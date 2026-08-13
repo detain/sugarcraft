@@ -1243,4 +1243,131 @@ final class RendererTest extends TestCase
 
         $this->assertStringNotContainsString('session picker', $out);
     }
+
+    /**
+     * The user-reported regression behind crush_feat.md §3 E2: expanding a
+     * finished tool call showed its OUTPUT but the row never said which
+     * command produced it. Against the old renderer this fails - the finished
+     * row was `🔧 tool: bash ✓ ok` and the `ls -la` only ever appeared on the
+     * transient running placeholder.
+     */
+    public function testFinishedToolRowShowsTheCommandThatRan(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'a.txt', 'call_1')
+                ->withDescription('bash(command: "ls -la")'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('tool: bash', $out);
+        $this->assertStringContainsString('ls -la', $out);
+    }
+
+    /**
+     * The tail is drawn AFTER the status marker on purpose: markToolCalls()
+     * locates the clickable row by str_contains() of the label it recorded,
+     * so the un-suffixed label has to stay a verbatim prefix of the row or
+     * click-to-expand would start missing rows.
+     */
+    public function testCommandTailIsAppendedAfterTheStatusMarkerNotBeforeIt(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'a.txt', 'call_1')
+                ->withDescription('bash(command: "ls -la")'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+        $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash')
+            . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
+
+        $this->assertStringContainsString($label, $out);
+        $this->assertStringContainsString(
+            $label . Style::new()->foreground($theme->systemLabel)->faint()->render(' — bash(command: "ls -la")'),
+            $out,
+        );
+    }
+
+    /** A result with no known call keeps exactly the row it always had. */
+    public function testToolRowWithoutADescriptionIsUnchanged(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'a.txt', 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash')
+                . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
+            $out,
+        );
+        $this->assertStringNotContainsString('—', $out);
+    }
+
+    /**
+     * The tail is model-authored text on a row candy-core repaints by
+     * absolute position, so it must never push the row past the terminal.
+     */
+    public function testCommandTailIsTruncatedToTheTerminalWidth(): void
+    {
+        $cols = 60;
+        $chat = $this->sizedChat(
+            [$this->resultMessage(
+                \SugarCraft\Crush\ToolResult::ok('bash', 'done', 'call_1')
+                    ->withDescription('bash(command: "' . str_repeat('very-long-argument ', 20) . '")'),
+            )],
+            $cols,
+        );
+
+        $out = Renderer::render($chat);
+
+        $rows = array_values(array_filter(
+            explode("\n", $out),
+            static fn(string $line): bool => str_contains($line, 'tool: bash'),
+        ));
+
+        $this->assertCount(1, $rows, 'the tail must stay on the one row it belongs to');
+        $this->assertLessThanOrEqual($cols, Width::string($rows[0]));
+    }
+
+    /**
+     * Raw ESC in a model-authored description would forge SGR straight onto
+     * the terminal wire, exactly as the rest of this renderer's untrusted
+     * strings are guarded against.
+     */
+    public function testCommandTailIsScrubbedOfControlBytes(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'done', 'call_1')
+                ->withDescription("bash(command: \"\x1b[31mred\x07\")"),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('red', $out);
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+    }
+
+    /**
+     * A tail so squeezed it could only show a couple of columns of the
+     * command is not worth the status marker's breathing room.
+     */
+    public function testNoTailIsDrawnWhenTheRowHasNoRoomForOne(): void
+    {
+        $chat = $this->sizedChat(
+            [$this->resultMessage(
+                \SugarCraft\Crush\ToolResult::ok(str_repeat('n', 40), 'done', 'call_1')
+                    ->withDescription('ls -la'),
+            )],
+            26,
+        );
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringNotContainsString('ls -la', $out);
+    }
 }

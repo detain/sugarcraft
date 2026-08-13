@@ -175,6 +175,13 @@ final class Renderer
     private const SHELL_CHROME_COLS = 6;
 
     /**
+     * Narrowest tail {@see toolCallSuffix()} will draw. Below this the row is
+     * left as-is: four columns of an elided command tells the user nothing
+     * and only costs the status marker its breathing room.
+     */
+    private const TOOL_DESCRIPTION_MIN_COLS = 8;
+
+    /**
      * Cell width a tool-result image ({@see renderToolImage()}) is scaled to
      * before its height is derived from the source aspect ratio. Literally
      * crush_feat.md §9 E3's `$w = 40`: wide enough for a screenshot to be
@@ -1267,6 +1274,7 @@ final class Renderer
                 default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
             };
             $label = Style::new()->foreground($theme->systemLabel)->faint()->strikethrough($stopped)->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
+            $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
             $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
             $key = $result->id ?? $result->name;
             $isExpanded = ($expanded[$key] ?? false) === true;
@@ -1274,7 +1282,7 @@ final class Renderer
             // drive one expansion mechanism rather than two.
             self::recordToolCallZone($key, $label);
 
-            $block = $label;
+            $block = $row;
             if ($body !== '') {
                 $block .= "\n" . self::renderToolBody($body, $result->isError(), $isExpanded, $theme);
             }
@@ -1294,6 +1302,54 @@ final class Renderer
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * The " — <what actually ran>" tail appended to a finished tool row.
+     *
+     * User-reported gap behind crush_feat.md §3 E2: the running placeholder
+     * has always shown {@see Message::describeToolCall()}'s one-liner (e.g.
+     * `bash(command: "ls -la")`, or the model-authored description when the
+     * turn sent one), but the finished row replaced it with just the tool
+     * NAME - so once §1 E5's collapse hid the body, a row said `bash ✓ ok`
+     * and never which command that was. {@see Chat} now carries the
+     * placeholder's one-liner onto the result ({@see ToolResult::$description})
+     * and this is where it reaches the user.
+     *
+     * Appended AFTER the status rather than between name and status on
+     * purpose: {@see recordToolCallZone()} registers the un-suffixed label and
+     * {@see markToolCalls()} locates the row by `str_contains()`, so keeping
+     * the recorded label a verbatim PREFIX of the rendered row is what keeps
+     * click-to-expand pointing at the right line.
+     *
+     * The string is model-authored, so it is {@see untrusted()}-scrubbed (it
+     * was already flattened to one line upstream by
+     * {@see Message::describeToolCall()}, but this renderer never trusts that)
+     * and hard-truncated to whatever the row has left, preserving the
+     * one-logical-line-per-row invariant {@see renderDiff()} documents. Returns
+     * '' when there is no description or no room for a useful amount of it -
+     * a couple of columns of an elided command is worse than none.
+     *
+     * @param int $used display columns the label already occupies on this row
+     */
+    private static function toolCallSuffix(ToolResult $result, Theme $theme, int $width, int $used): string
+    {
+        if (!$result->hasDescription()) {
+            return '';
+        }
+
+        $separator = ' — ';
+        $room = $width - $used - Width::of($separator);
+        if ($room < self::TOOL_DESCRIPTION_MIN_COLS) {
+            return '';
+        }
+
+        $text = Width::truncate(self::untrusted((string) $result->description), $room);
+        if (trim($text) === '') {
+            return '';
+        }
+
+        return Style::new()->foreground($theme->systemLabel)->faint()->render($separator . $text);
     }
 
     /**

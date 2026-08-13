@@ -611,6 +611,10 @@ final class ChatTest extends TestCase
         // History: user msg + assistant msg + tool result msg
         $this->assertCount(3, $next->history);
         $this->assertStringContainsString('total 0', $next->history[2]->content);
+        // crush_feat.md §3 E2: the placeholder's describeToolCall() one-liner
+        // rides onto the finished result so a collapsed row still says WHAT
+        // ran, not just which tool ran.
+        $this->assertSame('bash(cmd: "ls -la")', $next->history[2]->toolResults[0]->description);
     }
 
     /**
@@ -2100,6 +2104,56 @@ final class ChatTest extends TestCase
         $last = $final->history[count($final->history) - 1];
         $this->assertSame('there is one file', $last->content);
         $this->assertFalse($final->inFlight);
+    }
+
+    /**
+     * The user-reported gap behind crush_feat.md §3 E2: on the live
+     * (EngineBackend) path the only carrier of a call's arguments is the
+     * running placeholder, and replacing it used to throw them away - so the
+     * finished row could name the TOOL but never the command. ToolFinished
+     * carries no arguments, so this is the one point the description can be
+     * preserved at; against the old Chat $result->description is null.
+     */
+    public function testToolFinishedCarriesThePlaceholdersDescriptionOntoTheResult(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls -la']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')),
+            ], Message::assistant('there is one file')),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $this->assertSame('bash(command: "ls -la")', $withResults[0]->toolResults[0]->description);
+    }
+
+    /**
+     * An unmatched result is still appended rather than dropped, and honestly
+     * carries no description - there was no placeholder to read one off.
+     */
+    public function testAnUnmatchedToolResultIsAppendedWithoutADescription(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls -la']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')),
+            ], Message::assistant('there is one file')),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $this->assertSame('a.txt', $withResults[0]->toolResults[0]->result);
+        $this->assertNull($withResults[0]->toolResults[0]->description);
     }
 
     public function testToolFinishedCorrelatesOnTheEventIdNotTheToolsInventedResultId(): void

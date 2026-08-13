@@ -77,6 +77,18 @@ final class ToolResult
      *                          so a renderer can hand it straight to a diff viewer instead of
      *                          string-scanning free text (mirrors {@see EngineToolResult::diff()})
      * @param int|null $durationMs Wall-clock execution time, if the dispatching pipeline measured it
+     * @param string|null $description The {@see Message::describeToolCall()} one-liner for the CALL
+     *                                 this result answers -- e.g. `bash(command: "ls -la")`, or the
+     *                                 model-authored summary when the turn supplied one. Display-only
+     *                                 and deliberately NOT part of {@see toEngineResult()}/
+     *                                 {@see fromEngineResult()}: the engine pair carries what the
+     *                                 MODEL is shown, and this string exists solely so
+     *                                 {@see \SugarCraft\Crush\Renderer::renderToolResults()} can say
+     *                                 WHAT ran on a finished (and therefore collapsed) row. It is
+     *                                 attached by {@see \SugarCraft\Crush\Chat} at the point the
+     *                                 "running" placeholder is replaced, because that placeholder is
+     *                                 the only carrier of the call's arguments that survives to the
+     *                                 finish of an engine-dispatched call (crush_feat.md §3 E2/§1 E5).
      */
     public function __construct(
         public readonly string $name,
@@ -88,6 +100,7 @@ final class ToolResult
         public readonly ?string $imageProtocol = null,
         public readonly ?string $diff = null,
         public readonly ?int $durationMs = null,
+        public readonly ?string $description = null,
     ) {}
 
     /**
@@ -146,7 +159,45 @@ final class ToolResult
             imageProtocol: self::probeMosaic()->protocol(),
             diff: $this->diff,
             durationMs: $this->durationMs,
+            description: $this->description,
         );
+    }
+
+    /**
+     * Fluent attach of the human-readable one-liner describing the CALL this
+     * result answers -- see the constructor's `$description` docblock for why
+     * a display-only field is carried here rather than derived at render time.
+     *
+     * Returns a new instance per this repo's immutable+with*() convention
+     * (see AGENTS.md); an empty/blank $description is treated as "unknown"
+     * and clears the field, so a placeholder that never had one cannot make
+     * the renderer draw a dangling separator.
+     */
+    public function withDescription(?string $description): self
+    {
+        $trimmed = $description === null ? null : trim($description);
+
+        return new self(
+            $this->name,
+            $this->result,
+            $this->error,
+            $this->id,
+            $this->imageBytes,
+            $this->imagePath,
+            $this->imageProtocol,
+            $this->diff,
+            $this->durationMs,
+            $trimmed === '' ? null : $trimmed,
+        );
+    }
+
+    /**
+     * True when this result knows the call it answers, i.e. it can tell the
+     * user WHAT ran and not merely which tool ran.
+     */
+    public function hasDescription(): bool
+    {
+        return $this->description !== null;
     }
 
     /**

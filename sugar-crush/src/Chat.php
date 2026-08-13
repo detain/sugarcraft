@@ -1120,7 +1120,12 @@ final class Chat implements Model
         foreach ($this->history as $historyMessage) {
             $pendingId = $historyMessage->pendingToolCallId;
             if ($pendingId !== null && isset($resultsById[$pendingId])) {
-                $result = $resultsById[$pendingId];
+                // The placeholder's content IS Message::describeToolCall()'s
+                // one-liner, and it is the only carrier of the call's
+                // arguments that reaches this point - the result itself never
+                // saw them. Carrying it onto the finished result is what lets
+                // a collapsed row still say WHAT ran (crush_feat.md §3 E2).
+                $result = $resultsById[$pendingId]->withDescription($historyMessage->content);
                 $newHistory[] = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
                     ->withToolResults([$result]);
 
@@ -1306,14 +1311,16 @@ final class Chat implements Model
     private function replaceToolRunningPlaceholder(ToolFinished $event): self
     {
         $result = ToolResult::fromEngineResult($event->result, $event->toolName);
-        $message = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
-            ->withToolResults([$result]);
 
         $newHistory = [];
         $replaced = false;
         foreach ($this->history as $historyMessage) {
             if (!$replaced && $historyMessage->pendingToolCallId === $event->toolCallId) {
-                $newHistory[] = $message;
+                // Same reasoning as finishToolCalls(): the placeholder content
+                // is Message::describeToolCall()'s one-liner, and ToolFinished
+                // carries no arguments, so this is the only point at which the
+                // finished row can learn WHAT ran (crush_feat.md §3 E2).
+                $newHistory[] = self::toolResultMessage($result->withDescription($historyMessage->content));
                 $replaced = true;
 
                 continue;
@@ -1322,10 +1329,24 @@ final class Chat implements Model
         }
 
         if (!$replaced) {
-            $newHistory[] = $message;
+            $newHistory[] = self::toolResultMessage($result);
         }
 
         return $this->mutate(['history' => $newHistory]);
+    }
+
+    /**
+     * The finished-tool-call history entry {@see replaceToolRunningPlaceholder()}
+     * writes, in both its replace and its append branch.
+     *
+     * Split out only so the two branches cannot drift apart now that the
+     * replace branch attaches a description the append branch has no way of
+     * knowing (there is no placeholder to read it off).
+     */
+    private static function toolResultMessage(ToolResult $result): Message
+    {
+        return Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
+            ->withToolResults([$result]);
     }
 
     /**
