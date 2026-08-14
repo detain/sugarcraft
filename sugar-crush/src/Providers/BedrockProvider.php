@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
-use Aws\Bedrock\BedrockClient;
+use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Exception\AwsException;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
@@ -13,6 +13,28 @@ use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 
+/**
+ * Amazon Bedrock provider, speaking the Converse API.
+ *
+ * WHY THE *RUNTIME* CLIENT AND NOT `Aws\Bedrock\BedrockClient`
+ * -----------------------------------------------------------
+ * The AWS SDK splits Bedrock across two entirely separate services with two
+ * separate API models:
+ *
+ *   - `bedrock` (2023-04-20, `Aws\Bedrock\BedrockClient`) is the CONTROL
+ *     plane - guardrails, evaluation jobs, model customisation, provisioned
+ *     throughput. It has no inference operations at all.
+ *   - `bedrock-runtime` (2023-09-30, `Aws\BedrockRuntime\BedrockRuntimeClient`)
+ *     is the DATA plane, and is the only one that defines `Converse`,
+ *     `ConverseStream`, `InvokeModel` and `InvokeModelWithResponseStream`.
+ *
+ * This class was previously handed a `BedrockClient`, so `converse()` fell
+ * through `AwsClient::__call()` into `getCommand()`, which threw
+ * `InvalidArgumentException: Operation not found: Converse` - and, because
+ * that is not an `AwsException`, it slipped straight past the `catch` below
+ * and out of the provider unwrapped. Every Bedrock completion failed, always,
+ * before a single byte reached AWS.
+ */
 final readonly class BedrockProvider implements ProviderInterface
 {
     use HttpClientDefaults;
@@ -20,30 +42,69 @@ final readonly class BedrockProvider implements ProviderInterface
     private const REGION_US = 'us-east-1';
     private const REGION_EU = 'eu-west-1';
 
+    private const DEFAULT_MODEL = 'anthropic.claude-sonnet-4-6';
+
+    /**
+     * Fallback ceiling for a streaming turn.
+     *
+     * Converse requires nothing here, but `ConverseStream` without a
+     * `maxTokens` inherits whatever per-model default AWS picks, which for
+     * some model families is short enough to truncate an agentic reply
+     * mid-tool-call.
+     */
+    private const DEFAULT_STREAM_MAX_TOKENS = 4096;
+
+    private const DEFAULT_TEMPERATURE = 0.7;
+
     public function __construct(
-        private BedrockClient $client,
+        private BedrockRuntimeClient $client,
         private string $region = self::REGION_US,
-        private string $defaultModel = 'anthropic.claude-sonnet-4-6',
+        private string $defaultModel = self::DEFAULT_MODEL,
     ) {}
 
     public static function create(string $region = self::REGION_US, ?string $model = null): self
     {
+        $region = self::resolveRegion($region);
+
+        // Credentials are deliberately left to the SDK's default provider
+        // chain (env -> shared ini/profile -> ECS/EC2 metadata), the same
+        // chain every other AWS tool on the box resolves through, so an
+        // instance role or `AWS_PROFILE` works with no config here. Passing
+        // an explicit `credentials` key would *disable* that chain.
+        //
         // The AWS SDK talks to Bedrock over Guzzle too, it just takes its
         // transport options as `http` rather than accepting a client. Same
         // policy, same reason - see HttpClientDefaults. Still no total
         // `timeout`: a Bedrock completion is as long-running as any other.
-        $client = new BedrockClient([
+        $client = new BedrockRuntimeClient([
             'region' => $region,
             'version' => 'latest',
             'http' => ['connect_timeout' => self::connectTimeoutSeconds()],
         ]);
 
-        return new self($client, $region, $model ?? 'anthropic.claude-sonnet-4-6');
+        return new self($client, $region, $model ?? self::DEFAULT_MODEL);
     }
 
     public function name(): string
     {
         return 'bedrock';
+    }
+
+    /**
+     * The region this provider's client is bound to.
+     *
+     * Bedrock model availability is regional - a model id that resolves in
+     * `us-east-1` is a `ValidationException` in `eu-west-1` - so the region
+     * is part of every failure message this class raises.
+     */
+    public function region(): string
+    {
+        return $this->region;
+    }
+
+    public function model(): string
+    {
+        return $this->defaultModel;
     }
 
     public function supportsStreaming(): bool
@@ -93,8 +154,10 @@ final readonly class BedrockProvider implements ProviderInterface
 
     public function complete(CompleteRequest $request): CompleteResponse
     {
+        $model = $this->modelId($request);
+
         $params = [
-            'modelId' => $request->model,
+            'modelId' => $model,
             'messages' => $this->formatMessages($request->messages),
         ];
 
@@ -102,44 +165,49 @@ final readonly class BedrockProvider implements ProviderInterface
             $params['system'] = [['text' => $request->systemPrompt]];
         }
 
-        if ($request->maxTokens !== null) {
-            $params['inferenceConfig'] = [
-                'maxTokens' => $request->maxTokens,
-                'temperature' => $request->temperature ?? 0.7,
-            ];
+        $inference = $this->inferenceConfig($request);
+        if ($inference !== []) {
+            $params['inferenceConfig'] = $inference;
         }
 
         try {
-            // Converse-shaped params (messages/system/inferenceConfig) require the
-            // Converse API, not the legacy invokeModel body protocol.
+            // Converse-shaped params (messages/system/inferenceConfig) require
+            // the Converse API on the *runtime* client - see the class
+            // docblock. Not the legacy invokeModel body protocol, and not
+            // anything on the control-plane client, which has no inference
+            // operation to call.
             $result = $this->client->converse($params);
             $data = $result->toArray();
 
-            return $this->parseResponse($data);
+            return $this->parseResponse($data, $model);
         } catch (AwsException $e) {
-            throw new \RuntimeException('Bedrock completion failed: ' . $e->getMessage(), 0, $e);
+            throw new \RuntimeException($this->failureMessage('completion', $model, $e), 0, $e);
         }
     }
 
     /**
      * Streams completion responses as a generator of deltas.
      *
-     * Each yielded CompleteResponse contains only the delta/content from that chunk.
-     * The caller is responsible for accumulating content across chunks.
+     * Each yielded CompleteResponse contains only the delta/content from that
+     * chunk. The caller is responsible for accumulating content across chunks.
      *
-     * Note: tokensUsed and costUsd will be 0 for all chunks - usage data is only
-     * available when the stream completes, not per-chunk.
+     * Only the final `metadata` event carries usage, so every chunk before it
+     * reports tokensUsed/costUsd of 0 and the last one reports the turn total
+     * with empty content. Callers must therefore accumulate content and read
+     * usage independently - which is what `Runtime::runStreaming()` does.
      *
      * @return \Generator<int, CompleteResponse>
      */
     public function completeStream(CompleteRequest $request): \Generator
     {
+        $model = $this->modelId($request);
+
         $params = [
-            'modelId' => $request->model,
+            'modelId' => $model,
             'messages' => $this->formatMessages($request->messages),
-            'inferenceConfig' => [
-                'maxTokens' => $request->maxTokens ?? 4096,
-                'temperature' => $request->temperature ?? 0.7,
+            'inferenceConfig' => $this->inferenceConfig($request) + [
+                'maxTokens' => self::DEFAULT_STREAM_MAX_TOKENS,
+                'temperature' => self::DEFAULT_TEMPERATURE,
             ],
         ];
 
@@ -148,16 +216,18 @@ final readonly class BedrockProvider implements ProviderInterface
         }
 
         try {
-            // ConverseStream emits an event stream of typed events; each text token
-            // arrives as a contentBlockDelta event (not the legacy `completion` field).
+            // ConverseStream emits an event stream of typed events; each text
+            // token arrives as a contentBlockDelta event (not the legacy
+            // `completion` field). The SDK's EventParsingIterator hands each
+            // one over already shaped as [<eventName> => <payload>].
             $result = $this->client->converseStream($params);
             $stream = $result->get('stream');
 
             foreach ($stream as $event) {
-                yield $this->parseChunk($event);
+                yield $this->parseChunk(is_array($event) ? $event : [], $model);
             }
         } catch (AwsException $e) {
-            throw new \RuntimeException('Bedrock streaming failed: ' . $e->getMessage(), 0, $e);
+            throw new \RuntimeException($this->failureMessage('streaming', $model, $e), 0, $e);
         }
     }
 
@@ -165,6 +235,50 @@ final readonly class BedrockProvider implements ProviderInterface
     {
         // Use Titan or Cohere for embeddings via Bedrock
         return new EmbeddingsResponse(embeddings: []);
+    }
+
+    /**
+     * `modelId` is a required URI path segment on Converse, so an empty one
+     * would be signed into a malformed URL rather than rejected usefully.
+     * Falling back to the configured model keeps a caller that only set the
+     * provider's model (and left CompleteRequest::$model empty) working.
+     */
+    private function modelId(CompleteRequest $request): string
+    {
+        return $request->model !== '' ? $request->model : $this->defaultModel;
+    }
+
+    /**
+     * Converse rejects an empty `inferenceConfig` structure, and previously a
+     * request with a temperature but no maxTokens silently dropped the
+     * temperature - the whole block was gated on maxTokens alone.
+     *
+     * @return array<string, mixed>
+     */
+    private function inferenceConfig(CompleteRequest $request): array
+    {
+        $config = [];
+
+        if ($request->maxTokens !== null) {
+            $config['maxTokens'] = $request->maxTokens;
+        }
+
+        if ($request->temperature !== null) {
+            $config['temperature'] = $request->temperature;
+        }
+
+        if ($request->topP !== null) {
+            $config['topP'] = $request->topP;
+        }
+
+        // Converse takes stop sequences here rather than at the top level.
+        if (is_string($request->stop) && $request->stop !== '') {
+            $config['stopSequences'] = [$request->stop];
+        } elseif (is_array($request->stop) && $request->stop !== []) {
+            $config['stopSequences'] = array_values($request->stop);
+        }
+
+        return $config;
     }
 
     /**
@@ -192,48 +306,108 @@ final readonly class BedrockProvider implements ProviderInterface
     /**
      * @param array<string, mixed> $data
      */
-    private function parseResponse(array $data): CompleteResponse
+    private function parseResponse(array $data, string $model): CompleteResponse
     {
         $output = $data['output']['message'] ?? [];
-        $content = $output['content'] ?? [];
+        $blocks = is_array($output['content'] ?? null) ? $output['content'] : [];
 
-        $inputTokens = $data['usage']['inputTokens'] ?? 0;
-        $outputTokens = $data['usage']['outputTokens'] ?? 0;
+        $text = '';
+        $reasoning = '';
 
-        $costUsd = ($inputTokens * $this->costPer1kTokens($this->defaultModel, 'input')
-            + $outputTokens * $this->costPer1kTokens($this->defaultModel, 'output')) / 1000;
+        // A Converse reply is a LIST of content blocks, not one text block:
+        // a reasoning-capable model puts `reasoningContent` first, so reading
+        // only $content[0]['text'] returns the empty string for exactly the
+        // models worth pointing this provider at.
+        foreach ($blocks as $block) {
+            if (!is_array($block)) {
+                continue;
+            }
+
+            if (isset($block['text']) && is_string($block['text'])) {
+                $text .= $block['text'];
+            }
+
+            $thought = $block['reasoningContent']['reasoningText']['text'] ?? null;
+            if (is_string($thought)) {
+                $reasoning .= $thought;
+            }
+        }
+
+        $inputTokens = (int) ($data['usage']['inputTokens'] ?? 0);
+        $outputTokens = (int) ($data['usage']['outputTokens'] ?? 0);
 
         return new CompleteResponse(
-            content: $content[0]['text'] ?? '',
-            reasoning: null,
+            content: $text,
+            reasoning: $reasoning !== '' ? $reasoning : null,
             toolCalls: null,
             tokensUsed: $inputTokens + $outputTokens,
-            costUsd: $costUsd,
+            costUsd: $this->cost($model, $inputTokens, $outputTokens),
         );
     }
 
     /**
-     * Parses a streaming chunk into a partial/delta CompleteResponse.
+     * Parses a streaming event into a partial/delta CompleteResponse.
      *
-     * This returns only the delta content from this chunk - it does NOT contain
-     * accumulated content. The caller must accumulate content across chunks.
-     *
-     * Note: tokensUsed and costUsd are always 0 for streaming responses because
-     * usage data is only available from the final chunk, not per-chunk.
+     * This returns only the delta content from this chunk - it does NOT
+     * contain accumulated content. The caller must accumulate across chunks.
      *
      * @param array<string, mixed> $data
      */
-    private function parseChunk(array $data): CompleteResponse
+    private function parseChunk(array $data, string $model): CompleteResponse
     {
-        // ConverseStream text tokens arrive as contentBlockDelta events.
-        $text = $data['contentBlockDelta']['delta']['text'] ?? '';
+        // ConverseStream text tokens arrive as contentBlockDelta events, whose
+        // `delta` is a union - text OR reasoningContent OR toolUse.
+        $delta = $data['contentBlockDelta']['delta'] ?? [];
+        $text = is_string($delta['text'] ?? null) ? $delta['text'] : '';
+        $thought = $delta['reasoningContent']['text'] ?? null;
+
+        // Usage lands once, on the terminal metadata event; every earlier
+        // event genuinely has none to report.
+        $inputTokens = (int) ($data['metadata']['usage']['inputTokens'] ?? 0);
+        $outputTokens = (int) ($data['metadata']['usage']['outputTokens'] ?? 0);
 
         return new CompleteResponse(
             content: $text,
-            reasoning: null,
+            reasoning: is_string($thought) && $thought !== '' ? $thought : null,
             toolCalls: null,
-            tokensUsed: 0,
-            costUsd: 0.0,
+            tokensUsed: $inputTokens + $outputTokens,
+            costUsd: $this->cost($model, $inputTokens, $outputTokens),
         );
+    }
+
+    private function cost(string $model, int $inputTokens, int $outputTokens): float
+    {
+        return ($inputTokens * $this->costPer1kTokens($model, 'input')
+            + $outputTokens * $this->costPer1kTokens($model, 'output')) / 1000;
+    }
+
+    /**
+     * Bedrock's own errors say nothing about which region or model id was
+     * asked for, and the overwhelmingly common failure - a model that is not
+     * enabled in this account/region - is unreadable without both.
+     */
+    private function failureMessage(string $stage, string $model, AwsException $e): string
+    {
+        return sprintf(
+            'Bedrock %s failed for model "%s" in %s: %s',
+            $stage,
+            $model,
+            $this->region,
+            $e->getMessage(),
+        );
+    }
+
+    /**
+     * An empty region would make the SDK throw on construction rather than
+     * fall back, so honour the same `AWS_REGION`/`AWS_DEFAULT_REGION` pair the
+     * SDK and the aws CLI read before giving up on the built-in default.
+     */
+    private static function resolveRegion(string $region): string
+    {
+        if ($region !== '') {
+            return $region;
+        }
+
+        return (getenv('AWS_REGION') ?: getenv('AWS_DEFAULT_REGION')) ?: self::REGION_US;
     }
 }
