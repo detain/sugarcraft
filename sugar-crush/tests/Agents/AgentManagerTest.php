@@ -27,6 +27,11 @@ use SugarCraft\Crush\Skills\SkillRegistry;
 
 /**
  * Tests for AgentManager - manages agents and sub-agents.
+ *
+ * HOME is redirected to a sandbox for the whole class, same convention as
+ * EngineBackendParallelConfigTest: the team tests below delegate to a real
+ * TeamManager, and the Teams it builds persist under ~/.sugar-crush/teams/{id}/
+ * no matter where the manager's own registry lives.
  */
 final class AgentManagerTest extends TestCase
 {
@@ -34,11 +39,121 @@ final class AgentManagerTest extends TestCase
     private SkillRegistry $skillRegistry;
     private AgentManager $agentManager;
 
+    /** The throwaway root holding this test's sandbox HOME and registry dirs. */
+    private string $sandboxDir;
+
+    /** The developer's actual home, kept so tearDown() can check it is untouched. */
+    private string $realHome;
+
+    private string $originalHome;
+
+    private ?string $originalServerHome = null;
+
+    /** @var list<string> */
+    private array $realHomeFootprint = [];
+
     protected function setUp(): void
     {
+        parent::setUp();
+
         $this->provider = $this->createMock(ProviderInterface::class);
         $this->skillRegistry = new SkillRegistry();
         $this->agentManager = new AgentManager($this->provider, $this->skillRegistry);
+
+        $this->sandboxDir = sys_get_temp_dir() . '/sc_agent_manager_' . bin2hex(random_bytes(6));
+        mkdir($this->sandboxDir . '/home', 0o700, true);
+
+        $this->originalHome = getenv('HOME') ?: '';
+        $this->originalServerHome = isset($_SERVER['HOME']) ? (string) $_SERVER['HOME'] : null;
+        $this->realHome = $this->originalServerHome ?? $this->originalHome;
+        $this->realHomeFootprint = $this->realHomeFootprint();
+
+        // BOTH have to move: Team::basePath() and TeamManager::expandPath()
+        // read $_SERVER['HOME'] while Bootstrap reads getenv('HOME').
+        putenv('HOME=' . $this->sandboxDir . '/home');
+        $_SERVER['HOME'] = $this->sandboxDir . '/home';
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
+        }
+        $this->originalHome === '' ? putenv('HOME') : putenv('HOME=' . $this->originalHome);
+
+        $this->removeDirectory($this->sandboxDir);
+
+        $this->assertSame(
+            $this->realHomeFootprint,
+            $this->realHomeFootprint(),
+            'a team test wrote into the real ~/.sugar-crush instead of its sandbox HOME',
+        );
+
+        parent::tearDown();
+    }
+
+    /**
+     * Everything under the real ~/.sugar-crush a Team could create: the config
+     * dir's own entries, so conjuring the directory itself is caught, plus the
+     * names directly under teams/, which is where one directory per Team
+     * appears.
+     *
+     * Deliberately shallow: the residue is one new entry per Team, so a
+     * recursive walk buys nothing and costs a full tree scan twice per test.
+     *
+     * @return list<string>
+     */
+    private function realHomeFootprint(): array
+    {
+        $configDir = $this->realHome . '/.sugar-crush';
+
+        return [
+            ...self::entriesOf($configDir),
+            ...self::entriesOf($configDir . '/teams'),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function entriesOf(string $dir): array
+    {
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        $entries = array_values(array_diff(scandir($dir) ?: [], ['.', '..']));
+        sort($entries);
+
+        return array_map(static fn(string $entry): string => $dir . '/' . $entry, $entries);
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (array_diff(scandir($dir) ?: [], ['.', '..']) as $entry) {
+            $path = $dir . '/' . $entry;
+            is_dir($path) ? $this->removeDirectory($path) : @unlink($path);
+        }
+
+        @rmdir($dir);
+    }
+
+    /**
+     * A registry dir inside this test's sandbox, so it goes away with it.
+     *
+     * These used to be minted straight into sys_get_temp_dir() and never
+     * removed: 8,487 abandoned agentmgr_test_* registries had piled up in one
+     * developer's /tmp.
+     */
+    private function teamRegistryDir(): string
+    {
+        return $this->sandboxDir . '/registry_' . bin2hex(random_bytes(6));
     }
 
     // -------------------------------------------------------------------------
@@ -990,7 +1105,7 @@ final class AgentManagerTest extends TestCase
 
     public function testSetAndGetTeamManager(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
 
         $this->agentManager->setTeamManager($teamManager);
 
@@ -999,7 +1114,7 @@ final class AgentManagerTest extends TestCase
 
     public function testCreateTeamDelegates(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
         $this->agentManager->setTeamManager($teamManager);
 
         $team = $this->agentManager->createTeam('test-team', 'Test Team', 'lead-agent-1');
@@ -1015,7 +1130,7 @@ final class AgentManagerTest extends TestCase
 
     public function testGetTeamDelegates(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
         $this->agentManager->setTeamManager($teamManager);
 
         // Create a team directly via TeamManager
@@ -1037,7 +1152,7 @@ final class AgentManagerTest extends TestCase
 
     public function testHasTeamDelegates(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
         $this->agentManager->setTeamManager($teamManager);
 
         // Create a team directly via TeamManager
@@ -1057,7 +1172,7 @@ final class AgentManagerTest extends TestCase
 
     public function testRemoveTeamDelegates(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
         $this->agentManager->setTeamManager($teamManager);
 
         // Create a team via AgentManager
@@ -1090,7 +1205,7 @@ final class AgentManagerTest extends TestCase
 
     public function testCreateTeamConflictDelegates(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
         $this->agentManager->setTeamManager($teamManager);
 
         // Create first team succeeds
@@ -1105,7 +1220,7 @@ final class AgentManagerTest extends TestCase
 
     public function testGetTeamsDelegates(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
         $this->agentManager->setTeamManager($teamManager);
 
         // Initially empty
@@ -1132,7 +1247,7 @@ final class AgentManagerTest extends TestCase
 
     public function testTeamCountDelegates(): void
     {
-        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $teamManager = new TeamManager($this->teamRegistryDir());
         $this->agentManager->setTeamManager($teamManager);
 
         // Initially zero

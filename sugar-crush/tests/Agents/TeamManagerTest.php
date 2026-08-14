@@ -13,17 +13,120 @@ use SugarCraft\Crush\Agents\TeamManager;
 
 /**
  * Tests for TeamManager - creates and manages Team aggregate roots.
+ *
+ * HOME is redirected to a sandbox for the whole class, same convention as
+ * EngineBackendParallelConfigTest, so nothing here can write into the real
+ * ~/.sugar-crush.
  */
 final class TeamManagerTest extends TestCase
 {
     private ?string $tempDir = null;
 
+    /** @var list<string> every dir createTempDir() handed out, all removed in tearDown() */
+    private array $tempDirs = [];
+
+    /** The throwaway root holding this test's sandbox HOME. */
+    private string $sandboxDir;
+
+    /** The sandbox every "~" in this class expands to. */
+    private string $homeDir;
+
+    /** The developer's actual home, kept so tearDown() can check it is untouched. */
+    private string $realHome;
+
+    private string $originalHome;
+
+    private ?string $originalServerHome = null;
+
+    /** @var list<string> */
+    private array $realHomeFootprint = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->sandboxDir = sys_get_temp_dir() . '/sc_team_manager_' . bin2hex(random_bytes(6));
+        $this->homeDir = $this->sandboxDir . '/home';
+        mkdir($this->homeDir, 0o700, true);
+
+        $this->originalHome = getenv('HOME') ?: '';
+        $this->originalServerHome = isset($_SERVER['HOME']) ? (string) $_SERVER['HOME'] : null;
+        $this->realHome = $this->originalServerHome ?? $this->originalHome;
+        $this->realHomeFootprint = $this->realHomeFootprint();
+
+        // BOTH have to move. Bootstrap resolves the config dir off
+        // getenv('HOME'), but Team::basePath() and TeamManager::expandPath()
+        // read $_SERVER['HOME'] instead - and they are the two that persist
+        // here, so redirecting only the env var would leave the leak intact.
+        putenv('HOME=' . $this->homeDir);
+        $_SERVER['HOME'] = $this->homeDir;
+    }
+
     protected function tearDown(): void
     {
-        if ($this->tempDir !== null && is_dir($this->tempDir)) {
-            $this->removeDirectory($this->tempDir);
+        if ($this->originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
         }
+        $this->originalHome === '' ? putenv('HOME') : putenv('HOME=' . $this->originalHome);
+
+        foreach ($this->tempDirs as $dir) {
+            $this->removeDirectory($dir);
+        }
+        $this->tempDirs = [];
+        $this->tempDir = null;
+        $this->removeDirectory($this->sandboxDir);
+
+        // The sandbox exists to be checked. Every test in this class builds a
+        // Team, and a Team persists under whatever "~" resolves to at the
+        // moment it is constructed - so a redirect that quietly stopped
+        // applying would go unnoticed until the residue was counted by hand.
+        $this->assertSame(
+            $this->realHomeFootprint,
+            $this->realHomeFootprint(),
+            'a Team test wrote into the real ~/.sugar-crush instead of its sandbox HOME',
+        );
+
         parent::tearDown();
+    }
+
+    /**
+     * Everything under the real ~/.sugar-crush that a Team or a TeamManager
+     * could create: the config dir's own entries, so conjuring the directory
+     * itself is caught, plus the names directly under teams/, which is where
+     * one directory per Team appears.
+     *
+     * Deliberately shallow. The residue this guards against is one new entry
+     * per Team, so a recursive walk buys nothing and costs a full tree scan
+     * twice per test - which on a machine that has already accumulated the
+     * residue is slow enough to look like a hang.
+     *
+     * @return list<string>
+     */
+    private function realHomeFootprint(): array
+    {
+        $configDir = $this->realHome . '/.sugar-crush';
+
+        return [
+            ...self::entriesOf($configDir),
+            ...self::entriesOf($configDir . '/teams'),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function entriesOf(string $dir): array
+    {
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        $entries = array_values(array_diff(scandir($dir) ?: [], ['.', '..']));
+        sort($entries);
+
+        return array_map(static fn(string $entry): string => $dir . '/' . $entry, $entries);
     }
 
     // -------------------------------------------------------------------------
@@ -163,10 +266,13 @@ final class TeamManagerTest extends TestCase
 
     public function testHandleTeammateIdleClaimsNextUnblockedTask(): void
     {
-        // Team::basePath() persists tasks.sqlite under the REAL $HOME
+        // Team::basePath() persists tasks.sqlite under $HOME
         // (~/.sugar-crush/teams/{id}/), independent of the TeamManager's own
-        // temp registry dir — so the team id must be unique per test run to
-        // avoid state bleeding across repeated invocations of this suite.
+        // temp registry dir — so the team id stays unique per run to avoid
+        // state bleeding across repeated invocations of this suite. That $HOME
+        // is now the per-test sandbox (see setUp()); it used to be the
+        // developer's real one, which is how 11k of these directories came to
+        // pile up there.
         $teamId = 'idle-team-' . uniqid('', true);
         $tm = $this->createTeamManager();
         $team = $tm->createTeam(teamId: $teamId, name: 'Idle Team', leadAgentId: 'lead-1');
@@ -484,6 +590,37 @@ final class TeamManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // The sandbox itself
+    // -------------------------------------------------------------------------
+
+    /**
+     * A Team persists under whatever "~" resolved to when it was constructed,
+     * and nothing about a TeamManager pointed at a temp registry dir changes
+     * that — which is how every test in this class used to leave a
+     * tasks.sqlite in the developer's own ~/.sugar-crush/teams/. 11,270 such
+     * directories had accumulated on one machine, invisible to a top-level
+     * listing because teams/ already existed.
+     *
+     * tearDown() guards every test here by comparing the real config dir
+     * before and after. This states the same claim positively, so a sandbox
+     * that stopped applying fails with the reason spelled out rather than as
+     * an unexplained diff.
+     */
+    public function testTeamStateIsPersistedUnderTheSandboxHomeAndNotTheRealOne(): void
+    {
+        $teamId = 'home-sandbox-' . bin2hex(random_bytes(6));
+
+        $this->createTeamManager()->createTeam(
+            teamId: $teamId,
+            name: 'Sandbox Team',
+            leadAgentId: 'lead-1',
+        );
+
+        $this->assertFileExists($this->homeDir . '/.sugar-crush/teams/' . $teamId . '/tasks.sqlite');
+        $this->assertDirectoryDoesNotExist($this->realHome . '/.sugar-crush/teams/' . $teamId);
+    }
+
+    // -------------------------------------------------------------------------
     // Helper methods
     // -------------------------------------------------------------------------
 
@@ -496,15 +633,27 @@ final class TeamManagerTest extends TestCase
         return new TeamManager($basePath);
     }
 
+    /**
+     * Registered for teardown, not just returned. tearDown() used to remove
+     * only whatever $this->tempDir happened to hold last, so a test that
+     * minted its own registry dir left it behind for good — 1,190 abandoned
+     * sugar_crush_test_* trees had piled up in one developer's /tmp.
+     */
     private function createTempDir(): string
     {
         $tempDir = sys_get_temp_dir() . '/sugar_crush_test_' . uniqid('', true);
         mkdir($tempDir, 0755, true);
+        $this->tempDirs[] = $tempDir;
+
         return $tempDir;
     }
 
     private function removeDirectory(string $dir): void
     {
+        if (!is_dir($dir)) {
+            return;
+        }
+
         $files = array_diff(scandir($dir) ?: [], ['.', '..']);
         foreach ($files as $file) {
             $path = $dir . '/' . $file;

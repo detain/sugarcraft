@@ -15,20 +15,108 @@ use SugarCraft\Crush\Agents\WorktreeManager;
 
 /**
  * Tests for Team - aggregate root for lead + teammates coordination.
+ *
+ * HOME is redirected to a sandbox for the whole class, same convention as
+ * EngineBackendParallelConfigTest: a Team persists its task list and mailbox
+ * under ~/.sugar-crush/teams/{id}/ the moment it is constructed, and every
+ * test below constructs one.
  */
 final class TeamTest extends TestCase
 {
     /** @var list<string> temp dirs created by createRealWorktreeManager(), cleaned up in tearDown() */
     private array $tmpDirsToClean = [];
 
+    /** The throwaway root holding this test's sandbox HOME. */
+    private string $sandboxDir;
+
+    /** The developer's actual home, kept so tearDown() can check it is untouched. */
+    private string $realHome;
+
+    private string $originalHome;
+
+    private ?string $originalServerHome = null;
+
+    /** @var list<string> */
+    private array $realHomeFootprint = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->sandboxDir = sys_get_temp_dir() . '/sc_team_' . bin2hex(random_bytes(6));
+        mkdir($this->sandboxDir . '/home', 0o700, true);
+
+        $this->originalHome = getenv('HOME') ?: '';
+        $this->originalServerHome = isset($_SERVER['HOME']) ? (string) $_SERVER['HOME'] : null;
+        $this->realHome = $this->originalServerHome ?? $this->originalHome;
+        $this->realHomeFootprint = $this->realHomeFootprint();
+
+        // BOTH have to move: Team::basePath() reads $_SERVER['HOME'] while
+        // Bootstrap reads getenv('HOME'), so redirecting one leaves the other
+        // pointing at the real home.
+        putenv('HOME=' . $this->sandboxDir . '/home');
+        $_SERVER['HOME'] = $this->sandboxDir . '/home';
+    }
+
     protected function tearDown(): void
     {
+        if ($this->originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
+        }
+        $this->originalHome === '' ? putenv('HOME') : putenv('HOME=' . $this->originalHome);
+
         foreach ($this->tmpDirsToClean as $dir) {
             if (is_dir($dir)) {
                 $this->removeDirectory($dir);
             }
         }
+        $this->removeDirectory($this->sandboxDir);
+
+        $this->assertSame(
+            $this->realHomeFootprint,
+            $this->realHomeFootprint(),
+            'a Team test wrote into the real ~/.sugar-crush instead of its sandbox HOME',
+        );
+
         parent::tearDown();
+    }
+
+    /**
+     * Everything under the real ~/.sugar-crush a Team could create: the config
+     * dir's own entries, so conjuring the directory itself is caught, plus the
+     * names directly under teams/, which is where one directory per Team
+     * appears.
+     *
+     * Deliberately shallow: the residue is one new entry per Team, so a
+     * recursive walk buys nothing and costs a full tree scan twice per test.
+     *
+     * @return list<string>
+     */
+    private function realHomeFootprint(): array
+    {
+        $configDir = $this->realHome . '/.sugar-crush';
+
+        return [
+            ...self::entriesOf($configDir),
+            ...self::entriesOf($configDir . '/teams'),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function entriesOf(string $dir): array
+    {
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        $entries = array_values(array_diff(scandir($dir) ?: [], ['.', '..']));
+        sort($entries);
+
+        return array_map(static fn(string $entry): string => $dir . '/' . $entry, $entries);
     }
 
     // -------------------------------------------------------------------------
