@@ -90,21 +90,92 @@ acceptable outcome. Build tests out as you go.
 - **#52 + #53** — test-hygiene leaks. Agent running. Two independent
   change-sets, to be committed separately.
 
+## Concurrency map — lanes, ownership, and the real constraint
+
+The plan claims items within a phase are "file-disjoint or near enough". **That
+is wrong for Phase 2 and Phase 4.** Almost every P2 item funnels through
+`src/Cli/Bootstrap.php` (1102 lines, 28 static methods) and half of P4 funnels
+through `Chat::submit()`'s dispatch chain (`src/Chat.php`, 5672 lines). Those
+two files — not the phase boundaries — are what actually serializes the work.
+
+Concurrency here is **same-tree with enforced file ownership**, not git
+worktrees. Worktrees are a trap for this repo: `vendor/` is gitignored, and a
+symlinked `vendor/` resolves `$vendorDir` from its realpath, so composer's PSR-4
+map silently autoloads `src/` from the MAIN tree — an isolated worktree that
+quietly tests the wrong code. A real `composer install` per worktree also breaks
+the `../candy-*` path repos. So: one tree, disjoint lanes.
+
+### Lane ownership (a file has exactly ONE owner at a time)
+
+| Lane | Owns | Items |
+|---|---|---|
+| **W** wiring (critical path) | `Cli/Bootstrap.php`, `Chat.php`, `Backend/EngineBackend.php`, `MCP/`, `Workflow/`, `Hooks/`, `Permissions/`, `Skills/`, `Commands/`, `Context/ContextCompactor.php`, `Config/` | #11 #12 #13 #14 #15 #16 #18 #22 #23 #28 #31 #32 #33 #38 #47 |
+| **U** UI | `Tui/`, `Tui/Components/`, `Renderer.php`, themes, `.vhs/` | #19 #20 #21 #25 #37 #39 #40 |
+| **T** tools | `Tools/`, `Tools/BuiltIn/`, `LSP/` | #17 #41 #44 #45 #46 + #43's Grep half |
+| **P** prompt/context | `Runtime.php`, `Context/EnvironmentBlock.php`, `Context/InstructionFileLoader.php`, `App/App.php` | #27 #30 #42 + #43's loadRoot half |
+| **X** CLI + isolated + cross-lib | `Cli/ArgvParser.php`, `Cli/NonInteractive.php`, `bin/sugarcrush`, `Cli/Help.php`, `Providers/`, `Agents/WorktreeManager.php`, `Commands/ShareCommand.php`, **candy-core**, **candy-testing** | #24 #26 #48 #50 #54 #55 #56 |
+| **D** docs | `README.md`, `sugar-crush/docs/`, repo `docs/_data/`, `docs/lib/` | #34 #35 #36 |
+
+### Hard sequencing (real, not stylistic)
+
+- #11 → #15 (`ScriptHook` needs `ask`/`modify` exit codes before a discovered
+  hook config can do anything) and → #33 (a settings `permission` block before
+  `PermissionGate` reaches the main loop is just a second decorative surface).
+- #31 (P6.2 layered settings) → #32, #33, and the config-path half of #12.
+- #12 (`McpClient` rename) → the `Bootstrap::mcpClient()` half of #12 itself,
+  and → #47.
+- #12–#17 → #47 (the plugin-manifest epic is their consolidation).
+- #10 ✅ already unblocks #39, #40, #45.
+- #24 (`SUGAR_CRUSH_*` → `SUGARCRUSH_*`) → D's ENVIRONMENT.md, or the table
+  documents names that are about to change.
+- #55: its **candy-core build phase is fully parallel** (different lib), but its
+  **sugar-crush adapter phase needs an exclusive lane-W window** — it rewrites
+  fork sites in `Chat.php`, `Runtime.php`, `EngineBackend.php`.
+
+### Shared-file collisions and their rules
+
+1. **`Bootstrap::tools()` one-line registrations** — #17 (Lsp), #44 (Write),
+   #45 (Task), #32 (allow/deny filter). Lane T builds and tests each tool
+   standalone; the registration line is applied by the supervisor at commit
+   time. Lane T never edits `Bootstrap.php`.
+2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`candy-forms`, #19
+   wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil`
+   and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work.
+   Add all three missing deps in **one prep commit** before U or W reach them.
+3. **`README.md`** — #11 (permission bullet), #24 (env table), #34–#36. Lane D
+   owns it exclusively; other lanes file requests rather than editing.
+4. **`Cli/Help.php`** — #24 (`--version`) then #21 (candy-kit restyle), in that
+   order.
+5. **`Runtime.php`** — lane P owns it; #55's adapter phase must wait for a
+   quiet window.
+
+### Verification protocol under concurrency
+
+- Sub-agents run **targeted tests only** (`--filter`, or a single test dir).
+  **No agent runs the full suite** — 8 concurrent full-suite runs is what
+  stretched a 2:22 suite to 13 minutes on 2026-08-13.
+- The supervisor runs the full suite serially, once per commit gate.
+- Commit with an **explicit path list** (`git add <paths>`), never `git add -A`
+  — the tree legitimately holds several lanes of uncommitted work.
+- Reviewers get a **lane-scoped diff** (`git diff -- <lane paths>`), so they do
+  not flag a neighbouring lane's in-progress work.
+- A red full-suite gate names the culprit by lane via test-file ownership.
+
+This deliberately overrides the repo's blanket "run sub-agents ONE AT A TIME"
+rule. That rule exists because concurrent writes to `MATCHUPS.md`/`README.md`
+collide; enforced file ownership addresses the same hazard directly, and lane D
+holding `README.md` exclusively preserves the original rule's intent.
+
 ## Queue
 
-1. **#55 — extract fork/collect/reap into candy-core** (user-confirmed, promoted
-   to near-term). See below.
-2. **#11 — P1.2** unify permissions; `ScriptHook` ask/modify. Depends on P1.1.
-3. #54 AgentWorkerPool `executeAll()` hang — check against #55 first, it may be
-   fixed or made moot rather than needing its own fix.
-4. #12-#17 P2 wiring · #18-#21 P3 sibling-lib reuse · #22-#26 P4 commands/CLI ·
-   #27-#30 P5 context/cost/prompt · #31-#33 P6 settings · #34-#36 P7 docs ·
-   #37-#46 P8 polish · #47 P2.9 plugin manifest epic.
-5. Follow-ups: #48, #49 (fixed in P1.1 — verify and close), #50, #51, #56.
+**Wave 1 (concurrent):** W #11 · X #24 · T #44 · D #34.
+Fillers when a lane goes idle: #50 (BedrockProvider, one file, fully isolated),
+#49 (verify-and-close), #46, #56.
 
-Dependencies: #11→#10 ✅ · #15 wants #11's exit codes · #29 after #11 ·
-#33 after #11+#31 · #39/#40/#45 need P1.1's live-output accessor ✅ ·
-#47 after #12-#17.
+Then: W #16 → #12 → #13 → #14 → #22+#23 → #15 → #31 → #32 → #33 → #28 → #38 →
+#18 → #47. U #37 → #25 → #19 → #39 → #40 → #21 → #20. T #41 → #46 → #17 → #45.
+P #27 → #30 → #42. X #48 → #56 → #55 → #54 → #26. D #36 → #35 (hold MCP.md /
+PERMISSIONS.md / HOOKS.md until #12 / #11 / #15 land).
 
 ---
 
