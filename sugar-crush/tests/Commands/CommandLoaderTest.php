@@ -27,8 +27,10 @@ final class CommandLoaderTest extends TestCase
     {
         if ($this->originalHome === false) {
             unset($_SERVER['HOME']);
+            putenv('HOME');
         } else {
             $_SERVER['HOME'] = $this->originalHome;
+            putenv('HOME=' . $_SERVER['HOME']);
         }
 
         $this->removeTree($this->tmp);
@@ -216,6 +218,7 @@ final class CommandLoaderTest extends TestCase
     public function testLoadUserCommandsReadsTheHomeCommandsDirectory(): void
     {
         $_SERVER['HOME'] = $this->tmp;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->writeCommand('.sugar-crush/commands/mine.md', 'user body');
 
         $commands = (new CommandLoader())->loadUserCommands();
@@ -239,6 +242,7 @@ final class CommandLoaderTest extends TestCase
         $home = $this->tmp . '/home';
         $project = $this->tmp . '/project';
         $_SERVER['HOME'] = $home;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->writeCommand('home/.sugar-crush/commands/user-only.md', 'user body');
         $this->writeCommand('project/.sugar-crush/commands/project-only.md', 'project body');
 
@@ -258,6 +262,7 @@ final class CommandLoaderTest extends TestCase
         $home = $this->tmp . '/home';
         $project = $this->tmp . '/project';
         $_SERVER['HOME'] = $home;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->writeCommand('home/.sugar-crush/commands/compact.md', "---\ndescription: user compact\n---\nuser body");
         $this->writeCommand('home/.sugar-crush/commands/shared.md', "---\ndescription: user shared\n---\nuser body");
         $this->writeCommand('project/.sugar-crush/commands/shared.md', "---\ndescription: project shared\n---\nproject body");
@@ -272,6 +277,7 @@ final class CommandLoaderTest extends TestCase
     public function testLoadAllWithNoCommandDirectoriesIsJustTheBuiltInRegistry(): void
     {
         $_SERVER['HOME'] = $this->tmp . '/no-home';
+        putenv('HOME=' . $_SERVER['HOME']);
 
         $commands = (new CommandLoader())->loadAll($this->tmp . '/no-project');
 

@@ -25,10 +25,13 @@ trait TemporaryDirectoryTrait
             RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($items as $item) {
-            if ($item->isDir()) {
-                rmdir($item->getPathname());
-            } else {
+            // A symlink TO a directory answers true to isDir() and false to
+            // rmdir(); tests that plant one (symlinked skill dirs) would leave
+            // the tree behind and warn. isLink() is checked first.
+            if ($item->isLink() || !$item->isDir()) {
                 unlink($item->getPathname());
+            } else {
+                rmdir($item->getPathname());
             }
         }
         rmdir($dir);

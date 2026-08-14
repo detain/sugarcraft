@@ -28,23 +28,27 @@ use SugarCraft\Crush\Workflows\WorkflowStatus;
  */
 final class WorkflowResumptionTest extends TestCase
 {
+    use \SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+
     private string $tempDir;
     private WorkflowRegistry $registry;
     private ExecutorInterface $mockExecutor;
     private AgentWorkerPool $pool;
     private WorkflowEngine $engine;
-    private string $originalHome;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalHome = $_SERVER['HOME'] ?? '/root';
         $this->tempDir = sys_get_temp_dir() . '/sugar-crush-resume-test-' . uniqid('', true);
         mkdir($this->tempDir, 0755, true);
 
-        // Override HOME so pause files go to our temp directory
-        $_SERVER['HOME'] = $this->tempDir;
+        // Override HOME so pause files go to our temp directory. BOTH forms:
+        // WorkflowEngine resolves ~ through
+        // {@see \SugarCraft\Crush\Support\HomeDirectory}, which reads
+        // `getenv()` — and the env var is also what the SIGTERM subprocess
+        // below inherits, which `$_SERVER` alone never was.
+        $this->useHomeSandbox($this->tempDir);
 
         $this->registry = new WorkflowRegistry();
 
@@ -59,8 +63,7 @@ final class WorkflowResumptionTest extends TestCase
 
     protected function tearDown(): void
     {
-        // Restore original HOME
-        $_SERVER['HOME'] = $this->originalHome;
+        $this->restoreHomeSandbox();
 
         // Clean up temp directory
         $this->removeDirectory($this->tempDir);

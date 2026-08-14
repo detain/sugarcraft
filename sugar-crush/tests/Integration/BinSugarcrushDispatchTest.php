@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\ArgvParser;
 use SugarCraft\Crush\Cli\Help;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * crush_code.md Phase 0 item 3: every unrecognized or incomplete CLI flag
@@ -34,6 +35,8 @@ use SugarCraft\Crush\Cli\Help;
  */
 final class BinSugarcrushDispatchTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     /** Usage error, per crush_code.md; distinct from NonInteractive's 1 = ran and failed. */
     private const EXIT_USAGE = 2;
 
@@ -57,8 +60,27 @@ final class BinSugarcrushDispatchTest extends TestCase
      */
     private const WATCHDOG_GRACE_SECONDS = 5;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Every case here exec's a child with minimalEnv()'s throwaway HOME,
+        // but the in-process side of the class had no sandbox at all -- so any
+        // assertion added here that touches Bootstrap would read the
+        // developer's ~/.claude/skills. Sandbox both spellings up front rather
+        // than waiting for that to be someone's flaky test (see
+        // Tests\Support\HomeSandboxTrait).
+        $this->useHomeSandbox(\sys_get_temp_dir() . '/bin_dispatch_inproc_home_' . \uniqid('', true));
+    }
+
     protected function tearDown(): void
     {
+        $sandbox = \getenv('HOME');
+        $this->restoreHomeSandbox();
+        if (\is_string($sandbox) && \str_contains($sandbox, '/bin_dispatch_inproc_home_')) {
+            @\rmdir($sandbox);
+        }
+
         if ($this->tempHome !== '' && \is_dir($this->tempHome)) {
             $entries = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($this->tempHome, \FilesystemIterator::SKIP_DOTS),

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\ForeignSkillDiscovery;
 use SugarCraft\Crush\Skills\SkillSource;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Tests for ForeignSkillDiscovery — imports SKILL.md-shaped directories from
@@ -17,28 +18,27 @@ use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 final class ForeignSkillDiscoveryTest extends TestCase
 {
     use TemporaryDirectoryTrait;
+    use HomeSandboxTrait;
 
     private string $tempDir;
-    private string $origHome;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->tempDir = sys_get_temp_dir() . '/sugar-crush-foreign-skill-test-' . uniqid();
         mkdir($this->tempDir, 0777, true);
-        $this->origHome = $_SERVER['HOME'] ?? '/root';
         // Every discover*() call also scans the real HOME's foreign-skill
         // dirs; point HOME at an empty sandbox by default so tests aren't
         // polluted by whatever .claude/skills or .opencode/skills happen to
         // exist on the machine running the suite. Tests that specifically
-        // exercise home-dir discovery override this to a different fake home.
-        $_SERVER['HOME'] = $this->tempDir . '/default-empty-home';
-        mkdir($_SERVER['HOME'], 0777, true);
+        // exercise home-dir discovery move the sandbox to a different fake
+        // home. BOTH spellings of HOME are redirected -- see HomeSandboxTrait.
+        $this->useHomeSandbox($this->tempDir . '/default-empty-home');
     }
 
     protected function tearDown(): void
     {
-        $_SERVER['HOME'] = $this->origHome;
+        $this->restoreHomeSandbox();
         $this->removeDirectory($this->tempDir);
         parent::tearDown();
     }
@@ -83,7 +83,7 @@ final class ForeignSkillDiscoveryTest extends TestCase
     {
         $discovery = new ForeignSkillDiscovery();
         $fakeHome = $this->tempDir . '/fake-home';
-        $_SERVER['HOME'] = $fakeHome;
+        $this->useHomeSandbox($fakeHome);
         $this->createSkillFile($fakeHome . '/.claude/skills', 'home-skill', 'Home Claude skill');
 
         $result = $discovery->discoverClaude($this->tempDir . '/empty-project');
@@ -93,26 +93,34 @@ final class ForeignSkillDiscoveryTest extends TestCase
         $this->assertSame(SkillSource::Claude, $result['home-skill']->source);
     }
 
-    public function testDiscoverClaudeMergesProjectAndHomeWithProjectWinning(): void
+    /**
+     * THE USER'S OWN COPY WINS. A project's `.claude/skills` arrives with
+     * whatever repository was cloned, so letting it win a shared key would let
+     * a clone silently re-point a skill the user relies on -- the weaker,
+     * prompt-text form of the project-hook-file hole
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::hookFiles()} is gated for. The
+     * project's skill is still imported; it just may not displace a name that
+     * already resolved.
+     */
+    public function testDiscoverClaudeMergesProjectAndHomeWithTheUsersCopyWinning(): void
     {
-        // Both discoverClaude() search-path directories can define the same
-        // skill name. The merge is last-write-wins over a
-        // lowest-priority-first search order (home then project), so the
-        // project checkout wins a shared key -- the same "user < project"
-        // precedence SkillLoader::loadAll() documents for native skills.
+        // The merge is last-write-wins over a lowest-priority-first search
+        // order, so the search order is project then home.
         $discovery = new ForeignSkillDiscovery();
         $projectRoot = $this->tempDir . '/project2';
         $fakeHome = $this->tempDir . '/fake-home2';
-        $_SERVER['HOME'] = $fakeHome;
+        $this->useHomeSandbox($fakeHome);
         $this->createSkillFile($projectRoot . '/.claude/skills', 'shared', 'From project');
+        $this->createSkillFile($projectRoot . '/.claude/skills', 'project-only', 'Project only skill');
         $this->createSkillFile($fakeHome . '/.claude/skills', 'shared', 'From home');
         $this->createSkillFile($fakeHome . '/.claude/skills', 'home-only', 'Home only skill');
 
         $result = $discovery->discoverClaude($projectRoot);
 
-        $this->assertCount(2, $result);
-        $this->assertSame('From project', $result['shared']->description);
+        $this->assertCount(3, $result);
+        $this->assertSame('From home', $result['shared']->description);
         $this->assertArrayHasKey('home-only', $result);
+        $this->assertArrayHasKey('project-only', $result, 'a project skill with no collision is still imported');
     }
 
     // -------------------------------------------------------------------------
@@ -148,7 +156,7 @@ final class ForeignSkillDiscoveryTest extends TestCase
     {
         $discovery = new ForeignSkillDiscovery();
         $fakeHome = $this->tempDir . '/fake-home-oc';
-        $_SERVER['HOME'] = $fakeHome;
+        $this->useHomeSandbox($fakeHome);
         $this->createSkillFile($fakeHome . '/.config/opencode/skills', 'oc-home-skill', 'Home opencode skill');
 
         $result = $discovery->discoverOpencode($this->tempDir . '/empty-oc-project');
@@ -158,23 +166,24 @@ final class ForeignSkillDiscoveryTest extends TestCase
         $this->assertSame(SkillSource::Opencode, $result['oc-home-skill']->source);
     }
 
-    public function testDiscoverOpencodeMergesProjectAndHomeWithProjectWinning(): void
+    public function testDiscoverOpencodeMergesProjectAndHomeWithTheUsersCopyWinning(): void
     {
-        // Same user < project precedence as discoverClaude(); discoverOpencode()
-        // shared the identical backwards search order before this was fixed.
+        // Same project < user precedence as discoverClaude().
         $discovery = new ForeignSkillDiscovery();
         $projectRoot = $this->tempDir . '/oc-project2';
         $fakeHome = $this->tempDir . '/fake-home-oc2';
-        $_SERVER['HOME'] = $fakeHome;
+        $this->useHomeSandbox($fakeHome);
         $this->createSkillFile($projectRoot . '/.opencode/skills', 'shared', 'From project');
+        $this->createSkillFile($projectRoot . '/.opencode/skills', 'project-only', 'Project only skill');
         $this->createSkillFile($fakeHome . '/.config/opencode/skills', 'shared', 'From home');
         $this->createSkillFile($fakeHome . '/.config/opencode/skills', 'home-only', 'Home only skill');
 
         $result = $discovery->discoverOpencode($projectRoot);
 
-        $this->assertCount(2, $result);
-        $this->assertSame('From project', $result['shared']->description);
+        $this->assertCount(3, $result);
+        $this->assertSame('From home', $result['shared']->description);
         $this->assertArrayHasKey('home-only', $result);
+        $this->assertArrayHasKey('project-only', $result, 'a project skill with no collision is still imported');
     }
 
     // -------------------------------------------------------------------------

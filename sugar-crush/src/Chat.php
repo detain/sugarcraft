@@ -5260,7 +5260,22 @@ final class Chat implements Model
             // would put the engine and Chat's own tool path on two different
             // modes — the exact "one gate for the whole launch" invariant
             // Bootstrap::chat() builds for.
-            $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor($name, gate: $this->permissionGate());
+            //
+            // THE ROOT IS THREADED TOO, and omitting it silently SHORTENED the
+            // guard chain. Bootstrap::backendFor() falls back to `getcwd()`
+            // for a null root, and the launch's root is not the process
+            // directory whenever `--root` was given — so a trusted project's
+            // `.sugar-crush/hooks.yaml` was loaded at launch and then dropped
+            // by the switch, leaving Chat's own tool path and the engine path
+            // on two different chains. A guard silently missing from the chain
+            // is the one failure a guard must not have (see
+            // {@see \SugarCraft\Crush\Hooks\HookConfig}), and it fails exactly
+            // when it matters: the tool call the hook existed to stop.
+            $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor(
+                $name,
+                $this->projectRoot,
+                gate: $this->permissionGate(),
+            );
         } catch (\Throwable $e) {
             return [$this->mutate([
                 'palette' => null,

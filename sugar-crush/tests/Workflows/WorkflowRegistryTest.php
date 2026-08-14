@@ -104,6 +104,32 @@ class Dummy {}');
         $this->assertSame(['add-feature', 'audit-code', 'refactor-service'], $names);
     }
 
+    /**
+     * `~` EXPANSION IS NOT A REGEX SUBSTITUTION. The expansion used to be
+     * `preg_replace('/^~/', HomeDirectory::path(), $path)`, and the REPLACEMENT
+     * argument is where `$1`, `\1` and `\\` are meaningful to PCRE — so a home
+     * directory containing any of them came back mangled (a `$1` with no
+     * capture group substitutes the empty string). A home path is user data,
+     * not a pattern.
+     */
+    public function testATildeIsExpandedLiterallyEvenWhenTheHomePathLooksLikeABackreference(): void
+    {
+        $awkwardHome = $this->tempDir . '/ho$1me';
+        mkdir($awkwardHome . '/.sugar-crush/workflows', 0755, true);
+        file_put_contents($awkwardHome . '/.sugar-crush/workflows/from-home.php', "<?php\nclass Dummy {}");
+
+        $originalEnvHome = getenv('HOME');
+        putenv('HOME=' . $awkwardHome);
+        $_SERVER['HOME'] = $awkwardHome;
+
+        try {
+            $this->assertSame(['from-home'], (new WorkflowRegistry())->list());
+        } finally {
+            $originalEnvHome === false ? putenv('HOME') : putenv('HOME=' . $originalEnvHome);
+            $_SERVER['HOME'] = $this->tempDir;
+        }
+    }
+
     public function testListIgnoresHiddenFilesAndNonPhpFiles(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';

@@ -16,6 +16,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
+use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Memory\MemoryStore;
@@ -34,6 +35,7 @@ use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
@@ -76,7 +78,70 @@ final class Bootstrap
 
     private const PERMISSION_RULES_CONFIG_KEY = 'permissionRules';
 
+    /**
+     * The per-user opt-in that makes a PROJECT `.sugar-crush/hooks.yaml`
+     * eligible to run at all — a list of project roots, in the same
+     * `~/.sugar-crush/config.json` {@see PERMISSION_RULES_CONFIG_KEY} is read
+     * from and parsed with the same warn-and-skip-the-bad-entry tolerance.
+     * See {@see hookFiles()} for why the default has to be "no".
+     */
+    private const TRUSTED_PROJECT_HOOKS_CONFIG_KEY = 'trustedProjectHooks';
+
     private const DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
+
+    /**
+     * Project hook files this process has already reported as skipped, keyed
+     * by path — see the notice in {@see hookFiles()} for why it may only fire
+     * once per launch. Static because the duplication comes from ONE launch
+     * building two hook chains, which is a property of the process rather than
+     * of any instance.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedUntrustedHookFiles = [];
+
+    /**
+     * Permission-config warnings this process has already printed, keyed by
+     * message — see {@see warnPermissionConfigOnce()}.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedPermissionConfigWarnings = [];
+
+    /**
+     * The trusted project roots this process resolved, keyed by the
+     * `config.json` they came out of — see {@see trustedRootsForThisProcess()}
+     * for why the answer may not be recomputed mid-session.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedRoots = [];
+
+    /**
+     * The hook entries this process read, keyed by file path — see
+     * {@see hookFileEntries()} for why the file is read once per launch.
+     *
+     * @var array<string, array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}>>
+     */
+    private static array $hookFileEntries = [];
+
+    /**
+     * Every SKILL.md the launch's skill scan gave up on, keyed by path — the
+     * diagnostic {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()}
+     * keeps instead of writing to stderr, hoisted here so it survives past the
+     * manager that produced it. See {@see skillSkips()}.
+     *
+     * @var array<string, string>
+     */
+    private static array $skillSkips = [];
+
+    /**
+     * The subset of {@see $skillSkips} already put in front of the user — see
+     * {@see reportSkillSkips()}.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedSkillSkips = [];
 
     /**
      * Build the fully-wired Chat model the CLI binary hands to Program.
@@ -92,6 +157,19 @@ final class Bootstrap
         // reached through backend() -> tools() — reports the missing root as a
         // clear error rather than handing a path jail a `false`.
         $root ??= getcwd() ?: null;
+
+        // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
+        // {@see trustedConfigDirPath()} throws when this process cannot tell
+        // whose home it is in, which is what stops the launch reading policy
+        // out of `sys_get_temp_dir()`. It used to be reached through
+        // permissionGate() — five calls further down, after sessionStore() and
+        // skillRegistry() had already run — so a launch with `HOME` unset and
+        // `TMPDIR` pointed at an attacker-owned directory still refused, but
+        // only after CREATING `session.db` inside it. Naming the directory
+        // before anything is built is what makes the refusal precede the side
+        // effects it exists to prevent.
+        self::trustedConfigDirPath();
+
         $userConfig = self::readUserConfig();
 
         // ONE store instance, seeded before the Chat is built: seedSession()
@@ -108,6 +186,10 @@ final class Bootstrap
         // to be on. It also keeps the launch to ONE disk scan rather than one
         // per consumer.
         $skills = $root === null ? null : self::skillRegistry($root);
+
+        // Construction time, before Program takes the terminal — see
+        // {@see reportSkillSkips()} for why here and nowhere else.
+        self::reportSkillSkips();
 
         // ONE gate for the whole launch, for the reason the registry above is
         // one: PermissionGate's Auto-mode circuit breaker is per-INSTANCE
@@ -143,7 +225,7 @@ final class Bootstrap
             // would still be the one unguarded tool path in the live binary
             // (crush_feat.md §1 E1) - hooks that a call gets gated by on the
             // engine pipeline would silently not apply on this one.
-            hooks: self::hooks($permissionGate),
+            hooks: self::hooks($permissionGate, $root),
             // Without a supervisor instance /bg answers "Background sessions
             // not configured" on every real run, which leaves crush_feat.md
             // §5 E3 (`/bg` dispatching onto BackgroundSupervisor) implemented
@@ -340,9 +422,18 @@ final class Bootstrap
      */
     public static function agentPresets(string $root): array
     {
+        // trustedConfigDirPath(), NOT configDirPath(), and resolved OUTSIDE
+        // the catch below. A preset carries `permissionMode:` and `tools:`
+        // ({@see \SugarCraft\Crush\Agents\AgentPreset}), which is policy by the
+        // same definition {@see hookFiles()} uses — so the user half of this
+        // pair may no more be read out of a world-writable `/tmp` stand-in than
+        // `config.json` may. Outside the catch because that arm degrades to the
+        // built-in agents, and "this process cannot tell whose home this is" is
+        // not a degradable condition: it is the launch refusal
+        // {@see trustedConfigDirPath()} exists to raise.
         $registry = new AgentPresetRegistry([
             rtrim($root, '/') . '/.sugar-crush/agents',
-            self::configDirPath() . '/agents',
+            self::trustedConfigDirPath() . '/agents',
         ]);
 
         try {
@@ -395,6 +486,14 @@ final class Bootstrap
         // displayed tool list: scanning twice would show the user a roster
         // that the tool could disagree with.
         $skills = self::skillRegistry($root);
+
+        // This is a SECOND scan — chat() above already reported what its own
+        // scan skipped — and it can find skills that one did not, because it
+        // runs after it and reads the same trees. reportSkillSkips() only
+        // prints what has not been printed yet, so the common case is silence
+        // and the case this adds is a skill file that would otherwise have been
+        // collected into skillSkips() and never mentioned to anybody.
+        self::reportSkillSkips();
 
         return App::new($provider, $model)
             ->withChat($chat)
@@ -475,6 +574,12 @@ final class Bootstrap
      */
     public static function backend(?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null): Backend
     {
+        // Same first-line refusal {@see chat()} makes, for the same ordering
+        // reason: this method is the `-p` path's entry point, where nothing
+        // else resolves the config directory until hooks() does — five calls
+        // and one full skill scan later. See {@see trustedConfigDirPath()}.
+        self::trustedConfigDirPath();
+
         ToolIpcFiles::sweepOnce();
 
         $root ??= getcwd() ?: null;
@@ -522,7 +627,7 @@ final class Bootstrap
 
         return (new EngineBackend(new EchoProvider(), 'echo'))
             ->withTools(self::tools($root, $loader, $skills))
-            ->withHooks(self::hooks())
+            ->withHooks(self::hooks(null, $root))
             ->withPermissionGate($gate ?? self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
@@ -549,8 +654,10 @@ final class Bootstrap
     public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null): Backend
     {
         // See backend(): whichever of the two a run enters through, the sweep
-        // happens once. sweepOnce() latches, so backend() delegating here does
-        // not sweep twice.
+        // happens once, and the config directory is named before any store or
+        // skill scan can resolve it out of a `/tmp` stand-in. sweepOnce()
+        // latches, so backend() delegating here does not sweep twice.
+        self::trustedConfigDirPath();
         ToolIpcFiles::sweepOnce();
 
         $root ??= getcwd() ?: null;
@@ -563,7 +670,7 @@ final class Bootstrap
 
         return (new EngineBackend($provider, (string) $model))
             ->withTools(self::tools($root, $loader, $skills))
-            ->withHooks(self::hooks())
+            ->withHooks(self::hooks(null, $root))
             ->withPermissionGate($gate ?? self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
@@ -739,6 +846,14 @@ final class Bootstrap
      * {$root}/.opencode/skills, ~/.config/opencode/skills (see {@see
      * \SugarCraft\Crush\Skills\ForeignSkillDiscovery}).
      *
+     * The foreign half of that list was ASPIRATIONAL until crush_code.md
+     * Phase 2 item 6: nothing called ForeignSkillDiscovery, so a
+     * `~/.claude/skills` tree was discovered by its unit tests and by nothing
+     * else. {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} now calls
+     * it, registering the imports FIRST so a native skill still wins a name
+     * collision — see that method for why additive is the only safe merge
+     * direction here.
+     *
      * This is the missing link crush_feat.md section 10.5(1) needed: without
      * it, SkillManager/SkillLoader/ForeignSkillDiscovery were only ever
      * exercised by their own unit tests — nothing in `bin/sugarcrush` called
@@ -763,27 +878,620 @@ final class Bootstrap
             $manager->disableFromConfig(array_values(array_filter($disabled, 'is_string')));
         }
 
+        // The diagnostic outlives the manager that produced it — see
+        // {@see skillSkips()}. Merged rather than replaced because a launch
+        // scans more than once (chat(), app(), and every Ctrl+P provider
+        // switch), and a later scan finding nothing wrong must not erase what
+        // an earlier one found.
+        self::$skillSkips = [...self::$skillSkips, ...$manager->skipped()];
+
         return $registry;
     }
 
     /**
+     * Every SKILL.md this process's skill scans could not read, keyed by path.
+     *
+     * The seam that replaced {@see \SugarCraft\Crush\Skills\SkillLoader}'s old
+     * per-skip `error_log()`. Getting those lines off stderr was right — they
+     * are OTHER TOOLS' files, one broken third-party skill printed on every
+     * launch, and a skill scan also runs mid-session on the Ctrl+P provider
+     * switch, where the line lands inside a frame the renderer believes it
+     * owns — but a diagnostic nothing reads is the same as no diagnostic. So
+     * the detail lives here, reachable from a doctor report or a debug pane,
+     * and {@see reportSkillSkips()} puts ONE bounded line in front of the user
+     * at launch so they know it is here to ask for.
+     *
+     * @return array<string, string> sourcePath => why it was skipped
+     */
+    public static function skillSkips(): array
+    {
+        return self::$skillSkips;
+    }
+
+    /**
+     * Tell the user, once and in one line, that some skill files were skipped.
+     *
+     * ONE LINE regardless of how many, and only when there ARE some: the
+     * failure this replaced was N lines every launch. Called from
+     * {@see chat()} rather than from {@see skillRegistry()} deliberately —
+     * skillRegistry() also runs on the Ctrl+P provider switch, mid-session,
+     * with the alt screen up, and that is precisely where a stderr write
+     * corrupts the frame. Construction time, before Program takes the
+     * terminal, is the only safe moment, which is the same reasoning
+     * {@see hookFiles()}'s skip notice is written under.
+     *
+     * PUBLIC because two construction paths outside this method's original
+     * caller reach a skill scan and never reported it: {@see app()} scans a
+     * second time for the shell's panes (skips found only by THAT scan were
+     * collected and never surfaced), and {@see NonInteractive::run()} builds a
+     * backend without going through {@see chat()} at all, so a `-p` run
+     * swallowed the notice outright. Both call it at construction time, and the
+     * `-p` path has no alt screen to corrupt in the first place.
+     */
+    public static function reportSkillSkips(): void
+    {
+        // Only what has not been reported yet, keyed the same way
+        // {@see $reportedUntrustedHookFiles} is: a process that builds more
+        // than one Chat (a test suite, an embedder) must not re-print the
+        // same skips, and a second scan that found something NEW still says so.
+        $new = array_diff_key(self::$skillSkips, self::$reportedSkillSkips);
+        if ($new === []) {
+            return;
+        }
+
+        foreach (array_keys($new) as $path) {
+            self::$reportedSkillSkips[$path] = true;
+        }
+
+        $count = \count($new);
+        self::warnPermissionConfig(sprintf(
+            '%d skill file%s could not be read and %s skipped; set %s=1 to list %s',
+            $count,
+            $count === 1 ? '' : 's',
+            $count === 1 ? 'was' : 'were',
+            SkillLoader::DEBUG_SKIPS_ENV,
+            $count === 1 ? 'it' : 'them',
+        ));
+    }
+
+    /**
+     * The launch's PreToolUse/PostToolUse chain: the built-in guards, then
+     * whatever {@see hookFiles()} found on disk, then the permission gate.
+     *
+     * THE ORDER IS THE POINT. Built-ins first, config hooks second, the gate
+     * LAST — a scan reports the FIRST refusal it meets
+     * ({@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} returns a
+     * non-permitting result outright), so this puts the narrow, specific
+     * hazard ("this touches a protected file", then the user's own rule) ahead
+     * of the broad policy one ("mode plan does not allow Edit"). Loading the
+     * config hooks BEFORE the gate also keeps the gate last on both
+     * construction paths, since {@see EngineBackend}'s own
+     * `resolveHookManager()` appends it to whatever manager it is handed.
+     *
+     * A config hook cannot use that position to WIN over a built-in DENY: a
+     * pass stops at the first non-permitting result, and the built-ins are
+     * ahead of it, so a config hook can only ever report on a call the guards
+     * before it already permitted.
+     *
+     * What that same short-circuit costs, stated rather than implied: the gate
+     * is LAST, so ANY earlier non-permitting result returns before
+     * {@see PermissionGateHook::execute()} is reached and the refusal never
+     * reaches {@see PermissionGate}'s Auto-mode 3-strike circuit breaker. That
+     * is not a cost this wiring introduced and it is not about config hooks:
+     * the three built-ins have always been ahead of the gate, so a
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook} DENY — the
+     * commonest refusal there is — was already uncounted before a hook FILE
+     * could be loaded at all. Registering config hooks in between adds one
+     * more source of the same uncounted refusal, not a new failure mode. It is
+     * a MISCOUNT rather than a hole — the call is refused either way, and the
+     * strike counter only escalates refusals it never saw — and closing it means
+     * either running the gate on calls another hook already denied (giving a
+     * denied call a second, weaker verdict) or teaching the registry to notify
+     * skipped hooks. Both are larger than this wiring; the miscount is the
+     * documented trade.
+     *
      * @param PermissionGate|null $gate Install this gate as an additional
      *        PreToolUse layer, AFTER the built-ins — see {@see PermissionGateHook}
      *        for why that order. Pass the launch's single gate instance so the
      *        Auto-mode circuit breaker counts strikes once across every path
      *        that shares this manager; null keeps the built-ins-only chain
      *        every caller had before crush_code.md Phase 1 item 2.
+     * @param string|null $root The project whose `.sugar-crush/hooks.yaml` is
+     *        read alongside the user's. Null reads only the user's file, which
+     *        is what a caller with no root of its own to give should get
+     *        rather than a hook file resolved against the process directory.
+     *
+     * @throws PermissionConfigException when a hook file is present and unusable
      */
-    private static function hooks(?PermissionGate $gate = null): HookManager
+    private static function hooks(?PermissionGate $gate = null, ?string $root = null): HookManager
     {
         $hooks = new HookManager(new HookRegistry());
         $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
+
+        foreach (self::hookFiles($root) as $path) {
+            try {
+                $hooks->loadEntries(self::hookFileEntries($path), $path);
+            } catch (\InvalidArgumentException | \RuntimeException $e) {
+                // Same refusal {@see permissionConfig()} makes, for the same
+                // reason: this file is part of the launch's gating policy, so
+                // "present but unusable" may not degrade into a shorter guard
+                // chain nobody was told about. PermissionConfigException is
+                // what `bin/sugarcrush`, {@see NonInteractive::run()} and
+                // {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}
+                // already turn into a clean exit-2 usage report.
+                throw new PermissionConfigException(
+                    $e->getMessage() . ' Refusing to start rather than run with a hook chain '
+                    . 'that is not the one configured.',
+                    0,
+                    $e,
+                );
+            }
+        }
 
         if ($gate !== null) {
             $hooks->register(new PermissionGateHook($gate));
         }
 
         return $hooks;
+    }
+
+    /**
+     * $path's hook entries, READ ONCE PER PROCESS.
+     *
+     * THE CHAIN A LAUNCH STARTS WITH IS THE CHAIN IT RUNS. A hook entry is a
+     * shell command, and this method is reached on every hook-manager build —
+     * the launch's two, plus one more for each Ctrl+P provider switch
+     * ({@see \SugarCraft\Crush\Chat::selectPaletteProvider()} =>
+     * {@see backendFor()}). Re-reading the file on each of those meant the
+     * SESSION ITSELF could install hooks into itself: `Bash` is deliberately
+     * not path-jailed, so one `>> ~/.sugar-crush/hooks.yaml` followed by a
+     * provider switch put attacker-authored shell in the guard chain
+     * mid-session, with no relaunch and no prompt.
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} denies the write
+     * itself, but its `command` half is best-effort by nature (see that
+     * method), so the read side may not depend on the write side having caught
+     * it. Freezing at first read is what makes the two independent.
+     *
+     * The cost is stated rather than implied: a hook file EDITED BY THE USER
+     * mid-session no longer takes effect until the next launch. That is the
+     * same "one config source for the whole launch" commitment
+     * {@see agentManager()} already documents for the permission rules, and it
+     * is the half of the trade that can be undone by pressing Ctrl+C.
+     *
+     * Keyed by path, so this does not entangle a project file with the user's,
+     * and an absent file is memoised as `[]` — a file that appears mid-session
+     * is exactly the case being closed.
+     *
+     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}>
+     *
+     * @throws PermissionConfigException when the user's own hook file is
+     *         writable by other accounts, or belongs to one
+     * @throws \RuntimeException|\InvalidArgumentException see {@see \SugarCraft\Crush\Hooks\HookConfig::loadFromFile()}
+     */
+    private static function hookFileEntries(string $path): array
+    {
+        if (!\array_key_exists($path, self::$hookFileEntries)) {
+            // Only the USER's file. The project's is gated by
+            // `trustedProjectHooks` and lives in a checkout whose permissions
+            // are the user's business; the user's file is the one loaded with
+            // no gate at all, on a premise that ownership is what makes true.
+            if ($path === self::trustedConfigDirPath() . '/hooks.yaml') {
+                self::requirePrivatePolicyFile($path);
+            }
+
+            self::$hookFileEntries[$path] = HookConfig::loadFromFile($path);
+        }
+
+        return self::$hookFileEntries[$path];
+    }
+
+    /**
+     * Refuse a policy file that is not exclusively this account's.
+     *
+     * The gate on the project hook file answers "did the user trust this
+     * repository". This answers the question underneath it — "is the file that
+     * records the answer actually the user's" — which nothing checked, and
+     * which the whole `~/.sugar-crush` premise rests on. A `config.json` owned
+     * by another uid, or sitting in a world-writable directory, is somebody
+     * else's `permissionMode`, `permissionRules` and `trustedProjectHooks`.
+     *
+     * WORLD-WRITABLE, NOT GROUP-WRITABLE. Debian/Ubuntu ship umask 002 with
+     * user-private groups — every file this CLI writes on such a box is
+     * group-writable to a group with exactly one member — so refusing on the
+     * group bit would be a launch failure for the default configuration of a
+     * mainstream distribution rather than a finding about anything. The `o+w`
+     * bit has no such benign reading, and it is the bit `/tmp`-style planted
+     * directories carry.
+     *
+     * OWNERSHIP is checked where `ext-posix` allows: it is the half that
+     * catches a file another account planted with sane permissions. It does
+     * NOT catch the session writing its own home — same uid — which is what
+     * {@see hookFileEntries()} and {@see trustedRootsForThisProcess()} freeze
+     * against instead.
+     *
+     * @throws PermissionConfigException
+     */
+    private static function requirePrivatePolicyFile(string $path): void
+    {
+        foreach ([$path, \dirname($path)] as $target) {
+            if (!file_exists($target)) {
+                continue;
+            }
+
+            clearstatcache(true, $target);
+
+            $mode = @fileperms($target);
+            if ($mode !== false && ($mode & 0002) !== 0) {
+                throw new PermissionConfigException(
+                    "{$target} is writable by every account on this machine, so the permission "
+                    . 'policy and hook chain it carries are not this user\'s. Refusing to start '
+                    . 'rather than run policy anyone could have written — `chmod o-w ' . $target . '`.',
+                );
+            }
+
+            if (!\function_exists('posix_geteuid')) {
+                continue;
+            }
+
+            $owner = @fileowner($target);
+            if ($owner !== false && $owner !== posix_geteuid()) {
+                throw new PermissionConfigException(
+                    "{$target} belongs to uid {$owner}, not to the account this session is running as, "
+                    . 'so the permission policy and hook chain it carries are somebody else\'s. '
+                    . 'Refusing to start rather than run another account\'s policy.',
+                );
+            }
+        }
+    }
+
+    /**
+     * The hook files this launch reads, lowest-priority first: the user's
+     * `~/.sugar-crush/hooks.yaml` always, and the project's
+     * `{root}/.sugar-crush/hooks.yaml` ONLY when the user has said they trust
+     * that project.
+     *
+     * THE PROJECT FILE IS ARBITRARY CODE EXECUTION FROM CLONED CONTENT, and
+     * that is the whole reason for the gate. A hook entry is a shell command;
+     * a `matcher: '.*'` entry runs it on the model's first tool call. So
+     * `git clone <untrusted> && cd <it> && sugarcrush` would run a stranger's
+     * shell with no prompt and nothing in the transcript — and no permission
+     * mode saves the user from it, because the config hooks are registered
+     * BEFORE {@see PermissionGateHook} and a scan stops at the first refusal,
+     * so the payload has already run by the time the gate would have refused.
+     * `--permission-mode plan` was measured as `verdict=allow, attacker shell
+     * ran: YES`. Nothing else in this codebase runs project-authored code:
+     * {@see agentPresets()} lets a project WEAKEN a sub-agent's policy, which
+     * is influence over policy, not execution.
+     *
+     * THE OPT-IN. `~/.sugar-crush/config.json` — the user's own file, which no
+     * repository can write BY BEING CLONED — carries a `trustedProjectHooks`
+     * list of project roots:
+     *
+     * ```json
+     * { "trustedProjectHooks": ["/home/you/work/my-repo", "~/src/other"] }
+     * ```
+     *
+     * Per-path rather than one global `true` because "I trust this one repo"
+     * is the real need, and a global flag re-opens the hole in every other
+     * checkout the moment it is set. Entries are compared by `realpath()`, so
+     * a symlinked or trailing-slash spelling of a trusted root still matches
+     * and a path that does not resolve simply never matches.
+     *
+     * WHAT "THE USER'S OWN FILE" CAN AND CANNOT MEAN. A clone cannot write it,
+     * but the SESSION runs as the user: `Bash` is not path-jailed, and a
+     * cloned README or `CLAUDE.md` prompting the model into appending one line
+     * to `trustedProjectHooks` is the same threat class as the hook file
+     * itself. Two things keep the grant the user's:
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} denies the tool
+     * call, and {@see trustedRootsForThisProcess()} freezes the list for the
+     * process so a write that got past it cannot take effect in the session
+     * that made it. Neither can make a NEXT launch safe — see that method for
+     * the boundary, stated rather than implied.
+     *
+     * THE GATE, NOT THE FEATURE, IS WHAT IS CONDITIONAL. The project-file code
+     * path is intact and reachable; only the decision to walk it is gated.
+     * That is deliberate room for the better answer: a per-directory trust
+     * PROMPT (print the hooks, require an explicit yes, record the decision
+     * keyed by real path + content hash, re-prompt when the hash changes)
+     * belongs here as a SECOND way to satisfy {@see projectHooksAreTrusted()},
+     * beside the config key rather than instead of it — a prompt needs a
+     * terminal, and this method also runs on the non-interactive and
+     * background-session paths where there is nobody to ask.
+     *
+     * The gate is also what has to stand between a `SessionStart` hook and
+     * execution. {@see \SugarCraft\Crush\Hooks\HookConfig::parse()} accepts
+     * every {@see \SugarCraft\Crush\Hooks\HookEvent} case, so such an entry
+     * registers today and is inert only because nothing constructs
+     * {@see \SugarCraft\Crush\Hooks\HookDispatcher}. Wire session-lifecycle
+     * dispatch up and the payload moves from first-tool-call to launch with no
+     * other change — so "the gate refused to load it" is the property that has
+     * to hold, not "nothing dispatches it yet".
+     *
+     * PATH SHAPE COPIED FROM {@see agentPresets()} — the project's
+     * `.sugar-crush/<thing>` beside the user's, resolved off
+     * {@see configDirPath()} rather than {@see configDir()} so reading the
+     * hook chain is not what creates `~/.sugar-crush`. YAML because
+     * {@see \SugarCraft\Crush\Hooks\HookConfig} parses YAML (symfony/yaml is a
+     * hard dependency of this package), so the extension names what the file
+     * actually is.
+     *
+     * WHEN BOTH ARE LOADED, neither overrides the other, and a name collision
+     * between them is refused by {@see HookManager::loadFromFile()}. That is
+     * deliberately NOT the "later source overrides earlier" precedence
+     * {@see \SugarCraft\Crush\Skills\SkillLoader::loadAll()} uses for skills,
+     * because a hook chain is not a lookup table: overriding by name would
+     * mean a checked-in project file could disarm a guard the user wrote for
+     * themselves — by naming it — on the first repo they cloned, and the
+     * reverse ordering would let a personal file disarm the project's. Adding
+     * is the only thing a second file is allowed to do.
+     *
+     * @return list<string> paths that may or may not exist, de-duplicated by
+     *         real path; an absent file is a no-op, see
+     *         {@see \SugarCraft\Crush\Hooks\HookConfig::loadFromFile()}
+     *
+     * @throws PermissionConfigException when a path cannot be reached, so
+     *         whether a hook file is configured there is unknowable
+     */
+    private static function hookFiles(?string $root): array
+    {
+        // trustedConfigDirPath(), NOT configDirPath(): the user file is loaded
+        // with no trust gate at all on the grounds that the user wrote it, and
+        // that premise only holds in a directory only the user can write.
+        $paths = [self::trustedConfigDirPath() . '/hooks.yaml'];
+
+        if ($root !== null) {
+            // CANONICAL, not as spelled. The trust decision below is made on
+            // `realpath($root)`, so naming the file off the raw string would
+            // leave the loaded path dependent on the process directory for a
+            // decision that was not — and an in-process `chdir()` would then
+            // re-point a path the launch had already vetted.
+            $canonicalRoot = realpath($root);
+            $projectFile = rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/') . '/.sugar-crush/hooks.yaml';
+
+            if ($canonicalRoot !== false && self::projectHooksAreTrusted($canonicalRoot)) {
+                $paths[] = $projectFile;
+            } elseif (is_file($projectFile)) {
+                // NOT a silent drop. Ignoring a file the repo's author expects
+                // to run changes what the session does, so it is reported the
+                // same way a skipped permission rule is — see
+                // {@see warnPermissionConfig()} for why stderr. This runs
+                // during construction, before Program takes the terminal, so
+                // on the interactive path the line lands ahead of the alt
+                // screen rather than inside a frame.
+                //
+                // ONCE PER PATH PER PROCESS. {@see chat()} builds two hook
+                // managers (its own chain and the engine backend's), so an
+                // untrusted project printed this twice on every interactive
+                // launch — and a notice a user meets twice a run for doing
+                // nothing wrong is a notice they learn to scroll past.
+                //
+                // The advice names the CANONICAL path, which is the whole
+                // point of printing it: `--root .` used to print `Add "." to
+                // trustedProjectHooks`, and a literal `"."` entry is
+                // realpath()'d against the CWD on every launch exactly as the
+                // root is, so it always agrees — following the tool's own
+                // instruction turned a per-path allowlist into "trust every
+                // repository I cd into". {@see trustedProjectHookRoots()}
+                // refuses such an entry now; this makes sure the tool never
+                // suggests one.
+                if (!isset(self::$reportedUntrustedHookFiles[$projectFile])) {
+                    self::$reportedUntrustedHookFiles[$projectFile] = true;
+
+                    self::warnPermissionConfig(
+                        "{$projectFile} was NOT loaded: honouring a project hook file means running shell "
+                        . "this repository's author wrote, every time you open it. Add "
+                        . '"' . rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/')
+                        . '" to "' . self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY
+                        . '" in ' . self::userConfigPath() . ' to opt in',
+                    );
+                }
+            }
+        }
+
+        foreach ($paths as $path) {
+            if (is_file($path)) {
+                continue;
+            }
+
+            // The same ambiguity {@see permissionConfig()} draws the line on:
+            // `is_file()` answers false both for "there is no hook file" and
+            // for "a directory on the way to it cannot be searched", and only
+            // the first is "nothing was configured". Reading the second as
+            // absence would run the session with a guard chain shorter than
+            // the configured one and say nothing.
+            $unreachable = self::unreachableAncestor($path);
+            if ($unreachable !== null) {
+                throw new PermissionConfigException(
+                    "{$path} cannot be reached: {$unreachable}, "
+                    . 'so whether hooks are configured there is unknowable. '
+                    . 'Refusing to start rather than run with an unknown hook chain.',
+                );
+            }
+        }
+
+        // DE-DUPLICATED BY REAL PATH, because the two candidates are not always
+        // two files. Run `sugarcrush` in your own home directory — or with
+        // `--root .` from it, or through a symlinked/trailing-slash alias of it
+        // — and both entries name `~/.sugar-crush/hooks.yaml`. Loading it twice
+        // hits {@see HookManager::loadFromFile()}'s already-registered guard and
+        // kills the launch with exit 2 over a collision that does not exist,
+        // and it does so only for users who actually wrote hooks.
+        $unique = [];
+        foreach ($paths as $path) {
+            // `?: $path` keeps a not-yet-existing file (the fresh-install case,
+            // where realpath() answers false) as its own entry rather than
+            // collapsing every absent candidate onto one key.
+            $unique[realpath($path) ?: $path] ??= $path;
+        }
+
+        return array_values($unique);
+    }
+
+    /**
+     * Whether the user has opted this project root's `.sugar-crush/hooks.yaml`
+     * in — see {@see hookFiles()} for the threat this answers and for the trust
+     * PROMPT that belongs beside this check rather than instead of it.
+     *
+     * Fails closed on every uncertainty: an unresolvable root, an absent key, a
+     * key of the wrong shape. The one thing it does not degrade quietly on is a
+     * `config.json` that exists and cannot be parsed — {@see permissionConfig()}
+     * stops the launch there, and this is the same file and the same class of
+     * decision.
+     *
+     * @throws PermissionConfigException when the user config exists and is unusable
+     */
+    private static function projectHooksAreTrusted(string $root): bool
+    {
+        $canonical = realpath($root);
+        if ($canonical === false) {
+            return false;
+        }
+
+        return in_array($canonical, self::trustedRootsForThisProcess(), true);
+    }
+
+    /**
+     * The trusted roots for this launch, RESOLVED ONCE AND NOT AGAIN.
+     *
+     * THE GRANT MAY NOT BE MADE BY THE THING IT GATES. `trustedProjectHooks`
+     * lives in `~/.sugar-crush/config.json`; the shipped default permission
+     * mode is {@see DEFAULT_PERMISSION_MODE}; and `Bash` is deliberately not
+     * path-jailed ({@see \SugarCraft\Crush\Tools\BuiltIn\Bash}). This method
+     * used to re-read the file on every hook-manager build, so a repository
+     * whose README prompt-injected the model into appending one line to that
+     * list — then any Ctrl+P provider switch — had its own `.sugar-crush/hooks.yaml`
+     * shell running mid-session, no relaunch and no prompt. That is precisely
+     * the cloned-content threat {@see hookFiles()} describes, arriving through
+     * the allowlist instead of around it.
+     *
+     * Freezing at first read is what breaks the loop: within a session the
+     * answer to "which repositories did the user trust" is whatever it was
+     * when the session started, so a write made DURING the session — however
+     * it got past {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} —
+     * cannot take effect in that session. What it does not, and cannot, do is
+     * make a NEXT launch safe: a session that can run arbitrary shell as this
+     * user can leave anything behind in this user's home. The property claimed
+     * here is narrower and is the one the gate needs to be worth having — the
+     * trust decision is the user's, and is made before the untrusted content
+     * is running, not by it and not while it runs.
+     *
+     * Keyed by the config path so a process that legitimately moves `HOME`
+     * (the test suite) still reads each home once, rather than one home ever.
+     *
+     * @return list<string>
+     *
+     * @throws PermissionConfigException see {@see permissionConfig()}
+     */
+    private static function trustedRootsForThisProcess(): array
+    {
+        $path = self::trustedConfigDirPath() . '/config.json';
+
+        if (!\array_key_exists($path, self::$trustedRoots)) {
+            self::$trustedRoots[$path] = self::trustedProjectHookRoots(self::permissionConfig());
+        }
+
+        return self::$trustedRoots[$path];
+    }
+
+    /**
+     * The project roots listed under `trustedProjectHooks`, canonicalised.
+     *
+     * Item-wise tolerance copied from {@see permissionRules()}: one malformed
+     * entry is skipped and reported rather than silently widening or narrowing
+     * the whole list. An entry that does not RESOLVE is dropped without a
+     * warning, though — it can never match anything, and the launch already
+     * prints the far more useful "this project's hook file was not loaded"
+     * line when that was what the user meant to opt in.
+     *
+     * REPORTED ONCE PER PROCESS, through {@see warnPermissionConfigOnce()} and
+     * for the same reason the sibling notice in {@see hookFiles()} is latched:
+     * a hook manager is built at launch and again on every Ctrl+P provider
+     * switch, and by the second one the alt screen is up, so the line lands in
+     * a frame the renderer believes it owns. It fires on exactly the upgrade
+     * path this diff created — a user who followed the tool's older advice and
+     * wrote `"."` is the one who now gets a warning — so it is the last
+     * message that should be repainting somebody's transcript.
+     *
+     * @param array<string, mixed> $config the already-read user config
+     * @return list<string>
+     */
+    private static function trustedProjectHookRoots(array $config): array
+    {
+        $raw = $config[self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY] ?? null;
+        if ($raw === null) {
+            return [];
+        }
+
+        if (!is_array($raw)) {
+            self::warnPermissionConfigOnce(
+                self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY . ' is not a list of project paths; '
+                . 'no project hook file was trusted',
+            );
+
+            return [];
+        }
+
+        $roots = [];
+        foreach ($raw as $index => $entry) {
+            if (!is_string($entry) || trim($entry) === '') {
+                self::warnPermissionConfigOnce(
+                    self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY . "[{$index}] is not a project path; entry skipped",
+                );
+                continue;
+            }
+
+            $entry = trim($entry);
+            $expanded = str_starts_with($entry, '~/') || $entry === '~'
+                ? self::homePath() . substr($entry, 1)
+                : $entry;
+
+            // A RELATIVE ENTRY IS A GLOBAL BYPASS, not a narrow trust. This
+            // list is realpath()'d fresh on every launch and so is the root it
+            // is compared against, so `"."` resolves to whatever directory the
+            // process was started in and therefore ALWAYS matches — one entry
+            // that trusts every repository the user ever cd's into. `"../x"`
+            // and `"src/repo"` are the same defect wearing a longer name.
+            //
+            // REFUSED rather than resolved-once-at-parse-time, because there
+            // is nothing stable to resolve it against: this file is per-USER
+            // and read on every launch, while the only thing a relative path
+            // could be anchored to — the CWD — is per-INVOCATION. Any
+            // anchoring choice would make "which repo did I trust?" depend on
+            // where the user happened to be standing when they last edited
+            // the config, which is the ambiguity, not a fix for it. And it is
+            // refused LOUDLY: a silently dropped entry leaves the user
+            // believing they opted in.
+            if (!self::isAbsolutePath($expanded)) {
+                self::warnPermissionConfigOnce(
+                    self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY . "[{$index}] is '{$entry}', which is relative to "
+                    . 'whatever directory sugarcrush was started in — it would trust EVERY repository you '
+                    . 'run it from, not one. Write the absolute path (or a ~/-rooted one); entry skipped',
+                );
+                continue;
+            }
+
+            $canonical = realpath($expanded);
+            if ($canonical !== false) {
+                $roots[] = $canonical;
+            }
+        }
+
+        return $roots;
+    }
+
+    /**
+     * Whether $path names a location independently of the process directory.
+     *
+     * Windows spellings are recognised as well as POSIX ones because
+     * {@see resolvedHomePath()} reads `$USERPROFILE`, so a `~`-rooted entry can
+     * legitimately expand to `C:\Users\you\...` on the one platform where a
+     * drive letter — not a leading slash — is what makes a path absolute.
+     */
+    private static function isAbsolutePath(string $path): bool
+    {
+        return str_starts_with($path, '/')
+            || str_starts_with($path, '\\\\')
+            || preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1;
     }
 
     /**
@@ -940,8 +1648,29 @@ final class Bootstrap
      */
     private static function permissionConfig(): array
     {
-        $path = self::userConfigPath();
+        // trustedConfigDirPath(), NOT userConfigPath(): the two resolve to the
+        // same file whenever this user's home is knowable, and when it is not
+        // this one refuses instead of reading a permission policy — and a
+        // `trustedProjectHooks` list — out of a world-writable stand-in.
+        $path = self::trustedConfigDirPath() . '/config.json';
+
         if (!is_file($path)) {
+            // SOMETHING IS THERE AND IT IS NOT A READABLE REGULAR FILE — a
+            // directory named `config.json`, a dangling symlink. The walk
+            // below answers "nothing is configured" for it, because every
+            // ancestor really is searchable, and this method then starts on
+            // the permissive default. That is the same present-but-unusable
+            // fail-open the rest of this method exists to close, and the same
+            // distinction {@see \SugarCraft\Crush\Hooks\HookConfig::loadFromFile()}
+            // draws for the hook file, so it is drawn the same way here.
+            if (file_exists($path) || is_link($path)) {
+                throw new PermissionConfigException(
+                    "{$path} exists but is not a readable file (it is a "
+                    . (is_dir($path) ? 'directory' : 'symlink that does not resolve to one')
+                    . '). Refusing to start rather than run with an unknown permission policy.',
+                );
+            }
+
             // `is_file()` answers false for two things that are not the same
             // question: the file is ABSENT, or a directory on the way to it
             // cannot be SEARCHED, in which case a policy may be sitting right
@@ -963,6 +1692,10 @@ final class Bootstrap
 
             return [];
         }
+
+        // The file exists, so "whose is it" is now an answerable question and
+        // has to be answered before its contents become this launch's policy.
+        self::requirePrivatePolicyFile($path);
 
         // `@`-silenced for the reason readUserConfig() is: the false branch
         // below IS the handling, and the raw warning would land in the middle
@@ -1126,6 +1859,27 @@ final class Bootstrap
     private static function warnPermissionConfig(string $message): void
     {
         fwrite(STDERR, "sugarcrush: {$message}.\n");
+    }
+
+    /**
+     * {@see warnPermissionConfig()}, but at most once per process per message.
+     *
+     * For the warnings raised from a path that runs MORE THAN ONCE A LAUNCH.
+     * Keyed by the message rather than by a call site because the same
+     * malformed entry reported twice is what the user experiences as noise,
+     * whichever line printed it — and because the message already carries the
+     * entry's index, so two genuinely different bad entries still both get
+     * said. Static for the reason {@see $reportedUntrustedHookFiles} is: the
+     * duplication is a property of the launch, not of any instance.
+     */
+    private static function warnPermissionConfigOnce(string $message): void
+    {
+        if (isset(self::$reportedPermissionConfigWarnings[$message])) {
+            return;
+        }
+
+        self::$reportedPermissionConfigWarnings[$message] = true;
+        self::warnPermissionConfig($message);
     }
 
     /**
@@ -1590,7 +2344,93 @@ final class Bootstrap
      */
     private static function configDirPath(): string
     {
-        $home = getenv('HOME') ?: (getenv('USERPROFILE') ?: '/tmp');
+        return self::homePath() . '/.sugar-crush';
+    }
+
+    /**
+     * This user's home directory, or the least-surprising stand-in when
+     * nothing can say — the one resolution every `~`-rooted path in this class
+     * goes through, so the config directory and a `trustedProjectHooks` entry
+     * written `~/src/repo` can never disagree about where `~` is.
+     *
+     * WHICH READERS STILL GET THE STAND-IN, stated exactly, because the older
+     * wording here ("everything that is POLICY goes through
+     * trustedConfigDirPath()") was not true of `~/.sugar-crush/agents`, whose
+     * presets carry `permissionMode:` and `tools:`. That directory now resolves
+     * through {@see trustedConfigDirPath()} as well, alongside `config.json`
+     * and `hooks.yaml`. What is left on this path is the state whose worst
+     * outcome is a lost setting or a lost transcript: the theme, the persisted
+     * provider, the session store, the memory store, and the skill trees.
+     *
+     * Those are not policy, but they are not nothing either — a skill body is
+     * prompt context — so the ORDER is what protects them: {@see chat()},
+     * {@see backend()} and {@see backendFor()} each resolve
+     * {@see trustedConfigDirPath()} before they build anything, so a launch
+     * that cannot determine this user's home refuses before a store is created
+     * or a skill tree is scanned, rather than after. Direct callers of the
+     * individual store factories still get the stand-in; that is the documented
+     * boundary, not an oversight.
+     */
+    private static function homePath(): string
+    {
+        return HomeDirectory::path();
+    }
+
+    /**
+     * This user's home directory when it can actually be DETERMINED, or null.
+     *
+     * The environment failing to say where home is does not mean nobody knows:
+     * a cron entry, a systemd unit, `env -i` and `sudo` without `-E` all drop
+     * `HOME` while the process still has a real uid with a real passwd entry,
+     * so the passwd database is consulted before giving up. That is what keeps
+     * the answer the user's OWN directory on every path that previously fell
+     * through to a shared one.
+     *
+     * Null — nothing in the environment, no passwd entry, or no ext-posix — is
+     * "this process cannot tell whose home this is", which is a different
+     * answer from any directory and is why this returns null rather than
+     * inventing one.
+     */
+    private static function resolvedHomePath(): ?string
+    {
+        return HomeDirectory::resolved();
+    }
+
+    /**
+     * {@see configDirPath()} for the two files that are SECURITY POLICY rather
+     * than preference — `config.json` (permission mode, permission rules,
+     * `trustedProjectHooks`) and `hooks.yaml` (shell commands run on tool
+     * calls) — and therefore the one path resolution that may not fall back to
+     * a directory anybody else can write.
+     *
+     * `/tmp` is mode 1777. With `HOME` unset and no passwd entry,
+     * {@see homePath()}'s stand-in made `/tmp/.sugar-crush/hooks.yaml` the
+     * "user's own file, which no repository can write" that
+     * {@see hookFiles()} loads WITHOUT the project-trust gate — so any local
+     * user could pre-create that directory and get arbitrary shell on the
+     * session's first tool call, plus a `config.json` setting
+     * `permissionMode` and `trustedProjectHooks`. The ungating is sound; the
+     * premise it rests on ("you wrote it") is what stopped being true.
+     *
+     * Refusing is the only outcome that is neither of the two wrong ones: a
+     * launch that reads a stranger's policy, or one that silently ignores the
+     * policy the user did write. It costs one exported variable to fix and
+     * says so.
+     *
+     * @throws PermissionConfigException when this user's home cannot be determined
+     */
+    private static function trustedConfigDirPath(): string
+    {
+        $home = self::resolvedHomePath();
+        if ($home === null) {
+            throw new PermissionConfigException(
+                'this process cannot determine which home directory is yours ($HOME is unset, '
+                . '$USERPROFILE is unset, and there is no passwd entry for its uid), so the '
+                . 'permission policy and hook chain in ~/.sugar-crush cannot be located. '
+                . 'Refusing to start rather than read either of them out of a world-writable '
+                . 'fallback directory — export HOME to the account this session belongs to.',
+            );
+        }
 
         return $home . '/.sugar-crush';
     }

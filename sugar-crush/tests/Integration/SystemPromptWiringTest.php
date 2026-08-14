@@ -20,6 +20,7 @@ use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\ToolCall;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * W1.B3c (crush_feat.md section 6 recommendation #5): integration-level proof
@@ -43,6 +44,8 @@ use SugarCraft\Crush\Tools\ToolCall;
  */
 final class SystemPromptWiringTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $tempDir;
 
     protected function setUp(): void
@@ -51,10 +54,21 @@ final class SystemPromptWiringTest extends TestCase
 
         $this->tempDir = sys_get_temp_dir() . '/sugarcrush_sysprompt_' . uniqid('', true);
         mkdir($this->tempDir, 0755, true);
+
+        // BOTH spellings. registryWithProjectSkill() runs
+        // SkillManager::loadAll(), which walks ~/.claude/skills and
+        // ~/.config/opencode/skills — and those trees read HOME through
+        // getenv() now, the same resolution Bootstrap uses, while the
+        // team/workflow stores still read $_SERVER['HOME']. Redirecting one
+        // and not the other is how a suite ends up quietly reading the
+        // developer's own skills. See Tests\Support\HomeSandboxTrait.
+        $this->useHomeSandbox($this->tempDir . '/empty-home');
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
+
         $this->removeDirectory($this->tempDir);
 
         parent::tearDown();

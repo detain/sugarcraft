@@ -47,13 +47,12 @@ final class BootstrapPermissionGateTest extends TestCase
         $this->originalHome = getenv('HOME') ?: '';
         putenv('HOME=' . $this->tempDir . '/home');
 
-        // BOTH, because the code under test does not agree with itself about
-        // where HOME lives: Bootstrap reads getenv('HOME'), while
-        // SkillDiscovery, ForeignSkillDiscovery and ForeignAgentPresetRegistry
-        // read $_SERVER['HOME'] — so redirecting only the env var left the
-        // chat()/agentManager() tests below scanning the DEVELOPER's real
-        // ~/.claude/skills and ~/.config/opencode/agents, which makes them
-        // depend on a machine rather than on a fixture.
+        // BOTH forms, because half a sandbox is not a sandbox. Everything in
+        // src/ now resolves `~` through {@see \SugarCraft\Crush\Support\HomeDirectory},
+        // which reads `getenv()` — but a nested process or a third-party
+        // library holding a `$_SERVER['HOME']` copy must not be left pointing
+        // at the DEVELOPER's real ~/.claude/skills and ~/.config/opencode/agents,
+        // which would make these tests depend on a machine rather than a fixture.
         $this->originalServerHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = $this->tempDir . '/home';
 

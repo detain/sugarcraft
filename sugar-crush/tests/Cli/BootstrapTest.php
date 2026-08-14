@@ -17,9 +17,12 @@ use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 final class BootstrapTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     /** @var array<string, string|false> */
     private array $savedEnv = [];
 
@@ -48,10 +51,18 @@ final class BootstrapTest extends TestCase
         foreach ($volatile as $name) {
             putenv($name);
         }
+
+        // A sandbox HOME for EVERY test, not only the ones that ask for one
+        // through isolatedHome(): Bootstrap::chat()/app() walk the skill trees
+        // under HOME, so without it the roster this class builds is whatever
+        // the developer has installed for another CLI.
+        $this->isolatedHome();
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
+
         foreach ($this->savedEnv as $name => $value) {
             if ($value === false) {
                 putenv($name);
@@ -485,9 +496,10 @@ final class BootstrapTest extends TestCase
     }
 
     /**
-     * Point $HOME (which Bootstrap::configDir() reads) at a throwaway
-     * directory so a test never reads or writes the developer's real
-     * ~/.sugar-crush state.
+     * Point $HOME at a throwaway directory so a test never reads or writes the
+     * developer's real ~/.sugar-crush state -- nor their ~/.claude/skills,
+     * which Bootstrap::skillRegistry() now walks. BOTH spellings of HOME are
+     * redirected; see Tests\Support\HomeSandboxTrait.
      */
     private function isolatedHome(): string
     {
@@ -497,9 +509,7 @@ final class BootstrapTest extends TestCase
             $this->tmpHome = $dir;
         }
 
-        putenv("HOME={$this->tmpHome}");
-
-        return $this->tmpHome;
+        return $this->useHomeSandbox($this->tmpHome);
     }
 
     public function testChatCarriesABackgroundSupervisorSoSlashBgIsUsable(): void

@@ -270,12 +270,23 @@ final class BackgroundSessionRunnerTest extends TestCase
         $previousKey = getenv('CUSTOM_API_KEY');
         putenv('HOME=' . $home);
         putenv('CUSTOM_API_KEY=k');
+        // BOTH forms are redirected, because half a sandbox is not a sandbox:
+        // {@see \SugarCraft\Crush\Support\HomeDirectory} reads `getenv()`,
+        // and anything still holding a `$_SERVER['HOME']` copy (a nested
+        // process, a library) must not be left pointing at the real home.
+        $previousServerHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = $home;
 
         try {
             $status = $runner->executeTask();
         } finally {
             putenv($previousHome === false ? 'HOME' : 'HOME=' . $previousHome);
             putenv($previousKey === false ? 'CUSTOM_API_KEY' : 'CUSTOM_API_KEY=' . $previousKey);
+            if ($previousServerHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $previousServerHome;
+            }
             @unlink($home . '/.sugar-crush/config.json');
             @rmdir($home . '/.sugar-crush');
             @rmdir($home);

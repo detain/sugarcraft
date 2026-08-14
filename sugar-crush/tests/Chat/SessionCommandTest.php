@@ -11,9 +11,14 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\SessionStore;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 final class SessionCommandTest extends TestCase
 {
+    use HomeSandboxTrait;
+
+    private string $homeSandbox = '';
+
     private string $tempDir;
     private SessionStore $sessionStore;
 
@@ -21,11 +26,19 @@ final class SessionCommandTest extends TestCase
     {
         $this->tempDir = sys_get_temp_dir() . '/session_cmd_test_' . uniqid('', true);
         mkdir($this->tempDir, 0755, true);
+        // Every launch path reached from here walks the skill trees under HOME
+        // (~/.claude/skills, ~/.config/opencode/skills, ~/.sugar-crush/skills),
+        // so HOME is redirected at an empty sandbox -- both spellings, see
+        // HomeSandboxTrait. Nothing here asserts on a skill roster today; the
+        // point is that nothing here can start depending on the developer's.
+        $this->homeSandbox = $this->useHomeSandbox($this->tempDir . '-home');
         $this->sessionStore = new SessionStore($this->tempDir . '/sessions.db');
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
+        @rmdir($this->homeSandbox);
         $files = glob($this->tempDir . '/*');
         if ($files !== false) {
             foreach ($files as $file) {

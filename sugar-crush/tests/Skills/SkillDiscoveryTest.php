@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Skills;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\SkillDiscovery;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Tests for SkillDiscovery - discovers skill directories across search paths.
@@ -14,6 +15,7 @@ use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 final class SkillDiscoveryTest extends TestCase
 {
     use TemporaryDirectoryTrait;
+    use HomeSandboxTrait;
 
     private string $tempDir;
 
@@ -22,12 +24,102 @@ final class SkillDiscoveryTest extends TestCase
         parent::setUp();
         $this->tempDir = sys_get_temp_dir() . '/sugar-crush-discovery-test-' . uniqid();
         mkdir($this->tempDir, 0777, true);
+        // discoverUserSkills()/discoverAll() read ~/.sugar-crush/skills, so the
+        // class-wide default is an empty sandbox HOME rather than the
+        // developer's own -- see HomeSandboxTrait for why BOTH spellings.
+        $this->useHomeSandbox($this->tempDir . '/default-empty-home');
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
         $this->removeDirectory($this->tempDir);
         parent::tearDown();
+    }
+
+    /**
+     * F11's second site. `discoverUserSkills()` reads `getenv('HOME')`, not
+     * `$_SERVER['HOME']`: while both halves of this codebase read the
+     * superglobal they were wrong TOGETHER, and the moment one moved a
+     * `putenv('HOME')` pointed two subsystems at two different homes.
+     */
+    public function testUserSkillsFollowTheEnvHomeNotTheServerSuperglobal(): void
+    {
+        // WITH a SKILL.md in each: discovery walks through
+        // {@see \SugarCraft\Crush\Skills\SkillLoader::skillDirectoriesIn()},
+        // which reports the directories that actually hold one rather than
+        // every subdirectory. Both fixtures get the file so the assertion below
+        // is still only about WHICH HOME was read.
+        $envHome = $this->tempDir . '/env-home';
+        mkdir($envHome . '/.sugar-crush/skills/from-env', 0777, true);
+        file_put_contents($envHome . '/.sugar-crush/skills/from-env/SKILL.md', "---\ndescription: Env\n---\n");
+
+        $decoyHome = $this->tempDir . '/server-home';
+        mkdir($decoyHome . '/.sugar-crush/skills/from-server', 0777, true);
+        file_put_contents($decoyHome . '/.sugar-crush/skills/from-server/SKILL.md', "---\ndescription: Server\n---\n");
+
+        $this->useHomeSandbox($envHome);
+        $_SERVER['HOME'] = $decoyHome;
+
+        $found = array_map('basename', (new SkillDiscovery())->discoverUserSkills());
+
+        $this->assertContains('from-env', $found);
+        $this->assertNotContains('from-server', $found);
+    }
+
+    /**
+     * A SECOND, UNCONTAINED WALKER IS THE SAME HOLE TWICE.
+     *
+     * `discoverSkillsAt()` used its own `DirectoryIterator` and returned every
+     * `isDir()` entry — and `isDir()` stats THROUGH a symlink — so a cloned
+     * repository carrying `.sugar-crush/skills/escape -> $HOME` had this class
+     * report the user's home directory as a skill directory. Git stores
+     * symlinks, so that arrives with `git clone`. It is the identical escape
+     * {@see \SugarCraft\Crush\Skills\SkillLoader} closed one class over, which
+     * is why the walk now goes through that loader instead of beside it.
+     */
+    public function testAProjectSkillsSymlinkCannotEscapeTheSkillsTree(): void
+    {
+        $projectRoot = $this->tempDir . '/escape-project';
+        mkdir($projectRoot . '/.sugar-crush/skills', 0777, true);
+
+        $outside = $this->tempDir . '/outside';
+        mkdir($outside . '/secret', 0777, true);
+        file_put_contents($outside . '/secret/SKILL.md', "---\ndescription: Not yours\n---\n");
+
+        if (!@symlink($outside, $projectRoot . '/.sugar-crush/skills/escape')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $discovery = new SkillDiscovery();
+
+        $this->assertSame([], $discovery->discoverProjectSkills($projectRoot));
+        $this->assertNotSame([], $discovery->skipped(), 'the refusal is recorded, not silent');
+    }
+
+    /**
+     * The other half of the same rule: a link in the USER's own tree may reach
+     * the rest of the user's home, which is the real layout the loader's
+     * $ownedBy widening exists for (skills linked in from a shared checkout).
+     */
+    public function testAUserSkillsSymlinkMayStillReachTheRestOfTheUsersHome(): void
+    {
+        $home = $this->useHomeSandbox($this->tempDir . '/owned-home');
+        mkdir($home . '/.sugar-crush/skills', 0777, true);
+        mkdir($home . '/elsewhere/shared-skill', 0777, true);
+        file_put_contents($home . '/elsewhere/shared-skill/SKILL.md', "---\ndescription: Shared\n---\n");
+
+        if (!@symlink($home . '/elsewhere/shared-skill', $home . '/.sugar-crush/skills/shared-skill')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        try {
+            $found = array_map('basename', (new SkillDiscovery())->discoverUserSkills());
+
+            $this->assertContains('shared-skill', $found);
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
     }
 
     private function createSkillDir(string $path): void
@@ -89,9 +181,8 @@ final class SkillDiscoveryTest extends TestCase
         $discovery = new SkillDiscovery();
 
         // Use a temp home that definitely has no skills
-        $origHome = $_SERVER['HOME'] ?? '/root';
-        $_SERVER['HOME'] = $this->tempDir . '/empty-home';
-        mkdir($_SERVER['HOME'] . '/.sugar-crush/skills', 0777, true);
+        $home = $this->useHomeSandbox($this->tempDir . '/empty-home');
+        mkdir($home . '/.sugar-crush/skills', 0777, true);
 
         try {
             $result = $discovery->discoverUserSkills();
@@ -100,16 +191,15 @@ final class SkillDiscoveryTest extends TestCase
             // The directory exists but is empty
             $this->assertEmpty($result);
         } finally {
-            $_SERVER['HOME'] = $origHome;
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
         }
     }
 
     public function testDiscoverUserSkillsFindsSkillDirectories(): void
     {
         $discovery = new SkillDiscovery();
-        $origHome = $_SERVER['HOME'] ?? '/root';
         $fakeHome = $this->tempDir . '/fake-home';
-        $_SERVER['HOME'] = $fakeHome;
+        $this->useHomeSandbox($fakeHome);
         mkdir($fakeHome . '/.sugar-crush/skills/user-skill', 0777, true);
         file_put_contents($fakeHome . '/.sugar-crush/skills/user-skill/SKILL.md', "---\ndescription: User skill\n---\n");
 
@@ -119,7 +209,7 @@ final class SkillDiscoveryTest extends TestCase
             $this->assertCount(1, $result);
             $this->assertStringContainsString('user-skill', $result[0]);
         } finally {
-            $_SERVER['HOME'] = $origHome;
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
         }
     }
 
@@ -189,9 +279,8 @@ final class SkillDiscoveryTest extends TestCase
         file_put_contents($projectRoot . '/.sugar-crush/skills/project-skill/SKILL.md', "---\ndescription: Project\n---\n");
 
         // Set up user skills (using fake home)
-        $origHome = $_SERVER['HOME'] ?? '/root';
         $fakeHome = $this->tempDir . '/all-user';
-        $_SERVER['HOME'] = $fakeHome;
+        $this->useHomeSandbox($fakeHome);
         mkdir($fakeHome . '/.sugar-crush/skills/user-skill', 0777, true);
         file_put_contents($fakeHome . '/.sugar-crush/skills/user-skill/SKILL.md', "---\ndescription: User\n---\n");
 
@@ -210,7 +299,7 @@ final class SkillDiscoveryTest extends TestCase
             $this->assertArrayHasKey('user-skill', $result);
             $this->assertArrayHasKey('lib-skill', $result);
         } finally {
-            $_SERVER['HOME'] = $origHome;
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
         }
     }
 
@@ -219,9 +308,8 @@ final class SkillDiscoveryTest extends TestCase
         $discovery = new SkillDiscovery();
 
         // Set up user skills with a conflicting skill name
-        $origHome = $_SERVER['HOME'] ?? '/root';
         $fakeHome = $this->tempDir . '/override-user';
-        $_SERVER['HOME'] = $fakeHome;
+        $this->useHomeSandbox($fakeHome);
         mkdir($fakeHome . '/.sugar-crush/skills/shared-skill', 0777, true);
         file_put_contents($fakeHome . '/.sugar-crush/skills/shared-skill/SKILL.md', "---\ndescription: User version\n---\n");
 
@@ -238,7 +326,7 @@ final class SkillDiscoveryTest extends TestCase
             $this->assertArrayHasKey('shared-skill', $result);
             $this->assertStringContainsString('override-lib', $result['shared-skill']);
         } finally {
-            $_SERVER['HOME'] = $origHome;
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
         }
     }
 
@@ -299,5 +387,49 @@ final class SkillDiscoveryTest extends TestCase
 
         $this->assertNotNull($result);
         $this->assertSame($path1, $result);
+    }
+
+    /**
+     * A NAME IS NOT A PATH. `resolveSkillPath()` used to concatenate the name
+     * onto the base and ask `is_dir()`, so `'../../..'` named a directory
+     * outside the search path and was resolved as a skill — the escape this
+     * class's own doc-comment says a future caller would inherit. Matching
+     * against the contained walk cannot leave the tree: a basename holds no
+     * separator.
+     */
+    public function testResolveSkillPathRefusesANameThatWalksOutOfTheSearchPath(): void
+    {
+        $discovery = new SkillDiscovery();
+        $base = $this->tempDir . '/escape/skills';
+        mkdir($base . '/real', 0777, true);
+        file_put_contents($base . '/real/SKILL.md', "---\ndescription: Real\n---\n");
+
+        $this->assertNull($discovery->resolveSkillPath('..', [$base]));
+        $this->assertNull($discovery->resolveSkillPath('../../..', [$base]));
+        $this->assertNull($discovery->resolveSkillPath('real/../../..', [$base]));
+        // ...and the ordinary lookup still works, so containment is not
+        // "resolves nothing".
+        $this->assertSame($base . '/real', $discovery->resolveSkillPath('real', [$base]));
+    }
+
+    /**
+     * The other half of the same escape: `is_dir()` stats THROUGH a symlink, so
+     * a link out of the skills directory answered true and its target came back
+     * as the skill's path. The loader's walk refuses it.
+     */
+    public function testResolveSkillPathRefusesASkillDirectoryThatIsALinkOutOfTheTree(): void
+    {
+        $discovery = new SkillDiscovery();
+        $base = $this->tempDir . '/linked/skills';
+        $outside = $this->tempDir . '/outside/elsewhere';
+        mkdir($base, 0777, true);
+        mkdir($outside, 0777, true);
+        file_put_contents($outside . '/SKILL.md', "---\ndescription: Outside\n---\n");
+
+        if (!@symlink($outside, $base . '/escape')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertNull($discovery->resolveSkillPath('escape', [$base]));
     }
 }

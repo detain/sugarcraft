@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Workflows;
 
+use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentManager;
@@ -280,7 +281,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if (str_contains($workflowId, '..') || str_contains($workflowId, '/')) {
             throw new \InvalidArgumentException('workflowId must not contain path separators or ..');
         }
-        $home = $_SERVER['HOME'] ?? '/root';
+        $home = HomeDirectory::path();
 
         return $home . '/.sugar-crush/workflows/' . self::PAUSE_DIR . '/' . $workflowId . '.json';
     }

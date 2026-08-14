@@ -17,10 +17,23 @@ use SugarCraft\Crush\Tui\Pane;
 final class AppBuilderTest extends TestCase
 {
     private ProviderInterface $provider;
+    private string $sandboxHome;
+    private mixed $originalServerHome;
 
     protected function setUp(): void
     {
         $this->provider = $this->createMock(ProviderInterface::class);
+
+        // build() runs SkillManager::loadAll(), which walks the user's
+        // foreign-skill trees (~/.claude/skills, ~/.config/opencode/skills)
+        // since crush_code.md Phase 2 item 6. Point HOME at an empty sandbox
+        // so a built App's skill roster is this test's fixtures and nothing
+        // the developer running the suite happens to have installed.
+        $this->sandboxHome = sys_get_temp_dir() . '/sugarcrush_appbuilder_home_' . uniqid('', true);
+        mkdir($this->sandboxHome, 0700, true);
+        $this->tempRoots[] = $this->sandboxHome;
+        $this->originalServerHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = $this->sandboxHome;
     }
 
     // =========================================================================
@@ -658,6 +671,12 @@ final class AppBuilderTest extends TestCase
 
     protected function tearDown(): void
     {
+        if ($this->originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
+        }
+
         foreach ($this->tempRoots as $root) {
             $this->removeDirectory($root);
         }

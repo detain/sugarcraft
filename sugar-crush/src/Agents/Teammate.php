@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Support\HomeDirectory;
+
 /**
  * Represents a teammate agent within a team.
  *
@@ -36,7 +38,7 @@ final readonly class Teammate
      */
     public function getInboxPath(): string
     {
-        $base = $_SERVER['HOME'] ?? '/tmp';
+        $base = HomeDirectory::path();
 
         if (str_contains($this->teamId, '..') || str_contains($this->id, '..')) {
             throw new \InvalidArgumentException('Teammate ID and Team ID must not contain path traversal sequences.');

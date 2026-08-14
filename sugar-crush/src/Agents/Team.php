@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Support\HomeDirectory;
+
 /**
  * Team aggregate root — the central coordination point for a lead + teammates unit.
  *
@@ -153,7 +155,7 @@ final class Team
 
     private function basePath(): string
     {
-        $base = $_SERVER['HOME'] ?? '/tmp';
+        $base = HomeDirectory::path();
 
         if (str_contains($this->id, '..')) {
             throw new \InvalidArgumentException('Team ID must not contain path traversal sequences.');

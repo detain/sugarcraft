@@ -698,6 +698,7 @@ final class WorkflowEngineTest extends TestCase
         $tmpDir = sys_get_temp_dir() . '/sugar-crush-pause-test-' . uniqid();
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             // Now pause the completed workflow
@@ -717,6 +718,7 @@ final class WorkflowEngineTest extends TestCase
             $this->assertSame(300, $data['totalTokens']);
         } finally {
             $_SERVER['HOME'] = $oldHome;
+            putenv('HOME=' . $_SERVER['HOME']);
             // Clean up
             @unlink($tmpDir . '/.sugar-crush/workflows/.running/pause-test.json');
             @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
@@ -755,6 +757,7 @@ final class WorkflowEngineTest extends TestCase
         $tmpDir = sys_get_temp_dir() . '/sugar-crush-resume-test-' . uniqid();
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             // Run the workflow — all 3 stages succeed, callCount becomes 3
@@ -817,6 +820,7 @@ final class WorkflowEngineTest extends TestCase
             $this->assertSame('output-5', $resumeResult->context['stage-3.output'] ?? null);
         } finally {
             $_SERVER['HOME'] = $oldHome;
+            putenv('HOME=' . $_SERVER['HOME']);
             @unlink($pauseFile);
             @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
             @rmdir($tmpDir . '/.sugar-crush/workflows');
@@ -840,6 +844,7 @@ final class WorkflowEngineTest extends TestCase
         $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-pause-' . uniqid();
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             $this->expectException(\SugarCraft\Crush\Workflows\WorkflowNotRunningException::class);
@@ -848,6 +853,7 @@ final class WorkflowEngineTest extends TestCase
             $this->engine->resume('nonexistent-pause-file');
         } finally {
             $_SERVER['HOME'] = $oldHome;
+            putenv('HOME=' . $_SERVER['HOME']);
             @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
             @rmdir($tmpDir . '/.sugar-crush/workflows');
             @rmdir($tmpDir . '/.sugar-crush');
@@ -862,6 +868,7 @@ final class WorkflowEngineTest extends TestCase
         $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-status-' . uniqid();
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             $this->expectException(\SugarCraft\Crush\Workflows\WorkflowNotRunningException::class);
@@ -870,6 +877,7 @@ final class WorkflowEngineTest extends TestCase
             $this->engine->getStatus('nonexistent-pause-file');
         } finally {
             $_SERVER['HOME'] = $oldHome;
+            putenv('HOME=' . $_SERVER['HOME']);
             @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
             @rmdir($tmpDir . '/.sugar-crush/workflows');
             @rmdir($tmpDir . '/.sugar-crush');
@@ -884,6 +892,7 @@ final class WorkflowEngineTest extends TestCase
         $tmpDir = sys_get_temp_dir() . '/sugar-crush-status-test-' . uniqid();
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             // Manually create a pause file
@@ -901,6 +910,7 @@ final class WorkflowEngineTest extends TestCase
             $this->assertSame(WorkflowStatus::Paused, $status);
         } finally {
             $_SERVER['HOME'] = $oldHome;
+            putenv('HOME=' . $_SERVER['HOME']);
             @unlink($pauseFile);
             @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
             @rmdir($tmpDir . '/.sugar-crush/workflows');

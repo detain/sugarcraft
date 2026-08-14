@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Hooks;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookRegistry;
@@ -202,6 +203,22 @@ final class HookRegistryTest extends TestCase
         $this->assertCount(0, $matches);
     }
 
+    /**
+     * The registry must MATCH under the delimiter {@see HookConfig::parse()}
+     * VALIDATED under. Two spellings of that is the silent-registration bug
+     * again: a matcher containing the other's delimiter either passes
+     * validation and never fires, or stops the launch over a pattern this
+     * method would have run happily.
+     */
+    public function testFindMatchesHonoursAMatcherContainingTheDefaultDelimiter(): void
+    {
+        $hook = $this->createHook('SlashHook', HookEvent::PreToolUse, 'Read|Write/Edit', 'Read|Write/Edit');
+        $this->registry->register($hook);
+
+        $this->assertCount(1, $this->registry->findMatches('PreToolUse', 'Write/Edit'));
+        $this->assertCount(0, $this->registry->findMatches('PreToolUse', 'Bash'));
+    }
+
     public function testFindMatchesIsCaseInsensitive(): void
     {
         $hook = $this->createHook('LowerHook', HookEvent::PreToolUse, 'read', '^read$');
@@ -235,6 +252,48 @@ final class HookRegistryTest extends TestCase
 
         $this->assertCount(1, $matches);
         $this->assertSame($hook1, $matches[0]);
+    }
+
+    /**
+     * A MATCHER THAT CANNOT BE EVALUATED MUST NOT READ AS "NO MATCH".
+     *
+     * `'(a+)+$'` compiles, so {@see \SugarCraft\Crush\Hooks\HookConfig::parse()}
+     * accepts it, and against a long tool name it backtracks catastrophically
+     * — `preg_match()` returns `false`, not `0`. Treating that as "did not
+     * match" made the guard silently not fire on the one call it was chosen
+     * for, and the tool call then ran with nothing said anywhere. The subject
+     * here is a TOOL NAME, which the model chooses.
+     *
+     * The backtrack limit is lowered so the test is deterministic and fast
+     * rather than relying on the 1,000,000 default being reached.
+     */
+    public function testAMatcherThatCannotBeEvaluatedFailsClosedAndIsRecorded(): void
+    {
+        $hook = $this->createHook('CatastrophicHook', HookEvent::PreToolUse, 'x', '(a+)+$');
+        $this->registry->register($hook);
+
+        $limit = ini_get('pcre.backtrack_limit');
+        ini_set('pcre.backtrack_limit', '100');
+
+        try {
+            $matches = $this->registry->findMatches('PreToolUse', str_repeat('a', 40) . 'b');
+        } finally {
+            ini_set('pcre.backtrack_limit', $limit === false ? '1000000' : $limit);
+        }
+
+        $this->assertCount(1, $matches, 'a guard that cannot be evaluated must still get to judge the call');
+        $this->assertSame($hook, $matches[0]);
+        $this->assertArrayHasKey('(a+)+$', $this->registry->matcherFailures());
+        $this->assertNotSame('No error', $this->registry->matcherFailures()['(a+)+$']);
+    }
+
+    /** The failure log stays empty when every matcher evaluates normally. */
+    public function testMatcherFailuresIsEmptyWhenNothingFails(): void
+    {
+        $this->registry->register($this->createHook('OrdinaryHook', HookEvent::PreToolUse, 'Read', '^Read$'));
+        $this->registry->findMatches('PreToolUse', 'Read');
+
+        $this->assertSame([], $this->registry->matcherFailures());
     }
 
     public function testFindMatchesReturnsEmptyArrayWhenNoMatches(): void

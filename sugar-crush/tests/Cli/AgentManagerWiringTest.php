@@ -70,6 +70,8 @@ final class AgentManagerWiringTest extends TestCase
     private static string $repo = '';
     private static string $brokenRepo = '';
     private static string $originalHome = '';
+
+    private static mixed $originalServerHome = null;
     private static ?App $app = null;
     private static ?Chat $brokenChat = null;
 
@@ -95,8 +97,15 @@ final class AgentManagerWiringTest extends TestCase
         mkdir(self::$repo, 0755, true);
         mkdir(self::$brokenRepo, 0755, true);
 
+        // BOTH spellings of HOME. `putenv()` alone moved Bootstrap's config
+        // directory while the skill trees and the team/workflow stores kept
+        // reading the developer's real home -- see
+        // Tests\Support\HomeSandboxTrait (a class-level fixture cannot use
+        // the trait itself, so it is spelled out here).
         self::$originalHome = getenv('HOME') ?: '';
+        self::$originalServerHome = $_SERVER['HOME'] ?? null;
         putenv('HOME=' . self::$tempDir . '/home');
+        $_SERVER['HOME'] = self::$tempDir . '/home';
 
         self::writePreset(self::$repo . '/.sugar-crush/agents', 'docs-writer', 'Writes the docs');
         self::writePreset(self::$tempDir . '/home/.sugar-crush/agents', 'house-style', 'Enforces house style');
@@ -121,6 +130,12 @@ final class AgentManagerWiringTest extends TestCase
             putenv('HOME=' . self::$originalHome);
         } else {
             putenv('HOME');
+        }
+
+        if (self::$originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = self::$originalServerHome;
         }
         self::removeDirectory(self::$tempDir);
 

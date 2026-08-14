@@ -5,6 +5,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands;
 
+use SugarCraft\Crush\Support\HomeDirectory;
+
 /**
  * Discovers file-based custom commands, mirroring the three-tier pattern
  * {@see \SugarCraft\Crush\Skills\SkillLoader} already proves for skills:
@@ -142,7 +144,7 @@ final class CommandLoader
     /** ~/.sugar-crush/commands */
     private function userCommandsDir(): string
     {
-        $home = $_SERVER['HOME'] ?? '/root';
+        $home = HomeDirectory::path();
 
         return $home . '/.sugar-crush/commands';
     }

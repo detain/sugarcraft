@@ -8,12 +8,23 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Tests for SkillLoader - loads skills from directories.
+ *
+ * HOME IS SANDBOXED FOR THE WHOLE CLASS. Several tests here drive
+ * {@see SkillLoader::loadAll()} / {@see SkillLoader::loadAllManifests()},
+ * which walk `~/.sugar-crush/skills` — the DEVELOPER'S, without this. That is
+ * green today only because those assertions are shape-only, and it is the
+ * tracker #52/#53 pattern: a suite may not depend on what the person running
+ * it happens to have installed. It got sharper once the walk began following
+ * symlinks, since a link in a real skills tree would drag the unit suite into
+ * whatever it points at.
  */
 final class SkillLoaderTest extends TestCase
 {
+    use HomeSandboxTrait;
     use TemporaryDirectoryTrait;
 
     private string $tempDir;
@@ -24,10 +35,13 @@ final class SkillLoaderTest extends TestCase
         parent::setUp();
         $this->tempDir = sys_get_temp_dir() . '/sugar-crush-test-' . uniqid();
         $this->errorLogCalls = [];
+        $this->useHomeSandbox($this->tempDir . '/home');
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
+
         if (is_dir($this->tempDir)) {
             $this->removeDirectory($this->tempDir);
         }
@@ -811,5 +825,432 @@ SKILL
 
         // Assert
         $this->assertIsArray($result);
+    }
+
+    // =========================================================================
+    // Symlinked skill directories, and the diagnostics for the ones that fail
+    // =========================================================================
+
+    /**
+     * A SKILL DIRECTORY THAT IS A SYMLINK IS STILL A SKILL. The walk used to
+     * be a RecursiveDirectoryIterator WITHOUT FOLLOW_SYMLINKS, which skips
+     * them silently -- and linking skills in from a shared checkout is how the
+     * trees this loader now imports from are commonly laid out.
+     */
+    public function testLoadFromDirectoryFollowsASymlinkedSkillDirectory(): void
+    {
+        $loader = new SkillLoader();
+        $real = $this->tempDir . '/real/linked-skill';
+        mkdir($real, 0777, true);
+        file_put_contents($real . '/SKILL.md', "---\ndescription: Behind a symlink\n---\n\nBody.");
+
+        $skills = $this->tempDir . '/skills';
+        mkdir($skills, 0777, true);
+        if (!@symlink($real, $skills . '/linked-skill')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        // $ownedBy is what makes a link OUT of the skills tree legitimate:
+        // this is the real `~/.config/opencode/skills/x -> ~/.config/skillshare/x`
+        // layout, where both ends belong to the user. Without it the SAME link
+        // is an escape -- see the containment tests below.
+        $result = $loader->loadFromDirectory($skills, $this->tempDir);
+
+        $this->assertArrayHasKey('linked-skill', $result);
+        $this->assertSame('Behind a symlink', $result['linked-skill']->description);
+    }
+
+    /** The manifest-only walker shares the walk, so it shares the fix. */
+    public function testLoadManifestsFromDirectoryFollowsASymlinkedSkillDirectory(): void
+    {
+        $loader = new SkillLoader();
+        $real = $this->tempDir . '/real-manifest/linked-skill';
+        mkdir($real, 0777, true);
+        file_put_contents($real . '/SKILL.md', "---\ndescription: Behind a symlink\n---\n\nBody.");
+
+        $skills = $this->tempDir . '/manifest-skills';
+        mkdir($skills, 0777, true);
+        if (!@symlink($real, $skills . '/linked-skill')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $result = $loader->loadManifestsFromDirectory($skills, $this->tempDir);
+
+        $this->assertArrayHasKey('linked-skill', $result);
+        $this->assertSame('Behind a symlink', $result['linked-skill']['description']);
+    }
+
+    /**
+     * Following symlinks reintroduces cycles a plain walk could not have:
+     * `skills/loop -> ..` is a tree with no bottom. The walk must terminate
+     * and still return the skills it found -- this test HANGS rather than
+     * fails if the realpath visited-set is dropped.
+     */
+    public function testLoadFromDirectorySurvivesASymlinkLoop(): void
+    {
+        $loader = new SkillLoader();
+        $skills = $this->tempDir . '/looping';
+        mkdir($skills . '/real-skill', 0777, true);
+        file_put_contents($skills . '/real-skill/SKILL.md', "---\ndescription: Real\n---\n\nBody.");
+
+        if (!@symlink($skills, $skills . '/real-skill/loop')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $result = $loader->loadFromDirectory($skills);
+
+        // EXACTLY ONE KEY. `assertArrayHasKey` alone passes with the visited
+        // set dropped -- the loop then also finds
+        // `real-skill/loop/real-skill/SKILL.md`, whose relative-path key is
+        // `real-skill/loop/real-skill`, so the extra registration is what the
+        // guard is actually preventing and what this asserts. The depth bound
+        // is what stops the same mutation HANGING instead of failing.
+        $this->assertSame(['real-skill'], array_keys($result));
+    }
+
+    /**
+     * The visited set is keyed by REAL path, not by the path walked. Two
+     * spellings of one directory are different strings, so keying by the
+     * walked path would neither terminate a loop nor collapse an alias.
+     */
+    public function testADirectoryReachableTwoWaysIsWalkedOnce(): void
+    {
+        $loader = new SkillLoader();
+        $base = $this->tempDir . '/aliased';
+        mkdir($base . '/real/deep-skill', 0777, true);
+        file_put_contents($base . '/real/deep-skill/SKILL.md', "---\ndescription: Once\n---\n\nBody.");
+
+        $skills = $base . '/skills';
+        mkdir($skills, 0777, true);
+        // BOTH names are links, so neither is the spelling that happens to
+        // equal its own realpath -- keying the visited set by the WALKED path
+        // then registers the skill twice no matter which one readdir yields
+        // first, which is what makes this test independent of scan order.
+        if (!@symlink($base . '/real', $skills . '/a') || !@symlink($base . '/real', $skills . '/b')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $result = $loader->loadFromDirectory($skills, $base);
+
+        $this->assertCount(1, $result);
+    }
+
+    /**
+     * THE ESCAPE. A cloned repository's `.claude/skills/escape -> $HOME` made
+     * the walk register a skill whose BODY was a file from the user's home
+     * directory -- prompt context the model reads, from a file nowhere near a
+     * skills tree, with no opt-in anywhere. Git stores symlinks, so this is
+     * attacker-controlled content arriving with `git clone`.
+     */
+    public function testASymlinkOutOfAProjectSkillTreeIsRefused(): void
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        $secrets = $this->tempDir . '/elsewhere/private';
+        mkdir($secrets, 0777, true);
+        file_put_contents($secrets . '/SKILL.md', "---\ndescription: leaked\n---\n\nAPI_KEY=hunter2");
+
+        $skills = $this->tempDir . '/project/.claude/skills';
+        mkdir($skills, 0777, true);
+        if (!@symlink($this->tempDir . '/elsewhere', $skills . '/escape')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $result = $loader->loadFromDirectory($skills);
+
+        $this->assertSame([], $result);
+        $this->assertStringNotContainsString('hunter2', json_encode($result) ?: '');
+        $this->assertArrayHasKey($skills . '/escape', $loader->skipped());
+    }
+
+    /** A SKILL.md that is itself a link out of the tree is refused too. */
+    public function testASymlinkedSkillFileOutOfTheTreeIsRefused(): void
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        $outside = $this->tempDir . '/outside';
+        mkdir($outside, 0777, true);
+        file_put_contents($outside . '/secret.md', "---\ndescription: leaked\n---\n\nAPI_KEY=hunter2");
+
+        $skills = $this->tempDir . '/filelink/.claude/skills/pretend';
+        mkdir($skills, 0777, true);
+        if (!@symlink($outside . '/secret.md', $skills . '/SKILL.md')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertSame([], $loader->loadFromDirectory($this->tempDir . '/filelink/.claude/skills'));
+    }
+
+    /**
+     * The containment boundary is an EXACT prefix with a separator, never a
+     * bare string prefix: `/a/b` may not be read as containing `/a/bevil`.
+     */
+    public function testASiblingDirectorySharingAPrefixIsNotContained(): void
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        // The sibling's path is the boundary's path plus more CHARACTERS but
+        // not plus a PATH COMPONENT -- `/w/skills-root-evil` against a
+        // boundary of `/w/skills-root`. A bare `str_starts_with` reads that as
+        // contained, which is the mutation this fixture exists to catch.
+        $sibling = $this->tempDir . '/skills-root-evil/leak';
+        mkdir($sibling, 0777, true);
+        file_put_contents($sibling . '/SKILL.md', "---\ndescription: leaked\n---\n\nBody.");
+
+        $skills = $this->tempDir . '/skills-root';
+        mkdir($skills, 0777, true);
+        if (!@symlink($this->tempDir . '/skills-root-evil', $skills . '/sneak')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertSame([], $loader->loadFromDirectory($skills));
+    }
+
+    /**
+     * $ownedBy is what keeps the real user layout working -- the link leaves
+     * the skills tree but stays inside the directory the same person owns.
+     */
+    public function testALinkInsideTheOwningTreeIsStillFollowed(): void
+    {
+        $loader = new SkillLoader();
+        $shared = $this->tempDir . '/owner/shared/db-query';
+        mkdir($shared, 0777, true);
+        file_put_contents($shared . '/SKILL.md', "---\ndescription: Shared\n---\n\nBody.");
+
+        $skills = $this->tempDir . '/owner/skills';
+        mkdir($skills, 0777, true);
+        if (!@symlink($shared, $skills . '/db-query')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertSame([], $loader->loadFromDirectory($skills));
+        $this->assertArrayHasKey(
+            'db-query',
+            $loader->loadFromDirectory($skills, $this->tempDir . '/owner'),
+        );
+    }
+
+    /**
+     * DEPTH IS BOUNDED. A link can graft a tree of any depth on, and the walk
+     * used to descend all of it -- `-> /usr/share` cost 8.29s on one measured
+     * launch. A real skills tree is two or three levels deep.
+     */
+    public function testTheWalkStopsDescendingPastTheDepthBound(): void
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        $skills = $this->tempDir . '/deep';
+        $deep = $skills . '/a/b/c/d/e/f/g/too-deep';
+        mkdir($deep, 0777, true);
+        file_put_contents($deep . '/SKILL.md', "---\ndescription: Too deep\n---\n\nBody.");
+
+        $shallow = $skills . '/reachable';
+        mkdir($shallow, 0777, true);
+        file_put_contents($shallow . '/SKILL.md', "---\ndescription: Fine\n---\n\nBody.");
+
+        $result = $loader->loadFromDirectory($skills);
+
+        $this->assertArrayHasKey('reachable', $result);
+        $this->assertArrayNotHasKey('a/b/c/d/e/f/g/too-deep', $result);
+        $this->assertNotSame([], $loader->skipped());
+    }
+
+    /**
+     * BREADTH IS BOUNDED TOO. A `skills/x -> /usr/share` link cost 8.29s on
+     * one measured launch and `-> /` is unbounded; a real skills tree is tens
+     * of directories, so the cap is only ever reached by something that is not
+     * one.
+     */
+    public function testTheWalkStopsAfterTheDirectoryBound(): void
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        $skills = $this->tempDir . '/wide';
+        $bound = (new \ReflectionClassConstant(SkillLoader::class, 'MAX_DIRECTORIES'))->getValue();
+        $this->assertIsInt($bound);
+
+        mkdir($skills, 0777, true);
+        for ($i = 0; $i <= $bound + 1; $i++) {
+            mkdir($skills . '/d' . str_pad((string) $i, 6, '0', STR_PAD_LEFT), 0777);
+        }
+
+        $walk = new \ReflectionMethod(SkillLoader::class, 'skillFilesIn');
+        $walk->invoke($loader, $skills, null);
+
+        $this->assertNotSame([], $loader->skipped(), 'the walk must stop and say why');
+        $this->assertStringContainsString(
+            'directories',
+            implode(' ', $loader->skipped()),
+        );
+    }
+
+    /**
+     * DISCOVERY ORDER IS A CONTRACT. Two SKILL.md files competing for one
+     * registry key must resolve the same way on every machine, and readdir
+     * order is not sorted.
+     */
+    public function testTheWalkReturnsSkillFilesInAscendingOrder(): void
+    {
+        $loader = new SkillLoader();
+        $skills = $this->tempDir . '/ordered';
+        foreach (['zulu', 'alpha', 'mike'] as $name) {
+            mkdir($skills . '/' . $name, 0777, true);
+            file_put_contents($skills . '/' . $name . '/SKILL.md', "---\ndescription: {$name}\n---\n\nBody.");
+        }
+
+        $walk = new \ReflectionMethod(SkillLoader::class, 'skillFilesIn');
+
+        $this->assertSame(
+            [
+                $skills . '/alpha/SKILL.md',
+                $skills . '/mike/SKILL.md',
+                $skills . '/zulu/SKILL.md',
+            ],
+            $walk->invoke($loader, $skills, null),
+        );
+    }
+
+    /** A path that exists but is not a directory is nothing to walk. */
+    public function testAFilePassedAsASkillDirectoryYieldsNothing(): void
+    {
+        $loader = new SkillLoader();
+        $file = $this->tempDir . '/not-a-directory';
+        file_put_contents($file, 'x');
+
+        $this->assertSame([], $loader->loadFromDirectory($file));
+        // ...and it is NOTHING TO WALK rather than a failure to report: without
+        // the guard the iterator is constructed on a regular file, throws, and
+        // the skip log fills with entries about paths that were never a skill
+        // tree in the first place.
+        $this->assertSame([], $loader->skipped());
+    }
+
+    /**
+     * F11: the skill trees read `getenv('HOME')`, NOT `$_SERVER['HOME']`.
+     * While both halves of this codebase read `$_SERVER` they were wrong
+     * together; the moment one moved, a `putenv('HOME')` pointed
+     * `~/.claude/skills` and `~/.claude/agents` at two different homes.
+     */
+    public function testUserSkillsFollowTheEnvHomeNotTheServerSuperglobal(): void
+    {
+        $envHome = $this->tempDir . '/env-home';
+        mkdir($envHome . '/.sugar-crush/skills/from-env', 0777, true);
+        file_put_contents(
+            $envHome . '/.sugar-crush/skills/from-env/SKILL.md',
+            "---\ndescription: env\n---\n\nBody.",
+        );
+
+        $decoyHome = $this->tempDir . '/server-home';
+        mkdir($decoyHome . '/.sugar-crush/skills/from-server', 0777, true);
+        file_put_contents(
+            $decoyHome . '/.sugar-crush/skills/from-server/SKILL.md',
+            "---\ndescription: server\n---\n\nBody.",
+        );
+
+        $this->useHomeSandbox($envHome);
+        $_SERVER['HOME'] = $decoyHome;
+
+        $result = (new SkillLoader())->loadUserSkills();
+
+        $this->assertArrayHasKey('from-env', $result);
+        $this->assertArrayNotHasKey('from-server', $result);
+    }
+
+    /**
+     * AN UNPARSEABLE SKILL IS SKIPPED QUIETLY AND REMEMBERED. These files
+     * belong to other tools -- ~/.claude/skills is walked on every launch now
+     * -- so "fix your SKILL.md" is not advice this CLI's user can act on, and
+     * an error_log() line lands in the middle of a TUI frame. The diagnostic
+     * still has to exist, so it moves to skipped().
+     */
+    public function testAnUnparseableSkillIsRecordedRatherThanLogged(): void
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        $skills = $this->tempDir . '/broken-skills';
+        mkdir($skills . '/broken', 0777, true);
+        file_put_contents($skills . '/broken/SKILL.md', "---\n: : not: yaml: [\n---\n\nBody.");
+
+        $result = $loader->loadFromDirectory($skills);
+
+        $this->assertSame([], $result);
+        $this->assertArrayHasKey($skills . '/broken/SKILL.md', $loader->skipped());
+    }
+
+    /** A good skill beside a broken one is still loaded. */
+    public function testABrokenSkillDoesNotStopTheOnesBesideIt(): void
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        $skills = $this->tempDir . '/mixed-skills';
+        mkdir($skills . '/broken', 0777, true);
+        file_put_contents($skills . '/broken/SKILL.md', "---\n: : not: yaml: [\n---\n\nBody.");
+        mkdir($skills . '/good', 0777, true);
+        file_put_contents($skills . '/good/SKILL.md', "---\ndescription: Fine\n---\n\nBody.");
+
+        $result = $loader->loadFromDirectory($skills);
+
+        $this->assertArrayHasKey('good', $result);
+        $this->assertCount(1, $loader->skipped());
+    }
+
+    /**
+     * The stderr half, asserted rather than assumed: `error_log()` in CLI goes
+     * to stderr, so a launch that walks another tool's skills used to print
+     * one line per unparseable file INTO THE TUI'S FRAME, every time. The
+     * default loader must write nothing at all.
+     */
+    public function testTheDefaultLoaderWritesNothingAboutASkillItSkipped(): void
+    {
+        $log = $this->tempDir . '/error.log';
+        if (!is_dir($this->tempDir)) {
+            mkdir($this->tempDir, 0777, true);
+        }
+        $skills = $this->brokenSkillTree('quiet');
+
+        $previousLog = ini_get('error_log');
+        $previousEnv = getenv(SkillLoader::DEBUG_SKIPS_ENV);
+        ini_set('error_log', $log);
+        putenv(SkillLoader::DEBUG_SKIPS_ENV);
+
+        try {
+            (new SkillLoader())->loadFromDirectory($skills);
+
+            $this->assertSame('', is_file($log) ? (string) file_get_contents($log) : '');
+        } finally {
+            ini_set('error_log', $previousLog === false ? '' : $previousLog);
+            $previousEnv === false
+                ? putenv(SkillLoader::DEBUG_SKIPS_ENV)
+                : putenv(SkillLoader::DEBUG_SKIPS_ENV . '=' . $previousEnv);
+        }
+    }
+
+    /** ...and the diagnostic comes back for whoever is actually debugging. */
+    public function testTheDebugEnvVarPutsTheSkipsBackOnTheLog(): void
+    {
+        $log = $this->tempDir . '/error-debug.log';
+        if (!is_dir($this->tempDir)) {
+            mkdir($this->tempDir, 0777, true);
+        }
+        $skills = $this->brokenSkillTree('loud');
+
+        $previousLog = ini_get('error_log');
+        $previousEnv = getenv(SkillLoader::DEBUG_SKIPS_ENV);
+        ini_set('error_log', $log);
+        putenv(SkillLoader::DEBUG_SKIPS_ENV . '=1');
+
+        try {
+            (new SkillLoader())->loadFromDirectory($skills);
+
+            $this->assertStringContainsString('Failed to load skill', (string) file_get_contents($log));
+        } finally {
+            ini_set('error_log', $previousLog === false ? '' : $previousLog);
+            $previousEnv === false
+                ? putenv(SkillLoader::DEBUG_SKIPS_ENV)
+                : putenv(SkillLoader::DEBUG_SKIPS_ENV . '=' . $previousEnv);
+        }
+    }
+
+    /** A skills directory holding one SKILL.md that cannot be parsed. */
+    private function brokenSkillTree(string $name): string
+    {
+        $skills = $this->tempDir . '/' . $name . '-skills';
+        mkdir($skills . '/broken', 0777, true);
+        file_put_contents($skills . '/broken/SKILL.md', "---\n: : not: yaml: [\n---\n\nBody.");
+
+        return $skills;
     }
 }

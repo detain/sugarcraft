@@ -377,6 +377,83 @@ final class HookDispatcherTest extends TestCase
     }
 
     // =========================================================================
+    // Matcher semantics — the SAME question this dispatcher's registry answers,
+    // so a second answer to it is a hook that fires for one loop and not the
+    // other (round 6 S-1: this class wrapped the matcher in a hard-coded `/`
+    // and read a runtime `false` as "no match", missing both of round 5's
+    // matcher fixes)
+    // =========================================================================
+
+    /**
+     * `matcher: 'Read|Write/Edit'` is a valid pattern {@see \SugarCraft\Crush\Hooks\HookConfig::parse()}
+     * accepts. Wrapped in a hard-coded `/` it became `/Read|Write/Edit/i`,
+     * whose delimiter closes at the slash — the compile test then failed and
+     * the hook was SKIPPED on the very tool it names, while the registry,
+     * delimiting through {@see \SugarCraft\Crush\Hooks\HookConfig::pattern()},
+     * denied the same call. Identical registry, identical hook, opposite
+     * verdicts.
+     */
+    public function testAMatcherContainingASlashIsJudgedTheSameWayTheRegistryJudgesIt(): void
+    {
+        $this->registry->register(
+            $this->createHardBlockHook('SlashMatcher', HookEvent::PreToolUse, 'Write/Edit', 'Read|Write/Edit'),
+        );
+
+        $result = $this->dispatcher->dispatch(HookEvent::PreToolUse, $this->createContext('Write/Edit'));
+        $registryResult = $this->registry->executeHooks('PreToolUse', $this->createContext('Write/Edit'));
+
+        $this->assertTrue($result->isBlock(), 'a slash in the matcher must not make the hook unrunnable');
+        $this->assertSame('Hard block message', $result->message);
+        $this->assertTrue($registryResult->isDenied(), 'the two loops must reach the same verdict');
+    }
+
+    /**
+     * A MATCHER THAT CANNOT BE EVALUATED MUST NOT READ AS "NO MATCH", the same
+     * rule and the same reason as
+     * {@see \SugarCraft\Crush\Hooks\HookRegistry::matcherMatches()}: `'(a+)+$'`
+     * compiles, so the config parser accepts it, and against a long tool name
+     * it backtracks catastrophically — `preg_match()` returns `false`, not `0`.
+     * Reading that as "did not match" made the guard silently not fire on the
+     * one call it was chosen for. The subject is a TOOL NAME, which the model
+     * chooses.
+     *
+     * The backtrack limit is lowered so the test is deterministic and fast
+     * rather than relying on the 1,000,000 default being reached.
+     */
+    public function testAMatcherThatCannotBeEvaluatedFailsClosedAndIsRecorded(): void
+    {
+        $this->registry->register(
+            $this->createHardBlockHook('CatastrophicHook', HookEvent::PreToolUse, 'x', '(a+)+$'),
+        );
+
+        $limit = ini_get('pcre.backtrack_limit');
+        ini_set('pcre.backtrack_limit', '100');
+
+        try {
+            $result = $this->dispatcher->dispatch(
+                HookEvent::PreToolUse,
+                $this->createContext(str_repeat('a', 40) . 'b'),
+            );
+        } finally {
+            ini_set('pcre.backtrack_limit', $limit === false ? '1000000' : $limit);
+        }
+
+        $this->assertTrue($result->isBlock(), 'a guard that cannot be evaluated must still get to judge the call');
+        $this->assertArrayHasKey('(a+)+$', $this->dispatcher->matcherFailures());
+        $this->assertNotSame('No error', $this->dispatcher->matcherFailures()['(a+)+$']);
+    }
+
+    /** The failure log stays empty when every matcher evaluates normally. */
+    public function testMatcherFailuresIsEmptyWhenNothingFails(): void
+    {
+        $this->registry->register($this->createAllowHook('OrdinaryHook', HookEvent::PreToolUse, 'Read', '^Read$'));
+
+        $this->dispatcher->dispatch(HookEvent::PreToolUse, $this->createContext('Read'));
+
+        $this->assertSame([], $this->dispatcher->matcherFailures());
+    }
+
+    // =========================================================================
     // Convenience Dispatch Method Tests
     // =========================================================================
 

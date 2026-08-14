@@ -76,6 +76,9 @@ final class HookDispatcher
      */
     public const UNANSWERED_ASK_PREFIX = '[unanswered-ask] ';
 
+    /** @var array<string, string> matcher => PCRE error, see {@see matcherFailures()} */
+    private array $matcherFailures = [];
+
     public function __construct(
         private HookRegistry $registry,
     ) {}
@@ -357,17 +360,71 @@ final class HookDispatcher
     /**
      * Returns true if the given pattern matches the tool name.
      *
-     * Validates the pattern compiles before use to avoid PREG_* errors
-     * from malformed regex patterns in hook matcher() implementations.
+     * DELIMITED BY {@see HookConfig::pattern()} RATHER THAN BY A `/` WRITTEN
+     * HERE, and fail-closed on a runtime match failure, because this method and
+     * {@see HookRegistry::matcherMatches()} decide the same question about the
+     * same hook and a second spelling of either rule is a second answer:
+     *
+     * - `matcher: 'Read|Write/Edit'` is a valid pattern {@see HookConfig::parse()}
+     *   accepts. Wrapped in a hard-coded `/` it became `/Read|Write/Edit/i`,
+     *   whose delimiter closes early — the compile test below then failed and
+     *   this method returned false, so the hook was skipped on the very tool it
+     *   names while the registry (which picks a delimiter the pattern does not
+     *   contain) denied the call.
+     * - `matcher: '(a+)+$'` compiles and then backtracks catastrophically
+     *   against a long tool name, so `preg_match()` answers `false`, not `0`.
+     *   Reading that as "did not match" makes a guard silently not fire on the
+     *   one call it was chosen for, which is the failure mode a guard may not
+     *   have — see the fail-closed arm below and {@see HookRegistry::matcherMatches()}
+     *   for the argument in full.
+     *
+     * The failure is recorded rather than swallowed for the reason
+     * {@see matcherFailures()} gives.
      */
     private function matcherMatches(string $pattern, string $toolName): bool
     {
+        $compiled = HookConfig::pattern($pattern);
+
         // Validate the pattern compiles before use
-        if (@preg_match('/' . $pattern . '/i', '') === false) {
+        if (@preg_match($compiled, '') === false) {
             return false;
         }
 
-        return preg_match('/' . $pattern . '/i', $toolName) === 1;
+        $matched = @preg_match($compiled, $toolName);
+
+        if ($matched === false) {
+            // The compile test above passed, so this is a RUNTIME limit
+            // (pcre.backtrack_limit / pcre.recursion_limit) reached on this
+            // subject. Treat the hook as matching and let it decide: a hook
+            // that judges a call it did not mean to can still allow it (a
+            // permitting result does not stop the scan), while a hook that
+            // never runs cannot deny anything.
+            $this->matcherFailures[$pattern] = preg_last_error_msg();
+
+            return true;
+        }
+
+        return $matched === 1;
+    }
+
+    /**
+     * Every matcher this dispatcher could not EVALUATE, keyed by the matcher,
+     * with the PCRE error as the value.
+     *
+     * Kept here rather than pushed onto the registry because
+     * {@see HookRegistry}'s own log is private to it and populated only from
+     * {@see HookRegistry::findMatches()} — a dispatch never reaches it. Kept at
+     * all, rather than logged, for the reason the registry keeps its own: this
+     * is reached mid-session on a tool call, where the TUI owns the screen and
+     * a stderr line lands inside a frame the renderer believes it owns. "Your
+     * matcher is too expensive to evaluate" is not something the user can act
+     * on if nobody records it.
+     *
+     * @return array<string, string>
+     */
+    public function matcherFailures(): array
+    {
+        return $this->matcherFailures;
     }
 
     /**

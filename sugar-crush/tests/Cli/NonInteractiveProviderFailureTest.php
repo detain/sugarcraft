@@ -13,6 +13,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * crush_code.md Phase 0 item 10 (§5): a misconfigured provider on the one-shot
@@ -45,6 +46,8 @@ use SugarCraft\Crush\Providers\ProviderInterface;
  */
 final class NonInteractiveProviderFailureTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     /**
      * Every variable that can steer provider selection, provider CONSTRUCTION,
      * or where the persisted selection is read from. All are cleared in
@@ -135,7 +138,8 @@ final class NonInteractiveProviderFailureTest extends TestCase
             putenv($key);
         }
 
-        putenv('HOME=' . $this->tempDir . '/home');
+        // BOTH spellings -- see HomeSandboxTrait.
+        $this->useHomeSandbox($this->tempDir . '/home');
     }
 
     protected function tearDown(): void
@@ -148,6 +152,7 @@ final class NonInteractiveProviderFailureTest extends TestCase
             }
         }
         $this->savedEnv = [];
+        $this->restoreHomeSandbox();
 
         $this->removeTree($this->tempDir);
 

@@ -37,6 +37,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         // point HOME at an empty sandbox so the machine running the suite
         // cannot leak its own .claude/agents into an assertion.
         $_SERVER['HOME'] = $this->tempDir . '/default-empty-home';
+        putenv('HOME=' . $_SERVER['HOME']);
         mkdir($_SERVER['HOME'], 0777, true);
         // Keep the lossy-mapping error_log() calls out of the suite's stderr.
         $this->origErrorLog = (string) ini_get('error_log');
@@ -47,6 +48,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
     {
         ini_set('error_log', $this->origErrorLog);
         $_SERVER['HOME'] = $this->origHome;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->removeDirectory($this->tempDir);
         parent::tearDown();
     }
@@ -96,6 +98,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $registry = new ForeignAgentPresetRegistry();
         $fakeHome = $this->tempDir . '/fake-home';
         $_SERVER['HOME'] = $fakeHome;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->writeAgent($fakeHome . '/.claude/agents', 'home-agent', 'description: A home agent');
 
         $result = $registry->discoverClaude($this->tempDir . '/empty-project');
@@ -113,6 +116,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $projectRoot = $this->tempDir . '/project2';
         $fakeHome = $this->tempDir . '/fake-home2';
         $_SERVER['HOME'] = $fakeHome;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->writeAgent($projectRoot . '/.claude/agents', 'shared', 'description: From project');
         $this->writeAgent($fakeHome . '/.claude/agents', 'shared', 'description: From home');
         $this->writeAgent($fakeHome . '/.claude/agents', 'home-only', 'description: Home only');
@@ -274,6 +278,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $registry = new ForeignAgentPresetRegistry();
         $fakeHome = $this->tempDir . '/fake-home-oc';
         $_SERVER['HOME'] = $fakeHome;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->writeAgent($fakeHome . '/.config/opencode/agents', 'oc-home', 'description: Home opencode agent');
 
         $result = $registry->discoverOpencode($this->tempDir . '/empty-oc-project');

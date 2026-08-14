@@ -11,13 +11,23 @@ use SugarCraft\Crush\App\App;
  */
 final class SkillManager
 {
+    private ForeignSkillDiscovery $foreign;
+
     public function __construct(
         private SkillLoader $loader,
         private SkillRegistry $registry,
-    ) {}
+        ?ForeignSkillDiscovery $foreign = null,
+    ) {
+        // Defaults to one sharing THIS loader rather than building its own, so
+        // a caller that handed in a configured loader gets it used for both
+        // the native and the foreign walk.
+        $this->foreign = $foreign ?? new ForeignSkillDiscovery($loader);
+    }
 
     /**
-     * Load all skills from standard locations.
+     * Load all skills from standard locations: the foreign imports other
+     * coding CLIs leave under `.claude/skills` / `.opencode/skills`, then the
+     * native built-in/user/project trees.
      *
      * Registers Stage-1 manifests only (name/description/flags) via
      * SkillLoader::loadAllManifests() -- not the previous
@@ -32,12 +42,68 @@ final class SkillManager
      * the backfill path is implemented and tested, not yet production
      * reachable from bin/sugarcrush. Wiring it in is tracked separately
      * (crush_feat.md section 7, item 2 / W3.S8 in crush_feat_plan.md).
+     *
+     * FOREIGN DISCOVERY IS CALLED HERE, and this is crush_code.md Phase 2
+     * item 6: {@see ForeignSkillDiscovery}, its SkillSource tagging and its
+     * tests all existed, and nothing ever called it — so a skill under
+     * `~/.claude/skills` was invisible to a real run no matter what
+     * `Bootstrap`'s doc-block claimed. HERE rather than in
+     * {@see SkillLoader::loadAllManifests()} because the whole point of
+     * ForeignSkillDiscovery is the {@see SkillSource} tag it stamps on each
+     * result, and that tag rides on a {@see Skill} object: the loader's
+     * manifest arrays have nowhere to carry it, so routing the foreign walk
+     * through them would discover the skills and throw away the provenance
+     * the palette badges them with. This class is also the first layer that
+     * holds the registry, which is what the two-source merge below needs.
+     *
+     * NATIVE WINS A NAME COLLISION, which is why the foreign trees are
+     * registered FIRST and the native manifests over the top of them (the
+     * registry is last-write-wins, the same merge convention
+     * {@see SkillLoader::loadAll()} documents). Wiring a new discovery source
+     * in must not change what an existing name resolves to: with the reverse
+     * order, installing another CLI — or cloning a repo that carries a
+     * `.claude/skills` tree — would silently re-point a skill the user
+     * already had. Additive is the only safe direction for this step. The same
+     * argument decides the two directories INSIDE each foreign tree, where
+     * {@see ForeignSkillDiscovery} gives the user's own copy precedence over a
+     * cloned repository's.
+     *
+     * Between the two foreign trees the fixed call order below decides it
+     * (opencode over Claude); that pair has no principled winner, so what
+     * matters is that it is deterministic rather than dependent on scan order.
+     * That property is only true because {@see SkillLoader} follows symlinked
+     * skill directories — while it did not, half of a tree could be invisible
+     * and the winner of a cross-tree collision was decided by which layout the
+     * machine happened to use.
+     *
+     * The cost, stated rather than hidden: the foreign walk reads each
+     * imported SKILL.md's BODY (ForeignSkillDiscovery goes through
+     * loadFromDirectory()), so those skills do not get the lazy Stage-1
+     * treatment 7.E3 bought for the native ones. Giving them it needs
+     * registerFromManifest() to carry a SkillSource, which is a change to the
+     * registry's shape rather than to this wiring.
      */
     public function loadAll(string $projectRoot = '.'): void
     {
+        $this->registry->register($this->foreign->discoverClaude($projectRoot));
+        $this->registry->register($this->foreign->discoverOpencode($projectRoot));
+
         foreach ($this->loader->loadAllManifests($projectRoot) as $manifest) {
             $this->registry->registerFromManifest($manifest);
         }
+    }
+
+    /**
+     * Every SKILL.md the load gave up on, keyed by path — the diagnostic
+     * {@see SkillLoader::recordSkip()} keeps instead of writing to stderr, so
+     * a caller with somewhere safe to show it (a doctor report, a debug pane)
+     * can reach it without the TUI paying for it on every launch.
+     *
+     * @return array<string, string>
+     */
+    public function skipped(): array
+    {
+        return $this->loader->skipped();
     }
 
     /**

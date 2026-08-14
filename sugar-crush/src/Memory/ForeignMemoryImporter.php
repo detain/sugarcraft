@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Memory;
 
+use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Skills\SkillSource;
 use Symfony\Component\Yaml\Yaml;
@@ -69,7 +70,7 @@ final class ForeignMemoryImporter
      */
     public function importClaudeCode(string $projectRoot, ?string $claudeHome = null): int
     {
-        $home = $claudeHome ?? (($_SERVER['HOME'] ?? '/root') . '/.claude');
+        $home = $claudeHome ?? (HomeDirectory::path() . '/.claude');
         $dir = rtrim($home, '/') . '/projects/' . $this->claudeProjectSlug($projectRoot) . '/memory';
 
         $imported = 0;

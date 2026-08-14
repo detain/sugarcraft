@@ -26,6 +26,7 @@ final class SkillPathScopingWiringTest extends TestCase
 {
     private string $tempDir = '';
     private string $originalHome = '';
+    private mixed $originalServerHome;
 
     protected function setUp(): void
     {
@@ -37,6 +38,13 @@ final class SkillPathScopingWiringTest extends TestCase
 
         $this->originalHome = getenv('HOME') ?: '';
         putenv('HOME=' . $this->tempDir . '/home');
+
+        // BOTH: Bootstrap reads getenv('HOME'), ForeignSkillDiscovery — now
+        // reached from SkillManager::loadAll() — reads $_SERVER['HOME'], so
+        // redirecting one leaves the other scanning the developer's own
+        // ~/.claude/skills.
+        $this->originalServerHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = $this->tempDir . '/home';
 
         $dir = $this->tempDir . '/repo/.sugar-crush/skills/path-scoped-audit';
         mkdir($dir, 0o755, true);
@@ -54,6 +62,13 @@ final class SkillPathScopingWiringTest extends TestCase
         } else {
             putenv('HOME');
         }
+
+        if ($this->originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
+        }
+
         $this->removeDirectory($this->tempDir);
 
         parent::tearDown();

@@ -118,6 +118,7 @@ final class TeammateTest extends TestCase
         // Backup and override HOME for consistent testing
         $originalHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = '/home/testuser';
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             $inboxPath = $teammate->getInboxPath();
@@ -125,8 +126,10 @@ final class TeammateTest extends TestCase
         } finally {
             if ($originalHome !== null) {
                 $_SERVER['HOME'] = $originalHome;
+                putenv('HOME=' . $_SERVER['HOME']);
             } else {
                 unset($_SERVER['HOME']);
+                putenv('HOME');
             }
         }
     }
@@ -144,6 +147,7 @@ final class TeammateTest extends TestCase
 
         $originalHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = '/tmp';
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             $inboxPath = $teammate->getInboxPath();
@@ -151,8 +155,10 @@ final class TeammateTest extends TestCase
         } finally {
             if ($originalHome !== null) {
                 $_SERVER['HOME'] = $originalHome;
+                putenv('HOME=' . $_SERVER['HOME']);
             } else {
                 unset($_SERVER['HOME']);
+                putenv('HOME');
             }
         }
     }
@@ -174,6 +180,7 @@ final class TeammateTest extends TestCase
 
         $originalHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = '/home/testuser';
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             $inboxPath = $teammate->getInboxPath();
@@ -181,8 +188,10 @@ final class TeammateTest extends TestCase
         } finally {
             if ($originalHome !== null) {
                 $_SERVER['HOME'] = $originalHome;
+                putenv('HOME=' . $_SERVER['HOME']);
             } else {
                 unset($_SERVER['HOME']);
+                putenv('HOME');
             }
         }
     }
@@ -202,6 +211,7 @@ final class TeammateTest extends TestCase
 
         $originalHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = '/home/safeuser';
+        putenv('HOME=' . $_SERVER['HOME']);
 
         try {
             $path = $teammate->getInboxPath();
@@ -210,8 +220,10 @@ final class TeammateTest extends TestCase
         } finally {
             if ($originalHome !== null) {
                 $_SERVER['HOME'] = $originalHome;
+                putenv('HOME=' . $_SERVER['HOME']);
             } else {
                 unset($_SERVER['HOME']);
+                putenv('HOME');
             }
         }
     }

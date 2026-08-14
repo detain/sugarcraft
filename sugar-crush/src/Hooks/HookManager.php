@@ -14,27 +14,87 @@ final class HookManager
     ) {}
 
     /**
-     * Load hooks from a YAML/JSON hook file.
+     * Load hooks from a YAML hook file, adding each one to the chain.
      *
-     * INTENTIONALLY DORMANT: nothing in `src/` or `bin/` calls this, so on a
-     * stock `bin/sugarcrush` run the only hooks that exist are the built-ins
-     * {@see registerBuiltIns()} registers plus whatever
-     * {@see \SugarCraft\Crush\Cli\Bootstrap} hands over. This is the seam an
-     * EMBEDDER uses to install its own hooks, and it is also the seam that
-     * makes {@see ScriptHook}'s `exit 3`/`exit 4` (ASK and MODIFY) reachable
-     * from configuration rather than only from hand-written PHP — the
-     * reachability {@see HookRegistry::executeHooks()} and
-     * {@see HookRegistry::isReserved()} are written against. Wiring a
-     * discovery path for it (`~/.sugar-crush/hooks.yaml` and friends) is a
-     * separate step; until then, treat every "reachable from a plain hook
-     * file" claim in this package as "reachable to an embedder".
+     * LIVE since crush_code.md Phase 2 item 5:
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::hooks()} calls this for
+     * `~/.sugar-crush/hooks.yaml` — and for `{root}/.sugar-crush/hooks.yaml`
+     * only when the user has TRUSTED that project, since a hook entry is a
+     * shell command and a project file arrives with whatever was cloned (see
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::hookFiles()}) — after
+     * {@see registerBuiltIns()}, which is what makes {@see ScriptHook}'s
+     * `exit 3`/`exit 4` (ASK and MODIFY) reachable from configuration rather
+     * than only from hand-written PHP — the reachability
+     * {@see HookRegistry::executeHooks()} and {@see HookRegistry::isReserved()}
+     * are written against. Embedders still call it directly for their own
+     * files.
+     *
+     * A LOADED HOOK MAY ONLY ADD TO THE CHAIN, NEVER REPLACE ANYTHING IN IT.
+     * {@see HookRegistry::register()} keys by event+name and overwrites, so
+     * without the guard below a file saying `name: confirm-remove` would
+     * UNINSTALL {@see BuiltIn\ConfirmRemoveHook} — a config file switching a
+     * guard off by naming it, which is the same hole
+     * {@see HookRegistry::isReserved()} closes for the permission gate, and
+     * which a file the CLI now reads by convention makes reachable. Refusing
+     * is also what keeps the outcome independent of WHICH file was loaded
+     * first: a project `.sugar-crush/hooks.yaml` cannot disarm a hook the
+     * user wrote in their home directory by reusing its name, in either
+     * registration order.
+     *
+     * @throws \RuntimeException when the file exists and cannot be read
+     * @throws \InvalidArgumentException when the file cannot be used, or when
+     *         one of its hooks would displace an already-registered hook
      */
     public function loadFromFile(string $path): void
     {
-        $configs = HookConfig::loadFromFile($path);
+        $this->loadEntries(HookConfig::loadFromFile($path), $path);
+    }
 
+    /**
+     * {@see loadFromFile()} with the parse already done — same registration
+     * contract, same refusals, $source only naming the file the entries came
+     * from so the messages stay actionable.
+     *
+     * Split out for {@see \SugarCraft\Crush\Cli\Bootstrap::hookFileEntries()},
+     * which reads each hook file ONCE PER LAUNCH and replays the entries into
+     * every hook manager it builds, so a file appearing or changing mid-session
+     * cannot install shell into a chain the launch already vetted. Embedders
+     * that just want "load my file" keep calling loadFromFile().
+     *
+     * @param array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}> $configs
+     *
+     * @throws \InvalidArgumentException when an entry would displace an
+     *         already-registered hook
+     */
+    public function loadEntries(array $configs, string $source): void
+    {
         foreach ($configs as $config) {
+            // `disabled: true` MEANS NOT IN THE CHAIN, and it means it by not
+            // registering rather than by calling {@see HookRegistry::disable()}.
+            // That registry method keys by NAME ALONE, across every event, so
+            // routing a config file's disable through it would let an entry
+            // named after a hook registered on a DIFFERENT event switch that
+            // one off — a config file disarming a guard by naming it, which is
+            // the hole {@see HookRegistry::isReserved()} and the
+            // already-registered refusal below exist to close, re-opened by
+            // the back door. The entry is still fully VALIDATED first (see
+            // {@see HookConfig::parse()}), so `disabled: true` beside a
+            // misspelled key or an uncompilable matcher still stops the launch.
+            if ($config['disabled'] ?? false) {
+                continue;
+            }
+
             $hook = ScriptHook::fromConfig($config);
+            $event = $hook->event()->value;
+            $name = $hook->name();
+
+            if ($this->registry->get($event, $name) !== null) {
+                throw new \InvalidArgumentException(
+                    "{$source}: a hook named '{$name}' is already registered for {$event}; "
+                    . 'a hook file may add to the chain but may not replace what is already in it.',
+                );
+            }
+
             $this->registry->register($hook);
         }
     }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Support\HomeDirectory;
+
 /**
  * Creates and manages Team aggregate roots.
  *
@@ -369,7 +371,7 @@ final class TeamManager
         }
 
         if (str_starts_with($path, '~/')) {
-            $home = $_SERVER['HOME'] ?? '/tmp';
+            $home = HomeDirectory::path();
             $path = $home . '/' . substr($path, 2);
         }
 

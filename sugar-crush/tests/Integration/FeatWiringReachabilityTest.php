@@ -56,6 +56,7 @@ final class FeatWiringReachabilityTest extends TestCase
 {
     private string $tempDir;
     private string $originalHome;
+    private mixed $originalServerHome;
 
     protected function setUp(): void
     {
@@ -70,6 +71,13 @@ final class FeatWiringReachabilityTest extends TestCase
         // session list out of the seeding assertions below, which count rows.
         $this->originalHome = getenv('HOME') ?: '';
         putenv('HOME=' . $this->tempDir . '/home');
+
+        // BOTH: Bootstrap reads getenv('HOME'), ForeignSkillDiscovery — now
+        // reached from SkillManager::loadAll() — reads $_SERVER['HOME'], so
+        // redirecting one leaves the other scanning the developer's own
+        // ~/.claude/skills.
+        $this->originalServerHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = $this->tempDir . '/home';
     }
 
     protected function tearDown(): void
@@ -79,6 +87,13 @@ final class FeatWiringReachabilityTest extends TestCase
         } else {
             putenv('HOME');
         }
+
+        if ($this->originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
+        }
+
         $this->removeDirectory($this->tempDir);
 
         parent::tearDown();

@@ -11,6 +11,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\ToolResult;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * crush_feat.md §9 E3 — image-bearing tool results reach the terminal through
@@ -24,6 +25,10 @@ use SugarCraft\Crush\ToolResult;
  */
 final class RendererImageTest extends TestCase
 {
+    use HomeSandboxTrait;
+
+    private string $homeSandbox = '';
+
     /** First Private-Use-Area codepoint candy-core's ImageOverlay uses as a marker. */
     private const MARKER = "\u{E000}";
 
@@ -32,6 +37,20 @@ final class RendererImageTest extends TestCase
         if (!\extension_loaded('gd')) {
             $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
         }
+
+        // Constructing a Chat reaches the skill trees under HOME; sandbox both
+        // spellings so this never reads the developer's -- see HomeSandboxTrait.
+        $this->homeSandbox = $this->useHomeSandbox(
+            sys_get_temp_dir() . '/renderer_image_home_' . uniqid('', true),
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreHomeSandbox();
+        @rmdir($this->homeSandbox);
+
+        parent::tearDown();
     }
 
     /** A real, decodable 20x10 PNG — candy-mosaic rejects anything it cannot decode. */

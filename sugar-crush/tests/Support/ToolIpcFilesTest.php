@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Support;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Support\ToolIpcFiles;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * The two properties {@see ToolIpcFiles} exists for: a forked tool child's
@@ -21,6 +22,8 @@ use SugarCraft\Crush\Support\ToolIpcFiles;
  */
 final class ToolIpcFilesTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $dir;
 
     protected function setUp(): void
@@ -29,10 +32,17 @@ final class ToolIpcFilesTest extends TestCase
 
         $this->dir = sys_get_temp_dir() . '/sc_ipc_files_' . bin2hex(random_bytes(6));
         mkdir($this->dir, 0o700, true);
+        // Every launch path reached from here walks the skill trees under HOME
+        // (~/.claude/skills, ~/.config/opencode/skills, ~/.sugar-crush/skills),
+        // so HOME is redirected at an empty sandbox -- both spellings, see
+        // HomeSandboxTrait. Nothing here asserts on a skill roster today; the
+        // point is that nothing here can start depending on the developer's.
+        $this->useHomeSandbox($this->dir . '/home');
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
         foreach (glob($this->dir . '/*') ?: [] as $path) {
             @unlink($path);
         }
@@ -273,16 +283,15 @@ final class ToolIpcFilesTest extends TestCase
         $latch = new \ReflectionProperty(ToolIpcFiles::class, 'swept');
         $wasSwept = $latch->getValue();
 
-        $home = getenv('HOME') ?: '';
         $provider = getenv('SUGARCRUSH_PROVIDER');
         $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
 
+        // setUp() already put HOME here (both spellings); this test only needs
+        // the same directory to assert against.
         $sandbox = $this->dir . '/home';
-        mkdir($sandbox, 0o700, true);
 
         try {
             $latch->setValue(null, false);
-            putenv('HOME=' . $sandbox);
             putenv('SUGARCRUSH_PROVIDER');
             putenv('SUGARCRUSH_BACKEND_CMD');
 
@@ -292,10 +301,8 @@ final class ToolIpcFilesTest extends TestCase
         } finally {
             @unlink($stale);
             $latch->setValue(null, $wasSwept);
-            $home === '' ? putenv('HOME') : putenv('HOME=' . $home);
             $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
             $cmd === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $cmd);
-            $this->removeTree($sandbox);
         }
     }
 

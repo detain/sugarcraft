@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Isolates ~/.sugar-crush/config.json under a temp HOME, same convention as
@@ -14,8 +15,9 @@ use SugarCraft\Crush\Cli\Bootstrap;
  */
 final class BootstrapUserConfigTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $tempDir;
-    private string $originalHome;
 
     protected function setUp(): void
     {
@@ -24,17 +26,15 @@ final class BootstrapUserConfigTest extends TestCase
         $this->tempDir = sys_get_temp_dir() . '/bootstrap_user_config_' . uniqid('', true);
         mkdir($this->tempDir . '/home', 0700, true);
 
-        $this->originalHome = getenv('HOME') ?: '';
-        putenv('HOME=' . $this->tempDir . '/home');
+        // BOTH spellings of HOME, not just the env var: putenv() alone moved
+        // the config dir while every skill tree kept reading the developer's
+        // real ~/.claude/skills -- see HomeSandboxTrait.
+        $this->useHomeSandbox($this->tempDir . '/home');
     }
 
     protected function tearDown(): void
     {
-        if ($this->originalHome !== '') {
-            putenv('HOME=' . $this->originalHome);
-        } else {
-            putenv('HOME');
-        }
+        $this->restoreHomeSandbox();
 
         parent::tearDown();
     }

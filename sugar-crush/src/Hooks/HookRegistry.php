@@ -25,6 +25,9 @@ final class HookRegistry
     /** @var array<string, bool> disabled hooks */
     private array $disabled = [];
 
+    /** @var array<string, string> matcher => the PCRE error evaluating it raised */
+    private array $matcherFailures = [];
+
     /**
      * @throws \InvalidArgumentException when a hook that is not the permission
      *         gate claims the gate's reserved name — see
@@ -99,9 +102,12 @@ final class HookRegistry
      * would silently REPLACE — or, via a disable, UNINSTALL — the launch's
      * {@see BuiltIn\PermissionGateHook}. That is a config file switching the
      * whole permission system off, which is the opposite of what a hook file
-     * is allowed to do. Nothing wires {@see HookManager::loadFromFile()} yet
-     * (see its docblock), so the reservation lands ahead of the hole rather
-     * than after it.
+     * is allowed to do. The reservation landed ahead of the hole:
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::hooks()} now reads
+     * `.sugar-crush/hooks.yaml` through {@see HookManager::loadFromFile()},
+     * which additionally refuses a config hook that would displace ANY
+     * already-registered hook — this reservation is the part that cannot be
+     * bypassed by loading order.
      */
     public static function isReserved(string $name): bool
     {
@@ -135,15 +141,67 @@ final class HookRegistry
      *
      * Validates the pattern compiles before use to avoid PREG_* errors
      * from malformed regex patterns in hook matcher() implementations.
+     *
+     * Delimited by {@see HookConfig::pattern()} rather than by a `/` written
+     * here, so the delimiter this matches under is the same one
+     * {@see HookConfig::parse()} validated under. Two spellings of that would
+     * mean a matcher containing the other's delimiter either passed validation
+     * and never fired, or failed validation and stopped the launch over a
+     * pattern this method would have run happily.
      */
     private function matcherMatches(string $pattern, string $toolName): bool
     {
+        $compiled = HookConfig::pattern($pattern);
+
         // Validate the pattern compiles before use
-        if (@preg_match('/' . $pattern . '/i', '') === false) {
+        if (@preg_match($compiled, '') === false) {
             return false;
         }
 
-        return preg_match('/' . $pattern . '/i', $toolName) === 1;
+        $matched = @preg_match($compiled, $toolName);
+
+        // `false` HERE IS NOT `0`. The compile check above passed, so the
+        // pattern is valid; a false at this point is a RUNTIME failure —
+        // pcre.backtrack_limit or pcre.recursion_limit, reached while matching
+        // this particular subject. `'(a+)+$'` is a matcher
+        // {@see HookConfig::parse()} accepts, and against a long tool name it
+        // backtracks catastrophically. Reading that as "did not match" makes a
+        // guard SILENTLY NOT FIRE on the one call it was chosen for, which is
+        // the failure mode a guard may not have — the call would then run
+        // ungated with nothing said anywhere.
+        //
+        // So it fails closed: the hook is treated as matching and gets to
+        // decide. A hook that runs on a tool call it did not mean to judge can
+        // still allow it (a permitting result does not stop the scan — see
+        // {@see executeHooks()}); a hook that never runs cannot deny anything.
+        // The failure is also kept rather than swallowed, because "your matcher
+        // is too expensive to evaluate" is not something the user can act on if
+        // nobody records it — see {@see matcherFailures()}.
+        if ($matched === false) {
+            $this->matcherFailures[$pattern] = preg_last_error_msg();
+
+            return true;
+        }
+
+        return $matched === 1;
+    }
+
+    /**
+     * Every matcher this registry could not EVALUATE, keyed by the matcher, with
+     * the PCRE error as the value.
+     *
+     * Kept rather than logged for the reason
+     * {@see \SugarCraft\Crush\Skills\SkillLoader::skipped()} keeps its skips:
+     * this is reached mid-session, on a tool call, where the TUI owns the
+     * screen and a stderr line lands inside a frame the renderer believes it
+     * owns. A doctor report or a debug pane can ask; the frame is not written
+     * to.
+     *
+     * @return array<string, string>
+     */
+    public function matcherFailures(): array
+    {
+        return $this->matcherFailures;
     }
 
     /**

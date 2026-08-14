@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Support\HomeDirectory;
+
 /**
  * Manages creation, deletion, and listing of git worktrees per agent.
  *
@@ -698,7 +700,7 @@ final class WorktreeManager
         }
 
         if (str_starts_with($path, '~/')) {
-            $home = $_SERVER['HOME'] ?? '/tmp';
+            $home = HomeDirectory::path();
             $path = $home . '/' . substr($path, 2);
         }
 

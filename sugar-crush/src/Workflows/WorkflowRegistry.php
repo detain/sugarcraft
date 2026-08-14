@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Workflows;
 
+use SugarCraft\Crush\Support\HomeDirectory;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -266,9 +267,13 @@ final class WorkflowRegistry
      */
     private function expandPath(string $path): string
     {
-        return rtrim(
-            preg_replace('/^~/', $_SERVER['HOME'] ?? '/root', $path),
-            '/'
-        );
+        // str_starts_with(), NOT preg_replace(): the replacement string is
+        // where `$1`, `\1` and `\\` are meaningful to PCRE, and this one is a
+        // HOME DIRECTORY — `/home/j$1` or a Windows `C:\1` spelling came back
+        // mangled (or empty) rather than expanded. There is nothing to pattern
+        // match here in the first place; the test is one leading character.
+        $home = str_starts_with($path, '~') ? HomeDirectory::path() . substr($path, 1) : $path;
+
+        return rtrim($home, '/');
     }
 }

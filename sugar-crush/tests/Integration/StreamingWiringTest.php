@@ -574,6 +574,12 @@ final class StreamingWiringTest extends TestCase
         \mkdir($repo, 0755, true);
         $originalHome = \getenv('HOME') ?: '';
         \putenv('HOME=' . $home);
+        // BOTH forms are redirected, because half a sandbox is not a sandbox:
+        // {@see \SugarCraft\Crush\Support\HomeDirectory} reads `getenv()`,
+        // and anything still holding a `$_SERVER['HOME']` copy (a nested
+        // process, a library) must not be left pointing at the real home.
+        $originalServerHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = $home;
 
         try {
             $this->assertTrue(
@@ -582,6 +588,11 @@ final class StreamingWiringTest extends TestCase
             );
         } finally {
             $originalHome === '' ? \putenv('HOME') : \putenv('HOME=' . $originalHome);
+            if ($originalServerHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $originalServerHome;
+            }
             self::removeDirectory($home);
         }
     }

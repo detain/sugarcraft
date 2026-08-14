@@ -47,9 +47,12 @@ use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Support\ToolIpcFiles;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 final class ChatTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     /**
      * Temp files this test asked for by name, unlinked in tearDown().
      *
@@ -100,6 +103,11 @@ final class ChatTest extends TestCase
         parent::setUp();
 
         $this->tempPaths = [];
+
+        // Chat's own construction paths reach the skill trees under HOME, so
+        // every test here runs against an empty sandbox rather than whatever
+        // the developer has in ~/.claude/skills -- see HomeSandboxTrait.
+        $this->useHomeSandbox(sys_get_temp_dir() . '/chat_test_home_' . uniqid('', true));
     }
 
     public function testTypingAccumulatesCharsInInputBuffer(): void
@@ -2035,6 +2043,12 @@ final class ChatTest extends TestCase
     {
         foreach ($this->tempPaths as $path) {
             @unlink($path);
+        }
+
+        $sandbox = getenv('HOME');
+        $this->restoreHomeSandbox();
+        if (is_string($sandbox) && str_contains($sandbox, '/chat_test_home_')) {
+            @rmdir($sandbox);
         }
 
         parent::tearDown();

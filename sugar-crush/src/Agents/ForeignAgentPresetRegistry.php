@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Skills\SkillSource;
 use Symfony\Component\Yaml\Yaml;
@@ -142,7 +143,7 @@ final class ForeignAgentPresetRegistry
     {
         return $this->scan(
             [
-                ($_SERVER['HOME'] ?? '/root') . '/.claude/agents',
+                HomeDirectory::path() . '/.claude/agents',
                 rtrim($projectRoot, '/') . '/.claude/agents',
             ],
             SkillSource::Claude,
@@ -156,7 +157,7 @@ final class ForeignAgentPresetRegistry
     {
         return $this->scan(
             [
-                ($_SERVER['HOME'] ?? '/root') . '/.config/opencode/agents',
+                HomeDirectory::path() . '/.config/opencode/agents',
                 rtrim($projectRoot, '/') . '/.opencode/agents',
             ],
             SkillSource::Opencode,

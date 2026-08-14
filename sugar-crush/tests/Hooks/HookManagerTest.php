@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Hooks\BuiltIn\AuditHook;
 use SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook;
 use SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook;
+use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookManager;
@@ -225,6 +226,242 @@ YAML);
         } finally {
             unlink($tempFile);
         }
+    }
+
+    /**
+     * `disabled: true` MEANS NOT IN THE CHAIN. The key was accepted and
+     * silently ignored before, so a user who wrote the natural thing — the
+     * registry has a first-class disable()/isDisabled() pair — got a hook that
+     * ran anyway.
+     */
+    public function testADisabledEntryIsNotRegistered(): void
+    {
+        $tempFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: off-guard
+      command: 'true'
+      disabled: true
+    - name: on-guard
+      command: 'true'
+YAML);
+
+        try {
+            $this->manager->loadFromFile($tempFile);
+
+            $this->assertNull($this->registry->get('PreToolUse', 'off-guard'));
+            $this->assertNotNull($this->registry->get('PreToolUse', 'on-guard'));
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    /**
+     * A disabled entry is still fully VALIDATED. `disabled: true` beside a
+     * misspelled key must not become a way to smuggle an unreadable entry past
+     * the checks by declaring it inert.
+     */
+    public function testADisabledEntryIsStillValidated(): void
+    {
+        $tempFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: off-guard
+      command: 'true'
+      disabled: true
+      mather: '^Bash$'
+YAML);
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/is not a key a hook entry/');
+
+            $this->manager->loadFromFile($tempFile);
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    /**
+     * A hook file may ADD to the chain and may never replace what is in it:
+     * `name: confirm-rm` would otherwise overwrite the registry entry
+     * {@see ConfirmRemoveHook} occupies — a config file uninstalling a guard by
+     * naming it.
+     */
+    /**
+     * The seam {@see \SugarCraft\Crush\Cli\Bootstrap::hookFileEntries()} uses to
+     * replay ONE read of a hook file into every hook manager a launch builds —
+     * which is what stops a file written mid-session installing itself into the
+     * chain on the next provider switch. Same registration contract as
+     * {@see HookManager::loadFromFile()}, including the refusal to displace
+     * anything already in the chain, with $source only naming the origin for
+     * the message.
+     */
+    public function testLoadEntriesRegistersWithoutTouchingDisk(): void
+    {
+        $this->manager->registerBuiltIns();
+        $this->manager->loadEntries(
+            HookConfig::parse("hooks:\n  PreToolUse:\n    - name: replayed\n      command: 'true'\n"),
+            '/some/hooks.yaml',
+        );
+
+        $this->assertNotNull($this->manager->hook('PreToolUse', 'replayed'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('#/some/hooks\.yaml: a hook named .replayed. is already registered#');
+
+        $this->manager->loadEntries(
+            HookConfig::parse("hooks:\n  PreToolUse:\n    - name: replayed\n      command: 'true'\n"),
+            '/some/hooks.yaml',
+        );
+    }
+
+    public function testLoadFromFileRefusesToDisplaceABuiltInGuard(): void
+    {
+        $this->manager->registerBuiltIns();
+
+        $tempFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: confirm-rm
+      matcher: '.*'
+      command: 'true'
+YAML);
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/may not replace/');
+
+            $this->manager->loadFromFile($tempFile);
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    /**
+     * The guard survives the refusal — the point is that the built-in is still
+     * the hook registered under that name, not merely that something threw.
+     */
+    public function testABuiltInGuardSurvivesARefusedDisplacement(): void
+    {
+        $this->manager->registerBuiltIns();
+
+        $tempFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: confirm-rm
+      matcher: '.*'
+      command: 'true'
+YAML);
+
+        try {
+            $this->manager->loadFromFile($tempFile);
+            $this->fail('expected the displacement to be refused');
+        } catch (\InvalidArgumentException) {
+            $this->assertInstanceOf(
+                ConfirmRemoveHook::class,
+                $this->registry->get('PreToolUse', 'confirm-rm'),
+            );
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    /**
+     * The reserved permission-gate name is refused by {@see HookRegistry::register()}
+     * itself, so it cannot be claimed even by a file loaded BEFORE the gate is
+     * installed — which is the order {@see \SugarCraft\Crush\Cli\Bootstrap::hooks()}
+     * uses.
+     */
+    public function testLoadFromFileCannotClaimThePermissionGateName(): void
+    {
+        $tempFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: permission-gate
+      matcher: '.*'
+      command: 'true'
+YAML);
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/reserved for the permission gate/');
+
+            $this->manager->loadFromFile($tempFile);
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    /**
+     * Two files, no collision: both files' hooks end up in one chain, which is
+     * what makes a project file additive to the user's rather than a
+     * replacement for it.
+     */
+    public function testTwoHookFilesBothAddToTheChain(): void
+    {
+        $userFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: user-guard
+      command: 'true'
+YAML);
+        $projectFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: project-guard
+      command: 'true'
+YAML);
+
+        try {
+            $this->manager->loadFromFile($userFile);
+            $this->manager->loadFromFile($projectFile);
+
+            $this->assertNotNull($this->manager->hook('PreToolUse', 'user-guard'));
+            $this->assertNotNull($this->manager->hook('PreToolUse', 'project-guard'));
+        } finally {
+            unlink($userFile);
+            unlink($projectFile);
+        }
+    }
+
+    /**
+     * ...and a collision BETWEEN the two files is refused too, in whichever
+     * order they are loaded, so neither file can disarm the other's hook by
+     * reusing its name.
+     */
+    public function testACollisionBetweenTwoHookFilesIsRefused(): void
+    {
+        $userFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: guard
+      command: 'user.sh'
+YAML);
+        $projectFile = $this->writeHookFile(<<<'YAML'
+hooks:
+  PreToolUse:
+    - name: guard
+      command: 'project.sh'
+YAML);
+
+        try {
+            $this->manager->loadFromFile($userFile);
+
+            $this->expectException(\InvalidArgumentException::class);
+            $this->manager->loadFromFile($projectFile);
+        } finally {
+            unlink($userFile);
+            unlink($projectFile);
+        }
+    }
+
+    private function writeHookFile(string $yaml): string
+    {
+        $path = sys_get_temp_dir() . '/test_hooks_' . uniqid('', true) . '.yaml';
+        file_put_contents($path, $yaml);
+
+        return $path;
     }
 
     // =========================================================================

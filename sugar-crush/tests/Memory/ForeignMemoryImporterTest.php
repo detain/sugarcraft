@@ -30,6 +30,7 @@ final class ForeignMemoryImporterTest extends TestCase
         // The default ~/.claude lookup must not read the real machine's memory.
         $this->origHome = $_SERVER['HOME'] ?? '/root';
         $_SERVER['HOME'] = $this->tempDir . '/default-empty-home';
+        putenv('HOME=' . $_SERVER['HOME']);
         mkdir($_SERVER['HOME'], 0777, true);
 
         // Keep the skip-a-malformed-file error_log() calls out of the suite's stderr.
@@ -44,6 +45,7 @@ final class ForeignMemoryImporterTest extends TestCase
     {
         ini_set('error_log', $this->origErrorLog);
         $_SERVER['HOME'] = $this->origHome;
+        putenv('HOME=' . $_SERVER['HOME']);
         $this->removeDirectory($this->tempDir);
         parent::tearDown();
     }
@@ -181,6 +183,7 @@ final class ForeignMemoryImporterTest extends TestCase
     public function testImportClaudeCodeDefaultsToClaudeHomeUnderHome(): void
     {
         $_SERVER['HOME'] = $this->tempDir . '/fake-home';
+        putenv('HOME=' . $_SERVER['HOME']);
         $dir = $this->claudeMemoryDir($this->projectRoot, $this->tempDir . '/fake-home/.claude');
         file_put_contents($dir . '/a.md', "---\ndescription: From home\n---\nbody\n");
 
