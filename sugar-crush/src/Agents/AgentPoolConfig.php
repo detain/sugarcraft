@@ -30,6 +30,23 @@ final readonly class AgentPoolConfig
         /**
          * Maximum number of retry attempts for a failed agent.
          * Set to 0 to disable retries.
+         *
+         * DORMANT SEAM — deliberately not consumed yet. {@see AgentWorkerPool}
+         * takes maxConcurrent and an executor, not this config, and has no retry
+         * loop at all; the per-sub-agent equivalent ({@see SubAgent::$maxRetries},
+         * populated by WorkflowEngine from a task's `retries`) is likewise carried
+         * but never acted on. Recorded here because it was suspected of being part
+         * of the #54 executeAll() hang: it is not. A retry path that never retries
+         * cannot hang a waiter — nothing waits on it. That hang came entirely from
+         * AgentWorkerPool::$active retaining entries no completion path could
+         * remove (see its docblock).
+         *
+         * Wiring point when retries are implemented: AgentWorkerPool::executeAll()
+         * would re-queue an agent whose AgentResult::isFailure() is true, up to
+         * this many attempts, instead of yielding it. That is a behavioural
+         * decision, not a bug fix — a sub-agent that failed after editing files or
+         * spending tokens is not automatically safe to run again — so it is left
+         * for whoever owns that call.
          */
         public int $maxRetries = 2,
 

@@ -17,8 +17,38 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  */
 final class AgentWorkerPool
 {
-    /** @var array<string, SubAgent> Currently executing agents */
+    /**
+     * @var array<string, SubAgent> Currently executing agents, keyed by agent id
+     *
+     * EXACTLY one entry per in-flight agent. executeAll()'s outer loop runs
+     * until this drains, so any entry that no completion path can remove is a
+     * permanent hang. A forked agent's child PID is tracked separately in
+     * {@see $activePids} rather than by adding a second '__pid:<pid>:<id>' key
+     * here: that second key made count() double-count (halving the effective
+     * maxConcurrent) and, worse, left the two keys to be removed by two
+     * different racing mechanisms — pcntl_wait() removed the pid key while only
+     * a hasResult() poll that happened to land in the window between the child
+     * writing its result file and the child actually dying could remove the
+     * plain key. Lose that race (child killed, child crashed before writing, or
+     * simply a poll that missed a short shutdown) and the plain key was
+     * stranded in $active with no result file for hasResult() to ever match,
+     * and executeAll() span forever.
+     */
     private array $active = [];
+
+    /**
+     * @var array<string, int> agent id => forked child PID
+     *
+     * Only populated for agents started through pcntl_fork(); the synchronous
+     * paths (injected executor, fork unavailable, fork failed) have no child to
+     * reap and store their result inline.
+     *
+     * The key type is aspirational: PHP silently stores a numeric-string agent
+     * id (executeAll() takes caller-supplied SubAgents, so '42' is legal) as an
+     * int key, which is why every read of it casts back. See
+     * {@see waitForCompletion()}.
+     */
+    private array $activePids = [];
 
     /** @var array<string, SubAgent> Queued agents */
     private array $queue = [];
@@ -40,6 +70,45 @@ final class AgentWorkerPool
 
     /** Poll backoff for waitForCompletion() when nothing has completed yet (microseconds). */
     private const WAIT_POLL_INTERVAL_USEC = 5_000;
+
+    /**
+     * {@see reapTerminatedWorkers()}'s bounded WNOHANG window: 20 attempts x
+     * 5ms is a 100ms ceiling on how long a teardown may sit reaping, shared
+     * across every worker it just signalled. Deliberately the same pair of
+     * numbers as {@see \SugarCraft\Crush\Backend\EngineBackend}'s
+     * REAP_ATTEMPTS/REAP_POLL_MICROSECONDS, which exists for the same reason:
+     * a signalled child is normally collected on the first attempt or two, and
+     * the budget only bounds the cost of one that is slow to die.
+     */
+    private const REAP_ATTEMPTS = 20;
+
+    private const REAP_POLL_MICROSECONDS = 5_000;
+
+    /**
+     * @var array<int, true> PIDs this pool signalled but has not yet confirmed
+     * reaped, swept opportunistically at the very top of the next executeAll()
+     * and drained for good by {@see __destruct()}.
+     *
+     * The sweep sits ABOVE executeAll()'s early returns, not below them:
+     * cancelAll() is the main producer of entries here and it also SETS
+     * wasCancelledByUser, so the very next executeAll() always takes the first
+     * early return — a sweep placed after it could never, by construction, see
+     * the children cancelAll() had just run out of budget on.
+     *
+     * cancelAll() and an abandoned generator (a caller that breaks out of the
+     * executeAll() foreach — note that WorkflowEngine does NOT: it drains the
+     * generator in full, and stopOnFirstFailure is handled inside executeAll()
+     * by emptying the queue) both tear the run down while children are still
+     * alive; nothing polls afterwards, so without this list every such teardown
+     * left a permanent zombie. Mirrors
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::$unreapedChildren}: a
+     * tracked list rather than a blanket `pcntl_waitpid(-1, ...)`, because this
+     * process contains other components (EngineBackend, Chat's parallel tool
+     * calls, BackgroundSessionRunner, the executor's own proc_open()ed workers)
+     * that wait on their OWN pids and check the returned pid — a blind sweep
+     * would steal their exit statuses.
+     */
+    private array $unreapedChildren = [];
 
     /** True once the sequential-fallback warning has been logged for this pool instance. */
     private bool $sequentialFallbackWarned = false;
@@ -89,20 +158,78 @@ final class AgentWorkerPool
      * A clone (see withStopOnFirstFailure()) gets its own IPC directory so the
      * two instances never observe each other's results and neither destructor
      * removes files the other still owns.
+     *
+     * The child bookkeeping is dropped for the same reason, and it matters more
+     * now that cancelAll() and __destruct() both SIGTERM and reap whatever
+     * $activePids holds: a clone did not fork those children, so inheriting
+     * them lets it kill and collect processes the ORIGINAL is still waiting on.
+     * The original's waitForCompletion() then sees -1 for every one and settles
+     * each agent Failed-status-unknowable, throwing away results that were
+     * about to land. $unreapedChildren is cleared for the mirror reason — the
+     * original's deferred sweep is the only thing entitled to collect them, and
+     * two sweeps racing for the same pid is exactly the stolen-exit-status
+     * hazard the tracked-list design exists to avoid. The clone also has a
+     * fresh $resultDir the inherited children would never write into, so
+     * carrying them over could not have worked in any case.
      */
     public function __clone(): void
     {
         $this->resultDir = self::makeResultDirPath();
         $this->resultDirOwnerPid = (int) getmypid();
+        $this->activePids = [];
+        $this->unreapedChildren = [];
     }
 
     /**
-     * Remove this pool's private IPC directory, if this process created it.
+     * Stop and collect this pool's forked workers, then remove its private IPC
+     * directory — if this process created it.
+     *
+     * The teardown is here and not only in executeAll()'s reset because the
+     * reset can physically never run for the pools that need it most: both
+     * in-repo call sites build a pool, run it once, and drop it
+     * (WorkflowEngine::executeParallelStage() constructs a fresh pool per
+     * stage; Chat::executeAgents() does the same from AgentPoolConfig). A
+     * caller that takes the \Generator those return and breaks out of it after
+     * the first result leaves live children behind, and the pool then goes out
+     * of scope — so without this the rmdir below would delete $resultDir out
+     * from under children still trying to write into it, and nobody would ever
+     * reap them: N zombies plus N orphaned `php -r` grandchildren for the life
+     * of a TUI process that runs for hours.
+     *
+     * Safe in a destructor, and the try/catch is what makes that claim
+     * unconditional rather than merely true of the two helpers. Neither of them
+     * throws on its own (posix_kill is silenced, pcntl_waitpid is always
+     * WNOHANG, and with nothing outstanding both are a single empty foreach) —
+     * but "this helper does not throw" is not the same claim as "nothing throws
+     * out of this destructor". The reap spends up to 100ms in usleep(), and
+     * pcntl_async_signals(true) is unconditionally on in BOTH contexts a pool is
+     * ever built in (candy-core's Program run loop and WorkflowEngine::run()),
+     * so any signal the host process handles in userland is delivered inside
+     * that window and a handler that throws would surface its exception right
+     * here. An exception leaving a destructor is an uncatchable fatal, and
+     * during shutdown there is nothing left that could handle it anyway, so it
+     * is swallowed: the teardown is best-effort cleanup with no caller to report
+     * to. (No in-repo handler throws today — Program's SIGINT/SIGWINCH/SIGTSTP/
+     * SIGCONT set state or send() a Msg, WorkflowEngine's SIGINT/SIGTERM already
+     * catches \Throwable before exit(), candy-pty's SignalForwarder forwards —
+     * so this widens a window the pre-fix glob/@unlink loop already had, rather
+     * than admitting a new class of hazard.)
+     *
+     * It runs AFTER the owner-pid guard on purpose — a forked child inherits
+     * this object and runs destructors on exit(), and it must neither signal its
+     * siblings nor steal their exit statuses.
      */
     public function __destruct()
     {
         if ($this->resultDirOwnerPid !== (int) getmypid()) {
             return;
+        }
+
+        try {
+            $this->releaseForkedWorkers();
+            $this->reapTerminatedWorkers();
+        } catch (\Throwable) {
+            // Swallowed deliberately — see above.
         }
 
         if (!is_dir($this->resultDir)) {
@@ -133,6 +260,15 @@ final class AgentWorkerPool
      */
     public function executeAll(array $agents, CompleteRequest $request): \Generator
     {
+        // Straggler children an earlier teardown ran out of reap budget on are
+        // collected BEFORE the early returns below, never after: cancelAll()
+        // both produces those stragglers and sets wasCancelledByUser, so the
+        // executeAll() immediately following a cancel always takes the first
+        // early return — a sweep below it would let every cancelled run's
+        // leftovers survive an extra generation by construction. One WNOHANG
+        // syscall per tracked pid, and nothing at all when the list is empty.
+        $this->sweepUnreapedChildren();
+
         // If cancelAll() was called before this executeAll(), cancel all pending
         // agents before they are even queued. This makes cancelAll() effective
         // when called before executeAll() iteration begins.
@@ -150,6 +286,25 @@ final class AgentWorkerPool
             $this->queue[$agent->id] = $agent;
         }
         $this->active = [];
+        // Any pid still tracked at this point belongs to an abandoned run — a
+        // caller that broke out of the previous generator left its children
+        // running. (No in-repo caller does: WorkflowEngine and Chat both drain
+        // the generator in full, and both build a single-use pool, so this
+        // reset covers REUSED pools only. The single-use case is covered by
+        // __destruct().) Wiping the map alone would leave them alive AND
+        // untracked, so hand them to the deferred sweep instead; the sweep
+        // itself costs one WNOHANG syscall per straggler and buys back every
+        // child the last teardown's bounded reap had to give up on.
+        //
+        // Bounded (100ms) like cancelAll()'s. The full 100ms is only reachable
+        // while something is genuinely outstanding — either a child just
+        // signalled here, or one still tracked in $unreapedChildren (which on a
+        // build without ext-posix means a worker nobody could signal, running
+        // out its full executor timeout and costing every executeAll() the
+        // whole window until it dies). With nothing outstanding the first sweep
+        // finds an empty list and returns at once.
+        $this->releaseForkedWorkers();
+        $this->reapTerminatedWorkers();
         $this->cancelled = [];
 
         $executor = $this->executor ?? $this->createDefaultExecutor();
@@ -254,7 +409,11 @@ final class AgentWorkerPool
 
         if (isset($this->active[$agentId])) {
             $this->cancelled[$agentId] = true;
+            // Only set on the injected-executor path; on the default path the
+            // executor lives inside the forked child, so the signal below is the
+            // only cancellation channel the parent has.
             $this->executor?->cancel($agentId);
+            $this->terminateWorker($agentId);
         }
     }
 
@@ -275,7 +434,18 @@ final class AgentWorkerPool
         $this->queue = [];
 
         $this->executor?->cancelAll();
+
+        // Signal every forked worker before dropping the bookkeeping — clearing
+        // $active alone would orphan the children, leaving them running against
+        // a pool nobody is reading any more.
+        $this->releaseForkedWorkers();
         $this->active = [];
+
+        // ...and then collect them. Nothing polls after cancelAll(), so a
+        // signalled-but-unwaited child is a permanent zombie: one per worker,
+        // in a TUI that lives for hours. Bounded (100ms total) so a child that
+        // is slow to die costs a deferred reap rather than a frozen caller.
+        $this->reapTerminatedWorkers();
     }
 
     /**
@@ -372,13 +542,33 @@ final class AgentWorkerPool
             // also currently unreachable from bin/sugarcrush's live path
             // (Renderer.php's R20.fix docblock), so there is no live-TUI
             // scenario this protects that candy-core doesn't already cover.
+            //
+            // Nothing here catches: ProcessExecutor::checkBackpressure() throws
+            // at >=80% memory and spawnWorker() throws when proc_open() fails,
+            // both BEFORE any result is written. The child then fatals on the
+            // uncaught exception and this agent's only completion evidence is
+            // its exit status — no signal, no crash, just a child that ends
+            // without a result file. That is the 100%-reproducible shape of the
+            // hang waitForCompletion() now closes by settling on the reap:
+            // whatever the child fails to say for itself, the parent reports
+            // from the exit status.
             $result = $executor->execute($agent, $request);
             $this->storeResult($agent->id, $result);
             exit(0);
         }
 
-        // Parent: store a PID marker so waitForCompletion can find this agent
-        $this->active['__pid:' . $pid . ':' . $agent->id] = $agent;
+        // Parent: remember which child owns this agent so waitForCompletion()
+        // can reap exactly that PID. The agent already occupies its single
+        // $active slot (added by executeAll() before dispatch) — adding a
+        // second, differently-keyed entry here is what used to strand agents in
+        // $active forever; see the $active docblock.
+        $this->activePids[$agent->id] = $pid;
+
+        // Dispatch time, so a worker that dies without writing a result still
+        // yields a *timed* AgentResult (see workerDiedResult()). Only set when
+        // nothing else has: SubAgent::$startedAt means "when execution actually
+        // began", and AgentManager stamps it on the paths it drives itself.
+        $agent->startedAt ??= new \DateTimeImmutable();
     }
 
     /**
@@ -389,50 +579,268 @@ final class AgentWorkerPool
      */
     protected function waitForCompletion(): ?string
     {
-        if (!function_exists('pcntl_wait')) {
-            // No pcntl — check for any stored results (sync execution path)
-            foreach ($this->active as $key => $agent) {
-                if ($this->hasResult($agent->id)) {
-                    unset($this->active[$key]);
-                    return $agent->id;
+        // Forked agents settle on the reap, never on a result-file poll. Tying
+        // removal to the child's exit is what makes this total: the child is
+        // guaranteed to exit exactly once, whereas its result file may never
+        // appear at all (crash, OOM, SIGKILL, cancellation), and a waiter that
+        // needed that file to show up is precisely what hung the pool.
+        if ($this->activePids !== [] && function_exists('pcntl_waitpid')) {
+            foreach ($this->activePids as $agentId => $pid) {
+                // PHP coerces numeric-string array keys to int, so an agent
+                // whose caller-supplied id is '42' comes back out of this
+                // foreach as int(42) — and every consumer below is typed
+                // string, under declare(strict_types=1). Cast once, here.
+                $agentId = (string) $agentId;
+
+                $status = 0;
+                // waitpid on OUR pid rather than pcntl_wait() for any child:
+                // this pool runs inside a process that proc_open()s children of
+                // its own (the executor's workers, tool calls, MCP servers), and
+                // a bare pcntl_wait() would reap those too — stealing the exit
+                // status their proc_close() is waiting on.
+                $reaped = pcntl_waitpid($pid, $status, WNOHANG);
+                if ($reaped === 0) {
+                    // Still running — the only non-terminal answer.
+                    continue;
                 }
+
+                // $reaped === -1 means the child is gone but unwaitable: some
+                // other waiter got there first. A SIGCHLD handler set to SIG_IGN
+                // has the kernel auto-reap every child (candy-pty's
+                // SignalForwarder can install exactly that), and so does any
+                // blanket wait() elsewhere in the process. Treating -1 as "not
+                // yet" would strand this agent in $active with nothing left able
+                // to remove it — the precise shape of permanent hang this waiter
+                // exists to rule out — so it settles the agent too, with a
+                // result that admits the exit status is unknowable.
+                $agent = $this->active[$agentId] ?? null;
+                unset($this->activePids[$agentId], $this->active[$agentId]);
+
+                // The child left no readable result. Synthesize the failure
+                // rather than returning an agent id that extractResult() will
+                // decline: executeAll() yields one result per agent it
+                // dispatched, and a silent drop here would report a killed
+                // sub-agent as though it had never run.
+                if (!$this->hasDecodableResult($agentId)) {
+                    $this->storeResult(
+                        $agentId,
+                        $this->workerDiedResult($agentId, $reaped === $pid ? $status : null, $agent),
+                    );
+                }
+
+                return $agentId;
             }
-            // Nothing completed yet — back off briefly instead of busy-spinning
-            // the CPU while waiting for a result file to appear.
-            usleep(self::WAIT_POLL_INTERVAL_USEC);
-            return null;
         }
 
-        // Non-blocking wait for any child to exit
-        $status = null;
-        $pid = pcntl_wait($status, WNOHANG);
-
-        if ($pid > 0) {
-            // Find the agent with this PID
-            $prefix = '__pid:' . $pid . ':';
-            foreach ($this->active as $key => $agent) {
-                if (str_starts_with($key, $prefix)) {
-                    unset($this->active[$key]);
-                    return $agent->id;
-                }
+        // Synchronous paths (injected executor, fork unavailable, fork failed)
+        // wrote their result inline and have no child to reap.
+        foreach ($this->active as $agentId => $agent) {
+            if (isset($this->activePids[$agentId])) {
+                continue;
             }
-        }
 
-        // Check if any sync agents (no PID) have completed
-        foreach ($this->active as $key => $agent) {
             if ($this->hasResult($agent->id)) {
-                unset($this->active[$key]);
+                unset($this->active[$agentId]);
                 return $agent->id;
             }
         }
 
-        // No child exited and no sync result appeared this cycle — sleep
-        // briefly before the caller polls again. Without this, the WNOHANG
-        // wait above turns executeAll()'s outer loop into a hot CPU spin
-        // while forked children are still running.
+        // Nothing completed this cycle — sleep briefly before the caller polls
+        // again. Without this, the WNOHANG reap above turns executeAll()'s outer
+        // loop into a hot CPU spin while forked children are still running.
         usleep(self::WAIT_POLL_INTERVAL_USEC);
 
         return null;
+    }
+
+    /**
+     * Ask a forked worker to stop.
+     *
+     * SIGTERM, not SIGKILL — but NOT because the child runs a graceful
+     * shutdown: it installs no SIGTERM handler, so the default disposition
+     * applies and it dies without running destructors or shutdown functions,
+     * exactly as it would under SIGKILL. (It could not usefully install one
+     * either: a worker blocked in the executor's stream_select() never reaches
+     * a pcntl_signal_dispatch() point, so a handler would only fire in the
+     * moments the child was already between syscalls.) The reasons SIGTERM is
+     * still the right signal are that it is the catchable one — anything the
+     * child later grows, or any process that replaces it, gets the chance a
+     * SIGKILL would deny — and that it is *distinguishable* in the wait status,
+     * so {@see workerDiedResult()} can tell a user "killed by signal 15", i.e.
+     * "you cancelled this", apart from a signal 9 the OOM killer sent.
+     *
+     * The one real casualty is the executor's own proc_open()ed `php -r`
+     * grandchild: the child dies before proc_terminate() can run, so the
+     * grandchild is orphaned. It self-exits within about a second on EPIPE when
+     * its now-closed pipes are next written, which is why this is left alone
+     * rather than papered over with a pid-tree walk.
+     *
+     * This only signals — it never touches $active/$activePids, so cancel()
+     * leaves the agent in place for waitForCompletion() to reap, and that reap
+     * is what settles it to a terminal Failed result. (cancelAll() drops the
+     * bookkeeping itself, because it tears the whole run down and nothing polls
+     * afterwards; it hands the pids to {@see $unreapedChildren} instead.)
+     */
+    private function terminateWorker(string $agentId): void
+    {
+        $pid = $this->activePids[$agentId] ?? null;
+        if ($pid === null || !function_exists('posix_kill')) {
+            return;
+        }
+
+        @posix_kill($pid, defined('SIGTERM') ? SIGTERM : 15);
+    }
+
+    /**
+     * Move every tracked forked worker onto the deferred-reap list, after
+     * asking it to stop.
+     *
+     * All three callers (cancelAll(), executeAll()'s reset of a previous run's
+     * leftovers, and __destruct()) drop $activePids, which is the only record
+     * the pool keeps of its children — so the signal and the hand-off have to
+     * happen together or the children become unstoppable and unreapable in the
+     * same statement.
+     */
+    private function releaseForkedWorkers(): void
+    {
+        foreach ($this->activePids as $agentId => $pid) {
+            // Numeric-string agent ids come back out of this foreach as int;
+            // terminateWorker() is typed string. See waitForCompletion().
+            $this->terminateWorker((string) $agentId);
+            $this->unreapedChildren[$pid] = true;
+        }
+
+        $this->activePids = [];
+    }
+
+    /**
+     * Collect the children {@see releaseForkedWorkers()} just signalled, over a
+     * bounded WNOHANG window shared by all of them.
+     *
+     * Never an unflagged pcntl_waitpid(): posix_kill() is guarded because
+     * ext-posix is not guaranteed, and in exactly that build nothing signalled
+     * the children at all — a blocking wait would then hang the caller on a
+     * worker that is still happily running its 300-second timeout.
+     */
+    private function reapTerminatedWorkers(): void
+    {
+        for ($attempt = 0; $attempt < self::REAP_ATTEMPTS; $attempt++) {
+            $this->sweepUnreapedChildren();
+            if ($this->unreapedChildren === []) {
+                return;
+            }
+
+            usleep(self::REAP_POLL_MICROSECONDS);
+        }
+    }
+
+    /**
+     * One non-blocking pass over the children an earlier teardown ran out of
+     * budget on, so a straggler from run N is collected at run N+1 instead of
+     * sitting as a zombie for the life of the process.
+     *
+     * Deliberately does not sleep or retry: anything still running here gets
+     * looked at again next run. See {@see $unreapedChildren} for why this walks
+     * a tracked list rather than calling pcntl_waitpid(-1, ...).
+     */
+    private function sweepUnreapedChildren(): void
+    {
+        if (!function_exists('pcntl_waitpid')) {
+            return;
+        }
+
+        $status = 0;
+        foreach (array_keys($this->unreapedChildren) as $pid) {
+            // 0 means "still running, nothing reaped yet"; $pid means reaped;
+            // -1 means unwaitable (already reaped, or never ours) — both of the
+            // latter are terminal.
+            if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) {
+                unset($this->unreapedChildren[$pid]);
+            }
+        }
+    }
+
+    /**
+     * Whether a result file exists AND parses back into an AgentResult.
+     *
+     * {@see hasResult()} is file_exists(), which a child SIGKILLed between
+     * file_put_contents()'s open(O_TRUNC) and its write() satisfies with a
+     * 0-byte file. Gating the synthesis below on mere existence would then skip
+     * it, extractResult() would return null, and executeAll() would yield
+     * *nothing at all* for an agent it dispatched — the same "an agent settles
+     * without a result" defect the synthesis exists to close, just through a
+     * narrower window. Decoding is the only honest test of "a result arrived".
+     *
+     * Non-destructive on purpose: the caller's own extractResult() still needs
+     * the file.
+     */
+    private function hasDecodableResult(string $agentId): bool
+    {
+        if (!$this->hasResult($agentId)) {
+            return false;
+        }
+
+        $data = @file_get_contents($this->resultFile($agentId));
+        if (!is_string($data) || $data === '') {
+            return false;
+        }
+
+        $decoded = json_decode($data, true);
+
+        return is_array($decoded) && $this->arrayToResult($decoded) !== null;
+    }
+
+    /**
+     * Terminal result for a forked worker that exited without leaving a
+     * readable one.
+     *
+     * The wait status is decoded into the message because "the sub-agent
+     * produced nothing" and "the sub-agent was killed by SIGKILL" are very
+     * different things to a user staring at a failed workflow stage. A null
+     * $status means the child was reaped by someone else (see
+     * waitForCompletion()), so no status was ever ours to read.
+     *
+     * completedAt is stamped because every other AgentResult in the library
+     * carries one: {@see AgentManager::drain()} mirrors the pair onto the
+     * SubAgent, and a terminal result with both timestamps null makes
+     * {@see AgentResult::durationMs()} and SubAgent::elapsedSeconds() report a
+     * flat 0s in the status strip and the dashboard. startedAt comes from the
+     * SubAgent, stamped at dispatch by {@see startAgent()} — the reap is the
+     * moment we learned the worker was dead, which is the most this path can
+     * honestly claim about when it actually died.
+     */
+    private function workerDiedResult(string $agentId, ?int $status, ?SubAgent $agent = null): AgentResult
+    {
+        // No function_exists() guards on the pcntl_w*() family: the only caller
+        // is inside a function_exists('pcntl_waitpid') branch, and pcntl is one
+        // extension — if waitpid is loaded, so is the rest of it.
+        if ($status === null) {
+            $reason = 'is gone, but its exit status had already been collected by another '
+                . 'waiter (a SIGCHLD handler, or a wait() elsewhere in this process), so how '
+                . 'it died is unknowable';
+        } elseif (pcntl_wifsignaled($status)) {
+            $reason = 'was killed by signal ' . pcntl_wtermsig($status);
+        } elseif (pcntl_wifexited($status)) {
+            $reason = 'exited with code ' . pcntl_wexitstatus($status);
+        } else {
+            // Unreachable in practice — a WNOHANG wait without WUNTRACED only
+            // ever returns an exited-or-signalled status — but a status neither
+            // macro claims must still produce a terminal result rather than an
+            // undefined $reason.
+            $reason = 'exited abnormally';
+        }
+
+        return new AgentResult(
+            agentId: $agentId,
+            status: AgentStatus::Failed,
+            output: null,
+            error: new \RuntimeException(
+                'AgentWorkerPool: worker process for agent ' . $agentId . ' ' . $reason
+                . ' before writing a result.'
+            ),
+            startedAt: $agent?->startedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
     }
 
     /**
