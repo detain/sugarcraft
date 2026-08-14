@@ -683,3 +683,129 @@ blocked on #11 anyway. Filed rather than silently folded in.
 Lanes were picked for **file-disjointness from P1.2's uncommitted set**, not plan
 order. #49 was the obvious third pick and was rejected on exactly that test: its
 natural construction site is `AgentManager.php`, which P1.2 is holding.
+
+---
+
+## P1.2 review round 5 — MAJOR on the live path
+
+Round 4 found the dispatcher computing a rewrite and discarding it. Round 5
+found **the same bug surviving on the ASK path, in the live loop** — and unlike
+round 4's, this one is the shipped chain's *normal* configuration.
+
+### F1 (MAJOR) — a same-pass ASK silently discards that pass's rewrite
+
+`src/Hooks/HookRegistry.php:203-212` + `:302-304`. `scan()` ranks ASK above
+MODIFY, so when both come out of the **same** pass the pass ends as the ASK and
+`$pendingModify` is dropped. `executeHooks()`'s ASK branch only re-attaches
+`$modified` — a rewrite that settled on a *previous* pass. A rewrite made in the
+same pass as the question never travels and is never re-scanned.
+
+It is reachable by default because **`PermissionGateHook`'s ASK is mode-driven,
+not argument-driven**: in Default mode `PermissionGate::evaluate()` asks on every
+write tool whatever the arguments, so the gate asks on pass 1 and there is never
+a pass 2.
+
+```
+hooks: sanitiser (Edit{file_path:"/etc/passwd"} -> Edit{file_path:"./build/out.txt"})
+       permission-gate (PermissionMode::Default)
+executeHooks()       => action=ask, modifiedInput = NULL     <-- rewrite gone
+resolveAsk(approved) => action=allow, rewrittenArgs() = NULL
+```
+
+So `Runtime::settleAsk()` shows the approver `/etc/passwd` rather than
+`./build/out.txt`, and on approval `rewrittenArguments()` falls back to the
+originals and **writes `/etc/passwd`**. `Chat::gateToolCall()` is identical.
+This is exactly the invariant round 3's carrying-ASK mechanism was built to
+establish, defeated by the one chain shape nobody wrote a test for.
+
+The existing `HookRegistryTest::testAskAfterModifyStillSuspendsTheCall:461`
+drives this very chain and asserts only `isAsk()`/message/`!permitsExecution()`
+— it never looks at `modifiedInput`, so the hole is unpinned in **either**
+direction. The passing `testAnAskRaisedOverARewriteCarriesTheRewriteWithIt:558`
+covers only the *argument-conditional* ask hook, i.e. the pass-2 case.
+
+### F2 (MINOR) — a later inert rewrite discards an already-settled decodable one
+
+`HookRegistry.php:232-245`. Distinct from round 3's documented
+inert-runs-the-originals decision: `return $result;` in the inert branch also
+throws away `$modified`, a rewrite the whole chain had already re-scanned and
+agreed on. `HookDispatcher` keeps it on the identical chain — so the two loops
+the change-set explicitly claims are aligned settle on different arguments, and
+**the live one loses**. One-token fix: `return $modified ?? $result;`.
+
+### F3, F4 — two more GREEN sabotages
+
+- `determineExitCode()` reverts **wholesale** to its pre-round-4 body with the
+  suite green (1170/3010). The `&& !$result->isAsk()` guard is the only
+  behavioural content of round 4's fix and is load-bearing: `ScriptHook.php:183`
+  builds an ASK from raw stdout, so a script printing `[exit-1] Proceed?` yields
+  an ASK whose message starts with `[exit-1]` — without the guard the dispatch
+  proceeds as if nothing was asked.
+- `HookDispatcher::scan()`'s `&& $rewritten === null` guard deletes green.
+  Doubly load-bearing: the last rewrite would win (diverging from the registry,
+  whose twin `$pendingModify ??=` *is* covered), and because the assignment is
+  `$rewritten = self::rewrite(...)`, a later **inert** rewrite overwrites a good
+  `$rewritten` with `null`.
+
+### F5, F6 — the centralization is one consumer short, and one site widened
+
+`Runtime::asAsked()` still uses a bare `is_array($decoded)`, so it accepts the
+top-level JSON list `rewrittenArgs()` exists to refuse — the approver is shown a
+call that will not run, the inverse of round 3's invariant. And
+`Chat::applyRewrite()` lost its `isModified()` gate while `Runtime` kept one, so
+a plain ALLOW carrying a `modifiedInput` is now honoured by Chat and ignored by
+Runtime, against `gateToolCall()`'s promise that the two mirror each other
+decision for decision.
+
+### What round 5 cleared
+
+A (the `scan()` rule change) **cannot smuggle** — the winning rewrite is always
+re-scanned by the whole chain including the gate before it can settle, so making
+a later hook's rewrite win only ever exposes it to more judgement. The
+`$pendingInertModify` fallback cannot loop (the inert branch returns
+unconditionally, consuming no budget). `executeHooks()` has exactly two callers,
+both in `HookManager`, so nothing depended on the old rule.
+
+B is sound — `HookDispatchResult` and `HookContext` are both `final readonly`,
+so the new `public HookContext $context` is genuinely immutable, and the
+"no production consumer can see a non-null rewrite" claim was independently
+verified (only `PreToolUse` populates it; the sole consumer, `Agents/TaskList.php`,
+dispatches TaskCreated/TaskCompleted/TeammateIdle).
+
+C is sound with **no fail-closed regression** — every action was enumerated
+before and after; nothing that previously returned 0 was allowed, because
+`isAllowed()`/`isModified()` `continue` before that method is reached.
+
+D's `ltrim` question is clean: the two characters `ltrim` strips that JSON does
+not accept (`\0`, `\x0B`) make `json_decode()` fail anyway, and a BOM is stripped
+by neither — so both halves of the predicate agree by construction.
+
+### Process fix — record sabotage labels in the tree
+
+Round 5 could not re-run rounds 3/4's sabotages **by name** ("A7, B2, B4…")
+because those labels live only in agent reports, and this worklog carries prose.
+It reconstructed equivalents and got them all red, but that is re-derivation, not
+verification. **Sabotage labels belong here from now on**, so a later round can
+re-run the earlier ones exactly rather than approximately.
+
+| Label | Mutation | Expected |
+|---|---|---|
+| A7 | dispatcher fixed-point settle returns the **pre**-rewrite context | RED |
+| A7b | no-modify settle → always plain `allow()` | RED |
+| S2 | registry back to `$pendingModify ??= $result` | RED |
+| S3 | drop the ASK tag in `scan()` | RED |
+| S3b | `determineExitCode()` fallback widened to `EXIT_DENY` | RED |
+| S6 | `rewrittenArgs()` drops the `{`-check | RED |
+| B2 | concurrent path drops `gate()`'s third element | RED |
+| B4 | delete `applyRewrite` from Chat's ASK branch | RED |
+| SC1 | `determineExitCode()` reverted wholesale | **GREEN — F3** |
+| SE1 | `HookDispatcher::scan()` drops `&& $rewritten === null` | **GREEN — F4** |
+
+### Concurrency
+
+Dropping to **one agent at a time** once the two in flight (#54 fix, #56 fix
+round 2) land. The shared worktree has been costing real signal: cross-lane
+`pkill -f phpunit` and `pkill -f 'php -r'` killing each other's runs (one lane
+disclosed ~13 such windows), and `candy-core/src/Program.php` sabotage windows
+visible to sugar-crush through its `vendor/` path symlink. Serial lanes mean a
+failing test means what it says.
