@@ -89,6 +89,19 @@ acceptable outcome. Build tests out as you go.
 | 24b/48 | P4.3 `--version` + flag-shaped prompt value | `7590ae0d` |
 | 52 | Team tests leaking into the real `~/.sugar-crush` | `91467884` |
 | 53 | `ChatTest` leaking IPC payloads into the real `/tmp` | `00b3e963` |
+| 50 | `BedrockProvider` control plane → runtime plane | `a01b62b9` |
+
+**#57 (new, from #50's audit): `VertexProvider` `predict()` vs `rawPredict()`.**
+Same family as the Bedrock bug but it does NOT fail at the SDK boundary —
+`predict()` really exists, so it resolves and fails *server-side* against an
+Anthropic publisher-model path, which is served by `rawPredict`/
+`streamRawPredict`. `parseResponse()` also decodes protobuf `Value`s where
+`rawPredict` returns a raw `HttpBody`, and `new $clientClass(['projectId' =>
+…])` is silently ignored by gax's fixed-key `ClientOptions::fromArray()`, with
+`apiEndpoint` never set. Invisible today because the default predictor is a
+lazy closure every unit test replaces. **Test it the way #50 was tested — do
+not mock the client**; a double is precisely how the Bedrock bug survived 30
+tests. Queue: lane X, near the end.
 
 (Step 5 folded into step 1. **Phase 0 is complete.**)
 
