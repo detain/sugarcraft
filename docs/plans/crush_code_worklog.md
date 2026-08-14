@@ -885,3 +885,110 @@ pattern-matched kills and requires PID-targeted bounds.
 are confirmed stale-clock victims, now unblocked), **#63** (`phpunit.xml` sets no
 `enforceTimeLimit`, so the mock-executor half of the pool suite can still wedge
 CI). Still queued: **#58–#61**, and the P2–P8 body of the plan.
+
+---
+
+# RESUME HERE — self-contained state (2026-08-14)
+
+Everything needed to continue without the originating conversation. The plan
+itself is `crush_code.md`; its new "Execution status" header lists which items
+are done and, importantly, **which are only partly done despite carrying a ✅**.
+
+## Standing rules (from the user — these govern every step)
+
+1. **The loop, per plan step:** implement (agent) → **separate** agent reviews
+   the diff → findings? fix agent → **back to review** → clean? run the suite →
+   **commit directly to `master`**. No branches, no PRs.
+2. **Never delete a feature because it looks incomplete or dead.** Complete it,
+   or document it as an intentional dormant seam. The audit contains several
+   "delete this" recommendations from its own research agents that were
+   overridden for exactly this reason; honor that override.
+3. **Do not run `caliber` anything.** A stop hook nags about Caliber not being
+   set up on this machine — expected, the user has opted out. Don't run it and
+   don't keep re-asking.
+4. **Fix, don't disable.** Root-cause fixes, never disable-and-TODO fallbacks.
+5. **Never a blanket total-request timeout on an LLM provider HTTP client** — a
+   completion can legitimately run tens of minutes. A short `connect_timeout`
+   only.
+6. Conventions: `declare(strict_types=1);` first line, PSR-12, PHP 8.3+, `final`
+   unless extension is the contract, immutable+fluent `with*()` via `mutate()`,
+   bare accessors (no `get`), comments explain WHY not WHAT.
+7. Stale per-lib `vendor/`/`composer.lock` cause false local failures —
+   `composer update` in that lib before believing one.
+
+## Do NOT touch
+
+- `SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves` —
+  pre-existing timing flake. Don't skip it, don't weaken its assertion.
+- `McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails` —
+  the one legitimate skip.
+- This lib is **not** `php-cs-fixer`-clean repo-wide; don't normalize unrelated
+  files.
+- `docs/plans/plans_cleaning.md` and `sugar-crush/python_port/` are untracked
+  user work.
+- The working tree may carry real uncommitted work: **never** `git checkout .`,
+  `git reset`, `git stash`, or `git clean`.
+
+## Harness hazards learned the hard way this session
+
+These cost real signal and are not obvious. Put them in every agent brief.
+
+- **Never use a pattern-matched kill.** `pkill -f phpunit` AND
+  `pkill -f 'php -r'` are both banned — `ProcessExecutor` spawns its workers as
+  `php -r`, so the second pattern kills other lanes' workers. One lane disclosed
+  ~13 such windows that corrupted another lane's runs. Bound with
+  `timeout -s KILL` on your own child, or capture the PID.
+- **Never run phpunit through Python's `subprocess.run(capture_output=True)`** —
+  `tests/Cli`/`tests/Sessions` spawn detached children that inherit the pipe, so
+  the call blocks forever on a pipe phpunit already released. Write to a file.
+- **`candy-core/src/Program.php` sabotage is visible to `sugar-crush`** through
+  its `vendor/` path symlink. Keep cross-lib sabotage windows short.
+- **`sugar-crush/phpunit.xml` sets no `enforceTimeLimit`** (task #63), so an
+  unbounded test wedges the whole suite instead of failing it.
+- Treat any run that dies 143/144, or fails outside the lane's own files, as
+  **signal-free** — re-run narrower before concluding anything.
+
+## Method that repeatedly found real bugs
+
+- **Ask the fix agent which sabotages came back GREEN**, and re-run them
+  yourself before committing. Six real coverage holes this session were
+  self-reported this way, including two where the agent's own new test was
+  vacuous.
+- **Record sabotage labels in the tree, not just in agent reports.** Two rounds
+  lost labels and had to reconstruct mutations — re-derivation, not
+  verification. The round-3 driver's discipline is the one to copy: assert each
+  mutation anchor is unique before applying, and print `SKIP` rather than a
+  false GREEN.
+- **When two consecutive rounds find the same *shape* of bug by different
+  routes, stop fixing routes.** This is what ended P1.2's seven-round chain.
+- **A third agent adjudicates a measurement dispute.** #56's reviewer and fixer
+  disagreed about libuv; both were partly right and the adjudicator found a
+  MAJOR neither had.
+- Pick concurrent lanes by **file-disjointness from the uncommitted set**, not
+  plan order.
+
+## Open work, in the order I'd take it
+
+1. **#62** — pin the loop in candy-pty, candy-mosaic, candy-async. Unblocked by
+   `a2606c7f`; three confirmed victims with file:line evidence in the task.
+   Cheapest real win on the board.
+2. **#63** — `enforceTimeLimit`. Small, and it protects every future lane.
+3. **#37 (P8.6)** — VHS demos, plus `TerminalBackground::observe()`'s two
+   additive `App/App.php` edits. **Do not** flip candy-shine's
+   `lineNumbers: true` until candy-shine has a measurable separator — it joins
+   its gutter with a literal tab and would reintroduce over-wide rows in every
+   markdown code fence.
+4. **#15** — `HookManager::loadFromFile()`, newly unblocked by `df0a563b`.
+5. **#12/#13/#14/#16/#17** — the rest of Phase 2 wiring.
+6. **#64** — P1.2's five non-blocking notes; N3 (give `Runtime`'s unreachable
+   `isModified()` gate the same docblock+direct-test treatment F5a got) is the
+   one I'd actually do.
+7. **#58/#59/#60/#61**, **#49**, **#51**, **#55**.
+
+## Sabotage drivers — GONE
+
+The drivers used across P1.2 rounds 3-7 lived in `/tmp` (`sabotage.py`,
+`/tmp/r6/sabotage6.py`, `/tmp/r7/sabotage7.py`, `/tmp/r7/sabotage8.py`) and
+`sugar-crush/.r3-sabotage/` (deleted after #54 landed). **None survive a
+reboot.** If a P1.2 regression is ever suspected, re-derive labels from the
+findings recorded in this worklog rather than trusting those paths.
