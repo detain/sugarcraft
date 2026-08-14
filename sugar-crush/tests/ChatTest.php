@@ -46,9 +46,62 @@ use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Permissions\PermissionReply;
+use SugarCraft\Crush\Support\ToolIpcFiles;
 
 final class ChatTest extends TestCase
 {
+    /**
+     * Temp files this test asked for by name, unlinked in tearDown().
+     *
+     * @var list<string>
+     */
+    private array $tempPaths = [];
+
+    /**
+     * The `sc_chat_tool_*` payloads already in the temp dir when this class
+     * started, so {@see tearDownAfterClass()} can tell what this run stranded
+     * from what was already lying around.
+     *
+     * @var list<string>
+     */
+    private static array $toolIpcFilesAtStart = [];
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+
+        self::$toolIpcFilesAtStart = self::toolIpcFiles();
+    }
+
+    /**
+     * Chat hands each forked tool child a temp file to write its result into,
+     * and the ONLY thing that unlinks one is the parent collecting it — so a
+     * test that drops the Cmd doing the collecting strands a payload in the
+     * developer's real /tmp. {@see ToolIpcFiles::sweep()} reclaims them after
+     * an hour, which makes the leak self-limiting rather than acceptable:
+     * running this suite is not a request to litter.
+     *
+     * Checked once for the whole class rather than per test, because the
+     * matching glob has to scan the entire temp directory and a developer's
+     * /tmp is routinely tens of thousands of entries — 50ms a call, which per
+     * test would cost more than the rest of this file put together.
+     */
+    public static function tearDownAfterClass(): void
+    {
+        $stranded = array_values(array_diff(self::toolIpcFiles(), self::$toolIpcFilesAtStart));
+
+        parent::tearDownAfterClass();
+
+        self::assertSame([], $stranded, 'a forked tool child was abandoned with its IPC payload uncollected');
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->tempPaths = [];
+    }
+
     public function testTypingAccumulatesCharsInInputBuffer(): void
     {
         $chat = new Chat();
@@ -1975,8 +2028,44 @@ final class ChatTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->tempPaths as $path) {
+            @unlink($path);
+        }
+
         parent::tearDown();
         \Mockery::close();
+    }
+
+    /**
+     * A temp path this test owns: handed out unique, registered for cleanup,
+     * and never created here — callers use it as a sentinel a forked child
+     * writes to prove it ran.
+     */
+    private function tempPath(string $prefix): string
+    {
+        $path = sys_get_temp_dir() . '/' . $prefix . bin2hex(random_bytes(8));
+        $this->tempPaths[] = $path;
+
+        return $path;
+    }
+
+    /**
+     * Every `sc_chat_tool_*` payload currently in the temp dir.
+     *
+     * `sys_get_temp_dir()` deliberately, not the suite's TMPDIR sandbox: PHP
+     * resolves and caches the temp dir once per process, so tests/bootstrap.php
+     * setting TMPDIR moves it for the CHILDREN this suite spawns and not for
+     * this process — {@see \SugarCraft\Crush\Support\ToolIpcFiles::reserve()}
+     * running in-process still lands in the real one.
+     *
+     * @return list<string>
+     */
+    private static function toolIpcFiles(): array
+    {
+        $found = glob(sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX . '*') ?: [];
+        sort($found);
+
+        return $found;
     }
 
     /**
@@ -3296,7 +3385,7 @@ final class ChatTest extends TestCase
      */
     public function testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall(): void
     {
-        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $sentinel = $this->tempPath('sc_perm_');
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Really run rm -rf /?'));
 
         [$suspended, $cmd] = $chat->update(new AssistantMsg($this->askingToolCall()));
@@ -3316,7 +3405,7 @@ final class ChatTest extends TestCase
      */
     public function testTheSuspendingCmdStaysPendingUntilTheUserAnswers(): void
     {
-        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $sentinel = $this->tempPath('sc_perm_');
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
 
         [$suspended, $cmd] = $chat->update(new AssistantMsg($this->askingToolCall()));
@@ -3337,7 +3426,7 @@ final class ChatTest extends TestCase
      */
     public function testOnceReplyRunsTheToolAndGatesItExactlyOnce(): void
     {
-        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $sentinel = $this->tempPath('sc_perm_');
         $calls = 0;
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?', $calls));
 
@@ -3362,7 +3451,7 @@ final class ChatTest extends TestCase
      */
     public function testAlwaysReplyGrantsTheToolForTheRestOfTheSession(): void
     {
-        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $sentinel = $this->tempPath('sc_perm_');
         $calls = 0;
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?', $calls));
 
@@ -3391,7 +3480,7 @@ final class ChatTest extends TestCase
      */
     public function testRejectReplyRefusesTheCallAndEndsTheTurn(): void
     {
-        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $sentinel = $this->tempPath('sc_perm_');
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
 
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
@@ -3424,11 +3513,11 @@ final class ChatTest extends TestCase
      */
     public function testPermissionKeysDecideThePrompt(KeyMsg $key, PermissionReply $expected): void
     {
-        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $sentinel = $this->tempPath('sc_perm_');
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
 
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
-        [$answered] = $suspended->update($key);
+        [$answered, $cmd] = $suspended->update($key);
 
         $this->assertNull($answered->pendingPermission());
         $this->assertSame(
@@ -3436,6 +3525,17 @@ final class ChatTest extends TestCase
             $answered->permissionGrants(),
         );
         $this->assertSame($expected === PermissionReply::Reject, !$answered->inFlight);
+
+        // A permitting key releases the batch, and dispatchToolCalls() forks
+        // its children EAGERLY - before the Cmd it hands back is ever run. That
+        // Cmd is the only thing that reaps a child and unlinks the temp file it
+        // wrote its result to, so dropping it on the floor here stranded two
+        // real payloads in /tmp on every run of this suite. What this test is
+        // about is the key mapping, but a released batch still has to be seen
+        // through.
+        if ($expected !== PermissionReply::Reject) {
+            $this->awaitToolResults($answered, $cmd);
+        }
     }
 
     public static function permissionKeyProvider(): array
@@ -3455,7 +3555,7 @@ final class ChatTest extends TestCase
      */
     public function testUnmappedKeyLeavesThePermissionPromptUp(): void
     {
-        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $sentinel = $this->tempPath('sc_perm_');
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
 
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
@@ -3502,8 +3602,8 @@ final class ChatTest extends TestCase
      */
     public function testAnsweringOneAskDoesNotReleaseTheOtherCallsInTheBatch(): void
     {
-        $alpha = sys_get_temp_dir() . '/sc_perm_a_' . bin2hex(random_bytes(8));
-        $beta = sys_get_temp_dir() . '/sc_perm_b_' . bin2hex(random_bytes(8));
+        $alpha = $this->tempPath('sc_perm_a_');
+        $beta = $this->tempPath('sc_perm_b_');
         $chat = $this->chatAwaitingTwoPermissions($alpha, $beta);
 
         [$suspended] = $chat->update(new AssistantMsg($this->twoAskingToolCalls()));
@@ -3538,8 +3638,8 @@ final class ChatTest extends TestCase
      */
     public function testAlwaysForOneToolDoesNotReleaseAnAskForAnother(): void
     {
-        $alpha = sys_get_temp_dir() . '/sc_perm_a_' . bin2hex(random_bytes(8));
-        $beta = sys_get_temp_dir() . '/sc_perm_b_' . bin2hex(random_bytes(8));
+        $alpha = $this->tempPath('sc_perm_a_');
+        $beta = $this->tempPath('sc_perm_b_');
         $chat = $this->chatAwaitingTwoPermissions($alpha, $beta);
 
         [$suspended] = $chat->update(new AssistantMsg($this->twoAskingToolCalls()));
