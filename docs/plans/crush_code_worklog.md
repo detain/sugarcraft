@@ -87,6 +87,8 @@ acceptable outcome. Build tests out as you go.
 | 44 | P8.12 `Write` tool (**not yet registered**) | `9dbc5f8e` |
 | 24a | P4.4 `SUGAR_CRUSH_*` rename + shim | `ff6debba` |
 | 24b/48 | P4.3 `--version` + flag-shaped prompt value | `7590ae0d` |
+| 52 | Team tests leaking into the real `~/.sugar-crush` | `91467884` |
+| 53 | `ChatTest` leaking IPC payloads into the real `/tmp` | `00b3e963` |
 
 (Step 5 folded into step 1. **Phase 0 is complete.**)
 
@@ -197,6 +199,17 @@ same step**, where its existing context is the asset. Never to start new work.
 - Reviewers get a **lane-scoped diff** (`git diff -- <lane paths>`), so they do
   not flag a neighbouring lane's in-progress work.
 - A red full-suite gate names the culprit by lane via test-file ownership.
+- **Lint before every gate run.** Any lane's half-written `src/` file poisons
+  every other lane's tests, because `ToolSchemaEncodingTest`'s dataProvider
+  constructs every built-in tool and autoloading pulls in whatever is mid-edit.
+  Seen for real: a gate died with `syntax error, unexpected token "final"` in a
+  brand-new `src/Tools/IgnoreRules.php` another lane was still writing. Sweep
+  `php -l` over `git status --porcelain` first and retry rather than
+  investigating a phantom regression.
+- **Cap concurrency at 2 agents** when session context is tight (set 2026-08-14
+  at 75% usage). Lanes are cheap to pause between steps and expensive to
+  restart mid-step, so throttle by not *starting* the next step, never by
+  killing a running one.
 
 This deliberately overrides the repo's blanket "run sub-agents ONE AT A TIME"
 rule. That rule exists because concurrent writes to `MATCHUPS.md`/`README.md`
