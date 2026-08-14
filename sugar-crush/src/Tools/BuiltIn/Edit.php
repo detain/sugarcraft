@@ -79,15 +79,35 @@ final readonly class Edit implements Tool
             );
         }
 
+        if (str_contains($path, "\0")) {
+            // realpath() throws a ValueError on a NUL byte instead of failing,
+            // so without this the crash escaped execute() rather than coming
+            // back as a tool error. Same guard as Read/Write.
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'Error: file_path contains a NUL byte',
+                isError: true,
+            );
+        }
+
         if ($this->worktreeJail !== null) {
-            $path = $this->worktreeJail->jailPath($path);
-            if (!$this->worktreeJail->isAllowed($path)) {
+            // resolve() once, and read/write the CANONICAL path it returns.
+            // jailPath()+isAllowed() proved containment on the realpath() of
+            // $path and then re-opened the unresolved $path below, so a
+            // symlink component swapped between the check and the open landed
+            // outside the jail (crush_code.md P8.14/15). The file_exists()
+            // clause is isAllowed()'s existence-strictness kept verbatim, so
+            // a missing file still reports 'path outside worktree' here
+            // exactly as it did before, not the 'file not found' below.
+            $resolved = $this->worktreeJail->resolve($path);
+            if ($resolved === null || !file_exists($resolved)) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
                     content: 'Error: path outside worktree',
                     isError: true,
                 );
             }
+            $path = $resolved;
         } elseif ($this->root !== null) {
             $resolved = PathJail::resolve($this->root, $path);
             if ($resolved === null) {

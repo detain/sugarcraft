@@ -197,6 +197,18 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
+        // realpath() THROWS a ValueError on a NUL byte rather than failing, so
+        // an unguarded NUL left execute() as an uncaught crash. PathJail also
+        // rejects it now, but say so in this tool's own vocabulary instead of
+        // reporting a malformed argument as a containment verdict.
+        if (str_contains($path, "\0")) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'Error: path contains a NUL byte',
+                isError: true,
+            );
+        }
+
         if ($this->root !== null) {
             $resolved = PathJail::resolveDir($this->root, $path);
             if ($resolved === null) {
@@ -225,12 +237,28 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             $baseDir = '/';
         }
 
+        // Two different problems, so two different messages. The jailed branch
+        // above settles CONTAINMENT, not directory-ness: PathJail::resolveDir()
+        // gates on existence and hands back an existing regular file as readily
+        // as a directory (deliberately — it is a containment predicate, and
+        // both answers are inside the jail). So `path: "sub/here.txt"` reached
+        // here and was reported as an unreadable directory, which is wrong
+        // twice over about a perfectly readable file and sends the model
+        // hunting for a permission problem that does not exist.
+        if (!is_dir($baseDir)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: sprintf('Error: not a directory: %s', $baseDir),
+                isError: true,
+            );
+        }
+
         // A permission problem is not an answer. Left to the walk it came back
         // as content='' / isError=false, i.e. a confident "no such files" for
         // a directory nobody was allowed to look inside — the same
         // stated-with-confidence wrong answer the truncation markers exist to
         // avoid.
-        if (!is_dir($baseDir) || !is_readable($baseDir)) {
+        if (!is_readable($baseDir)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
                 content: sprintf('Error: directory is not readable: %s', $baseDir),

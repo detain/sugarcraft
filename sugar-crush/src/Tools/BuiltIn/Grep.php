@@ -91,6 +91,18 @@ final readonly class Grep implements Tool, ParallelSafe
             );
         }
 
+        // realpath() THROWS a ValueError on a NUL byte rather than failing, so
+        // an unguarded NUL left execute() as an uncaught crash. PathJail also
+        // rejects it now, but say so in this tool's own vocabulary instead of
+        // reporting a malformed argument as a containment verdict.
+        if (str_contains($path, "\0")) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'Error: path contains a NUL byte',
+                isError: true,
+            );
+        }
+
         if ($this->root !== null) {
             $resolved = PathJail::resolveDir($this->root, $path);
             if ($resolved === null) {

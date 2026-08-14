@@ -94,17 +94,40 @@ final readonly class Write implements Tool
         if (!is_string($content)) {
             return $this->error($args, 'Error: content must be a string');
         }
+        // realpath() throws a ValueError on a NUL byte rather than failing, so
+        // without this the crash escaped execute() instead of coming back as a
+        // tool error the model can read. Same guard as Read/Edit.
+        if (str_contains($path, "\0")) {
+            return $this->error($args, 'Error: file_path contains a NUL byte');
+        }
 
         if ($this->worktreeJail !== null) {
-            $path = $this->worktreeJail->jailPath($path);
             // isAllowed() realpath()s the target and so answers false for ANY
             // file that does not exist yet - i.e. for every legitimate Write.
-            // Fall back to the nearest ancestor that does exist: the missing
-            // segments below it cannot be symlinks out of the worktree.
-            if (!$this->worktreeJail->isAllowed($path)
-                && !$this->worktreeJail->isAllowed(self::nearestExistingAncestor($path))) {
+            // resolveForCreate() is the shared containment algorithm's answer
+            // to exactly that case, so the hand-rolled nearest-existing-ancestor
+            // probe that used to live here is gone: one algorithm, two jails
+            // (see Tools\PathJailInterface for why both jails still exist).
+            //
+            // That probe was not merely redundant, it was wrong, and the
+            // replacement is strictly stronger rather than equivalent.
+            // Replaying the old gate path-for-path against resolveForCreate()
+            // on a canonical root, SEVEN paths it admitted are now refused:
+            // '..', '../', 'out_dir' (symlink -> outside dir), 'out_file'
+            // (symlink -> outside file), 'dangling', 'dangling/x.txt' and
+            // 'nope/../../escaped.txt'. Each one anchored on an ancestor that
+            // really was in the worktree while the TARGET was not. Five of the
+            // seven were then stopped downstream by checks that exist for
+            // unrelated reasons (the is_dir() refusal below, a failing
+            // mkdir()), so the jail was contributing nothing to their safety;
+            // two landed outside for real -- 'out_file' overwrote a file
+            // outside the worktree, and 'dangling' created one there. Nothing
+            // the old gate refused is newly allowed.
+            $resolved = $this->worktreeJail->resolveForCreate($path);
+            if ($resolved === null) {
                 return $this->error($args, 'Error: path outside worktree');
             }
+            $path = $resolved;
         } elseif ($this->root !== null) {
             $resolved = PathJail::resolveForCreate($this->root, $path);
             if ($resolved === null) {
@@ -182,20 +205,6 @@ final readonly class Write implements Tool
             isError: false,
             diff: $diff === '' ? null : $diff,
         );
-    }
-
-    /**
-     * The closest ancestor directory of $path that exists on disk, used to
-     * anchor a containment check for a file that does not exist yet.
-     */
-    private static function nearestExistingAncestor(string $path): string
-    {
-        $dir = \dirname($path);
-        while (!is_dir($dir) && $dir !== \dirname($dir)) {
-            $dir = \dirname($dir);
-        }
-
-        return $dir;
     }
 
     /** @param array<string, mixed> $args */

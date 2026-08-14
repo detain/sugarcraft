@@ -147,4 +147,69 @@ final class PathJailTest extends TestCase
 
         $this->assertNull($resolved);
     }
+
+    // =========================================================================
+    // resolveForCreate() — the ancestor walk
+    // =========================================================================
+
+    public function testResolveForCreateAcceptsMissingParentsInsideJail(): void
+    {
+        $resolved = PathJail::resolveForCreate($this->jail, 'a/b/c/new.md');
+
+        $this->assertSame(realpath($this->jail) . '/a/b/c/new.md', $resolved);
+    }
+
+    /**
+     * A DANGLING symlink in the path is a denial, not a missing directory.
+     *
+     * The ancestor walk trusts the segments below its anchor for one reason:
+     * they do not exist, and a path that does not exist cannot be a symlink
+     * out of the jail. A broken link breaks that premise — it exists, it is a
+     * symlink, and neither is_dir() nor realpath() can see it, so the walk
+     * stepped over it and anchored on the jail root. The returned
+     * `<jail>/dangling/x.txt` then resolves outside the jail the instant the
+     * link's target is created, which an attacker who can lose a race (or who
+     * planted the link in the first place) controls.
+     */
+    public function testResolveForCreateRejectsPathUnderDanglingSymlink(): void
+    {
+        symlink($this->outside . '/never-created', $this->jail . '/dangling');
+        self::assertTrue(is_link($this->jail . '/dangling'));
+        self::assertFalse(is_dir($this->jail . '/dangling'));
+
+        $this->assertNull(PathJail::resolveForCreate($this->jail, 'dangling/x.txt'));
+    }
+
+    /** The same hazard when the broken link is the leaf being written to. */
+    public function testResolveForCreateRejectsDanglingSymlinkAsTheTarget(): void
+    {
+        symlink($this->outside . '/never-created', $this->jail . '/dangling');
+
+        $this->assertNull(PathJail::resolveForCreate($this->jail, 'dangling'));
+    }
+
+    /**
+     * Non-regression for the fix above: a symlink to a directory that DOES
+     * exist inside the jail must still work. is_dir() is tested before
+     * is_link(), so such a link stops the walk and is settled by realpath()ing
+     * through it — denying every symlink outright would have broken legitimate
+     * in-jail layouts.
+     */
+    public function testResolveForCreateStillFollowsInJailSymlinkedDirectory(): void
+    {
+        mkdir($this->jail . '/real');
+        symlink($this->jail . '/real', $this->jail . '/alias');
+
+        $resolved = PathJail::resolveForCreate($this->jail, 'alias/new.txt');
+
+        $this->assertSame(realpath($this->jail . '/real') . '/new.txt', $resolved);
+    }
+
+    /** A symlinked directory pointing OUT of the jail stays rejected. */
+    public function testResolveForCreateRejectsSymlinkedDirectoryOutsideJail(): void
+    {
+        symlink($this->outside, $this->jail . '/escape');
+
+        $this->assertNull(PathJail::resolveForCreate($this->jail, 'escape/new.txt'));
+    }
 }

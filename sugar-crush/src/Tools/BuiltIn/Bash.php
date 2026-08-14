@@ -76,9 +76,11 @@ final readonly class Bash implements Tool
         $command = $args['command'] ?? '';
         $output = [];
         $exitCode = 0;
-        // Worktree jail takes precedence over root for isolated teammates;
-        // jailPath('') returns the worktree root when path is empty.
-        $cwd = $this->worktreeJail?->jailPath('') ?? $this->root ?? null;
+        // Worktree jail takes precedence over root for isolated teammates.
+        // root() says "the directory this jail is bound to" outright, where
+        // the previous jailPath('') got the same string by relying on an
+        // edge case of a join helper that checks no containment at all.
+        $cwd = $this->worktreeJail?->root() ?? $this->root ?? null;
         // Mirrors charmbracelet/bubbletea.*.Exec.
         // Use bash -c to interpret shell syntax; escapeshellarg prevents command injection.
         if ($cwd !== null) {

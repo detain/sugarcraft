@@ -107,15 +107,56 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
     {
         $path = $args['file_path'] ?? '';
 
+        // The type check is part of the same guard, not a separate nicety: this
+        // sits ABOVE the try/catch below, and under strict_types str_contains()
+        // raises a TypeError on a non-string. Without it, `file_path: 123` --
+        // which the untyped tool-call JSON can carry -- turned the very crash
+        // the NUL guard exists to remove back into an uncaught throw out of
+        // execute(), where it had previously been caught and reported as a tool
+        // error. ToolRegistry::execute() does not wrap its call site, so that
+        // is a crash the model never sees as a result.
+        if (!is_string($path)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'Error: file_path must be a string',
+                isError: true,
+            );
+        }
+
+        // A NUL byte makes realpath()/filesize() throw a ValueError rather than
+        // fail, which escaped execute() as an uncaught crash instead of a tool
+        // error the model can read and correct. It is not a containment bypass
+        // -- both jail branches below reject the path anyway -- but the throw
+        // happened before they got the chance on the no-jail path.
+        if (str_contains($path, "\0")) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'Error: file_path contains a NUL byte',
+                isError: true,
+            );
+        }
+
         if ($this->worktreeJail !== null) {
-            $path = $this->worktreeJail->jailPath($path);
-            if (!$this->worktreeJail->isAllowed($path)) {
+            // resolve() proves containment AND returns the canonical path, so
+            // the bytes read below are the bytes that were checked. The old
+            // jailPath()+isAllowed() pairing proved containment on the
+            // realpath() of $path and then re-opened the UNRESOLVED $path --
+            // a symlink component swapped between the two calls resolved
+            // somewhere else on the second pass (crush_code.md P8.14/15).
+            //
+            // The file_exists() half is isAllowed()'s existence-strictness,
+            // kept verbatim: resolve() also accepts a not-yet-existing file
+            // whose parent is in the jail, which is not something Read may
+            // open, and rejecting it here preserves this call site's error.
+            $resolved = $this->worktreeJail->resolve($path);
+            if ($resolved === null || !file_exists($resolved)) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
                     content: 'Error: path outside worktree',
                     isError: true,
                 );
             }
+            $path = $resolved;
         } elseif ($this->root !== null) {
             $resolved = PathJail::resolve($this->root, $path);
             if ($resolved === null) {
