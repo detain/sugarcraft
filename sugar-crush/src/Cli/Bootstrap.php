@@ -15,9 +15,15 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Memory\MemoryStore;
+use SugarCraft\Crush\Permissions\PermissionAction;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Permissions\PermissionRule;
+use SugarCraft\Crush\Permissions\SafetyClassifier;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -60,6 +66,19 @@ use SugarCraft\Crush\Tools\Tool;
 final class Bootstrap
 {
     /**
+     * The per-invocation override and the persisted key for the launch's
+     * permission mode, plus the mode used when neither says anything. See
+     * {@see permissionGate()} for why the default is the permissive one.
+     */
+    private const PERMISSION_MODE_ENV = 'SUGARCRUSH_PERMISSION_MODE';
+
+    private const PERMISSION_MODE_CONFIG_KEY = 'permissionMode';
+
+    private const PERMISSION_RULES_CONFIG_KEY = 'permissionRules';
+
+    private const DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
+
+    /**
      * Build the fully-wired Chat model the CLI binary hands to Program.
      *
      * $root defaults to getcwd() — the directory the CLI was invoked from —
@@ -90,8 +109,27 @@ final class Bootstrap
         // per consumer.
         $skills = $root === null ? null : self::skillRegistry($root);
 
+        // ONE gate for the whole launch, for the reason the registry above is
+        // one: PermissionGate's Auto-mode circuit breaker is per-INSTANCE
+        // state, so two gates would each need three strikes before either
+        // escalated, and a user watching one counter would be watching half
+        // the session's refusals (crush_code.md Phase 1 item 2). It is also
+        // ONE read of the config, so the engine and Chat's own tool path can
+        // never end up enforcing two different modes — including across a
+        // Ctrl+P provider switch, which carries this instance rather than
+        // rebuilding one (see Chat::selectPaletteProvider()).
+        //
+        // Do not over-read the circuit-breaker half of that on the TUI path:
+        // EngineBackend::completeAsync() runs the turn in a pcntl_fork()ed
+        // child, so the strike increments a turn makes die with the child.
+        // Sharing the instance is what unifies the MODE and the RULES today;
+        // "one counter for the session" needs the gate's state to cross the
+        // fork boundary, which is a separate queued step. See
+        // PermissionGateHook::NAME.
+        $permissionGate = self::permissionGate();
+
         return new Chat(
-            backend: self::backend($root, $skills),
+            backend: self::backend($root, $skills, $permissionGate),
             memoryStore: self::memoryStore(),
             sessionStore: $sessionStore,
             currentSessionId: $sessionId,
@@ -105,7 +143,7 @@ final class Bootstrap
             // would still be the one unguarded tool path in the live binary
             // (crush_feat.md §1 E1) - hooks that a call gets gated by on the
             // engine pipeline would silently not apply on this one.
-            hooks: self::hooks(),
+            hooks: self::hooks($permissionGate),
             // Without a supervisor instance /bg answers "Background sessions
             // not configured" on every real run, which leaves crush_feat.md
             // §5 E3 (`/bg` dispatching onto BackgroundSupervisor) implemented
@@ -159,13 +197,57 @@ final class Bootstrap
      *        second disk scan; the sub-agents this manager runs resolve their
      *        `skills:` names against it, so sharing the instance also means a
      *        skill disabled in the user config is disabled for sub-agents too.
+     * @param \Closure(\SugarCraft\Crush\ToolCall, \SugarCraft\Crush\Agents\SubAgent): bool|null $approver
+     *        Settles a sub-agent's {@see \SugarCraft\Crush\Permissions\PermissionDecision::Ask}.
+     *        Null leaves it failing closed — see
+     *        {@see AgentManager::evaluateToolCalls()}. Nothing supplies one
+     *        yet: the caller that should is {@see Chat}, which owns the
+     *        blocking prompt UI, and that wiring is its own change.
+     *
+     * @throws PermissionConfigException when the permission config is present
+     *         and unusable — raised HERE, on the launch path, rather than from
+     *         inside the gate factory at {@see AgentManager::createSubAgent()}
+     *         time. See the eager read in the body.
      */
-    public static function agentManager(?string $root = null, ?SkillRegistry $skills = null): AgentManager
+    public static function agentManager(?string $root = null, ?SkillRegistry $skills = null, ?\Closure $approver = null): AgentManager
     {
         $root = self::requireRoot($root);
         [$provider, $model] = self::provider();
 
-        $manager = new AgentManager($provider, $skills ?? self::skillRegistry($root));
+        // Read here, EAGERLY, rather than inside the factory closure below.
+        // The closure runs at createSubAgent() time, which — once `/agents`
+        // dispatches onto it — is mid-TUI, where a PermissionConfigException's
+        // only handler is `bin/sugarcrush`'s and its exit(2) would abandon the
+        // terminal in alt-screen/raw mode with the message painted over the
+        // frame. Reading at CONSTRUCTION puts the same refusal on the launch
+        // path, before Program::run() has taken the screen, which is where
+        // every other permission-config refusal already lands.
+        //
+        // The consequence is deliberate: the policy a launch starts with is
+        // the policy its sub-agents get, even if the file is edited underneath
+        // a running session. That is the same "one config source for the whole
+        // launch" the main-loop gate already commits to.
+        $permissionRules = self::permissionRules(self::permissionConfig());
+
+        $manager = new AgentManager(
+            $provider,
+            $skills ?? self::skillRegistry($root),
+            // Sub-agent gates are built from the SAME config the main loop's
+            // gate is (crush_code.md Phase 1 item 2's "one config source"),
+            // rather than AgentManager's own bare `new PermissionGate($mode)`
+            // fallback: that fallback passes no SafetyClassifier, and
+            // PermissionGate::evaluateAuto() fails closed without one — so a
+            // preset declaring `permissionMode: auto` got a gate that asked
+            // about literally every call instead of classifying any of them.
+            // The MODE still comes from the preset, not from the config: an
+            // agent that declares its own mode means it.
+            permissionGateFactory: static fn(PermissionMode $mode): PermissionGate => new PermissionGate(
+                $mode,
+                $permissionRules,
+                new SafetyClassifier(),
+            ),
+            permissionApprover: $approver,
+        );
 
         // A snapshot captured at $root for every agent, which is what closes
         // the "sub-agents are told the process cwd, not the configured root"
@@ -386,8 +468,12 @@ final class Bootstrap
      *        engine and its tools; defaults to a fresh scan of $root. Pass the
      *        caller's so a launch scans once and every consumer sees the same
      *        enabled/disabled set (see {@see chat()}).
+     * @param PermissionGate|null $gate The launch's safety gate, threaded into
+     *        {@see EngineBackend::withPermissionGate()}. Pass the caller's so
+     *        the engine and Chat's own tool path share ONE circuit breaker;
+     *        defaults to a gate built fresh from the same config.
      */
-    public static function backend(?string $root = null, ?SkillRegistry $skills = null): Backend
+    public static function backend(?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null): Backend
     {
         ToolIpcFiles::sweepOnce();
 
@@ -396,7 +482,18 @@ final class Bootstrap
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
             try {
-                return self::backendFor($providerType, $root, $skills);
+                return self::backendFor($providerType, $root, $skills, $gate);
+            } catch (PermissionConfigException $e) {
+                // Not a provider problem, and not survivable by degrading:
+                // the echo fallback below builds the very same gate and would
+                // throw again, after blaming the provider for it on stderr.
+                //
+                // Written out even though PHP already lets an unmatched type
+                // through the `\Throwable` arm below — it is NOT unmatched, it
+                // is a SUBTYPE, and without this arm the degrade-to-echo
+                // handler swallows it. Static analysis flags the rethrow as
+                // redundant; it is load-bearing.
+                throw $e;
             } catch (\Throwable $e) {
                 fwrite(STDERR, "sugarcrush: provider '{$providerType}' unavailable ({$e->getMessage()}); falling back to echo.\n");
             }
@@ -410,7 +507,11 @@ final class Bootstrap
         $persisted = self::readUserConfig()['provider'] ?? null;
         if (is_string($persisted) && $persisted !== '') {
             try {
-                return self::backendFor($persisted, $root, $skills);
+                return self::backendFor($persisted, $root, $skills, $gate);
+            } catch (PermissionConfigException $e) {
+                // See the env-var branch above: this arm exists to keep the
+                // `\Throwable` degrade-to-echo arm below from catching it.
+                throw $e;
             } catch (\Throwable $e) {
                 fwrite(STDERR, "sugarcrush: persisted provider '{$persisted}' unavailable ({$e->getMessage()}); falling back to echo.\n");
             }
@@ -422,6 +523,7 @@ final class Bootstrap
         return (new EngineBackend(new EchoProvider(), 'echo'))
             ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks())
+            ->withPermissionGate($gate ?? self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
             ->withRoot($root);
@@ -440,10 +542,11 @@ final class Bootstrap
      * should see the real error rather than silently getting something else.
      *
      * @param SkillRegistry|null $skills See {@see backend()}.
+     * @param PermissionGate|null $gate See {@see backend()}.
      *
      * @throws \Throwable
      */
-    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null): Backend
+    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null): Backend
     {
         // See backend(): whichever of the two a run enters through, the sweep
         // happens once. sweepOnce() latches, so backend() delegating here does
@@ -461,6 +564,7 @@ final class Bootstrap
         return (new EngineBackend($provider, (string) $model))
             ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks())
+            ->withPermissionGate($gate ?? self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
             ->withRoot($root);
@@ -566,6 +670,15 @@ final class Bootstrap
      * call only ever touches the keys it names (e.g. switching the theme
      * doesn't clobber a previously-persisted provider choice).
      *
+     * The replacement is ATOMIC — write a sibling temp file, then `rename()`
+     * over the target — because a partial write here is not merely a lost
+     * theme: {@see permissionConfig()} refuses to launch on a config it cannot
+     * parse, so a `/theme` or Ctrl+P persist interrupted by SIGINT, an OOM
+     * kill or a full disk would leave a truncated file that bricks every
+     * subsequent run, from inside the one binary that could have fixed it.
+     * `rename()` within a directory is atomic on POSIX, so a reader ever sees
+     * the old file or the new one and never a half of either.
+     *
      * @param array<string, mixed> $patch
      */
     public static function writeUserConfig(array $patch): void
@@ -578,9 +691,44 @@ final class Bootstrap
 
         // The write, not the read, is what earns the directory — see
         // {@see userConfigPath()}.
-        self::ensureDir(self::configDirPath());
+        $dir = self::configDirPath();
+        self::ensureDir($dir);
 
-        file_put_contents(self::userConfigPath(), $json);
+        // The temp file must be the target's SIBLING: rename() is only atomic
+        // within one filesystem, and tempnam() silently falls back to the
+        // system temp dir when the requested one is unusable — which on a
+        // separate mount would turn the rename into a failure rather than a
+        // torn write, but is worth refusing explicitly either way.
+        //
+        // Compared through realpath() on BOTH sides, never as raw strings:
+        // tempnam() hands back a CANONICAL path, so a `HOME` with a trailing
+        // slash (`HOME=/root/` is ordinary in a Dockerfile), a doubled slash,
+        // or a `/./` made `dirname($temp) !== $dir` true for every write and
+        // silently disabled config persistence outright — the sibling check
+        // refusing the one directory it was pointed at. `realpath()` cannot
+        // fail here: ensureDir() has just guaranteed $dir, and tempnam()
+        // returns a file it created.
+        $temp = @tempnam($dir, '.config.json.');
+        if ($temp === false || realpath(\dirname($temp)) !== realpath($dir)) {
+            if (is_string($temp)) {
+                @unlink($temp);
+            }
+
+            return;
+        }
+
+        if (@file_put_contents($temp, $json) !== strlen($json) || !@rename($temp, self::userConfigPath())) {
+            // Losing the setting is the correct outcome of a failed write.
+            // Leaving the previous config intact is the important half.
+            @unlink($temp);
+
+            return;
+        }
+
+        // tempnam() creates at 0600; the file this replaces was created at the
+        // process umask. 0600 is kept deliberately — this file now carries the
+        // launch's permission policy, so it is nobody else's business.
+        @chmod(self::userConfigPath(), 0600);
     }
 
     /**
@@ -618,12 +766,366 @@ final class Bootstrap
         return $registry;
     }
 
-    private static function hooks(): HookManager
+    /**
+     * @param PermissionGate|null $gate Install this gate as an additional
+     *        PreToolUse layer, AFTER the built-ins — see {@see PermissionGateHook}
+     *        for why that order. Pass the launch's single gate instance so the
+     *        Auto-mode circuit breaker counts strikes once across every path
+     *        that shares this manager; null keeps the built-ins-only chain
+     *        every caller had before crush_code.md Phase 1 item 2.
+     */
+    private static function hooks(?PermissionGate $gate = null): HookManager
     {
         $hooks = new HookManager(new HookRegistry());
         $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
 
+        if ($gate !== null) {
+            $hooks->register(new PermissionGateHook($gate));
+        }
+
         return $hooks;
+    }
+
+    /**
+     * The launch's {@see PermissionGate} — crush_code.md Phase 1 item 2's
+     * "constructed from the same config source as sub-agents".
+     *
+     * Same vocabulary the sub-agent path already speaks: the kebab-case
+     * {@see PermissionMode} values an agent preset's `permissionMode:`
+     * frontmatter uses (see {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}),
+     * so `plan` means the same thing whether it is written in an agent preset
+     * or in ~/.sugar-crush/config.json. Precedence: the env var is the
+     * per-invocation override and wins over the persisted key.
+     *
+     * NOTHING HERE MAY FAIL OPEN. Every other setting this class reads
+     * degrades quietly on a bad value because the cost of guessing wrong is a
+     * default theme; here the fallback is the most PERMISSIVE mode, so the
+     * same tolerance turns "I configured `plan` with a deny rule" plus one
+     * stray comma into an ungated session the user has no way to notice. So
+     * this method draws a hard line between ABSENCE and a PRESENT-BUT-UNUSABLE
+     * input:
+     *
+     * - Absent (no config file, no `permissionMode`, no env var) => the
+     *   documented default below. Nothing was configured, nothing is being
+     *   overridden, and a fresh install must start.
+     * - Present but unusable => {@see PermissionConfigException}, which
+     *   `bin/sugarcrush` reports as an exit-2 usage error. That covers a
+     *   config file that exists and cannot be read or parsed, and a
+     *   `permissionMode` — from either source — naming no real mode
+     *   (`paln`, `Plan`, `deny-all`).
+     *
+     * Hard-failing rather than warning-and-continuing on the corrupt-file case
+     * is deliberate, and the asymmetry with a typo'd env value is only in the
+     * MESSAGE, not the severity: a broken config file is precisely the input
+     * whose intent cannot be recovered. `readUserConfig()` hands back `[]` for
+     * it, so `permissionMode` and `permissionRules` both vanish at once and
+     * there is no way to tell a file that only ever set a theme from one that
+     * set a deny-everything policy. Continuing permissively is the reported
+     * fail-open; continuing restrictively silently ignores what the file
+     * actually said; refusing to start is the only outcome that is neither,
+     * costs a one-line fix, and cannot be missed. The same file being
+     * unreadable already silently drops the user's persisted provider and
+     * theme, so this makes an existing quiet breakage loud rather than
+     * inventing a new failure.
+     *
+     * DEFAULT IS BypassPermissions, deliberately, and TEMPORARILY. The main
+     * loop had no gate at all before this, and a stricter default would have
+     * been a breaking change on upgrade rather than a safer one: modes that
+     * answer Ask (Default/AcceptEdits/Auto, for writes) currently fail CLOSED
+     * on the engine path, because no caller anywhere attaches an approver —
+     * {@see EngineBackend::withPermissionApprover()} has none outside its own
+     * test — so Default mode would have turned "no permission system" into
+     * "every Edit refused". Be honest about what that costs: with the shipped
+     * empty rule set, BypassPermissions is not "more guarded than before", it
+     * is EXACTLY EQUAL to having no gate. Every destructive `rm` the gate's
+     * circuit breaker refuses is already refused, earlier and more broadly, by
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}, and "explicit
+     * deny rules still apply" says nothing when no rules are configured. What
+     * the default buys is a gate that is REACHABLE and configurable: set
+     * `permissionMode`/`permissionRules` and it starts deciding things. The
+     * permissive default is a stopgap for the fail-closed ASK path, not the
+     * settled design — it goes away once an ASK on the engine path can
+     * actually be ANSWERED: an approver attached (the missing piece today),
+     * and a channel it can ask over from inside
+     * {@see EngineBackend::completeAsync()}'s forked child (the piece behind
+     * that one).
+     *
+     * Rules come from a `permissionRules` array of
+     * `{"pattern": "Bash*", "action": "deny"}` objects. Unlike the mode, a
+     * malformed entry is skipped individually rather than stopping the launch:
+     * the list is item-wise, so one bad entry does not make the others
+     * unreadable the way a JSON syntax error makes the whole file unreadable.
+     * A skipped entry is reported on stderr, because a silently dropped `deny`
+     * rule widens permission — and an entry whose `action` is not a real
+     * {@see PermissionAction} is DROPPED, never coerced to allow.
+     *
+     * @throws PermissionConfigException when a present permission input cannot be used
+     */
+    public static function permissionGate(): PermissionGate
+    {
+        $config = self::permissionConfig();
+
+        // An EMPTY env var is absence, not a bad value: `FOO=` is how a
+        // wrapper script drops an inherited override. Anything else it says,
+        // including "0", is a value the user meant.
+        $env = getenv(self::PERMISSION_MODE_ENV);
+        $envRaw = ($env === false || $env === '') ? null : $env;
+
+        // A present-but-non-string `permissionMode` (a number, a bool, a
+        // nested object) is stringified rather than ignored, so it reaches the
+        // same "that is not a mode" refusal an unrecognised string does.
+        // Silently skipping it would be the fail-open again, one type away.
+        $configRaw = $config[self::PERMISSION_MODE_CONFIG_KEY] ?? null;
+        $configRaw = match (true) {
+            $configRaw === null => null,
+            is_string($configRaw) => $configRaw === '' ? null : $configRaw,
+            is_scalar($configRaw) => var_export($configRaw, true),
+            default => get_debug_type($configRaw),
+        };
+
+        $mode = self::permissionModeFrom($envRaw, '$' . self::PERMISSION_MODE_ENV)
+            ?? self::permissionModeFrom(
+                $configRaw,
+                self::PERMISSION_MODE_CONFIG_KEY . ' in ' . self::userConfigPath(),
+            )
+            ?? self::DEFAULT_PERMISSION_MODE;
+
+        // The classifier is what Auto mode gates on, and PermissionGate fails
+        // CLOSED (everything Asks) without one — so it is always supplied
+        // rather than only when the mode currently happens to be Auto: this
+        // gate instance is shared, and a mode read from config is not
+        // something this method should have to predict.
+        return new PermissionGate($mode, self::permissionRules($config), new SafetyClassifier());
+    }
+
+    /**
+     * Resolve one permission-mode source: null when it said nothing, the mode
+     * when it named one, and a throw when it named something that is not one.
+     *
+     * @param string|null $raw    the raw value, or null when the source is absent
+     * @param string      $source how to name the source in the error message
+     *
+     * @throws PermissionConfigException
+     */
+    private static function permissionModeFrom(?string $raw, string $source): ?PermissionMode
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $mode = PermissionMode::tryFrom($raw);
+        if ($mode !== null) {
+            return $mode;
+        }
+
+        $valid = implode(', ', array_map(static fn(PermissionMode $m): string => $m->value, PermissionMode::cases()));
+
+        throw new PermissionConfigException(
+            "{$source} is '{$raw}', which is not a permission mode (expected one of: {$valid}). "
+            . 'Refusing to start rather than fall back to the permissive default.',
+        );
+    }
+
+    /**
+     * {@see readUserConfig()}, minus the tolerance — see {@see permissionGate()}
+     * for why the permission path may not share it.
+     *
+     * Kept separate rather than made the one reader for everything: the theme
+     * and the persisted provider genuinely SHOULD survive a corrupt config,
+     * because guessing wrong about them costs nothing.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws PermissionConfigException when the file exists and cannot be used
+     */
+    private static function permissionConfig(): array
+    {
+        $path = self::userConfigPath();
+        if (!is_file($path)) {
+            // `is_file()` answers false for two things that are not the same
+            // question: the file is ABSENT, or a directory on the way to it
+            // cannot be SEARCHED, in which case a policy may be sitting right
+            // there and this process simply cannot see it. Only the first is
+            // "nothing was configured". Reading the second as absence was the
+            // fail-open this method exists to close, and it needs no change to
+            // the config file at all to reach — a different euid, `sudo`
+            // without `-E`, an NFS/autofs blip. It was also exactly backwards
+            // from what the docblock promises: an unreadable FILE hard-failed
+            // while an unreadable DIRECTORY silently ran bypass-permissions.
+            $unreachable = self::unreachableAncestor($path);
+            if ($unreachable !== null) {
+                throw new PermissionConfigException(
+                    "{$path} cannot be reached: {$unreachable}, "
+                    . 'so whether a permission policy is configured there is unknowable. '
+                    . 'Refusing to start rather than run with an unknown permission policy.',
+                );
+            }
+
+            return [];
+        }
+
+        // `@`-silenced for the reason readUserConfig() is: the false branch
+        // below IS the handling, and the raw warning would land in the middle
+        // of the TUI's own output.
+        $contents = @file_get_contents($path);
+        if ($contents === false) {
+            throw new PermissionConfigException(
+                "{$path} exists but could not be read (check its permissions). "
+                . 'Refusing to start rather than run with an unknown permission policy.',
+            );
+        }
+
+        // A zero-byte (or whitespace-only) file is definitionally "nothing was
+        // configured", and refusing to start on it bricks the CLI on a state
+        // the CLI can produce ITSELF: {@see writeUserConfig()} replaces the
+        // file atomically now, but a config truncated by an older build, a
+        // full disk, or an editor is still out there, and there is no way to
+        // fix it from inside a binary that will not launch.
+        if (trim($contents) === '') {
+            return [];
+        }
+
+        $data = json_decode($contents, true);
+
+        // The second half of the test is on the JSON TEXT, for exactly the
+        // reason {@see \SugarCraft\Crush\Hooks\ScriptHook::modifyOrDeny()}
+        // tests it there: `json_decode()` throws away the distinction being
+        // made, since `{}` and `[]` both decode to `[]`. `is_array()` alone
+        // therefore called a top-level JSON LIST a usable config, dropped
+        // every key in it, and started on the permissive default — with the
+        // branch below still claiming, unreachably, that it would have
+        // reported "the top level is not a JSON object".
+        if (!is_array($data) || !str_starts_with(ltrim($contents), '{')) {
+            // A BOM is named rather than left to `json_last_error_msg()`'s bare
+            // "Syntax error": it is a common editor artifact, it is INVISIBLE
+            // in every editor that wrote it, and the file it fails on is
+            // otherwise character-for-character correct — so the generic
+            // message sends the user hunting for a stray comma that is not
+            // there. Still a hard failure: JSON does not permit a BOM, and
+            // this path may not guess at a policy.
+            $error = match (true) {
+                str_starts_with($contents, "\xEF\xBB\xBF") => 'it starts with a UTF-8 byte-order mark, '
+                    . 'which JSON does not permit — re-save the file as UTF-8 without a BOM',
+                json_last_error() === JSON_ERROR_NONE => 'the top level is not a JSON object',
+                default => json_last_error_msg(),
+            };
+
+            throw new PermissionConfigException(
+                "{$path} is not usable JSON ({$error}). "
+                . 'Refusing to start rather than run with an unknown permission policy.',
+            );
+        }
+
+        return $data;
+    }
+
+    /**
+     * Why $path could not be reached, phrased for the exception message, or
+     * null when the whole chain is traversable and the file is simply not
+     * there.
+     *
+     * Walks UPWARD rather than testing `dirname($path)` alone because that
+     * test is itself ambiguous: `is_dir()` on a directory whose own parent is
+     * unsearchable also answers false. The first ancestor that answers true to
+     * `is_dir()` was successfully stat'ed, which proves everything above it
+     * was searchable — so its own `is_executable()` is the whole answer.
+     *
+     * The SYMLINK probe is the second half, and without it the walk re-opened
+     * the very fail-open it exists to close. `dirname()` is LEXICAL, so it
+     * cannot follow the real chain past a link: point `~/.sugar-crush` at a
+     * directory sitting behind an unsearchable one and `is_dir()` on the link
+     * answers false, the walk steps up to a perfectly searchable `~`, and a
+     * policy nobody can read is reported as "nothing configured". A component
+     * that `lstat()`s but does not resolve to a directory is therefore its own
+     * terminal answer: whether it dangles or its target is merely out of
+     * reach, what is behind it is unknowable, and unknowable fails closed.
+     *
+     * Why not a `realpath()`-based walk: `realpath()` returns false for BOTH
+     * "does not exist" and "cannot be reached", which is precisely the
+     * distinction this method exists to draw — it would have to fall back to a
+     * lexical walk anyway, and would lose the "reached the root, nothing is
+     * there" terminal state that keeps a fresh install launching.
+     */
+    private static function unreachableAncestor(string $path): ?string
+    {
+        $dir = \dirname($path);
+
+        while (true) {
+            if (is_dir($dir)) {
+                return is_executable($dir) ? null : "{$dir} is not searchable by this process";
+            }
+
+            if (is_link($dir)) {
+                return "{$dir} is a symlink that does not resolve to a directory this process can search";
+            }
+
+            $parent = \dirname($dir);
+            if ($parent === $dir) {
+                // Reached the filesystem root without finding anything that
+                // exists. Nothing is hiding a config; there is no config.
+                return null;
+            }
+
+            $dir = $parent;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config the already-read user config
+     * @return list<PermissionRule>
+     */
+    private static function permissionRules(array $config): array
+    {
+        $raw = $config[self::PERMISSION_RULES_CONFIG_KEY] ?? null;
+        if ($raw === null) {
+            return [];
+        }
+
+        if (!is_array($raw)) {
+            self::warnPermissionConfig(
+                self::PERMISSION_RULES_CONFIG_KEY . ' is not a list of rules; no rules were loaded',
+            );
+
+            return [];
+        }
+
+        $rules = [];
+        foreach ($raw as $index => $entry) {
+            if (!is_array($entry) || !is_string($entry['pattern'] ?? null)) {
+                self::warnPermissionConfig(
+                    self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] has no string 'pattern'; rule skipped",
+                );
+                continue;
+            }
+
+            $action = is_string($entry['action'] ?? null)
+                ? PermissionAction::tryFrom($entry['action'])
+                : null;
+            if ($action === null) {
+                self::warnPermissionConfig(
+                    self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') has no valid 'action' "
+                    . "(expected allow, deny or ask); rule skipped rather than coerced",
+                );
+                continue;
+            }
+
+            $rules[] = new PermissionRule($entry['pattern'], $action);
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Report a permission-config problem the launch survived.
+     *
+     * stderr, matching the precedent {@see backend()} already sets for a
+     * configured-but-unusable provider: stdout belongs to the TUI, and a
+     * dropped rule has to be visible somewhere or it is the silent widening
+     * this whole path exists to avoid.
+     */
+    private static function warnPermissionConfig(string $message): void
+    {
+        fwrite(STDERR, "sugarcrush: {$message}.\n");
     }
 
     /**

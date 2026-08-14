@@ -44,12 +44,15 @@ final class AgentManager
 
     /**
      * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
+     * @param \Closure(ToolCall, SubAgent): bool $permissionApprover Settles a
+     *        {@see PermissionDecision::Ask} into a real allow/deny. @see evaluateToolCalls()
      */
     public function __construct(
         private ProviderInterface $provider,
         private SkillRegistry $skillRegistry,
         private ?AgentWorkerPool $workerPool = null,
         private ?\Closure $permissionGateFactory = null,
+        private ?\Closure $permissionApprover = null,
     ) {}
 
     /**
@@ -432,10 +435,31 @@ final class AgentManager
     /**
      * Evaluate tool calls through the sub-agent's permission gate.
      * Denied tool calls cause the sub-agent to fail immediately.
-     * Ask decisions also fail since sub-agents cannot prompt for user input.
+     *
+     * ASK is routed to {@see $permissionApprover}, the seam that makes it a
+     * question instead of a dead end. Before it, every Ask was an immediate
+     * hard failure, which made {@see PermissionMode::Auto}'s whole 3-strike
+     * circuit breaker unreachable for sub-agents: its ESCALATION path — three
+     * consecutive blocks of one category escalating from Deny to Ask so a
+     * human can intervene — behaved exactly like the Deny it was escalating
+     * away from, only with a worse message. (Pre-existing; verified against
+     * the pre-P1.1 baseline, not a regression from that step.)
+     *
+     * Deliberately the same contract {@see \SugarCraft\Crush\Runtime::settleAsk()}
+     * uses for the identical problem on the main loop, so an approver written
+     * once works on both: literal `true` grants and NOTHING else does. A
+     * `(bool)` cast would make every {@see \SugarCraft\Crush\Permissions\PermissionReply}
+     * — `Reject` included, since every enum case is a truthy object — read as
+     * permission, which is exactly how ForeignAgentPresetRegistry once granted
+     * tool access it should have refused.
+     *
+     * With no approver attached the behaviour is unchanged and fails CLOSED:
+     * a sub-agent whose caller owns no UI must not run a call the gate refused
+     * to decide on its own.
      *
      * @param array<ToolCall> $toolCalls
-     * @throws \RuntimeException When a tool call is denied or requires user input
+     * @throws \RuntimeException When a tool call is denied, or an Ask goes
+     *         unanswered/refused
      */
     private function evaluateToolCalls(array $toolCalls, SubAgent $subAgent): void
     {
@@ -447,25 +471,47 @@ final class AgentManager
             $decision = $subAgent->permissionGate->evaluate($toolCall);
 
             if ($decision === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
-                $subAgent->status = SubAgent::STATUS_FAILED;
-                $subAgent->error = sprintf(
-                    'Tool call "%s" denied by permission gate (mode: %s)',
-                    $toolCall->name,
-                    $subAgent->permissionGate->mode()->value,
-                );
-                throw new \RuntimeException($subAgent->error);
+                $this->refuseToolCall($toolCall, $subAgent, 'denied by permission gate');
             }
 
-            if ($decision === \SugarCraft\Crush\Permissions\PermissionDecision::Ask) {
-                $subAgent->status = SubAgent::STATUS_FAILED;
-                $subAgent->error = sprintf(
-                    'Tool call "%s" requires user input but sub-agents cannot prompt (mode: %s)',
-                    $toolCall->name,
-                    $subAgent->permissionGate->mode()->value,
+            if ($decision !== \SugarCraft\Crush\Permissions\PermissionDecision::Ask) {
+                continue;
+            }
+
+            if ($this->permissionApprover === null) {
+                $this->refuseToolCall(
+                    $toolCall,
+                    $subAgent,
+                    'requires approval and no approver is attached to this manager',
                 );
-                throw new \RuntimeException($subAgent->error);
+            }
+
+            if (($this->permissionApprover)($toolCall, $subAgent) !== true) {
+                $this->refuseToolCall($toolCall, $subAgent, 'refused at the permission prompt');
             }
         }
+    }
+
+    /**
+     * Stop a sub-agent on a refused tool call.
+     *
+     * One exit for all three refusal reasons so a sub-agent can never be left
+     * marked RUNNING after its work was refused — the shape the Ask branch got
+     * wrong by carrying its own near-duplicate of this.
+     *
+     * @throws \RuntimeException always
+     */
+    private function refuseToolCall(ToolCall $toolCall, SubAgent $subAgent, string $reason): never
+    {
+        $subAgent->status = SubAgent::STATUS_FAILED;
+        $subAgent->error = sprintf(
+            'Tool call "%s" %s (mode: %s)',
+            $toolCall->name,
+            $reason,
+            $subAgent->permissionGate?->mode()->value ?? 'unknown',
+        );
+
+        throw new \RuntimeException($subAgent->error);
     }
 
     /**

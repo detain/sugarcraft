@@ -360,7 +360,7 @@ final class Runtime
 
         $context = $this->hookContext($toolCall, $tool, $app);
 
-        [$args, $denial] = $this->gate($toolCall, $context, $onPermissionRequest);
+        [$args, $denial, $context] = $this->gate($toolCall, $context, $onPermissionRequest);
         if ($denial !== null) {
             return $this->failure($toolCall, $denial, $onEvent);
         }
@@ -478,7 +478,7 @@ final class Runtime
             }
 
             $context = $this->hookContext($toolCall, $tool, $app);
-            [$args, $denial] = $this->gate($toolCall, $context, $onPermissionRequest);
+            [$args, $denial, $context] = $this->gate($toolCall, $context, $onPermissionRequest);
 
             $jobs[] = [
                 'call' => $toolCall,
@@ -587,7 +587,9 @@ final class Runtime
      * in a concurrent group it is called during phase 1, before any child
      * exists, so nothing can run past a question that has not been answered.
      *
-     * @return array{0: ?array<string, mixed>, 1: ?string} [arguments, denial reason]
+     * @return array{0: ?array<string, mixed>, 1: ?string, 2: HookContext}
+     *     [arguments, denial reason, the context describing the call that will
+     *     actually run — see below]
      */
     private function gate(ToolCall $toolCall, HookContext $context, ?callable $onPermissionRequest): array
     {
@@ -598,16 +600,48 @@ final class Runtime
         }
 
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
-            return [null, "Hook denied: {$hookResult->message}"];
+            return [null, "Hook denied: {$hookResult->message}", $context];
         }
 
         // A MODIFY hook rewrites the tool input before execution.
-        return [
-            $hookResult->isModified()
-                ? (json_decode($hookResult->modifiedInput ?? '', true) ?? $toolCall->arguments())
-                : $toolCall->arguments(),
-            null,
-        ];
+        $args = self::rewrittenArguments($toolCall, $hookResult);
+
+        // ...and `PostToolUse` has to observe the call that RAN. $context still
+        // describes the model's PROPOSAL, so on a rewritten call an audit log
+        // built from it names a command that was never executed — which is
+        // worse than no log at all on the one call anybody would want the
+        // record for. Compared rather than assumed, because
+        // {@see rewrittenArguments()} deliberately falls back to the originals
+        // for a rewrite that will not decode to an argument map.
+        if ($args !== $toolCall->arguments()) {
+            $context = $context->withRewrittenArgs($args, (string) $hookResult->modifiedInput);
+        }
+
+        return [$args, null, $context];
+    }
+
+    /**
+     * The arguments this call should actually execute with.
+     *
+     * {@see HookResult::rewrittenArgs()}, not a bare `?? $toolCall->arguments()`:
+     * a rewrite of `4` or `"ls"` decodes to a non-null SCALAR, which the
+     * null-coalesce happily handed on as the argument map and pushed a type
+     * error into the tool layer — and a rewrite of `["rm","-rf","/"]` decodes
+     * to an ARRAY, which a bare `is_array()` accepted as an argument map.
+     * Everything that is not an argument map falls back to the originals — the
+     * documented behaviour, and the reason
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook::modifyOrDeny()} refuses to
+     * emit such a rewrite at all.
+     *
+     * @return array<string, mixed>
+     */
+    private static function rewrittenArguments(ToolCall $toolCall, HookResult $hookResult): array
+    {
+        if (!$hookResult->isModified()) {
+            return $toolCall->arguments();
+        }
+
+        return $hookResult->rewrittenArgs() ?? $toolCall->arguments();
     }
 
     /**
@@ -915,6 +949,18 @@ final class Runtime
             );
         }
 
+        // THE APPROVER MUST BE SHOWN WHAT WILL RUN. An ASK can carry a rewrite
+        // an earlier hook in the same chain made ({@see
+        // \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} re-scans against
+        // the rewritten arguments and carries them on the question), and
+        // {@see \SugarCraft\Crush\Hooks\HookManager::resolveAsk()} settles an
+        // approval back into that rewrite — so handing the ORIGINAL call over
+        // put one command in front of the approver and executed another. The
+        // arguments are the only thing an approver UI has to render; the
+        // question text says nothing about them. Same fix, same reason, as
+        // {@see \SugarCraft\Crush\Chat::gateToolCall()}'s ASK branch.
+        $toolCall = self::asAsked($toolCall, $ask);
+
         // `=== true`, never a (bool) cast: only a literal true is a grant.
         // A cast would turn ANY truthy return into permission, and the
         // obvious wiring for this seam is Chat handing over an approver that
@@ -922,6 +968,40 @@ final class Runtime
         // is a truthy object. That is exactly how ForeignAgentPresetRegistry
         // silently granted tool access earlier in this build.
         return $this->hookManager->resolveAsk($ask, $onPermissionRequest($toolCall, $ask) === true);
+    }
+
+    /**
+     * The call an ASK is actually about: $toolCall with the rewrite the
+     * question carries applied, or $toolCall untouched when it carries none.
+     *
+     * Separate from {@see rewrittenArguments()} because that one gates on
+     * `isModified()` — correct for the SETTLED verdict it reads, and exactly
+     * wrong here, where the action is ASK and the rewrite rides along on it.
+     * What counts as a rewrite is otherwise the SAME question, so it is asked
+     * in the same place: {@see HookResult::rewrittenArgs()}. A hand-rolled
+     * `is_array()` here accepted a top-level JSON LIST that every other
+     * consumer refuses, so an `ask('Proceed?', '["rm","-rf","/"]')` showed the
+     * approver a positional-argument call that {@see rewrittenArguments()}
+     * would then decline to run — the approver shown one call and another
+     * executed, which is the exact inversion of what this method exists for.
+     *
+     * THAT REFUSAL IS DEFENCE-IN-DEPTH RATHER THAN LIVE, stated so nobody
+     * reads its dormancy as evidence it can go: an ASK's own `modifiedInput`
+     * is a PROPOSAL now, re-scanned by
+     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()}, which then
+     * REBUILDS the question carrying only what the chain settled on — and
+     * anything that settled decoded as an argument map on the way. So the
+     * chain can no longer hand this method an unusable rewrite; a caller that
+     * settles an ASK it built itself still can, which is the same standing
+     * {@see \SugarCraft\Crush\Chat::applyRewrite()}'s action gate has.
+     */
+    private static function asAsked(ToolCall $toolCall, HookResult $ask): ToolCall
+    {
+        $decoded = $ask->rewrittenArgs();
+
+        return $decoded === null
+            ? $toolCall
+            : new ToolCall($toolCall->id(), $toolCall->name(), $decoded);
     }
 
     /**

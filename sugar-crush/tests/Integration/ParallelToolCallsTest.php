@@ -404,6 +404,61 @@ final class ParallelToolCallsTest extends TestCase
         $this->assertSame(['a:saw=2', 'c:saw=2'], $observed);
     }
 
+    /**
+     * The concurrent twin of
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testPostToolUseObservesTheArgumentsThatActuallyRan}.
+     *
+     * {@see Runtime::gate()} hands back the rewritten HookContext as its third
+     * element, and the concurrent path has to CARRY it into the job it queues —
+     * per call, with no cross-contamination between siblings. Dropping that
+     * element (`[$args, $denial] = $this->gate(...)`) left each job holding the
+     * context built from the model's PROPOSAL, so `AuditHook` recorded three
+     * commands none of which ran, on precisely the calls whose record anybody
+     * would want. It passed the whole suite: the serial path had a test and this
+     * one did not.
+     *
+     * Distinct rewrites per call are the point — one shared rewrite would pass
+     * even if every job were handed the same context.
+     */
+    public function testPostToolUseObservesEachConcurrentCallsOwnRewrittenArguments(): void
+    {
+        $observed = [];
+        $this->hookRegistry->register($this->hook(HookEvent::PreToolUse, static function (HookContext $context): HookResult {
+            $args = $context->toolArgs;
+            $marker = (string) ($args['marker'] ?? '');
+
+            // The re-scan hands this hook its own rewrite back; re-proposing a
+            // second suffix forever would exhaust the rewrite budget instead of
+            // settling (see HookRegistry::MAX_REWRITE_PASSES).
+            if (str_ends_with($marker, '-rw')) {
+                return HookResult::allow();
+            }
+
+            $args['marker'] = $marker . '-rw';
+
+            return HookResult::modify((string) json_encode($args));
+        }));
+        $this->hookRegistry->register($this->hook(HookEvent::PostToolUse, static function (HookContext $context) use (&$observed): HookResult {
+            $observed[] = $context->toolArgs['marker'];
+
+            return HookResult::allow();
+        }));
+
+        $results = $this->execute(
+            $this->rendezvousCalls(['a', 'b', 'c'], peers: 2, wait: self::RENDEZVOUS_WAIT),
+            [$this->rendezvousTool()],
+        );
+
+        // Positive control: the rewrite really reached the forked children, so a
+        // failure below can only be the context that was threaded alongside it.
+        $ran = array_map('basename', glob($this->dir . '/markers/*') ?: []);
+        sort($ran);
+        $this->assertSame(['a-rw', 'b-rw', 'c-rw'], $ran);
+        $this->assertSame('saw=2', $results[0]->content());
+
+        $this->assertSame(['a-rw', 'b-rw', 'c-rw'], $observed, 'PostToolUse must see each call OWN rewrite, in provider order');
+    }
+
     // =========================================================================
     // Failure modes: throw, hang
     // =========================================================================

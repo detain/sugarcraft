@@ -237,6 +237,57 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertInstanceOf(Backend::class, $backend);
         $this->assertStringContainsString('[session:provider:fallback]', (string) file_get_contents($buffer));
     }
+
+    /**
+     * An unusable permission policy is the one failure the provider fallback
+     * cannot help with, and the catch-all used to blame the provider for it.
+     *
+     * The old `catch (\Throwable)` logged `[session:provider:fallback] <the
+     * permission message>` and then called `Bootstrap::backend()`, which
+     * builds the very same gate from the very same config and throws the very
+     * same exception one line later — so the session died anyway, having first
+     * written a log line that sends the reader to the wrong file. Rethrowing
+     * matches the arm `NonInteractive::run()` and `Bootstrap::backend()`
+     * already carry: the caller reports it as a task failure with the real
+     * reason.
+     */
+    public function testAnUnusablePermissionPolicyIsNotReportedAsAProviderFallback(): void
+    {
+        $home = sys_get_temp_dir() . '/crush_bg_home_' . uniqid('', true);
+        mkdir($home . '/.sugar-crush', 0700, true);
+        file_put_contents($home . '/.sugar-crush/config.json', '{"permissionMode":"plan",}');
+
+        $buffer = $this->bufferPath();
+        $runner = new BackgroundSessionRunner(
+            sessionId: 's1',
+            socketPath: $buffer . '.sock',
+            bufferPath: $buffer,
+            task: 'x',
+            provider: 'custom',
+        );
+
+        $previousHome = getenv('HOME');
+        $previousKey = getenv('CUSTOM_API_KEY');
+        putenv('HOME=' . $home);
+        putenv('CUSTOM_API_KEY=k');
+
+        try {
+            $status = $runner->executeTask();
+        } finally {
+            putenv($previousHome === false ? 'HOME' : 'HOME=' . $previousHome);
+            putenv($previousKey === false ? 'CUSTOM_API_KEY' : 'CUSTOM_API_KEY=' . $previousKey);
+            @unlink($home . '/.sugar-crush/config.json');
+            @rmdir($home . '/.sugar-crush');
+            @rmdir($home);
+        }
+
+        $log = (string) file_get_contents($buffer);
+
+        $this->assertSame(1, $status);
+        $this->assertStringNotContainsString('[session:provider:fallback]', $log);
+        $this->assertStringContainsString('[session:task:failed]', $log);
+        $this->assertStringContainsString('not usable JSON', $log);
+    }
 }
 
 /**

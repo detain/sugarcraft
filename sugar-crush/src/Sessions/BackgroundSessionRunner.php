@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Cli\PermissionConfigException;
 use SugarCraft\Crush\Message;
 
 /**
@@ -220,6 +221,11 @@ final class BackgroundSessionRunner
      * when the agent names a provider that cannot be constructed, so an
      * unknown provider degrades to the offline engine rather than killing
      * the session.
+     *
+     * @throws PermissionConfigException when the launch's permission policy is
+     *         present and unusable — the one failure the fallback cannot help
+     *         with, reported by {@see self::executeTask()} as a task failure
+     *         with the real reason rather than as a provider fallback
      */
     public function backend(): Backend
     {
@@ -232,6 +238,20 @@ final class BackgroundSessionRunner
         if ($this->provider !== '') {
             try {
                 return Bootstrap::backendFor($this->provider, $root);
+            } catch (PermissionConfigException $e) {
+                // Same arm {@see \SugarCraft\Crush\Cli\NonInteractive::run()}
+                // and {@see Bootstrap::backend()} carry: an unusable permission
+                // policy is not this provider's fault and is not survivable by
+                // degrading. Bootstrap::backend() below builds the very same
+                // gate from the very same config, so the old catch-all logged
+                // a misleading "[session:provider:fallback]" line naming the
+                // permission error as a provider problem, and then hit the
+                // identical exception one line later. That second throw was
+                // never uncaught — {@see self::executeTask()} wraps this call
+                // in its own `catch (\Throwable)` and reports
+                // "[session:task:failed]" — so what this fixes is the
+                // misleading line, not a killed session.
+                throw $e;
             } catch (\Throwable $e) {
                 $this->log('[session:provider:fallback] ' . $this->oneLine($e->getMessage()));
             }

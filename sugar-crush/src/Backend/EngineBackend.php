@@ -14,6 +14,7 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
+use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
@@ -22,6 +23,7 @@ use SugarCraft\Crush\Messages\Message as TypedMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
@@ -129,6 +131,20 @@ final class EngineBackend implements Backend
          * App unrooted, which resolves to the process directory downstream.
          */
         private readonly ?string $root = null,
+        /**
+         * The 6-mode safety gate every tool call this backend dispatches is
+         * evaluated against, installed onto the PreToolUse chain by
+         * {@see resolveHookManager()}. Null leaves the built-in hooks as the
+         * only gating layer, which is what every caller got before
+         * crush_code.md Phase 1 item 2. @see withPermissionGate()
+         */
+        private readonly ?PermissionGate $permissionGate = null,
+        /**
+         * Answers a {@see \SugarCraft\Crush\Hooks\HookResult::ask()} raised by
+         * any PreToolUse hook — the gate's Ask decisions included.
+         * @see withPermissionApprover()
+         */
+        private readonly ?\Closure $permissionApprover = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -141,7 +157,7 @@ final class EngineBackend implements Backend
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
     }
 
     /**
@@ -149,7 +165,7 @@ final class EngineBackend implements Backend
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
     }
 
     /**
@@ -164,7 +180,7 @@ final class EngineBackend implements Backend
      */
     public function withSkillRegistry(SkillRegistry $skillRegistry): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
     }
 
     /**
@@ -176,13 +192,98 @@ final class EngineBackend implements Backend
      */
     public function withInstructionLoader(InstructionFileLoader $instructionLoader): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+    }
+
+    /**
+     * Attach the 6-mode {@see PermissionGate} — crush_code.md Phase 1 item 2's
+     * consolidation seam, sibling to {@see withHooks()}.
+     *
+     * Before this, the gate (with its rules, its Auto-mode 3-strike circuit
+     * breaker and its unconditional `rm -rf /` refusal) had exactly ONE
+     * consumer, {@see \SugarCraft\Crush\Agents\AgentManager}'s sub-agents,
+     * while the main loop got only {@see HookManager}'s built-ins. Attaching
+     * it here makes ONE gating layer serve both paths, without deleting the
+     * built-ins: they stay registered as an additional, narrower check layer
+     * (see {@see PermissionGateHook} for the ordering rationale and why both
+     * orders are fail-closed).
+     *
+     * Installed onto the PreToolUse chain rather than consulted directly by
+     * this class, because the hook chain is already the single point BOTH live
+     * tool pipelines gate on — and it is the only one of the two that already
+     * knows how to suspend a call on an ASK.
+     *
+     * Deliberately does NOT clear {@see withoutHooks()}'s opt-out the way
+     * {@see withHooks()} does: `->withoutHooks()->withPermissionGate($g)` is a
+     * coherent request for gate-only guarding, and silently re-registering the
+     * built-ins would be this method answering a question it was not asked.
+     */
+    public function withPermissionGate(PermissionGate $permissionGate): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover);
+    }
+
+    /**
+     * The gate this backend was built with, or null when it has none.
+     *
+     * Exists so a caller REPLACING the backend can carry the launch's one gate
+     * across: {@see \SugarCraft\Crush\Chat}'s Ctrl+P "Switch model" builds a
+     * whole new backend, and without a reader for this it had no way to hand
+     * the new one anything but a freshly-constructed second gate — which
+     * resets the Auto-mode strike counters and, if the config changed
+     * underneath the session, puts the two live tool paths on two different
+     * modes. A bare accessor rather than a `get` prefix, per the project
+     * convention.
+     */
+    public function permissionGate(): ?PermissionGate
+    {
+        return $this->permissionGate;
+    }
+
+    /**
+     * Attach the approver that settles an ASK — from {@see PermissionGateHook}
+     * or from any other PreToolUse hook — into a real allow/deny.
+     *
+     * {@see Runtime::run()} has carried this parameter since the blocking
+     * permission prompt was built, but this class passed a hard-coded `null`
+     * for it, so on the engine path EVERY ask resolved to "Permission required
+     * and no approver is attached to this run" (see {@see Runtime::settleAsk()}).
+     * That is fail-closed and correct, but it also meant an Ask-producing
+     * permission mode was indistinguishable from a deny-everything one.
+     *
+     * The approver must return literal `true` to grant — see
+     * {@see Runtime::settleAsk()} on why a truthy cast is not enough.
+     *
+     * KNOWN LIMIT, deliberately left as a seam rather than papered over, and
+     * there are TWO of them — the first is the one that actually bites today:
+     *
+     * 1. Nothing in `src/` or `bin/` calls this method. The caller that should
+     *    is {@see \SugarCraft\Crush\Chat}, which owns the blocking prompt UI,
+     *    and that wiring is its own change. So on the engine path every ASK
+     *    currently settles as {@see Runtime::settleAsk()}'s no-approver
+     *    refusal, whatever the transport underneath.
+     * 2. Even once one is attached, {@see completeAsync()} runs
+     *    {@see complete()} inside a `pcntl_fork()`ed child whose only channel
+     *    back to the parent is a one-way frame stream, so a closure attached
+     *    from the TUI cannot put its question on screen from in there. That
+     *    needs a request/response protocol on the socket.
+     *
+     * An attached approver already works on every SYNCHRONOUS
+     * {@see complete()} caller (embedders, {@see completeAsyncBlocking()}'s
+     * no-pcntl fallback, tests), which is why the parameter is threaded now
+     * rather than after the socket work.
+     *
+     * @param \Closure(\SugarCraft\Crush\Tools\ToolCall, \SugarCraft\Crush\Hooks\HookResult): bool $approver
+     */
+    public function withPermissionApprover(\Closure $approver): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $approver);
     }
 
     /**
@@ -192,7 +293,7 @@ final class EngineBackend implements Backend
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
     }
 
     /**
@@ -206,12 +307,12 @@ final class EngineBackend implements Backend
      */
     public function withRoot(?string $root): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
     }
 
     /**
@@ -235,7 +336,7 @@ final class EngineBackend implements Backend
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
     }
 
     /**
@@ -315,7 +416,7 @@ final class EngineBackend implements Backend
             $assistant = null;
             $toolResults = [];
 
-            foreach ($runtime->run($app, $onEvent, null, $tokenSink) as $message) {
+            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink) as $message) {
                 if ($message instanceof AssistantMessage) {
                     $assistant = $message;
                 } elseif ($message instanceof ToolResultMessage) {
@@ -1062,16 +1163,29 @@ final class EngineBackend implements Backend
      * {@see \SugarCraft\Crush\Hooks\BuiltIn\AuditHook}) so Bash/Edit/Write
      * tools never run unguarded. Callers opt out explicitly via
      * {@see withoutHooks()}.
+     *
+     * A {@see withPermissionGate()} gate is registered LAST, after the
+     * built-ins — see {@see PermissionGateHook} for why that order (both are
+     * fail-closed; the order picks which message wins). Registration mutates
+     * the manager in place, exactly as {@see withWorktreeRoot()} already does:
+     * {@see HookManager} owns a private registry with no copy constructor, and
+     * {@see \SugarCraft\Crush\Hooks\HookRegistry} keys hooks by name, so
+     * re-running this per turn REPLACES the same entry rather than stacking
+     * gates with independent circuit-breaker state.
      */
     private function resolveHookManager(): HookManager
     {
-        if ($this->hookManager !== null) {
-            return $this->hookManager;
+        $manager = $this->hookManager;
+
+        if ($manager === null) {
+            $manager = new HookManager(new HookRegistry());
+            if (!$this->hooksDisabled) {
+                $manager->registerBuiltIns();
+            }
         }
 
-        $manager = new HookManager(new HookRegistry());
-        if (!$this->hooksDisabled) {
-            $manager->registerBuiltIns();
+        if ($this->permissionGate !== null) {
+            $manager->register(new PermissionGateHook($this->permissionGate));
         }
 
         return $manager;

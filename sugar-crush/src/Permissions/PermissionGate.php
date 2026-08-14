@@ -417,15 +417,23 @@ final class PermissionGate
     }
 
     /**
-     * Write-capable tools: `Edit` mutates files directly, `Bash` can do anything
-     * a shell can, and MCP tools follow the `mcp__<server>__<tool>` naming
-     * convention (@see PermissionRule) — their capability is server-defined and
-     * unknowable here, so they're treated conservatively as writes. `Write` and
-     * `McpTool` were never real tool names.
+     * Write-capable tools: `Edit`/`Write` mutate files directly, `Bash` can do
+     * anything a shell can, and MCP tools follow the `mcp__<server>__<tool>`
+     * naming convention (@see PermissionRule) — their capability is
+     * server-defined and unknowable here, so they're treated conservatively as
+     * writes. `McpTool` was never a real tool name.
+     *
+     * `Write` is named even though nothing dispatched under that name for most
+     * of this lib's life, because the cost of the two mistakes is not
+     * symmetric: a name listed here that no tool ever uses costs one dead
+     * `in_array` entry, while a real write tool missing from the list falls
+     * through to Ask in Plan mode instead of the Deny that mode promises.
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} has always
+     * matched on `^(Bash|Edit|Write|Read)$` for the same reason.
      */
     private function isWriteTool(ToolCall $call): bool
     {
-        if (in_array($call->name, ['Bash', 'Edit'], true)) {
+        if (in_array($call->name, ['Bash', 'Edit', 'Write'], true)) {
             return true;
         }
 

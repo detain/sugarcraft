@@ -582,6 +582,119 @@ final class BinSugarcrushDispatchTest extends TestCase
         $this->assertStringNotContainsString('/.sugar-crush/config.json', $result['stderr']);
     }
 
+    // -------------------------------------------------------------------------
+    // An unusable permission policy: the USER-VISIBLE half of the fail-open
+    // fix. `bin/sugarcrush`'s try/catch, `NonInteractive::run()`'s rethrow and
+    // `Bootstrap::backend()`'s two rethrows had zero tests between them, so
+    // nothing anywhere checked that a stray comma in the config produces an
+    // exit code rather than a PHP fatal painted over the alt-screen.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function unusablePermissionPolicies(): array
+    {
+        return [
+            'trailing comma' => ['{"permissionMode":"plan",}', 'not usable JSON'],
+            'top-level list' => ['[{"permissionMode":"plan"}]', 'not usable JSON'],
+            'mode that names nothing' => ['{"permissionMode":"paln"}', 'permissionMode'],
+        ];
+    }
+
+    /**
+     * The one-shot dispatch path. `-p` never reaches `Program::run()`, so this
+     * exercises `NonInteractive::run()`'s rethrow and the bin's catch.
+     *
+     * @dataProvider unusablePermissionPolicies
+     */
+    public function testAnUnusablePermissionPolicyFailsTheOneShotRunAtExitTwo(string $config, string $fragment): void
+    {
+        $this->writeRawUserConfig($config);
+
+        $result = $this->runBin(['-p', 'hello there'], ['SUGARCRUSH_PROVIDER' => 'custom', 'CUSTOM_API_KEY' => 'k']);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertSame('', $result['stdout'], 'a failed launch must not answer on stdout');
+        $this->assertStringContainsString($fragment, $result['stderr']);
+        $this->assertStringNotContainsString("\033", $result['stderr'], 'ANSI leaked out of a run that never took the screen');
+        $this->assertStringNotContainsString("\033", $result['stdout']);
+    }
+
+    /**
+     * ...and under `--output-format json`, the same failure still puts exactly
+     * one document on stdout — the contract the README makes for every exit-2
+     * cause, which this one was missing from entirely.
+     *
+     * @dataProvider unusablePermissionPolicies
+     */
+    public function testAnUnusablePermissionPolicyStillEmitsOneJsonDocument(string $config, string $fragment): void
+    {
+        $this->writeRawUserConfig($config);
+
+        $result = $this->runBin(
+            ['-p', 'hello there', '--output-format', 'json'],
+            ['SUGARCRUSH_PROVIDER' => 'custom', 'CUSTOM_API_KEY' => 'k'],
+        );
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($result['stdout'], true));
+        $this->assertNull($decoded['result']);
+        $this->assertSame('usage', $decoded['error']['type']);
+        $this->assertStringContainsString($fragment, $decoded['error']['message']);
+    }
+
+    /**
+     * The OTHER dispatch path: no `-p`, so the bin goes for the TUI. It must
+     * die at exit 2 BEFORE `Program::run()` takes the terminal, which is the
+     * whole reason the try/catch wraps both branches — and is safe to exec
+     * precisely because it never gets that far.
+     */
+    public function testAnUnusablePermissionPolicyStopsTheTuiLaunchBeforeItTakesTheScreen(): void
+    {
+        $this->writeRawUserConfig('{"permissionMode":"plan",}');
+
+        $result = $this->runBin([], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertSame('', $result['stdout'], 'the alt-screen was entered before the policy was read');
+        $this->assertStringContainsString('not usable JSON', $result['stderr']);
+    }
+
+    /**
+     * The absence half, end to end: a run with no config at all still starts.
+     * Without this, the two tests above are equally satisfied by a binary that
+     * refuses to launch on everything.
+     */
+    public function testAnAbsentConfigStillLaunchesTheOneShotRun(): void
+    {
+        $result = $this->runBin(['-p', 'hello there'], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('hello there', $result['stdout']);
+    }
+
+    /**
+     * Write a byte-exact ~/.sugar-crush/config.json into the throwaway HOME the
+     * child will get. Raw, because these fixtures are precisely the JSON that
+     * `Bootstrap::writeUserConfig()` can never produce.
+     */
+    private function writeRawUserConfig(string $contents): void
+    {
+        if ($this->tempHome === '') {
+            $this->tempHome = \sys_get_temp_dir() . '/bin_dispatch_home_' . \uniqid('', true);
+            \mkdir($this->tempHome, 0700, true);
+        }
+
+        if (!\is_dir($this->tempHome . '/.sugar-crush')) {
+            \mkdir($this->tempHome . '/.sugar-crush', 0700, true);
+        }
+
+        \file_put_contents($this->tempHome . '/.sugar-crush/config.json', $contents);
+    }
+
     /**
      * Seed the throwaway HOME `minimalEnv()` hands the child with a persisted
      * Ctrl+P provider choice. Creates the directory eagerly so the later

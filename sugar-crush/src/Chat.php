@@ -1713,6 +1713,13 @@ final class Chat implements Model
         $hookResult = $this->hooks->preToolUse($context);
 
         if ($hookResult->isAsk()) {
+            // An ASK can carry a rewrite an earlier hook in the same chain
+            // made (see HookRegistry::executeHooks()): the question was put
+            // about the REWRITTEN call, so the job queued here has to be the
+            // rewritten one or an approval would dispatch the originals the
+            // user was never shown.
+            [$toolCall, $context] = self::applyRewrite($toolCall, $context, $hookResult);
+
             return ($this->permissionGrants[$toolCall->name] ?? false)
                 ? [$toolCall, null, $context, null]
                 : [$toolCall, null, $context, $hookResult];
@@ -1727,14 +1734,57 @@ final class Chat implements Model
             ];
         }
 
-        if ($hookResult->isModified()) {
-            $decoded = json_decode($hookResult->modifiedInput ?? '', true);
-            if (is_array($decoded)) {
-                $toolCall = new ToolCall($toolCall->name, $decoded, $toolCall->id);
-            }
-        }
+        [$toolCall, $context] = self::applyRewrite($toolCall, $context, $hookResult);
 
         return [$toolCall, null, $context, null];
+    }
+
+    /**
+     * The tool call a hook chain's rewrite (if any) says should actually run,
+     * paired with the context that describes THAT call.
+     *
+     * Both halves move together deliberately. The context returned here is the
+     * one {@see applyPostToolUse()} hands `PostToolUse`, and the incoming one
+     * still describes the model's PROPOSAL — so leaving it behind made
+     * `AuditHook` record a command that was never executed, on precisely the
+     * calls (the rewritten ones) whose record anybody would care about.
+     *
+     * Returns $toolCall untouched when the result carries no rewrite, or when
+     * the rewrite will not decode to an argument map ({@see
+     * \SugarCraft\Crush\Hooks\HookResult::rewrittenArgs()}, which is also
+     * where the JSON-list case is refused) — the same conservative fallback
+     * the engine path takes, and the reason
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook::modifyOrDeny()} refuses to
+     * emit a non-object rewrite in the first place.
+     *
+     * ONLY A MODIFY OR AN ASK CARRIES A REWRITE HERE, matching
+     * {@see Runtime::rewrittenArguments()} (which gates on `isModified()`) and
+     * {@see Runtime::asAsked()} (the ASK half) — the "decision for decision"
+     * claim on {@see gateToolCall()} is only true if this side draws the same
+     * line. A plain ALLOW carrying a `modifiedInput` is constructible (the
+     * {@see \SugarCraft\Crush\Hooks\HookResult} constructor is public) and
+     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} never
+     * re-scans one, since only a MODIFY makes the loop take another pass — so
+     * honouring it would dispatch arguments no hook in the chain ever judged,
+     * which is the fail-open the re-scan exists to close.
+     *
+     * @return array{0: ToolCall, 1: HookContext}
+     */
+    private static function applyRewrite(
+        ToolCall $toolCall,
+        HookContext $context,
+        \SugarCraft\Crush\Hooks\HookResult $result,
+    ): array {
+        $decoded = $result->isModified() || $result->isAsk()
+            ? $result->rewrittenArgs()
+            : null;
+
+        return $decoded !== null
+            ? [
+                new ToolCall($toolCall->name, $decoded, $toolCall->id),
+                $context->withRewrittenArgs($decoded, (string) $result->modifiedInput),
+            ]
+            : [$toolCall, $context];
     }
 
     /**
@@ -5171,12 +5221,46 @@ final class Chat implements Model
     }
 
     /**
+     * The launch's one {@see \SugarCraft\Crush\Permissions\PermissionGate}, as
+     * seen from whichever of Chat's two collaborators is holding it, or null
+     * when this Chat was built without one (every embedder and most tests).
+     *
+     * The hook chain is consulted as well as the backend, and not only as a
+     * fallback for a non-engine backend: the chain is the collaborator that
+     * SURVIVES a provider switch, so it is the more trustworthy of the two
+     * about what this session has been gating on.
+     */
+    private function permissionGate(): ?\SugarCraft\Crush\Permissions\PermissionGate
+    {
+        $hook = $this->hooks?->hook(
+            \SugarCraft\Crush\Hooks\HookEvent::PreToolUse->value,
+            \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook::NAME,
+        );
+
+        if ($hook instanceof \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook) {
+            return $hook->gate();
+        }
+
+        return $this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend
+            ? $this->backend->permissionGate()
+            : null;
+    }
+
+    /**
      * @return array{0: self, 1: ?\Closure}
      */
     private function selectPaletteProvider(string $name): array
     {
         try {
-            $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor($name);
+            // The launch's ONE gate is carried across the switch rather than
+            // left to be rebuilt: PermissionGate's Auto-mode circuit breaker
+            // is per-INSTANCE state, so a fresh gate hands a model sitting at
+            // two strikes a clean slate and escalation-to-Ask never fires. It
+            // also re-reads the config, which means a file edited mid-session
+            // would put the engine and Chat's own tool path on two different
+            // modes — the exact "one gate for the whole launch" invariant
+            // Bootstrap::chat() builds for.
+            $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor($name, gate: $this->permissionGate());
         } catch (\Throwable $e) {
             return [$this->mutate([
                 'palette' => null,

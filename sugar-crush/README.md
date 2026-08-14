@@ -50,7 +50,9 @@ export SUGARCRUSH_MODEL=gpt-4o          # optional; provider default otherwise
 ./bin/sugarcrush
 ```
 
-`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Glob/Grep/WebFetch/Doctor/Skill) and the safety hooks automatically.
+`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Glob/Grep/WebFetch/WebSearch/Doctor/Skill) and the safety hooks automatically.
+
+Every environment variable SugarCrush reads is documented in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
 ### Non-interactive (one-shot) mode
 
@@ -64,6 +66,8 @@ sugarcrush -p "audit this" --output-format json # machine-readable envelope
 sugarcrush --output-format json run "audit this" # `run` works after flags too
 sugarcrush --root /path/to/project              # set the project root explicitly
 sugarcrush --help                               # prints and exits (never opens the TUI)
+sugarcrush --version                            # prints the installed version and exits
+sugarcrush -- --not-a-flag                      # `--` ends options; everything after is positional
 ```
 
 `--root` also accepts the first positional argument that looks like a path, so
@@ -86,7 +90,7 @@ one.
 | --- | --- |
 | `0` | the prompt ran and produced an answer |
 | `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), or the answer could not be encoded in the requested format — retrying may help |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, `--root` naming no directory, a missing `vendor/autoload.php`, or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help |
 
 `2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that
@@ -182,8 +186,9 @@ discriminated so a text-selection drag does not fire the zone underneath it.
 ### Slash commands
 
 `/agents` `/agent` `/bg` `/background` `/fork` `/branch` `/compact` `/mcp`
-`/memory` `/rename` `/rewind` `/sessions` `/share` `/theme` `/workflow`
-`/exit` (`/quit`) — plus any **file-based custom command** found on disk.
+`/memory` `/rename` `/rewind` `/sessions` `/share` `/theme` `/websearch`
+`/workflow` `/exit` (`/quit`) — plus any **file-based custom command** found on
+disk.
 Typing `/` opens a live popup of the matches.
 
 **New session**, **Switch model** and **Open docs** are palette-only actions
@@ -225,13 +230,15 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 | Provider        | Type key      | Notes                                                            |
 |-----------------|---------------|------------------------------------------------------------------|
 | OpenAI          | `openai`      | `openai-php/client`; function calling, embeddings, cost table    |
-| Anthropic       | `anthropic`   | real Messages API (`/v1/messages`, `x-api-key`)                  |
+| Anthropic       | `anthropic`   | `x-api-key` + `anthropic-version` auth, but an OpenAI-shaped `chat/completions` body — see below |
 | Claude Code CLI | `claude-code` | drives the `claude` binary headless; native cost; JSON schema    |
 | SGLang          | `sglang`      | OpenAI-compatible self-hosted endpoints (Guzzle)                 |
 | AWS Bedrock     | `bedrock`     | Converse API via `aws/aws-sdk-php`; per-model pricing            |
 | GCP Vertex      | `vertex`      | Anthropic-on-Vertex via an injectable predictor seam             |
 | Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
 | Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
+
+The `anthropic` type key is **not** a native Messages API client. `ProviderFactory::createAnthropic()` builds a `CustomProvider` with Anthropic's `x-api-key`/`anthropic-version` headers, but that class POSTs an OpenAI-shaped body to `chat/completions`, and it is constructed with `supportsFunctionCalling: false` — so this type key cannot do tool calling. For a real Anthropic-native path today, use `claude-code` (which drives the `claude` binary) or point `SUGARCRUSH_BACKEND_CMD` at a shell script. Fixing this is tracked as a known gap.
 
 The `sglang` type accepts an optional `toolCallParser` key: `'openai'` (the
 default — read the server's parsed `tool_calls[]` array) or
@@ -263,9 +270,11 @@ $backend = (EngineBackend::new($provider, 'gpt-4o'))
 
 ## Capabilities
 
-- **Tools** — `Tools\BuiltIn\*`: `Bash`, `Read`, `Edit`, `Glob`, `Grep`, `WebFetch`, `Doctor` (a capability probe the model can call to report what this build/deployment actually supports), and `Skill` (level 2 of the progressive-disclosure design below). Implement `Tools\Tool` for your own.
-- **Hooks** — `Hooks\*`: pre/post-tool-use guards (allow / deny / **modify** the input). Built-ins: `AuditHook`, `ConfirmRemoveHook`, `ProtectFilesHook`. YAML config and external `ScriptHook` supported.
-- **Permission modes** — `Permissions\*`: `PermissionGate` enforces one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`) per tool call, with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured.
+- **Tools** — `Tools\BuiltIn\*`: `Bash`, `Read`, `Edit`, `Glob`, `Grep`, `WebFetch`, `WebSearch` (against `$SUGARCRUSH_SEARCH_ENDPOINT`), `Doctor` (a capability probe the model can call to report what this build/deployment actually supports), and `Skill` (level 2 of the progressive-disclosure design below). Implement `Tools\Tool` for your own.
+- **Hooks** — `Hooks\*`: pre/post-tool-use guards (allow / deny / **modify** the input / **ask** the user). `HookManager::registerBuiltIns()` registers `AuditHook`, `ConfirmRemoveHook` and `ProtectFilesHook`; `BashEscapeDenyHook` is registered separately by `EngineBackend::withWorktreeRoot()`, since it needs the worktree root to decide what counts as an escape. YAML config and external `ScriptHook` supported: a hook script's exit code selects the outcome — `0` allow, `1` deny, `2` hard block, `3` ask (stdout becomes the question), `4` modify (stdout must be a JSON object replacing the tool input, or the call is denied rather than run unmodified).
+- **Permission modes** — `Permissions\*`: `PermissionGate` evaluates a tool call against one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`), with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured. It reaches the main loop as `PermissionGateHook`, registered *after* the built-ins so a narrow, specific hazard ("Bash path outside the workspace root") reports before the broad policy one ("mode `plan` does not allow Edit"). Set the mode with `$SUGARCRUSH_PERMISSION_MODE` or a `permissionMode` key in `~/.sugar-crush/config.json`; add `permissionRules` entries like `{"pattern": "Bash*", "action": "deny"}` for per-pattern overrides. **The default is `bypass-permissions`, and that is a stopgap, not the intended end state** — the main loop had no gate at all before this, and every mode that answers Ask fails closed on the engine path (nothing attaches an approver yet), so a stricter default would have refused edits on upgrade rather than prompting for them. Be clear about what the default costs: with no `permissionRules` configured, `bypass-permissions` is *identical* to having no gate — every destructive `rm` its circuit breaker refuses is already refused, earlier and more broadly, by `ConfirmRemoveHook`. What the default buys is a gate that is reachable and configurable; it starts deciding things the moment you set a mode or a rule. The permissive default goes away once an ASK can reach the TUI from the engine path.
+
+A permission setting that is **present but unusable stops the launch** (exit 2 — see the exit-code table above) instead of falling back to the permissive default: a `~/.sugar-crush/config.json` that is unreadable, unparseable, or whose top level is a JSON *list* rather than an object; a config directory this process cannot search (so whether a policy is configured there is unknowable); or a `permissionMode` — in either source — that names no real mode. Absence is not an error: a fresh install with no config, and a zero-byte config, both get the default. Individual malformed `permissionRules` entries are skipped (never coerced to `allow`) and reported on stderr, because the list is item-wise in a way a JSON syntax error is not.
 - **Skills** — `Skills\*`: frontmatter `SKILL.md` files inject prompt context, matched by keyword/path. Discovered from built-ins (`src/Skills/BuiltIn/`), `~/.sugar-crush/skills`, and `<project>/.sugar-crush/skills` (project wins). Ships 12 built-ins spanning language/framework conventions (`php-best-practices`, `laravel-best-practices`, `symfony-best-practices`), workflow (`testing-strategies`, `api-design`, `explore-codebase`, `worktree-workflow`, `mcp-authoring`, `matchups-sync`) and the original four (`security-audit`, `phpunit-master`, `composer-wizard`). `disable-model-invocation`, `user-invocable`, and `context: fork` frontmatter flags are enforced, not decorative — a fork-context skill runs through `AgentWorkerPool` as an isolated sub-agent. Loading is **progressive**: the system prompt carries only each skill's name + description, and the model pulls the full `SKILL.md` body through the `Skill` tool when it decides one is relevant. Path-scoped skills self-announce — the first time `Read`/`Edit`/`Glob` touches a file a skill's `paths:` covers, that skill is surfaced (once per session, via one shared announce-set across the three tools). Skills authored for other CLIs (Claude Code, opencode) are imported rather than ignored, and the picker shows a provenance badge for where each one came from.
 - **Agents** — `Agents\*`: 6 sub-agent presets (coder/reviewer/debugger/architect/tester/devops) with their own model, tools, skills, and a streaming lifecycle, dispatched through `AgentWorkerPool` (`pcntl_fork`-based, with a synchronous fallback + warning when `pcntl` is unavailable).
 - **Teams & worktrees** — `Agents\{Team,TeamManager,Teammate,TaskList,Mailbox}`: a lead agent spawns a capped team of teammates that atomically claim `TaskList` tasks (SQLite `flock`-backed, contention-tested) and exchange append-only JSON-lines mailbox messages. `Agents\{WorktreeConfig,WorktreeManager,PathJail}` give each teammate an isolated git worktree (`.worktreeinclude`-aware, swept for staleness) sandboxed by a path jail.
@@ -275,7 +284,7 @@ $backend = (EngineBackend::new($provider, 'gpt-4o'))
 - **Tokens & export** — `Util\TokenTracker` (token + cost accumulation) and `Util\Exporter` (Markdown / JSON / text transcripts).
 - **Messages** — typed `Messages\{System,User,Assistant,ToolResult}Message`; `UserMessage` carries file/image attachments; `AssistantMessage` carries tool calls + reasoning.
 - **Context files** — `CLAUDE.md`/`AGENTS.md` at the project root are loaded into the system prompt, with `@import` expansion (cycle- and traversal-guarded, and de-duplicated so an imported doc is not injected twice). `Forced` instructions come from user config. An `EnvironmentBlock` (cwd, platform, git state, date) is prepended so the model is not guessing at its surroundings.
-- **Permission prompts** — a blocking request/reply flow (`HookResult::ask()` → `PermissionRequestMsg`/`PermissionReplyMsg`) rendered as a Veil modal over the transcript; the answer settles the paused tool call rather than being advisory.
+- **Permission prompts** — the blocking request/reply flow is wired end to end: `Chat` runs the whole batch of a turn's tool calls through the `PreToolUse` chain *before* forking any of them, and a `HookResult::ask()` suspends the turn on a `PermissionRequestMsg` rendered as a Veil modal over the transcript. `y`/`n`/`a` settles the paused call rather than being advisory, and `a` records a session-scoped grant so that tool stops asking. Because the shipped default mode is `bypass-permissions`, you will not see a prompt until you select a mode that asks (`default`, `accept-edits`, `auto`) or register a hook that returns `ask()`. Note that on the **engine** path an ASK currently fails closed, so an asking mode refuses those calls rather than prompting — see the known gap below for why.
 
 ## Architecture
 
@@ -302,10 +311,12 @@ The chassis speaks the root `Message` value object; the engine speaks the typed 
 Things that are genuinely not finished, stated plainly rather than left for you to discover:
 
 - **`SglangProvider`'s `toolCallParser` applies to the batch `complete()` path only.** The streaming path reassembles tool calls itself and does not consult the setting.
+- **An ASK decision fails closed on the engine path.** The blocking modal works for `Chat`'s own tool calls. On the engine path it does not, for a simpler reason than the plumbing suggests: **nothing anywhere attaches an approver** — `EngineBackend::withPermissionApprover()` has no caller outside its own test — so every ASK settles as "permission required and no approver is attached to this run". Attaching one is necessary but not sufficient: `completeAsync()` runs the turn in a `pcntl_fork()`ed child whose only channel back to the parent is a one-way frame stream, so an approver would also need that socket to become request/response before it could put a question on screen. Until both land, a mode that answers Ask refuses those calls instead of prompting — which is why the shipped default mode is `bypass-permissions` rather than `default`.
+- **The `anthropic` provider type key is OpenAI-shaped.** It authenticates as Anthropic but posts to `chat/completions` with `supportsFunctionCalling: false`, so it cannot call tools. Use `claude-code` or `SUGARCRUSH_BACKEND_CMD` for a native Anthropic path.
 - **Five shell commands are still inert**: `GroupInputCmd`, `CancelAgentCmd`, `ResumeAgentCmd`, `StopAllAgentsCmd`, `QuitAgentViewCmd`. The first has no counterpart in the live app; the agent four would need to reach into a worker pool the shell does not hold. Their pane/selection half *is* applied — only the action half is missing.
 - **Workflow resume granularity is per whole stage.** An interrupted *parallel* sub-stage cannot be resumed with partial credit.
 - **`pcntl` is required for real parallelism.** Without it `AgentWorkerPool` falls back to sequential execution and logs a one-time visible warning rather than pretending to fan out.
-- **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by `/doctor` and by using it, not by CI.
+- **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by the `Doctor` tool (model-invocable; there is no `/doctor` slash command) and by using it, not by CI.
 - **The `Doctor` tool reports capabilities, it does not repair them.**
 
 ## Custom provider
@@ -334,7 +345,7 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-4,337 tests / 12,587 assertions (0 failures, 0 errors). Coverage spans every subsystem: typed messages + attachments, the 6 built-in tools, all 7 providers (unit-tested with mocked transports — no live calls), the hook framework, permission-mode gating (incl. `pcntl_fork` concurrency stress tests for atomic task claiming), skills discovery + flag enforcement, sub-agents/teams/worktrees, workflow execution (sequential/parallel/pipeline/verification, PHP + YAML loading), the MCP client/servers (incl. per-agent routing enforcement), the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), the shell-out `CommandBackend` / `StreamingCommandBackend`, and the `EngineBackend` agentic loop (incl. the `maxSteps` guard).
+4,337 tests / 12,587 assertions (0 failures, 0 errors). Coverage spans every subsystem: typed messages + attachments, the 9 built-in tools, all 7 providers (unit-tested with mocked transports — no live calls), the hook framework, permission-mode gating (incl. `pcntl_fork` concurrency stress tests for atomic task claiming), skills discovery + flag enforcement, sub-agents/teams/worktrees, workflow execution (sequential/parallel/pipeline/verification, PHP + YAML loading), the MCP client/servers (incl. per-agent routing enforcement), the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), the shell-out `CommandBackend` / `StreamingCommandBackend`, and the `EngineBackend` agentic loop (incl. the `maxSteps` guard).
 
 A dedicated `tests/Integration/` tier asserts **reachability** rather than behaviour: that the session store, session tabs, background sessions, the skills subsystem, mouse mode, the environment block and root context-file loading are actually reached from `bin/sugarcrush` → `Bootstrap::app()`, not merely implemented somewhere in `src/`. That tier exists because the audit recorded in the monorepo root's `crush_code_update.md` found well-tested subsystems that no real run could ever touch.
 

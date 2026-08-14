@@ -598,4 +598,21 @@ final class PermissionGateTest extends TestCase
 
         $this->assertSame(PermissionDecision::Ask, $decision);
     }
+
+    /**
+     * A file-writing tool that is not literally named `Edit` must still be
+     * refused by Plan mode, not fall through to the generic Ask — the mode
+     * promises "no edits land until the plan is approved".
+     */
+    public function testPlanModeDeniesTheWriteTool(): void
+    {
+        $gate = new PermissionGate(PermissionMode::Plan);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Write',
+            arguments: ['file_path' => 'a.txt', 'content' => 'x'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
 }

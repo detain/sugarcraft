@@ -14,7 +14,20 @@ final class HookManager
     ) {}
 
     /**
-     * Load hooks from config file.
+     * Load hooks from a YAML/JSON hook file.
+     *
+     * INTENTIONALLY DORMANT: nothing in `src/` or `bin/` calls this, so on a
+     * stock `bin/sugarcrush` run the only hooks that exist are the built-ins
+     * {@see registerBuiltIns()} registers plus whatever
+     * {@see \SugarCraft\Crush\Cli\Bootstrap} hands over. This is the seam an
+     * EMBEDDER uses to install its own hooks, and it is also the seam that
+     * makes {@see ScriptHook}'s `exit 3`/`exit 4` (ASK and MODIFY) reachable
+     * from configuration rather than only from hand-written PHP — the
+     * reachability {@see HookRegistry::executeHooks()} and
+     * {@see HookRegistry::isReserved()} are written against. Wiring a
+     * discovery path for it (`~/.sugar-crush/hooks.yaml` and friends) is a
+     * separate step; until then, treat every "reachable from a plain hook
+     * file" claim in this package as "reachable to an embedder".
      */
     public function loadFromFile(string $path): void
     {
@@ -42,6 +55,19 @@ final class HookManager
     public function register(HookInterface $hook): void
     {
         $this->registry->register($hook);
+    }
+
+    /**
+     * The hook registered for $event under $name, or null.
+     *
+     * A reader rather than an exposed registry, so a caller can find the one
+     * hook it needs — {@see \SugarCraft\Crush\Chat} recovering the launch's
+     * {@see BuiltIn\PermissionGateHook} to carry its gate across a provider
+     * switch — without gaining the ability to re-key the chain from outside.
+     */
+    public function hook(string $event, string $name): ?HookInterface
+    {
+        return $this->registry->get($event, $name);
     }
 
     /**
@@ -85,7 +111,18 @@ final class HookManager
 
         $message = $feedback !== '' ? $feedback : $ask->message;
 
-        return $approved ? HookResult::allow($message) : HookResult::deny($message);
+        if (!$approved) {
+            return HookResult::deny($message);
+        }
+
+        // An ASK raised over a call an earlier hook already REWROTE settles as
+        // that rewrite, not as a bare allow: the question was put about the
+        // rewritten arguments ({@see HookRegistry::executeHooks()} re-scans
+        // against them), so dropping the rewrite here would run the originals
+        // the user was never asked about.
+        return $ask->modifiedInput === null
+            ? HookResult::allow($message)
+            : HookResult::modify($ask->modifiedInput, $message);
     }
 
     /**

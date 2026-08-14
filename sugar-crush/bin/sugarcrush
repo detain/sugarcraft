@@ -30,6 +30,7 @@ use SugarCraft\Crush\Cli\ArgvParser;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
 use SugarCraft\Crush\Cli\NonInteractive;
+use SugarCraft\Crush\Cli\PermissionConfigException;
 
 // Parse argv first and dispatch before ever touching Program/Bootstrap::chat()
 // — `--help` and `-p`/`run "<prompt>"` must never attach to the TTY or enter
@@ -76,8 +77,10 @@ if ($args->usageError !== null) {
 // meaning NonInteractive gives it; 1 stays reserved for "ran and failed".
 //
 // Reported through NonInteractive::failUsage() rather than fwrite+exit here:
-// this branch is one of the three exit-2 causes the README's JSON contract
-// covers, and it used to leave stdout completely empty under
+// this branch is one of the exit-2 causes the README's JSON contract covers
+// (unrecognized flag, `-p` handed a flag, `--root` naming no directory, an
+// unusable permission policy, an unusable explicitly-selected provider, and a
+// missing vendor/autoload.php), and it used to leave stdout completely empty under
 // `--output-format json`, which is the empty pipe that contract promises never
 // happens.
 if ($args->unknownFlags !== []) {
@@ -98,6 +101,18 @@ $rootError = ArgvParser::rootError($args);
 if ($rootError !== null) {
     exit(NonInteractive::failUsage($rootError, $args->outputFormat));
 }
+
+// A permission policy that is configured but unusable stops the launch rather
+// than falling back to the permissive default — see
+// Bootstrap::permissionGate(). Caught here, around BOTH dispatch paths, so a
+// stray comma in ~/.sugar-crush/config.json reports like every other "nothing
+// ran and a retry cannot help" condition (exit 2, and the JSON error document
+// under --output-format json) instead of as a PHP fatal over the terminal.
+//
+// The body below is deliberately left at column 0 rather than indented into
+// this block: the diff should show the two lines that were added, not every
+// line of the dispatch it now wraps.
+try {
 
 // Dispatch on "the user asked for one-shot mode", NOT on "a prompt value was
 // parsed": a bare `sugarcrush -p` / `--prompt` / `run` has a null prompt, and
@@ -124,3 +139,11 @@ if ($args->promptRequested) {
 // uses it — see crush_feat.md section 8 E1. They belong to the hosted
 // content model, which is what reads the mouse events.
 (new Program(Bootstrap::app($args->root), Chat::programOptions()))->run();
+
+} catch (PermissionConfigException $e) {
+    exit(NonInteractive::failUsage(
+        'sugarcrush: ' . $e->getMessage(),
+        $args->outputFormat,
+        'Fix or remove the offending value, then run sugarcrush again.',
+    ));
+}

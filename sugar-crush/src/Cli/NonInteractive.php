@@ -154,6 +154,12 @@ final class NonInteractive
             } else {
                 try {
                     $backend = Bootstrap::backendFor($providerName, $args->root);
+                } catch (PermissionConfigException $e) {
+                    // An unusable permission policy is not this provider's
+                    // fault and must not be reported as if it were — it
+                    // propagates to `bin/sugarcrush`, which reports it with
+                    // its own message. See Bootstrap::permissionGate().
+                    throw $e;
                 } catch (\Throwable $e) {
                     return self::failUnusableProvider($providerName, $e, $outputFormat);
                 }
