@@ -494,3 +494,90 @@ that reads as a real defect.
 
 Housekeeping: 480 stale `/tmp/bootstrap_permission_gate_*` fixture dirs (Aug 13,
 pre-F11-teardown) removed; current teardown verified clean.
+
+---
+
+## Session handoff (2026-08-14, before a client restart)
+
+### Committed this session
+
+| SHA | Item |
+|---|---|
+| `e1881baf` | **#57 VertexProvider** — 4 defects + a 60s total-request cap |
+| `9d92bb5a` | **#46 P8.14/15 PathJail** — turned out to be a security fix |
+| `64191566` | worklog: P1.2 round-2 findings |
+
+Both code commits were verified **personally**, not on report: the Vertex
+call-site tripwire (strip `callOptions()` → 6 failures, restore → 578 green) and
+the PathJail NUL guard (neuter `unusable()` → 7 errors, restore → 1160 green).
+
+### UNCOMMITTED and needing review round 4: P1.2
+
+Fix round 3 closed everything round 3 raised, and the suite is green
+(P1.2 scope **944 tests / 2214 assertions**; agent reported whole-suite
+**5677 / 17534 / 1 skip**). It is held back deliberately, because two fixes grew
+**new surface in the permission path**:
+
+- **`HookDispatcher` was WIRED** to `HookRegistry::executeHooks()`'s re-scan
+  contract rather than documented around — a *second* re-scan loop with its own
+  fixed-point settle and `MAX_REWRITE_PASSES` block. The right call (a docblock
+  does not survive the day someone routes `PreToolUse` through it) but it is
+  machinery, not a comment.
+- **`Runtime::gate()` now returns a third element** and `Chat::applyRewrite()`
+  returns a tuple, threaded through `executeSequentially` **and**
+  `executeConcurrently`, so `PostToolUse` observes what actually ran.
+
+Every round so far has found something, and the carrying-ASK bug came from
+exactly this shape — a fix that quietly grew surface. Round 4 should focus
+there, plus re-confirm the 8 round-3 sabotages (the agent re-ran all 8 red).
+
+**Fixed in round 3, for the reviewer's context:** the approver was being shown a
+different call than would run (`settleAsk()` now applies the carried rewrite via
+`asAsked()`, deliberately separate from `rewrittenArguments()` because that one
+gates on `isModified()` and an ASK's rewrite rides on an `ASK` action); a
+symlinked config dir re-opening the F1a fail-open (`unreachableAncestor()` with
+an `is_link()` probe — which also catches `HOME` *itself* being a symlink, a case
+the narrower suggested fix missed); and a trailing-slash `HOME` silently
+disabling **all** config persistence (a regression from the atomic-write fix).
+
+**Commit groups (agent's, land 1 before 3 — both touch `Runtime.php`):**
+1. approver-shown fix — `Runtime.php` + `RuntimeTest.php`
+2. symlink fail-open + non-canonical HOME + BOM message — `Cli/Bootstrap.php` + its test
+3. PostToolUse sees what ran — `Runtime.php` + `Chat.php` + both tests
+4. HookDispatcher re-scan — `Hooks/HookDispatcher.php` + new test
+5. two comment corrections — `Sessions/BackgroundSessionRunner.php` + `bin/sugarcrush`
+
+`README.md` carries hunks from **three** lanes — use `git add -p`, never a
+whole-file add.
+
+### UNCOMMITTED: UI #37 (P8.1 diff gutter + P8.5 adaptive theme)
+
+Reviewed; in a fix round for a **real render-invariant break** (the PR #1403
+class): `Width::string("\t") === 0` but candy-sprinkles' `Style::render()`
+paints a tab as 4 spaces, so a Go/Makefile diff at `cols: 40` emits 48-cell
+rows. Pre-existing, but the gutter amplifies it by its own width. Also fixing a
+latent float→`TypeError` inside `view()` (would kill the Program with the
+terminal in raw mode) and `-- ` SQL/Lua comment content misread as a file header.
+
+P8.6 (VHS) deliberately deferred. `TerminalBackground::observe()` is a dormant
+seam with verified-correct wiring instructions for `App/App.php`.
+
+### Queued follow-ups found by the review chain
+
+#58 Bedrock streaming discards its connect bound · #59 stale
+`ProviderConnectTimeoutTest` exemption · #60 `ScriptHook` has no execution
+timeout (a hook that never exits wedges the CLI; **pre-existing**, deliberately
+excluded from the security fix) · #61 P1.2's unsearchable-dir tests assert a
+throw **root does not produce** — fine locally (uid 1000) but CI containers
+often run as root.
+
+Also flagged by round 3, not queued yet: `HookManager::applyPreHooks()` is the
+same stale-`toolArgs` family as `HookDispatcher` was, and `ToolStarted`/
+`ToolFinished` still carry the pre-rewrite `ToolCall` on both pipelines.
+
+### Method note that keeps paying
+
+Have the fix agent report *which sabotages stay green*, and re-run them myself
+before committing. Three separate green sabotages this session marked real
+coverage holes — Vertex's `callOptions()` call sites, Vertex's regional
+`apiEndpoint` (half the original bug, untested), and PathJail's NUL guard.
