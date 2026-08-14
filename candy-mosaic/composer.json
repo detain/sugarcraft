@@ -37,7 +37,8 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
-        "react/http": "^1.11"
+        "react/http": "^1.11",
+        "sugarcraft/candy-testing": "dev-master"
     },
     "suggest": {
         "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
@@ -86,6 +87,20 @@
         {
             "type": "path",
             "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-testing",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-buffer",
             "options": {
                 "symlink": true
             }

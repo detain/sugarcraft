@@ -19,9 +19,12 @@ use SugarCraft\Pty\PumpOptions;
  *
  * Loop runs are hard-bounded by safety timers so CI cannot hang.
  *
- * Each test builds its own StreamSelectLoop instead of the global
- * Loop::get() — see ReactPumpTest's class doc for the ExtUvLoop
- * stale-clock rationale.
+ * Each test builds its own StreamSelectLoop and nothing here touches the
+ * global Loop::get(). The point is loop isolation (see ReactPumpTest's
+ * class doc); the safety caps' stale-clock immunity comes with it, since
+ * StreamSelectLoop refreshes its clock at ARM time. The suite bootstrap's
+ * pin covers the tests that do use the shared loop — it is not what
+ * protects these. See {@see \SugarCraft\Testing\LoopPin}.
  */
 final class MultiPumpRunAsyncTest extends TestCase
 {

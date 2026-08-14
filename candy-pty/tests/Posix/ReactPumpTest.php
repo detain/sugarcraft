@@ -22,12 +22,33 @@ use SugarCraft\Pty\PumpOptions;
  * assertions double as leak detectors — a leaked read stream or timer
  * would pin the loop until the safety cap.
  *
- * Each test builds its own StreamSelectLoop instead of the global
- * Loop::get(): the global loop may be ExtUvLoop, whose internal clock
- * only advances while the loop runs — a relative timer armed after
- * ~20 s of non-loop tests is instantly overdue on the next run() and
- * the safety cap fires immediately. A fresh per-test loop also keeps
- * registrations from leaking across test boundaries.
+ * Each test builds its own StreamSelectLoop and nothing in this file
+ * touches the global Loop::get(). The reason is isolation: a leaked read
+ * stream or timer from one test must not pin the next test's loop and
+ * mask the very leak those elapsed-time assertions exist to detect.
+ *
+ * Clock freshness comes along with it, and is what makes the safety caps
+ * trustworthy. ExtUvLoop — what Loop::get() autodetects wherever ext-uv
+ * is installed — builds a timer's deadline from a clock refreshed once
+ * per loop ITERATION, so a 5 s cap armed after seconds of synchronous
+ * test code is computed against a clock that far behind. (The clock does
+ * not "only advance while the loop runs"; the exposure is idle between
+ * refreshes, which blocking inside a callback produces just as well.)
+ * Whether the overdue cap then fires at once depends on what else the
+ * loop is holding: with any other handle due sooner — and a pump test
+ * always has the master read stream — the first poll returns early, the
+ * clock catches up and the cap fires immediately; a cap alone on a
+ * never-run loop survives on an arithmetic cancellation instead. Both
+ * cases are the last two rows of Program::run()'s table.
+ * StreamSelectLoop refreshes at ARM time instead, so a per-test loop is
+ * immune by construction, in both shapes.
+ *
+ * The suite bootstrap pins the same guarantee onto the SHARED loop, but
+ * that is for the tests which actually use it (PtyPoolReactLoopTest,
+ * SignalForwarderReactLoopTest); these files get theirs from the
+ * per-test loop, not from the pin. See {@see \SugarCraft\Testing\LoopPin}
+ * for the mechanism and {@see \SugarCraft\Core\Program::run()} for the
+ * measurements.
  */
 final class ReactPumpTest extends TestCase
 {

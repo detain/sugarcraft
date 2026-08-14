@@ -471,9 +471,15 @@ final class AsyncOpsTest extends TestCase
         // attempt 2 fails at t~=30ms the budget is spent, so retry aborts with
         // the last error instead of exhausting all 5 attempts.
         //
-        // Use a private loop (via the injection seam) rather than the shared
-        // Loop::get(): stale timers from earlier tests on the singleton perturb
-        // this deadline-sensitive timing.
+        // Drives retry() through its ?LoopInterface injection seam, which is
+        // what keeps this deadline-sensitive case honest twice over: a private
+        // loop carries no leftover timers from earlier tests to perturb the
+        // 20ms budget, and StreamSelectLoop refreshes its clock in
+        // Timers::add() — at ARM time — so the 0.5s cap below cannot be
+        // shortened by however long the preceding tests idled. The suite's
+        // tests/bootstrap.php pin gives the same guarantee to the tests that
+        // use the SHARED loop; this one never touches Loop::get(), so the pin
+        // has no bearing on it. See \SugarCraft\Testing\LoopPin.
         $loop = new \React\EventLoop\StreamSelectLoop();
         $attempts = 0;
 

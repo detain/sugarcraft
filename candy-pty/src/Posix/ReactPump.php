@@ -47,10 +47,73 @@ final class ReactPump
 {
     /**
      * Resolved lazily in {@see start()} — constructing a pump must not
-     * instantiate the global loop (Loop::get() memoises the backend,
-     * and ExtUvLoop's internal clock only advances while running, so an
-     * eagerly-created-but-idle global loop makes later relative timers
-     * fire instantly).
+     * instantiate the global loop. Loop::get() memoises the backend AND
+     * registers a shutdown hook that runs it, so merely constructing a
+     * pump would commit the whole process to an autodetected loop it may
+     * never use.
+     *
+     * That backend is ExtUvLoop wherever ext-uv is installed, and libuv
+     * builds a timer's deadline from a clock refreshed once per loop
+     * ITERATION, so any timer is short by the idle since the last
+     * refresh. This class arms at two kinds of site, exposed by different
+     * things — only one of them is cured by keeping callbacks short:
+     *
+     * - The stdin-EOF grace and the post-child-exit flush deadline go in
+     *   from inside callbacks ({@see onStdinEof()}, {@see onPollTick()}).
+     *   What shortens those is time this iteration has already spent in
+     *   callbacks, so "keep callbacks short" is the cure, and a shortened
+     *   one-shot really does cut the grace/flush window.
+     * - The housekeeping poll timer goes in from {@see start()}, which is
+     *   NOT a callback. What shortens it is however long the CALLER idled
+     *   first, and on a loop that has not run yet that is the whole span
+     *   since `uv_loop_new()`. That is the second reason the lazy
+     *   `$this->loop ??= Loop::get()` in start() earns its keep, beyond
+     *   the shutdown-hook hygiene above: when start() is what CREATES the
+     *   loop, the caller's idle happened before `uv_loop_new()` and costs
+     *   the poll timer nothing. Measured on this class's shape (6s idle,
+     *   master already readable, 5s periodic armed before the first
+     *   run()): loop built after the idle, first tick 5.025s after the
+     *   arm; loop built before it, 0.001s. What deferral cannot cure is a
+     *   loop somebody else already created — then the stale span is the
+     *   caller's and this pump has no say in it.
+     *
+     * Nor is the arm being pre-run a defence. start() registers the
+     * master (and stdin) read streams ABOVE the arm, so the moment one is
+     * readable the first poll returns early, the clock catches up, and
+     * the overdue timer fires at once: Program::run()'s "before the
+     * loop's first run(), with ANY other handle due sooner" row, and a
+     * PTY master whose child is already writing is exactly that case.
+     * With the master quiet the arm is the loop's earliest deadline, the
+     * row above it applies, and the tick lands on time. Those two
+     * outcomes are canonical-table rows that this class reproduces rather
+     * than new cases, so their figures are not restated here — read them
+     * off {@see \SugarCraft\Core\Program::run()}, which is where the
+     * table lives.
+     *
+     * The 5.025s/0.001s pair in the bullet above is not a restatement of
+     * them and is not in tension with this: the table varies WHERE a
+     * timer is armed and how long the process idled first, never when the
+     * loop was CONSTRUCTED relative to that idle. It has no row for the
+     * deferral this class does, so that one figure has to be local. Same
+     * rule for the periodic re-arm figures below.
+     *
+     * Only the FIRST tick is early: libuv re-arms the period against a
+     * clock the poll has since refreshed (measured here, 0.5s periodic
+     * after a 3s idle: ticks at 0.000 / 0.503 / 1.006 / 1.509s, against
+     * 0.502 / 1.005 / 1.507 / 2.010s with no idle). Harmless for a pump —
+     * but not a no-op: an early tick fires `PumpOptions::$onIdle` and
+     * `$keepalive` one period ahead of schedule (see {@see onPollTick()}).
+     * So this site is the one that misleads readers rather than the one
+     * that breaks pumps.
+     *
+     * Program::run()'s rule — "keep callbacks short, and never arm a timer
+     * after a long stretch of blocking work inside one" — covers the first
+     * bullet, both of its clauses being about callbacks. The pre-run arm
+     * in the second is a hazard that rule does not reach, which is what
+     * this class's constructor `?LoopInterface` parameter is for: a caller
+     * that can promise neither short callbacks nor a fresh loop should
+     * hand the pump a clock-fresh one, as candy-pty's own async tests do.
+     * See {@see \SugarCraft\Core\Program::run()} for the measurements.
      */
     private ?LoopInterface $loop;
 
