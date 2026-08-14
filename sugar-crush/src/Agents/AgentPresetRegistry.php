@@ -48,6 +48,13 @@ final class AgentPresetRegistry
     /**
      * List all available presets from all search paths.
      *
+     * Applies the same containment check {@see load()} does, and for the same
+     * reason: a `.md` entry that resolves outside its search path — a symlink
+     * such as `agents/link.md -> /elsewhere/stolen.md` — is not a preset this
+     * directory declares. The two methods share one trust boundary, and this
+     * is the one {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()}
+     * actually calls, so leaving it open made load()'s check decorative.
+     *
      * @return array<string, AgentPreset> Map of preset name => AgentPreset
      */
     public function list(): array
@@ -59,8 +66,22 @@ final class AgentPresetRegistry
                 continue;
             }
 
+            $realSearchPath = realpath($path);
+            if ($realSearchPath === false) {
+                continue;
+            }
+            // Trailing separator for the same reason as load(): a sibling
+            // directory whose name merely starts with the same string
+            // ("agents-secrets" vs "agents") must not pass a raw prefix check.
+            $normalizedSearchPath = rtrim($realSearchPath, '/') . '/';
+
             $files = glob($path . '/*.md');
             foreach ($files as $file) {
+                $realFile = realpath($file);
+                if ($realFile === false || !str_starts_with($realFile, $normalizedSearchPath)) {
+                    continue;
+                }
+
                 $name = basename($file, '.md');
                 // First search path takes precedence on name conflicts
                 if (!isset($presets[$name])) {
@@ -143,7 +164,10 @@ final class AgentPresetRegistry
             throw new \RuntimeException("Invalid YAML frontmatter in: {$filePath}");
         }
 
-        return $this->arrayToPreset($data, $filePath);
+        // Everything after the closing `---` is the preset's prompt. $matches[0]
+        // is the whole delimited block, so slicing by its length is what leaves
+        // the body and nothing else.
+        return $this->arrayToPreset($data, $filePath, trim(substr($content, strlen($matches[0]))));
     }
 
     /**
@@ -151,8 +175,13 @@ final class AgentPresetRegistry
      *
      * @param string $filePath Path of the preset file the data was parsed from,
      *                         used as the name fallback when no `name:` key is set.
+     * @param string $body     The markdown after the frontmatter, used as the
+     *                         preset's prompt when no `initialPrompt:` key is
+     *                         set. An explicit `initialPrompt:` WINS: it is the
+     *                         more specific statement of intent, and a file
+     *                         carrying both is asking for the declared one.
      */
-    private function arrayToPreset(array $data, string $filePath): AgentPreset
+    private function arrayToPreset(array $data, string $filePath, string $body = ''): AgentPreset
     {
         return new AgentPreset(
             name: $data['name'] ?? basename($filePath, '.md'),
@@ -169,8 +198,27 @@ final class AgentPresetRegistry
             effort: $this->parseEffort($data['effort'] ?? 'medium'),
             isolation: $this->parseIsolation($data['isolation'] ?? null),
             color: $data['color'] ?? null,
-            initialPrompt: $data['initialPrompt'] ?? null,
+            initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
         );
+    }
+
+    /**
+     * The preset's prompt: a declared `initialPrompt:` if there is one, else
+     * the markdown body.
+     *
+     * The body is where Claude Code and opencode both put a subagent's prompt,
+     * so a `reviewer.md` written to either convention used to register with an
+     * empty prompt here — the agent arrived carrying nothing but its
+     * environment block. Null (rather than '') when neither is present, so
+     * AgentPreset's own "no prompt" value is preserved.
+     */
+    private static function resolveInitialPrompt(mixed $declared, string $body): ?string
+    {
+        if (is_string($declared) && $declared !== '') {
+            return $declared;
+        }
+
+        return $body === '' ? null : $body;
     }
 
     private function parsePermissionMode(string $value): PermissionMode

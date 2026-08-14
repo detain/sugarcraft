@@ -1159,8 +1159,340 @@ final class AgentManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // isWorking() and active()'s derived liveness
+    // -------------------------------------------------------------------------
+
+    public function testIsWorkingIsFalseForAnAgentWithNoSubAgents(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'idle'));
+
+        $this->assertFalse($this->agentManager->isWorking('idle'));
+        $this->assertFalse($this->agentManager->isWorking('never-registered'));
+    }
+
+    public function testIsWorkingCountsAPendingSubAgent(): void
+    {
+        // A sub-agent queued behind the pool's concurrency limit is work the
+        // user asked for and is waiting on - reporting it idle would make a
+        // saturated pool look like an empty one.
+        $this->agentManager->register($this->createAgent(name: 'queued'));
+        $subAgent = $this->agentManager->createSubAgent('queued', 'task');
+
+        $this->assertSame(SubAgent::STATUS_PENDING, $subAgent->status);
+        $this->assertTrue($this->agentManager->isWorking('queued'));
+    }
+
+    public function testIsWorkingGoesFalseOnceEverySubAgentIsTerminal(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'winding-down'));
+        $first = $this->agentManager->createSubAgent('winding-down', 'one');
+        $second = $this->agentManager->createSubAgent('winding-down', 'two');
+
+        $first->status = SubAgent::STATUS_COMPLETE;
+        $this->assertTrue($this->agentManager->isWorking('winding-down'), 'the second is still live');
+
+        $second->status = SubAgent::STATUS_FAILED;
+        $this->assertFalse($this->agentManager->isWorking('winding-down'));
+    }
+
+    public function testActivePromotesAnIdleRegistrationThatHasLiveWork(): void
+    {
+        // The property Bootstrap's roster depends on: agents are registered
+        // idle so a launch paints no agent strip, and delegation is what makes
+        // one appear.
+        $this->agentManager->register($this->createAgent(name: 'delegate', isActive: false));
+        $this->assertSame([], $this->agentManager->active());
+
+        $this->agentManager->createSubAgent('delegate', 'task');
+
+        $active = $this->agentManager->active();
+        $this->assertCount(1, $active);
+        $this->assertSame('delegate', $active[0]->name);
+        $this->assertTrue($active[0]->isActive, 'the renderers turn isActive into the literal word "working"');
+    }
+
+    public function testActiveDemotesADerivedAgentOnceItsWorkIsDone(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'delegate', isActive: false));
+        $subAgent = $this->agentManager->createSubAgent('delegate', 'task');
+
+        $this->agentManager->stopSubAgent($subAgent->id);
+
+        $this->assertSame([], $this->agentManager->active());
+    }
+
+    public function testActiveDoesNotMutateTheRegistration(): void
+    {
+        // The registration is the configured agent and outlives any sub-agent;
+        // the derived case hands back a copy.
+        $registered = $this->createAgent(name: 'delegate', isActive: false);
+        $this->agentManager->register($registered);
+        $this->agentManager->createSubAgent('delegate', 'task');
+
+        $this->agentManager->active();
+
+        $this->assertFalse($this->agentManager->get('delegate')?->isActive);
+        $this->assertFalse($registered->isActive);
+    }
+
+    // -------------------------------------------------------------------------
+    // liveOutput() / liveOutputs() - the live output buffer seam
+    // -------------------------------------------------------------------------
+
+    public function testLiveOutputIsEmptyForAnAgentWithNoSubAgents(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'quiet'));
+
+        $this->assertSame('', $this->agentManager->liveOutput('quiet'));
+        $this->assertSame('', $this->agentManager->liveOutput('never-registered'));
+    }
+
+    public function testLiveOutputJoinsSubAgentBuffersInCreationOrder(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'talker'));
+        $first = $this->agentManager->createSubAgent('talker', 'one');
+        $second = $this->agentManager->createSubAgent('talker', 'two');
+
+        $first->output = 'from the first';
+        $second->output = 'from the second';
+
+        $this->assertSame("from the first\nfrom the second", $this->agentManager->liveOutput('talker'));
+    }
+
+    public function testLiveOutputGrowsWithTheBufferRatherThanWaitingForCompletion(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'streamer'));
+        $subAgent = $this->agentManager->createSubAgent('streamer', 'task');
+        $subAgent->status = SubAgent::STATUS_STREAMING;
+
+        $subAgent->output .= 'chunk one ';
+        $this->assertSame('chunk one ', $this->agentManager->liveOutput('streamer'));
+
+        $subAgent->output .= 'chunk two';
+        $this->assertSame('chunk one chunk two', $this->agentManager->liveOutput('streamer'));
+    }
+
+    public function testLiveOutputsOmitsSilentAgents(): void
+    {
+        // The split-pane compositor lays several agents out side by side;
+        // including the silent ones would give it a row of empty tiles.
+        $this->agentManager->register($this->createAgent(name: 'loud'));
+        $this->agentManager->register($this->createAgent(name: 'silent'));
+        $loud = $this->agentManager->createSubAgent('loud', 'task');
+        $this->agentManager->createSubAgent('silent', 'task');
+        $loud->output = 'saying something';
+
+        $this->assertSame(['loud' => 'saying something'], $this->agentManager->liveOutputs());
+    }
+
+    public function testLiveOutputsIsKeyedOffRegistrationsSoARemovedAgentCannotResurrectAPane(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'gone'));
+        $subAgent = $this->agentManager->createSubAgent('gone', 'task');
+        $subAgent->output = 'orphaned text';
+
+        $this->agentManager->removeSubAgent($subAgent->id);
+
+        $this->assertSame([], $this->agentManager->liveOutputs());
+    }
+
+    // -------------------------------------------------------------------------
+    // executeAll() settles pool results back onto the SubAgent
+    // -------------------------------------------------------------------------
+
+    public function testExecuteAllSettlesTheSubAgentsStatusAndOutputFromThePoolResult(): void
+    {
+        // Without this, a pool-executed sub-agent stayed `pending` with an
+        // empty buffer forever: isWorking() (and through it active(), the
+        // status strip and the dashboard) reported a finished agent as still
+        // working for the rest of the session.
+        $manager = new AgentManager(
+            $this->provider,
+            $this->skillRegistry,
+            new AgentWorkerPool(2, $this->completingExecutor('settled output', AgentStatus::Completed)),
+        );
+        $manager->register($this->createAgent(name: 'pool-agent', isActive: false));
+        $subAgent = $manager->createSubAgent('pool-agent', 'pooled task');
+
+        iterator_to_array($manager->executeAll(
+            [$subAgent],
+            new CompleteRequest(model: 'test-model', messages: []),
+        ));
+
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+        $this->assertSame('settled output', $subAgent->output);
+        $this->assertSame('settled output', $manager->liveOutput('pool-agent'));
+        $this->assertFalse($manager->isWorking('pool-agent'));
+        $this->assertSame([], $manager->active());
+    }
+
+    public function testExecuteAllFoldsATimeoutOntoTheFailedStatus(): void
+    {
+        // SubAgent has no `timed_out`; from the caller's side a timeout is a
+        // failure that happens to have a cause.
+        $manager = new AgentManager(
+            $this->provider,
+            $this->skillRegistry,
+            new AgentWorkerPool(2, $this->completingExecutor(null, AgentStatus::TimedOut)),
+        );
+        $manager->register($this->createAgent(name: 'slow-agent'));
+        $subAgent = $manager->createSubAgent('slow-agent', 'slow task');
+
+        iterator_to_array($manager->executeAll(
+            [$subAgent],
+            new CompleteRequest(model: 'test-model', messages: []),
+        ));
+
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        // A null output must not blank a buffer the sub-agent already had.
+        $this->assertSame('', $subAgent->output);
+    }
+
+    // -------------------------------------------------------------------------
+    // Cancelled / abandoned sub-agents must reach a terminal status
+    // -------------------------------------------------------------------------
+
+    /**
+     * `stopOnFirstFailure` cancels the rest of the queue, and the pool yields
+     * NO result for a sub-agent it never dispatched — so those sub-agents were
+     * left at `pending` forever. Because pending counts as working,
+     * `isWorking()` (and through it `active()`, the transcript strip and
+     * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane}) then painted
+     * `[working]` for the rest of the session with nothing running.
+     *
+     * Fails if the fix is reverted: sub-agents two and three stay
+     * `SubAgent::STATUS_PENDING`, so the status assertions fail and
+     * `assertFalse($manager->isWorking(...))` fails with the agent still
+     * reported as working.
+     */
+    public function testCancelledSubAgentsSettleInsteadOfBeingLeftPendingForever(): void
+    {
+        $manager = new AgentManager($this->provider, $this->skillRegistry);
+        $manager->register($this->createAgent(name: 'coder', isActive: false));
+
+        // maxConcurrent=1 so exactly one runs, fails, and empties the queue.
+        $pool = (new AgentWorkerPool(1, $this->completingExecutor(null, AgentStatus::Failed)))
+            ->withStopOnFirstFailure(true);
+
+        $subAgents = [
+            $manager->createSubAgent('coder', 'one'),
+            $manager->createSubAgent('coder', 'two'),
+            $manager->createSubAgent('coder', 'three'),
+        ];
+
+        $results = iterator_to_array($manager->executeAll(
+            $subAgents,
+            new CompleteRequest(model: 'test-model', messages: []),
+            $pool,
+        ));
+
+        $this->assertCount(1, $results, 'stopOnFirstFailure must cancel the rest of the queue');
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgents[0]->status);
+        $this->assertSame(SubAgent::STATUS_STOPPED, $subAgents[1]->status);
+        $this->assertSame(SubAgent::STATUS_STOPPED, $subAgents[2]->status);
+
+        // The property the renderers actually read.
+        $this->assertFalse($manager->isWorking('coder'));
+        $this->assertSame([], $manager->active());
+
+        // A terminal status without a completedAt would leave elapsedSeconds()
+        // counting against wall-clock forever, which is the same bug wearing a
+        // different hat.
+        $this->assertNotNull($subAgents[1]->completedAt);
+        $this->assertNotNull($subAgents[2]->completedAt);
+    }
+
+    /**
+     * A caller that walks away mid-iteration leaves the same wreckage as a
+     * cancellation, so the settling is a `finally` rather than a tail: the
+     * generator is destroyed on `break`, and everything still pending has to
+     * stop claiming to be working.
+     */
+    public function testAbandoningTheGeneratorMidIterationStillSettlesTheRemainder(): void
+    {
+        $manager = new AgentManager($this->provider, $this->skillRegistry);
+        $manager->register($this->createAgent(name: 'coder', isActive: false));
+
+        $pool = new AgentWorkerPool(1, $this->completingExecutor('done', AgentStatus::Completed));
+
+        $subAgents = [
+            $manager->createSubAgent('coder', 'one'),
+            $manager->createSubAgent('coder', 'two'),
+            $manager->createSubAgent('coder', 'three'),
+        ];
+
+        foreach ($manager->executeAll($subAgents, new CompleteRequest(model: 'test-model', messages: []), $pool) as $result) {
+            unset($result);
+            break;
+        }
+
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgents[0]->status);
+        $this->assertFalse($manager->isWorking('coder'));
+    }
+
+    /**
+     * The settling must not overwrite an outcome the pool DID report — a
+     * completed sub-agent stays complete, with its output intact.
+     */
+    public function testSettlingLeavesResultsThePoolAlreadyReportedAlone(): void
+    {
+        $manager = new AgentManager($this->provider, $this->skillRegistry);
+        $manager->register($this->createAgent(name: 'coder', isActive: false));
+
+        $pool = new AgentWorkerPool(2, $this->completingExecutor('the answer', AgentStatus::Completed));
+
+        $subAgents = [
+            $manager->createSubAgent('coder', 'one'),
+            $manager->createSubAgent('coder', 'two'),
+        ];
+
+        iterator_to_array($manager->executeAll(
+            $subAgents,
+            new CompleteRequest(model: 'test-model', messages: []),
+            $pool,
+        ));
+
+        foreach ($subAgents as $subAgent) {
+            $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+            $this->assertSame('the answer', $subAgent->output);
+            $this->assertNull($subAgent->error);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helper methods
     // -------------------------------------------------------------------------
+
+    /** An executor that returns one fixed result, for the pool-settling tests. */
+    private function completingExecutor(?string $output, AgentStatus $status): ExecutorInterface
+    {
+        return new class ($output, $status) implements ExecutorInterface {
+            public function __construct(
+                private readonly ?string $output,
+                private readonly AgentStatus $status,
+            ) {}
+
+            public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                return new AgentResult(
+                    agentId: $agent->id,
+                    status: $this->status,
+                    output: $this->output,
+                    startedAt: new \DateTimeImmutable('2024-01-15T10:00:00Z'),
+                    completedAt: new \DateTimeImmutable('2024-01-15T10:00:10Z'),
+                );
+            }
+
+            public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+
+            public function cancelAll(): void {}
+        };
+    }
 
     private function createAgent(
         string $name = 'test-agent',

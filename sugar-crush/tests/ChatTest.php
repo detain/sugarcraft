@@ -3671,6 +3671,68 @@ final class ChatTest extends TestCase
         @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer');
     }
 
+    /**
+     * `/bg` must run the daemon as a REAL roster agent, not as the synthesised
+     * stand-in `Chat::defaultBackgroundAgent()` returns.
+     *
+     * This pins a live behaviour change that crush_code.md Phase 1 item 1 made
+     * as a side effect. `BackgroundSupervisor::spawnSession()` interpolates
+     * `$agent->provider` and `$agent->model` straight into the daemon's
+     * command line, and the stand-in carries the literal strings
+     * "unknown"/"unknown" — so for as long as `Bootstrap::chat()` passed no
+     * AgentManager, every `/bg` and `/fork` daemon was launched with a
+     * provider and model of "unknown". Wiring the manager in fixed that
+     * silently; without this test, unwiring it again would silently
+     * reintroduce the bug with nothing failing.
+     *
+     * Fails if the wiring is reverted: with no AgentManager on the Chat,
+     * `scheduleBackgroundSpawn()` falls through both roster arms to the
+     * stand-in and the spawned session's agent reports provider/model
+     * "unknown", which the last two assertions reject by name.
+     */
+    public function testBackgroundSpawnRunsTheDaemonAsARosterAgentNotTheUnknownStandIn(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $chat = new Chat(
+            backgroundSupervisor: $supervisor,
+            agentManager: $this->createAgentManagerWithAgents([
+                new Agent(
+                    name: 'coder',
+                    description: 'Implements features',
+                    prompt: 'You write code.',
+                    model: 'gpt-4o',
+                    provider: 'openai',
+                    tools: [],
+                    skillNames: [],
+                    hooks: [],
+                    isActive: false,
+                ),
+            ]),
+        );
+
+        [, $cmd] = $this->submitLine($chat, '/bg port the renderer');
+        $spawned = $this->resolveAsyncCmd($cmd);
+
+        $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
+        $this->assertNull($spawned->error);
+        $this->assertNotNull($spawned->sessionId);
+
+        $session = $supervisor->getSession($spawned->sessionId);
+        $this->assertNotNull($session);
+
+        try {
+            $this->assertSame('coder', $session->agent->name);
+            $this->assertSame('openai', $session->agent->provider);
+            $this->assertSame('gpt-4o', $session->agent->model);
+            $this->assertNotSame('unknown', $session->agent->provider);
+            $this->assertNotSame('unknown', $session->agent->model);
+        } finally {
+            @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.sock');
+            @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer');
+            @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer.log');
+        }
+    }
+
     public function testFailedSpawnIsReportedInTheTranscript(): void
     {
         $failed = new BackgroundSessionSpawnedMsg('/bg', 'Port the renderer', null, 'Failed to spawn session process');

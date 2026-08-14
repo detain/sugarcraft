@@ -152,29 +152,34 @@ final class BinSugarcrushWiringTest extends TestCase
     }
 
     /**
-     * R20.fix regression (reviewer-reported): `Bootstrap::chat()` never
-     * constructs/passes an `agentManager:` -- confirming that here in the
-     * same test file that already exercises `Bootstrap::chat()` directly
-     * documents the gap where a future reader will actually see it, rather
-     * than only in a docblock. See `Renderer.php`'s "R20.fix" note.
+     * The inverse of what this test used to assert. It previously pinned the
+     * R20.fix GAP -- `Bootstrap::chat()` never constructs/passes an
+     * `agentManager:` -- documenting it where a reader would see it rather
+     * than only in a docblock. crush_code.md Phase 1 item 1 closed the gap, so
+     * the pin flips: a launch must now carry a real manager, because
+     * everything downstream of it (`/agents`, Ctrl+A, the transcript's agent
+     * strip, `AgentDashboardPane`'s agent rows, `PermissionGate`) is reachable
+     * only through this reference.
      */
-    public function testChatHasNoAgentManagerSinceBootstrapDoesNotConstructOne(): void
+    public function testChatIsWiredWithARealAgentManager(): void
     {
         $chat = Bootstrap::chat($this->tempDir . '/repo');
 
-        $this->assertNull($chat->agentManager());
+        $this->assertNotNull($chat->agentManager());
     }
 
     /**
-     * R20.fix regression: with the gap above in place, typing "/agents" (or
-     * pressing Ctrl+A) against a real `Bootstrap::chat()`-constructed Chat
-     * used to throw an uncaught `RuntimeException('AgentManager not set')`
-     * straight out of `Chat::update()` -- candy-core's `Program` has no
-     * try/catch around its synchronous update() dispatch, so this crashed
-     * the live CLI outright (and skipped `teardownTerminal()`). It must now
-     * degrade to a plain "not configured" response instead.
+     * R20.fix regression: typing "/agents" (or pressing Ctrl+A) against a real
+     * `Bootstrap::chat()`-constructed Chat used to throw an uncaught
+     * `RuntimeException('AgentManager not set')` straight out of
+     * `Chat::update()` -- candy-core's `Program` has no try/catch around its
+     * synchronous update() dispatch, so this crashed the live CLI outright
+     * (and skipped `teardownTerminal()`). It was then made to degrade to a
+     * "not configured" response; with Phase 1 item 1's wiring it must answer
+     * from the real roster instead, so neither the crash nor the degradation
+     * is what a CLI user sees.
      */
-    public function testAgentsCommandDoesNotCrashARealBootstrapConstructedChat(): void
+    public function testAgentsCommandAnswersFromTheRealRosterOnABootstrapConstructedChat(): void
     {
         $chat = Bootstrap::chat($this->tempDir . '/repo');
         $ref = new \ReflectionMethod($chat, 'withInputBuf');
@@ -182,8 +187,10 @@ final class BinSugarcrushWiringTest extends TestCase
         $chat = $ref->invoke($chat, '/agents');
 
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $reply = $next->history[array_key_last($next->history)]->content;
 
-        $this->assertStringContainsString('Agent manager not configured', $next->history[array_key_last($next->history)]->content);
+        $this->assertStringNotContainsString('Agent manager not configured', $reply);
+        $this->assertStringContainsString('agent(s) registered and idle', $reply);
     }
 
     /**

@@ -7,6 +7,8 @@ namespace SugarCraft\Crush\Tests\Agents;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentDefinition;
+use SugarCraft\Crush\Agents\AgentPreset;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 
 /**
@@ -356,5 +358,89 @@ final class AgentTest extends TestCase
             ->withEnvironment(new EnvironmentBlock('/some/cwd', 'some-model'));
 
         $this->assertArrayNotHasKey('environment', $agent->toArray());
+    }
+
+    // -------------------------------------------------------------------------
+    // fromDefinition() / fromPreset() - the bridges into AgentManager::register()
+    // -------------------------------------------------------------------------
+
+    public function testFromDefinitionCarriesTheTemplateAndTheCallersProviderAndModel(): void
+    {
+        $agent = Agent::fromDefinition(AgentDefinition::reviewer(), 'openai', 'gpt-4o');
+
+        $this->assertSame('reviewer', $agent->name);
+        $this->assertSame('Code review specialist', $agent->description);
+        $this->assertStringContainsString('code review specialist', $agent->prompt);
+        $this->assertSame(['Read', 'Grep', 'Bash(git:*)'], $agent->tools);
+        $this->assertSame(['php-best-practices', 'security-audit'], $agent->skillNames);
+        // The definition carries no provider/model of its own - it is a library
+        // template, not a session's configuration.
+        $this->assertSame('openai', $agent->provider);
+        $this->assertSame('gpt-4o', $agent->model);
+    }
+
+    public function testFromDefinitionRegistersIdleByDefault(): void
+    {
+        // On this class active means "currently working" - the renderers turn
+        // it into the literal word - so a template nobody has delegated to is
+        // not active.
+        $this->assertFalse(Agent::fromDefinition(AgentDefinition::coder(), 'echo', 'echo')->isActive);
+        $this->assertTrue(Agent::fromDefinition(AgentDefinition::coder(), 'echo', 'echo', isActive: true)->isActive);
+    }
+
+    public function testFromPresetResolvesInheritOntoTheSessionModel(): void
+    {
+        $agent = Agent::fromPreset(
+            new AgentPreset(name: 'docs', description: 'Writes docs'),
+            'openai',
+            'gpt-4o',
+        );
+
+        // 'inherit' is AgentPreset's default and its documented "use whatever
+        // model the session is on" - passing it through verbatim would hand a
+        // provider a model name it would reject.
+        $this->assertSame('gpt-4o', $agent->model);
+    }
+
+    public function testFromPresetKeepsAnExplicitModel(): void
+    {
+        $agent = Agent::fromPreset(
+            new AgentPreset(name: 'docs', description: 'Writes docs', model: 'claude-opus-4-1'),
+            'openai',
+            'gpt-4o',
+        );
+
+        $this->assertSame('claude-opus-4-1', $agent->model);
+    }
+
+    public function testFromPresetMapsToolsSkillsAndTheInitialPrompt(): void
+    {
+        $agent = Agent::fromPreset(
+            new AgentPreset(
+                name: 'docs',
+                description: 'Writes docs',
+                tools: ['Read', 'Edit'],
+                skills: ['markdown'],
+                initialPrompt: 'You write documentation.',
+            ),
+            'openai',
+            'gpt-4o',
+        );
+
+        $this->assertSame('docs', $agent->name);
+        $this->assertSame('Writes docs', $agent->description);
+        $this->assertSame('You write documentation.', $agent->prompt);
+        $this->assertSame(['Read', 'Edit'], $agent->tools);
+        $this->assertSame(['markdown'], $agent->skillNames);
+        $this->assertFalse($agent->isActive);
+    }
+
+    public function testFromPresetWithNoInitialPromptYieldsAnEmptyPrompt(): void
+    {
+        // Agent::systemPrompt() treats '' as "environment block only", which is
+        // the right degradation for a preset that declares no prose.
+        $agent = Agent::fromPreset(new AgentPreset(name: 'bare', description: ''), 'echo', 'echo');
+
+        $this->assertSame('', $agent->prompt);
     }
 }

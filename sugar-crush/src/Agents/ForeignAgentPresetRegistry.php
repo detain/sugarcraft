@@ -28,14 +28,14 @@ use Symfony\Component\Yaml\Yaml;
  * discarded silently.
  *
  * NOT YET WIRED INTO THE RUNTIME. Nothing in `src/` or `bin/` constructs this
- * class — and nothing constructs the native {@see AgentPresetRegistry} either,
- * so the whole agent-preset subsystem is data-model-only today and
- * {@see AgentPreset::$source} currently has no reader. The step that added
- * this class is scoped to the mapping itself; a later step has to call
- * {@see discover()} alongside AgentPresetRegistry from the bootstrap (mirroring
+ * class, so {@see AgentPreset::$source} still has no reader and importing a
+ * foreign agent has no runtime effect. The NATIVE {@see AgentPresetRegistry}
+ * is no longer in that position: crush_code.md Phase 1 item 1 made
+ * `Bootstrap::agentPresets()` construct it and merge its presets into the
+ * launch roster. The remaining step for this class is crush_code.md Phase 1
+ * item 3 — call {@see discover()} alongside it from the same place (mirroring
  * how `Bootstrap::skillRegistry()` consumes ForeignSkillDiscovery) and badge
- * the imported presets in the palette. Until that lands, importing a foreign
- * agent has no runtime effect.
+ * the imported presets in the palette.
  */
 final class ForeignAgentPresetRegistry
 {
@@ -201,11 +201,11 @@ final class ForeignAgentPresetRegistry
 
             foreach (glob(rtrim($dir, '/') . '/*.md') ?: [] as $file) {
                 try {
-                    $data = $this->frontmatter($file);
+                    [$data, $body] = $this->frontmatter($file);
                     $name = basename($file, '.md');
                     $presets[$name] = match ($source) {
-                        SkillSource::Claude => $this->claudePreset($data, $name),
-                        SkillSource::Opencode => $this->opencodePreset($data, $name),
+                        SkillSource::Claude => $this->claudePreset($data, $name, $body),
+                        SkillSource::Opencode => $this->opencodePreset($data, $name, $body),
                     };
                 } catch (\Throwable $e) {
                     // One malformed foreign file must not abort the import of
@@ -230,7 +230,10 @@ final class ForeignAgentPresetRegistry
      * one repo-wide frontmatter reader those four call -- a refactor well
      * outside a foreign-preset import. Left duplicated until that lands.
      *
-     * @return array<string, mixed>
+     * Returns the parsed frontmatter AND the markdown after it, because in both
+     * foreign dialects the body is where the agent's prompt is written.
+     *
+     * @return array{0: array<string, mixed>, 1: string} [frontmatter, body]
      */
     private function frontmatter(string $file): array
     {
@@ -248,7 +251,7 @@ final class ForeignAgentPresetRegistry
             throw new \RuntimeException("Invalid YAML frontmatter in: {$file}");
         }
 
-        return $data;
+        return [$data, trim(substr($content, strlen($matches[0])))];
     }
 
     /**
@@ -257,9 +260,13 @@ final class ForeignAgentPresetRegistry
      * normalising, because Claude Code accepts them as a comma-separated
      * string as well as a list.
      *
+     * Claude Code writes a subagent's system prompt as the markdown BODY, so
+     * $body is the prompt whenever no `initialPrompt:` key declares one; a
+     * declared key wins, being the more specific statement of intent.
+     *
      * @param array<string, mixed> $data
      */
-    private function claudePreset(array $data, string $fallbackName): AgentPreset
+    private function claudePreset(array $data, string $fallbackName, string $body = ''): AgentPreset
     {
         return new AgentPreset(
             name: isset($data['name']) ? (string) $data['name'] : $fallbackName,
@@ -276,7 +283,7 @@ final class ForeignAgentPresetRegistry
             effort: $this->enum(Effort::class, $data['effort'] ?? null) ?? Effort::Medium,
             isolation: $this->enum(Isolation::class, $data['isolation'] ?? null),
             color: isset($data['color']) ? (string) $data['color'] : null,
-            initialPrompt: isset($data['initialPrompt']) ? (string) $data['initialPrompt'] : null,
+            initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
             source: SkillSource::Claude,
         );
     }
@@ -287,9 +294,12 @@ final class ForeignAgentPresetRegistry
      * are left behind; its `prompt` is sugar-crush's `initialPrompt`, and its
      * `tools:`/`permission:` blocks collapse into `tools`/`disallowedTools`.
      *
+     * opencode also accepts the prompt as the markdown BODY, so $body is used
+     * when no `prompt:` key declares one; a declared `prompt:` wins.
+     *
      * @param array<string, mixed> $data
      */
-    private function opencodePreset(array $data, string $fallbackName): AgentPreset
+    private function opencodePreset(array $data, string $fallbackName, string $body = ''): AgentPreset
     {
         [$allowed, $denied] = $this->opencodeToolLists($data, $fallbackName);
 
@@ -300,9 +310,28 @@ final class ForeignAgentPresetRegistry
             disallowedTools: $denied,
             model: isset($data['model']) ? (string) $data['model'] : 'inherit',
             skills: (array) ($data['skills'] ?? []),
-            initialPrompt: isset($data['prompt']) ? (string) $data['prompt'] : null,
+            initialPrompt: self::resolveInitialPrompt($data['prompt'] ?? null, $body),
             source: SkillSource::Opencode,
         );
+    }
+
+    /**
+     * The imported preset's prompt: the dialect's declared prompt key if there
+     * is one, else the markdown body.
+     *
+     * Both foreign conventions put a subagent's system prompt in the body, so
+     * without this an imported `reviewer.md` mapped onto an AgentPreset with a
+     * null prompt and (once registered) an Agent carrying nothing but its
+     * environment block. Null rather than '' when neither is present, to
+     * preserve AgentPreset's own "no prompt" value.
+     */
+    private static function resolveInitialPrompt(mixed $declared, string $body): ?string
+    {
+        if (is_string($declared) && $declared !== '') {
+            return $declared;
+        }
+
+        return $body === '' ? null : $body;
     }
 
     /**

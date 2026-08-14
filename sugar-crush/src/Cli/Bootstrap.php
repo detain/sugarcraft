@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Cli;
 
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentDefinition;
+use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Agents\AgentPresetRegistry;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CommandBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
@@ -76,8 +81,17 @@ final class Bootstrap
         $sessionStore = self::sessionStore();
         [$sessionId, $sessionName] = self::seedSession($sessionStore, ...self::selectedProviderLabel());
 
+        // ONE registry across the engine and the sub-agents, for the same
+        // reason {@see tools()} shares one across Read/Edit/Glob: two
+        // independently scanned registries would let a skill disabled on one
+        // still be invocable through the other, and a sub-agent granted a
+        // skill the main loop was told not to offer is the wrong side of that
+        // to be on. It also keeps the launch to ONE disk scan rather than one
+        // per consumer.
+        $skills = $root === null ? null : self::skillRegistry($root);
+
         return new Chat(
-            backend: self::backend($root),
+            backend: self::backend($root, $skills),
             memoryStore: self::memoryStore(),
             sessionStore: $sessionStore,
             currentSessionId: $sessionId,
@@ -118,7 +132,144 @@ final class Bootstrap
             // TUI rendering is driven off the shared inbox instead. Passing
             // one here would only duplicate what the pump already does.
             streaming: true,
+            // crush_code.md Phase 1 item 1. Until now this argument was never
+            // passed on the one construction path `bin/sugarcrush` runs, so
+            // `/agents`, Ctrl+A, the transcript's agent strip,
+            // AgentDashboardPane's agent rows, PermissionGate (whose only
+            // consumer is the sub-agent path) and the whole
+            // TeamManager/worktree stack downstream of them were built,
+            // tested, and unreachable — `Chat::handleAgentsCommand()` answered
+            // "Agent manager not configured" on every real run.
+            agentManager: self::agentManager($root, $skills),
         );
+    }
+
+    /**
+     * The {@see AgentManager} a launch delegates through, with the run's
+     * roster already registered.
+     *
+     * Built here rather than inside {@see Chat} because a manager needs a
+     * {@see ProviderInterface} and a {@see SkillRegistry} — Chat holds neither
+     * (it holds the unrelated {@see Backend} interface), which is the exact
+     * reason `Renderer.php`'s R20.fix note gave for the wiring never having
+     * landed. Both are already built here for other consumers, so this is a
+     * construction-wiring method, not new machinery.
+     *
+     * @param SkillRegistry|null $skills Pass the caller's registry to avoid a
+     *        second disk scan; the sub-agents this manager runs resolve their
+     *        `skills:` names against it, so sharing the instance also means a
+     *        skill disabled in the user config is disabled for sub-agents too.
+     */
+    public static function agentManager(?string $root = null, ?SkillRegistry $skills = null): AgentManager
+    {
+        $root = self::requireRoot($root);
+        [$provider, $model] = self::provider();
+
+        $manager = new AgentManager($provider, $skills ?? self::skillRegistry($root));
+
+        // A snapshot captured at $root for every agent, which is what closes
+        // the "sub-agents are told the process cwd, not the configured root"
+        // gap: Agent::systemPrompt()'s own last-resort
+        // EnvironmentBlock::capture(getcwd()) is documented as the fallback for
+        // callers holding no session snapshot, and this caller holds one. A
+        // `--root candy-shine` run now orients its sub-agents at candy-shine
+        // rather than at wherever the binary was invoked from.
+        //
+        // Captured PER AGENT, at that agent's own model. The block renders a
+        // `Model:` line into the prompt, so one shared instance stamped the
+        // SESSION's model onto every agent: a preset declaring
+        // `model: gpt-5-turbo` was handed to a sub-agent whose system prompt
+        // said `Model: echo`. Sharing bought nothing in exchange either --
+        // EnvironmentBlock::render() is not memoised, so its git shell-out
+        // happens once per systemPrompt() call whichever instance it is called
+        // on, and capture() itself only stores three values.
+        foreach (self::agentRoster($root, self::selectedProviderName() ?? 'echo', $model) as $agent) {
+            $manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)));
+        }
+
+        return $manager;
+    }
+
+    /**
+     * Every agent a launch can delegate to: the six built-in
+     * {@see AgentDefinition} templates, then any `.md`+frontmatter preset
+     * discovered under `{root}/.sugar-crush/agents` or `~/.sugar-crush/agents`.
+     *
+     * Presets are applied second and by name, so a project that ships its own
+     * `reviewer.md` replaces the built-in `reviewer` rather than adding a
+     * duplicate row to `/agents`.
+     *
+     * Everything is registered INACTIVE. On {@see Agent} active means
+     * "currently working" — the renderers turn it into the literal word — so a
+     * roster registered active would paint an agent strip on every launch
+     * claiming six agents were working on a session where nothing has been
+     * delegated. {@see AgentManager::active()} derives the live value from
+     * running sub-agents instead.
+     *
+     * Foreign presets (`.claude/agents`, `.opencode/agents`, via
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}) are
+     * deliberately NOT merged here — that is crush_code.md Phase 1 item 3, and
+     * it lands as its own change alongside the palette badging that makes an
+     * imported preset distinguishable from a native one.
+     *
+     * @return list<Agent>
+     */
+    public static function agentRoster(string $root, string $provider, string $model): array
+    {
+        $agents = [];
+
+        foreach ([
+            AgentDefinition::TYPE_CODER,
+            AgentDefinition::TYPE_REVIEWER,
+            AgentDefinition::TYPE_DEBUGGER,
+            AgentDefinition::TYPE_ARCHITECT,
+            AgentDefinition::TYPE_TESTER,
+            AgentDefinition::TYPE_DEVOPS,
+        ] as $type) {
+            $definition = AgentDefinition::fromType($type, $type);
+            if ($definition !== null) {
+                $agents[$definition->name] = Agent::fromDefinition($definition, $provider, $model);
+            }
+        }
+
+        foreach (self::agentPresets($root) as $name => $preset) {
+            $agents[$name] = Agent::fromPreset($preset, $provider, $model);
+        }
+
+        return array_values($agents);
+    }
+
+    /**
+     * The native agent presets on disk, project directory first so a checked-in
+     * preset overrides a same-named one in the user's home.
+     *
+     * Resolved off {@see configDirPath()}, never {@see configDir()}: listing
+     * agents is a read, and a read must not be what creates ~/.sugar-crush.
+     *
+     * A malformed preset degrades to "no presets this launch" with a warning
+     * on stderr rather than an exception. {@see AgentPresetRegistry::list()}
+     * throws on the first file with missing or invalid frontmatter, and these
+     * files are hand-authored — letting that escape would make one bad `.md`
+     * in a repo enough to stop `bin/sugarcrush` from starting at all, which is
+     * a far worse failure than losing the roster's optional half. stderr is
+     * where this class already reports provider fallbacks and pruned sessions.
+     *
+     * @return array<string, \SugarCraft\Crush\Agents\AgentPreset> keyed by preset name
+     */
+    public static function agentPresets(string $root): array
+    {
+        $registry = new AgentPresetRegistry([
+            rtrim($root, '/') . '/.sugar-crush/agents',
+            self::configDirPath() . '/agents',
+        ]);
+
+        try {
+            return $registry->list();
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "sugarcrush: agent presets unavailable ({$e->getMessage()}); continuing with the built-in agents.\n");
+
+            return [];
+        }
     }
 
     /**
@@ -156,7 +307,7 @@ final class Bootstrap
         $root ??= getcwd() ?: null;
 
         $chat = self::chat($root);
-        [$provider, $model] = self::shellProvider();
+        [$provider, $model] = self::provider();
 
         // ONE registry for the shell's Skills pane and the Skill tool in its
         // displayed tool list: scanning twice would show the user a roster
@@ -175,21 +326,22 @@ final class Bootstrap
     }
 
     /**
-     * The provider/model pair the shell displays, as real objects.
+     * The run's selected provider and model as real objects, for the two
+     * consumers that need a {@see ProviderInterface} rather than the
+     * {@see Backend} the hosted chat runs on: {@see App} (which uses it as a
+     * label source for the status bar's provider name and never calls it) and
+     * {@see agentManager()} (which genuinely drives it, for sub-agent
+     * completions).
      *
-     * {@see App} needs a {@see ProviderInterface}, not the {@see Backend} the
-     * hosted chat runs on — in the hosted arrangement it is a label source
-     * (the status bar's provider name) rather than something the shell ever
-     * calls. It is therefore built from the same selection {@see
-     * selectedProviderLabel()} reports, and falls back to the offline
-     * {@see EchoProvider} whenever this run has no provider or the provider
-     * cannot be constructed: {@see backend()} has already warned on stderr in
-     * that case, and refusing to launch the TUI over an unusable label would
-     * be a worse outcome than showing "echo".
+     * Built from the same selection {@see selectedProviderLabel()} reports, and
+     * falls back to the offline {@see EchoProvider} whenever this run has no
+     * provider or the provider cannot be constructed: {@see backend()} has
+     * already warned on stderr in that case, and refusing to launch the TUI
+     * over an unusable label would be a worse outcome than showing "echo".
      *
      * @return array{0: ProviderInterface, 1: string}
      */
-    private static function shellProvider(): array
+    public static function provider(): array
     {
         [$name, $model] = self::selectedProviderLabel();
         $providerName = self::selectedProviderName();
@@ -229,8 +381,13 @@ final class Bootstrap
      * or {@see backendFor()} exactly once, and the files being swept are by
      * definition ones whose owning process was killed before it could clean up
      * after itself.
+     *
+     * @param SkillRegistry|null $skills The registry to thread into the
+     *        engine and its tools; defaults to a fresh scan of $root. Pass the
+     *        caller's so a launch scans once and every consumer sees the same
+     *        enabled/disabled set (see {@see chat()}).
      */
-    public static function backend(?string $root = null): Backend
+    public static function backend(?string $root = null, ?SkillRegistry $skills = null): Backend
     {
         ToolIpcFiles::sweepOnce();
 
@@ -239,7 +396,7 @@ final class Bootstrap
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
             try {
-                return self::backendFor($providerType, $root);
+                return self::backendFor($providerType, $root, $skills);
             } catch (\Throwable $e) {
                 fwrite(STDERR, "sugarcrush: provider '{$providerType}' unavailable ({$e->getMessage()}); falling back to echo.\n");
             }
@@ -253,14 +410,14 @@ final class Bootstrap
         $persisted = self::readUserConfig()['provider'] ?? null;
         if (is_string($persisted) && $persisted !== '') {
             try {
-                return self::backendFor($persisted, $root);
+                return self::backendFor($persisted, $root, $skills);
             } catch (\Throwable $e) {
                 fwrite(STDERR, "sugarcrush: persisted provider '{$persisted}' unavailable ({$e->getMessage()}); falling back to echo.\n");
             }
         }
 
         $loader = self::instructionLoader($root);
-        $skills = self::skillRegistry($root);
+        $skills ??= self::skillRegistry($root);
 
         return (new EngineBackend(new EchoProvider(), 'echo'))
             ->withTools(self::tools($root, $loader, $skills))
@@ -282,9 +439,11 @@ final class Bootstrap
      * $providerName - a caller here asked for this provider explicitly and
      * should see the real error rather than silently getting something else.
      *
+     * @param SkillRegistry|null $skills See {@see backend()}.
+     *
      * @throws \Throwable
      */
-    public static function backendFor(string $providerName, ?string $root = null): Backend
+    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null): Backend
     {
         // See backend(): whichever of the two a run enters through, the sweep
         // happens once. sweepOnce() latches, so backend() delegating here does
@@ -297,7 +456,7 @@ final class Bootstrap
         $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
 
         $loader = self::instructionLoader($root);
-        $skills = self::skillRegistry($root);
+        $skills ??= self::skillRegistry($root);
 
         return (new EngineBackend($provider, (string) $model))
             ->withTools(self::tools($root, $loader, $skills))

@@ -231,8 +231,38 @@ final class AgentsCommandTest extends TestCase
         $output = ob_get_clean();
 
         $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('No active agents configured', $output);
         $this->assertStringNotContainsString('inactive-agent', $output);
+        // "Active" means currently working, so on a real launch this branch is
+        // the normal idle state rather than an empty manager: Bootstrap
+        // registers six built-in agents plus any on-disk preset. Reporting the
+        // idle count keeps the message from reading as "delegation is
+        // unavailable" when the roster is in fact fully wired.
+        $this->assertStringContainsString('No agents are working right now', $output);
+        $this->assertStringContainsString('1 agent(s) registered and idle', $output);
+        $this->assertStringContainsString('/agent <name>', $output);
+        // The two lines have to agree with each other. "No active agents
+        // CONFIGURED" immediately above "1 agent(s) registered" was a
+        // self-contradiction, and belongs only to the genuinely-empty branch
+        // asserted by testExecuteWithAnEmptyManagerStillPointsAtTheConfigurationFile().
+        $this->assertStringNotContainsString('No active agents configured', $output);
+        $this->assertStringNotContainsString('agents configuration file', $output);
+    }
+
+    public function testExecuteWithAnEmptyManagerStillPointsAtTheConfigurationFile(): void
+    {
+        // The genuinely-empty case keeps the original advice: there is no
+        // roster to inspect with /agent <name>, so telling the user to define
+        // one is the only useful thing to say.
+        $command = new AgentsCommand($this->createAgentManagerWithAgents([]));
+
+        ob_start();
+        $exitCode = $command->execute(new Chat([]), []);
+        $output = ob_get_clean();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('No active agents configured', $output);
+        $this->assertStringContainsString('agents configuration file', $output);
+        $this->assertStringNotContainsString('registered and idle', $output);
     }
 
     public function testExecuteShowAgentWithNoOptionalFields(): void

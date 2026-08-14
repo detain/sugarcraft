@@ -496,6 +496,136 @@ YAML;
     }
 
     // -------------------------------------------------------------------------
+    // Markdown body as the preset prompt
+    // -------------------------------------------------------------------------
+
+    /**
+     * A preset whose prompt is written as the markdown BODY — the Claude Code
+     * and opencode convention — must reach `initialPrompt`.
+     *
+     * The parser only ever looked at the frontmatter, so a body-authored
+     * `reviewer.md` produced `initialPrompt: null`, and `Agent::fromPreset()`'s
+     * `?? ''` then registered the agent with an EMPTY prompt.
+     *
+     * Fails if the fix is reverted: `initialPrompt` is null, so both assertions
+     * below fail immediately.
+     */
+    public function testMarkdownBodyBecomesTheInitialPromptWhenFrontmatterDeclaresNone(): void
+    {
+        file_put_contents(
+            $this->tempDir . '/body-authored.md',
+            "---\nname: body-authored\ndescription: Prompt lives in the body\n---\n\n"
+                . "You are a meticulous reviewer.\n\nQuote the line numbers you cite.\n",
+        );
+
+        $preset = (new AgentPresetRegistry([$this->tempDir]))->load('body-authored');
+
+        $this->assertSame(
+            "You are a meticulous reviewer.\n\nQuote the line numbers you cite.",
+            $preset->initialPrompt,
+        );
+        // list() is the method Bootstrap uses, so it has to agree with load().
+        $this->assertSame(
+            $preset->initialPrompt,
+            (new AgentPresetRegistry([$this->tempDir]))->list()['body-authored']->initialPrompt,
+        );
+    }
+
+    /**
+     * A declared `initialPrompt:` is the more specific statement of intent, so
+     * it wins over a body that is only commentary.
+     */
+    public function testDeclaredInitialPromptWinsOverTheMarkdownBody(): void
+    {
+        file_put_contents(
+            $this->tempDir . '/both.md',
+            "---\nname: both\ndescription: Declares both\ninitialPrompt: The declared prompt.\n---\n\n"
+                . "Notes for humans, not for the model.\n",
+        );
+
+        $preset = (new AgentPresetRegistry([$this->tempDir]))->load('both');
+
+        $this->assertSame('The declared prompt.', $preset->initialPrompt);
+    }
+
+    /** A frontmatter-only preset still reports "no prompt" as null, not ''. */
+    public function testAPresetWithNoBodyAndNoDeclaredPromptStillHasANullInitialPrompt(): void
+    {
+        file_put_contents(
+            $this->tempDir . '/bare.md',
+            "---\nname: bare\ndescription: Nothing but frontmatter\n---\n",
+        );
+
+        $this->assertNull((new AgentPresetRegistry([$this->tempDir]))->load('bare')->initialPrompt);
+    }
+
+    // -------------------------------------------------------------------------
+    // list() path containment
+    // -------------------------------------------------------------------------
+
+    /**
+     * `list()` must apply the containment check `load()` already applies.
+     *
+     * `load()` resolves the candidate with realpath() and refuses anything that
+     * lands outside the search path; `list()` — the method
+     * `Bootstrap::agentPresets()` actually calls — just globbed, so a symlink
+     * `agents/link.md -> ../outside/stolen.md` registered an agent from a file
+     * the search path does not contain. Same trust boundary, two answers.
+     *
+     * Fails if the fix is reverted: the unguarded glob parses the symlink and
+     * `list()` returns the key 'link', tripping assertArrayNotHasKey.
+     */
+    public function testListRefusesAPresetSymlinkedInFromOutsideTheSearchPath(): void
+    {
+        $agents = $this->tempDir . '/agents';
+        $outside = $this->tempDir . '/outside';
+        mkdir($agents, 0777, true);
+        mkdir($outside, 0777, true);
+
+        $this->writePreset($agents . '/genuine.md', 'genuine', 'Lives in the search path');
+        $this->writePreset($outside . '/stolen.md', 'stolen', 'Does not');
+        symlink($outside . '/stolen.md', $agents . '/link.md');
+
+        $registry = new AgentPresetRegistry([$agents]);
+        $presets = $registry->list();
+
+        $this->assertArrayHasKey('genuine', $presets);
+        $this->assertArrayNotHasKey('link', $presets);
+        $this->assertArrayNotHasKey('stolen', $presets);
+
+        // The two methods now agree: load() already refused this file.
+        $this->expectException(\RuntimeException::class);
+        $registry->load('link');
+    }
+
+    /**
+     * The guard must not reject the ordinary case of a search path that is
+     * itself reached through a symlink (a symlinked project directory, or
+     * /tmp -> /private/tmp on macOS): realpath() normalises BOTH sides, so
+     * containment still holds.
+     */
+    public function testListStillFindsPresetsWhenTheSearchPathItselfIsASymlink(): void
+    {
+        $real = $this->tempDir . '/real-agents';
+        mkdir($real, 0777, true);
+        $this->writePreset($real . '/genuine.md', 'genuine', 'Lives in the real directory');
+
+        $linked = $this->tempDir . '/linked-agents';
+        symlink($real, $linked);
+
+        try {
+            $presets = (new AgentPresetRegistry([$linked]))->list();
+
+            $this->assertArrayHasKey('genuine', $presets);
+        } finally {
+            // Removed here, not by tearDown(): removeDir() treats a
+            // symlink-to-directory as a directory and would rmdir() it, which
+            // warns -- and phpunit.xml sets failOnWarning="true".
+            unlink($linked);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

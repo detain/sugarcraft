@@ -42,6 +42,97 @@ final readonly class Agent
     }
 
     /**
+     * Build a registrable agent from one of the six built-in
+     * {@see AgentDefinition} templates.
+     *
+     * The definitions carry no provider or model of their own — they are
+     * library templates, not a session's configuration — so the run's
+     * selected provider/model are supplied by the caller
+     * ({@see \SugarCraft\Crush\Cli\Bootstrap::agentRoster()}). Without this
+     * bridge the templates were a data model with no way into
+     * {@see AgentManager::register()}, which takes an Agent.
+     *
+     * `isActive` defaults to false: on this class, active means *currently
+     * doing work* — {@see \SugarCraft\Crush\Renderer::agentDisplayState()}
+     * renders it as the literal string "working" — and a template nobody has
+     * delegated to yet is not working. {@see AgentManager::active()} derives
+     * the live value from running sub-agents.
+     *
+     * The `$isActive` PARAMETER is therefore an INTENTIONAL DORMANT SEAM with
+     * no production caller, exercised only by {@see
+     * \SugarCraft\Crush\Tests\Agents\AgentTest}. It is kept, not removed,
+     * because these two factories are the supported way to reach the
+     * constructor's full field set, and the one caller that will need it is
+     * roster restoration: a session resumed from disk knows which of its
+     * agents were mid-flight when it was suspended, and derivation cannot
+     * recover that — the sub-agents it would derive from are gone with the
+     * process. Do not delete it to satisfy a coverage tool.
+     */
+    public static function fromDefinition(
+        AgentDefinition $definition,
+        string $provider,
+        string $model,
+        bool $isActive = false,
+    ): self {
+        return new self(
+            name: $definition->name,
+            description: $definition->description,
+            prompt: $definition->prompt,
+            model: $model,
+            provider: $provider,
+            tools: $definition->defaultTools,
+            skillNames: $definition->defaultSkills,
+            hooks: [],
+            isActive: $isActive,
+        );
+    }
+
+    /**
+     * Build a registrable agent from a discovered {@see AgentPreset} — the
+     * `.md`+frontmatter files {@see AgentPresetRegistry} reads out of
+     * `{root}/.sugar-crush/agents` and `~/.sugar-crush/agents`, and the
+     * foreign `.claude/agents`/`.opencode/agents` imports
+     * {@see ForeignAgentPresetRegistry} maps onto the same type.
+     *
+     * `model: 'inherit'` is AgentPreset's documented "use whatever model the
+     * session is on" default, so it resolves to $model rather than being
+     * passed through as a literal model name a provider would reject. The
+     * preset's richer fields (permissionMode, maxTurns, effort, isolation,
+     * mcpServers) have no Agent counterpart and stay on the preset: this
+     * bridge exists so a preset can be *registered and delegated to*, and
+     * {@see AgentManager::createSubAgent()} takes the permission mode as its
+     * own argument.
+     *
+     * The prompt is the preset's `initialPrompt`, which
+     * {@see AgentPresetRegistry} fills from a declared `initialPrompt:` key or,
+     * failing that, from the file's markdown BODY — the convention Claude Code
+     * and opencode both write subagent prompts in. `''` remains the value for
+     * a preset that genuinely declares no prompt; the agent then carries only
+     * its environment block.
+     *
+     * `$isActive` is the same intentional dormant seam documented on
+     * {@see fromDefinition()}.
+     */
+    public static function fromPreset(
+        AgentPreset $preset,
+        string $provider,
+        string $model,
+        bool $isActive = false,
+    ): self {
+        return new self(
+            name: $preset->name,
+            description: $preset->description,
+            prompt: $preset->initialPrompt ?? '',
+            model: $preset->model === 'inherit' || $preset->model === '' ? $model : $preset->model,
+            provider: $provider,
+            tools: $preset->tools,
+            skillNames: $preset->skills,
+            hooks: [],
+            isActive: $isActive,
+        );
+    }
+
+    /**
      * Serialize the agent's persisted configuration.
      *
      * The environment snapshot is deliberately absent: it is per-session

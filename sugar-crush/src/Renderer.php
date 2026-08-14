@@ -89,41 +89,52 @@ use SugarCraft\Crush\Tui\Pane;
  * builds `AgentDisplayState` values directly from
  * `Chat::agentManager()->active()` (real `Agent` registrations) instead.
  *
- * ### R20.fix: `agentManager` is not yet populated in production
+ * ### R20.fix, CLOSED: `agentManager` IS populated in production
  *
  * The rendering below is only reachable when `Chat::agentManager()` is
- * non-null. Today, `SugarCraft\Crush\Cli\Bootstrap::chat()` — the
- * construction path `bin/sugarcrush` actually runs — never passes an
- * `agentManager:` argument (constructing a real one needs a
- * `ProviderInterface` + `SkillRegistry`, which `Bootstrap::backend()`
- * builds internally but does not currently expose for this purpose), so
- * `renderAgentView()` always returns `''` for a real `bin/sugarcrush` user
- * regardless of config. This is honestly a currently-unreachable code path
- * pending that follow-up wiring in `Bootstrap.php` (not in this item's file
- * scope) — it is exercised today only by tests that construct
- * `new Chat(agentManager: ...)` directly. `Chat::handleAgentsCommand()`
- * (and the Ctrl+A shortcut that dispatches through it) degrades to a
- * "not configured" message rather than throwing when `agentManager` is
- * null, so this gap is inert rather than crashing — see that method's
- * docblock.
+ * non-null, and until crush_code.md Phase 1 item 1 it never was:
+ * `SugarCraft\Crush\Cli\Bootstrap::chat()` — the construction path
+ * `bin/sugarcrush` actually runs — passed no `agentManager:` argument, so
+ * `renderAgentView()` returned `''` for every real user regardless of
+ * config, and the path was exercised only by tests constructing
+ * `new Chat(agentManager: ...)` directly. That item added
+ * `Bootstrap::agentManager()` (built from `Bootstrap::provider()` +
+ * `Bootstrap::skillRegistry()`, the two collaborators this note used to
+ * record as unavailable) and passes it in, so the strip below is now
+ * REACHABLE — which is not the same as populated. Nothing in `src/` or
+ * `bin/` calls `AgentManager::createSubAgent()`/`executeSubAgent()` yet:
+ * there is no Task/Agent tool, `Chat::executeAgents()` (the one production
+ * route into `AgentManager::executeAll()`) has no caller, and
+ * `WorkflowEngine` is never constructed. So the null check no longer stops
+ * this code, but a real user still has no way to create the sub-agent that
+ * `active()` derives liveness from. What would populate it is crush_code.md
+ * #45 (the Task tool that delegates to a registered agent) and #13
+ * (constructing `WorkflowEngine`); until one of those lands the strip is
+ * exercised only by tests and by an embedder driving the manager directly.
  *
- * Only `Agent::isActive`/`name`/`description` are real, live data from that
- * path — `AgentWorkerPool`/`AgentManager`'s public API (deliberately not
- * touched by this item; both are out of its file scope) exposes only
- * aggregate counts (`getActiveCount()`/`getQueueSize()`), not a per-agent
- * live output buffer, elapsed time, or token/cost accounting. So
- * `elapsedSeconds`/`tokensUsed`/`costUsd` are honestly reported as `0`
- * rather than fabricated, and {@see \SugarCraft\Crush\Tui\AgentOutputPane}
- * (which needs a real streaming output buffer) and the P5.S7/S8 split-pane
- * renderer (`self::renderWithSplit()`/`renderForCurrentEnvironment()` on
- * `Tui\Renderer`, meant for laying out *multiple* agents' live output side
- * by side) are explicitly NOT wired into `render()` here — with no real
- * per-agent output text to show, a split view would only ever display empty
- * tiles, which is worse than the honest single-column status line this
- * renders instead. Wiring either one for real needs a public
- * "current live output buffer" accessor on `AgentManager`/`AgentWorkerPool`
- * first, which is out of scope for this pass (those files are not in R20's
- * file list). `src/Tui/Components/AgentsPane.php` — also in R20's file list
+ * What that does NOT mean is a permanent agent strip on every launch:
+ * `Bootstrap::agentRoster()` registers its agents INACTIVE, and
+ * `AgentManager::active()` promotes one only while it has a live sub-agent.
+ * A session where nothing has been delegated still renders `''` here — the
+ * same blank frame as before, now for the right reason, and with no live
+ * delegation path yet (see above) that is every session. `handleAgentsCommand()`
+ * keeps its "not configured" degradation for embedders that construct a
+ * `Chat` without a manager.
+ *
+ * `elapsedSeconds`/`tokensUsed`/`costUsd` have been real per-agent telemetry
+ * since W3.S5b (see {@see agentDisplayState()}), and Phase 1 item 1 added the
+ * missing fourth: `AgentManager::liveOutput()`/`liveOutputs()`, the public
+ * "current live output buffer" accessor this note used to say had to exist
+ * before {@see \SugarCraft\Crush\Tui\AgentOutputPane} or the P5.S7/S8
+ * split-pane renderer (`self::renderWithSplit()`/`renderForCurrentEnvironment()`
+ * on `Tui\Renderer`, meant for laying out *multiple* agents' live output side
+ * by side) could be wired to anything but empty tiles.
+ * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane} consumes it
+ * already. Neither of those two is wired into `render()` HERE, and that is now
+ * a layout decision rather than a missing-data one: this class renders the
+ * in-transcript single-column strip, and whether the compositor replaces it is
+ * crush_code.md Phase 8 item 4's call.
+ * `src/Tui/Components/AgentsPane.php` — also in R20's file list
  * — is untouched by THIS class for a different reason than the one recorded
  * here originally. The `App`-keyed pane system it belongs to is no longer
  * disconnected (see the opening paragraph), but that does NOT mean the shell

@@ -352,8 +352,13 @@ final class AgentDashboardPane
             ),
             model: self::safe($agent->model),
             // A registered agent has no output buffer of its own — its
-            // sub-agents do, and those are peeked from the session rows.
-            outputBuffer: [],
+            // sub-agents do, and {@see
+            // \SugarCraft\Crush\Agents\AgentManager::liveOutput()} is the
+            // accessor that rolls theirs up as it is produced (crush_code.md
+            // Phase 1 item 1). Before it existed this was necessarily `[]`,
+            // so a delegating agent's row was a header with no body while a
+            // background session's row showed a live tail.
+            outputBuffer: self::outputTail($manager->liveOutput($agent->name)),
         );
     }
 

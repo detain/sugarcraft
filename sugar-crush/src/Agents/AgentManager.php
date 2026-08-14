@@ -81,14 +81,59 @@ final class AgentManager
     /**
      * Get active agents.
      *
+     * "Active" is what every renderer keys off — {@see
+     * \SugarCraft\Crush\Renderer::agentDisplayState()} and {@see
+     * \SugarCraft\Crush\Tui\Components\AgentDashboardPane::agentEntry()} both
+     * map it onto the literal status string "working" — so an agent with a
+     * live sub-agent is active here even when its registration says
+     * otherwise. That derivation is what lets a roster be registered as idle
+     * templates ({@see \SugarCraft\Crush\Cli\Bootstrap::agentRoster()}) without
+     * the launch painting a permanent strip of agents claiming to be working
+     * on a session where nothing has been delegated yet.
+     *
+     * The derived case returns a `withActive(true)` COPY rather than mutating
+     * the registration: the registration is the configured agent and outlives
+     * any sub-agent, and callers that registered an agent as active still get
+     * their own instance back untouched.
+     *
      * @return array<Agent>
      */
     public function active(): array
     {
-        return array_values(array_filter(
-            $this->agents,
-            fn($agent) => $agent->isActive
-        ));
+        $active = [];
+
+        foreach ($this->agents as $agent) {
+            if ($this->isWorking($agent->name)) {
+                $active[] = $agent->isActive ? $agent : $agent->withActive(true);
+                continue;
+            }
+
+            if ($agent->isActive) {
+                $active[] = $agent;
+            }
+        }
+
+        return $active;
+    }
+
+    /**
+     * Whether the named agent has at least one sub-agent that has not reached
+     * a terminal state.
+     *
+     * Pending counts as working: a sub-agent queued behind
+     * {@see AgentWorkerPool}'s concurrency limit is work the user asked for
+     * and is waiting on, and reporting it as idle would make a saturated pool
+     * look like an empty one.
+     */
+    public function isWorking(string $agentName): bool
+    {
+        foreach ($this->subAgentsOf($agentName) as $subAgent) {
+            if (!$subAgent->isComplete() && !$subAgent->isStopped()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -241,6 +286,68 @@ final class AgentManager
     }
 
     /**
+     * The named agent's output buffer AS IT IS BEING PRODUCED — the public
+     * "current live output buffer" accessor {@see \SugarCraft\Crush\Renderer}'s
+     * own class docblock records as the missing piece, and the one thing that
+     * separates a renderer able to show a sub-agent working from one that can
+     * only show its final result.
+     *
+     * The value is a snapshot, not a stream: {@see executeSubAgent()} appends
+     * to {@see SubAgent::$output} per streamed chunk and {@see executeAll()}
+     * settles the out-of-process pool's output back onto the same field, so a
+     * caller polling this between frames observes real incremental text. Pull
+     * rather than push deliberately — every consumer in this codebase (the
+     * transcript strip, {@see
+     * \SugarCraft\Crush\Tui\Components\AgentDashboardPane}, the split-pane
+     * compositor) renders from a frame tick it already owns, and a push
+     * callback would only invert that control flow.
+     *
+     * Sub-agents are joined newest-last in creation order, which is the order
+     * {@see subAgentsOf()} preserves, so a tail-oriented reader (the dashboard
+     * peeks the last few lines) sees the most recent activity.
+     */
+    public function liveOutput(string $agentName): string
+    {
+        $chunks = [];
+        foreach ($this->subAgentsOf($agentName) as $subAgent) {
+            if ($subAgent->output !== '') {
+                $chunks[] = $subAgent->output;
+            }
+        }
+
+        return implode("\n", $chunks);
+    }
+
+    /**
+     * Every registered agent's live output buffer, keyed by agent name, with
+     * silent agents omitted.
+     *
+     * This is the multi-agent shape the tmux/iTerm2 split-pane compositor
+     * ({@see \SugarCraft\Crush\Tui\Renderer::renderWithSplit()}) needs: it lays
+     * several agents' live output out side by side, so it wants "who is
+     * producing text right now", not one name at a time. Omitting the silent
+     * ones is what keeps it from rendering a row of empty tiles — the exact
+     * reason that compositor was deferred rather than wired.
+     *
+     * Keyed off the REGISTERED agents rather than off the sub-agent map, so a
+     * sub-agent whose registration was removed cannot resurrect a pane.
+     *
+     * @return array<string, string> agent name => live output
+     */
+    public function liveOutputs(): array
+    {
+        $outputs = [];
+        foreach ($this->agents as $name => $agent) {
+            $output = $this->liveOutput($agent->name);
+            if ($output !== '') {
+                $outputs[$name] = $output;
+            }
+        }
+
+        return $outputs;
+    }
+
+    /**
      * Execute a subagent task.
      *
      * @throws \RuntimeException When subagent is not found
@@ -382,15 +489,44 @@ final class AgentManager
         $pool ??= $this->workerPool ?? new AgentWorkerPool();
 
         // Register each sub-agent so it is trackable via getSubAgent().
+        $batch = [];
         foreach ($agents as $agent) {
             assert($agent instanceof SubAgent, 'executeAll requires SubAgent[]');
             if ($agent->task === '') {
                 throw new \InvalidArgumentException('SubAgent task cannot be empty');
             }
             $this->subAgents[$agent->id] = $agent;
+            $batch[] = $agent->id;
         }
 
-        foreach ($pool->executeAll($agents, $request) as $result) {
+        try {
+            yield from $this->drain($pool->executeAll($agents, $request));
+        } finally {
+            // The pool yields a result for every sub-agent it RAN, and none for
+            // the ones it did not: withStopOnFirstFailure() empties the queue on
+            // the first failure and cancelAll() empties it outright, so those
+            // sub-agents are never dispatched and never settled by the loop
+            // above. Left at `pending`, they make isWorking() -- and through it
+            // active(), the status strip and the dashboard -- report the agent
+            // as `[working]` for the rest of the session with nothing running.
+            // A caller that abandons this generator mid-iteration leaves the
+            // same wreckage, which is why this is a finally rather than a tail.
+            $this->settleAbandoned($batch);
+        }
+    }
+
+    /**
+     * Mirror each pool result back onto the SubAgent this manager holds.
+     *
+     * Split out of {@see executeAll()} so its `finally` cannot swallow or
+     * reorder the yields; the settling has to happen after the LAST one.
+     *
+     * @param \Generator<AgentResult> $results
+     * @return \Generator<AgentResult>
+     */
+    private function drain(\Generator $results): \Generator
+    {
+        foreach ($results as $result) {
             $subAgent = $this->subAgents[$result->agentId] ?? null;
             if ($subAgent !== null) {
                 // The pool executes out-of-process, so the SubAgent object held
@@ -402,10 +538,73 @@ final class AgentManager
                 $subAgent->completedAt = $result->completedAt ?? $subAgent->completedAt;
                 $subAgent->tokensUsed += $result->tokensUsed;
                 $subAgent->costUsd += $result->costUsd;
+                // Status and output, for the same reason and with sharper
+                // consequences: a pool-executed sub-agent used to be left at
+                // `pending` with an empty buffer forever, so isWorking() (and
+                // through it active(), the status strip and the dashboard)
+                // would report a finished agent as still working for the rest
+                // of the session, and liveOutput() would never see the text the
+                // child actually produced.
+                $subAgent->status = self::subAgentStatus($result->status);
+                if ($result->output !== null) {
+                    $subAgent->output = $result->output;
+                }
+                $subAgent->error ??= $result->error?->getMessage();
             }
 
             yield $result;
         }
+    }
+
+    /**
+     * Settle every sub-agent of a batch the pool never reported on.
+     *
+     * `stopped` rather than `failed`: these tasks were cancelled or abandoned
+     * before they ran, which is what stopSubAgent() already records for a task
+     * the user killed — reporting them as failures would invent an outcome the
+     * work never had. completedAt is stamped for the same reason that method
+     * stamps it: elapsedSeconds() freezes the span on it, and a null there
+     * counts against wall-clock forever.
+     *
+     * @param list<string> $batch
+     */
+    private function settleAbandoned(array $batch): void
+    {
+        foreach ($batch as $id) {
+            $subAgent = $this->subAgents[$id] ?? null;
+            if ($subAgent === null || $subAgent->isComplete() || $subAgent->isStopped()) {
+                continue;
+            }
+
+            $subAgent->status = SubAgent::STATUS_STOPPED;
+            $subAgent->completedAt ??= new \DateTimeImmutable();
+            $subAgent->error ??= 'Cancelled before completion.';
+        }
+    }
+
+    /**
+     * Map the worker pool's {@see AgentStatus} onto {@see SubAgent}'s own
+     * status vocabulary.
+     *
+     * The two enumerations exist because SubAgent predates AgentStatus and
+     * carries string constants; they are not merged here because SubAgent's
+     * set is a strict subset (it has no Queued) and collapsing Queued onto
+     * `pending` is a decision this mapping should state rather than a rename
+     * should hide. TimedOut folds onto `failed` for the same reason
+     * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::sessionStatus()}
+     * folds it: from the caller's side a timeout is a failure that happens to
+     * have a cause.
+     */
+    private static function subAgentStatus(AgentStatus $status): string
+    {
+        return match ($status) {
+            AgentStatus::Pending, AgentStatus::Queued => SubAgent::STATUS_PENDING,
+            AgentStatus::Running => SubAgent::STATUS_RUNNING,
+            AgentStatus::Streaming => SubAgent::STATUS_STREAMING,
+            AgentStatus::Completed => SubAgent::STATUS_COMPLETE,
+            AgentStatus::Stopped => SubAgent::STATUS_STOPPED,
+            AgentStatus::Failed, AgentStatus::TimedOut => SubAgent::STATUS_FAILED,
+        };
     }
 
     /**

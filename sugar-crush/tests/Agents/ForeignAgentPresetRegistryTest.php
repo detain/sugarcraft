@@ -618,6 +618,97 @@ final class ForeignAgentPresetRegistryTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Markdown body as the imported prompt
+    // -------------------------------------------------------------------------
+
+    /**
+     * Claude Code writes a subagent's system prompt as the markdown BODY, and
+     * `initialPrompt:` frontmatter is the rare form — so importing only the
+     * frontmatter produced a preset with a null prompt for the common case.
+     *
+     * Fails if the fix is reverted: `initialPrompt` is null and the assertion
+     * on the body text fails.
+     */
+    public function testDiscoverClaudeTakesThePromptFromTheMarkdownBody(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/claude-body';
+        $this->writeAgent(
+            $projectRoot . '/.claude/agents',
+            'reviewer',
+            "name: reviewer\ndescription: Reviews code",
+            "You are a meticulous reviewer.\n\nCite line numbers.\n",
+        );
+
+        $preset = $registry->discoverClaude($projectRoot)['reviewer'];
+
+        $this->assertSame("You are a meticulous reviewer.\n\nCite line numbers.", $preset->initialPrompt);
+    }
+
+    /** A declared `initialPrompt:` still wins over the body. */
+    public function testDiscoverClaudePrefersADeclaredInitialPromptOverTheBody(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/claude-both';
+        $this->writeAgent(
+            $projectRoot . '/.claude/agents',
+            'reviewer',
+            "description: Reviews code\ninitialPrompt: The declared prompt.",
+            "Notes for humans.\n",
+        );
+
+        $this->assertSame(
+            'The declared prompt.',
+            $registry->discoverClaude($projectRoot)['reviewer']->initialPrompt,
+        );
+    }
+
+    /** Same convention, same fix, on the opencode side. */
+    public function testDiscoverOpencodeTakesThePromptFromTheMarkdownBody(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/oc-body';
+        $this->writeAgent(
+            $projectRoot . '/.opencode/agents',
+            'builder',
+            'description: Builds things',
+            "You build things carefully.\n",
+        );
+
+        $preset = $registry->discoverOpencode($projectRoot)['builder'];
+
+        $this->assertSame('You build things carefully.', $preset->initialPrompt);
+    }
+
+    /** A declared `prompt:` still wins over the body. */
+    public function testDiscoverOpencodePrefersADeclaredPromptOverTheBody(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/oc-both';
+        $this->writeAgent(
+            $projectRoot . '/.opencode/agents',
+            'builder',
+            "description: Builds things\nprompt: The declared prompt.",
+            "Notes for humans.\n",
+        );
+
+        $this->assertSame(
+            'The declared prompt.',
+            $registry->discoverOpencode($projectRoot)['builder']->initialPrompt,
+        );
+    }
+
+    /** Frontmatter-only files still report "no prompt" as null rather than ''. */
+    public function testAnImportedAgentWithNoBodyAndNoPromptKeyHasANullInitialPrompt(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/claude-bare';
+        $this->writeAgent($projectRoot . '/.claude/agents', 'bare', 'description: Nothing but frontmatter', '');
+
+        $this->assertNull($registry->discoverClaude($projectRoot)['bare']->initialPrompt);
+    }
+
+    // -------------------------------------------------------------------------
     // AgentPreset::$source default (added for foreign-provenance badging)
     // -------------------------------------------------------------------------
 

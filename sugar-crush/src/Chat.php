@@ -3763,11 +3763,16 @@ final class Chat implements Model
 
     private function handleAgentsCommand(string $inputBuf): array
     {
-        // R20.fix: Bootstrap::chat() (the real construction path
-        // `bin/sugarcrush` uses) never passes an `agentManager:` -- so this
-        // was reachable with zero configuration via a typed "/agents" *and*,
-        // since R20 added the Ctrl+A shortcut below in update(), via a
-        // single accidental keystroke. The former "?? throw" here escaped
+        // R20.fix: Bootstrap::chat() USED to pass no `agentManager:` -- so
+        // this was reachable with zero configuration via a typed "/agents"
+        // *and*, since R20 added the Ctrl+A shortcut below in update(), via a
+        // single accidental keystroke. crush_code.md Phase 1 item 1 closed
+        // that gap (Bootstrap::agentManager() now supplies a real one on every
+        // launch), so the branch below is no longer what a CLI user hits; it
+        // remains the degradation for embedders that construct a Chat
+        // directly, and is kept because that is a supported construction --
+        // Chat's every other collaborator is optional the same way. The
+        // former "?? throw" here escaped
         // uncaught out of Chat::update(): candy-core's Program has no
         // try/catch around its synchronous update() dispatch, so the
         // exception propagated out of the event loop entirely, skipping
@@ -4276,10 +4281,23 @@ final class Chat implements Model
     {
         $supervisor = $this->backgroundSupervisor;
         // A registered "default" agent first, then whatever IS registered,
-        // then a synthesised stand-in: Bootstrap::chat() does not pass an
-        // AgentManager at all today, and refusing to background anything
-        // until it does would leave this command as unreachable as the
-        // supervisor it drives.
+        // then a synthesised stand-in.
+        //
+        // The middle arm is what a real launch takes now. Until crush_code.md
+        // Phase 1 item 1, Bootstrap::chat() passed no AgentManager, so every
+        // `/bg` and `/fork` fell through to defaultBackgroundAgent() — and
+        // BackgroundSupervisor::spawnSession() feeds $agent->provider and
+        // $agent->model straight into the daemon's command line, so those
+        // daemons were launched with the literal strings "unknown"/"unknown".
+        // Registering the roster fixed that as a side effect: the session's
+        // real provider/model now reach the child. That is a live behaviour
+        // change, so it is pinned by
+        // ChatTest::testBackgroundSpawnRunsTheDaemonAsARosterAgentNotTheUnknownStandIn()
+        // rather than left to be silently undone by unwiring the manager.
+        //
+        // The stand-in stays for embedders that construct a Chat with no
+        // manager: refusing to background anything without one would leave
+        // this command as unreachable as the supervisor it drives.
         $agent = $this->agentManager?->get('default')
             ?? ($this->agentManager?->all()[0] ?? null)
             ?? self::defaultBackgroundAgent();
