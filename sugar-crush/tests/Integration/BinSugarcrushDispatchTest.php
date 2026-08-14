@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\ArgvParser;
+use SugarCraft\Crush\Cli\Help;
 
 /**
  * crush_code.md Phase 0 item 3: every unrecognized or incomplete CLI flag
@@ -80,11 +81,11 @@ final class BinSugarcrushDispatchTest extends TestCase
     public static function unknownFlagInvocations(): array
     {
         return [
-            // --version is NOT implemented in this step (that is crush_code.md
-            // Phase 4 item 3); failing cleanly as an unknown flag is the
-            // correct intermediate state, and this test is what will have to
-            // be updated when it lands.
-            '--version'            => [['--version']],
+            // `--version` used to live here: crush_code.md Phase 0 item 3 made
+            // it fail cleanly as an unknown flag, and Phase 4 item 3 made it a
+            // real flag. A near-miss typo of it stands in, so the guard that
+            // used to catch `--version` itself is still covered.
+            'near-miss typo'       => [['--verzion']],
             'unrecognized long'    => [['--bogus-flag']],
             'unrecognized short'   => [['-z']],
             // -px is a single unknown token, not "-p" + "x" — the parser does
@@ -266,6 +267,138 @@ final class BinSugarcrushDispatchTest extends TestCase
 
         $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
         $this->assertStringContainsString('Usage:', $result['stdout']);
+    }
+
+    // -------------------------------------------------------------------------
+    // crush_code.md Phase 4 item 3: --version dispatches like --help.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: list<string>}>
+     */
+    public static function versionInvocations(): array
+    {
+        return [
+            'long'  => [['--version']],
+            'short' => [['-v']],
+        ];
+    }
+
+    /**
+     * Safe to exec, and the only way to prove the thing that actually matters:
+     * `--version` has to answer on a machine with no provider and no TTY, and
+     * must never reach `Program::run()`. A regression that drops the dispatch
+     * branch reopens the TUI, so this fails on the deadline rather than
+     * hanging the suite.
+     *
+     * The env is passed explicitly (empty overrides -> minimal environment) so
+     * a runner's real `SUGARCRUSH_PROVIDER` cannot turn this into a run that
+     * constructs a backend before printing.
+     *
+     * @param list<string> $args
+     *
+     * @dataProvider versionInvocations
+     */
+    public function testVersionPrintsAndExitsZeroWithoutOpeningTheTui(array $args): void
+    {
+        $result = $this->runBin($args, []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringStartsWith('sugarcrush ', $result['stdout']);
+        $this->assertStringNotContainsString("\x1b", $result['stdout'], 'the TUI was entered');
+        $this->assertStringNotContainsString('unrecognized option', $result['stderr']);
+    }
+
+    /**
+     * The version reported by the binary is the one {@see Help::versionString()}
+     * resolves — i.e. the binary is not hardcoding a second copy of it.
+     */
+    public function testVersionMatchesTheResolvedPackageVersion(): void
+    {
+        $result = $this->runBin(['--version'], []);
+
+        $this->assertSame('sugarcrush ' . Help::versionString() . "\n", $result['stdout']);
+    }
+
+    // -------------------------------------------------------------------------
+    // Follow-up #48: a prompt option handed a flag is a usage error.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: list<string>, 1: string}>
+     */
+    public static function flagShapedPromptInvocations(): array
+    {
+        return [
+            '-p'       => [['-p', '--verbose'], '-p'],
+            '--prompt' => [['--prompt', '--verbose'], '--prompt'],
+            'run'      => [['run', '--verbose'], 'run'],
+        ];
+    }
+
+    /**
+     * These used to run a real one-shot turn whose prompt text was the literal
+     * string "--verbose" — a live backend call, billed, answering a question
+     * nobody asked. Exit 2 (nothing attempted, a retry cannot help), and the
+     * message names the option rather than only the token.
+     *
+     * @param list<string> $args
+     *
+     * @dataProvider flagShapedPromptInvocations
+     */
+    public function testAFlagShapedPromptValueIsAUsageErrorAndNeverReachesABackend(array $args, string $option): void
+    {
+        $result = $this->runBin($args, []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString($option . ' expects a prompt', $result['stderr']);
+        $this->assertStringContainsString('--verbose', $result['stderr']);
+        $this->assertStringContainsString('--prompt=', $result['stderr'], 'the escape hatch must be named');
+        $this->assertSame('', $result['stdout'], 'nothing was attempted, so nothing may look like an answer');
+    }
+
+    /**
+     * The sharper of the two messages wins: the unconsumed flag also lands in
+     * $unknownFlags, and "unrecognized option: --verbose" blames the symptom
+     * rather than naming the option that was misused.
+     */
+    public function testTheFlagShapedPromptErrorOutranksTheUnknownFlagError(): void
+    {
+        $result = $this->runBin(['-p', '--verbose'], []);
+
+        $this->assertStringNotContainsString('unrecognized option', $result['stderr']);
+    }
+
+    /**
+     * Same guarantee the other bin-level usage errors carry: a
+     * `--output-format json` caller reads stdout and nothing else, so this
+     * must arrive there as one document rather than as an empty pipe.
+     */
+    public function testTheFlagShapedPromptErrorStillEmitsAJsonDocument(): void
+    {
+        $result = $this->runBin(['--output-format', 'json', '-p', '--verbose'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($result['stdout'], true));
+        $this->assertNull($decoded['result']);
+        $this->assertSame('usage', $decoded['error']['type']);
+        $this->assertStringContainsString('expects a prompt', $decoded['error']['message']);
+    }
+
+    /**
+     * The escape hatch has to keep working end to end, not just at the parse
+     * layer — but exec'ing it would call a backend, so it is asserted where
+     * the other backend-bound vectors are.
+     */
+    public function testTheEqualsFormStillCarriesAPromptBeginningWithADash(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--prompt=--verbose']);
+
+        $this->assertNull($args->usageError);
+        $this->assertSame('--verbose', $args->prompt);
+        $this->assertTrue($args->promptRequested);
     }
 
     /**

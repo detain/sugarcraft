@@ -10,8 +10,8 @@ namespace SugarCraft\Crush\Cli;
  * sugar-post/bin/pop's hand-rolled getopt()-style loop rather than mirroring
  * any single upstream charmbracelet method.
  *
- * Supports: -p/--prompt <value>, --help/-h, the `run "<prompt>"` positional
- * subcommand form (an alias for -p "<prompt>", advertised by
+ * Supports: -p/--prompt <value>, --help/-h, --version/-v, the `run "<prompt>"`
+ * positional subcommand form (an alias for -p "<prompt>", advertised by
  * {@see Help::screen()} and {@see NonInteractive::run()}'s own usage
  * message), --output-format/--output-format=<value> (advertised by
  * {@see Help::screen()}, consumed by {@see NonInteractive::format()}), the
@@ -20,11 +20,13 @@ namespace SugarCraft\Crush\Cli;
  *
  * Unrecognised `-`-prefixed arguments are NOT applied, but they are recorded
  * in {@see ParsedArgs::$unknownFlags} rather than dropped: dropping them made
- * `sugarcrush --version` (and every other typo) fall all the way through
- * `bin/sugarcrush` into the blocking full-screen TUI instead of failing fast
- * — the same bug class as the already-fixed "`--help` opens the TUI"
- * (crush_code.md Phase 0 item 3). The binary turns a non-empty
- * `$unknownFlags` into a usage error (exit 2) before it can reach `Program`.
+ * every typo fall all the way through `bin/sugarcrush` into the blocking
+ * full-screen TUI instead of failing fast — the same bug class as the
+ * already-fixed "`--help` opens the TUI" (crush_code.md Phase 0 item 3). The
+ * binary turns a non-empty `$unknownFlags` into a usage error (exit 2) before
+ * it can reach `Program`. `--version` was the original reproduction for that
+ * item and is now a recognised flag of its own (crush_code.md Phase 4 item 3),
+ * dispatched by the binary exactly the way `--help` is.
  */
 final class ArgvParser
 {
@@ -38,6 +40,8 @@ final class ArgvParser
      *                       not as a flag's value and not after `--`)
      *   --help           -> help = true
      *   -h               -> help = true
+     *   --version        -> version = true
+     *   -v               -> version = true
      *   --output-format <value>       -> outputFormat = <value>
      *   --output-format=<value>       -> outputFormat = <value>
      *
@@ -64,6 +68,15 @@ final class ArgvParser
      * {@see NonInteractive::run()}'s "no prompt given" error instead of
      * silently opening the TUI.
      *
+     * A prompt VALUE that is itself flag-shaped is a usage error rather than a
+     * prompt (follow-up #48): `sugarcrush -p --verbose` used to run a one-shot
+     * turn whose prompt text was the literal string "--verbose", which is
+     * never what the caller meant and is unreadable in a CI log. The offending
+     * token is left unconsumed and {@see ParsedArgs::$usageError} carries the
+     * message; `--prompt=--verbose` remains the escape hatch for a prompt that
+     * genuinely starts with a dash, because the `=` form takes its value from
+     * the same token and so cannot be ambiguous.
+     *
      * @param array<int, string> $argv Command-line arguments, as received by
      *   a PHP CLI entry point ($argv[0] = script name is expected and
      *   skipped — parsing starts at $argv[1]).
@@ -72,12 +85,14 @@ final class ArgvParser
     public static function parse(array $argv): ParsedArgs
     {
         $help = false;
+        $version = false;
         $prompt = null;
         $root = null;
         $outputFormat = ParsedArgs::DEFAULT_OUTPUT_FORMAT;
         $positional = [];
         $unknownFlags = [];
         $promptRequested = false;
+        $usageError = null;
         $endOfOptions = false;
 
         $i = 1; // skip $argv[0] (script name)
@@ -123,7 +138,14 @@ final class ArgvParser
             // reaches here at all), and `sugarcrush run run` is a prompt of
             // "run" rather than a subcommand that re-arms itself.
             if ($arg === 'run' && !$promptRequested) {
-                $prompt = $argv[$i + 1] ?? null;
+                $next = $argv[$i + 1] ?? null;
+                if (self::looksLikeFlag($next)) {
+                    $usageError ??= self::flagAsPromptError('run', (string) $next);
+                    $promptRequested = true;
+                    ++$i; // leave the flag for the loop rather than eating it
+                    continue;
+                }
+                $prompt = $next;
                 $promptRequested = true;
                 $i += 2;
                 continue;
@@ -136,11 +158,25 @@ final class ArgvParser
                 continue;
             }
 
+            // --version or -v
+            if ($arg === '--version' || $arg === '-v') {
+                $version = true;
+                ++$i;
+                continue;
+            }
+
             // -p <value>
             if ($arg === '-p') {
-                $prompt = $argv[++$i] ?? null;
+                $next = $argv[$i + 1] ?? null;
+                if (self::looksLikeFlag($next)) {
+                    $usageError ??= self::flagAsPromptError('-p', (string) $next);
+                    $promptRequested = true;
+                    ++$i;
+                    continue;
+                }
+                $prompt = $next;
                 $promptRequested = true;
-                ++$i;
+                $i += 2;
                 continue;
             }
 
@@ -154,9 +190,16 @@ final class ArgvParser
 
             // --prompt <value>
             if ($arg === '--prompt') {
-                $prompt = $argv[++$i] ?? null;
+                $next = $argv[$i + 1] ?? null;
+                if (self::looksLikeFlag($next)) {
+                    $usageError ??= self::flagAsPromptError('--prompt', (string) $next);
+                    $promptRequested = true;
+                    ++$i;
+                    continue;
+                }
+                $prompt = $next;
                 $promptRequested = true;
-                ++$i;
+                $i += 2;
                 continue;
             }
 
@@ -212,7 +255,7 @@ final class ArgvParser
             }
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError);
     }
 
     /**
@@ -252,6 +295,38 @@ final class ArgvParser
     {
         return $s !== '' && ($s[0] === '/' || $s[0] === '.' || \strpos($s, '/') !== false);
     }
+
+    /**
+     * Is this token flag-shaped, i.e. something no caller ever meant as a
+     * prompt?
+     *
+     * A lone `-` is deliberately NOT flag-shaped: it is the conventional
+     * stdin/stdout placeholder across the whole POSIX toolset, so treating it
+     * as an error would reject a token that has a long-standing meaning as an
+     * operand. `--` IS flag-shaped — swallowing the end-of-options separator
+     * as prompt text is the same silent misreading as swallowing `--verbose`.
+     */
+    private static function looksLikeFlag(?string $token): bool
+    {
+        return $token !== null && \strlen($token) > 1 && $token[0] === '-';
+    }
+
+    /**
+     * The usage error for a prompt option whose value is a flag.
+     *
+     * Names the escape hatch inline because the alternative reading — "the
+     * tool refuses to accept my prompt" — is the wrong conclusion: a prompt
+     * beginning with a dash is legal, it just has to arrive in a token that
+     * cannot be mistaken for an option.
+     */
+    private static function flagAsPromptError(string $option, string $value): string
+    {
+        return \sprintf(
+            'sugarcrush: %s expects a prompt, but the next argument is the option %s',
+            $option,
+            $value,
+        );
+    }
 }
 
 /**
@@ -274,6 +349,13 @@ final readonly class ParsedArgs
      * @param bool $promptRequested True when `-p`/`--prompt`/`--prompt=`/`run`
      *   appeared at all, even without a value — distinct from
      *   `$prompt !== null`, which is only true when a value followed.
+     * @param bool $version True when `--version`/`-v` appeared. Dispatched by
+     *   `bin/sugarcrush` the same way `$help` is: print and exit before any
+     *   TUI/backend wiring is touched.
+     * @param string|null $usageError A malformed invocation that is neither an
+     *   unknown flag nor a bad `--root` — currently only "a prompt option was
+     *   handed a flag" (follow-up #48). Non-null means the binary must fail
+     *   with exit 2 rather than run anything.
      */
     private function __construct(
         public bool $help,
@@ -282,6 +364,8 @@ final readonly class ParsedArgs
         public string $outputFormat = self::DEFAULT_OUTPUT_FORMAT,
         public array $unknownFlags = [],
         public bool $promptRequested = false,
+        public bool $version = false,
+        public ?string $usageError = null,
     ) {
     }
 
@@ -299,7 +383,9 @@ final readonly class ParsedArgs
         string $outputFormat = self::DEFAULT_OUTPUT_FORMAT,
         array $unknownFlags = [],
         bool $promptRequested = false,
+        bool $version = false,
+        ?string $usageError = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError);
     }
 }

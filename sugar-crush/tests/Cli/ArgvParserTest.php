@@ -210,11 +210,17 @@ final class ArgvParserTest extends TestCase
         $this->assertSame(['--unknown', '--also-unknown'], $result->unknownFlags);
     }
 
+    /**
+     * `--version` used to be this vector's first entry — it was the original
+     * reproduction for the unknown-flag guard. It is a real flag now
+     * (crush_code.md Phase 4 item 3), so an equally-unknown long flag stands in
+     * for it and the ordering assertion is unchanged.
+     */
     public function testEveryUnknownFlagIsRecordedInOrder(): void
     {
-        $result = ArgvParser::parse(['sugarcrush', '--version', '-z', '--nope']);
+        $result = ArgvParser::parse(['sugarcrush', '--verzion', '-z', '--nope']);
 
-        $this->assertSame(['--version', '-z', '--nope'], $result->unknownFlags);
+        $this->assertSame(['--verzion', '-z', '--nope'], $result->unknownFlags);
     }
 
     public function testRecognisedInvocationsRecordNoUnknownFlags(): void
@@ -395,13 +401,20 @@ final class ArgvParserTest extends TestCase
         $this->assertNull($result->root);
     }
 
-    public function testPromptValueCanBeNextFlag(): void
+    /**
+     * Inverted from what it originally pinned. This used to assert that `-p`
+     * consumes a following FLAG as its value ("mirrors getopt behaviour in
+     * pop") — but nothing in getopt does that, and no caller typing
+     * `sugarcrush -p --verbose` meant to send the four characters "--verbose"
+     * to a model. It is a usage error now (follow-up #48); see
+     * {@see self::flagShapedPromptValues()} for the full matrix.
+     */
+    public function testPromptValueIsNotTheNextFlag(): void
     {
-        // When -p is followed by another flag (not a value), the next flag
-        // is consumed as the value. This mirrors getopt behaviour in pop.
-        $result = ArgvParser::parse(['sugarcrush', '-p', '--help']);
+        $result = ArgvParser::parse(['sugarcrush', '-p', '--verbose']);
 
-        $this->assertSame('--help', $result->prompt);
+        $this->assertNull($result->prompt);
+        $this->assertNotNull($result->usageError);
     }
 
     // -------------------------------------------------------------------------
@@ -616,5 +629,140 @@ final class ArgvParserTest extends TestCase
         $missing = sys_get_temp_dir() . '/sugarcrush_no_such_root_' . uniqid('', true);
 
         $this->assertSame($missing, ArgvParser::parse(['sugarcrush', '--root', $missing])->root);
+    }
+
+    // -------------------------------------------------------------------------
+    // --version / -v (crush_code.md Phase 4 item 3)
+    // -------------------------------------------------------------------------
+
+    public function testVersionDefaultsToFalse(): void
+    {
+        $this->assertFalse(ArgvParser::parse(['sugarcrush'])->version);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function versionFlags(): array
+    {
+        return ['long' => ['--version'], 'short' => ['-v']];
+    }
+
+    /**
+     * @dataProvider versionFlags
+     */
+    public function testVersionFlagIsRecognisedAndNotAnUnknownFlag(string $flag): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', $flag]);
+
+        $this->assertTrue($result->version);
+        $this->assertSame([], $result->unknownFlags, 'the flag fell through to the unknown-flag recorder');
+        $this->assertFalse($result->help);
+        $this->assertFalse($result->promptRequested);
+    }
+
+    /**
+     * `--` protects what follows it from being read as a flag, so
+     * `sugarcrush -- --version` is a (non-path-shaped, therefore discarded)
+     * operand and the binary opens the TUI — the same contract `--help` and
+     * every other flag already honour.
+     */
+    public function testVersionAfterTheSeparatorIsAnOperandNotAFlag(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--', '--version']);
+
+        $this->assertFalse($result->version);
+        $this->assertSame([], $result->unknownFlags);
+    }
+
+    // -------------------------------------------------------------------------
+    // A prompt option handed a flag is a usage error (follow-up #48)
+    // -------------------------------------------------------------------------
+
+    public function testUsageErrorDefaultsToNull(): void
+    {
+        $this->assertNull(ArgvParser::parse(['sugarcrush', '-p', 'hello'])->usageError);
+    }
+
+    /**
+     * @return array<string, array{0: list<string>, 1: string}>
+     */
+    public static function flagShapedPromptValues(): array
+    {
+        return [
+            '-p'          => [['sugarcrush', '-p', '--verbose'], '-p'],
+            '--prompt'    => [['sugarcrush', '--prompt', '--verbose'], '--prompt'],
+            'run'         => [['sugarcrush', 'run', '--verbose'], 'run'],
+            // The end-of-options separator is flag-shaped too: swallowing it as
+            // prompt text is the same silent misreading.
+            '-p then --'  => [['sugarcrush', '-p', '--'], '-p'],
+            'short flag'  => [['sugarcrush', '-p', '-z'], '-p'],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     *
+     * @dataProvider flagShapedPromptValues
+     */
+    public function testAFlagShapedPromptValueIsAUsageErrorAndNotThePrompt(array $argv, string $option): void
+    {
+        $result = ArgvParser::parse($argv);
+
+        $this->assertNotNull($result->usageError, 'the flag was silently accepted as the prompt');
+        $this->assertStringContainsString($option, $result->usageError, 'the offending option must be named');
+        $this->assertStringContainsString($argv[2], $result->usageError, 'the offending value must be named');
+        $this->assertNull($result->prompt);
+    }
+
+    /**
+     * The escape hatch: the `=` form takes its value from the same token, so
+     * it cannot be ambiguous and a leading dash stays literal.
+     */
+    public function testTheEqualsFormStillAcceptsAPromptBeginningWithADash(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--prompt=--verbose']);
+
+        $this->assertNull($result->usageError);
+        $this->assertSame('--verbose', $result->prompt);
+        $this->assertTrue($result->promptRequested);
+    }
+
+    /**
+     * A lone `-` is the POSIX stdin/stdout placeholder, not an option — a
+     * caller who types it meant it, so it stays a legal prompt.
+     */
+    public function testALoneDashIsStillAcceptedAsAPrompt(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', '-']);
+
+        $this->assertNull($result->usageError);
+        $this->assertSame('-', $result->prompt);
+    }
+
+    /**
+     * The rejected token is left unconsumed so the loop still classifies it —
+     * which is what lets the binary report the sharper usage error first and
+     * still name the flag if the user asked for `--help` in the same breath.
+     */
+    public function testTheRejectedValueIsStillClassifiedByTheRestOfTheParse(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', '--help']);
+
+        $this->assertNotNull($result->usageError);
+        $this->assertTrue($result->help);
+    }
+
+    /**
+     * Only the FIRST such mistake is reported, so the message is deterministic
+     * rather than a function of how many options the caller got wrong.
+     */
+    public function testOnlyTheFirstFlagShapedPromptValueIsReported(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', '--verbose', '--prompt', '--quiet']);
+
+        $this->assertNotNull($result->usageError);
+        $this->assertStringContainsString('--verbose', $result->usageError);
+        $this->assertStringNotContainsString('--quiet', $result->usageError);
     }
 }

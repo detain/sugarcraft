@@ -148,6 +148,20 @@ final class HelpTest extends TestCase
         $this->assertStringContainsString('github.com/detain/sugarcraft', $screen);
     }
 
+    /**
+     * The unknown-flag error tells the user to "Try `sugarcrush --help` for
+     * the list of supported options", so every flag ArgvParser accepts has to
+     * be listed here — `--version` included, or it is a supported option the
+     * documented discovery path never mentions.
+     */
+    public function testScreenListsTheVersionFlag(): void
+    {
+        $screen = Help::screen();
+
+        $this->assertStringContainsString('--version', $screen);
+        $this->assertStringContainsString('-v,', $screen);
+    }
+
     public function testScreenDoesNotContainTuiRenderingCode(): void
     {
         $screen = Help::screen();
@@ -160,5 +174,51 @@ final class HelpTest extends TestCase
         // It should not contain printf-style format placeholders (implies
         // missed sprintf() interpolation).
         $this->assertStringNotContainsString('%s', $screen);
+    }
+
+    // -------------------------------------------------------------------------
+    // --version (crush_code.md Phase 4 item 3)
+    // -------------------------------------------------------------------------
+
+    public function testVersionNamesTheBinaryAndEndsWithASingleNewline(): void
+    {
+        $version = Help::version();
+
+        $this->assertStringStartsWith('sugarcrush ', $version);
+        $this->assertStringEndsWith("\n", $version);
+        $this->assertSame(1, substr_count($version, "\n"), '--version is one line');
+        $this->assertStringNotContainsString("\x1b[", $version, 'plain text, never a TUI component');
+    }
+
+    /**
+     * The point of sourcing this from Composer's install metadata rather than
+     * a literal: the string has to be SOMETHING specific, and "unknown" means
+     * the package could not be found in the installed set — which, running out
+     * of this repo's own vendor/, would be a wiring bug.
+     */
+    public function testVersionStringResolvesFromTheInstalledPackageMetadata(): void
+    {
+        $resolved = Help::versionString();
+
+        $this->assertNotSame('unknown', $resolved);
+        $this->assertNotSame('', $resolved);
+    }
+
+    /**
+     * A dev checkout must carry its commit reference: every checkout since the
+     * branch existed reports the same `dev-master`, so the bare version
+     * identifies nothing on its own. A tagged install is already exact and is
+     * deliberately left undecorated.
+     */
+    public function testDevVersionsCarryACommitReference(): void
+    {
+        $resolved = Help::versionString();
+
+        if (!str_contains($resolved, 'dev')) {
+            $this->assertDoesNotMatchRegularExpression('/\([0-9a-f]{7}\)$/', $resolved);
+            return;
+        }
+
+        $this->assertMatchesRegularExpression('/ \([0-9a-f]{7}\)$/', $resolved);
     }
 }
