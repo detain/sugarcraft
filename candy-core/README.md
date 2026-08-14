@@ -62,6 +62,8 @@ final class Counter implements Model
 - **`Msg`** — marker interface for events. Built-ins: `KeyMsg`, `WindowSizeMsg`, `QuitMsg`.
 - **`Cmd`** — `Closure(): ?Msg`. Async work whose result is dispatched as a Msg. Helpers in `Cmd::quit()`, `Cmd::batch()`, `Cmd::send()`.
 - **`Program`** — orchestrator. Sets up TTY, runs the ReactPHP event loop, dispatches Msgs, drives renders at the configured framerate.
+- **Timer accuracy** — on a libuv-backed loop (`ExtUvLoop`, picked automatically when `ext-uv` is installed) a timer's deadline is computed against a clock refreshed once per loop iteration, so a timer armed after long blocking work in a callback fires early by that much. Keep callbacks short; see the notes on `Program::run()` for the measured numbers and the safe paths.
+- **Timers in tests** — a PHPUnit process runs the loop in short bursts with long synchronous gaps, which is the same hazard writ large: a safety timer can fire instantly. Suites that arm one should pin a clock-fresh loop from `tests/bootstrap.php` with candy-testing's `SugarCraft\Testing\LoopPin::pinStableClock()`.
 - **`InputReader`** — stateful byte-stream parser; handles split escape sequences across reads.
 - **`Renderer`** — minimal cursor-home + erase + write. Diff-based renderer is a follow-up.
 - **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `TtyDetect`, `RawMode`, `Open` foundation utilities, shared with CandySprinkles. `RawMode::enable($stream)` / `RawMode::disable($stream)` is the portable `stty`-based raw-mode toggle for the controlling terminal — a safe no-op on non-tty streams.

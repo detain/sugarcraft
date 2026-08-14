@@ -203,6 +203,124 @@ final class Program
     /**
      * Run the program loop until a QuitMsg is dispatched (or the loop is
      * stopped externally). Returns the final Model.
+     *
+     * ## Timer accuracy on a libuv-backed loop
+     *
+     * Where ext-uv is installed, `Loop::get()` autodetects and returns
+     * `ExtUvLoop`. libuv does not read the OS clock when you arm a timer: it
+     * computes the deadline against the loop's CACHED clock (`loop->time`).
+     * That cache is refreshed once per loop iteration — the moment the poll
+     * syscall returns, before any callback is dispatched. (`UV::RUN_DEFAULT`
+     * additionally refreshes at the top of the pass, but `ExtUvLoop::run()`
+     * only ever drives `RUN_ONCE` / `RUN_NOWAIT`, which do not.) **A timer's
+     * error is the wall time between the last refresh and the arm.** Armed
+     * from inside a callback, that is however long this iteration has already
+     * spent in callbacks; armed while the loop is idle between `run()` bursts,
+     * it is the idle time.
+     *
+     * So the rule is: keep callbacks short, and never arm a timer after a long
+     * stretch of blocking work inside one. Note what the rule is NOT — it is
+     * not "stay inside `uv_run()`". One `$loop->run()` is not one `uv_run()`:
+     * `ExtUvLoop::run()` is itself a PHP `while` loop of short `uv_run()`
+     * calls (`RUN_ONCE` / `RUN_NOWAIT`), and every one of them refreshes the
+     * clock when its poll returns. Burst-running the loop is a hazard only
+     * because of the idle *between* the bursts, which is a consequence of the
+     * rule above rather than the mechanism behind it.
+     *
+     * Measured here (ext-uv 0.3.0, PHP 8.3), arming a 5s timer after N seconds
+     * of synchronous work at five different sites. **This table is the single
+     * canonical copy** — candy-testing's `LoopPin` and its README point at it
+     * rather than restating it, because the last time it was duplicated a wrong
+     * row had to be wrong in three places at once:
+     *
+     *   arming site                            N=0      N=3      N=6
+     *   inside a read-stream/timer callback    5.025s   2.010s   0.000s
+     *   idle between two run() bursts          5.025s   2.009s   0.000s
+     *   inside a futureTick, loop already run  5.024s   2.010s   0.000s
+     *   before the loop's first run(), armed
+     *     timer is the earliest deadline in
+     *     the loop — the degenerate case       5.025s   5.025s   5.026s
+     *   before the loop's first run(), with
+     *     ANY other handle due sooner — what
+     *     a real Program always looks like     4.999s   1.999s   0.016s
+     *
+     * {@see \React\EventLoop\StreamSelectLoop} is immune, though not for the
+     * reason usually given: it caches a clock too (`Timers::$time`, from
+     * `hrtime(true) * 1e-9`). What makes it safe is that `Timers::add()` calls
+     * `Timers::updateTime()` at ARM time. The same probe returns 5.000s at
+     * every N and every site.
+     *
+     * ## Which paths through this class are safe, and why
+     *
+     * **Safe: blocking inside `update()`.** Every Cmd this runtime executes is
+     * deferred through `futureTick()` (see `scheduleCmd()`), and ExtUvLoop
+     * drains that queue between `uv_run()` passes — a boundary that refreshes
+     * the clock. So work in `update()` cannot poison the timer that the Cmd it
+     * returns goes on to arm. Measured through this method: a `KeyMsg` whose
+     * `update()` blocks N seconds and returns `Cmd::tick(5.0, …)` fires at
+     * 5.001s / 5.001s / 5.000s for N = 0 / 3 / 6.
+     *
+     * **Exposed, despite appearances: timers armed before the loop's first
+     * `run()`.** It is tempting to read the fourth row above as "pre-run arms
+     * are immune". They are not, and the reason they sometimes look it is not
+     * the reason usually given. A never-run loop DOES have a baseline:
+     * `uv_loop_new()` sets `loop->time` and nothing moves it until an iteration
+     * runs, so `uv_now()` on the loop's own handle shows the cache stale by the
+     * FULL pre-run idle (6.001s after a 6s idle) at the instant of the arm —
+     * exactly as in every other row. The deadline really is computed against a
+     * stale clock, and it really is already in the past.
+     *
+     * What rescues the degenerate case is an arithmetic cancellation, not an
+     * absent baseline. Under `RUN_ONCE` libuv sizes the poll BEFORE refreshing
+     * the clock, so `uv__next_timeout()` subtracts the same stale value the
+     * deadline was built from; the two errors cancel exactly and the poll
+     * blocks for the full delay, measured from the arm. That cancellation
+     * survives only while the armed timer is the earliest deadline in the loop
+     * and nothing else ends that first poll. Add a handle that wakes sooner — a
+     * periodic render tick, an earlier one-shot timer, a stream with bytes
+     * already waiting — and the poll returns early, the post-poll
+     * `uv__update_time()` reveals the true clock, and the overdue timer fires at
+     * once, early by the whole pre-run idle like every other row.
+     *
+     * A real `Program` ALWAYS carries such handles: the stdin read watcher and
+     * the framerate tick. Measured through this method, a bail-out timer armed
+     * on a fresh loop before that loop is handed to `Program::run()` fires at
+     * 5.001s / 1.999s / 0.022s for a 5s arm after N = 0 / 3 / 6 seconds of idle
+     * — dead linear in `delay - idle`. So a test harness must not treat a
+     * pre-run arm as a safe place to put a safety net; that is precisely the
+     * flake these notes exist to prevent. For contrast, `uv_run(RUN_DEFAULT)`
+     * does refresh up front and so exposes the staleness with no other handle
+     * at all: the same 5s timer on a never-run raw libuv loop fires 2.010s
+     * after arming at N = 3.
+     *
+     * The rule the fourth row really encodes is therefore about the handles
+     * present at RUN time, not about the moment of the arm.
+     *
+     * **Exposed: blocking inside a Cmd that then arms.** `Cmd::tick()` returns
+     * a `TickRequest`, and `dispatch()` arms it in the same futureTick drain
+     * the Cmd ran in, so it loses whatever the Cmd blocked for: measured
+     * 5.001s / 2.000s / 0.012s for N = 0 / 3 / 6.
+     *
+     * **Exposed: the two timers this class arms synchronously inside a
+     * callback.** The lone-ESC settling timer in `scheduleEscapeFlush()`, and
+     * the subscription timers `startSubscription()` arms from the
+     * `reconcileWantedSubscriptions()` call at the end of `dispatch()`. A model
+     * that blocks for seconds inside `update()` shortens both. This is inherent
+     * to libuv, not a bug candy-core can fix from here; the cure is the general
+     * rule — do not block in a callback.
+     *
+     * ## Consequence for test suites
+     *
+     * A PHPUnit process is the burst-and-idle shape by construction: seconds of
+     * ordinary synchronous test code between short `run()` calls. A safety
+     * timer armed to bound a wait is therefore already overdue and fires on the
+     * first tick — the safety net fires instead of the work, and the test fails
+     * having consumed no wall time. It presents as an unattributable flake.
+     * Nothing needs to change in `src/`: a suite should pin a clock-fresh loop
+     * instead of inheriting the autodetected one. candy-testing ships
+     * `SugarCraft\Testing\LoopPin::pinStableClock()` for a one-line
+     * `tests/bootstrap.php` — named in prose rather than linked, since
+     * candy-core cannot depend on candy-testing.
      */
     public function run(): Model
     {
@@ -294,6 +412,13 @@ final class Program
             $this->dirty = false;
         }
 
+        // One run() for the life of the program. Not because the process must
+        // stay inside uv_run() — ExtUvLoop::run() is itself a loop of short
+        // uv_run() calls — but because the alternative shape, repeated
+        // run()/stop() bursts, puts long synchronous stretches between the
+        // clock refreshes libuv does per iteration, and every timer armed in
+        // one of those gaps fires early by the gap. See the timer-accuracy
+        // notes on this method.
         $this->loop->run();
 
         $this->loop->cancelTimer($tickTimer);

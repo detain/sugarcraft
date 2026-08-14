@@ -27,6 +27,7 @@
     },
     "require": {
         "php": "^8.3",
+        "react/event-loop": "^1.6",
         "sugarcraft/candy-core": "@dev",
         "sugarcraft/candy-buffer": "@dev"
     },
