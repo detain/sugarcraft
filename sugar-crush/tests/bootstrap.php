@@ -2,9 +2,47 @@
 
 declare(strict_types=1);
 
+use React\EventLoop\Loop;
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 
 require __DIR__ . '/../vendor/autoload.php';
+
+/*
+ * Pin the suite's shared event loop to StreamSelectLoop.
+ *
+ * DO NOT "clean this up" — it fixes a measured ~33% flake (2 failures in 6
+ * runs, on this change AND on the untouched baseline) in the three tests that
+ * bound their wait with a Loop safety timer: BinSugarcrushWiringTest,
+ * StreamingWiringTest and SystemPromptWiringTest.
+ *
+ * Loop::get() autodetects, and where ext-uv is installed it hands back
+ * ExtUvLoop. libuv computes a timer's deadline against the loop's CACHED
+ * clock (`loop->time`), which is only refreshed from the OS inside uv_run().
+ * A PHPUnit process runs the loop in short bursts with long stretches of
+ * ordinary synchronous test code in between, so by the time a test calls
+ * run() the cached clock can be many seconds stale. A timer armed for 10s
+ * against a clock that is 10s behind is already overdue, so it fires on the
+ * FIRST tick and run() returns immediately. Those three tests arm exactly
+ * such a safety timeout to bound their wait, so the safety net fires instead
+ * of the work: effective delay is `delay - idle_since_last_run`. Measured on
+ * this suite: 8s idle => run() returned after 2.0013s; 10.5s idle => 0.0002s;
+ * 12s idle => 0.0002s. The tests then fail having consumed no wall time.
+ *
+ * StreamSelectLoop recomputes microtime(true) every iteration, so it has no
+ * stale-clock window at all: the same probe at 4s and 11s of idle returns
+ * 10.0003s and 10.0010s. Production is unaffected either way — there
+ * candy-core's Program::run() drives one continuous uv_run(), which keeps
+ * libuv's cached clock fresh, so this is a test-harness concern only and the
+ * pin deliberately does not reach into src/.
+ *
+ * The one global side effect to know about: StreamSelectLoop's constructor
+ * calls pcntl_async_signals(true) process-wide. That is what candy-core's
+ * Program::run() does in production anyway, nothing in this repo uses
+ * Loop::addSignal(), and 30 runs of tests/Agents with and 30 without the pin
+ * were identical, so it is recorded rather than worked around.
+ */
+Loop::set(new StreamSelectLoop());
 
 /*
  * A temp directory for the suite's own throwaway files, and the two things that
