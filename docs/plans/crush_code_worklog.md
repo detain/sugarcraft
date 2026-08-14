@@ -82,8 +82,18 @@ acceptable outcome. Build tests out as you go.
 | 9 | P0.14 parallel tool calls | `94c45e93` |
 | — | test loop pinned to `StreamSelectLoop` | `19fb6232` |
 | 10 | P1.1 real `AgentManager` | `15de96a5` |
+| — | concurrency lane map (this doc) | `6203a0e2` |
+| — | extract `Edit`'s diff builder into a trait | `597ee859` |
+| 44 | P8.12 `Write` tool (**not yet registered**) | `9dbc5f8e` |
+| 24a | P4.4 `SUGAR_CRUSH_*` rename + shim | `ff6debba` |
+| 24b/48 | P4.3 `--version` + flag-shaped prompt value | `7590ae0d` |
 
 (Step 5 folded into step 1. **Phase 0 is complete.**)
+
+**`Write` is committed but deliberately unregistered.** `Bootstrap::tools()` gets
+its one-line registration only once #11 lands — that change adds `Write` to
+`PermissionGate::isWriteTool()`, and registering first would ship a write tool
+that skips write-gating. Do not forget this line; the feature is inert without it.
 
 ## In flight
 
@@ -149,6 +159,33 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
 5. **`Runtime.php`** — lane P owns it; #55's adapter phase must wait for a
    quiet window.
 
+**Sixth hazard, found the hard way (2026-08-14): reads cross lanes even though
+writes do not.** Lane D documents behaviour by reading source, and in wave 1 it
+read lane W's *uncommitted, unreviewed* P1.2 work mid-flight — then documented
+`PermissionGateHook`, `ScriptHook` exit codes and `SUGARCRUSH_PERMISSION_MODE`
+as shipped fact. Ownership stops lanes clobbering each other; it does **not**
+stop a docs lane from describing code that has not passed review and may still
+change. Rule: **lane D's pages covering an in-flight lane's subject matter are
+re-verified after that lane's review closes**, before its commit lands.
+
+### One fresh agent per step — never a reused one
+
+Every step gets a **brand-new agent**, and so does every review and every fix
+round. A lane is a file-ownership boundary, **not** a long-lived agent: lane W
+running six items in sequence means six separate implementer agents, not one
+agent handed six tasks. The step-N agent never sees step-N-1's context.
+
+Why it matters here: these agents burn 120k-170k tokens on a single step. A
+reused agent starts step 2 already loaded with step 1's dead exploration, gets
+slower and more expensive per step, and eventually degrades or dies mid-task
+(exactly what killed fix agent `a52cbd14be2ca48f0` on 2026-08-13). A fresh
+agent also cannot rationalize its own earlier work, which is the whole point of
+the separate reviewer.
+
+Reuse (`SendMessage` to a still-live agent) is legitimate for exactly one case:
+answering a clarifying question or handing back review findings **within the
+same step**, where its existing context is the asset. Never to start new work.
+
 ### Verification protocol under concurrency
 
 - Sub-agents run **targeted tests only** (`--filter`, or a single test dir).
@@ -201,6 +238,21 @@ continuous `uv_run()`.
 
 **Other libs are plausibly flaking for this reason** — candy-query, candy-wish,
 candy-pty, candy-mosaic. Signature: intermittent failure consuming no wall time.
+
+### New evidence for #54, the intermittent hang (2026-08-14)
+
+`vendor/bin/phpunit tests/Tools tests/Providers tests/Integration` **hung** —
+14:20 elapsed for 11s of CPU, state `S`, no children, killed. Run separately
+immediately afterwards, all three are green and fast: Tools 325 tests/1.75s,
+Providers 491/0.53s, Integration 433 (under 90s). So it is not a broken test.
+
+It hung while two *other* full suites were running concurrently (a subagent
+that predated the no-full-suite rule). Signature — blocked, not spinning, no
+children — points at a `pcntl_waitpid`/socket read in the fork machinery
+waiting on a child that is already gone, which is the same family as #54 and a
+strong argument that **#55's candy-core extraction should subsume #54** rather
+than #54 being patched where it sits. Reproduction lever: run the fork-heavy
+integration tests under CPU contention, not in isolation.
 
 ### Why P1.1's `AgentManager` is "live" but sub-agents do not run
 
