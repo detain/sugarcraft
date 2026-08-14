@@ -581,3 +581,40 @@ Have the fix agent report *which sabotages stay green*, and re-run them myself
 before committing. Three separate green sabotages this session marked real
 coverage holes — Vertex's `callOptions()` call sites, Vertex's regional
 `apiEndpoint` (half the original bug, untested), and PathJail's NUL guard.
+
+### Handoff update — UI #37 landed
+
+`4e10360b` — **P8.1 + P8.5 committed.** Verified personally: tab-expansion
+sabotage → 1 failure, restored → **803 tests / 14218 assertions** green.
+
+Committed rather than sent to review round 2 because, unlike P1.2, the new
+surface is small, internal, and cosmetic-or-crash rather than security. Two
+things raised confidence: the agent **corrected its own over-report** (the
+54-cell row at `cols=40` was the status bar, an unrelated pre-existing
+over-emit, not the diff box), and it reported that its **own first sabotage came
+back green** — narrowing `SEPARATOR` didn't fail because `format()` reads the
+same constant, so it re-ran with a fullwidth separator to prove the
+`Width::string` change is genuinely load-bearing.
+
+Two judgement calls it made that I'd have made: it declined to bound the hunk
+regex to `\d{1,9}` (an unrecognised `@@` falls through to the context branch, so
+a bounded regex would let the *previous* hunk's counters keep advancing — trading
+a crash for silently wrong numbers) and instead opted out of *numbering* only.
+And it fixed `styleDiffLine()`'s twin ambiguity rather than documenting it,
+because leaving it would have made the gutter say "deleted line" while the colour
+said "file header" **on the same row** — a new inconsistency created by its own
+fix.
+
+**P8.6 (VHS) remains open** on #37. Also left: `TerminalBackground::observe()`
+is a dormant seam needing two additive `App/App.php` edits, and candy-shine's
+`lineNumbers: true` must NOT be flipped until candy-shine has a measurable
+separator — it joins its gutter with a literal tab and would reintroduce
+over-wide rows in every markdown code fence.
+
+### State at pause
+
+Working tree carries **only P1.2** (plus the pre-existing untracked
+`docs/plans/plans_cleaning.md`, `sugar-crush/docs/`, `sugar-crush/python_port/`
+and the lane-D docs edits). P1.2 is green at **944 / 2214** in its own scope and
+awaits **review round 4**, focused on `HookDispatcher`'s second re-scan loop and
+`Runtime::gate()`'s third return element.
