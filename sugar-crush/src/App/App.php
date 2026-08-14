@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\App;
 
+use SugarCraft\Core\Cmd as CoreCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg as CoreMsg;
 use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
@@ -41,6 +43,7 @@ use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\ZoneClickTracker;
 use DateTimeImmutable;
@@ -411,15 +414,28 @@ final class App implements Model
     }
 
     /**
-     * The startup Cmd, delegated to the hosted {@see Chat}.
+     * The startup Cmd: ask the terminal what colour it paints on, batched with
+     * whatever the hosted {@see Chat} wants to run.
      *
-     * The shell itself has no startup side effect: its whole initial state is
-     * already in the constructor. Without a hosted chat there is nothing to
-     * run, which is why this is null rather than a no-op closure.
+     * The OSC 11 query is the shell's one genuine startup side effect. It is
+     * asked once, here, because the answer is a property of the terminal this
+     * process is attached to rather than of any one conversation — see
+     * {@see TerminalBackground} for why the reply is memoised per-process
+     * instead of being carried as model state. The reply comes back
+     * asynchronously as a {@see BackgroundColorMsg}, handled in
+     * {@see update()}; until it lands the `adaptive` theme runs on the
+     * environment guess, which is why this is fire-and-forget rather than
+     * something the first frame waits on.
+     *
+     * {@see CoreCmd::batch()} drops nulls, so a shell with no hosted chat (or a
+     * chat with no startup Cmd of its own) still emits just the query.
      */
     public function init(): ?\Closure
     {
-        return $this->chat?->init();
+        return CoreCmd::batch(
+            CoreCmd::requestBackgroundColor(),
+            $this->chat?->init(),
+        );
     }
 
     /**
@@ -468,8 +484,48 @@ final class App implements Model
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
             $msg instanceof KeyMsg => $this->handleKey($msg),
             $msg instanceof MouseMsg => $this->handleShellMouse($msg),
+            $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
             default => $this->delegateToChat($msg),
         };
+    }
+
+    /**
+     * Record the terminal's OSC 11 answer, then hand the message on unchanged.
+     *
+     * A separate method rather than an arm body because a `match` arm is an
+     * expression and {@see TerminalBackground::observe()} returns void; this is
+     * the void-swallowing wrapper that lets the arm still evaluate to the
+     * fall-through result.
+     *
+     * The message is NOT consumed. Every other arm above CLAIMS its message —
+     * it is the shell's to answer and the hosted chat never sees it. This one
+     * does not: it observes a fact in passing and hands the message on, because
+     * nothing on `Chat` answers a {@see BackgroundColorMsg} today but the shell
+     * has no claim on it either, and swallowing it would make a later consumer
+     * on the content model silently unreachable.
+     *
+     * That fall-through has no RUNTIME observable, and the pin for it is
+     * therefore structural — see
+     * {@see \SugarCraft\Crush\Tests\App\AppModelTest::testTheBackgroundColorArmHandsTheMessageOnRatherThanConsumingIt()}.
+     * {@see Chat} is `final`, so no stub can be hosted in its place, and
+     * `Chat::update()` returns `[$this, null]` for every message it does not
+     * claim — byte-identical to what consuming the message here would return.
+     * A test that drives `update()` cannot tell the two apart, so the delegation
+     * is asserted on the method body instead. If `Chat` ever grows a consumer
+     * for this message, replace that structural assertion with the behavioural
+     * one it is standing in for.
+     *
+     * No re-render is forced: the answer is read through
+     * {@see TerminalBackground::isDark()} on every theme resolution, so the
+     * next frame the Program paints for any other reason already uses it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function observeBackground(BackgroundColorMsg $msg): array
+    {
+        TerminalBackground::observe($msg);
+
+        return $this->delegateToChat($msg);
     }
 
     /**

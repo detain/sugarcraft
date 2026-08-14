@@ -120,6 +120,115 @@ final class TerminalBackgroundTest extends TestCase
         $this->assertTrue(TerminalBackground::isDark($env));
     }
 
+    /**
+     * ...but an explicit `SUGARCRUSH_BACKGROUND` outranks even that. The
+     * ordering only became observable once `observe()` was wired into the live
+     * shell (crush_code.md Phase 8 item 6): with the query now sent on every
+     * launch, ranking the measurement above the override would leave the
+     * documented escape hatch with nothing to escape on any terminal that
+     * answers OSC 11 — which is most of them.
+     */
+    public function testTheEnvOverrideBeatsEvenAnObservedOsc11Reply(): void
+    {
+        TerminalBackground::observe(new BackgroundColorMsg(0, 0, 0)); // terminal says dark
+
+        $this->assertTrue(TerminalBackground::isDark([]), 'no override: the terminal wins');
+        $this->assertFalse(
+            TerminalBackground::isDark([TerminalBackground::ENV_OVERRIDE => 'light']),
+            'the user said light; the measurement does not get to argue',
+        );
+
+        TerminalBackground::observe(new BackgroundColorMsg(255, 255, 255)); // terminal says light
+
+        $this->assertFalse(TerminalBackground::isDark([]));
+        $this->assertTrue(TerminalBackground::isDark([TerminalBackground::ENV_OVERRIDE => ' DARK ']));
+
+        // An unrecognised override is still ignored rather than pinning a
+        // palette on a typo - it falls back through to the observed answer.
+        $this->assertFalse(TerminalBackground::isDark([
+            TerminalBackground::ENV_OVERRIDE => 'purple',
+            'COLORFGBG' => '15;0',
+        ]), 'typo falls through to the terminal, not to COLORFGBG');
+    }
+
+    /**
+     * The production call shape is the ARGUMENTLESS one:
+     * {@see \SugarCraft\Crush\Theme::adaptive()} calls `isDark()` with no `$env`,
+     * so the whole live path runs through `defaultEnv()` and its real
+     * `getenv()` reads. Every other test in this class injects an explicit
+     * array, which leaves that resolution step uncovered — with `$env ??=
+     * self::defaultEnv()` reduced to `$env ??= []` the entire suite stays green
+     * while `SUGARCRUSH_BACKGROUND` and `COLORFGBG` quietly stop reaching the
+     * live adaptive theme. These two tests are the pin for that step.
+     *
+     * They set and restore the REAL process environment, so `finally` is not
+     * optional: the suite shares one process, and a leaked
+     * `SUGARCRUSH_BACKGROUND` would silently re-tier every later background
+     * assertion in it.
+     */
+    public function testIsDarkReadsTheRealEnvironmentWhenNoneIsInjected(): void
+    {
+        $this->withEnv(function (): void {
+            putenv(TerminalBackground::ENV_OVERRIDE . '=light');
+            putenv('COLORFGBG=15;0'); // the environment guess says dark
+
+            $this->assertFalse(
+                TerminalBackground::isDark(),
+                'the override reached the no-argument call shape production uses',
+            );
+
+            // ...and still does once the terminal has answered, which is the
+            // tier ordering the live shell spends most of its life in.
+            TerminalBackground::observe(new BackgroundColorMsg(0, 0, 0));
+            $this->assertFalse(TerminalBackground::isDark(), 'override outranks the observed reply');
+
+            // With the override gone, the no-argument shape falls through to
+            // the real COLORFGBG rather than to an empty array.
+            putenv(TerminalBackground::ENV_OVERRIDE);
+            TerminalBackground::forget();
+            putenv('COLORFGBG=0;15');
+            $this->assertFalse(TerminalBackground::isDark(), 'COLORFGBG reached it too');
+        });
+    }
+
+    /** The same uncovered line, on {@see TerminalBackground::detect()}. */
+    public function testDetectReadsTheRealEnvironmentWhenNoneIsInjected(): void
+    {
+        $this->withEnv(function (): void {
+            putenv(TerminalBackground::ENV_OVERRIDE);
+            putenv('COLORFGBG=0;15');
+            $this->assertFalse(TerminalBackground::detect(), 'a white background, read off the real env');
+
+            putenv('COLORFGBG=15;0');
+            $this->assertTrue(TerminalBackground::detect());
+
+            putenv(TerminalBackground::ENV_OVERRIDE . '=light');
+            $this->assertFalse(TerminalBackground::detect(), 'detect() checks the override itself');
+        });
+    }
+
+    /**
+     * Run $body with `SUGARCRUSH_BACKGROUND`/`COLORFGBG` restored afterwards —
+     * including back to UNSET, which `putenv()` only does when handed a bare
+     * name.
+     */
+    private function withEnv(callable $body): void
+    {
+        $keys = [TerminalBackground::ENV_OVERRIDE, 'COLORFGBG'];
+        $saved = [];
+        foreach ($keys as $key) {
+            $saved[$key] = getenv($key);
+        }
+
+        try {
+            $body();
+        } finally {
+            foreach ($saved as $key => $value) {
+                putenv(is_string($value) ? "{$key}={$value}" : $key);
+            }
+        }
+    }
+
     public function testForgetRestoresTheEnvironmentFallback(): void
     {
         TerminalBackground::observe(new BackgroundColorMsg(255, 255, 255));

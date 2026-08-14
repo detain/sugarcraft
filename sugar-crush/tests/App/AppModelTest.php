@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\App;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\RawMsg;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Crush\App\App;
@@ -34,8 +38,10 @@ use SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Crush\Tui\Components\SkillsPane;
+use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Tui\TerminalBackground;
 
 /**
  * App as the pane shell's root Model, hosting a Chat
@@ -95,12 +101,168 @@ final class AppModelTest extends TestCase
         $this->assertSame($chat, $afterOtherWither->chat);
     }
 
-    public function testInitDelegatesToHostedChatAndIsNullWithoutOne(): void
+    /**
+     * init() no longer just forwards the hosted chat's Cmd: it batches the OSC
+     * 11 background query in front of it (crush_code.md Phase 8 item 6), which
+     * is what makes `TerminalBackground::observe()` reachable at all. The query
+     * is unconditional — a shell with no hosted chat still asks.
+     *
+     * @see \SugarCraft\Crush\Tui\TerminalBackground
+     */
+    public function testInitAsksTheTerminalForItsBackgroundAndBatchesTheChatsOwnCmd(): void
     {
-        $this->assertNull($this->app()->init());
+        $bare = $this->app()->init();
+        $this->assertNotNull($bare, 'the shell now has a startup side effect of its own');
 
+        $batch = $bare();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+
+        // Chat::init() is null today, and Cmd::batch() drops nulls, so the
+        // query is the only member — asserting the count is what would catch a
+        // null leaking through as a member and TypeError-ing scheduleCmd().
+        $this->assertCount(1, $batch->cmds);
+
+        $raw = ($batch->cmds[0])();
+        $this->assertInstanceOf(RawMsg::class, $raw);
+        $this->assertSame(Ansi::requestBackgroundColor(), $raw->bytes);
+        $this->assertSame("\x1b]11;?\x07", $raw->bytes, 'OSC 11 query, BEL-terminated');
+    }
+
+    /**
+     * The hosted chat's own startup Cmd is still run — it is batched, not
+     * replaced. Chat::init() returns null today, so this drives a stub Model
+     * whose init() is non-null to prove the batching rather than asserting on
+     * a null that would pass either way.
+     */
+    public function testInitBatchesRatherThanReplacesAHostedChatsStartupCmd(): void
+    {
         $chat = new Chat();
-        $this->assertSame($chat->init(), $this->app()->withChat($chat)->init());
+        $this->assertNull($chat->init(), 'guard: if Chat gains a startup Cmd, assert on it here');
+
+        $batch = ($this->app()->withChat($chat)->init())();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        $this->assertCount(1, $batch->cmds);
+    }
+
+    /**
+     * The other half of the wiring: the reply App::init() asked for reaches
+     * TerminalBackground through a real update() dispatch.
+     *
+     * Deliberately NOT named for the fall-through it also exercises — a
+     * consuming arm (`return [$this, null]`) satisfies every assertion below
+     * identically, because `Chat::update()` answers a message it does not claim
+     * with exactly that pair. The fall-through is pinned separately by
+     * {@see testTheBackgroundColorArmHandsTheMessageOnRatherThanConsumingIt()}.
+     */
+    public function testABackgroundColorReplyIsObservedByUpdate(): void
+    {
+        TerminalBackground::forget();
+
+        try {
+            $app = $this->app()->withChat(new Chat());
+
+            [$next, $cmd] = $app->update(new BackgroundColorMsg(255, 255, 255));
+
+            $this->assertFalse(
+                TerminalBackground::observed(),
+                'a white terminal is not dark, and update() is what recorded it',
+            );
+            $this->assertInstanceOf(App::class, $next);
+            $this->assertNull($cmd);
+
+            [, $cmd] = $app->update(new BackgroundColorMsg(0, 0, 0));
+            $this->assertTrue(TerminalBackground::observed(), 'a later reply replaces the earlier one');
+            $this->assertNull($cmd);
+        } finally {
+            // Process-scoped state in a shared-process suite: never leave it set.
+            TerminalBackground::forget();
+        }
+    }
+
+    /**
+     * The arm hands the message on to the hosted chat instead of consuming it
+     * — the claim {@see App::observeBackground()}'s docblock makes, and the one
+     * property of that arm no behavioural test can reach.
+     *
+     * Structural rather than behavioural on purpose, and the reason is worth
+     * writing down: {@see Chat} is `final`, so no recording stub can be hosted
+     * in its place, and `Chat::update()` returns `[$this, null]` for every
+     * message it does not claim — the same pair `observeBackground()` would
+     * return if it swallowed the message, from the same `App` instance, with
+     * the same null Cmd. Driving `update()` cannot distinguish them, which is
+     * how a `return [$this, null];` mutation here passed all 155 tests in this
+     * directory. Asserting on the method body is what is left, and it does fail
+     * on that mutation.
+     *
+     * Replace this with the behavioural test it stands in for the moment `Chat`
+     * grows a consumer for {@see BackgroundColorMsg} — at that point the
+     * delegation has a real observable and this becomes redundant.
+     */
+    public function testTheBackgroundColorArmHandsTheMessageOnRatherThanConsumingIt(): void
+    {
+        $method = new \ReflectionMethod(App::class, 'observeBackground');
+        $file = $method->getFileName();
+        $this->assertIsString($file);
+
+        $body = implode('', array_slice(
+            file($file) ?: [],
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $this->assertSame(
+            1,
+            preg_match_all('/\breturn\s+([^;]+);/', $body, $matches),
+            'one exit only — a second one would be an unpinned path',
+        );
+        $this->assertSame(
+            '$this->delegateToChat($msg)',
+            trim($matches[1][0]),
+            'the arm must return the delegation, not a pair of its own',
+        );
+        $this->assertStringContainsString(
+            'TerminalBackground::observe($msg)',
+            $body,
+            'and it must still record the answer before delegating',
+        );
+    }
+
+    /**
+     * The point of asking at all: once the terminal has answered, `adaptive`
+     * follows the answer instead of the environment. Pinned end-to-end from
+     * App::update() rather than from TerminalBackground::observe() directly,
+     * because the wiring is the part that was missing.
+     */
+    public function testAnObservedBackgroundSteersTheAdaptiveTheme(): void
+    {
+        // Theme::adaptive() reads the REAL environment (there is no seam to
+        // inject one through view()), and an explicit override deliberately
+        // outranks the observed answer — so on a machine that sets it, this
+        // test is asserting the wrong precedence tier, not a regression.
+        if (getenv(TerminalBackground::ENV_OVERRIDE) !== false) {
+            $this->markTestSkipped(TerminalBackground::ENV_OVERRIDE . ' is set and outranks OSC 11 by design.');
+        }
+
+        TerminalBackground::forget();
+
+        try {
+            $app = $this->app();
+
+            $app->update(new BackgroundColorMsg(0, 0, 0));
+            $this->assertEquals(
+                Theme::byName('dark')->markdown,
+                Theme::adaptive()->markdown,
+            );
+
+            $app->update(new BackgroundColorMsg(255, 255, 255));
+            $this->assertEquals(
+                Theme::byName('light')->markdown,
+                Theme::adaptive()->markdown,
+            );
+            $this->assertSame('adaptive', Theme::adaptive()->name, 'the name never collapses to the resolved side');
+        } finally {
+            TerminalBackground::forget();
+        }
     }
 
     public function testSubscriptionsDelegateToHostedChat(): void

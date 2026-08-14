@@ -34,7 +34,10 @@ use SugarCraft\Sprinkles\Theme as SprinklesTheme;
  * not require them to know to run `/theme light` on a light terminal. It stays
  * resolved-on-read rather than snapshotted, so a persisted `adaptive` re-reads
  * the terminal on the next launch instead of freezing whatever the first one
- * happened to detect.
+ * happened to detect — and, since {@see \SugarCraft\Crush\App\App::init()}
+ * asks the terminal over OSC 11 and the reply lands some frames later,
+ * resolved-on-read is also what lets that answer take effect mid-session
+ * without any cache to invalidate.
  */
 final class Theme
 {
@@ -86,6 +89,19 @@ final class Theme
      * time by a second rule, and its `COLORFGBG >= 8` heuristic disagrees with
      * {@see TerminalBackground::detect()} on the two indices that matter (see
      * that method). One detector, both halves.
+     *
+     * Note the two-stage answer this can give within one session, by design.
+     * With `SUGARCRUSH_BACKGROUND` set there are no stages at all: the override
+     * is the top tier of {@see TerminalBackground::isDark()} and outranks both
+     * detection sources, so every frame from the first resolves against it and
+     * the palette never moves. Only WITHOUT it do the two stages appear — the
+     * first frames resolve against `COLORFGBG` because the OSC 11 query
+     * `App::init()` sends has not been answered yet, and every frame after the
+     * reply resolves against the terminal's real background. On a terminal
+     * whose `COLORFGBG` is absent or lying, that shows up as the palette
+     * correcting itself a beat after launch, which is the intended trade: a
+     * synchronous read would mean blocking the first frame on a query some
+     * terminals never answer at all.
      */
     public static function adaptive(): self
     {
