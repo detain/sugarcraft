@@ -90,6 +90,51 @@ acceptable outcome. Build tests out as you go.
 | 52 | Team tests leaking into the real `~/.sugar-crush` | `91467884` |
 | 53 | `ChatTest` leaking IPC payloads into the real `/tmp` | `00b3e963` |
 | 50 | `BedrockProvider` control plane → runtime plane | `a01b62b9` |
+| 41 | P8.7 `.gitignore`-aware `Glob`/`Grep` | `c4a90a12` |
+
+### #11 (P1.2) review outcome — NOT yet committed
+
+Implementation is in the tree, reviewed, and **must not commit as-is**. The
+review verified 6 of 8 implementer claims, disproved 1, and found the hang is
+**not** caused by this change (see below). Outstanding work:
+
+- **F1 blocker.** `Bootstrap::permissionGate()` reads via `readUserConfig()`,
+  which returns `[]` on ANY parse/read failure — so a strict config with one
+  trailing comma, or mode 0000, or an env typo (`paln`, `Plan`, `deny-all`)
+  silently downgrades to full bypass with **nothing on stderr**. Demonstrated
+  across 6 config variants. Fix is one `fwrite(STDERR, …)`, matching the
+  precedent already in `Bootstrap::backend()` (`:454`, `:468`), same file.
+- **F2.** "Strictly more guarded than before" is **false** — it is exactly
+  *equal*. Verified over 11 tool calls and 20 destructive `rm` variants:
+  `bypass-permissions` is byte-identical to no-gate, because `ConfirmRemoveHook`
+  already denied every one and the default rule set is empty. Asserted in 4
+  places: the `permissionGate()` docblock, `BootstrapPermissionGateTest:75-77`,
+  `PermissionGateHookTest:89-92`, and the README bullet.
+- **F3.** 10 of 13 sabotages went red; **3 stayed green**. Worst is S12:
+  deleting the gate registration from `Bootstrap::hooks()` breaks nothing —
+  `Chat::gateToolCall()`, the second live tool path, could silently lose the
+  gate. Also S8 (a malformed rule coerced to Allow is indistinguishable under
+  `bypass`; move that assertion to `plan` mode and it bites) and S13 (the
+  "ONE gate per launch" circuit-breaker sharing is untested).
+- **F5.** A MODIFY hook short-circuits `HookRegistry::executeHooks()` before
+  the gate runs, because the gate is registered last and `executeHooks()`
+  returns on the first `isModified()`. Latent today, but this change is what
+  makes MODIFY reachable from config via `exit 4`, and #15 wires `hooks.yaml`.
+  Fix belongs in `executeHooks()`: MODIFY should carry its rewrite and continue
+  the scan, like ALLOW, so a later DENY still wins.
+- Minor: F7/F8 (`exit 4` with `[]` runs the tool with zero args; a numerically
+  keyed JSON object is falsely denied — both fail-safe), F9 (`ScriptHook` reads
+  stdout then stderr sequentially, so >1 pipe buffer on stderr deadlocks —
+  pre-existing but newly more reachable), F10 import ordering, F11 temp-dir leak.
+
+**USER DECISION (2026-08-14): fix the ASK path at the root**, rather than
+keeping the permissive default or defaulting-and-warning. Make
+`EngineBackend::completeAsync()`'s existing one-way frame socket
+request/response so an ASK can reach the TUI from inside the forked child,
+then default to a real mode. Overlaps #55's fork-IPC extraction — decide
+whether it lands there. Note the reviewer's correction: ASK fails closed today
+because **nothing anywhere attaches an approver**, not because of the fork;
+`withPermissionApprover()` has no caller outside its own test.
 
 **#57 (new, from #50's audit): `VertexProvider` `predict()` vs `rawPredict()`.**
 Same family as the Bedrock bug but it does NOT fail at the SDK boundary —
@@ -278,12 +323,23 @@ immediately afterwards, all three are green and fast: Tools 325 tests/1.75s,
 Providers 491/0.53s, Integration 433 (under 90s). So it is not a broken test.
 
 It hung while two *other* full suites were running concurrently (a subagent
-that predated the no-full-suite rule). Signature — blocked, not spinning, no
-children — points at a `pcntl_waitpid`/socket read in the fork machinery
-waiting on a child that is already gone, which is the same family as #54 and a
-strong argument that **#55's candy-core extraction should subsume #54** rather
-than #54 being patched where it sits. Reproduction lever: run the fork-heavy
+that predated the no-full-suite rule). Reproduction lever: run the fork-heavy
 integration tests under CPU contention, not in isolation.
+
+**Ruled out as the cause: P1.2.** A pre/post A/B under load average 107 (48
+cores) completed on both trees; the only asymmetry was the *pre-change* tree
+flaking twice in `ParallelToolCallsTest`. `Runtime.php` and `Chat.php` — where
+every fork, socketpair, WNOHANG poll and loop suspension lives — are untouched
+by P1.2, and `settleAsk()` returns `deny` immediately on a null approver (77
+real `Runtime::gate()` calls, 22 of them ASKs, under a second).
+
+**Best-supported suspect: P0.14's parallel-tool fork machinery** (`94c45e93`).
+The signature — state `S`, ~11s CPU over 14 min, no children — fits a 2 ms
+WNOHANG poll loop whose exit condition never trips, and
+`Runtime::PARALLEL_TOOL_POLL_MICROSECONDS` is exactly such a loop. **Next time
+it hangs, capture `ls -l /proc/<pid>/fd`, `cat /proc/<pid>/syscall` and
+`cat /proc/<pid>/wchan` before killing it** — that settles it in one shot.
+Still argues #55 should subsume #54.
 
 ### Why P1.1's `AgentManager` is "live" but sub-agents do not run
 
