@@ -618,3 +618,68 @@ Working tree carries **only P1.2** (plus the pre-existing untracked
 and the lane-D docs edits). P1.2 is green at **944 / 2214** in its own scope and
 awaits **review round 4**, focused on `HookDispatcher`'s second re-scan loop and
 `Runtime::gate()`'s third return element.
+
+---
+
+## Session resume — lane-D docs reviewed, held; three lanes running
+
+### Lane-D docs (#34) — reviewed by the supervisor, NOT ready to commit
+
+Reviewed directly rather than delegated: it is 140 lines of `ENVIRONMENT.md`
+plus the `docs/_data/sugar-crush.{json,body.html}` pair, small enough that a
+round trip would have cost more than it bought.
+
+**What checks out:**
+
+- `php tools/gen-docs.php --check` → *ok: all 58 pages + index.html counts match
+  generated output*. So `docs/lib/sugar-crush.html` really is generated from the
+  data store, not hand-edited — the one structural rule for that file.
+- Every environment variable named in `ENVIRONMENT.md` exists in `src/` or
+  `bin/`. Cross-checked by extracting `(SUGARCRUSH|SUGAR_CRUSH|CRUSH)_[A-Z0-9_]+`
+  from both sides and diffing: **zero documented-but-nonexistent** variables.
+- "Seven providers" and the `SUGARCRUSH_PROVIDER` accepted-value list match
+  `ProviderFactory::available()` exactly (`src/Providers/ProviderFactory.php:203`).
+- "12 built-ins" matches `ls src/Skills/BuiltIn | wc -l` → 12.
+- "Nine built-in tools" matches what `Bootstrap` actually registers. `Write.php`
+  is a tenth file on disk but deliberately unregistered (#44), so the page is
+  right to omit it — and will need a line the day #44 is wired.
+- `BashEscapeDenyHook` is on `HEAD`, so naming it is fine.
+
+**Why it is held:** the page documents **`PermissionGateHook`** — "plus
+`PermissionGateHook` last, which adapts the six-mode `PermissionGate` onto the
+same chain" — and `ScriptHook` selecting allow/deny/modify/ask by exit code.
+Both are **P1.2 deliverables and P1.2 is still uncommitted**:
+
+```
+$ git cat-file -e HEAD:sugar-crush/src/Hooks/BuiltIn/PermissionGateHook.php
+fatal: path ... exists on disk, but not in 'HEAD'
+```
+
+Committing lane-D first would publish a docs page describing a class that is not
+in the repository. So lane-D lands **with or after P1.2**, not before. This is
+ordering, not a defect in the docs — the prose is accurate about the tree it was
+written against.
+
+**One real gap to close before it lands:** `SUGARCRUSH_BACKGROUND`
+(`src/Tui/TerminalBackground.php:45`, `ENV_OVERRIDE`) is a user-settable knob
+with **zero** mentions in `ENVIRONMENT.md`. It arrived with the UI lane
+(`4e10360b`) after lane-D was written, so this is drift rather than an
+oversight. The three `SUGARCRUSH_DISABLE_*` flags are all documented.
+
+Deliberately **not** a gap: `CRUSH_TOOL_NAME` / `CRUSH_TOOL_INPUT` /
+`CRUSH_TOOL_OUTPUT` / `CRUSH_SESSION_ID` / `CRUSH_MODEL` / `CRUSH_PROVIDER` are
+undocumented, but they are variables sugar-crush **exports into hook scripts**,
+not ones a user sets. They belong in the HOOKS authoring guide (#35), which is
+blocked on #11 anyway. Filed rather than silently folded in.
+
+### Three lanes running concurrently
+
+| Lane | Item | Fence |
+|---|---|---|
+| review | **#11 P1.2 round 4** | read-only + hand-restored sabotages |
+| fix | **#54** `AgentWorkerPool::executeAll()` hang | `src/Agents/AgentWorkerPool.php` + siblings only; `AgentManager.php` explicitly forbidden (P1.2 owns it) |
+| fix | **#56** ExtUvLoop stale-clock | `candy-core` + `candy-testing`; **all** of `sugar-crush/` forbidden |
+
+Lanes were picked for **file-disjointness from P1.2's uncommitted set**, not plan
+order. #49 was the obvious third pick and was rejected on exactly that test: its
+natural construction site is `AgentManager.php`, which P1.2 is holding.
