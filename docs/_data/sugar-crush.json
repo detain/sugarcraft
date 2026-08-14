@@ -6,6 +6,6 @@
     "emoji": "🤖",
     "displayName": "SugarCrush",
     "tagline": "Terminal AI coding agent",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/crush\" style=\"color: inherit;\">crush</a></span>\n          <span class=\"tag-chip\">ai</span>\n          <span class=\"tag-chip\">chat</span>\n          <span class=\"tag-chip\">anthropic</span>\n          <span class=\"tag-chip\">openai</span>\n          <span class=\"tag-chip\">ollama</span>"
 }

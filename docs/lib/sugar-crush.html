@@ -60,30 +60,31 @@
     <pre class="code"><code>composer install
 ./bin/sugarcrush
 
-# By default it ships with EchoBackend (offline). Wire to a real LLM:
-export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic-stream.sh
+# With no configuration it runs the offline EchoProvider through the full
+# engine — zero network, zero keys. Point it at a real model instead:
+export SUGARCRUSH_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+export SUGARCRUSH_MODEL=gpt-4o     # optional; provider default otherwise
 ./bin/sugarcrush
 
-# ~/bin/anthropic-stream.sh
-#!/usr/bin/env bash
-payload=$(jq -nc --argjson h "$(cat)" \
-  '{model: "claude-opus-4-7", max_tokens: 4096, messages: $h}')
+# One-shot (never attaches to the TTY, never opens the alt-screen):
+sugarcrush -p "explain the Width helper"
+sugarcrush -p "audit this" --output-format json | jq -r .result</code></pre>
 
-curl -sN https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" \
-  -d "$payload" \
-  | jq -r '.content[0].text'</code></pre>
+    <p style="margin-top: 20px;"><code>SUGARCRUSH_PROVIDER</code> accepts <code>openai</code>, <code>anthropic</code>, <code>claude-code</code>, <code>sglang</code>, <code>bedrock</code>, <code>vertex</code> or <code>custom</code>. To skip PHP SDKs entirely, set <code>SUGARCRUSH_BACKEND_CMD</code> to a script that reads JSON history on stdin and writes the reply to stdout. See <a href="https://github.com/sugarcraft/sugar-crush/blob/master/docs/ENVIRONMENT.md">docs/ENVIRONMENT.md</a> for the full environment-variable reference.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Pluggable Backend</strong><span>Implement <code>Backend::send(History): string</code>. EchoBackend ships for offline runs.</span></div>
-      <div class="feature"><strong>CommandBackend</strong><span>Shell out to <code>$SUGARCRUSH_BACKEND_CMD</code> — hand it JSON history, read its stdout.</span></div>
-      <div class="feature"><strong>Markdown reply rendering</strong><span>Assistant replies pass through CandyShine — code blocks, lists, links all rendered.</span></div>
-      <div class="feature"><strong>Scrollback + fixed input</strong><span>Top region scrolls, input box stays glued to the bottom.</span></div>
-      <div class="feature"><strong>History persistence</strong><span>Every turn is appended to a JSONL file you can grep / replay.</span></div>
-      <div class="feature"><strong>Network-dep-free</strong><span>Wrapping curl / your provider SDK in a wrapper script keeps the PHP package import-light.</span></div>
+      <div class="feature"><strong>Seven providers</strong><span>One <code>ProviderInterface</code> — OpenAI, Anthropic, Claude Code CLI, SGLang, Bedrock, Vertex, custom — with capability introspection, streaming, function calling, embeddings and per-model cost.</span></div>
+      <div class="feature"><strong>Bounded agent loop</strong><span><code>EngineBackend</code> calls the provider, runs the returned tool calls through the hook gate, feeds results back, and repeats until the model answers without calling tools or <code>maxSteps</code> is hit.</span></div>
+      <div class="feature"><strong>Nine built-in tools</strong><span><code>Bash</code>, <code>Read</code>, <code>Edit</code>, <code>Glob</code>, <code>Grep</code>, <code>WebFetch</code>, <code>WebSearch</code>, <code>Doctor</code> and <code>Skill</code>, all jailed to the project root. Implement <code>Tools\Tool</code> for your own.</span></div>
+      <div class="feature"><strong>Hooks that can say no</strong><span>Pre/post-tool-use guards returning allow / deny / modify / ask. Built-ins: <code>ProtectFilesHook</code>, <code>ConfirmRemoveHook</code>, <code>AuditHook</code>, plus <code>BashEscapeDenyHook</code> when a worktree root is set and <code>PermissionGateHook</code> last, which adapts the six-mode <code>PermissionGate</code> onto the same chain. YAML config and external <code>ScriptHook</code> supported, the latter selecting its outcome by exit code.</span></div>
+      <div class="feature"><strong>Progressive skills</strong><span>Frontmatter <code>SKILL.md</code> files inject prompt context. The system prompt carries only name + description; the model pulls a full body through the <code>Skill</code> tool. 12 built-ins, plus <code>~/.sugar-crush/skills</code> and <code>&lt;project&gt;/.sugar-crush/skills</code>.</span></div>
+      <div class="feature"><strong>Sub-agents, teams &amp; worktrees</strong><span>Sub-agent presets with their own model, tools, skills and permission mode, dispatched through a <code>pcntl_fork</code> worker pool; teammates claim tasks from a <code>flock</code>-backed SQLite task list inside isolated git worktrees.</span></div>
+      <div class="feature"><strong>Workflows</strong><span><code>WorkflowEngine</code> runs multi-stage agent pipelines — sequential, fan-out parallel, chained pipeline, and task-then-verifier — from a PHP DSL or YAML, with SIGINT-safe pause and stage-granularity resume.</span></div>
+      <div class="feature"><strong>MCP client &amp; server</strong><span>Multi-server client over stdio + HTTP reading <code>.mcp.json</code> with <code>${VAR}</code> interpolation, plus stdio/HTTP servers to host your own tools. Per-preset <code>mcpServers</code> allowlists are enforced, not decorative.</span></div>
+      <div class="feature"><strong>SQLite sessions</strong><span>WAL-mode persistence of sessions, messages and tool calls with FK-enforced cascade, fork/rename/resume, and opt-in retention pruning that never drops a session you named.</span></div>
+      <div class="feature"><strong>Real TEA render loop</strong><span>A candy-core <code>Model</code>/<code>Program</code> tree with buffer-diffed output: Markdown-rendered replies via CandyShine, live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images via candy-mosaic, mouse zones and a command palette.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -99,12 +100,30 @@ curl -sN https://api.anthropic.com/v1/messages \
     <h3 style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Backend</td><td>send(history)</td><td>Send messages to LLM</td></tr>
-<tr><td>EchoBackend</td><td>new()</td><td>Offline echo backend</td></tr>
-<tr><td>CommandBackend</td><td>new(command)</td><td>Shell out to external command</td></tr>
-<tr><td>History</td><td>add(role, content)</td><td>Add message to history</td></tr>
-<tr><td>Chat</td><td>new(backend)</td><td>Create chat model</td></tr>
-<tr><td>Chat</td><td>update(msg)</td><td>Handle chat message</td></tr>
+<tr><td>ProviderInterface</td><td>complete(CompleteRequest): CompleteResponse</td><td>The single LLM abstraction — one batch completion</td></tr>
+<tr><td>ProviderInterface</td><td>completeStream(CompleteRequest): \Generator</td><td>Same call, yielded as streaming chunks</td></tr>
+<tr><td>ProviderInterface</td><td>supportsStreaming(), supportsVision(), contextWindow(), costPer1kTokens(model, direction)</td><td>Capability + cost introspection, so callers do not guess</td></tr>
+<tr><td>EngineBackend</td><td>new(provider, model)</td><td>Factory — bridges the chat <code>Backend</code> seam to the agent engine</td></tr>
+<tr><td>EngineBackend</td><td>withTools(tools), withHooks(manager), withSkillRegistry(registry), withMaxSteps(n)</td><td>Fluent wiring of the agent loop (immutable — each returns a new instance)</td></tr>
+<tr><td>EngineBackend</td><td>complete(history, ?onToken, ?onEvent): Message</td><td>Run one bounded agentic turn, emitting tool-lifecycle events</td></tr>
+<tr><td>HookManager</td><td>registerBuiltIns()</td><td>Registers <code>ProtectFilesHook</code>, <code>ConfirmRemoveHook</code>, <code>AuditHook</code></td></tr>
+<tr><td>HookManager</td><td>preToolUse(HookContext): HookResult</td><td>Gate a tool call — allow / deny / modify / ask</td></tr>
+<tr><td>HookManager</td><td>resolveAsk(ask, approved, feedback)</td><td>Settle an answered ASK into a final allow or deny</td></tr>
+<tr><td>SkillRegistry</td><td>findForPrompt(prompt): array</td><td>Match discovered <code>SKILL.md</code> files to the current turn</td></tr>
+<tr><td>SkillRegistry</td><td>getForPaths(paths): array</td><td>Path-scoped skills for files a tool just touched</td></tr>
+<tr><td>SkillRegistry</td><td>isAutoInvocable(name), isUserInvocable(name), isContextFork(name)</td><td>Frontmatter flag enforcement, not decoration</td></tr>
+<tr><td>AgentPreset</td><td>__construct(name, description, tools, model, permissionMode, skills, mcpServers, …)</td><td>Readonly sub-agent descriptor — model, tool allow/deny, skills, MCP allowlist, effort, isolation</td></tr>
+<tr><td>McpClient</td><td>startServers(), stopServers()</td><td>Launch / tear down the configured stdio + HTTP MCP servers</td></tr>
+<tr><td>McpClient</td><td>listTools(), callTool(server, tool, args), callToolByName(tool, args)</td><td>Discover and invoke MCP tools, filtered by the active preset's allowlist</td></tr>
+<tr><td>PermissionGate</td><td>evaluate(ToolCall): PermissionDecision</td><td>Evaluate a call against the active mode, with a mode-independent rm-rf circuit breaker</td></tr>
+<tr><td>PermissionGate</td><td>mode(): PermissionMode</td><td>One of <code>default</code>, <code>accept-edits</code>, <code>plan</code>, <code>auto</code>, <code>dont-ask</code>, <code>bypass-permissions</code></td></tr>
+<tr><td>WorkflowEngine</td><td>run(workflowPath, context): WorkflowResult</td><td>Execute a YAML multi-stage agent pipeline</td></tr>
+<tr><td>WorkflowEngine</td><td>runFromPhp(workflowClass, context): WorkflowResult</td><td>Same, from the PHP builder DSL</td></tr>
+<tr><td>WorkflowEngine</td><td>pause(id), resume(id), getStatus(id)</td><td>Stage-granularity pause / resume across a signal</td></tr>
+<tr><td>SessionStore</td><td>createSession(id, provider, model, ?systemPrompt, ?name)</td><td>Open a session row in the SQLite (WAL) store</td></tr>
+<tr><td>SessionStore</td><td>addMessage(sessionId, message), addToolCall(sessionId, messageId, toolCall)</td><td>Append a turn and its tool calls, FK-enforced</td></tr>
+<tr><td>SessionStore</td><td>listSessions(limit), forkSession(id), renameSession(id, name)</td><td>Back the <code>/sessions</code>, <code>/fork</code> and <code>/rename</code> commands</td></tr>
+<tr><td>SessionStore</td><td>pruneSessions(daysOld, ?exemptSessionId): int</td><td>Opt-in retention sweep; never drops a named or resuming session</td></tr>
 </table>
   </div>
 </section>
@@ -125,7 +144,7 @@ curl -sN https://api.anthropic.com/v1/messages \
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-crush">Packagist</a> ·
