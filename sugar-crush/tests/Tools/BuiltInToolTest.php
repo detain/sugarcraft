@@ -15,12 +15,14 @@ use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
+use SugarCraft\Crush\Tools\BuiltIn\Write;
 
 /**
  * @see Tool
  * @see Read
  * @see Bash
  * @see Edit
+ * @see Write
  * @see Grep
  * @see Glob
  * @see WebFetch
@@ -64,6 +66,7 @@ final class BuiltInToolTest extends TestCase
         yield Read::class => [Read::class];
         yield Bash::class => [Bash::class];
         yield Edit::class => [Edit::class];
+        yield Write::class => [Write::class];
         yield Grep::class => [Grep::class];
         yield Glob::class => [Glob::class];
         yield WebFetch::class => [WebFetch::class];
@@ -287,6 +290,7 @@ final class BuiltInToolTest extends TestCase
             'read' => [new Read()],
             'bash' => [new Bash()],
             'edit' => [new Edit()],
+            'write' => [new Write()],
             'grep' => [new Grep()],
             'glob' => [new Glob()],
             'webfetch' => [new WebFetch()],
@@ -620,6 +624,7 @@ final class BuiltInToolTest extends TestCase
             Read::class => new Read(),
             Bash::class => new Bash(),
             Edit::class => new Edit(),
+            Write::class => new Write(),
             Grep::class => new Grep(),
             Glob::class => new Glob(),
             WebFetch::class => new WebFetch(),

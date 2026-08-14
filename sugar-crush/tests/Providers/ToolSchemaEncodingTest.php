@@ -178,6 +178,7 @@ final class ToolSchemaEncodingTest extends TestCase
             new \SugarCraft\Crush\Tools\BuiltIn\SkillTool(new \SugarCraft\Crush\Skills\SkillRegistry()),
             new \SugarCraft\Crush\Tools\BuiltIn\WebFetch(),
             new \SugarCraft\Crush\Tools\BuiltIn\WebSearch(),
+            new \SugarCraft\Crush\Tools\BuiltIn\Write(),
         ];
     }
 
