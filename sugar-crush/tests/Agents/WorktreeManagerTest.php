@@ -18,6 +18,9 @@ final class WorktreeManagerTest extends TestCase
     private string $repoRoot;
     private WorktreeManager $manager;
 
+    /** @var array<string, string|false> Original values of every variable a test overrode. */
+    private array $envBackup = [];
+
     protected function setUp(): void
     {
         $this->tmpRoot = sys_get_temp_dir() . '/sugar-crush-worktree-test-' . uniqid('', true);
@@ -42,6 +45,13 @@ final class WorktreeManagerTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Restored FIRST: an override left set would be read by the next
+        // test's setUp() and quietly relocate its worktrees.
+        foreach ($this->envBackup as $name => $original) {
+            $original === false ? putenv($name) : putenv($name . '=' . $original);
+        }
+        $this->envBackup = [];
+
         // Clean up temp directory
         if (isset($this->tmpRoot) && is_dir($this->tmpRoot)) {
             $this->removeDirectory($this->tmpRoot);
@@ -687,6 +697,108 @@ final class WorktreeManagerTest extends TestCase
     // -------------------------------------------------------------------------
     // Helper
     // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // Base-path override: SUGARCRUSH_WORKTREES_DIR, with the pre-rename
+    // SUGAR_CRUSH_WORKTREES_DIR honoured for one release
+    // (crush_code.md Phase 4 item 4).
+    // -------------------------------------------------------------------------
+
+    public function testCanonicalOverrideReplacesTheConfiguredBasePath(): void
+    {
+        $override = $this->tmpRoot . '/canonical-worktrees';
+        $this->setEnv('SUGARCRUSH_WORKTREES_DIR', $override);
+
+        $this->assertSame($override, $this->basePathOf($this->newManager()));
+    }
+
+    /**
+     * The compat shim. An operator with the old export in a shared profile
+     * must not have every agent worktree silently relocate to the config
+     * default on the release that renames the variable.
+     */
+    public function testLegacyUnderscoredOverrideIsStillHonoured(): void
+    {
+        $override = $this->tmpRoot . '/legacy-worktrees';
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', $override);
+
+        $this->assertSame($override, $this->basePathOf($this->newManager()));
+    }
+
+    /**
+     * The canonical name wins, which is what lets the new export be added to a
+     * shared profile before the old one is removed.
+     */
+    public function testCanonicalOverrideWinsWhenBothAreSet(): void
+    {
+        $this->setEnv('SUGARCRUSH_WORKTREES_DIR', $this->tmpRoot . '/canonical-worktrees');
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', $this->tmpRoot . '/legacy-worktrees');
+
+        $this->assertSame($this->tmpRoot . '/canonical-worktrees', $this->basePathOf($this->newManager()));
+    }
+
+    /**
+     * An exported-but-empty canonical name is "unset", not "override with the
+     * empty string" — otherwise `export SUGARCRUSH_WORKTREES_DIR=` in a
+     * profile would disable the still-supported legacy export rather than
+     * leaving it alone.
+     */
+    public function testAnEmptyCanonicalOverrideFallsThroughToTheLegacyName(): void
+    {
+        $this->setEnv('SUGARCRUSH_WORKTREES_DIR', '');
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', $this->tmpRoot . '/legacy-worktrees');
+
+        $this->assertSame($this->tmpRoot . '/legacy-worktrees', $this->basePathOf($this->newManager()));
+    }
+
+    public function testWithNeitherVariableSetTheConfiguredBasePathIsUsed(): void
+    {
+        $this->setEnv('SUGARCRUSH_WORKTREES_DIR', null);
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', null);
+
+        $this->assertSame($this->tmpRoot . '/worktrees/', $this->basePathOf($this->newManager()));
+    }
+
+    /**
+     * A manager over the same config setUp() builds, constructed AFTER the
+     * environment has been arranged by the test body.
+     */
+    private function newManager(): WorktreeManager
+    {
+        return new WorktreeManager(
+            new WorktreeConfig(
+                basePath: $this->tmpRoot . '/worktrees/',
+                autoCleanup: true,
+                isolationMode: WorktreeIsolationMode::Worktree,
+            ),
+            $this->repoRoot,
+        );
+    }
+
+    /**
+     * The resolved base path is private and every public accessor for it
+     * throws unless a worktree already exists, so it is read directly rather
+     * than by creating a real worktree just to observe a string.
+     */
+    private function basePathOf(WorktreeManager $manager): string
+    {
+        $property = new \ReflectionProperty(WorktreeManager::class, 'expandedBasePath');
+
+        return (string) $property->getValue($manager);
+    }
+
+    /**
+     * Set (or, with a null value, unset) an environment variable, recording
+     * its original value for tearDown().
+     */
+    private function setEnv(string $name, ?string $value): void
+    {
+        if (!array_key_exists($name, $this->envBackup)) {
+            $this->envBackup[$name] = getenv($name);
+        }
+
+        $value === null ? putenv($name) : putenv($name . '=' . $value);
+    }
 
     private function removeDirectory(string $path): void
     {

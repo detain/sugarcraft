@@ -686,9 +686,8 @@ final class WorktreeManager
      */
     private function expandPath(string $path): string
     {
-        // Respect SUGAR_CRUSH_WORKTREES_DIR environment variable override
-        $envOverride = getenv('SUGAR_CRUSH_WORKTREES_DIR');
-        if ($envOverride !== false && $envOverride !== '') {
+        $envOverride = self::worktreesDirOverride();
+        if ($envOverride !== null) {
             $path = $envOverride;
         }
 
@@ -704,6 +703,35 @@ final class WorktreeManager
         }
 
         return $path;
+    }
+
+    /**
+     * The base-path override from the environment, or null when unset/empty.
+     *
+     * The canonical name is SUGARCRUSH_WORKTREES_DIR. SUGAR_CRUSH_WORKTREES_DIR
+     * is the original spelling and one of only two app variables that ever
+     * carried the underscore after SUGAR — every other SUGARCRUSH_* variable
+     * this app reads does not (crush_code.md Phase 4 item 4). It keeps working
+     * for one release so an existing export does not silently relocate every
+     * agent worktree back to the config default the day the rename lands; the
+     * canonical name wins when both are set, which is the ordering that lets
+     * an operator add the new export to a shared profile before removing the
+     * old one.
+     *
+     * No deprecation warning is emitted: the only caller runs inside the
+     * constructor, and the interactive TUI owns the terminal by then — a
+     * stray STDERR line there corrupts the frame rather than informing anyone.
+     */
+    private static function worktreesDirOverride(): ?string
+    {
+        foreach (['SUGARCRUSH_WORKTREES_DIR', 'SUGAR_CRUSH_WORKTREES_DIR'] as $name) {
+            $value = getenv($name);
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /**

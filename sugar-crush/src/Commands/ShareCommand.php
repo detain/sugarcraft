@@ -142,12 +142,24 @@ final class ShareCommand
 
     /**
      * Get configured upload base URL or default.
+     *
+     * The canonical variable is SUGARCRUSH_SHARE_UPLOAD_URL.
+     * SUGAR_CRUSH_SHARE_UPLOAD_URL is the original spelling and one of only two
+     * app variables that ever carried the underscore after SUGAR — every other
+     * SUGARCRUSH_* variable this app reads does not (crush_code.md Phase 4
+     * item 4). It keeps working for one release so an operator who has pointed
+     * /share at a private host does not silently start addressing the public
+     * default the day the rename lands; the canonical name wins when both are
+     * set, so the new export can be added to a shared profile before the old
+     * one is removed.
      */
     private function getUploadBaseUrl(): string
     {
-        $envUrl = getenv('SUGAR_CRUSH_SHARE_UPLOAD_URL');
-        if ($envUrl !== false && $envUrl !== '') {
-            return $envUrl;
+        foreach (['SUGARCRUSH_SHARE_UPLOAD_URL', 'SUGAR_CRUSH_SHARE_UPLOAD_URL'] as $name) {
+            $envUrl = getenv($name);
+            if (is_string($envUrl) && $envUrl !== '') {
+                return $envUrl;
+            }
         }
 
         return self::DEFAULT_UPLOAD_BASE_URL;

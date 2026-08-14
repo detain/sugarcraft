@@ -18,6 +18,9 @@ use SugarCraft\Crush\Message;
  */
 final class ShareCommandTest extends TestCase
 {
+    /** @var array<string, string|false> Original values of every variable a test overrode. */
+    private array $envBackup = [];
+
     // =========================================================================
     // Honest failure path
     // =========================================================================
@@ -149,8 +152,97 @@ final class ShareCommandTest extends TestCase
     }
 
     // =========================================================================
+    // Upload base URL: SUGARCRUSH_SHARE_UPLOAD_URL, with the pre-rename
+    // SUGAR_CRUSH_SHARE_UPLOAD_URL honoured for one release
+    // (crush_code.md Phase 4 item 4).
+    // =========================================================================
+
+    protected function tearDown(): void
+    {
+        foreach ($this->envBackup as $name => $original) {
+            $original === false ? putenv($name) : putenv($name . '=' . $original);
+        }
+        $this->envBackup = [];
+
+        parent::tearDown();
+    }
+
+    public function testUploadBaseUrlDefaultsWhenNeitherVariableIsSet(): void
+    {
+        $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', null);
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', null);
+
+        $this->assertSame('https://share.sugarcraft.dev', $this->uploadBaseUrl());
+    }
+
+    public function testCanonicalVariableSetsTheUploadBaseUrl(): void
+    {
+        $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', 'https://canonical.example');
+
+        $this->assertSame('https://canonical.example', $this->uploadBaseUrl());
+    }
+
+    /**
+     * The compat shim: an operator who has pointed /share at a private host
+     * must not silently start addressing the public default on the release
+     * that renames the variable.
+     */
+    public function testLegacyUnderscoredVariableIsStillHonoured(): void
+    {
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', 'https://legacy.example');
+
+        $this->assertSame('https://legacy.example', $this->uploadBaseUrl());
+    }
+
+    public function testCanonicalVariableWinsWhenBothAreSet(): void
+    {
+        $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', 'https://canonical.example');
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', 'https://legacy.example');
+
+        $this->assertSame('https://canonical.example', $this->uploadBaseUrl());
+    }
+
+    /**
+     * An exported-but-empty canonical name is "unset", not "override with the
+     * empty string" — a `/share` pointed at "" would be worse than either the
+     * legacy value or the default.
+     */
+    public function testAnEmptyCanonicalVariableFallsThroughToTheLegacyName(): void
+    {
+        $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', '');
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', 'https://legacy.example');
+
+        $this->assertSame('https://legacy.example', $this->uploadBaseUrl());
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
+
+    /**
+     * The resolved upload base URL. Read directly because the only production
+     * caller hands it to ShareUploader, which always throws while no upload
+     * backend exists — so the value never reaches any observable output.
+     */
+    private function uploadBaseUrl(): string
+    {
+        $method = new \ReflectionMethod(ShareCommand::class, 'getUploadBaseUrl');
+
+        return (string) $method->invoke(new ShareCommand());
+    }
+
+    /**
+     * Set (or, with a null value, unset) an environment variable, recording
+     * its original value for tearDown().
+     */
+    private function setEnv(string $name, ?string $value): void
+    {
+        if (!array_key_exists($name, $this->envBackup)) {
+            $this->envBackup[$name] = getenv($name);
+        }
+
+        $value === null ? putenv($name) : putenv($name . '=' . $value);
+    }
 
     /**
      * Create a Chat instance with some test messages.
