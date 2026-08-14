@@ -220,9 +220,14 @@ same step**, where its existing context is the asset. Never to start new work.
   `php -l` over `git status --porcelain` first and retry rather than
   investigating a phantom regression.
 - **Cap concurrency at 2 agents** when session context is tight (set 2026-08-14
-  at 75% usage). Lanes are cheap to pause between steps and expensive to
-  restart mid-step, so throttle by not *starting* the next step, never by
-  killing a running one.
+  at 75% usage), then **1 agent** at 80%. Lanes are cheap to pause between
+  steps and expensive to restart mid-step, so throttle by not *starting* the
+  next step, never by killing a running one.
+- **Current setting: 1 agent at a time.** The supervisor's own context is the
+  scarce resource, not the machine — each returning agent costs 2-5k tokens to
+  read, verify and commit. When the cap is 1, the single slot goes to whatever
+  is on the critical path (#11's review), and the other lanes simply idle with
+  their work already committed. Raise the cap again after a compact.
 
 This deliberately overrides the repo's blanket "run sub-agents ONE AT A TIME"
 rule. That rule exists because concurrent writes to `MATCHUPS.md`/`README.md`
