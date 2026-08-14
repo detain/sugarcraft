@@ -401,3 +401,96 @@ build in candy-core with tests; convert sugar-crush to thin adapters one at a
 time with the suite green between each; deep adversarial review because 52 libs
 sit on candy-core. Design goal — **the safe path must be the easy path**, or the
 eighth call site hand-rolls too.
+
+---
+
+## P1.2 — review round 2 outcome (2026-08-14)
+
+**Verdict: do not commit. 1 blocker-grade residual + 4 majors, all reproduced
+end-to-end (not inferred). Fix round 2 dispatched.**
+
+Working tree restored by the reviewer; full suite re-verified at
+**5500 tests / 16959 assertions, 0 failures, 1 skip** (the known `McpClientTest`).
+
+### The F1 claim was still false for two inputs
+
+The fix round closed the *file* cases and left two open, in a way that inverted
+the docblock's own promise — an unreadable **file** hard-fails, an unreadable
+**directory** silently bypasses.
+
+1. **Unreadable config directory.** `permissionConfig()` gates on `is_file()`,
+   which is `false` when the *parent dir* is unsearchable, so it takes the
+   "nothing configured" branch. `chmod 000 ~/.sugar-crush` turns `plan` into
+   `bypass-permissions`, exit 0, nothing on stderr. Reachable via a different
+   euid, `sudo` without `-E`, or an NFS/autofs blip.
+2. **Top-level JSON list.** `is_array($data)` cannot tell `{}` from `[]` — the
+   *identical* defect F7/F8 had just fixed in `ScriptHook` by testing the JSON
+   **text**. The error string "the top level is not a JSON object" names a
+   branch that can never fire for a list, and the test that "covers" it passes
+   for the wrong reason (it uses the scalar `"plan"`, which `is_array()` does
+   catch).
+
+**Lesson worth keeping:** the same defect class appeared twice in one
+change-set and was only fixed at one of the two sites. When a fix round
+establishes a recipe, grep the whole change-set for the pattern.
+
+### Majors
+
+- **F9's `drain()` regressed what it fixed.** `stream_select()` is not restarted
+  under `SA_RESTART`; candy-core's `Program.php` enables
+  `pcntl_async_signals(true)` with SIGWINCH/SIGINT handlers, so a terminal
+  resize mid-hook returns `false` and the loop `break`s, abandoning unread
+  output. Measured: new `drain()` → `'AAAA'`, old `stream_get_contents()` →
+  `'AAAABBBB'`. Fails closed on the verdict but truncates deny reasons,
+  `exit 3` questions, and `exit 4` rewrites. The deadlock fix itself is real
+  (sabotage **hung** past 90s).
+- **Empty/whitespace `config.json` bricks the CLI**, and `writeUserConfig()` is
+  a non-atomic `file_put_contents()` that can *create* that state on SIGINT,
+  OOM, or a full disk. Needs temp-file + `rename()`.
+- **"One gate per launch" survives until the first Ctrl+P.**
+  `Chat::selectPaletteProvider()` calls `backendFor()` with no gate, so the
+  engine gets a fresh instance. In `auto` mode the 3-strike counters are
+  per-instance, so a provider switch resets the breaker — a model at 2 strikes
+  gets a clean slate. The test pins the invariant only at construction.
+- **F5 closed half the MODIFY hole.** `Runtime::gate()` applies `modifiedInput`
+  without re-running the chain, and the gate is registered last, so it only
+  ever sees pre-rewrite arguments: a hook rewriting `Bash{ls}` →
+  `Bash{rm -rf /}` is evaluated by everything against `ls`. Correct for the
+  *verdict*, wrong for the *arguments*.
+- **`backendFor()`'s gate wiring is untested** — deleting the
+  `withPermissionGate()` line leaves `tests/Cli/` green at 260/260. That is the
+  path for every `SUGARCRUSH_PROVIDER` run and every one-shot `-p`.
+
+### Confirmed resolved by sabotage
+
+F2 (prose re-derived true: `ConfirmRemoveHook`'s regexes strictly subsume the
+gate's breaker across all six `rm` spellings, and it runs first), F3 (all three
+gaps now bite), F7/F8, F10/F11. F5 and F9 are *partial* — real fixes with
+residuals.
+
+### Dormant-seam notes (do not delete — complete or document)
+
+- `HookManager::loadFromFile()` has no caller in `src/` or `bin/`, so the
+  `exit 3`/`exit 4` contract is reachable only by an embedder today.
+- `permission-gate` is not a reserved hook name; once `loadFromFile()` is wired
+  a YAML entry of that name silently **uninstalls** the gate.
+- `EngineBackend::completeAsync()` forks, so gate strike counters die with the
+  child — the "one gate, one counter" comments lean on state that never
+  survives a turn. Fold into the ASK-path/fork work, not here.
+- `agentManager()`'s gate factory reads config lazily, so a config broken after
+  launch throws mid-TUI where the only handler would `exit(2)` with the
+  terminal still in alt-screen/raw mode. Dormant until `/agents` dispatches.
+
+### Concurrency state
+
+Back to 3 lanes. Lanes chosen for **file-disjointness from P1.2**, not plan
+order: most of the queue blocks on `Bootstrap.php` (registration) or
+`NonInteractive.php`/`bin/sugarcrush` (both modified by P1.2).
+
+New agents are fenced out of `src/Tools/BuiltIn/*.php` while any review lane is
+running tests: `ToolSchemaEncodingTest`'s data provider autoloads every built-in
+tool, so a half-written file there fails *another lane's* run with a parse error
+that reads as a real defect.
+
+Housekeeping: 480 stale `/tmp/bootstrap_permission_gate_*` fixture dirs (Aug 13,
+pre-F11-teardown) removed; current teardown verified clean.
