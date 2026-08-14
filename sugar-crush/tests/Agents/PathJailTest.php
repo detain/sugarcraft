@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Agents;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\PathJail;
 use SugarCraft\Crush\Agents\PathJailConfig;
+use SugarCraft\Crush\Tools\PathJailInterface;
 
 /**
  * Tests for PathJail - path isolation layer for agent worktrees.
@@ -186,5 +187,83 @@ final class PathJailTest extends TestCase
 
         $jailed = $jail->jailPath('src/Agents/Thing.php');
         $this->assertTrue($jail->isAllowed($jailed));
+    }
+
+    // -------------------------------------------------------------------------
+    // Bound contract (crush_code.md P8.14) - one call, fail-closed
+    // -------------------------------------------------------------------------
+
+    public function testImplementsTheSharedBoundJailContract(): void
+    {
+        $jail = new PathJail($this->worktreePath, new PathJailConfig());
+
+        $this->assertInstanceOf(PathJailInterface::class, $jail);
+        $this->assertSame($this->worktreePath, $jail->root());
+        $this->assertInstanceOf(PathJailConfig::class, $jail->config());
+    }
+
+    public function testExpandPathIsTheHonestNameForJailPath(): void
+    {
+        $jail = new PathJail($this->worktreePath, new PathJailConfig());
+
+        $this->assertSame($this->worktreePath . '/a.txt', $jail->expandPath('a.txt'));
+        $this->assertSame('/etc/passwd', $jail->expandPath('/etc/passwd'));
+        $this->assertSame($this->worktreePath, $jail->expandPath(''));
+        $this->assertSame($jail->expandPath('../x'), $jail->jailPath('../x'));
+    }
+
+    public function testResolveSettlesContainmentInASingleCall(): void
+    {
+        file_put_contents($this->worktreePath . '/inside.txt', 'x');
+
+        $jail = new PathJail($this->worktreePath, new PathJailConfig());
+
+        $this->assertSame(
+            realpath($this->worktreePath . '/inside.txt'),
+            $jail->resolve('inside.txt'),
+        );
+        // The whole point of the single-call form: an absolute path outside the
+        // jail is rejected here, without the caller remembering isAllowed().
+        $this->assertNull($jail->resolve('/etc/passwd'));
+        $this->assertNull($jail->resolve('../escaped.txt'));
+    }
+
+    public function testResolveDirRejectsAnythingThatIsNotAnExistingInJailDirectory(): void
+    {
+        mkdir($this->worktreePath . '/sub', 0o755, true);
+
+        $jail = new PathJail($this->worktreePath, new PathJailConfig());
+
+        $this->assertSame(realpath($this->worktreePath . '/sub'), $jail->resolveDir('sub'));
+        $this->assertNull($jail->resolveDir('missing'));
+        $this->assertNull($jail->resolveDir('/etc'));
+    }
+
+    public function testResolveForCreateAcceptsMissingParentsButNotEscapes(): void
+    {
+        $jail = new PathJail($this->worktreePath, new PathJailConfig());
+
+        $this->assertNotNull($jail->resolveForCreate('a/b/c/new.txt'));
+        $this->assertNull($jail->resolveForCreate('nope/../../escaped.txt'));
+        $this->assertNull($jail->resolveForCreate('/etc/passwd'));
+    }
+
+    public function testIsAllowedStaysExistenceStrictForNewFiles(): void
+    {
+        $jail = new PathJail($this->worktreePath, new PathJailConfig());
+
+        // Write depends on this: isAllowed() must keep answering false for a
+        // file that does not exist yet, so creation routes at resolveForCreate()
+        // rather than quietly passing an unproven path.
+        $this->assertFalse($jail->isAllowed($this->worktreePath . '/notyet.txt'));
+        $this->assertNotNull($jail->resolveForCreate('notyet.txt'));
+    }
+
+    public function testIsAllowedTreatsAnEmptyPathAsTheJailRoot(): void
+    {
+        $jail = new PathJail($this->worktreePath, new PathJailConfig());
+
+        // Consistent with expandPath(''), which has always meant "the root".
+        $this->assertTrue($jail->isAllowed(''));
     }
 }
