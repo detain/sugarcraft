@@ -107,7 +107,23 @@ final class BuiltInToolTest extends TestCase
         $tool = new Grep();
 
         $this->assertSame('Grep', $tool->name());
-        $this->assertSame('Search for a pattern in files', $tool->description());
+        $this->assertStringStartsWith('Search for a pattern in files', $tool->description());
+    }
+
+    /**
+     * Same reasoning as {@see testGlobDescriptionNamesThePrunedDirectoriesAndTheOptOut()}:
+     * Grep skips the same machine-generated trees plus everything .gitignore
+     * excludes, and a search that silently never entered a directory is
+     * indistinguishable from one that found nothing there.
+     */
+    public function testGrepDescriptionNamesWhatItSkipsAndTheOptOut(): void
+    {
+        $description = (new Grep())->description();
+
+        foreach (['.git', 'vendor', 'node_modules', '.phpunit.cache', '.gitignore'] as $token) {
+            $this->assertStringContainsString($token, $description, $token);
+        }
+        $this->assertStringContainsString('include_ignored', $description);
     }
 
     public function testGlobToolHasCorrectNameAndDescription(): void

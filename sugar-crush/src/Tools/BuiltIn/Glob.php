@@ -8,6 +8,7 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Crush\Tools\IgnoreRules;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -29,8 +30,11 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
      * Pruned during the WALK, not filtered afterwards: the cost being avoided
      * is the traversal itself (and, for each match, an
      * {@see InstructionFileLoader} tree-walk on top of it).
+     *
+     * Shared with {@see Grep} through {@see IgnoreRules} so the two tools
+     * cannot drift into answering the same question differently.
      */
-    private const DEFAULT_PRUNED_DIRS = ['.git', 'vendor', 'node_modules', '.phpunit.cache'];
+    private const DEFAULT_PRUNED_DIRS = IgnoreRules::DEFAULT_EXCLUDED_DIRS;
 
     /**
      * Ceiling on how many paths one call collects.
@@ -157,6 +161,10 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
                 'type' => 'string',
                 'description' => 'Clear, concise 5-10 word description in active voice of what this search looks for (e.g. "Find every provider test file", not "globs *.php").',
             ],
+            'include_ignored' => [
+                'type' => 'boolean',
+                'description' => 'Search files the project\'s .gitignore excludes (build output, caches, local config). Off by default; the result says when .gitignore hid something.',
+            ],
         ],
         'required' => ['pattern', 'path', 'description'],
         ];
@@ -254,7 +262,25 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             }
         }
 
-        $found = $this->match($baseDir, $normalized, $regex);
+        // The ignore root is the WORKSPACE root when there is one, so a search
+        // scoped to a subdirectory still honours the project's top-level
+        // .gitignore. Unjailed there is nothing above $baseDir this tool has
+        // been told to trust, and silently climbing out of the directory the
+        // caller named to pick up a stranger's rules is worse than missing
+        // them.
+        $rules = IgnoreRules::new($this->root ?? $baseDir)
+            ->withGitignore(!self::flag($args['include_ignored'] ?? null));
+
+        // Pointing `path` INSIDE an ignored directory is a deliberate request
+        // for it, exactly as it already is for the prune list. Without this,
+        // `path: "build/reports"` in a project that ignores `build/` came back
+        // empty — a confident "nothing there" about a directory the caller had
+        // just named.
+        if ($rules->ignores($baseDir, true)) {
+            $rules = $rules->withGitignore(false);
+        }
+
+        $found = $this->match($baseDir, $normalized, $regex, $rules);
         if ($found['error'] !== null) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
@@ -297,18 +323,40 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // only place the escape hatch appears in the result, and it must not
         // be the thing the budget sacrifices.
         if ($found['pruned'] !== []) {
-            // truncateOutput() ends on its marker with no trailing newline, so
-            // the note has to supply its own separator or it is glued to the
-            // end of that sentence.
-            if ($output !== '' && !str_ends_with($output, "\n")) {
-                $output .= "\n";
-            }
+            $output = self::separated($output);
             $output .= sprintf(
                 "... [pruned: skipped %s. Files inside those directories are NOT in this list — "
                 . "name the directory in the pattern (e.g. \"%s/**/*.php\") or point path inside it "
                 . "to search there.]\n",
                 implode(', ', $found['pruned']),
                 self::pruneExample($found['pruned']),
+            );
+        }
+
+        // Same doctrine as the prune note, for the same reason: a list quietly
+        // shortened by .gitignore reads as a complete one. The difference is
+        // that the hatch here cannot be spelled in the pattern — an ignore rule
+        // is not a directory name — so the note has to name the argument.
+        if ($found['ignored'] > 0) {
+            $output = self::separated($output);
+            $output .= sprintf(
+                "... [gitignored: skipped %d path(s) the project's .gitignore excludes. "
+                . "Pass include_ignored: true to search them.]\n",
+                $found['ignored'],
+            );
+        }
+
+        // A symlinked directory is where this monorepo's sibling libraries
+        // live, so "not followed" is a genuinely surprising omission and the
+        // note carries its own hatch: seeding the walk AT the link is bounded,
+        // where following every link on the way past is not.
+        if ($found['symlinks'] > 0) {
+            $output = self::separated($output);
+            $output .= sprintf(
+                "... [symlinks: did not follow %d symlinked director%s. "
+                . "Point path at the link itself to search inside it.]\n",
+                $found['symlinks'],
+                $found['symlinks'] === 1 ? 'y' : 'ies',
             );
         }
 
@@ -340,12 +388,14 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
      * @param ?string $regex precompiled and already validated by execute();
      *                       null on the non-recursive fast path
      *
-     * @return array{files: list<string>, capped: bool, pruned: list<string>, error: ?string}
+     * @return array{files: list<string>, capped: bool, pruned: list<string>, ignored: int, symlinks: int, error: ?string}
      *         absolute paths, sorted; `pruned` names the default-skipped
-     *         directories this walk ACTUALLY passed over, so the result can
-     *         say what it is missing instead of pretending to be complete
+     *         directories this walk ACTUALLY passed over, `ignored` counts the
+     *         entries `.gitignore` excluded and `symlinks` the symlinked
+     *         directories it refused to follow — so the result can say what it
+     *         is missing instead of pretending to be complete
      */
-    private function match(string $baseDir, string $pattern, ?string $regex): array
+    private function match(string $baseDir, string $pattern, ?string $regex, IgnoreRules $rules): array
     {
         // The separator-free form, used only where this method JOINS a base to
         // something ("$stripped/$pattern", "$stripped/$relative"): at "/" that
@@ -358,7 +408,16 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             $files = glob($stripped . '/' . $pattern);
             $files = $files === false ? [] : array_values($files);
 
-            return $this->capped($files);
+            // The fast path never descends, so there is no traversal to prune
+            // and no symlink to refuse — but a single-level `*.php` can still
+            // land squarely on ignored build output, and a hit is a hit no
+            // matter which branch found it.
+            $kept = array_values(array_filter(
+                $files,
+                static fn (string $file): bool => !$rules->ignores($file, is_dir($file)),
+            ));
+
+            return $this->capped($kept, count($files) - count($kept));
         }
 
         $hidden = self::hiddenPolicy($pattern);
@@ -387,22 +446,47 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
                 'files' => [],
                 'capped' => false,
                 'pruned' => [],
+                'ignored' => 0,
+                'symlinks' => 0,
                 'error' => sprintf('Error: cannot read directory %s: %s', $baseDir, $e->getMessage()),
             ];
         }
+
+        $ignored = 0;
+        $symlinks = 0;
 
         // Returning false here does double duty: the entry is dropped AND, if
         // it is a directory, never descended into. That is what makes this a
         // prune rather than a post-hoc filter.
         $filtered = new \RecursiveCallbackFilterIterator(
             $directory,
-            static function (string $path) use ($hidden, $pruned, &$skipped): bool {
+            static function (string $path) use ($hidden, $pruned, $rules, &$skipped, &$ignored, &$symlinks): bool {
                 $base = basename($path);
 
                 if (isset($pruned[$base]) && is_dir($path)) {
                     // Recorded, not merely skipped: what the walk left out is
                     // part of the answer.
                     $skipped[$base] = true;
+
+                    return false;
+                }
+
+                // The symlink hard stop. RecursiveDirectoryIterator would not
+                // have descended it either (hasChildren() defaults to
+                // $allowLinks=false), but leaning on that default left the
+                // property invisible, untested at the tool's own boundary, and
+                // one flag change away from an unbounded walk — this repo's
+                // path-repo symlinks form real cycles. See IgnoreRules::halts().
+                if ($rules->halts($path)) {
+                    $symlinks++;
+
+                    return false;
+                }
+
+                // Checked before the hidden-name rule so an ignored dotfile is
+                // counted as ignored rather than silently absorbed by it.
+                if ($rules->ignores($path, is_dir($path))) {
+                    $ignored++;
 
                     return false;
                 }
@@ -453,28 +537,45 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         $skippedNames = array_keys($skipped);
         sort($skippedNames);
 
-        return ['files' => $matches, 'capped' => $capped, 'pruned' => $skippedNames, 'error' => null];
+        return [
+            'files' => $matches,
+            'capped' => $capped,
+            'pruned' => $skippedNames,
+            'ignored' => $ignored,
+            'symlinks' => $symlinks,
+            'error' => null,
+        ];
     }
 
     /**
      * @param list<string> $files
      *
-     * @return array{files: list<string>, capped: bool, pruned: list<string>, error: ?string}
+     * @return array{files: list<string>, capped: bool, pruned: list<string>, ignored: int, symlinks: int, error: ?string}
      */
-    private function capped(array $files): array
+    private function capped(array $files, int $ignored = 0): array
     {
         // The non-recursive fast path is glob(), which never descends, so
-        // there is nothing for it to have pruned.
+        // there is nothing for it to have pruned and no symlink it could have
+        // refused to follow.
         if ($this->maxMatches > 0 && count($files) > $this->maxMatches) {
             return [
                 'files' => array_slice($files, 0, $this->maxMatches),
                 'capped' => true,
                 'pruned' => [],
+                'ignored' => $ignored,
+                'symlinks' => 0,
                 'error' => null,
             ];
         }
 
-        return ['files' => $files, 'capped' => false, 'pruned' => [], 'error' => null];
+        return [
+            'files' => $files,
+            'capped' => false,
+            'pruned' => [],
+            'ignored' => $ignored,
+            'symlinks' => 0,
+            'error' => null,
+        ];
     }
 
     /**
@@ -524,6 +625,29 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         } finally {
             restore_error_handler();
         }
+    }
+
+    /**
+     * Make $output safe to append an annotation line to.
+     *
+     * truncateOutput() ends on its marker with no trailing newline, so a note
+     * appended raw is glued onto the end of that sentence.
+     */
+    private static function separated(string $output): string
+    {
+        return ($output !== '' && !str_ends_with($output, "\n")) ? $output . "\n" : $output;
+    }
+
+    /**
+     * Read a boolean tool argument.
+     *
+     * Models routinely send `"true"` and `1` for a boolean, and a bare cast
+     * turns the string `"false"` into true — which would silently disable the
+     * very filter this flag exists to control.
+     */
+    private static function flag(mixed $value): bool
+    {
+        return filter_var($value ?? false, FILTER_VALIDATE_BOOL);
     }
 
     /** True when any `/`-separated segment of $pattern is exactly `..`. */
