@@ -809,3 +809,79 @@ round 2) land. The shared worktree has been costing real signal: cross-lane
 disclosed ~13 such windows), and `candy-core/src/Program.php` sabotage windows
 visible to sugar-crush through its `vendor/` path symlink. Serial lanes mean a
 failing test means what it says.
+
+---
+
+## Session close — 5 change-sets landed
+
+| SHA | Item |
+|---|---|
+| `e1881baf` | **#57** VertexProvider — 4 defects + a 60s cap truncating completions |
+| `9d92bb5a` + `5af648a9` | **#46** PathJail unification (turned out to be a security fix) |
+| `4e10360b` | **#37** P8.1/P8.5 diff gutter + adaptive theme + tab overflow |
+| `a2606c7f` | **#56** libuv stale-clock trap documented; `LoopPin` in candy-testing |
+| `69d58867` | **#54** AgentWorkerPool hang (not intermittent — 100% with a latent trigger) |
+| `df0a563b` | **#11 P1.2** permission gate as a real hook |
+| `c182a309` | **#34 P7.1/2** docs site page + `ENVIRONMENT.md` |
+
+### P1.2 took seven rounds, and the reason is worth recording
+
+Rounds 4, 5 and 6 each found a MAJOR, and all three were **the same defect
+family**: a rewrite reaching the tool without the chain having judged it. Three
+different routes —
+
+1. `HookDispatcher` computed the rewrite and discarded it.
+2. A **same-pass ASK** dropped that pass's rewrite. Reachable **by default**:
+   `PermissionGateHook` asks on *mode*, not arguments, so the gate asks on pass 1
+   and there is never a pass 2. Approver shown `./build/out.txt`; approving wrote
+   `/etc/passwd`.
+3. An **ASK carrying its own rewrite** bypassed the re-scan entirely, because
+   `scan()` only recorded a rewrite when `isModified()`. On the shipped chain
+   that ran `rm -rf /` past `ConfirmRemoveHook`, and on Chat's path a prior
+   "always" grant dispatched it **with no prompt at all**.
+
+Round 6's fix is why round 7 came back clean: it stopped patching routes and made
+**where a rewrite came from stop deciding whether the chain sees it**. `scan()`
+no longer ranks; `executeHooks()` owns precedence; an ASK's rewrite becomes a
+proposal on the MODIFY path. Round 7's convergence argument — there is exactly
+one variable that can leave the loop carrying a rewrite, assigned in one
+statement, guarded by `rewrittenArgs() !== null` — is the first structural reason
+to believe the class is closed rather than the next variant merely unfound.
+
+**The lesson for the remaining queue:** when two consecutive rounds find the same
+*shape* of bug by different routes, stop fixing routes. The cheap fix in round 6
+was a one-liner; the fix agent measured that it closed the fail-open by
+*silently discarding the sanitisation* — the same harm, one layer down — and took
+the structural option instead. That judgement is what ended the chain.
+
+### What kept paying
+
+- **Ask fix agents which sabotages came back GREEN.** Six real coverage holes
+  this session were self-reported by the agent that wrote the code, including
+  two where the agent's own new test was vacuous.
+- **Re-run the reported sabotage personally before committing.** Every commit
+  above was verified that way, not on report.
+- **Record sabotage labels in the tree.** Two rounds lost labels and had to
+  reconstruct mutations, which is re-derivation, not verification. The round-3
+  driver's fix — assert each anchor is unique and print `SKIP` rather than a
+  false GREEN — is the mechanism that should have existed from the start.
+- **A third agent adjudicates a measurement dispute.** #56's reviewer and fixer
+  disagreed on libuv's mechanism; both were partly right, and the adjudicator
+  found a MAJOR neither had.
+
+### Concurrency
+
+Ran at 3 lanes, then 2, now 1–2 by request. The shared worktree cost real
+signal: cross-lane `pkill -f phpunit` and `pkill -f 'php -r'` (one lane disclosed
+~13 such windows), and `candy-core/src/Program.php` sabotage windows visible to
+sugar-crush through its `vendor/` path symlink. Every agent brief now bans
+pattern-matched kills and requires PID-targeted bounds.
+
+### Open
+
+**#37** P8.6 VHS demos and the `TerminalBackground::observe()` wiring into
+`App/App.php`. **#44** `Write` still deliberately unregistered in
+`Bootstrap::tools()`. New this session: **#62** (candy-pty/candy-mosaic/candy-async
+are confirmed stale-clock victims, now unblocked), **#63** (`phpunit.xml` sets no
+`enforceTimeLimit`, so the mock-executor half of the pool suite can still wedge
+CI). Still queued: **#58–#61**, and the P2–P8 body of the plan.
