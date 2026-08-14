@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
@@ -771,6 +772,65 @@ final class RendererTest extends TestCase
     }
 
     /**
+     * crush_code.md Phase 8 item 1: the diff box used to say what changed but
+     * never where. Each row now carries an old-file/new-file line-number
+     * gutter, and the numbers have to be the file's, not the diff block's.
+     */
+    public function testDiffRowsCarryOldAndNewFileLineNumbers(): void
+    {
+        $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -40,3 +40,3 @@\n <?php\n-\$old = 1;\n+\$new = 2;\n";
+        $lines = $this->visibleLines(Renderer::render($this->sizedChat([$this->editResult($diff)])));
+
+        $find = static function (string $needle) use ($lines): string {
+            foreach ($lines as $line) {
+                if (str_contains($line, $needle)) {
+                    return $line;
+                }
+            }
+            return '';
+        };
+
+        // Context sits on line 40 of both files; the edit is line 41 of each.
+        $this->assertMatchesRegularExpression('/40 40│  <\?php/', $find('<?php'));
+        $this->assertMatchesRegularExpression('/41\s+│ -\$old = 1;/', $find('-$old = 1;'));
+        $this->assertMatchesRegularExpression('/\s+41│ \+\$new = 2;/', $find('+$new = 2;'));
+        // File/hunk headers have no line to point at, but keep the column.
+        $this->assertMatchesRegularExpression('/\s+│ @@ -40,3 \+40,3 @@/', $find('@@ -40,3'));
+    }
+
+    /**
+     * The gutter is painted separately from the diff body so the body's own
+     * add/remove SGR bytes stay exactly what they were before a gutter existed
+     * -- otherwise every colour assertion above would have had to be loosened.
+     */
+    public function testTheGutterIsStyledSeparatelyFromTheDiffBody(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-gone\n+here\n";
+        $chat = $this->sizedChat([$this->editResult($diff)]);
+        $theme = $chat->theme();
+        $out = Renderer::render($chat);
+
+        $gutterStyle = Style::new()->foreground($theme->systemLabel)->faint();
+        $this->assertStringContainsString(
+            $gutterStyle->render('  1│ ') . Style::new()->foreground(Color::ansi(2))->render('+here'),
+            $out,
+        );
+    }
+
+    /**
+     * A viewport too narrow to spare the columns keeps the diff text and drops
+     * the gutter rather than truncating every row back to its marker.
+     */
+    public function testANarrowViewportDropsTheGutterInsteadOfTheDiffText(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-gone\n+here\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)], cols: 30));
+
+        $this->assertStringContainsString('+here', $out);
+        $this->assertStringNotContainsString('1│', $out);
+    }
+
+    /**
      * Render invariant: one logical line per physical row. A diff line wider
      * than the viewport must be truncated, never wrapped -- candy-core's
      * Renderer repaints by absolute row, so a wrapped line shifts every row
@@ -804,6 +864,109 @@ final class RendererTest extends TestCase
         // 43 diff rows, capped at 24 -> 19 reported as remaining.
         $this->assertStringContainsString('19 more diff lines', $out);
         $this->assertStringNotContainsString('+line 40', $out);
+    }
+
+    /**
+     * The PR #1403 failure class, reached through TAB.
+     *
+     * candy-core's Sanitize::untrusted() preserves TAB and Width::string("\t")
+     * is 0, but candy-sprinkles' Style::render() paints each tab as tabWidth
+     * spaces -- so a Go/Makefile/C diff was budgeted 0 cells per tab and
+     * painted 4, and the box emitted rows wider than the viewport. candy-core's
+     * Renderer repaints by absolute row and clamps cursorTo(), so an over-wide
+     * row lands on the status bar.
+     *
+     * Measured with Width::string(Ansi::strip()) rather than strlen: the whole
+     * bug is that byte count and display width disagree.
+     */
+    public function testTabIndentedDiffRowsNeverExceedTheRequestedWidth(): void
+    {
+        $render = new \ReflectionMethod(Renderer::class, 'renderDiff');
+        $render->setAccessible(true);
+        $theme = $this->chat()->theme();
+
+        $fixtures = [
+            'makefile' => "--- a/Makefile\n+++ b/Makefile\n@@ -1,3 +1,3 @@\n build:\n-\techo old\n+\techo new\n",
+            'go'       => "--- a/m.go\n+++ b/m.go\n@@ -5,4 +5,4 @@\n func f() {\n-\t\treturn 1\n+\t\treturn 2\n }\n",
+            'deep'     => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\t\t\t\tdeeply nested tabbed line\n+\t\t\t\tdeeply nested tabbed lino\n",
+            'cjk-tab'  => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\t日本語のテキスト\n+\t\t中文文本在这里\n",
+            'emoji'    => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\t🧑‍🚀🧑‍🚀 astronauts 👨‍👩‍👧‍👦\n+\t\t👍🏽 ok\n",
+            'raw-esc'  => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\x1b[31mforged\x1b[0m\n+\x1b[1;32m\tforged\x1b[0m\n",
+            'six-digit' => "--- a/x\n+++ b/x\n@@ -999999,3 +999999,3 @@\n ctx\n-\told\n+\tnew\n",
+        ];
+
+        foreach ($fixtures as $name => $diff) {
+            // 13 upward: below that the pre-existing max(8, $width - 4) floor
+            // makes the box a fixed 12 cells regardless of the request.
+            for ($width = 13; $width <= 120; $width++) {
+                foreach (explode("\n", $render->invoke(null, $diff, $theme, $width)) as $row) {
+                    $this->assertLessThanOrEqual(
+                        $width,
+                        Width::string(Ansi::strip($row)),
+                        "{$name} at width {$width}: " . Ansi::strip($row),
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * The same invariant through the real render() path, at the two widths
+     * either side of the gutter-drop boundary and at DIFF_MIN_BODY_COLS.
+     */
+    public function testATabIndentedDiffFitsTheFrameAcrossTheGutterDropBoundary(): void
+    {
+        $diff = "--- a/Makefile\n+++ b/Makefile\n@@ -1,3 +1,3 @@\n build:\n-\techo old\n+\techo new\n";
+
+        foreach ([80, 100, 120] as $cols) {
+            foreach (explode("\n", Renderer::render($this->sizedChat([$this->editResult($diff)], cols: $cols))) as $row) {
+                $this->assertLessThanOrEqual(
+                    $cols,
+                    Width::string(Ansi::strip($row)),
+                    "cols {$cols}: " . Ansi::strip($row),
+                );
+            }
+        }
+    }
+
+    /** Tabs are expanded, not dropped -- the indentation still reads as depth. */
+    public function testTabIndentationSurvivesAsSpaces(): void
+    {
+        $diff = "--- a/Makefile\n+++ b/Makefile\n@@ -1,2 +1,2 @@\n build:\n-\techo old\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)]));
+
+        $this->assertStringContainsString('-    echo old', $out);
+        $this->assertStringNotContainsString("\t", $out);
+    }
+
+    /**
+     * `--` opens a comment in SQL, Lua, Haskell and Ada, so a deleted
+     * `-- users table` arrives as `--- users table` and used to be coloured as
+     * a bold file header instead of a red removal. The verdict now comes from
+     * DiffGutter::fileHeaders(), which knows whether a hunk is open, so the
+     * colour and the line number can no longer disagree about what a row is.
+     */
+    public function testADeletedCommentRowIsColouredAsARemovalNotAFileHeader(): void
+    {
+        $diff = "--- a/schema.sql\n+++ b/schema.sql\n@@ -10,3 +10,3 @@\n CREATE TABLE users (\n--- users table, legacy\n";
+        $chat = $this->sizedChat([$this->editResult($diff)]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground(Color::ansi(1))->render('--- users table, legacy'),
+            $out,
+        );
+        $this->assertStringNotContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->render('--- users table, legacy'),
+            $out,
+        );
+        // The genuine header above it is still a header.
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->render('--- a/schema.sql'),
+            $out,
+        );
     }
 
     /**

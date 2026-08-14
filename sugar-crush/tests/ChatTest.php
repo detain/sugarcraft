@@ -1206,7 +1206,12 @@ final class ChatTest extends TestCase
         }
         [$inThemes] = $current->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertSame('themes', $inThemes->palette()->mode);
-        $this->assertSame(['dark', 'light', 'dracula', 'tokyoNight', 'ansi'], $inThemes->paletteMatches());
+        // `adaptive` (crush_code.md Phase 8 item 5) joined the roster; it is
+        // last because it is the newest, not because order carries meaning.
+        $this->assertSame(
+            ['dark', 'light', 'dracula', 'tokyoNight', 'ansi', 'adaptive'],
+            $inThemes->paletteMatches(),
+        );
 
         $draculaIndex = array_search('dracula', $inThemes->paletteMatches(), true);
         $current = $inThemes;
@@ -2796,6 +2801,41 @@ final class ChatTest extends TestCase
         [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
 
         $this->assertSame('ran: ls -la', $final->history[1]->content);
+    }
+
+    /**
+     * ...and PostToolUse has to observe THOSE arguments, not the ones the
+     * model proposed. Chat handed the post-hook the HookContext built before
+     * the pre-hooks ran, so AuditHook recorded `rm -rf /` for a call that
+     * actually executed `ls -la` - a log naming a command that never ran, on
+     * precisely the calls anybody would want the record for.
+     */
+    public function testPostToolUseObservesTheRewrittenArgumentsNotTheProposedOnes(): void
+    {
+        $observed = [];
+        $hooks = $this->hookManagerWith(
+            $this->spyHook(
+                HookEvent::PreToolUse,
+                static fn(HookContext $c): HookResult => HookResult::modify((string) json_encode(['cmd' => 'ls -la'])),
+            ),
+            $this->spyHook(HookEvent::PostToolUse, static function (HookContext $c) use (&$observed): HookResult {
+                $observed[] = ['args' => $c->toolArgs, 'input' => $c->toolInput];
+
+                return HookResult::allow();
+            }),
+        );
+
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args): string => 'ran: ' . ($args['cmd'] ?? 'nothing'))
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf /'], 'call_1');
+        $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame([[
+            'args' => ['cmd' => 'ls -la'],
+            'input' => '{"cmd":"ls -la"}',
+        ]], $observed);
     }
 
     /**

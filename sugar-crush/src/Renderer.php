@@ -26,6 +26,7 @@ use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
+use SugarCraft\Crush\Tui\DiffGutter;
 use SugarCraft\Crush\Tui\Pane;
 
 /**
@@ -201,6 +202,14 @@ final class Renderer
      * transcript once {@see render()}'s tail-clipping runs.
      */
     private const DIFF_MAX_ROWS = 24;
+
+    /**
+     * Columns of diff text {@see renderDiff()} insists on keeping before it
+     * will spend any on {@see DiffGutter}'s line numbers. Below this the gutter
+     * would be eating a third of a narrow viewport to annotate rows that have
+     * been truncated back to their `+`/`-` marker.
+     */
+    private const DIFF_MIN_BODY_COLS = 24;
 
     /**
      * Columns the shell's border + padding(1, 2) consume, subtracted before
@@ -1765,12 +1774,19 @@ final class Renderer
      * and "removed" look like, and the diff has to stay readable even under
      * the `ansi` theme, which has no room for two more accent colours.
      *
+     * Each row is prefixed with a faint old-file/new-file line-number gutter
+     * ({@see DiffGutter}) so a reviewer can tell which line of the file a
+     * change lands on - a raw `diff -u` body only says *what* changed.
+     *
      * Every line is {@see Sanitize::untrusted()}-stripped before display -
      * diff bodies are verbatim file contents, so an edited file containing a
      * raw ESC would otherwise forge SGR straight onto the terminal wire - then
      * hard-truncated to $width so the frame keeps its one-logical-line-per-row
      * invariant (candy-core's Renderer repaints by absolute row; a wrapped
-     * line silently shifts every row below it). The row count is capped at
+     * line silently shifts every row below it). Sanitising happens BEFORE the
+     * gutter is computed, so the marker column the numbering reads is the same
+     * one that ends up on screen. Tabs are expanded in the same pass, for the
+     * width reason spelled out at the call site. The row count is capped at
      * {@see self::DIFF_MAX_ROWS} with a trailer for the same reason
      * {@see render()} tail-clips: a 400-line diff must not evict the
      * conversation it belongs to.
@@ -1786,15 +1802,50 @@ final class Renderer
             $rows = array_slice($rows, 0, self::DIFF_MAX_ROWS);
         }
 
+        // TAB has to be expanded HERE, before anything measures a row.
+        // candy-core's Sanitize::untrusted() deliberately preserves TAB, and
+        // Width::string("\t") is 0 - but candy-sprinkles' Style::render()
+        // expands every tab to tabWidth spaces before it does its own width
+        // work (Style.php:969). So a tab-indented row (Go, Makefiles, C) is
+        // budgeted 0 cells and painted 4, and the frame emits a row wider than
+        // the viewport - the PR #1403 failure class, where candy-core's
+        // absolute cursorTo() repaint turns an over-wide row into a status-bar
+        // collision. The expansion width is read off a default Style rather
+        // than written as a literal so it cannot drift from the styles below,
+        // which are default-constructed the same way.
+        $tab = str_repeat(' ', Style::new()->getTabWidth());
+        $rows = array_map(
+            static fn (string $row): string => str_replace("\t", $tab, self::untrusted($row)),
+            $rows,
+        );
+
+        // On a viewport too narrow to spare the columns, the diff text itself
+        // is worth more than knowing its line numbers - drop the gutter rather
+        // than truncate every row down to its marker.
+        $gutter = DiffGutter::forDiff($rows);
+        if ($inner - $gutter->width < self::DIFF_MIN_BODY_COLS) {
+            $gutter = DiffGutter::none(count($rows));
+        }
+
+        // Computed from the un-narrowed rows, and separately from $gutter, so
+        // that dropping the gutter for a narrow viewport does not also change
+        // how the body is coloured.
+        $headers = DiffGutter::fileHeaders($rows);
+
+        $body = $inner - $gutter->width;
+        $gutterStyle = Style::new()->foreground($theme->systemLabel)->faint();
+
         $painted = [];
-        foreach ($rows as $row) {
-            $text = Width::truncate(self::untrusted($row), $inner);
-            $painted[] = self::styleDiffLine($text, $theme)->render($text);
+        foreach ($rows as $i => $row) {
+            $text = Width::truncate($row, $body);
+            $prefix = $gutter->prefixes[$i];
+            $painted[] = ($prefix === '' ? '' : $gutterStyle->render($prefix))
+                . self::styleDiffLine($text, $theme, $headers[$i])->render($text);
         }
 
         if ($overflow > 0) {
-            $trailer = Width::truncate("… {$overflow} more diff line" . ($overflow === 1 ? '' : 's'), $inner);
-            $painted[] = Style::new()->foreground($theme->systemLabel)->faint()->render($trailer);
+            $trailer = Width::truncate("… {$overflow} more diff line" . ($overflow === 1 ? '' : 's'), $body);
+            $painted[] = $gutterStyle->render($gutter->blank . $trailer);
         }
 
         return Style::new()
@@ -1809,10 +1860,18 @@ final class Renderer
      * The `---`/`+++` file headers are matched before the bare `-`/`+` markers
      * they start with, otherwise a diff's own header would render as a giant
      * removal followed by a giant addition.
+     *
+     * Whether a `--- `/`+++ ` row IS a header is not decidable from the row
+     * alone — `--` opens a comment in SQL, Lua, Haskell and Ada, so a deleted
+     * `-- users table` arrives here looking exactly like a file header — so the
+     * verdict comes from {@see DiffGutter::fileHeaders()}, which walks the block
+     * and already knows whether a hunk is open. It is a required argument, not a
+     * defaulted one, so a future caller has to decide rather than silently get
+     * the ambiguous reading back.
      */
-    private static function styleDiffLine(string $line, Theme $theme): Style
+    private static function styleDiffLine(string $line, Theme $theme, bool $isHeader): Style
     {
-        if (str_starts_with($line, '--- ') || str_starts_with($line, '+++ ')) {
+        if ($isHeader) {
             return Style::new()->foreground($theme->systemLabel)->bold();
         }
         if (str_starts_with($line, '@@')) {
