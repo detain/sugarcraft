@@ -141,17 +141,201 @@ final class VhsTapeContractTest extends TestCase
     ];
 
     /**
-     * The PHPUnit group a MUTATION SWEEP of the parsing model must exclude.
+     * The PHPUnit group a MUTATION SWEEP must exclude — of the parsing model,
+     * and now of the head scan too.
      *
-     * {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()} counts `if`
-     * sites, loop conditions and boolean operators, so every conjunct-drop
-     * mutation reds it whatever the mutation MEANS. Left in the run it therefore reports "killed"
-     * for every mutant and the EQUIVALENT-MUTANT REGISTER in {@see tokenize()}
-     * can never be exercised again. Sweeps run
+     * TWO tests carry it. {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()}
+     * counts the leaves of the four PARSING-MODEL methods and
+     * {@see testTheHeadScanSweepRegisterIsMeasuredNotNarrated()} counts the
+     * leaves of the four HEAD-SCAN methods, so between them every conjunct-drop
+     * mutation this file has a register for reds one of them whatever the
+     * mutation MEANS. Left in the run they therefore report "killed" for every
+     * mutant and neither the EQUIVALENT-MUTANT REGISTER in {@see tokenize()} nor
+     * the one on {@see literalHeadArguments()} can be exercised again. Sweeps run
      * `--exclude-group syntax-census`, and this constant is what that instruction
-     * refers to rather than a group name spelled out twice.
+     * refers to rather than a group name spelled out twice. WHICH methods carry
+     * it is asserted rather than assumed — the second census could otherwise have
+     * shipped ungrouped and silently made every head-scan sweep unreadable.
      */
     private const SWEEP_EXCLUDE_GROUP = 'syntax-census';
+
+    /**
+     * The tokens that ANCHOR a boolean condition — each one carries the BASE
+     * leaf of the condition it introduces.
+     *
+     * Shared, rather than spelled out twice, because this file runs TWO
+     * instruments over the same idea and they have twice disagreed about it in
+     * prose: {@see guardCensus()} counts the leaves a conjunct-drop sweep of the
+     * PARSING MODEL must visit, and {@see sweepLeafCensus()} counts the leaves of
+     * the same operator over the four methods of the HEAD SCAN, which is what
+     * {@see literalHeadArguments()}'s register is an inventory of. Round 19 left
+     * the first excluding loop conditions and `??=` while the second swept them;
+     * round 20 fixed that by editing one list. A shared constant is what stops
+     * the third round of it: widen or narrow the domain here and BOTH figures
+     * move together, so the two can no longer drift apart silently.
+     *
+     * `T_DO` is deliberately absent — a `do … while (…)` carries one condition
+     * and its `T_WHILE` already counts it. `T_FOREACH` is absent because it has
+     * no condition to drop. Ternaries and `match` arms are absent because they
+     * are a DIFFERENT mutation operator; {@see sweepLeafCensus()} adds them back
+     * for the head-scan register, which sweeps both operators under one figure,
+     * and that difference is asserted rather than described — see
+     * {@see testTheHeadScanSweepRegisterIsMeasuredNotNarrated()}.
+     */
+    private const CONJUNCT_ANCHORS = [
+        \T_IF, \T_ELSEIF,
+        \T_FOR, \T_WHILE,
+        \T_COALESCE, \T_COALESCE_EQUAL,
+    ];
+
+    /**
+     * The tokens that JOIN one more leaf onto a boolean condition.
+     *
+     * `and`/`or`/`xor` are here beside `&&`/`||` because they are conjunct
+     * spellings a drop-sweep must visit and every one of them was invisible to
+     * the regex these censuses replaced.
+     */
+    private const CONJUNCT_OPERATORS = [
+        \T_BOOLEAN_AND, \T_BOOLEAN_OR,
+        \T_LOGICAL_AND, \T_LOGICAL_OR, \T_LOGICAL_XOR,
+    ];
+
+    /**
+     * The registered SURVIVORS of the mutation sweep recorded on
+     * {@see literalHeadArguments()} — one entry per leaf that lives, with the
+     * method it lives in and the class of equivalence that keeps it alive.
+     *
+     * HERE RATHER THAN IN PROSE because a count in a docblock is a count that
+     * drifts, and this one has: round 19's register said thirty-eight leaves over
+     * a sentence enumerating thirty-seven, one killed count out with it, and one
+     * survivor — {@see headArgument()}'s `$index <= 1` bound — missing from every
+     * class while the rule above it said an unclassified survivor IS a gap. Round
+     * 20 corrected all three by rewriting the sentence, which is the same
+     * instrument that produced the drift. {@see
+     * testTheHeadScanSweepRegisterIsMeasuredNotNarrated()} now DERIVES every
+     * figure the register quotes from this list and from the code: the leaf total
+     * per method is measured by {@see sweepLeafCensus()}, the survivor total is
+     * this list's length, and the KILLED total is the subtraction of the two
+     * rather than a third number anybody types.
+     *
+     * The three class names are the register's own headings and are asserted to
+     * be exactly three, because "a survivor in none of the three classes is a
+     * gap" is the rule the register is enforced by — a fourth class added here
+     * without a reader is that rule quietly relaxing.
+     *
+     * `fragment` IS WHY THIS IS NOT A LIST OF NAMES. `leaf` is prose for a
+     * reader; `fragment` is the leaf's own bytes, and it is asserted to still
+     * occur in the method named beside it. Without that half the register would
+     * be an instrument that measures PRESENCE — seventeen rows exist, so the
+     * count reconciles — while a row could name a leaf deleted three rounds ago
+     * and nothing would say so. Counting rows is not checking them.
+     *
+     * @var list<array{method: string, leaf: string, fragment: string, class: string}>
+     */
+    private const SWEEP_SURVIVORS = [
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => '!\is_array($t) in the token filter',
+            'fragment' => '!\is_array($t)',
+            'class' => 'type guard PHP makes redundant',
+        ],
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => '!\is_array($token) in the entry-point gate',
+            'fragment' => '!\is_array($token)',
+            'class' => 'type guard PHP makes redundant',
+        ],
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => '!\is_array($previous) in the accessor test',
+            'fragment' => '!\is_array($previous)',
+            'class' => 'type guard PHP makes redundant',
+        ],
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => '\is_array($head[0]) in the literal gate',
+            'fragment' => '\is_array($head[0])',
+            'class' => 'type guard PHP makes redundant',
+        ],
+        [
+            'method' => 'callArgument',
+            'leaf' => '\is_array($token) in the array-token arm',
+            'fragment' => '\is_array($token)',
+            'class' => 'type guard PHP makes redundant',
+        ],
+        [
+            'method' => 'splitNamedArgument',
+            'leaf' => '\is_array($argument[0])',
+            'fragment' => '\is_array($argument[0])',
+            'class' => 'type guard PHP makes redundant',
+        ],
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => '$token[0] !== \T_STRING',
+            'fragment' => '$token[0] !== \T_STRING',
+            'class' => 'redundant against a companion conjunct',
+        ],
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => '$tokens[$k + 1] !== \'(\'',
+            'fragment' => '$tokens[$k + 1] !== \'(\'',
+            'class' => 'redundant against a companion conjunct',
+        ],
+        [
+            'method' => 'callArgument',
+            'leaf' => 'the $depth === 1 early-continue',
+            'fragment' => '$depth === 1',
+            'class' => 'redundant against a companion conjunct',
+        ],
+        [
+            'method' => 'splitNamedArgument',
+            'leaf' => '\count($argument) >= 3',
+            'fragment' => '\count($argument) >= 3',
+            'class' => 'redundant against a companion conjunct',
+        ],
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => 'the $k + 1 < $count loop bound, relaxed',
+            'fragment' => '$k + 1 < $count',
+            'class' => 'unreachable from this file\'s content',
+        ],
+        [
+            'method' => 'literalHeadArguments',
+            'leaf' => 'the $k > 0 ternary condition',
+            'fragment' => '$k > 0',
+            'class' => 'unreachable from this file\'s content',
+        ],
+        [
+            'method' => 'callArgument',
+            'leaf' => 'the bare { opener',
+            'fragment' => '$token === \'{\'',
+            'class' => 'unreachable from this file\'s content',
+        ],
+        [
+            'method' => 'callArgument',
+            'leaf' => 'the $k < \count($tokens) loop bound, relaxed',
+            'fragment' => '$k < \count($tokens)',
+            'class' => 'unreachable from this file\'s content',
+        ],
+        [
+            'method' => 'headArgument',
+            'leaf' => 'the $index <= 1 loop bound, relaxed',
+            'fragment' => '$index <= 1',
+            'class' => 'unreachable from this file\'s content',
+        ],
+        [
+            'method' => 'splitNamedArgument',
+            'leaf' => '$argument[0][0] === \T_STRING',
+            'fragment' => '$argument[0][0] === \T_STRING',
+            'class' => 'unreachable from this file\'s content',
+        ],
+        [
+            'method' => 'splitNamedArgument',
+            'leaf' => '$argument[1] === \':\'',
+            'fragment' => '$argument[1] === \':\'',
+            'class' => 'unreachable from this file\'s content',
+        ],
+    ];
 
     /**
      * Every identifier upstream vhs lexes as a KEYWORD rather than as a string:
@@ -2920,31 +3104,51 @@ final class VhsTapeContractTest extends TestCase
      *     read comments says ten where the code has four.
      *   CONJUNCTS PER MODEL METHOD. Cited by {@see skipSpeedSuffix()}'s pin list,
      *     whose retired heading said FOUR over eight.
-     *     DOMAIN: `if`/`elseif` sites, `for`/`while` loop conditions, and the
-     *     boolean operators `&&`, `||`, `and`, `or`, `xor`, `??` and `??=`,
-     *     counted as PHP TOKENS. That is the number of leaves a conjunct-drop
-     *     mutation sweep has to visit, which is what the pin list is an
-     *     inventory of. NAMED EXCLUSIONS, so that "silent here" never has to be
-     *     inferred: ternaries and `match` arms are a different mutation operator
-     *     with its own entry in {@see tokenize()}'s register; `foreach` has no
-     *     condition to drop; `do` is skipped because the `while` of a
-     *     `do … while` already counts that loop's one condition.
+     *     DOMAIN: the LEAVES of the boolean conditions in the method's own token
+     *     stream — {@see CONJUNCT_ANCHORS} for each condition's base leaf,
+     *     {@see CONJUNCT_OPERATORS} for each leaf joined onto it, and
+     *     {@see unanchoredConditions()} for the base of a condition no anchor
+     *     introduces. That is the number of leaves a conjunct-drop mutation
+     *     sweep has to visit, which is what the pin list is an inventory of.
+     *     NAMED EXCLUSIONS, so that "silent here" never has to be inferred:
+     *     ternaries and `match` arms are a different mutation operator with its
+     *     own entry in {@see tokenize()}'s register — and
+     *     {@see sweepLeafCensus()} is where the ONE figure in this file that
+     *     sweeps both operators together adds them back, by a subtraction that
+     *     is asserted rather than described; `foreach` has no condition to drop;
+     *     `do` is skipped because the `while` of a `do … while` already counts
+     *     that loop's one condition.
      *
-     *     THE LOOP-CONDITION AND `??=` HALVES OF THAT DOMAIN ARE NEW, AND THE
-     *     FIGURES MOVED — the only figures in this file's history that have.
-     *     `directiveValues` 5 → 8, `scanRegex` 8 → 10, `tokenize` 17 → 18;
-     *     `skipSpeedSuffix` has no loop and stays at 8, so the pin list it is
-     *     cited by is untouched. This is a DOMAIN correction, not a
-     *     re-baseline: the previous domain contradicted the register on
-     *     {@see literalHeadArguments()}, which counts "each loop bound" as a
-     *     leaf of the same drop operator and swept four of them. Measured under
-     *     the old domain, adding `while ($arity === -99) { break; }` or
-     *     `$values ??= [];` to {@see directiveValues()} left the whole file
-     *     GREEN at 114 tests / 549 assertions while the `if` and `??`
-     *     spellings of the same leaf each failed this test — a genuine leaf a
-     *     drop-sweep must visit, invisible to the instrument that claims to
-     *     count them, which is the same defect the regex paragraph below
-     *     records one instrument earlier.
+     *     THE DOMAIN HAS BEEN WIDENED TWICE AND THE FIGURES MOVED BOTH TIMES —
+     *     the only figures in this file's history that have, and both times
+     *     because the domain had been stated to be a leaf count while the
+     *     instrument counted something narrower.
+     *
+     *       * LOOP CONDITIONS AND `??=`. `directiveValues` 5 → 8, `scanRegex`
+     *         8 → 10, `tokenize` 17 → 18. Measured under the old domain, adding
+     *         `while ($arity === -99) { break; }` or `$values ??= [];` to
+     *         {@see directiveValues()} left the whole file GREEN at 114 tests /
+     *         549 assertions while the `if` and `??` spellings of the same leaf
+     *         each failed this test.
+     *       * UNANCHORED CONDITIONS. `tokenize` 18 → 19; the other three have
+     *         none and do not move. Measured under the old domain, adding
+     *         `$unanchored = static fn (): bool => $arity > 0;` to
+     *         {@see directiveValues()} left the whole file GREEN at 114 tests /
+     *         549 assertions, and the two-leaf spelling of it moved this figure
+     *         by ONE where a leaf count moves by two. This one was ALREADY IN
+     *         THE FILE rather than only reachable: {@see tokenize()}'s
+     *         `$terminated = $close !== false && $close < $lineEnd;` is the
+     *         shape, and both of its leaves are kills — dropping
+     *         `$close !== false` runs the tokenizer out of memory, dropping
+     *         `$close < $lineEnd` fails three tests — so what was wrong was the
+     *         FIGURE, not the sweep it feeds.
+     *
+     *     Neither is a re-baseline. Both are the same correction: the previous
+     *     domain contradicted the register on {@see literalHeadArguments()},
+     *     which counts each loop bound and each leaf of every condition under
+     *     the same drop operator. `skipSpeedSuffix` has no loop, no `??=` and no
+     *     unanchored condition, and stays at 8 through both, so the pin list it
+     *     is cited by is untouched by either.
      *
      * WHY TOKENS AND NOT A REGEX, which is what both counters used to be. A
      * regex over the stripped source could be fooled in BOTH directions, and
@@ -2963,12 +3167,13 @@ final class VhsTapeContractTest extends TestCase
      *
      * The token walk has neither behaviour, and the figures did not move when it
      * replaced the regex — 5/8/8/17 and 2/3/3/4 both ways UNDER THE DOMAIN OF
-     * THAT ROUND, which excluded loop conditions and `??=`; that is what says the
-     * INSTRUMENT swap was a fix and not a re-baseline, and it is a claim about
-     * that swap only. The conjunct figures are 8/10/8/18 today because the DOMAIN
-     * widened afterwards, as the paragraph above records. It is still not a
-     * SEMANTIC count: it sees syntax, so it moves for a conjunct that is added or
-     * removed however harmless, and that is the next paragraph's whole subject.
+     * THAT ROUND, which excluded loop conditions, `??=` and unanchored
+     * conditions; that is what says the INSTRUMENT swap was a fix and not a
+     * re-baseline, and it is a claim about that swap only. The conjunct figures
+     * are 8/10/8/19 today because the DOMAIN widened twice afterwards, as the
+     * paragraph above records. It is still not a SEMANTIC count: it sees syntax,
+     * so it moves for a conjunct that is added or removed however harmless, and
+     * that is the next paragraph's whole subject.
      *
      * THIS TEST IS EXCLUDED FROM A MUTATION SWEEP, and the exclusion is executable
      * rather than prose. Because it counts `if` sites and boolean operators, EVERY
@@ -3006,20 +3211,30 @@ final class VhsTapeContractTest extends TestCase
     #[\PHPUnit\Framework\Attributes\Group(self::SWEEP_EXCLUDE_GROUP)]
     public function testTheModelsBoundsAndConjunctsAreCountedNotNarrated(): void
     {
-        $attributes = (new \ReflectionMethod(self::class, __FUNCTION__))
-            ->getAttributes(\PHPUnit\Framework\Attributes\Group::class);
-        $groups = [];
+        $grouped = [];
 
-        foreach ($attributes as $attribute) {
-            $groups[] = $attribute->newInstance()->name();
+        foreach ((new \ReflectionClass(self::class))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            foreach ($method->getAttributes(\PHPUnit\Framework\Attributes\Group::class) as $attribute) {
+                $grouped[$method->getName()][] = $attribute->newInstance()->name();
+            }
         }
 
+        ksort($grouped);
+
         self::assertSame(
-            [self::SWEEP_EXCLUDE_GROUP],
-            $groups,
-            'first half of making the sweep instruction executable: this method really does '
-            . 'carry the group the instruction excludes. Delete the attribute and the '
-            . 'instruction silently starts excluding nothing',
+            [
+                'testTheHeadScanSweepRegisterIsMeasuredNotNarrated' => [self::SWEEP_EXCLUDE_GROUP],
+                'testTheModelsBoundsAndConjunctsAreCountedNotNarrated' => [self::SWEEP_EXCLUDE_GROUP],
+            ],
+            $grouped,
+            'first half of making the sweep instruction executable: the methods that really do '
+            . 'carry the group the instruction excludes, DERIVED from the class rather than '
+            . 'from __FUNCTION__. There are TWO census tests now, and the retired version '
+            . 'checked whichever one it was written inside — so the second could have shipped '
+            . 'with no attribute at all and the instruction would have silently stopped '
+            . 'excluding it, which is a sweep reading "killed" for every mutant. Both sides '
+            . 'bite: an attribute deleted here, and a test that acquires the group without '
+            . 'being a census',
         );
 
         $source = file_get_contents(__FILE__);
@@ -3081,7 +3296,7 @@ final class VhsTapeContractTest extends TestCase
                 'directiveValues' => ['bounds' => 2, 'conjuncts' => 8],
                 'scanRegex' => ['bounds' => 3, 'conjuncts' => 10],
                 'skipSpeedSuffix' => ['bounds' => 3, 'conjuncts' => 8],
-                'tokenize' => ['bounds' => 4, 'conjuncts' => 18],
+                'tokenize' => ['bounds' => 4, 'conjuncts' => 19],
             ],
             $measured,
             'the model\'s bounds comparisons and conjuncts, per method, from this file\'s own '
@@ -3090,6 +3305,185 @@ final class VhsTapeContractTest extends TestCase
             . 'valuesWithNoPhpDiagnostic() classifies one by one, and EIGHT conjuncts in '
             . 'skipSpeedSuffix(), which is what its pin list called four. '
             . 'A figure that moves here is a docblock that has gone stale two screens away',
+        );
+    }
+
+    /**
+     * The mutation-sweep register recorded on {@see literalHeadArguments()} is
+     * MEASURED against the code it describes, not narrated beside it.
+     *
+     * That register is the one place in this file where a figure had drifted in
+     * every direction at once: round 19 stated THIRTY-EIGHT leaves over a domain
+     * sentence enumerating thirty-seven, a killed count that was one out with it,
+     * one warning-only kill where there were two, and a survivor that appeared in
+     * no class at all while the rule above it read "a survivor in none of the
+     * three classes is a gap". Round 20 corrected each by rewriting the sentence.
+     * Rewriting the sentence is what produced it.
+     *
+     * SO NOTHING HERE IS TYPED TWICE. The leaf total per method comes from
+     * {@see sweepLeafCensus()} over the real methods; the survivors come from
+     * {@see SWEEP_SURVIVORS}; the KILLED total is the subtraction of the two and
+     * exists nowhere as a literal. A leaf added to any of the four methods moves
+     * the census and reds this test; a survivor listed for a method that has
+     * fewer leaves than survivors reds it; a fourth equivalence class reds it.
+     *
+     * AND THE RECONCILIATION THE CENSUSES OWE EACH OTHER, which is the half round
+     * 20 left standing. {@see guardCensus()} counts conjunct-drop leaves and
+     * excludes ternaries BY NAME, calling them "a different mutation operator";
+     * {@see literalHeadArguments()}'s register sweeps ternary collapse and
+     * conjunct drop under ONE heading and one figure. Both statements were true
+     * and they contradicted each other, so the file had two definitions of a leaf
+     * and no way to notice. They are one subtraction now — sweep leaves =
+     * conjuncts + ternary conditions — asserted below for ALL EIGHT methods the
+     * two censuses read between them, so widening either domain without the other
+     * is red rather than silent.
+     *
+     * WHY THIS CARRIES THE SWEEP-EXCLUDE GROUP. It counts leaves, so every
+     * conjunct-drop mutation in the four scan methods reds it whatever the
+     * mutation MEANS — which is exactly the property that made the model census
+     * uninterpretable inside a sweep. THAT IS A METHODOLOGY CHANGE for the
+     * head-scan register: before this test existed, the scan methods were outside
+     * every census and their sweep could be read from a whole-file run. It cannot
+     * be any more, and the register says so where it records the sweep.
+     */
+    #[\PHPUnit\Framework\Attributes\Group(self::SWEEP_EXCLUDE_GROUP)]
+    public function testTheHeadScanSweepRegisterIsMeasuredNotNarrated(): void
+    {
+        $scan = ['literalHeadArguments', 'callArgument', 'headArgument', 'splitNamedArgument'];
+        $leaves = [];
+
+        foreach ($scan as $method) {
+            $leaves[$method] = self::sweepLeafCensus(self::modelMethodTokens($method));
+        }
+
+        self::assertSame(
+            [
+                'literalHeadArguments' => 14,
+                'callArgument' => 16,
+                'headArgument' => 4,
+                'splitNamedArgument' => 4,
+            ],
+            $leaves,
+            'the SIZE OF THE SWEPT DOMAIN, per method, measured from this file\'s own token '
+            . 'stream instead of being enumerated in a docblock that adds up to something else. '
+            . 'DOMAIN, STATED WITH ITS RESTRICTIONS rather than beside them: every leaf of '
+            . 'every boolean condition (CONJUNCT_ANCHORS for each condition\'s base, '
+            . 'CONJUNCT_OPERATORS for each leaf joined on, unanchoredConditions() for a base no '
+            . 'anchor introduces) PLUS every ternary condition. What ESCAPES it, so that '
+            . '"silent" never has to be inferred: `match` arms, `foreach`, the second '
+            . 'unanchored condition of a single statement, and a boolean-bodied closure nested '
+            . 'inside an anchored statement — all four under-count, and none occurs in these '
+            . 'four methods today',
+        );
+
+        $total = array_sum($leaves);
+
+        self::assertSame(
+            38,
+            $total,
+            'and the total the register quotes, which is the sum of the four above and not a '
+            . 'figure of its own. The retired version was a literal beside a sentence '
+            . 'enumerating one fewer',
+        );
+
+        $byMethod = array_fill_keys($scan, 0);
+        $byClass = [];
+
+        foreach (self::SWEEP_SURVIVORS as $survivor) {
+            self::assertContains(
+                $survivor['method'],
+                $scan,
+                'every registered survivor names one of the four methods actually swept — a '
+                . 'survivor recorded against a method outside the domain is a register '
+                . 'describing something else',
+            );
+            self::assertStringContainsString(
+                $survivor['fragment'],
+                self::methodSourceWithoutComments($survivor['method']),
+                "the registered survivor `{$survivor['leaf']}` is not in "
+                . "{$survivor['method']}() any more. This is the half that makes the register "
+                . 'ENFORCED rather than merely PRESENT: the counts above reconcile just as well '
+                . 'when a row describes a leaf that was deleted rounds ago, because counting '
+                . 'rows is not checking them. Comments are stripped from the haystack on '
+                . 'purpose — the leaves here are discussed in prose a few lines from the code, '
+                . 'and a register satisfied by its own explanation would be worse than none',
+            );
+            ++$byMethod[$survivor['method']];
+            $byClass[$survivor['class']] = ($byClass[$survivor['class']] ?? 0) + 1;
+        }
+
+        ksort($byClass);
+
+        self::assertSame(
+            [
+                'redundant against a companion conjunct' => 4,
+                'type guard PHP makes redundant' => 6,
+                'unreachable from this file\'s content' => 7,
+            ],
+            $byClass,
+            'the survivors by equivalence class, counted from SWEEP_SURVIVORS rather than '
+            . 'stated three times in prose. THREE classes exactly: the register\'s rule is '
+            . '"a survivor in none of the three classes is a gap", and a fourth class added '
+            . 'without a reader is that rule relaxing in silence',
+        );
+
+        foreach ($byMethod as $method => $survivors) {
+            self::assertLessThanOrEqual(
+                $leaves[$method],
+                $survivors,
+                "more survivors registered for {$method} than it has leaves to mutate. This is "
+                . 'the check that catches a register left behind by a method that SHRANK — the '
+                . 'leaf count is measured and the survivor list is written down, so only this '
+                . 'comparison notices when the second outlives the first. IT TAKES TWO EDITS TO '
+                . 'REACH, and saying so is the point: removing a leaf alone fails the census '
+                . 'above first, so this fires only once someone has done what the docblocks '
+                . 'invite and updated the numbers there without touching SWEEP_SURVIVORS. '
+                . 'Measured that way — dropping splitNamedArgument()\'s `\is_array($argument[0])` '
+                . 'and correcting 4 → 3, 38 → 37 and 21 → 20 — this is the one assertion that '
+                . 'fails. splitNamedArgument() is where it bites soonest: all four of its '
+                . 'leaves are survivors, so it has no slack at all',
+            );
+        }
+
+        self::assertSame(
+            21,
+            $total - \count(self::SWEEP_SURVIVORS),
+            'and the KILLED count, DERIVED. It is the one figure in the register a sweeper '
+            . 'cannot measure from the source — it takes 38 runs — so it is the one figure '
+            . 'that must not be typed independently of the two that can be. Round 19 typed it '
+            . 'independently and it was one out',
+        );
+
+        $reconciled = [];
+
+        foreach ([...$scan, 'directiveValues', 'scanRegex', 'skipSpeedSuffix', 'tokenize'] as $method) {
+            $tokens = self::modelMethodTokens($method);
+            $ternaries = 0;
+
+            foreach (array_keys($tokens) as $k) {
+                if (self::isTernaryCondition($tokens, $k)) {
+                    ++$ternaries;
+                }
+            }
+
+            $reconciled[$method] = self::sweepLeafCensus($tokens)
+                - self::guardCensus($tokens)['conjuncts']
+                - $ternaries;
+        }
+
+        self::assertSame(
+            array_fill_keys(
+                [...$scan, 'directiveValues', 'scanRegex', 'skipSpeedSuffix', 'tokenize'],
+                0,
+            ),
+            $reconciled,
+            'and the two censuses reconciled, for ALL EIGHT methods they read between them: '
+            . 'the head-scan sweep\'s domain is the model census\'s domain plus ternary '
+            . 'conditions and nothing else. Round 19 found the two disagreeing about loop '
+            . 'bounds and `??=`; round 20 fixed those by editing one list and left the TERNARY '
+            . 'half of the same disagreement in place, stated as a deliberate exclusion in one '
+            . 'docblock and as an included operator in the other. Neither could see the other. '
+            . 'This subtraction is what makes a third round of it red instead of quiet',
         );
     }
 
@@ -3105,7 +3499,7 @@ final class VhsTapeContractTest extends TestCase
      *
      * @return list<array{int, string, int}|string>
      */
-    private static function modelMethodTokens(string $method): array
+    private static function modelMethodTokens(string $method, bool $keepWhitespace = false): array
     {
         $reflection = new \ReflectionMethod(self::class, $method);
         $lines = file(__FILE__);
@@ -3117,11 +3511,41 @@ final class VhsTapeContractTest extends TestCase
             $reflection->getEndLine() - $reflection->getStartLine() + 1,
         ));
 
+        $dropped = [\T_COMMENT, \T_DOC_COMMENT];
+
+        if (!$keepWhitespace) {
+            $dropped[] = \T_WHITESPACE;
+        }
+
         return array_values(array_filter(
             token_get_all('<?php ' . $body),
             static fn (array|string $token): bool => !\is_array($token)
-                || !\in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true),
+                || !\in_array($token[0], $dropped, true),
         ));
+    }
+
+    /**
+     * One method's own source with every comment removed and each whitespace run
+     * collapsed to a single space.
+     *
+     * The haystack {@see SWEEP_SURVIVORS}'s `fragment` half is checked against.
+     * Comments go because this file discusses its own guards a few lines from
+     * where they live — {@see tokenize()} quotes three of {@see scanRegex()}'s
+     * verbatim — so a register checked against the raw text would be satisfied
+     * by the paragraph explaining the leaf rather than by the leaf. Whitespace
+     * collapses because a condition that gets rewrapped across lines is the same
+     * condition, and a register that reds on reflow trains people to edit it
+     * without reading it.
+     */
+    private static function methodSourceWithoutComments(string $method): string
+    {
+        $text = '';
+
+        foreach (self::modelMethodTokens($method, true) as $token) {
+            $text .= \is_array($token) ? $token[1] : $token;
+        }
+
+        return trim((string) preg_replace('/\s+/', ' ', $text));
     }
 
     /**
@@ -3131,17 +3555,25 @@ final class VhsTapeContractTest extends TestCase
      * immediately on one side of it — the same rule the retired regex used,
      * except that a token walk cannot read one out of a string literal.
      *
-     * A CONJUNCT is an `if`/`elseif` site, a `for`/`while` loop condition, or a
-     * boolean operator. `and`/`or`/`xor` and `??`/`??=` are in the set because
-     * they are conjunct spellings a drop-sweep must visit, and every one of them
-     * was invisible to the regex this replaced. `for` and `while` are in it
-     * because {@see literalHeadArguments()}'s own register sweeps loop bounds
-     * under the same drop operator, so a census that skipped them would report
-     * fewer leaves than the file's own sweep visits. `T_DO` is deliberately NOT
-     * in the set: a `do … while (…)` carries one condition and its `T_WHILE`
-     * already counts it. `foreach` is not in it either — it has no condition to
-     * drop, and measured, adding one to {@see directiveValues()} is silent here
-     * by design rather than by oversight.
+     * A CONJUNCT is one LEAF of a boolean condition: an anchor from
+     * {@see CONJUNCT_ANCHORS} carries its condition's base leaf, an operator from
+     * {@see CONJUNCT_OPERATORS} joins one more onto it. `if (A || B)` is
+     * therefore two, which is what a drop-sweep of it visits.
+     *
+     * AN ANCHOR + OPERATOR COUNT IS NOT A LEAF COUNT ON ITS OWN, and the gap is
+     * where round 20 put the same defect back that round 20 was fixing. A
+     * boolean condition needs no anchor at all: `$flag = $a === $b;` is a leaf a
+     * drop-sweep must visit — the mutation makes the assignment unconditional —
+     * and it carries none of the eleven tokens. Measured, adding
+     * `$unanchored = static fn (): bool => $arity > 0;` to
+     * {@see directiveValues()} left the whole file GREEN at 114 tests / 549
+     * assertions, and the two-leaf spelling of the same thing moved this figure
+     * by ONE where a leaf count moves by two. It is not hypothetical either:
+     * {@see tokenize()}'s `$terminated = $close !== false && $close < $lineEnd;`
+     * is exactly that shape and was under-counted by one until this round —
+     * which is why `tokenize` reads 19 here and read 18 last round.
+     * {@see unanchoredConditions()} supplies the missing bases, and states its
+     * own two restrictions rather than leaving them to be discovered.
      *
      * @param list<array{int, string, int}|string> $tokens
      *
@@ -3155,20 +3587,14 @@ final class VhsTapeContractTest extends TestCase
             \T_IS_IDENTICAL, \T_IS_NOT_IDENTICAL,
             \T_IS_EQUAL, \T_IS_NOT_EQUAL, \T_SPACESHIP,
         ];
-        $conjunctions = [
-            \T_IF, \T_ELSEIF,
-            \T_FOR, \T_WHILE,
-            \T_BOOLEAN_AND, \T_BOOLEAN_OR,
-            \T_LOGICAL_AND, \T_LOGICAL_OR, \T_LOGICAL_XOR,
-            \T_COALESCE, \T_COALESCE_EQUAL,
-        ];
+        $conjunctions = [...self::CONJUNCT_ANCHORS, ...self::CONJUNCT_OPERATORS];
 
         $bound = static fn (array|string|null $token): bool => \is_array($token)
             && $token[0] === \T_VARIABLE
             && \in_array($token[1], ['$count', '$length'], true);
 
         $bounds = 0;
-        $conjuncts = 0;
+        $conjuncts = \count(self::unanchoredConditions($tokens));
 
         foreach ($tokens as $k => $token) {
             if (\is_array($token) && \in_array($token[0], $conjunctions, true)) {
@@ -3187,6 +3613,190 @@ final class VhsTapeContractTest extends TestCase
         }
 
         return ['bounds' => $bounds, 'conjuncts' => $conjuncts];
+    }
+
+    /**
+     * The statements of one method that carry a boolean condition NO anchor
+     * introduces — one entry per such statement, each the missing BASE leaf that
+     * {@see guardCensus()}'s token count cannot see.
+     *
+     * A statement is anchored when it opens with `if`, `elseif`, `else`, `for`,
+     * `while` or `do`, or when it contains a ternary condition or a `??`/`??=`.
+     * Anything else that carries a comparison or a boolean operator is a
+     * condition standing on its own: an assignment, a `return`, an arrow
+     * function's body.
+     *
+     * TWO RESTRICTIONS, stated here because both are ways this can UNDER-count
+     * and neither is visible from the figure it feeds:
+     *
+     *   * ONE PER STATEMENT. Two independent unanchored conditions written in a
+     *     single statement contribute one base, not two.
+     *   * ANCHORED WINS FOR THE WHOLE STATEMENT. A closure with a boolean body
+     *     nested inside an `if (…)` header is inside an anchored statement, so
+     *     its own base leaf is not counted.
+     *
+     * Neither shape occurs in the eight methods the two censuses read today.
+     * Both would under-count rather than over-count, which is the direction that
+     * hides a leaf, so they are named rather than merely true.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     *
+     * @return list<string> the statement text of each, so a failure names it
+     */
+    private static function unanchoredConditions(array $tokens): array
+    {
+        $comparisons = [
+            '<', '>',
+            \T_IS_SMALLER_OR_EQUAL, \T_IS_GREATER_OR_EQUAL,
+            \T_IS_IDENTICAL, \T_IS_NOT_IDENTICAL,
+            \T_IS_EQUAL, \T_IS_NOT_EQUAL, \T_SPACESHIP,
+        ];
+        $openers = [\T_IF, \T_ELSEIF, \T_ELSE, \T_FOR, \T_WHILE, \T_DO];
+        $found = [];
+
+        foreach (self::statements($tokens) as $statement) {
+            $first = $statement[0];
+            $anchored = \is_array($first) && \in_array($first[0], $openers, true);
+            $bears = false;
+
+            foreach ($statement as $k => $token) {
+                $id = \is_array($token) ? $token[0] : $token;
+
+                if ($id === \T_COALESCE || $id === \T_COALESCE_EQUAL
+                    || self::isTernaryCondition($statement, $k)) {
+                    $anchored = true;
+                }
+
+                if (\in_array($id, self::CONJUNCT_OPERATORS, true)
+                    || \in_array($id, $comparisons, true)) {
+                    $bears = true;
+                }
+            }
+
+            if ($bears && !$anchored) {
+                $text = implode('', array_map(
+                    static fn (array|string $token): string => \is_array($token) ? $token[1] : $token,
+                    $statement,
+                ));
+                $found[] = (string) preg_replace('/\s+/', ' ', $text);
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Split a method's token stream into statements at top-level `;`, `{` and `}`.
+     *
+     * Depth-counted over `(` and `[` so a `for` header's own semicolons do not
+     * split it, and over the SAME two token-stream asymmetries
+     * {@see callArgument()} handles — `T_CURLY_OPEN` and `T_ATTRIBUTE` open with
+     * an array token and close with a bare one, so a splitter matching only bare
+     * braces would treat the `}` of `"{$tape}"` as a statement boundary.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     *
+     * @return list<list<array{int, string, int}|string>>
+     */
+    private static function statements(array $tokens): array
+    {
+        $statements = [];
+        $current = [];
+        $depth = 0;
+
+        foreach ($tokens as $token) {
+            $id = \is_array($token) ? $token[0] : $token;
+
+            if ($token === '(' || $token === '['
+                || $id === \T_CURLY_OPEN || $id === \T_ATTRIBUTE) {
+                ++$depth;
+            } elseif ($token === ')' || $token === ']') {
+                --$depth;
+            } elseif ($token === '}' && $depth > 0) {
+                --$depth;
+            } elseif ($depth === 0
+                && ($token === ';' || $token === '{' || $token === '}')) {
+                if ($current !== []) {
+                    $statements[] = $current;
+                }
+
+                $current = [];
+
+                continue;
+            }
+
+            $current[] = $token;
+        }
+
+        if ($current !== []) {
+            $statements[] = $current;
+        }
+
+        return $statements;
+    }
+
+    /**
+     * Whether the `?` at $k opens a TERNARY rather than a nullable type.
+     *
+     * PHP lexes both as a bare `?`, so position is the only thing that separates
+     * them: a ternary's `?` follows an EXPRESSION — a `)`, a `]`, a variable, a
+     * name, a string or a number — while a nullable type's follows a `(`, a `,`
+     * or a `:`. `?->` is a token of its own and is never seen here. Without this
+     * a single `?int $x` parameter added to any of the eight methods would read
+     * as a ternary condition and move a figure with no leaf added.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     */
+    private static function isTernaryCondition(array $tokens, int $k): bool
+    {
+        if (($tokens[$k] ?? null) !== '?') {
+            return false;
+        }
+
+        $previous = $tokens[$k - 1] ?? null;
+
+        if ($previous === ')' || $previous === ']') {
+            return true;
+        }
+
+        return \is_array($previous) && \in_array($previous[0], [
+            \T_VARIABLE, \T_STRING, \T_CONSTANT_ENCAPSED_STRING,
+            \T_LNUMBER, \T_DNUMBER,
+        ], true);
+    }
+
+    /**
+     * The mutation LEAVES of one method under the operator
+     * {@see literalHeadArguments()}'s register sweeps.
+     *
+     * That register sweeps a WIDER operator than {@see guardCensus()} counts: it
+     * folds ternary-condition collapse in beside conjunct drop, under one figure
+     * and one heading. This is where the two instruments are reconciled, and the
+     * reconciliation is arithmetic rather than prose — one term, named:
+     *
+     *   sweep leaves = guardCensus conjuncts + ternary conditions
+     *
+     * {@see testTheHeadScanSweepRegisterIsMeasuredNotNarrated()} asserts that
+     * identity for all eight methods both censuses read, so neither side can be
+     * widened or narrowed without the other's figure moving. Round 19's finding
+     * was that the two disagreed about loop bounds and `??=`; round 20 fixed
+     * those two and left the ternary half of the same disagreement standing,
+     * described in two docblocks that contradicted each other. It is one
+     * subtraction now.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     */
+    private static function sweepLeafCensus(array $tokens): int
+    {
+        $ternaries = 0;
+
+        foreach (array_keys($tokens) as $k) {
+            if (self::isTernaryCondition($tokens, $k)) {
+                ++$ternaries;
+            }
+        }
+
+        return self::guardCensus($tokens)['conjuncts'] + $ternaries;
     }
 
     /**
@@ -3668,21 +4278,33 @@ final class VhsTapeContractTest extends TestCase
      * subject is the parsing model and a survivor here costs a MEASUREMENT of this
      * file rather than a missed defect in a tape.
      *
-     * OPERATOR: drop one conjunct LEAF.
+     * OPERATOR: drop one conjunct LEAF, OR collapse one ternary condition.
+     * TWO operators under one figure, said plainly because saying "conjunct
+     * drop" alone is what set this register against
+     * {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()}, which
+     * excludes ternaries by name as a different operator. The two are
+     * reconciled by subtraction now, in
+     * {@see testTheHeadScanSweepRegisterIsMeasuredNotNarrated()}.
      *
-     * DOMAIN, ENUMERATED SO THE FIGURE RECONCILES WITH IT rather than being
-     * asserted beside it — the retired version said THIRTY-EIGHT over a sentence
-     * that adds up to thirty-seven, and its kill count was one out with it.
-     * THIRTY-EIGHT mutations over the four methods of the scan — this one (14),
-     * {@see callArgument()} (16), {@see headArgument()} (4) and
-     * {@see splitNamedArgument()} (4) — being, in each:
+     * DOMAIN, MEASURED RATHER THAN ENUMERATED. The size of it, per method and in
+     * total, is asserted by that same test from {@see sweepLeafCensus()} over
+     * these four methods, and appears as a number NOWHERE in this docblock —
+     * because the retired version of this paragraph said THIRTY-EIGHT over a
+     * sentence that adds up to thirty-seven, with a kill count one out to match,
+     * and the round that fixed it fixed it by rewriting the sentence. What is
+     * swept, in each of {@see literalHeadArguments()}, {@see callArgument()},
+     * {@see headArgument()} and {@see splitNamedArgument()}:
      *
      *   * every LEAF of every `&&`/`||` condition, where a leaf is one atomic
      *     test and NOT a parenthesised subgroup. `A || (B && (C || D))` is four
      *     mutations, not five: dropping the group whole is dropping three leaves
-     *     at once and is a different operator. This is where the missing
-     *     thirty-eighth went.
-     *   * every single-condition `if`, mutated to an unconditional one.
+     *     at once and is a different operator. A condition that no `if` or loop
+     *     introduces is still a condition and its leaves are still in the
+     *     domain — the token filter's `static fn (…): bool => A || B` is two of
+     *     them, and {@see unanchoredConditions()} is what stops the census from
+     *     reporting one.
+     *   * every single-condition site, mutated to an unconditional one — an `if`
+     *     whose condition is one leaf, and equally an unanchored one.
      *   * every ternary CONDITION, mutated by collapsing to the true arm.
      *   * every loop bound, RELAXED BY ONE — `$k + 1 < $count` to `$k < $count`,
      *     `$k < \count($tokens)` to `<=`, `$index <= 1` to `$index <= 2`. The
@@ -3696,24 +4318,35 @@ final class VhsTapeContractTest extends TestCase
      *     {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()} counts
      *     `??` as a conjunct and the two instruments may not disagree about what
      *     a leaf is. There is exactly one here, the `?? 0` in the tally
-     *     increment, and it is the thirty-eighth mutation.
+     *     increment.
      *
-     * Swept in FULL at this commit, one mutation at a time, whole-file run,
-     * judged on this test file alone: TWENTY-ONE killed, SEVENTEEN survivors,
-     * 21 + 17 = 38. The survivors fall in three classes with no fourth inside
-     * that domain:
+     * Swept in FULL, one mutation at a time, judged on this test file alone.
+     * THE SWEEP NOW NEEDS THE EXCLUSION — see {@see SWEEP_EXCLUDE_GROUP} — which
+     * it did not before: until
+     * {@see testTheHeadScanSweepRegisterIsMeasuredNotNarrated()} existed these
+     * four methods were outside every census, so a plain whole-file run read
+     * their kills correctly. It now reports "killed" for all thirty-eight
+     * without the flag, and a survivor is green either way.
      *
-     *   * TYPE GUARDS PHP MAKES REDUNDANT — six: the `!\is_array($x) ||` half of
+     * THE THREE FIGURES — leaves, survivors, killed — ARE NOT WRITTEN HERE. They
+     * are asserted by that test from {@see sweepLeafCensus()} and
+     * {@see SWEEP_SURVIVORS}, with the killed count derived by subtracting the
+     * second from the first, because it is the only one of the three that cannot
+     * be measured from the source and so is the one that must not be typed on
+     * its own. The survivors fall in three classes with no fourth inside that
+     * domain, and each entry below is one row of {@see SWEEP_SURVIVORS}:
+     *
+     *   * TYPE GUARDS PHP MAKES REDUNDANT — the `!\is_array($x) ||` half of
      *     each of the three such pairs here (the token filter, the entry-point
      *     gate and the accessor test),
      *     the `\is_array($head[0])` in the literal gate, the `\is_array($token) &&`
      *     in {@see callArgument()}'s array-token arm, and the
      *     `\is_array($argument[0]) &&` in {@see splitNamedArgument()}. For a
      *     one-character string token `$x[0]` is that character, which is never
-     *     `===` an integer token id, so the array test decides nothing. All six
+     *     `===` an integer token id, so the array test decides nothing. They all
      *     stay: comparing a string's first byte against a token id is nonsense a
      *     reader should not have to work out is harmless.
-     *   * REDUNDANT AGAINST A COMPANION CONJUNCT — four: the `$token[0] !==
+     *   * REDUNDANT AGAINST A COMPANION CONJUNCT — the `$token[0] !==
      *     \T_STRING` and `$tokens[$k + 1] !== '('` tests here, both implied by the
      *     accessor test plus the entry-point name test on this file's content;
      *     {@see callArgument()}'s `$depth === 1` early-continue, which only keeps
@@ -3721,7 +4354,7 @@ final class VhsTapeContractTest extends TestCase
      *     {@see splitNamedArgument()}'s `\count($argument) >= 3`, whose companion
      *     `T_STRING` test returns false first on every argument this file passes
      *     that is shorter than three tokens.
-     *   * UNREACHABLE FROM THIS FILE'S CONTENT — seven: the `$k + 1 < $count`
+     *   * UNREACHABLE FROM THIS FILE'S CONTENT — the `$k + 1 < $count`
      *     bound and the `$k > 0` guard here; {@see callArgument()}'s bare `{`
      *     opener and its own loop bound; {@see headArgument()}'s `$index <= 1`
      *     bound; and {@see splitNamedArgument()}'s `T_STRING` and `:` tests. No
@@ -3729,8 +4362,8 @@ final class VhsTapeContractTest extends TestCase
      *     end of the token stream, passes a brace-delimited expression, leaves
      *     its parentheses unbalanced, passes a THIRD argument that could carry a
      *     `directive:` name, or opens an argument with a `name :` pair that is
-     *     not a named argument — so nothing in this file can reach any of the
-     *     seven. Same standing as {@see tokenize()}'s `$length > 0`: kept so the
+     *     not a named argument — so nothing in this file can reach any of them.
+     *     Same standing as {@see tokenize()}'s `$length > 0`: kept so the
      *     indexing beside them is obviously in range.
      *     THE `$index <= 1` BOUND IS THE ONE THAT WAS MISSING, and it was
      *     missing rather than argued away: under the relaxation direction stated
@@ -3739,10 +4372,10 @@ final class VhsTapeContractTest extends TestCase
      *     classes is a gap by this register's own rule, which is what makes an
      *     unlisted one worth naming as an omission and not a discovery.
      *
-     * The twenty-one that ARE killed are pinned between the tally and the exact
+     * The ones that ARE killed are pinned between the tally and the exact
      * dynamic count in {@see testSetShellIsTheMostQueriedTwoWordHead()} and the
-     * TEN fixtures of {@see testTheHeadScanSeesACallWrappedAcrossLines()}.
-     * NINETEEN of them fail an assertion naming a test; TWO are WARNING-ONLY
+     * TEN fixtures of {@see testTheHeadScanSeesACallWrappedAcrossLines()}. All
+     * but two fail an assertion naming a test; those TWO are WARNING-ONLY
      * kills, red because `phpunit.xml` sets `failOnWarning="true"` and for no
      * other reason — the `\count($head) === 1` gate (`Warnings: 1`,
      * `Undefined array key 0` from the `misnamed` fixture) and the `?? 0` in the
@@ -3753,7 +4386,7 @@ final class VhsTapeContractTest extends TestCase
      * this file has three times now declared that class of kill gone while one
      * sat in it — the `?? 0` kill sat inside the very method this register
      * documents, unrecorded, while the register said ONE.
-     * SIX of the twenty-one — the accessor gate, both square-bracket depth arms,
+     * SIX of the kills — the accessor gate, both square-bracket depth arms,
      * the `T_ATTRIBUTE` opener, {@see headArgument()}'s `$name === null` guard
      * and the `\count($head) === 1` gate just named — were survivors until the
      * fixture beside each went in, which is the whole reason those fixtures exist.
