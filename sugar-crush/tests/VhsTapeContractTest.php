@@ -71,9 +71,13 @@ use PHPUnit\Framework\TestCase;
  * lose a directive on any of 192 GLUE BYTES — the figure measured over the
  * whole byte domain, `Set Padding <B>Output x.gif` for every B in 1-255 — which
  * is exactly what shipped for twelve rounds. This docblock said "sixty-four"
- * for three of those rounds, which is that same set restricted to B < 0x80: a
- * printable-ASCII figure presented as the whole one. See the byte-class section
- * in {@see tokenize()} and {@see testAGluedDirectiveHeadIsStillAHead()}.
+ * for three of those rounds, which is that same set restricted to B < 0x80 —
+ * the SEVEN-BIT slice. The round that retired the figure (`48e0690c`) then
+ * called those 64 the printable-ASCII slice, at this site and two others, and
+ * they are not: only 35 of the 64 are printable, the other 29 being
+ * `\x01`-`\x08` `\x0b` `\x0c` `\x0e`-`\x1f` and `\x7f`. See the byte-class
+ * section in {@see tokenize()} and
+ * {@see testAGluedDirectiveHeadIsStillAHead()}.
  *
  * WHICH RENDERER THIS DESCRIBES. Upstream charmbracelet/vhs is a TRANSITIONAL
  * dependency. `.github/workflows/vhs.yml` still renders the whole matrix with
@@ -208,9 +212,12 @@ final class VhsTapeContractTest extends TestCase
      * in {@see IDENT_BYTES}, so `a-b` and `a%b` are single identifiers, while
      * `Set Padding -` is a `-` token and `Set LoopOffset 50%` is NUMBER `50`
      * followed by a `%`. Nine of the 192 glue bytes that used to hide a
-     * directive live in here — 192 over the whole byte domain, see
-     * {@see tokenize()}; this line said "sixty-four" while quoting the
-     * printable-ASCII slice of that set.
+     * directive live in here — 192 over the whole byte domain, `Set Padding
+     * <B>Output x.gif` for every byte value B in 1-255, see {@see tokenize()}.
+     * This line said "sixty-four" while quoting that set restricted to
+     * B < 0x80, and then called those 64 the printable-ASCII slice; 29 of them
+     * are control bytes, so it is the seven-bit slice and 35 is the printable
+     * count.
      */
     private const SINGLE_BYTE_TOKENS = '@=][-%^\\+';
 
@@ -1193,25 +1200,41 @@ final class VhsTapeContractTest extends TestCase
      * and `Ctrl+O` after a value still ends that value because `Ctrl` is a
      * keyword in its own right.
      *
-     * ALL THREE UNITS are rowed, not just the two anyone writes. `parseTime`
-     * accepts MILLISECONDS, SECONDS or MINUTES (`parser.go:278`) and
-     * `token.Keywords` maps `ms`, `s` and `m` respectively (`token.go:114-116`),
-     * so `m` is a real unit and `Type@1m "abc"` is Options `1m` / Args `abc`
-     * with zero errors. Dropping `m` from {@see skipSpeedSuffix()}'s unit list
-     * left the suite green: the `m` then began the value and the answer became
-     * `m abc`. Two of three units covered is the same shape as a figure quoted
-     * without its domain.
+     * ALL THREE UNITS are rowed, ONE ROW EACH, and the claim is worth stating
+     * that pedantically because `48e0690c` made it while rowing two.
+     * `parseTime` accepts MILLISECONDS, SECONDS or MINUTES (`parser.go:278`)
+     * and `token.Keywords` maps `ms`, `s` and `m` respectively
+     * (`token.go:114-116`). Each unit is its own conjunct of
+     * {@see skipSpeedSuffix()}'s `in_array` list and each has to be killed
+     * separately: dropping `ms` fails the `100ms` row, dropping `m` fails the
+     * `1m` row, and dropping `s` failed NOTHING until the `Type@1s "abc"` row
+     * below went in — the bare-number row above it defaults to seconds without
+     * ever lexing an `s` token, so it does not reach the conjunct. Two of three
+     * units covered is the same shape as a figure quoted without its domain:
+     * true of the rows present, silent about the row that is not.
      *
-     * The QUOTED `@` row is F3's defect one construct along, and it is the
-     * reason {@see skipSpeedSuffix()} tests the token KIND and not only its
-     * text. `Type "@" "abc"` lexes STRING `@` then STRING `abc`, so upstream
-     * types `@ abc` — the `@` is content. A model that matched on text alone
-     * skipped it as a speed suffix and answered `abc`, silently dropping a
-     * character the tape types, and nothing pinned the `kind === 'single'`
-     * conjunct that prevents it.
+     * THE TWO QUOTED ROWS are the same defect at the two ends of the suffix,
+     * and both are why {@see skipSpeedSuffix()} tests each token's KIND and not
+     * only its text:
      *
-     * Every row measured on both oracles: upstream's own `lexer.go`/`parser.go`
-     * run directly, and `/tmp/vhsbin/vhs validate`, exit 0 on all five.
+     *   * `Type "@" "abc"` lexes STRING `@` then STRING `abc`, so upstream
+     *     types `@ abc` — the `@` is content, not a suffix. A model matching on
+     *     text alone skipped it and answered `abc`, dropping a character the
+     *     tape types; that is the `kind === 'single'` conjunct.
+     *   * `Type@1"ms" "abc"` is the UNIT end of it. A quoted `ms` is a STRING,
+     *     not MILLISECONDS, so `parseTime` does not consume it and `parseType`'s
+     *     `for p.peek.Type == token.STRING` loop takes BOTH strings: upstream is
+     *     Options `1s`, Args `ms abc`, zero errors. Dropping the
+     *     `kind === 'ident'` conjunct answers `abc` instead, which is the
+     *     SILENT direction — {@see testTypedPathsResolveFromTheLibRoot()} then
+     *     has one fewer value to check and a bad path inside the dropped token
+     *     goes unchecked. This conjunct sat three lines below the two the
+     *     previous round fixed, in the same method, in the round that declared
+     *     the class closed.
+     *
+     * Every row measured on upstream's own `lexer.go`/`parser.go`, copied
+     * byte-for-byte out of the module cache and run directly: zero parser errors
+     * on all seven.
      */
     public function testASpeedSuffixBelongsToTheHeadNotTheValue(): void
     {
@@ -1240,7 +1263,21 @@ final class VhsTapeContractTest extends TestCase
             self::directiveValues($minutes, 'Type'),
             '`m` is MINUTES — a real `parseTime` unit (`parser.go:278`, `token.go:116`), not a '
             . 'stray letter. Upstream: Options `1m`, Args `abc`, zero errors. A unit list of '
-            . 'only `ms` and `s` lets the `m` start the value and answers `m abc`',
+            . 'only `ms` and `s` leaves the `m` for the value walk, which finds a KEYWORD there '
+            . 'and answers `` (measured; the retired message said `m abc`, which is what a '
+            . 'non-keyword in that position would give)',
+        );
+
+        $seconds = $this->scratchTape("Type@1s \"abc\"\n");
+
+        self::assertSame(
+            ['abc'],
+            self::directiveValues($seconds, 'Type'),
+            'and `s` EXPLICITLY, because the bare-number row above defaults to seconds without '
+            . 'lexing an `s` token at all, so it does not reach the unit list. Upstream: Options '
+            . '`1s`, Args `abc`, zero errors. Dropping `s` from that list was the one of the '
+            . 'three units nothing killed; measured, the mutant answers `` here, because `s` is '
+            . 'itself a keyword and so terminates the value it starts',
         );
 
         $quotedAt = $this->scratchTape("Type \"@\" \"abc\"\n");
@@ -1251,6 +1288,18 @@ final class VhsTapeContractTest extends TestCase
             'a QUOTED `@` is a STRING token, so it is content and not a speed suffix — upstream '
             . 'types `@ abc`. This is the F3 defect one construct along: matching the suffix on '
             . 'the token text alone rather than on its KIND drops a character the tape types',
+        );
+
+        $quotedUnit = $this->scratchTape("Type@1\"ms\" \"abc\"\n");
+
+        self::assertSame(
+            ['ms abc'],
+            self::directiveValues($quotedUnit, 'Type'),
+            'the same defect at the UNIT end of the suffix. A quoted `ms` is a STRING, not '
+            . 'MILLISECONDS, so `parseTime` leaves it and `parseType` takes both strings — '
+            . 'upstream: Options `1s`, Args `ms abc`, zero errors. Matching the unit on text '
+            . 'alone answers `abc` and SILENTLY drops a typed string, which is one fewer value '
+            . 'for testTypedPathsResolveFromTheLibRoot() to check',
         );
 
         $modifier = $this->scratchTape("Type abc Ctrl+O\n");
@@ -1417,6 +1466,84 @@ final class VhsTapeContractTest extends TestCase
             . 'IS a keyword and DOES end the value — upstream emits TYPE `abc`, ENTER, TYPE '
             . '`def`. Two occurrences here and one above is what makes the gate a test of the '
             . 'token KIND rather than of its text',
+        );
+    }
+
+    /**
+     * The SECOND word of a two-word head is gated the same two ways the first
+     * one is: it has to exist, and it has to be an `ident`.
+     *
+     * {@see directiveValues()} takes a head like `Set Shell` as a run of tokens,
+     * and both guards on that run went unpinned while the head's FIRST word had
+     * a test of its own ({@see testAQuotedKeywordIsNeverADirectiveHead()}).
+     * `Set Shell` is the most-queried directive in this file — 16 of its 28
+     * two-word `directiveValues()` calls, against `Set Theme`'s 4 — so the run
+     * is worth a test even where the mutant is loud.
+     *
+     * THE KIND GUARD. `Set "Shell" "sh"` and `Set /Shell/ "sh"` lex a STRING and
+     * a REGEX where the setting name belongs, and upstream's `parseSet` gates on
+     * the TOKEN TYPE, so both answer `Unknown setting: Shell` — one parser
+     * error, `SET` with empty Options, and CI's `set -euo pipefail` render loop
+     * dies on the tape. Dropping the `kind !== 'ident'` conjunct makes this
+     * model report `Set Shell` = `['sh']` on both, so the mutant can only ever
+     * raise a FALSE ALARM on a tape CI already rejects — the benign twin of the
+     * silent unit-kind gate in
+     * {@see testASpeedSuffixBelongsToTheHeadNotTheValue()}. Both tapes here are
+     * therefore ones upstream REJECTS, deliberately and unavoidably: `parseSet`
+     * accepts no spelling of a quoted setting name, so there is no accepted tape
+     * that exercises this conjunct.
+     *
+     * THE EXISTENCE GUARD, `$i + $arity <= $count`. A tape whose last token is a
+     * bare `Set` has a head whose second word is off the end of the stream.
+     * Upstream rejects that too (`Unknown setting: \0`, one error, `parseSet`
+     * reading the EOF literal), but the guard is not about the answer — without
+     * it this model reads `$tokens[$count]`, and a suite that raises
+     * `Undefined array key` inside its own model is one whose next reader
+     * silences the warning rather than restoring the bound. `phpunit.xml` sets
+     * `failOnWarning="true"`, which is what turns that into a red.
+     *
+     * Both rows measured on upstream's own `lexer.go`/`parser.go`, copied
+     * byte-for-byte out of the module cache and run directly.
+     */
+    public function testATwoWordHeadNeedsBothWordsAndBothAsIdents(): void
+    {
+        $quoted = $this->scratchTape("Set \"Shell\" \"sh\"\n");
+
+        self::assertSame(
+            [],
+            self::directiveValues($quoted, 'Set Shell'),
+            'a quoted setting name is not a setting name: upstream answers `Unknown setting: '
+            . 'Shell` and emits SET with EMPTY Options, so there is no `Set Shell` here to '
+            . 'report. A model that matched the head tail on text alone reports `sh` and fails '
+            . 'testShellIsOneUpstreamVhsAccepts() on a tape that never set a shell',
+        );
+
+        $regex = $this->scratchTape("Set /Shell/ \"sh\"\n");
+
+        self::assertSame(
+            [],
+            self::directiveValues($regex, 'Set Shell'),
+            'and the same for a REGEX token — same error, same empty Options. Two kinds rather '
+            . 'than one because the conjunct is positive: it admits `ident` and nothing else',
+        );
+
+        $truncated = $this->scratchTape("Set Theme \"A\"\nSet");
+
+        self::assertSame(
+            ['A'],
+            self::directiveValues($truncated, 'Set Theme'),
+            'the last token is a bare `Set`, so the head\'s second word is past the end of the '
+            . 'stream. The earlier occurrence is still reported and nothing is read out of '
+            . 'bounds — the bare `Set` is upstream\'s `Unknown setting: \\0`, not a `Set Theme`',
+        );
+
+        $control = $this->scratchTape("Set Shell \"sh\"\n");
+
+        self::assertSame(
+            ['sh'],
+            self::directiveValues($control, 'Set Shell'),
+            'the control, so the three rows above cannot pass by a head that stopped matching '
+            . 'altogether',
         );
     }
 
@@ -1876,6 +2003,18 @@ final class VhsTapeContractTest extends TestCase
             'a dot decides the reader' => [".5 .a\n", [
                 ['number', '.5'], ['ident', '.a'],
             ]],
+            // Both rows above give the `.` a next byte to look at. This one does
+            // not: upstream's `peekChar()` answers 0 at EOF and `isDigit(0)` is
+            // false, so a trailing `.` goes to `readIdentifier` and upstream
+            // emits STRING `.` (measured). The model's entry test needs its
+            // `$peek !== ''` conjunct to agree, because PHP's
+            // `str_contains($haystack, '')` is TRUE — without it the `.` enters
+            // the number reader instead. No tape ends in a bare `.` today, which
+            // is exactly why the kind is pinned here rather than left to a
+            // behavioural test that cannot reach it.
+            'a trailing dot at EOF is an ident' => ['Set Padding .', [
+                ['ident', 'Set'], ['ident', 'Padding'], ['ident', '.'],
+            ]],
             'dots do not end a number' => ["Set Padding 1.2.3\n", [
                 ['ident', 'Set'], ['ident', 'Padding'], ['number', '1.2.3'],
             ]],
@@ -2148,6 +2287,16 @@ final class VhsTapeContractTest extends TestCase
             'slash inside an identifier' => 'Output x.gif/a\\',
             'glued number, closed regex' => 'Set Padding 50/a/',
             'glued number, no backslash' => 'Set Padding 50/a',
+            // The row that makes `$end === $length` load-bearing: the regex is
+            // closed by a NEWLINE, so it never runs off the end, and the
+            // backslash at EOF is an ordinary `\` token four tokens later.
+            // Measured — upstream lexes SET/WAIT_PATTERN/REGEX/TYPE/STRING/`\`
+            // and does not panic; it reports ONE parser error on the trailing
+            // `\`, as the other rows here do, which is a rejected tape and not a
+            // dead binary. A detector that dropped the `$end === $length`
+            // conjunct calls this a panic and fails
+            // testNoTapeEndsInUpstreamsRegexPanic() on a tape vhs lexes fine.
+            'regex closed by a newline, backslash at EOF' => "Set WaitPattern /a\nType b\\",
         ];
 
         foreach ($safe as $why => $source) {
@@ -2276,7 +2425,15 @@ final class VhsTapeContractTest extends TestCase
      * away. Every one of them is a case where upstream gives a value MORE than
      * this model does, or a different one; none of them loses an occurrence,
      * because the loop below resumes head-matching ON the terminator rather
-     * than past it.
+     * than past it. What class 1 DOES do, and what the phrase "none of them
+     * loses an occurrence" reads as denying, is GAIN one: resuming on the
+     * terminator means a `Set` whose value is a keyword naming a queried
+     * directive yields that directive twice over. Measured — `Set Theme Output`
+     * then `Output a.gif` parses with zero errors, upstream emits ONE `OUTPUT`
+     * command, and this model answers `['', 'a.gif']` for `Output`. That is the
+     * loud direction (an empty value fails every path assertion here, and an
+     * extra occurrence fails the by-count ones), so no false green follows from
+     * it; the class is real and complete, and only its description was short.
      *
      * The previous revision listed two of these and called the second "the ONLY
      * divergence class the corpus differential below still reports". The
@@ -2648,19 +2805,59 @@ final class VhsTapeContractTest extends TestCase
      *   previous run so that no second head exists to find.
      *
      * 64 of the 192 are below 0x80, and "sixty-four" is what this paragraph
-     * said for three rounds — the printable-ASCII slice of the set, presented
-     * as the set. The 128 bytes `\x80`-`\xff` were omitted although each is an
+     * said for three rounds — the set restricted to B < 0x80, presented as the
+     * whole set. The 128 bytes `\x80`-`\xff` were omitted although each is an
      * ILLEGAL one-byte token, lexically identical to the `}` the paragraph did
-     * list: `Set Padding \x80Output x.gif` is `vhs validate` exit 0 with a live
-     * second OUTPUT, confirmed against the binary as well as the Go.
+     * list: `Set Padding \x80Output x.gif` parses with zero errors and a live
+     * second OUTPUT (re-measured on the Go here; an earlier round also had a
+     * `vhs` binary to hand and got `validate` exit 0 from it).
+     *
+     * Those 64 are the SEVEN-BIT slice and not the printable one, which is what
+     * `48e0690c` called them here and at two other sites. Of the 64, 35 are
+     * printable and 29 are control bytes — `\x01`-`\x08` `\x0b` `\x0c`
+     * `\x0e`-`\x1f` `\x7f` — so a reader who took the label at its word would
+     * look for the defect among the punctuation and never reach `\x1b`.
+     * (The "94-printable-ASCII sweep" under WHAT CAN HIDE A `#` above uses the
+     * term CORRECTLY and is not the same mistake: 94 is the count of `!`-`~`,
+     * whereas the seven-bit glue slice is 64 and its printable count is 35.)
      *
      * `Set Padding }Set Shell "sh"` is the shortest spelling: upstream reads
      * `SET Padding }` then `SET Shell sh` and the render aborts, while a
      * break-set model read one token `}Set` and reported OK.
      * {@see testAGluedDirectiveHeadIsStillAHead()} pins ten of them end to end,
-     * one from the high half. No behavioural claim changed here: over those
-     * same 255 tapes this model reports the same occurrences as upstream on all
-     * 198 that parse clean — 0 missing, 0 extra, 0 value divergences.
+     * one from the high half.
+     *
+     * WHAT THIS MODEL SCORES over that same domain — the 198 of the 255 that
+     * parse with zero errors, comparing this method's `Set Padding` and
+     * `Output` occurrences against upstream's command list: 0 MISSING, 0 EXTRA,
+     * 130 VALUE DIVERGENCES. The previous revision of this paragraph said all
+     * three were zero, in a sentence that opened "no behavioural claim changed
+     * here"; the occurrence halves are the two that were true, and the same
+     * file already described the third correctly in
+     * {@see directiveValues()}'s class 3.
+     *
+     * The 130 are two of the classes {@see directiveValues()} lists and one
+     * property of upstream itself:
+     *   * `0x23` (`#`) — class 2, the dropped COMMENT token. Upstream sets
+     *     `Padding` to `Output x.gif`; this model to ``.
+     *   * `0x40` (`@`) — class 3, {@see skipSpeedSuffix()}. Upstream `@`, this
+     *     model ``.
+     *   * the 128 bytes `\x80`-`\xff` — upstream's `newToken` builds its
+     *     literal as `string(ch)` with `ch` a `byte` (`lexer.go:107`), and Go
+     *     converts an integer to the UTF-8 ENCODING of that code point, so the
+     *     ILLEGAL token for `\x80` carries the two bytes `\xc2\x80` while this
+     *     model carries the one byte the tape holds. Measured over exactly those
+     *     128 tapes: 0 token-count mismatches, 0 kind mismatches, 128 token-TEXT
+     *     mismatches — one per tape, always the ILLEGAL token — which is why the
+     *     class cannot move an occurrence.
+     *
+     * That last one is upstream's own re-encoding and NOT an artefact of the
+     * harness, but a harness can produce the same 128 for its own reason and the
+     * two are indistinguishable if it does: PHP's `json_encode` refuses a lone
+     * `\x80` outright (`Malformed UTF-8 characters`), so a differential that
+     * ships literals as JSON or through a terminal loses the model's side of
+     * every high byte. Base64 both sides end to end, or the 128 stop meaning
+     * anything.
      *
      * =====================================================================
      *
@@ -2785,8 +2982,30 @@ final class VhsTapeContractTest extends TestCase
                 // "an UNTERMINATED regex that ran off the end": deleting it
                 // would make the rule depend on a postcondition of a different
                 // method, which is the kind of coupling this file has been bitten
-                // by. Do not weaken the other three conjuncts to match — each of
-                // those is load-bearing and killable.
+                // by.
+                //
+                // The retired version of this comment then said of the other
+                // three that "each of those is load-bearing and killable". One
+                // is neither and one was not killed. Re-swept, one mutation per
+                // conjunct, judged on this file alone:
+                //   `$length > 0`   UNKILLABLE, and unreachable-dead: this arm
+                //                   runs only from inside `$i < $length`, so
+                //                   $length >= 1 here by construction. Kept for
+                //                   the same reason as `!$terminated` — the next
+                //                   conjunct indexes `$length - 1`, and a reader
+                //                   should not have to walk out to the loop
+                //                   header to see that it is in range.
+                //   `$end === $length`  KILLABLE, and it was not killed until
+                //                   `regex closed by a newline, backslash at
+                //                   EOF` went into
+                //                   {@see testTheRegexPanicDetectorMatchesTheMeasuredShapes()}.
+                //                   Without it a regex closed by a NEWLINE plus
+                //                   a backslash anywhere at the end of the file
+                //                   reads as a panic: measured, `Set WaitPattern
+                //                   /a` + newline + `Type b\` does not panic
+                //                   upstream, and the mutant says it does.
+                //   `$source[$length - 1] === '\\'`  KILLABLE, and killed by the
+                //                   `no backslash` row that was already there.
                 if (!$terminated && $end === $length && $length > 0 && $source[$length - 1] === '\\') {
                     $regexPanic = true;
                 }
@@ -2976,6 +3195,13 @@ final class VhsTapeContractTest extends TestCase
      * be a keyword however its text is spelled — `/Source/` and `"Source"` both
      * answer `Invalid command: Source` — so this is upstream's own rule rather
      * than a list of exceptions to keep up to date.
+     *
+     * The `true` on the `in_array` below is an EQUIVALENT MUTANT and is recorded
+     * as one so the next sweep does not report it: `$token['text']` is always a
+     * string and no entry of {@see KEYWORDS} is a numeric string, so PHP 8
+     * compares the two as bytes either way. Same for {@see skipSpeedSuffix()}'s
+     * `['ms', 's', 'm']`. Both flags stay because the file's convention is
+     * strict comparison everywhere, not because a test can tell.
      *
      * @param array{text: string, kind: string} $token
      */
