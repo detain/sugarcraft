@@ -11,7 +11,12 @@ use PHPUnit\Framework\TestCase;
  *
  * `.github/workflows/vhs.yml`'s `render` job carries sugar-crush in its matrix,
  * runs `working-directory: ${{ matrix.lib }}`, drives the upstream
- * charmbracelet/vhs binary, and uploads `${{ matrix.lib }}/.vhs/*.gif`. Three
+ * charmbracelet/vhs binary, then copies `${{ matrix.lib }}/.vhs/*.gif` into
+ * `/tmp/staged/${{ matrix.lib }}/` and uploads that staging directory. (The
+ * staging hop exists so the lib name travels inside the archive rather than only
+ * in the artifact's name — `download-artifact` drops the name when a single
+ * artifact matches its pattern. It does not change which files are collected:
+ * the glob is still `<lib>/.vhs/*.gif`, so everything below still holds.) Three
  * things follow, and until this test existed nothing in the repo checked any
  * of them — no linter reads tapes, no test walks them, and the examples were
  * never smoke-run. A tape that broke all three shipped green, and did:

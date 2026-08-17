@@ -284,16 +284,39 @@ jobs:
           echo "rendered files in $(pwd):"
           find .vhs -type f | sort
 
+      # Stage under a plain <lib>/ directory so the lib name travels INSIDE the
+      # artifact rather than only in its name. Uploading <lib>/.vhs/*.gif makes
+      # <lib>/.vhs the archive root, so every entry is a bare `x.gif` and the
+      # commit job could only recover the lib from the artifact NAME — which is
+      # exactly what download-artifact drops when a single artifact matches its
+      # pattern (it then extracts straight into `path` with no per-artifact
+      # subdirectory). That is how 5 rendered GIFs were downloaded and silently
+      # placed nowhere while the job stayed green. `.vhs` is deliberately not
+      # part of the staged path either: it is dot-prefixed, and hidden paths
+      # need include-hidden-files, which is one more thing to get wrong.
+      - name: Stage rendered GIFs under their lib's name
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gifs=( "${{ matrix.lib }}"/.vhs/*.gif )
+          if [ ${#gifs[@]} -eq 0 ]; then
+            echo "no GIFs rendered for ${{ matrix.lib }} — nothing to stage"
+            exit 0
+          fi
+          mkdir -p "/tmp/staged/${{ matrix.lib }}"
+          cp -v "${gifs[@]}" "/tmp/staged/${{ matrix.lib }}/"
+
       - name: Upload rendered GIFs as artifact
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: gifs-${{ matrix.lib }}
-          path: ${{ matrix.lib }}/.vhs/*.gif
+          # A directory, so /tmp/staged is the archive root and each entry is
+          # `<lib>/<name>.gif`. Keep it a directory: passing a glob would make
+          # the least common ancestor the root again and flatten the lib away.
+          path: /tmp/staged
           if-no-files-found: warn
-          # The .vhs/ directory is dot-prefixed; upload-artifact@v4
-          # ignores hidden paths by default. Override to include them.
-          include-hidden-files: true
           retention-days: 1
 
   # sugar-dash has 153 tapes — ~10× the next biggest lib — so a single
@@ -353,13 +376,28 @@ jobs:
             vhs "$tape"
           done
 
+      # Same staging shape as the `render` job above — see the comment there for
+      # why the lib name has to be inside the archive. All four batches stage
+      # into /tmp/staged/sugar-dash/, so merge-multiple reassembles them into
+      # one directory with no batch-suffix parsing.
+      - name: Stage rendered GIFs under their lib's name
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gifs=( sugar-dash/.vhs/*.gif )
+          if [ ${#gifs[@]} -eq 0 ]; then
+            echo "batch ${{ matrix.batch }} rendered no GIFs — nothing to stage"
+            exit 0
+          fi
+          mkdir -p /tmp/staged/sugar-dash
+          cp -v "${gifs[@]}" /tmp/staged/sugar-dash/
+
       - name: Upload rendered GIFs as artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: gifs-sugar-dash-batch-${{ matrix.batch }}
-          path: sugar-dash/.vhs/*.gif
+          path: /tmp/staged
           if-no-files-found: warn
-          include-hidden-files: true
           retention-days: 1
 
   # Single aggregate-commit job. Runs once after every render finishes.
@@ -382,7 +420,18 @@ jobs:
         uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           path: /tmp/gifs
+          # `gifs-*` deliberately excludes the vhs-candy-vcr-* artifacts: that
+          # job is a non-blocking soak and its output is never committed.
           pattern: gifs-*
+          # Merge, so the layout is /tmp/gifs/<lib>/<name>.gif for ANY number of
+          # matching artifacts. Without this, download-artifact nests each under
+          # /tmp/gifs/gifs-<lib>/ when two or more match but extracts straight
+          # into /tmp/gifs when exactly one does — and one is the common case,
+          # because only changed libs render. The old per-artifact-directory
+          # loop therefore worked on multi-lib pushes and silently did nothing
+          # on single-lib ones. Each artifact carries its lib as its top-level
+          # directory now, so merging cannot collide.
+          merge-multiple: true
 
       - name: Move GIFs into their lib's .vhs/ dir
         run: |
@@ -395,23 +444,43 @@ jobs:
             exit 0
           fi
           shopt -s nullglob
-          for d in /tmp/gifs/gifs-*; do
-            lib="${d#/tmp/gifs/gifs-}"
-            # sugar-dash uploads in 4 parallel batches as
-            # gifs-sugar-dash-batch-{0..3}; strip the suffix so all
-            # four artifacts merge back into the same sugar-dash/.vhs/.
-            lib="${lib%-batch-*}"
-            echo "Processing artifact dir: $d -> lib: $lib"
-            mkdir -p "$lib/.vhs"
-            echo "Contents of $d:"
-            ls -la "$d/" || echo "(empty or missing)"
-            if [ "$(ls -1 "$d"/*.gif 2>/dev/null | wc -l)" -eq 0 ]; then
-              echo "WARNING: No .gif files found in $d/"
+          # Every GIF the artifacts hold, counted before any copying, so the
+          # placement can be checked against it below.
+          downloaded=$(find /tmp/gifs -name '*.gif' -type f | wc -l)
+          echo "Artifacts hold $downloaded GIF(s)"
+          if [ "$downloaded" -eq 0 ]; then
+            echo "No GIFs in the artifacts — nothing to move"
+            exit 0
+          fi
+
+          placed=0
+          for d in /tmp/gifs/*/; do
+            lib="$(basename "$d")"
+            gifs=( "$d"*.gif )
+            if [ ${#gifs[@]} -eq 0 ]; then
+              echo "::warning::$d holds no GIFs at its top level"
               continue
             fi
-            cp -v "$d"/*.gif "$lib/.vhs/"
-            echo "Copied $(ls -1 "$lib/.vhs/"/*.gif 2>/dev/null | wc -l) GIF(s) to $lib/.vhs/"
+            # The artifact names a directory; if this checkout has no such lib
+            # the staging layout has drifted and guessing would write junk.
+            if [ ! -d "$lib" ]; then
+              echo "::error::artifact names '$lib', which is not a directory in this checkout"
+              exit 1
+            fi
+            mkdir -p "$lib/.vhs"
+            cp -v "${gifs[@]}" "$lib/.vhs/"
+            placed=$((placed + ${#gifs[@]}))
           done
+
+          echo "Placed $placed GIF(s) into their lib's .vhs/"
+          # Fail loudly rather than leaving the commit step to find nothing
+          # staged and report success. A green run that renders GIFs and commits
+          # none is indistinguishable from a green run with nothing to do, which
+          # is how the flat-download bug survived unnoticed.
+          if [ "$placed" -ne "$downloaded" ]; then
+            echo "::error::$downloaded GIF(s) downloaded but $placed placed — artifacts are not laid out as <lib>/<name>.gif"
+            exit 1
+          fi
 
       - name: Commit + push
         run: |
