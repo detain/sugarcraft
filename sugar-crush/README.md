@@ -154,6 +154,8 @@ all one candy-core `Model` tree — not two parallel UIs.
 
 | Key | Does |
 |-----|------|
+| `?` (empty input) | Show the in-app keyboard reference — also `/keys` (or `/help`) when a draft is half-typed. `Esc`/`Enter`/`q` close it; `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
+| `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on an empty line would otherwise make one impossible. `/keys` is no help there: it opens the same screen |
 | `Enter` | Send |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker |
@@ -172,7 +174,25 @@ all one candy-core `Model` tree — not two parallel UIs.
 
 `Ctrl+P`, `Ctrl+O`, `Ctrl+A`, `Ctrl+W` and `Ctrl+C` always belong to the chat
 content model — the shell never claims them, in any pane, so hosting chat
-inside the shell cannot silently steal a binding.
+inside the shell cannot silently steal a binding. `Ctrl+R` belongs to the chat
+too, with one declared exception: while a shell view is itself driving the
+keyboard (the agent dashboard, an open skill picker, an open `F10` menu) the
+shell keeps it, because the picker it opens is painted by the chat those views
+cover and moved by the `↑`/`↓`/`Enter` those views claim. Leave the view and
+`Ctrl+R` works as usual.
+
+The table above is a summary of the chat pane; **the reference `?` opens is the
+authority**, and it covers the overlays too (palette, session picker, permission
+prompt, skill picker, agent view, menu bar, mouse). It is generated from
+`Commands\KeyBindingRegistry`, which is also what `Tui\KeyboardHandler` reads its
+claimed-chord sets from — so the screen cannot describe a keyboard the app does
+not have. `tests/Commands/KeyBindingDriftTest.php` presses every row it lists
+(and every "or …" alternate a row's description promises) through the real
+handlers, so a binding that stops working fails the suite instead of quietly
+staying in the docs. A chord that some handler claims but nothing acts on yet is
+marked dormant in the registry and deliberately left OUT of the reference —
+still claimed, so it cannot regress into typing its own letter into the input
+box, but not advertised either.
 
 ### Mouse
 

@@ -291,6 +291,16 @@ final class KeyBindingRegistry
      * 95 printable runes × Ctrl on/off = 3420 keypresses: 1710 derive nothing,
      * 938 derive one set, 772 derive two, none derive three.
      *
+     * That sweep visits the panes at their DEFAULT sub-state, and a sub-state is
+     * not neutral here: opening the skill picker in `Pane::Skills` flips
+     * `KeyboardHandler::shellOwnsKeyboard()`, which is the very predicate
+     * choosing which set derives (`ctrl+r` there goes `{Chat}` → `{Chat,
+     * YIELDED}`). So the same rune × Ctrl sweep is run again over the 8
+     * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 712
+     * derive one, 48 derive two, none derive three. Both distributions are
+     * properties of THIS row set — add a `Ctrl+<rune>` row and they move. The
+     * ceiling of two is the part that belongs to the routing rule.
+     *
      * So the yielded set is NOT asked for on the same keypresses as the other
      * two — it is asked for on precisely their COMPLEMENT. It still earns a
      * memo of its own ({@see $yieldedRuneMemo}) on a hot path of its own:
@@ -307,7 +317,7 @@ final class KeyBindingRegistry
      *
      * `KeyboardHandlerTest::testTheHotPathNeverDerivesMoreThanTwoRuneSets()` is
      * what keeps this accounting from drifting back into prose: it re-measures
-     * the table rows and re-runs the 3420-keypress sweep.
+     * the table rows and re-runs both sweeps, the 3420 and the 1520.
      *
      * @var array<string, list<string>>
      */
@@ -383,6 +393,13 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.agents', 'Ctrl+A', 'List the active agents (runs /agents)', $c),
             KeyBinding::new('chat.session-cycle', 'Ctrl+Tab', 'Switch to the next session', $c),
             KeyBinding::new('chat.session-cycle-prev', 'Ctrl+Shift+Tab', 'Switch to the previous session', $c),
+            // The reference's OWN keys (Esc/Enter/q to close, ↑↓/PgUp/PgDn to
+            // scroll, and the second "?" that closes it while typing a literal
+            // "?" so a message beginning with one is still composable) are not
+            // rows here: they are painted in the box's own footer by
+            // Renderer::renderKeyHelp(), because they apply only while that
+            // screen is up and this table describes the keyboard behind it.
+            // Chat::handleKeyHelpKey() is where they live and why.
             KeyBinding::new('chat.keys', '?', 'Show this reference (empty input box)', $c),
             KeyBinding::new('chat.cancel', 'Esc Esc', 'Cancel the turn in flight — twice, quickly', $c),
             KeyBinding::new('chat.quit', 'Ctrl+C', 'Quit SugarCrush', $c),

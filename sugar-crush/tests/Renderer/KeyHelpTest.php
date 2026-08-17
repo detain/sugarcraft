@@ -159,6 +159,104 @@ final class KeyHelpTest extends TestCase
         }
     }
 
+    /**
+     * The regression `?` introduced, and the escape hatch that repays it.
+     *
+     * Binding `?` on an empty line made a message that STARTS with `?`
+     * untypeable — not awkward, impossible. Measured on the shipped commit:
+     * this input box has no cursor movement (no `KeyType::Left`/`Right` arm
+     * anywhere in `Chat`) and no paste path, so column 0 is reachable only by
+     * typing the first character, `?why` on an empty line left `inputBuf`
+     * empty, and backspacing an existing draft down to empty never yields `?`
+     * either. `/keys` is not a mitigation: it opens the very screen such a user
+     * is trying to get past.
+     *
+     * So the second `?` closes the reference AND lands the character. Driven
+     * here as real keystrokes, one per character, exactly as a user types them.
+     */
+    public function testAMessageStartingWithAQuestionMarkIsTypeable(): void
+    {
+        $chat = $this->chat();
+        foreach (['?', '?', 'w', 'h', 'y'] as $rune) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
+        }
+
+        $this->assertNull($chat->keyHelp(), 'the second "?" closed the reference');
+        $this->assertSame('?why', $chat->inputBuf);
+
+        // And it really sends: the draft is a message like any other, not a
+        // command the submit path intercepts.
+        [$sent] = $chat->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame('', $sent->inputBuf);
+        $this->assertContains('?why', self::contents($sent));
+    }
+
+    /**
+     * The shortest case, and the one a "next printable rune falls through"
+     * design would still not have covered: the whole message is `?`.
+     */
+    public function testALoneQuestionMarkIsATypeableMessage(): void
+    {
+        $chat = $this->chat();
+        foreach (['?', '?'] as $rune) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
+        }
+
+        $this->assertSame('?', $chat->inputBuf);
+        $this->assertNull($chat->keyHelp());
+
+        [$sent] = $chat->update(new KeyMsg(KeyType::Enter));
+        $this->assertContains('?', self::contents($sent));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function contents(Chat $chat): array
+    {
+        return array_map(static fn(Message $m): string => $m->content, $chat->history);
+    }
+
+    /**
+     * The other three dismissals stay CLEAN — the insert is `?`'s alone, which
+     * is what leaves a reader who only wanted to close the screen unaffected.
+     */
+    public function testTheOtherDismissKeysLeaveNothingInTheInputBox(): void
+    {
+        foreach (self::dismissKeys() as [$label, $key]) {
+            if ($label === '?') {
+                continue;
+            }
+
+            [$open] = $this->chat()->update(new KeyMsg(KeyType::Char, '?'));
+            [$closed] = $open->update($key);
+
+            $this->assertSame('', $closed->inputBuf, $label . ' must not type anything');
+        }
+    }
+
+    /**
+     * The insert is disclosed ON SCREEN, not only in the code: a key that
+     * silently puts a character in an input box the user was not typing into is
+     * exactly the surprise this feature's own review flagged.
+     */
+    public function testTheFooterSaysThatTheSecondQuestionMarkTypesOne(): void
+    {
+        // Two sizes, because the hint is a different string in each: 100x30
+        // overflows the box (53 live rows plus 9 headers and 8 separators = 70
+        // content lines, against a 27-line body) so the footer carries the
+        // scroll clause as well, while 100x80 fits the whole list and drops it.
+        foreach ([[100, 30], [100, 80]] as [$cols, $rows]) {
+            [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
+
+            $this->assertStringContainsString(
+                'closes and types',
+                $this->body($open),
+                "the footer must disclose the literal-? insert at {$cols}x{$rows}",
+            );
+        }
+    }
+
     public function testAStrayLetterCannotTypeIntoTheInputBoxBehindIt(): void
     {
         [$open] = $this->chat()->update(new KeyMsg(KeyType::Char, '?'));
@@ -648,6 +746,77 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
+     * The width bound {@see Renderer::KEY_HELP_TOO_SMALL}'s comment rests on,
+     * asserted against the rendered bar rather than restated — the same
+     * treatment its sibling {@see Renderer::KEY_HELP_OVER_PROMPT} already gets
+     * in {@see testTheBarAnnouncesAPromptTheReferenceIsCovering()}. The comment
+     * previously quoted a range ("73–94") that matches no instrument at all on
+     * this fixture, which is what a figure with no fixture and no instrument
+     * named is worth.
+     *
+     * Instrument: {@see statusBar()}, i.e. `Width::of` after
+     * `stripZoneMarkers()` — the columns actually painted.
+     * Domain: the four sizes below, every one of them under
+     * `keyHelpGeometry()`'s documented 5x5 floor, which is the entire set of
+     * shapes in which this cue is ever emitted.
+     */
+    public function testTheTooSmallCueIsNeverWiderThanTheBarItReplaces(): void
+    {
+        foreach ([[4, 30], [1, 30], [100, 4], [4, 4]] as [$cols, $rows]) {
+            $sized = $this->chat('', $cols, $rows);
+
+            $cue = $this->statusBar($sized->withKeyHelp(0));
+            $replaced = $this->statusBar($sized);
+
+            $this->assertStringContainsString(
+                'window too small',
+                $cue,
+                "fixture: the cue is what the bar says at {$cols}x{$rows}",
+            );
+            $this->assertLessThanOrEqual(
+                Width::of($replaced),
+                Width::of($cue),
+                "the cue may not be wider than the bar it replaces at {$cols}x{$rows} — the bar is the "
+                . 'one line this renderer never truncates, so a wider cue would overflow by more than '
+                . 'the bar already does',
+            );
+        }
+    }
+
+    /**
+     * `Renderer::$keyHelpMaxOffset` is process-global and read by production
+     * code ({@see Chat::withKeyHelp()} clamps against it), so it is the same
+     * shape as the three statics this feature's review round had to add resets
+     * for — and it needs no reset seam because it resets ITSELF. That is a
+     * property of the overlay chain rather than a habit, so it is read back
+     * here: `renderKeyHelp()` runs first in `renderView()`, therefore on every
+     * frame, and its "reference closed" early return zeroes the ceiling.
+     *
+     * Without this, the argument for not giving it a seam is an unverified
+     * sentence, and the day the chain is reordered the leak is silent.
+     */
+    public function testTheOverflowCeilingResetsItselfOnAFrameWithoutTheReference(): void
+    {
+        [$open] = $this->chat()->update(new KeyMsg(KeyType::Char, '?'));
+        $open->view();
+        $this->assertGreaterThan(
+            0,
+            Renderer::keyHelpMaxOffset(),
+            'fixture: the list must overflow a 100x30 box, or there is no stale value to leak',
+        );
+
+        // One ordinary frame — the reference closed — and the ceiling is gone.
+        $this->chat()->view();
+        $this->assertSame(0, Renderer::keyHelpMaxOffset());
+
+        // Same for the frame that CANNOT paint the box: the other early return.
+        $open->view();
+        $this->assertGreaterThan(0, Renderer::keyHelpMaxOffset(), 'fixture: warmed again');
+        $this->chat('', 4, 30)->withKeyHelp(0)->view();
+        $this->assertSame(0, Renderer::keyHelpMaxOffset());
+    }
+
+    /**
      * The status bar as `Renderer` assembles it, with its invisible click-zone
      * sentinels stripped so a width comparison measures what is on screen.
      */
@@ -666,12 +835,17 @@ final class KeyHelpTest extends TestCase
      * (`beginToolCalls()`, `answerPermission()`) stamp the generation that is
      * current on the object they then call, so no producer in `src/` can emit
      * the stale ASK this covers, and `grep 'new PermissionRequestMsg' src/`
-     * finds only those two. Deleting the guard outright turns exactly this one
-     * test red — measured across the 252 tests in the three files that build a
-     * `PermissionRequestMsg` at all, which is every test that can observe the
-     * guard, since the only other way in is a real turn where the comparison is
-     * false by construction. That is the honest statement of what this pins:
-     * the guard's LOGIC, not a live path.
+     * finds only those two.
+     *
+     * Deleting the guard outright turns exactly this one test red, and so does
+     * making its body throw when it fires — measured over the 252 tests in the
+     * three files that build a `PermissionRequestMsg` at all AND, separately,
+     * over `ChatTest`'s 215, which stay green under both. That second domain is
+     * why the earlier wording here was wrong: it said no other test can even
+     * REACH a stamped ASK, and 14 `ChatTest` tests do, through the two producers
+     * above. What they cannot do is make the comparison true. See
+     * `Chat::requestPermission()`'s own comment for the four-mutation table.
+     * So what this pins is the guard's LOGIC, not a live path.
      *
      * That makes it a dormant-defence test, and worth keeping as one: the engine
      * path `PermissionRequestMsg`'s docblock names is the producer it is for,

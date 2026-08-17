@@ -296,4 +296,47 @@ final class KeyBindingRegistryTest extends TestCase
         $this->assertTrue(KeyBinding::new('x', 'Enter', 'd', 'c')->isLive());
         $this->assertFalse(KeyBinding::new('x', 'Enter', 'd', 'c', 'nothing consumes it')->isLive());
     }
+
+    /**
+     * {@see KeyBinding::new()} restates the constructor's whole signature, so a
+     * field added to one and not the other drifts silently: the new parameter
+     * would be unreachable through the factory every declaration in
+     * {@see KeyBindingRegistry} uses, and nothing would say so — the factory
+     * would keep compiling and keep passing the old six arguments positionally.
+     *
+     * The duplication is kept (the promoted constructor is where the per-field
+     * documentation belongs, and `::new()` is this project's declared root
+     * factory) and made non-silent instead. Compared field by field: name,
+     * declared type, and default.
+     */
+    public function testTheFactoryAndTheConstructorTakeTheSameParameters(): void
+    {
+        $shape = static function (\ReflectionFunctionAbstract $f): array {
+            $out = [];
+            foreach ($f->getParameters() as $parameter) {
+                $out[] = [
+                    $parameter->getName(),
+                    (string) $parameter->getType(),
+                    $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : '<required>',
+                ];
+            }
+
+            return $out;
+        };
+
+        $constructor = new \ReflectionMethod(KeyBinding::class, '__construct');
+        $factory = new \ReflectionMethod(KeyBinding::class, 'new');
+
+        $this->assertSame(
+            $shape($constructor),
+            $shape($factory),
+            'KeyBinding::new() and its constructor have drifted apart — a parameter added to one must be '
+            . 'added to the other, or the registry cannot declare it',
+        );
+        $this->assertSame(
+            'self',
+            (string) $factory->getReturnType(),
+            'the factory must still return the class it constructs',
+        );
+    }
 }

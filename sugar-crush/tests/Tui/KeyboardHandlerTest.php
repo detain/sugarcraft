@@ -1060,8 +1060,14 @@ final class KeyboardHandlerTest extends TestCase
     }
 
     /**
-     * The three states {@see KeyboardHandler::shellOwnsKeyboard()} names, built
-     * fresh so a caller cannot leak one state's static menu into another.
+     * TWO of the three states {@see KeyboardHandler::shellOwnsKeyboard()} names,
+     * built fresh so a caller cannot leak one state's static menu into another.
+     *
+     * The third — an open F10 menu — is not here because it is not a property of
+     * an `App` at all: it lives in `MenuBar`'s process-global menu, so it cannot
+     * be handed over as a value and every caller sets it up (and tears it down)
+     * itself. {@see keyboardOwningSubStates()} is the list that covers all three,
+     * as closures, for exactly that reason.
      *
      * @return array<string, App>
      */
@@ -1077,10 +1083,12 @@ final class KeyboardHandlerTest extends TestCase
     }
 
     /**
-     * The same three states, swept across the sub-states a user actually
-     * reaches inside them rather than at one fixture value each.
+     * All three {@see KeyboardHandler::shellOwnsKeyboard()} states — including
+     * the F10 menu, which {@see keyboardOwningStates()} cannot carry — swept
+     * across the sub-states a user actually reaches inside them rather than at
+     * one fixture value each.
      *
-     * Three fixture Apps is not "all three states". `createApp(Pane::Agents)`
+     * One fixture per state is not "all three states". `createApp(Pane::Agents)`
      * leaves `selectedAgentIndex = -1` and `agentViewMode = List`, and a
      * selected dashboard row is the NORMAL state after one `Down` — measured, a
      * `ctrl+r` arm guarded on `selectedAgentIndex >= 0` is invisible to a sweep
@@ -1092,7 +1100,9 @@ final class KeyboardHandlerTest extends TestCase
      * rather than by assembling an App, so it is a state the shell can actually
      * be in. Each entry is a closure because two of them also have to set up
      * `MenuBar`'s process-global menu state, which must not leak between
-     * entries.
+     * entries — and because a closure can be re-run: a caller that presses more
+     * than one key must rebuild between presses, since the two menu entries are
+     * DESTROYED by any press the menu answers with a close (`q`, `escape`).
      *
      * Domain, stated so the next reader knows what the sweep does and does not
      * cover: 8 states — the agent view in List (with and without a selection),
@@ -1312,12 +1322,33 @@ final class KeyboardHandlerTest extends TestCase
      * slots counted ({@see ResetsDerivedRuneSets::derivedRuneSetCount()}). A
      * slot is filled exactly once per derivation and nothing else fills one.
      *
-     * Domain: the 5 table rows below at one cold press each, then an exhaustive
-     * sweep of 2 menu states × 9 panes × 95 printable runes × Ctrl on/off =
-     * 3420 cold presses. Non-`Char` key types are covered only by the `Enter`
-     * row, and the panes are swept without their sub-states (no skill-picker
-     * options, no agent selection) — neither affects which rune SETS are read,
-     * only which branch reads them.
+     * Domain, in three parts:
+     *
+     * 1. the 8 table rows below, one cold press each;
+     * 2. an exhaustive sweep of 2 menu states × 9 panes × 95 printable runes ×
+     *    Ctrl on/off = 3420 cold presses, with the panes at their DEFAULT
+     *    sub-state (no skill-picker options, no agent selection);
+     * 3. the same rune × Ctrl sweep across the 8 keyboard-owning sub-states of
+     *    {@see keyboardOwningSubStates()} = 1520 more cold presses.
+     *
+     * Part 3 exists because the sentence that used to stand in its place was
+     * false. It said the sub-states do not affect which rune SETS are read, only
+     * which branch reads them — but opening the skill picker in `Pane::Skills`
+     * flips {@see KeyboardHandler::shellOwnsKeyboard()}, and that predicate IS
+     * the switch selecting which sets derive: measured, `ctrl+r` in
+     * `Pane::Skills` goes from `{Chat}` to `{Chat, YIELDED}` when the picker
+     * opens, and `ctrl+x` goes from `{Chat, Panes & windows}` to `{Chat}`. The
+     * ceiling of two and its structural argument survive that (the shell set and
+     * the yielded set are read on complementary keypresses, so no state can
+     * reach three), which is why the conclusion did not move — but the domain
+     * did, and it is swept now rather than argued away.
+     *
+     * Non-`Char` key types are covered only by the `Enter` row.
+     *
+     * Both histograms are corpus-specific in a way worth being explicit about:
+     * they count how many presses land on a rune THIS registry declares, so
+     * adding a `Ctrl+<rune>` row anywhere moves them. It is the ceiling, not the
+     * distribution, that is a property of the routing rule.
      */
     public function testTheHotPathNeverDerivesMoreThanTwoRuneSets(): void
     {
@@ -1396,6 +1427,51 @@ final class KeyboardHandlerTest extends TestCase
             [0 => 1710, 1 => 938, 2 => 772],
             $histogram,
             'the distribution the memo docblock states, over the sweep it names',
+        );
+
+        // Part 3: the same rune sweep inside the sub-states, because
+        // shellOwnsKeyboard() is exactly the predicate that decides WHICH set
+        // derives, and a pane at its default sub-state only has it true for
+        // Pane::Agents.
+        //
+        // The sub-state is rebuilt for EVERY press, not once per state: two of
+        // the eight live in MenuBar's process-global menu, and a swept rune of
+        // 'q' or 'escape' closes that menu — measured, building once let the
+        // first such rune turn the remaining presses into ordinary-pane presses
+        // and pulled shellCtrlRunes() into the histogram, which is exactly the
+        // leak the 3420-press sweep above resets per press to avoid.
+        $subStates = $this->keyboardOwningSubStates();
+        $this->assertCount(8, $subStates, 'fixture: the sub-state count the docblock states');
+
+        $subPresses = 0;
+        $subHistogram = [0 => 0, 1 => 0, 2 => 0];
+        foreach ($subStates as $where => $build) {
+            foreach ($printable as $rune) {
+                foreach ([false, true] as $ctrl) {
+                    $this->resetMenuBarState();
+                    $app = $build();
+                    $this->resetDerivedRuneSets();
+                    $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: $ctrl), $app);
+                    $derived = $this->derivedRuneSetCount();
+                    $this->assertLessThanOrEqual(
+                        2,
+                        $derived,
+                        "ctrl={$ctrl} rune '{$rune}' in {$where} derived {$derived} rune sets — the "
+                        . 'ceiling of two is what the memo docblock rests on, in the sub-states too',
+                    );
+                    $subHistogram[$derived]++;
+                    $subPresses++;
+                }
+            }
+        }
+
+        $this->resetMenuBarState();
+        $this->assertSame(1520, $subPresses, '8 keyboard-owning sub-states x 95 runes x ctrl on/off');
+        $this->assertSame(
+            [0 => 760, 1 => 712, 2 => 48],
+            $subHistogram,
+            'the sub-state distribution: nothing for ordinary typing, one set for a Ctrl chord this '
+            . 'registry does not give Chat, two when it does and the yielded set has to be consulted',
         );
     }
 

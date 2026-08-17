@@ -871,8 +871,20 @@ final class Chat implements Model
             // unconditional bind would make a question impossible to type -
             // the input box has no other way to receive it. The empty-buffer
             // condition is the same affordance the Up arm above already uses
-            // for history recall, and /keys is the escape hatch for the one
-            // case it costs (a message that starts with "?").
+            // for history recall.
+            //
+            // The empty-buffer guard alone still costs one message: the one
+            // that STARTS with "?". Measured, that cost is total rather than
+            // awkward - this input box has no cursor movement at all (no
+            // KeyType::Left or KeyType::Right arm anywhere in this file) and no
+            // paste path, so column 0 is only ever reached by typing the first
+            // character, and "?why" typed on an empty line used to leave
+            // inputBuf empty and the reference open. /keys is NOT
+            // the escape hatch for that: it opens the same reference, which is
+            // not what a user COMPOSING a "?" question wants. The escape hatch
+            // is the second "?" - see handleKeyHelpKey(), where "?" both closes
+            // the reference and lands the literal character, so "??why" types
+            // "?why" and the footer hint on screen says so.
             $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
                 && $msg->rune === '?' && $this->inputBuf === ''
                 => [$this->withKeyHelp(0), null],
@@ -1040,16 +1052,38 @@ final class Chat implements Model
         // every internal call site. `grep 'new PermissionRequestMsg' src/`
         // finds exactly those two lines; nothing else constructs one, and the
         // engine path that would -- PermissionRequestMsg's own docblock names
-        // it -- is not wired. Measured three ways (guard deleted, guard body
-        // throwing, every stamped ASK dropped): each turns exactly ONE test
-        // red, KeyHelpTest::testASupersededAskNeverPutsUpAPrompt(), which
-        // hand-builds the Msg. Domain of that "one": the 252 tests in the three
-        // files that construct a PermissionRequestMsg at all
-        // (KeyHelpTest, RendererTest, KeyBindingDriftTest). That bound is what
-        // makes the count complete rather than a sample -- no other test can
-        // reach a stamped ASK, because the only other route in is a real turn
-        // through beginToolCalls()/answerPermission(), where the comparison
-        // below is false by construction and so cannot change any outcome.
+        // it -- is not wired.
+        //
+        // What that bounds is which tests can watch this guard FIRE. It does
+        // NOT bound which tests reach a STAMPED ask, and the first version of
+        // this comment claimed the second: measured, 14 ChatTest tests reach
+        // one, through exactly the two producers above. They cannot make the
+        // comparison true, which is the property -- not that they never get
+        // here. Re-measured on PHP 8.3.6, four mutations of the two lines
+        // below, each judged by the targeted files going red:
+        //
+        //   | mutation                        | trio (252) | ChatTest (215)  |
+        //   |---------------------------------|------------|-----------------|
+        //   | guard deleted                   | 1 failure  | green           |
+        //   | throw when the guard FIRES      | 1 error    | green           |
+        //   | throw on ANY stamped ask        | 1 error    | 14 errors       |
+        //   | 2nd conjunct dropped, so every  | 1 failure  | 11 failures     |
+        //   | stamped ask is discarded        |            | and 1 error     |
+        //
+        // Row 2 is the honest bound: exactly ONE test anywhere can observe this
+        // branch being taken, KeyHelpTest::testASupersededAskNeverPutsUpAPrompt(),
+        // which hand-builds the Msg -- and row 1 shows deleting the guard costs
+        // that same single test. Row 3 is what refutes the old wording. Row 4
+        // changes BEHAVIOUR rather than observability, so its 12 reds say the
+        // stamped-and-current path is well covered; they are not evidence about
+        // this guard's reach, and reporting it as "exactly one test red" was
+        // simply wrong.
+        //
+        // Domains: "trio" is tests/RendererTest.php +
+        // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
+        // the three files that construct a PermissionRequestMsg at all (252
+        // tests / 19639 assertions). ChatTest is measured separately BECAUSE
+        // rows 3 and 4 show the trio's silence does not cover it.
         //
         // So this is not what makes the reference-over-prompt state
         // unreachable, and the sentence claiming it was "the one way that state
@@ -1223,6 +1257,41 @@ final class Chat implements Model
      * {@see handleSessionPickerKey()} gives: a stray letter must not type into
      * an input box the user cannot see behind the modal.
      *
+     * ── the "?" close also TYPES a literal "?" ────────────────────────────
+     *
+     * That one exception is what makes a message beginning with "?" typeable
+     * again, and it is a real cost repaid rather than a flourish. `update()`'s
+     * "?" arm binds the character on an empty input line, and this input box
+     * has no cursor movement and no paste path, so before this arm existed
+     * "?why" could not be composed AT ALL — measured, the "?" opened the
+     * reference and the remaining runes were swallowed, leaving inputBuf empty.
+     *
+     * Three options were weighed. Dropping the "?" shortcut is not one of them:
+     * the shortcut is the feature. Letting the next unbound printable rune fall
+     * through into the input would type "?why" from exactly those keystrokes,
+     * but it inverts this overlay's swallow-everything invariant for every
+     * letter — a reader trying `j` to scroll would lose their place and find
+     * "?j" in the box — and it still leaves a lone "?" message untypeable,
+     * because "?" itself would keep closing without typing. Gating the OPEN on
+     * some further condition needs a signal that distinguishes "about to
+     * compose" from "about to read", and this model has none: the two states
+     * are byte-identical.
+     *
+     * So the second "?" carries the character. One rule, one sentence, one
+     * extra keystroke ("??why" types "?why", "??" then Enter sends "?"), no new
+     * field on the model, and the reader who wants a clean dismissal has the
+     * three other spellings — which is why {@see Renderer::renderKeyHelp()}'s
+     * footer lists both behaviours on screen instead of leaving the insert to
+     * surprise someone. /keys is NOT this escape hatch and never was: it opens
+     * the same reference, which is no help to a user composing a question.
+     *
+     * The append is written against `$this->inputBuf` rather than as a plain
+     * `'?'` because that is what the arm MEANS — "the character the keystroke
+     * denotes, at the caret". Today the buffer is always empty here (the "?"
+     * arm requires it, and `submit()`'s /keys branch clears it), so the two
+     * spellings agree; the day the reference can be opened over a draft they
+     * would not, and appending is the reading that stays correct.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleKeyHelpKey(KeyMsg $msg): array
@@ -1238,8 +1307,10 @@ final class Chat implements Model
         return match (true) {
             $msg->type === KeyType::Escape,
             $msg->type === KeyType::Enter,
-            $rune === 'q',
-            $rune === '?' => [$this->withKeyHelp(null), null],
+            $rune === 'q' => [$this->withKeyHelp(null), null],
+            // Closes AND types the character — see this method's docblock for
+            // why the insert is here and not behind a new binding.
+            $rune === '?' => [$this->withKeyHelp(null)->withInputBuf($this->inputBuf . '?'), null],
             $msg->type === KeyType::Up => [$this->withKeyHelp($offset - 1), null],
             $msg->type === KeyType::Down => [$this->withKeyHelp($offset + 1), null],
             $msg->type === KeyType::PageUp => [$this->withKeyHelp($offset - $page), null],
@@ -3338,8 +3409,12 @@ final class Chat implements Model
         }
 
         // Handle /keys - the same in-app keybinding reference "?" opens, for
-        // the times "?" cannot be used (a draft is half-typed, or the message
-        // itself starts with "?"). /help is accepted as the spelling most
+        // the one time "?" cannot be used: a draft is half-typed, and the "?"
+        // arm in update() only binds the character on an EMPTY line. It is not
+        // the way to type a message that starts with "?" — that is the second
+        // "?", which closes the reference and lands the literal character (see
+        // handleKeyHelpKey()); this command opens the very screen such a user
+        // is trying to get past. /help is accepted as the spelling most
         // other CLIs use. Matched EXACTLY rather than by prefix, unlike the
         // argument-taking commands below: "/help me name this variable" is a
         // prompt, not a request for the shortcut list.

@@ -569,6 +569,18 @@ final class Renderer
      * in lines. Static for the same reason {@see $maxScrollOffset} is: the
      * keystroke that scrolls arrives between frames, so the only content
      * height it can be clamped against is the one already painted.
+     *
+     * Process-global and read by production code ({@see Chat::withKeyHelp()}
+     * clamps against it), which is the shape of the three statics this feature's
+     * review round had to add resets for — and it needs no reset seam, for a
+     * reason that is a property rather than a habit: {@see renderKeyHelp()} runs
+     * FIRST in {@see renderView()}'s overlay chain, so it runs on every frame,
+     * and its two early returns (reference closed, or box does not fit) both
+     * zero this before returning ''. One frame without the reference therefore
+     * clears it. A stale value can only survive between a frame that painted the
+     * reference and a `withKeyHelp()` call with no frame in between — which is
+     * why the self-reset is asserted rather than assumed, by
+     * `KeyHelpTest::testTheOverflowCeilingResetsItselfOnAFrameWithoutTheReference()`.
      */
     private static int $keyHelpMaxOffset = 0;
 
@@ -1023,11 +1035,27 @@ final class Renderer
      */
     private static function renderStatusBar(Chat $chat): string
     {
-        // Shorter than the bar it replaces (measured: 33 columns against the
-        // 73–94 the assembled bar comes to), so a narrow terminal cannot be
+        // Shorter than the bar it replaces, so a narrow terminal cannot be
         // made to overflow by MORE than it already does — the bar is the one
         // line this renderer does not truncate, a pre-existing property the
         // reference must not worsen.
+        //
+        // Instrument: Width::of() AFTER stripZoneMarkers() — the columns the
+        // bar actually paints. The unstripped string reads 23 columns wider
+        // (the `pane:menu` sentinel pair and the zone id inside it, which
+        // Program resolves into a paint and never puts on screen), and strlen
+        // reads the multi-byte glyphs as bytes; the same instrument
+        // KEY_HELP_OVER_PROMPT's floor is measured with, for the same reason.
+        // Fixture: a two-message chat (one user, one assistant) over
+        // EchoBackend, idle, no prompt pending.
+        // Measured on that fixture: this cue 33 columns, against 54 for the
+        // bar at every width below 79 and 75 at 79 and above — the context
+        // readout gains its token count once there is room to print it. Note
+        // the bar does NOT shrink with the terminal, which is the whole point:
+        // at the sizes that bring this cue out (cols < 5 or rows < 5, see
+        // keyHelpGeometry()) the bar it stands in for is still 54 columns.
+        // testTheTooSmallCueIsNeverWiderThanTheBarItReplaces() asserts the
+        // comparison against the rendered bar rather than restating it here.
         if ($chat->keyHelp() !== null && self::keyHelpGeometry($chat) === null) {
             return self::KEY_HELP_TOO_SMALL;
         }
@@ -2446,9 +2474,25 @@ final class Renderer
                 // not what those keys do while this screen is up. The wheel
                 // belongs here for the same reason: with the reference open it
                 // scrolls the reference (see Chat::scrollTranscript()).
+                //
+                // "? closes and types" is the one behaviour a reader would not
+                // guess and would be annoyed to discover by accident, so it is
+                // stated rather than left to the code: pressing "?" a second
+                // time dismisses this screen AND puts the literal character in
+                // the input box, which is what makes a message beginning with
+                // "?" typeable (Chat::handleKeyHelpKey() carries the reasoning).
+                // Anyone who wants a clean dismissal has the Esc named first.
+                //
+                // Widths, measured with Width::of against KEY_HELP_COLS = 64,
+                // the box's widest content: 63 columns for the scrolling form
+                // and 35 for the other. One column of headroom is thin, but the
+                // footer is the ONE line here that may be truncated without
+                // losing a binding — Width::truncate() below does that, and the
+                // scroll clause is deliberately last so a narrow box loses it
+                // before it loses either close key.
                 self::$keyHelpMaxOffset > 0
-                    ? 'Esc closes · scroll: ↑↓ PgUp/PgDn wheel'
-                    : 'Esc closes',
+                    ? 'Esc closes · ? closes and types "?" · ↑↓ PgUp/PgDn wheel scroll'
+                    : 'Esc closes · ? closes and types "?"',
                 $width,
             ));
         }

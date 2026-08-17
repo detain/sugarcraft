@@ -108,11 +108,16 @@ final class CommandRegistry
             CommandSpec::new('keys', 'Show the keyboard shortcut reference (or press ?)', 'App'),
             // `/help` is a SECOND row rather than an alias field because this
             // registry is what both discovery surfaces read: Chat::submit()
-            // matches '/keys' and '/help' in the same arm, and README.md
-            // documents both, so a registry that knew only one of them left the
-            // spelling most other CLIs use working when typed in full and
-            // invisible in the "/" popup — the exact drift this class exists to
-            // close, one level down.
+            // matches '/keys' and '/help' in the same arm, so a registry that
+            // knew only one of them left the spelling most other CLIs use
+            // working when typed in full and invisible in the "/" popup — the
+            // exact drift this class exists to close, one level down.
+            //
+            // The behaviour is what justifies the row; README.md's key table
+            // names both spellings too, but a doc file is not what makes this
+            // necessary and the first version of this comment cited it as
+            // though it were — while the row it cited had been assigned to
+            // another lane and was not in the same commit.
             CommandSpec::new('help', 'Show the keyboard shortcut reference (same as /keys)', 'App'),
             CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
             CommandSpec::new('workflow', 'Run, pause, resume, or inspect a workflow', 'Workflow'),
