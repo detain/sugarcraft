@@ -4633,3 +4633,138 @@ sabotage discipline, and the new `enforceTimeLimit`/`failOnRisky` facts.
 4. Plan steps **#14** → **#12** → **#17**, one at a time (#14 and #12 both want
    `Bootstrap.php`). **#17 must not start before #90**, or its `LspTool` lands
    invisible to every corpus.
+
+---
+
+## All three lanes closed a round, and all three are back under review
+
+Commits this stretch, in order: `4dbf5074` (#63), `ab7b185f` (worklog),
+`c08edcd0` (lane B round 18), `23ca19a1` (lane D round 7), `1fa7af45` (lane E
+round 5). Clean-tree suite at `1fa7af45`: **6525 / 68522 / 1 skipped / 0 failures
+/ 0 risky / exit 0**, 1:59. The 1 skip is the legitimate `McpClientTest` one.
+
+### The headline: #89 is CLOSED, and it was five escapes, not one
+
+The queue recorded #89 as "`InstructionFileLoader` has NO containment check; a
+committed `CLAUDE.md` symlink reads any local file into the system prompt." I
+proved that before briefing anyone — fixtures outside any checkout:
+
+```
+loadRoot()                           => ["TOP-SECRET-AAA private key material"]
+loadForPath("<sb>/outside/anything")  => "ANCESTOR-BBB instructions above the repo"
+```
+
+**The second one needs no symlink at all.** `loadForPath()` walked UP while
+`$dir !== $repoRoot`, so a touched path outside the repo never matched and the
+walk climbed to `/`, reading any `CLAUDE.md` it passed. That shape was not in the
+audit item.
+
+Writing the regression tests surfaced **three more**, none needing anything
+committed: a checkout merely SPELLED through a symlink (`$repoRoot` was
+`realpath()`-resolved and `$dir` was not, so the bound never fired); a `$repoRoot`
+that does not resolve (old code fell back to the configured string and walked);
+and the two pre-existing hand-spellings, consolidated. Five in total, five
+`ContainedPath` call sites, 18 regression tests of which **8 fail against the
+pre-fix source**. I re-ran my own probe against the fix: `[]` and `null`.
+
+Both halves of the "gate each candidate vs. don't walk at all" question were
+implemented, and the difference measured rather than assumed: the candidate gate
+stops **disclosure**; the start gate stops a directory outside the repository
+deciding which of the repository's OWN instruction files governs a touched path —
+a **control** escape, not a disclosure, and labelled as such in the code.
+
+### #90 was a prerequisite, not a nicety — the census is why
+
+I briefed the interface/trait guard as a tidy-up. The census corrected me: of
+**267** `.php` files under `src/`, **220 concrete / 25 enums / 16 interfaces /
+6 traits / 0 abstract**. `class_exists()` is false for interfaces and traits and
+true for abstract, so **the only shape the old guard classified correctly is the
+only shape that does not occur**, and the 22 files it throws on are already in the
+tree (`src/LSP/` alone ships two interfaces). Widening the scanner past the flat
+glob without fixing the guard first would have aborted suite construction on this
+checkout. Ordering credit goes to the agent, not the brief.
+
+### The defect class, eight rounds running, in its sharpest form yet
+
+`ContainedPath`'s inventory is no longer hand-maintained — 15 call sites in 5
+files, 8 hand-spellings in 4, all derived and pinned, drift biting in both
+directions. And it states its own bound in code: it counts compares that are
+**WRITTEN**, so it catches a check being deleted but **cannot catch a read path
+that never had one — which is exactly what `loadRoot()` and `loadForPath()` were,
+while listed as audited on that very inventory.** That is the whole eight-round
+pattern in one sentence: the instrument was blind to absence, not to change.
+
+Every lane hit the class again this round and every lane's fix agent found the
+recurrence in its own first draft. Lane B's F1: round 17 documented divergence
+class 6 as "inert today (nothing here queries a keypress head)" in the same commit
+that added an `Enter` query. Lane E's F1: `265` where the trio was `268`, in a
+docblock that PROMISED re-measurement, while the same commit updated the other two
+copies. Lane D's F-B: the reason given for not consolidating the deny hook was
+inverted — `rm -rf /nonexistent` is IDENTICAL both ways because the call site
+fails closed; the real divergence is over-denial of legitimate in-root creation.
+
+### Three false greens closed properly rather than documented around
+
+- **Lane B F3** — the tally tripwire's regex only matched a two-word head written
+  on ONE line. A genuine wrapped `Set Padding` query left the suite green; the
+  same call on one line reddened it. Replaced with `literalHeadArguments()`, a walk
+  over PHP's own token stream.
+- **Lane B F5** — "warning-only kills are gone" was false: three `scanRegex`
+  bounds guards were never routed, one giving 4,806,746 warnings and 8.39 GB.
+  Routed, and an **eighth** answer-invisible guard found that the review missed.
+- **Lane E F4** — the worst of the three. The agreement test APPENDED `/keys` to
+  each draft, so the command opened iff `trim(D . '/keys') === '/keys'` iff
+  `trim(D) === ''`: the identical predicate the `?` arm uses. The assertion was a
+  tautology of the two guards and the 18-draft corpus contributed nothing. Driving
+  the SUBMIT route instead found the drafts were already in the corpus, and the
+  true property is stronger than the one claimed — the two routes are
+  **complementary, not equivalent**.
+
+### #63 has already earned its keep
+
+Lane B's reviewer confirmed the documented forever-hang (dropping
+`$close !== false`) now turns the run **red** via `failOnRisky` instead of spinning
+indefinitely, and the 8.39 GB mutation produced two 60s aborts rather than a hang.
+Measured, in the exact scenario the config was added for.
+
+### Operational lessons — all three cost real time this session
+
+1. **`pkill -f <pattern>` matches the wrapper shell's OWN command line.** Two
+   suite runs died at exit 144 and one full run was cut at ~966/6465 because of a
+   `(sleep 900 && pkill -f 'phpunit') &` watchdog killing its own shell. Use
+   `pkill -f '[p]hpunit'` — or, now that #63 exists, no watchdog at all.
+2. **Never write into the live tree at test runtime.** An early draft of
+   `BuiltInToolCorpusTest` created `src/CorpusProbe/ProbeTool.php` while the suite
+   ran; it FATALED two of a sibling agent's full-suite runs (exit 255) and left an
+   empty `src/CorpusProbe/`. The fix that also fixes #90(a): make the scanner's
+   search root **injectable**, so the corpus can be tested without mutating the
+   tree it normally scans.
+3. **The scratchpad is shared across concurrent agents.** One agent `rm -rf`'d it
+   mid-run and destroyed another's harness; scratch files with generic names
+   (`probe.php`, `mutate.php`) collided. Concurrent agents must use private dirs.
+4. `cp -al vendor` preserves the RELATIVE `vendor/sugarcraft/*` symlinks, which
+   then dangle and produce phantom `Interface "SugarCraft\Core\Model" not found`
+   errors — one agent's first mutation matrix was invalid because of it.
+5. `ChatTest::tearDownAfterClass` globs shared `/tmp` for `sc_chat_tool_*.json`
+   and reports strays, so a CONCURRENT suite run makes it error spuriously. Not a
+   real failure.
+
+### Running now
+
+Three adversarial re-reviews, one per commit, all read-only and file-disjoint:
+`c08edcd0` (lane B round 18), `23ca19a1` (lane D round 7), `1fa7af45` (lane E
+round 5). Lane D's brief asks specifically for a **sixth escape** and points it at
+`ImportResolver` plus the skills/workflows/preset/command tiers, using the
+inventory's own admission as a map. Lane E's asks for a draft string that breaks
+the complementary-routes universal. Lane B's attacks the new token-stream scanner
+with the call shapes its own fixtures do not cover.
+
+### Queue after these
+
+1. Whatever the three reviews find — fix, then re-review, per lane.
+2. **#88** README whole-suite figure, standalone, once nothing else is landing.
+   Deferred AGAIN this stretch for the same reason. Current true value at
+   `1fa7af45` is **6525 / 68522**.
+3. Plan steps **#14** -> **#12** -> **#17**, one at a time (#14 and #12 both want
+   `Bootstrap.php`, which lane D just edited). **#90 is now fixed, so #17 is
+   unblocked** — its `LspTool` will be visible to the widened corpus.
