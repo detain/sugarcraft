@@ -2751,3 +2751,144 @@ citation is correct on all four counts; `VALID_SHELLS`' nine names match `shell.
 panic detector's quoted byte offsets are exact and the binary returns rc=2 on all six panic
 rows, rc≤1 on all nine safe ones; the grid tests are non-tautological, with `440` genuinely
 uncovered and the docblock saying so.
+
+---
+
+## Lane E (#38) — review: 6 findings + 6 nits, every one a test-domain or claim defect
+
+The reviewed *behaviour* is largely correct. What failed is the pinning and the prose — the
+same split lanes B and D landed on in the same round.
+
+### F1 (HIGH) — "answered by a NO-OP" cannot see the effect channel this class actually uses
+
+`assertSame($app, $handled[0])` is object identity, which is strong: a new-but-equivalent
+`App` fails it. **The hole is elsewhere.** "No-op" is checked as `[$app identical, null cmd]`
+— but `MenuBar::$activeMenu` is process-global static state the shell routes real effects
+through, and `handleKeyMsg():144-148` returns `[$app, null]` *after* `MenuBar::openMenu()`.
+The class under test already contains a claimed key with a visible effect, an unchanged
+`App`, and a null command.
+
+Sabotage: `if ($key === 'r') { MenuBar::openMenu(2); return [$app, null]; }` in
+`handleCtrl()`. Ctrl+R in `Pane::Agents` now pops the menu bar open — violating condition 2
+exactly as the docblock words it — and the **full suite stays green, 6294/38324**.
+
+### F2 — three fixture Apps are not "all three states"
+
+`createApp(Pane::Agents)` leaves `selectedAgentIndex = -1` and `agentViewMode = List`, so a
+guard keyed on `selectedAgentIndex >= 0` survives green. A selected dashboard row is the
+*normal* state after one `Down`; the claimed property of the derived set is pinned only for
+`List` + no selection.
+
+### F3 — the memo accounting is false in both directions
+
+| keypress | claimed | measured |
+|---|---|---|
+| ordinary letter, `Enter` | 1 | **0** |
+| `ctrl+r` in `Pane::Chat` | 2 | **1** |
+| `ctrl+n`/`ctrl+z`, ordinary pane | 2 | 2 |
+| `ctrl+r`/`ctrl+w` in `Pane::Agents` | 3 | **2** |
+
+Ordinary typing costs **zero** derivations — PHP short-circuits `!$msg->ctrl ||` at
+`KeyboardHandler.php:248` and `$msg->ctrl &&` at `:183`. Exhaustive sweep of **3420**
+keypresses (2 menu states × 9 panes × 95 runes × ctrl on/off): **max 2, never 3.**
+
+And three is *structurally impossible*: `shellCtrlRunes()` is read only when
+`!shellOwnsKeyboard()`, the yielded set only when `shellOwnsKeyboard()`. **Mutually
+exclusive** — the yielded set is asked for on precisely the *complement* of the shell set's
+keypresses, which is the **opposite** of the docblock's stated reason for giving it its own
+memo ("it is asked for on the same keypresses as the other two"). The timings reproduce
+honestly (49.6 µs cold / 0.206 µs warm / `all()` 19.7 µs); it is the reasoning that was
+invented.
+
+### F4 — the memo test reads the stored property, not the accessor's return value
+
+`testEveryDerivedSetTheHotPathReadsIsMemoised()` calls the accessors and then asserts on the
+`ReflectionProperty`. A mutant that stores correctly and **returns `[]`** stays green.
+Fresh-process consequence, measured:
+
+```
+press #1 ctrl+r in Pane::Agents: FELL THROUGH TO CHAT -> invisible undrivable picker
+press #2 ctrl+r in Pane::Agents: claimed by shell (no-op)
+```
+
+Exactly the bug the yield exists to prevent, on the first keystroke only. And **no test
+resets either static**, so within one PHPUnit process every later test sees a warm memo and
+per-test isolation of the derived sets is impossible. **This is lane D's `PermissionGate`
+strike-counter shape, in a different file, found in the same round.**
+
+### F5 — "every pair in this chain is genuinely reachable" is contradicted by lane E's own file
+
+Four links → six pairs; only the two involving the reference are substantiated.
+`Chat.php:800-801` says of the other end that the two modals *"cannot both be open"*.
+Swapping `renderPalette`/`renderSessionPicker` stays green — the chain's last link is
+unreachable **and** unpinned while the comment asserts it is reachable.
+
+### F6 — the generation check has no production producer
+
+Both internal callers build the ASK with `$this->generation` on the same object they then
+call, and `mutate()` never touches `'generation'` at either site, so
+`$msg->generation !== $this->generation` is **tautologically false at every internal call
+site**. `grep 'new PermissionRequestMsg' src/` → exactly those 2 lines; the engine path that
+would produce a stale one is explicitly unwired.
+
+Measured three ways against the full suite — replacing the guard body with a `throw`,
+deleting the guard, and dropping *every* stamped ASK — each turns exactly **one** test red:
+the one that hand-builds the `Msg`. So "the one way this state is reachable through the front
+door" has no producer, and the pinning test's domain is structurally incapable of saying so.
+
+**The guard stays** — it is correct dormant defence for the engine path, and the fix is to say
+that plainly, exactly as F-A2 did for `shellOwnsKeyboard()`'s unobservable conjunct. The cue
+is the real protection, and the review confirms the cue works.
+
+### Nits
+
+- **N-a** the documented priority of `KEY_HELP_TOO_SMALL` over `KEY_HELP_OVER_PROMPT` is
+  unpinned; swapping the branches stays green. A 4-column terminal would say "permission
+  waiting" instead of "window too small".
+- **N-b** the tightened drift regex's *positive* power is unmeasured — reverting it to the
+  loose pre-fix form stays green. The "eight spellings the first version missed" claim is
+  **true** (all 8 re-run, all caught); nothing asserts it, so the tightening can be silently
+  reverted.
+- **N-c** "two holes left open on purpose" undercounts. Of 33 near-miss spellings probed
+  outside the 57 rows, the misses include the **word forms of the arrow keys** — the class
+  `[\x{2190}-\x{2193}]` covers only the glyphs — plus `Spacebar`, `BkSp`, `Ctrl P`,
+  `control+p`, `⌘K`, `F-10`, `Numpad 5` and more. `Up`/`Down` matter most: four `*.move` rows
+  describe arrow movement, so "Down moves the highlight" is the likeliest next prose
+  regression and it escapes today.
+- **N-f** `KEY_HELP_OVER_PROMPT` is hardcoded English against the `Lang::t()` rule — but
+  `grep -rl 'Lang::t' src/` → **0 PHP files in this lib**. Lib-wide pre-existing deviation,
+  recorded rather than fixed; if sugar-crush ever adopts `Lang::t()`, the 35-vs-36 margin
+  becomes a translation-time trap.
+
+### Two claims the review confirmed, one of them mine being wrong
+
+- **N-d, the one-column cue margin is genuinely enforced.** Widening the cue 35→46 while
+  keeping the substring goes RED with a precise message. Independently measured: cue
+  `Width::of` = **35** while `strlen` = 36 — so it was *not* measured with `strlen`, which
+  would have sat exactly on the boundary; floor = 2+3+31 = **36**; idle branch 54;
+  `contextIndicator()`'s last resort can never be empty so 2 is its floor; `⠴`/`…`/`·` are
+  each one column; and there is **no spinner variation** — the string is a literal, not a
+  frame.
+- **N-e refutes my own attack.** I flagged that the cue test reads `renderStatusBar()` rather
+  than the composed frame. It does not:
+  `testTheBarAnnouncesAPromptTheReferenceIsCovering()` asserts `'permission waiting'` in the
+  **composed frame** at all five sizes, and only the *width comparison* uses the reflection.
+  The Veil-backdrop workaround is correctly scoped.
+
+### Also verified
+
+57 rows / 53 live / 4 dormant / 9 contexts; `shellCtrlRunes = [n,k,s,",",g]`,
+`chatCtrlRunes = [w,p,o,r,a,c]`, `yielded = [r]`. S1 → exactly 4 red, S2 → exactly 1, S11 →
+red. F-A1's central measurement holds end-to-end in all three states, and `handleCtrl('r')`
+genuinely has no arm. **The two-condition criterion is complete over all 57 rows**: `p`, `a`
+and `c` fail condition 2; `w` and `o` pass 2 but fail 1; only `r` meets both — no third
+candidate, and no yielded row that fails either condition. The context-keyed memo is well
+pinned (collapsing it turns 9 tests red).
+
+### The pattern across all three lanes this round
+
+Lane B's F4 (a printable-ASCII figure presented as the whole byte space), lane D's Finding 3
+(a "the one path that does X" claim with nine live counter-examples), and lane E's F3/F6 (an
+invented call-site count and a guard with no producer) are the same defect: **a number or a
+claim that travelled without its domain.** All three lanes are now briefed to state the
+domain beside every figure in the code itself, not only in the report.
