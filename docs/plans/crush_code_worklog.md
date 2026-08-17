@@ -2643,3 +2643,111 @@ intentional dormant guard.** `refuses()` collapses everything ≠ `Deny` to `fal
 only public route reaches `commitAutoStrikes: true`, so the `Ask`-vs-`Allow` distinction is
 unobservable through every public path. Sabotage → exactly 1 failure, that test. It is the
 only pin available; the branch stays.
+
+---
+
+## Lane B (#37) — round-14 review: the twelve-round chain is CLOSED
+
+Round 14 built its own oracle — `lexer.go`, `token.go`, `parser.go` copied verbatim out of
+the module cache with only the three vhs import lines rewritten (`diff`-proven), plus a
+`main` emitting the token stream, command list and `p.Errors()` under `recover()`, all
+literals base64-encoded so raw bytes survive JSON — and **transcribed the byte classes from
+`lexer.go` before reading the PHP.** They match exactly.
+
+### The verdict on the round-13 rewrite
+
+| corpus (reviewer's own design) | cardinality | clean upstream | MISS | EXTRA | boundary | kind |
+|---|---|---|---|---|---|---|
+| A: 10 shapes × 255 bytes | 2550 | 764 | **0** | **0** | **0** | **0** |
+| B: 13 prefixes × 26 fragments × 4 glues × 5 sentinels | 6760 | 2436 | **0** | **0** | **0** | **0** |
+| C: 13 prefixes × 9 bodies × 13 tails × 2 leads (panic) | 3042 | — | FN **0** | FP **0** | **0** | **0** |
+| the five shipped tapes | 5 | 5 | **0** | 0 | 0 | 0 |
+
+Corpus B's glue axis deliberately includes **the empty string** — the axis round 12's
+delimiter corpus structurally could not produce, and the one that would have caught the
+original bug had it existed. All **52** hand-written asserted cases were re-derived from
+upstream's own parser: **0 mismatches**, no fiction pinned anywhere.
+
+**The occurrence-direction defect that ran through twelve rounds is closed, on three
+independently-designed corpora plus the shipped tapes.** Round 15 is forbidden from
+re-opening it.
+
+### Four findings, all in the claims and the test data — none in the model
+
+**F1 — `skipSpeedSuffix()`'s docblock is measurably false.** It claims a suffixed head is
+"one upstream rejects outright", so the tolerance "can only ever over-approximate on a tape
+that already fails CI". False for every `Set <setting>` head: `parseSet`'s `default:` arm is
+`cmd.Args = p.peek.Literal` with **no type gate** (`parser.go:527`), so
+`Set Padding @Output x.gif` is **exit 0** upstream (`SET Padding @` + `OUTPUT x.gif`) while
+the model answers `''`. So on a tape upstream *accepts*, it under-approximates — the
+opposite of the claim. No occurrence is lost, so it is the loud direction; the defect is the
+unchecked sentence. It also leaves `directiveValues()`'s completeness statement short: that
+says the comment case is "the ONLY divergence class the corpus differential still reports",
+and the differential finds **four** — `Set`+comment, `Set`+`@`, unit re-joining, and `Env`'s
+Options/Args split.
+
+**F2 — `\r` decides where three tokens end, and the file contains zero CR bytes.** Measured:
+the only two `\r` occurrences are the implementation strings themselves. Upstream's
+`isNewLine` *and* `isWhitespace` both include `\r`, so CR bounds comments, strings **and**
+regexes — the exact axis of all twelve prior findings. Two sabotages survive GREEN: deleting
+`|| $char === "\r"` from `scanRegex()`, and narrowing `$newlines` to `"\n"`. The scenario the
+first hides: `Set WaitPattern /a<CR> Set Shell "sh"<LF>` parses clean upstream (CR bounds the
+regex, then `SET Shell sh`), `validate` exits 0, and the real render aborts
+`invalid shell sh` — taking every later tape in the `set -euo pipefail` loop. The unmutated
+model is **right**; nothing pins it. Round 13's sweep did include a CRLF family, so the model
+was *measured* on CR and never *pinned* on it.
+
+**F3 — one half of round 13's headline change is unpinned.** Dropping the `kind === 'ident'`
+gate from `startsDirective()` leaves the suite GREEN; the identical mutation on
+`headMatches()` is killed. `Type "abc" "Enter" "def"` is `TYPE '' 'abc Enter def'` upstream
+with zero errors; the mutant truncates to `['abc']`.
+
+**F4 — the "sixty-four glue bytes" are 192, and the figure is repeated four times.**
+Exhaustive over all 255 bytes in `Set Padding <B>Output x.gif`, classified by upstream's own
+parser: **192 glue**, 6 clean-but-head-absorbed (`" # ' / ` {`), 57 rejected. The file's list
+is exactly that 192-byte set **restricted to `< 0x80`** — the 128 high bytes are omitted
+although each is a one-byte ILLEGAL token, lexically identical to `}`, which *is* in the
+list. Confirmed against the binary: `Set Padding \x80Output x.gif` → `validate` exit 0.
+
+**F4 is the third time in this chain that a figure travelled without its domain** — and the
+docblock carrying it is the one that names exactly that as round 12's root cause. No
+behavioural impact; corpus A shows the model handles all 255 bytes correctly.
+
+### Nits
+
+- **N1** `testTheByteClassesAreUpstreamsOwn()` is a **drift detector, not a derivation** —
+  every assertion compares a constant against a hardcoded copy of itself and nothing reads
+  `lexer.go` at test time. It does real work (killed 5 mutations) but can only catch a
+  *changed* transcription, never a *wrong* one.
+- **N2** 44 mutations: 34 killed, **10 survived**, 0 hangs, 0 restore failures — which also
+  corroborates round 13's "the 3 HANG mutations are now impossible" claim, since nothing hung
+  even with the single-byte, regex, JSON and comment arms deleted. Beyond F2/F3 the survivors
+  are equivalent or benign but each needs a verdict: a redundant `!$terminated` conjunct, a
+  JSON-text-only change, a `.`-lookahead widening (`Type ..ms`), and dropping `\t` from the
+  whitespace class (`Output<TAB>.vhs/cli.gif`).
+- **N3** the `40ms` → `40` divergence is inert in the assertions but **live on every shipped
+  tape** — `chat.tape:29` and `agents.tape:57` carry `Set TypingSpeed 60ms`, and all five
+  carry `Sleep <n>s|ms`. Round 13's "no assertion queries it" is correct; the next person to
+  add one gets a failure unrelated to the tape.
+
+### candy-vcr forward-compatibility: verified intact
+
+All three `UPSTREAM-ONLY` labels are additive prose above a live assertion; nothing was
+removed. `Tape/Compiler.php:296` records the shell name; `Encode/TapeToGif.php:353-371`
+resolves CLI `--shell` → tape directive → default; `Render/FrameStream.php` runs exec mode
+under a real PTY with a fallback shell; `Tape/Lexer.php` is a 207-line line-oriented regex
+matcher with no JSON and no REGEX token. The byte classes are recorded **portably** for item
+#81 — named constants carrying the Go predicate names, plus a grammar write-up explicitly
+addressed to whoever writes `candy-vcr/src/Tape/Lexer.php`.
+
+### Also verified, and not to be re-litigated
+
+The UTF-8 re-encoding residual is boundary-neutral **proven rather than argued**: 1280 of
+2550 corpus-A cases carry a re-encoded ILLEGAL literal and all 1280 match after folding
+`string(byte)` back — the model never consumes upstream literals, so no count or offset can
+shift. `SINGLE_BYTE_TOKENS` is never interpolated into a regex (only
+`str_contains`/`strlen`), so the `[-%` reversed-range hazard does not exist. The `Home`
+citation is correct on all four counts; `VALID_SHELLS`' nine names match `shell.go`; the
+panic detector's quoted byte offsets are exact and the binary returns rc=2 on all six panic
+rows, rc≤1 on all nine safe ones; the grid tests are non-tautological, with `440` genuinely
+uncovered and the docblock saying so.
