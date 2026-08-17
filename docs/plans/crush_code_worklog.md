@@ -5193,3 +5193,34 @@ the same file.
    the corpus handles the private-constructor shape.
 5. Reported, unowned: `src/ToolRegistry.php` declares its own
    `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface.
+
+### Round 8 landed — `c075adcf`
+
+The permission fix is committed, as designed above. Re-driven table: all nine
+slash commands are now swallowed whole; `/agents`, Enter, `y` approves once at
+keystroke nine (the recovery); `ay` grants at keystroke two; `an` cancels the
+confirm and leaves the prompt ARMED, `and` cancels and DISARMS.
+
+Two things the agent surfaced that were not in the brief:
+
+1. **Binding descriptions were pinned by nothing.** Reverting `permission.always`'s
+   wording left KeyBindingRegistryTest, KeyBindingDriftTest, KeyHelpTest and
+   RendererTest all green — the drift suite reads a description only for
+   keyish-token violations and paints it, never asserting its words. One
+   assertion added for that row; **every other row's wording remains unpinned**,
+   and that is a standing gap worth its own round.
+2. **The first draft of the queued-ask test could not fail.** It answered question
+   one from an already-armed prompt, so "arms afresh" and "inherits" were
+   indistinguishable — the same defect class the chain keeps producing, caught by
+   the agent's own mutation rather than by a reviewer.
+
+**The two unexplained `VhsTapeContractTest` failures in round 8's intermediate run
+are explained: lane B round 21 was editing that file concurrently.** That is
+standing rule 4 (never edit a file while a run of it is in flight, because it
+shifts `file(__FILE__)` ranges against already-loaded reflection). Not a defect,
+and not unexplained — but it does mean two lanes were allowed to overlap on one
+file's *runs* even though they never overlapped on its *writes*. Serialise the
+suite runs, not just the edits.
+
+Queue item 1 above is now closed. Items 2–5 stand; #88's figure is **6678 / 69306
+/ 1 skipped** at `c075adcf`.
