@@ -70,13 +70,27 @@ use PHPUnit\Framework\TestCase;
  * does not. A model can agree with upstream on all five delimiters and still
  * lose a directive on any of 192 GLUE BYTES — the figure measured over the
  * whole byte domain, `Set Padding <B>Output x.gif` for every B in 1-255 — which
- * is exactly what shipped for twelve rounds. This docblock said "sixty-four"
- * for three of those rounds, which is that same set restricted to B < 0x80 —
- * the SEVEN-BIT slice. The round that retired the figure (`48e0690c`) then
- * called those 64 the printable-ASCII slice, at this site and two others, and
- * they are not: only 35 of the 64 are printable, the other 29 being
- * `\x01`-`\x08` `\x0b` `\x0c` `\x0e`-`\x1f` and `\x7f`. See the byte-class
- * section in {@see tokenize()} and
+ * is exactly what shipped for twelve rounds. The figure this docblock quoted
+ * instead was 64, which is that same set restricted to B < 0x80 — the SEVEN-BIT
+ * slice, and still exactly 64 on a re-run of the same sweep. HOW MANY REVISIONS
+ * carried it is not restated here, because it is not checkable from this repo:
+ * the file was ADDED in `48e0690c` (`git log --diff-filter=A -- <this file>`),
+ * so a `git log -S` over it cannot reach anything earlier, and the rounds before
+ * that one never landed as commits at all. A count of commits is deliberately
+ * not quoted either — it goes stale on the next commit, which is the same trap
+ * as the tally {@see testSetShellIsTheMostQueriedTwoWordHead()} exists to close.
+ *
+ * What IS checkable is the LABEL those 64 were given, and it was wrong at four
+ * sites: `48e0690c` called them the printable-ASCII slice here, in
+ * {@see SINGLE_BYTE_TOKENS}, in {@see gluedHeadProvider()} and in
+ * {@see tokenize()} (`git show 48e0690c:<this file> | grep -n printable`, four
+ * hits plus the one CORRECT use of the term, the 94-printable sweep in
+ * {@see tokenize()}). Only 35 of the 64 are printable; the other 29 are
+ * `\x01`-`\x08` `\x0b` `\x0c` `\x0e`-`\x1f` and `\x7f`. `2bd2263f` fixed three
+ * of the four and asserted in its own text that there were three, which is the
+ * fourth site's whole reason for surviving — the sweep behind that number was a
+ * `grep printable`, which DID list the fourth line and classified it by its
+ * first clause. See the byte-class section in {@see tokenize()} and
  * {@see testAGluedDirectiveHeadIsStillAHead()}.
  *
  * WHICH RENDERER THIS DESCRIBES. Upstream charmbracelet/vhs is a TRANSITIONAL
@@ -105,6 +119,12 @@ final class VhsTapeContractTest extends TestCase
     /**
      * The shells upstream vhs accepts, from its `Set Shell` lookup map.
      * Anything else aborts the render before ttyd is started.
+     *
+     * Pinned by {@see testTheValidShellSetIsUpstreamsOwn()}, and it is the pin
+     * this constant most needed: `sh` is the name every lexer regression in this
+     * file weaponises, and until that test existed ADDING `'sh'` here left the
+     * whole suite green — which would have turned the one sentinel that can be
+     * PROVED to have been seen into a directive this suite approves of.
      */
     private const VALID_SHELLS = [
         'bash', 'zsh', 'fish', 'powershell', 'pwsh', 'cmd', 'nu', 'osh', 'xonsh',
@@ -178,6 +198,19 @@ final class VhsTapeContractTest extends TestCase
      * `Copy`, `Paste`, `Alt` and `Shift` among them. Both are hand-written
      * prose, and a value that ran past a `Source` or an `Env` is exactly the
      * kind of miss this file keeps re-admitting.
+     *
+     * SUBSTITUTION is the hole the count-plus-duplicates-plus-lowercase pins
+     * left open, and it is the direction this docblock itself calls the silent
+     * one. `End` → `Home` and `Screenshot` → `Screenshots` were both GREEN: the
+     * count still says 60, no name repeats, and all seven lowercase names are
+     * still there. So {@see testTheKeywordSetIsUpstreamsWholeMap()} asserts the
+     * whole byte-sorted list as well — the same drift-detector shape as
+     * {@see testTheByteClassesAreUpstreamsOwn()}, and for the same reason. The
+     * copy in that assertion is not a copy of this constant: it was extracted
+     * from upstream with
+     * `awk '/^var Keywords = map/,/^}/' token/token.go | grep -oE '"[^"]+":' |
+     * tr -d '":' | LC_ALL=C sort` and compares set-identical to this list, 60
+     * names against 60.
      *
      * @var list<string>
      */
@@ -992,8 +1025,10 @@ final class VhsTapeContractTest extends TestCase
      * were zero literal tab bytes in this file's test data, only the `\t` inside
      * the implementation string that decides the answer.
      *
-     * Both rows measured on both oracles — upstream's own `lexer.go`/`parser.go`
-     * run directly, and `/tmp/vhsbin/vhs validate`, exit 0 on both:
+     * Both rows measured on all three oracles under THE THREE ORACLES in
+     * {@see directiveValues()} — upstream's own `lexer.go`/`parser.go` run
+     * directly, and `vhs validate` on each of the two v0.11.0 binaries, exit 0
+     * everywhere:
      *
      *   `Output<TAB>.vhs/cli.gif`        OUTPUT `.vhs/cli.gif`, zero errors
      *   `Set Padding 1<TAB>Set Shell "sh"`  SET Padding `1` + SET Shell `sh`
@@ -1061,10 +1096,11 @@ final class VhsTapeContractTest extends TestCase
      * with it. A regex that scanned past the CR swallows the `Set Shell` and
      * this file reports nothing: a lost occurrence, suite green.
      *
-     * Every row measured on both oracles — upstream's own lexer and parser run
-     * directly, and `/tmp/vhsbin/vhs`, whose exit status is quoted per row. The
-     * three CRLF rows are the control: a CRLF tape must keep working, since
-     * anything committed from Windows is one.
+     * Every row measured on all three oracles under THE THREE ORACLES in
+     * {@see directiveValues()} — upstream's own lexer and parser run directly,
+     * and BOTH v0.11.0 binaries, whose exit status is quoted per row and is the
+     * same on each. The three CRLF rows are the control: a CRLF tape must keep
+     * working, since anything committed from Windows is one.
      */
     public function testACarriageReturnBoundsEveryTokenAnLfBounds(): void
     {
@@ -1213,9 +1249,23 @@ final class VhsTapeContractTest extends TestCase
      * units covered is the same shape as a figure quoted without its domain:
      * true of the rows present, silent about the row that is not.
      *
-     * THE TWO QUOTED ROWS are the same defect at the two ends of the suffix,
-     * and both are why {@see skipSpeedSuffix()} tests each token's KIND and not
-     * only its text:
+     * AND THE LIST ITSELF is a conjunct, separately from its three entries.
+     * Deleting the whole `in_array` while keeping `kind === 'ident'` makes the
+     * walk step over ANY bare word after the number, and that survived every one
+     * of this test's other eight rows: each of them puts a quoted STRING in that
+     * position, which the kind gate turns away on its own without the list ever
+     * being consulted. `Type@100 abc` is the row that reaches it — a BARE typed
+     * word after a speed suffix. Upstream is TYPE Options `100s`, Args `abc`,
+     * ZERO errors, both binaries `vhs validate` exit 0; the mutant answers ``.
+     * That is the silent direction on a tape vhs renders, and the realistic
+     * spelling is `Type@100 ./bin/sugarcrush`, where the value that disappears is
+     * a path {@see testTypedPathsResolveFromTheLibRoot()} would have checked.
+     *
+     * THE THREE GATE ROWS run in BOTH directions, which is why
+     * {@see skipSpeedSuffix()} tests each token's KIND and its TEXT and needs
+     * both: the two quoted rows are tokens whose text says suffix and whose kind
+     * says value, the third is a token whose kind says suffix and whose text says
+     * value. Pinning only the kind half left the text half GREEN for a round.
      *
      *   * `Type "@" "abc"` lexes STRING `@` then STRING `abc`, so upstream
      *     types `@ abc` — the `@` is content, not a suffix. A model matching on
@@ -1231,10 +1281,26 @@ final class VhsTapeContractTest extends TestCase
      *     goes unchecked. This conjunct sat three lines below the two the
      *     previous round fixed, in the same method, in the round that declared
      *     the class closed.
+     *   * `Set Padding -` is the TEXT twin of the first of those two, and the
+     *     half that stayed unpinned when they went in. A `-` is a single-byte
+     *     token exactly as `@` is, so `kind === 'single'` admits it and only
+     *     `text === '@'` turns it away. Upstream reads SET Padding `-` with ZERO
+     *     errors — `parseSet`'s `default:` arm again, `parser.go:527-528` — and
+     *     all three oracles validate the tape clean, so dropping the text half
+     *     answers `` on a tape vhs renders: a value lost silently, the direction
+     *     that cannot announce itself. `Set Padding =` is the same measurement on
+     *     a second of the nine single-byte tokens (upstream `=`, mutant ``), and
+     *     `-` is the spelling {@see SINGLE_BYTE_TOKENS} already cites, which is
+     *     why it is the row.
      *
-     * Every row measured on upstream's own `lexer.go`/`parser.go`, copied
-     * byte-for-byte out of the module cache and run directly: zero parser errors
-     * on all seven.
+     * ALL NINE rows measured on all three oracles under THE THREE ORACLES in
+     * {@see directiveValues()}: zero parser errors on every one, and each row's
+     * upstream command list is quoted beside its assertion. NINE IS THE COUNT OF
+     * `scratchTape()` CALLS IN THE BODY BELOW — that is the domain, it is what
+     * `grep -c 'scratchTape('` over the method answers, and it moves every time a
+     * row is added. A revision of this file has already shipped "all three units"
+     * over a body that rowed two, so the number and the body are checked together
+     * or the number is not written.
      */
     public function testASpeedSuffixBelongsToTheHeadNotTheValue(): void
     {
@@ -1280,6 +1346,19 @@ final class VhsTapeContractTest extends TestCase
             . 'itself a keyword and so terminates the value it starts',
         );
 
+        $bareWordValue = $this->scratchTape("Type@100 abc\n");
+
+        self::assertSame(
+            ['abc'],
+            self::directiveValues($bareWordValue, 'Type'),
+            'the UNIT LIST is its own conjunct: without it any bare word after the number is '
+            . 'read as a unit and stepped over. Every other row here puts a quoted STRING in '
+            . 'that position, which the kind gate rejects on its own, so this was the only shape '
+            . 'that reached it. Upstream: Options `100s`, Args `abc`, zero errors, both binaries '
+            . 'validate clean — and the mutant answers ``, which as `Type@100 ./bin/x` is a '
+            . 'typed path that vanishes before any assertion sees it',
+        );
+
         $quotedAt = $this->scratchTape("Type \"@\" \"abc\"\n");
 
         self::assertSame(
@@ -1302,6 +1381,17 @@ final class VhsTapeContractTest extends TestCase
             . 'for testTypedPathsResolveFromTheLibRoot() to check',
         );
 
+        $notAnAt = $this->scratchTape('Set Padding -');
+
+        self::assertSame(
+            ['-'],
+            self::directiveValues($notAnAt, 'Set Padding'),
+            'a `-` is a single-byte token like `@`, so only the SUFFIX GATE\'S TEXT half turns '
+            . 'it away. Upstream reads SET Padding `-`, zero errors, all three oracles clean; a '
+            . 'gate on the kind alone steps over it and answers `` — a value dropped silently '
+            . 'on a tape vhs renders, which is the twin of the quoted rows above',
+        );
+
         $modifier = $this->scratchTape("Type abc Ctrl+O\n");
 
         self::assertSame(
@@ -1312,6 +1402,112 @@ final class VhsTapeContractTest extends TestCase
         );
     }
 
+    /**
+     * The THREE BOUNDS in {@see skipSpeedSuffix()}: the walk may not read past
+     * the last token of the stream. ALL THREE on tapes upstream ACCEPTS.
+     *
+     * These are the only guards in this model whose mutant changes NO ANSWER.
+     * Dropping one makes PHP read `$tokens[$count]`, which yields null, and the
+     * comparison that follows then fails exactly as the in-range comparison it
+     * replaced would have — so the value that comes back is byte-identical and
+     * the only observable is the diagnostic pair `Undefined array key <n>` plus
+     * `Trying to access array offset on null`, two per query, measured on each row
+     * below. A test for a bounds guard is therefore a test for a DIAGNOSTIC, which
+     * is why every row goes through {@see valuesWithNoPhpDiagnostic()} rather than
+     * relying on `failOnWarning="true"`: see that method for what the difference
+     * buys.
+     *
+     * WHAT PUTS THE WALK AT THE END OF THE STREAM is a head whose suffix position
+     * runs into EOF, and the reachable spelling is DIFFERENT FOR EACH GUARD, which
+     * is why there are three tapes and not one head with three tails. The obvious
+     * head is the wrong one at two of the three: `Type@` is two errors upstream
+     * (`Expected time after @`, `@ expects string`) and `Type@100` is one
+     * (`100 expects string`), because `parseType` demands a STRING after the
+     * speed. So `Type` cannot supply an ACCEPTED tape for guards 2 and 3 at all,
+     * and an earlier draft of this test used it for both and then claimed only the
+     * first guard was reachable on an accepted tape. All three are. Each row
+     * therefore names the head that reaches its guard with ZERO parser errors, on
+     * all three oracles under THE THREE ORACLES in {@see directiveValues()}:
+     *
+     *   `$i >= $count`                 `Output a.gif` NL `Hide` NL, query `Hide`
+     *     upstream OUTPUT `.gif`/`a.gif` then HIDE with EMPTY Options AND Args.
+     *     `parseHide` builds a Command and nothing else (`parser.go:548-551`), so
+     *     this row's `['']` is upstream's answer EXACTLY — the only one of the
+     *     three where the model and upstream agree on the value as well as on the
+     *     occurrence.
+     *   `$i < $count` before the NUMBER   `Set Padding @`, query `Set Padding`
+     *     upstream SET Padding `@`, via `parseSet`'s ungated `default:` arm
+     *     (`parser.go:527-528`). The value divergence is class 3 in
+     *     {@see directiveValues()} and is already pinned by
+     *     {@see testTheSetPlusAtDivergenceLosesTheValueNotTheHead()}; what is new
+     *     here is that the `@` is the LAST token, which is what walks off the end.
+     *   `$i < $count` before the UNIT    `Output a.gif` NL `Enter@100`, query `Enter`
+     *     upstream ENTER Options `100s`, Args `1`. A KEYPRESS head is what makes
+     *     this one accepted — `parseKeypress` takes a speed and then
+     *     `parseRepeat`, which returns `1` rather than erroring when no NUMBER
+     *     follows (`parser.go:253-261`, `parser.go:406-411`). That synthesized
+     *     count is divergence class 6, and it is unavoidable here: every head that
+     *     accepts `@<number>` at EOF supplies a default of its own (`Wait@1` is
+     *     Args `Line`, measured), so no accepted tape reaches this guard without
+     *     one.
+     *
+     * Being reachable on accepted tapes is what separates these three from the
+     * existence guard pinned in
+     * {@see testATwoWordHeadNeedsBothWordsAndBothAsIdents()}, which cannot be:
+     * its trigger is a trailing bare `Set`, and `parseSet` answers
+     * `Unknown setting: \0` for that in every spelling.
+     */
+    public function testTheSpeedSuffixWalkStopsAtTheEndOfTheStream(): void
+    {
+        $headAtEof = $this->scratchTape("Output a.gif\nHide\n");
+
+        self::assertSame(
+            [''],
+            self::valuesWithNoPhpDiagnostic($headAtEof, 'Hide'),
+            'the ENTRY guard `$i >= $count`. `Hide` is the last token, so the suffix walk starts '
+            . 'one past the end of the stream; without the guard this model reads $tokens[$count] '
+            . 'and raises two PHP diagnostics while answering the same `` it answers now. '
+            . 'Upstream: HIDE with empty Options and Args, ZERO errors, `vhs validate` exit 0 on '
+            . 'both binaries — so this fires on a tape that renders, and the model agrees with '
+            . 'upstream on the value too',
+        );
+        self::assertSame(
+            ['a.gif'],
+            self::valuesWithNoPhpDiagnostic($headAtEof, 'Output'),
+            'same tape, and the control that it is an ordinary tape rather than a probe: the '
+            . '`Output` this suite really does read is still found, with its real value',
+        );
+
+        $atAtEof = $this->scratchTape('Set Padding @');
+
+        self::assertSame(
+            [''],
+            self::valuesWithNoPhpDiagnostic($atAtEof, 'Set Padding'),
+            'the guard before the NUMBER test. The `@` is the last token, so the walk steps onto '
+            . 'the end of the stream looking for a time. Upstream ACCEPTS this tape — zero '
+            . 'errors, SET Padding `@` via parseSet\'s ungated default arm — so the diagnostic '
+            . 'this guard prevents is one a rendering tape can raise. `Type@` cannot stand in '
+            . 'here: upstream rejects it with two errors',
+        );
+
+        $unitPositionAtEof = $this->scratchTape("Output a.gif\nEnter@100");
+
+        self::assertSame(
+            [''],
+            self::valuesWithNoPhpDiagnostic($unitPositionAtEof, 'Enter'),
+            'and the guard before the UNIT test, one token further: `100` is the last token, so '
+            . 'the walk steps past it looking for `ms`/`s`/`m`. A KEYPRESS head is what makes '
+            . 'this accepted — upstream is ENTER Options `100s`, Args `1`, zero errors, both '
+            . 'binaries validate clean. The `1` is upstream\'s own synthesized repeat count '
+            . '(divergence class 6), not something this tape wrote',
+        );
+        self::assertSame(
+            ['a.gif'],
+            self::valuesWithNoPhpDiagnostic($unitPositionAtEof, 'Output'),
+            'same tape, same control: the suffixed keypress at EOF costs no occurrence of the '
+            . 'directive this suite actually reads',
+        );
+    }
     /**
      * The one divergence {@see skipSpeedSuffix()} costs, pinned in BOTH
      * directions: the value goes empty, and the directive behind it stays live.
@@ -1324,8 +1520,9 @@ final class VhsTapeContractTest extends TestCase
      * `cmd.Args = p.peek.Literal` with no type gate (`parser.go:527-528`), so an
      * `@` after a setting name is simply taken as the value.
      *
-     * Measured on both oracles — upstream's own `lexer.go`/`parser.go` run
-     * directly, and `/tmp/vhsbin/vhs validate`:
+     * Measured on all three oracles under THE THREE ORACLES in
+     * {@see directiveValues()} — upstream's own `lexer.go`/`parser.go` run
+     * directly, and `vhs validate` on both v0.11.0 binaries:
      *
      *   `Set Padding @Output x.gif`   ZERO errors, validate exit 0.
      *                                 upstream SET Padding `@` + OUTPUT `x.gif`
@@ -1425,10 +1622,12 @@ final class VhsTapeContractTest extends TestCase
      * about the KIND and not about the text: with the quotes removed, `Enter`
      * IS an `ident`, so it really does end the value AND open a directive of its
      * own — upstream emits TYPE `abc`, ENTER, TYPE `def`. All three tapes
-     * measured on both oracles: upstream's own `lexer.go`/`parser.go` run
-     * directly (zero errors, no panic on each), and `/tmp/vhsbin/vhs validate`,
-     * exit 0 on each. A tape upstream rejects could not be a false green, so
-     * all three had to clear that bar before their expectations meant anything.
+     * measured on all three oracles under THE THREE ORACLES in
+     * {@see directiveValues()}: upstream's own `lexer.go`/`parser.go` run
+     * directly (zero errors, no panic on each), and `vhs validate` on both
+     * v0.11.0 binaries, exit 0 on each. A tape upstream rejects could not be a
+     * false green, so all three had to clear that bar before their expectations
+     * meant anything.
      */
     public function testAQuotedKeywordIsNeverADirectiveHead(): void
     {
@@ -1476,9 +1675,14 @@ final class VhsTapeContractTest extends TestCase
      * {@see directiveValues()} takes a head like `Set Shell` as a run of tokens,
      * and both guards on that run went unpinned while the head's FIRST word had
      * a test of its own ({@see testAQuotedKeywordIsNeverADirectiveHead()}).
-     * `Set Shell` is the most-queried directive in this file — 16 of its 28
-     * two-word `directiveValues()` calls, against `Set Theme`'s 4 — so the run
-     * is worth a test even where the mutant is loud.
+     * `Set Shell` is the most-queried two-word head in this file by a wide
+     * margin, which is why the run is worth a test even where the mutant is
+     * loud. The margin is not quoted here on purpose:
+     * {@see testSetShellIsTheMostQueriedTwoWordHead()} ASSERTS it instead,
+     * after this sentence shipped a tally of `16 of 28` against `Set Theme`'s
+     * `4` that was measured on the PARENT commit and then written into the
+     * commit that changed it — the round adding rows to this very test moved
+     * all three of those numbers.
      *
      * THE KIND GUARD. `Set "Shell" "sh"` and `Set /Shell/ "sh"` lex a STRING and
      * a REGEX where the setting name belongs, and upstream's `parseSet` gates on
@@ -1500,10 +1704,22 @@ final class VhsTapeContractTest extends TestCase
      * it this model reads `$tokens[$count]`, and a suite that raises
      * `Undefined array key` inside its own model is one whose next reader
      * silences the warning rather than restoring the bound. `phpunit.xml` sets
-     * `failOnWarning="true"`, which is what turns that into a red.
+     * `failOnWarning="true"`, so that IS a non-zero exit — but the summary line
+     * PHPUnit prints for it is `OK, but there were issues!`, which a human
+     * scanning for the word FAILURES reads as a pass. This row therefore goes
+     * through {@see valuesWithNoPhpDiagnostic()}, which promotes the diagnostic
+     * to a thrown `\ErrorException` and so puts the guard's name in the ERRORS
+     * block instead. {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()}
+     * pins three more guards of exactly this class, all three on tapes upstream
+     * ACCEPTS; THIS one cannot be, and that is a property of `parseSet` rather
+     * than of the test — a trailing bare `Set` is `Unknown setting: \0` in every
+     * spelling.
      *
-     * Both rows measured on upstream's own `lexer.go`/`parser.go`, copied
-     * byte-for-byte out of the module cache and run directly.
+     * ALL FOUR rows measured on all three oracles listed under THE THREE
+     * ORACLES in {@see directiveValues()}: one `Unknown setting: Shell` error
+     * each for the two quoted-name rows, one `Unknown setting: \0` for the
+     * bare-`Set` row, and zero errors with SET Options `Shell` / Args `sh` for
+     * the control.
      */
     public function testATwoWordHeadNeedsBothWordsAndBothAsIdents(): void
     {
@@ -1531,7 +1747,7 @@ final class VhsTapeContractTest extends TestCase
 
         self::assertSame(
             ['A'],
-            self::directiveValues($truncated, 'Set Theme'),
+            self::valuesWithNoPhpDiagnostic($truncated, 'Set Theme'),
             'the last token is a bare `Set`, so the head\'s second word is past the end of the '
             . 'stream. The earlier occurrence is still reported and nothing is read out of '
             . 'bounds — the bare `Set` is upstream\'s `Unknown setting: \\0`, not a `Set Theme`',
@@ -1811,7 +2027,14 @@ final class VhsTapeContractTest extends TestCase
      * these to work, which is the order {@see tokenize()} takes them in.
      *
      * The `\x80` row is here because every row above it is a printable ASCII
-     * byte, and for three rounds so was the whole recorded glue set — 128 of the
+     * byte — that much is true of the ROWS — while the recorded glue set they
+     * stood in for was the SEVEN-BIT one, which is a different thing and is what
+     * this sentence used to call printable as well. Of its 64 bytes only 35 are
+     * printable; the other 29 are the control bytes `\x01`-`\x08` `\x0b` `\x0c`
+     * `\x0e`-`\x1f` `\x7f`, so a reader who took the label at its word would hunt
+     * the defect among the punctuation and never reach `\x1b`. (This is the
+     * fourth of the four sites the class docblock records; `2bd2263f` fixed three
+     * and said there were three.) Beyond the seven-bit slice, 128 of the
      * 192 glue bytes are `\x80`-`\xff`, each an ILLEGAL one-byte token
      * lexically identical to the `}` two rows up. Measured the same way as the
      * rest (upstream's own parser, zero errors, `vhs validate` exit 0), and note
@@ -2184,6 +2407,162 @@ final class VhsTapeContractTest extends TestCase
                 . 'produce it, which is how all seven went missing',
             );
         }
+
+        // SUBSTITUTION is what the three assertions above cannot see: `End` for
+        // `Home` and `Screenshot` for `Screenshots` both keep the count at 60,
+        // add no duplicate and touch none of the seven lowercase names, so both
+        // were GREEN. Adding a spurious keyword is the direction this constant's
+        // own docblock calls the silent one — a name upstream does not treat as a
+        // keyword cuts a value short and hides a defect — and `Home` is the exact
+        // name that docblock warns about, because `token.IsCommand()` answers
+        // true for it while `token.Keywords` has no such key.
+        //
+        // The expectation is not a copy of the constant. It is upstream's map,
+        // extracted with `awk '/^var Keywords = map/,/^}/' token/token.go |
+        // grep -oE '"[^"]+":' | tr -d '":' | LC_ALL=C sort` and compared
+        // set-identical against the constant, 60 names against 60.
+        $sorted = self::KEYWORDS;
+        sort($sorted);
+
+        self::assertSame(
+            [
+                'Alt', 'Backspace', 'BorderRadius', 'Copy', 'Ctrl', 'CursorBlink',
+                'Delete', 'Down', 'End', 'Enter', 'Env', 'Escape', 'FontFamily',
+                'FontSize', 'Framerate', 'Height', 'Hide', 'Insert', 'Left',
+                'LetterSpacing', 'LineHeight', 'LoopOffset', 'Margin',
+                'MarginFill', 'Output', 'Padding', 'PageDown', 'PageUp', 'Paste',
+                'PlaybackSpeed', 'Require', 'Right', 'Screenshot', 'ScrollDown',
+                'ScrollUp', 'Set', 'Shell', 'Shift', 'Show', 'Sleep', 'Source',
+                'Space', 'Tab', 'Theme', 'Type', 'TypingSpeed', 'Up', 'Wait',
+                'WaitPattern', 'WaitTimeout', 'Width', 'WindowBar',
+                'WindowBarSize', 'em', 'false', 'm', 'ms', 'px', 's', 'true',
+            ],
+            $sorted,
+            'the whole of upstream `token.Keywords` at v0.11.0, byte-sorted. A name SWAPPED '
+            . 'rather than added or dropped keeps the count, the no-duplicates check and the '
+            . 'seven lowercase names all green, so this is the only assertion here that can see '
+            . 'it. If this changed, it changed because the vhs version changed — re-extract the '
+            . 'map from `token/token.go`, do not edit this list to match the constant',
+        );
+    }
+
+    /**
+     * The nine shell names upstream accepts, transcribed from its own source.
+     *
+     * {@see VALID_SHELLS} was the one constant in this file with a live false-green
+     * consequence and no drift pin: adding `'sh'` to it left the whole suite GREEN,
+     * and `Set Shell "sh"` is both the abort the class docblock opens with and the
+     * sentinel the lexer regressions throughout this file are built on. A tape
+     * carrying it would then pass {@see testShellIsOneUpstreamVhsAccepts()} and take
+     * the render job down.
+     *
+     * MEASURED against upstream v0.11.0's `shell.go`: nine `const` names at
+     * `shell.go:5-13` and nine keys in `var Shells = map[string]Shell`
+     * (`shell.go:23`), the same nine names. The ORDER pinned below is the MAP's,
+     * not the const block's — the block is sorted by Go identifier, so `cmdexe`
+     * and `nushell` sit in different places there than `cmd` and `nu` do here.
+     *
+     * `sh` is in neither, and the failure it causes is a RENDER failure and NOT a
+     * validation one: on both binaries under THE THREE ORACLES in
+     * {@see directiveValues()}, `vhs validate` on a tape carrying `Set Shell "sh"`
+     * exits 0, while rendering the same tape answers `failed to execute command:
+     * invalid shell sh`, exit 1, no GIF. That split is why the name must be pinned
+     * in this file: the only cheap oracle anyone reaches for says nothing about it.
+     */
+    public function testTheValidShellSetIsUpstreamsOwn(): void
+    {
+        self::assertSame(
+            ['bash', 'zsh', 'fish', 'powershell', 'pwsh', 'cmd', 'nu', 'osh', 'xonsh'],
+            self::VALID_SHELLS,
+            'the nine keys of `var Shells` (`shell.go:23`), in the order that map declares '
+            . 'them — which is NOT the order of the `const` block at `shell.go:5-13`, since '
+            . 'that one is sorted by Go identifier. A name ADDED here is the false green: the '
+            . 'tape passes this suite and the render aborts',
+        );
+
+        self::assertNotContains(
+            'sh',
+            self::VALID_SHELLS,
+            '`sh` above all, because it is the sentinel every lexer regression in this file '
+            . 'uses. Upstream has no `sh` key, `vhs validate` exits 0 on it anyway, and the '
+            . 'render dies with `invalid shell sh` — so this suite is the only thing that can '
+            . 'catch it before CI does',
+        );
+    }
+
+    /**
+     * `Set Shell` really is the most-queried two-word head in this file, and the
+     * figure is ASSERTED here rather than narrated anywhere.
+     *
+     * This test exists because the sentence that used to carry the figure —
+     * in {@see testATwoWordHeadNeedsBothWordsAndBothAsIdents()} — quoted a tally
+     * measured on the PARENT commit and shipped inside the commit that changed it:
+     * that round's own new rows moved all three of its numbers. A narrated count
+     * of this file's own call sites cannot survive an edit to this file, so it is
+     * a count no comment should hold.
+     *
+     * DOMAIN, and it is narrow on purpose: the LITERAL two-word head arguments at
+     * this file's model call sites, both entry points. Reproduced by
+     *
+     *   grep -oE "self::(directiveValues|valuesWithNoPhpDiagnostic)[(][^,]+, '[A-Za-z]+ [A-Za-z]+'[)]" \
+     *     tests/VhsTapeContractTest.php | grep -oE "'[A-Za-z]+ [A-Za-z]+'" | sort | uniq -c | sort -rn
+     *
+     * which is the same expression the body below uses, so the two cannot
+     * disagree. BOTH entry points are in the domain because they are the same
+     * query: routing one existing row through {@see valuesWithNoPhpDiagnostic()}
+     * moved this tally, and so did every row added while writing the round that
+     * introduced this test — twice, in two different keys. That is exactly the
+     * domain-sensitivity this test exists to make loud instead of silent, and it
+     * is why the tally lives in an assertion and not in prose. The
+     * domain does NOT include heads a provider passes as data (the `$directive`
+     * parameter of {@see testTheJsonTokenIsModelledIncludingItsAsymmetry()} and
+     * {@see testAGluedDirectiveHeadIsStillAHead()}), so the number of two-word
+     * queries this suite actually runs is HIGHER than the tally below. What is
+     * pinned is the RANKING, which is all the retired sentence used its figure for.
+     */
+    public function testSetShellIsTheMostQueriedTwoWordHead(): void
+    {
+        $source = file_get_contents(__FILE__);
+        self::assertIsString($source, 'could not read this file');
+
+        preg_match_all(
+            '/self::(?:directiveValues|valuesWithNoPhpDiagnostic)\([^,]+, \'([A-Za-z]+ [A-Za-z]+)\'\)/',
+            $source,
+            $m,
+        );
+
+        $tally = array_count_values($m[1]);
+        ksort($tally);
+
+        self::assertSame(
+            [
+                'Set FontSize' => 1,
+                'Set Height' => 2,
+                'Set Padding' => 4,
+                'Set Shell' => 19,
+                'Set Theme' => 5,
+                'Set WaitPattern' => 2,
+                'Set Width' => 1,
+            ],
+            $tally,
+            'the literal two-word heads at this file\'s model call sites, both entry points '
+            . '(`directiveValues()` and `valuesWithNoPhpDiagnostic()`). This assertion is '
+            . 'MEANT to fail when a call is added or removed — that is the whole point, because '
+            . 'the figure it replaces was written into a commit that changed it. Update the '
+            . 'numbers here and nowhere else: no comment in this file quotes them',
+        );
+
+        $others = $tally;
+        unset($others['Set Shell']);
+
+        self::assertGreaterThan(
+            max($others),
+            $tally['Set Shell'],
+            'and the CLAIM rather than the tally: `Set Shell` is queried more often than any '
+            . 'other two-word head, which is why its head-matching run is worth a test of its '
+            . 'own even where the mutant is loud. This half stays true across edits that move '
+            . 'the numbers above',
+        );
     }
 
     /**
@@ -2244,9 +2623,14 @@ final class VhsTapeContractTest extends TestCase
      * another token with no space, so it is a token start only if the byte
      * classes end the previous run in the right place.
      *
-     * Every row measured twice: upstream's `lexer.go` run directly (recovered
-     * panic) and `/tmp/vhsbin/vhs validate`, whose exit status and byte offsets
-     * are quoted per row.
+     * Every row measured on all three oracles under THE THREE ORACLES in
+     * {@see directiveValues()}: upstream's `lexer.go` run directly (recovered
+     * panic) and `vhs validate` on both v0.11.0 binaries, whose exit status and
+     * byte offsets are quoted per row, identical on both binaries. The offset is
+     * worth quoting because it is `len(input) + 1` and nothing else — 17-byte tape,
+     * `[:18] with length 17` — so it pins the exact byte length of the tape in the
+     * comment, and a row whose source string drifted by one byte stops matching
+     * its own citation.
      */
     public function testTheRegexPanicDetectorMatchesTheMeasuredShapes(): void
     {
@@ -2289,9 +2673,10 @@ final class VhsTapeContractTest extends TestCase
             'glued number, no backslash' => 'Set Padding 50/a',
             // The row that makes `$end === $length` load-bearing: the regex is
             // closed by a NEWLINE, so it never runs off the end, and the
-            // backslash at EOF is an ordinary `\` token four tokens later.
-            // Measured — upstream lexes SET/WAIT_PATTERN/REGEX/TYPE/STRING/`\`
-            // and does not panic; it reports ONE parser error on the trailing
+            // backslash at EOF is an ordinary `\` token THREE tokens after the
+            // REGEX. Measured — the stream is SET/WAIT_PATTERN/REGEX/TYPE/
+            // STRING/`\`, six tokens, and upstream does not panic; it reports
+            // ONE parser error on the trailing
             // `\`, as the other rows here do, which is a rejected tape and not a
             // dead binary. A detector that dropped the `$end === $length`
             // conjunct calls this a panic and fails
@@ -2304,6 +2689,44 @@ final class VhsTapeContractTest extends TestCase
                 self::panicsUpstreamsLexer($this->scratchTape($source)),
                 "{$why}: measured as NOT a panic — reporting one would fail a tape vhs renders",
             );
+        }
+    }
+
+    /**
+     * {@see directiveValues()} with PHP's own diagnostics promoted to a THROWN
+     * error rather than left as warnings.
+     *
+     * Every bounds guard in this model is invisible in the ANSWER — see
+     * {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()} for why — so the
+     * only thing a test can assert about one is that PHP said nothing. That is
+     * already a non-zero exit, because `phpunit.xml` sets `failOnWarning="true"`,
+     * and it was verified to be one. The problem is what a reader SEES: PHPUnit
+     * prints `OK, but there were issues!` and lists the warning in a block most
+     * eyes skip, so a bounds guard killed only that way reads as a passing test
+     * with a lint nit attached — and these four guards are exactly the lines a
+     * reader then tidies up, because each looks redundant against the loop header
+     * two lines above it.
+     *
+     * Promoting the diagnostic to an `\ErrorException` puts the row in the ERRORS
+     * block with the guard's own message on it, which is a thing that gets acted
+     * on. It also makes the kill independent of `phpunit.xml`, which is not this
+     * file's to guarantee.
+     *
+     * The handler is installed for the duration of ONE query and restored in a
+     * `finally`, so nothing else in the suite runs under it.
+     *
+     * @return list<string>
+     */
+    private static function valuesWithNoPhpDiagnostic(string $tape, string $directive): array
+    {
+        set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+            throw new \ErrorException($message, 0, $severity, $file, $line);
+        });
+
+        try {
+            return self::directiveValues($tape, $directive);
+        } finally {
+            restore_error_handler();
         }
     }
 
@@ -2440,7 +2863,10 @@ final class VhsTapeContractTest extends TestCase
      * differential reports FIVE, and the sentence was written while three of
      * them were already in it — which is the same failure mode as the glue-byte
      * figure in {@see tokenize()}: a completeness claim whose domain was never
-     * stated. The list is therefore kept as a list of MEASUREMENTS:
+     * stated. So no TOTAL is claimed for the list either: it is a list of
+     * MEASUREMENTS, each carrying what measured it, and a sixth entry was added
+     * to it from a probe the differential's corpus cannot produce (that corpus
+     * queries `Set Padding` and `Output` and no keypress head at all).
      *
      *   1. `Set` whose value is a KEYWORD — empty here, the token upstream.
      *      `Set CursorBlink false` is `false` upstream (clean parse), `` here.
@@ -2481,8 +2907,20 @@ final class VhsTapeContractTest extends TestCase
      *      is Args `bar` upstream and `FOO bar` here. This one is the ordinary
      *      over-approximation direction, listed with the rest because the same
      *      two-token shape is what makes `Set X` a two-word head here.
+     *   6. A KEYPRESS head's synthesized REPEAT COUNT. `parseRepeat` returns the
+     *      string `1` when the token after the head is not a NUMBER
+     *      (`parser.go:253-261`), and `parseKeypress` puts it in Args
+     *      (`parser.go:406-411`), so upstream reports a count the tape never
+     *      wrote. Same shape as class 4 at a third site. MEASURED: `Output a.gif`
+     *      + newline + `Enter` parses with zero errors on all three oracles and is
+     *      ENTER Args `1` upstream against `` here. DOMAIN: a probe, not the
+     *      corpus differential — its generator emits no keypress head, which is
+     *      why the class went unlisted while the differential reported five.
+     *      Inert today (nothing here queries a keypress head) and the reason
+     *      {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()} pins its guard
+     *      on `Hide`, whose `parseHide` synthesizes nothing at all.
      *
-     * All five stay in the loud direction — an empty or over-long value fails
+     * All six stay in the loud direction — an empty or over-long value fails
      * every assertion in this file rather than hiding one — but they are
      * divergences and pretending otherwise is how this paragraph got falsified
      * three times.
@@ -2492,6 +2930,33 @@ final class VhsTapeContractTest extends TestCase
      * and under-approximates, because it can hide a `#`, and hiding a `#`
      * hides every directive behind it. See {@see tokenize()}.
      *
+     * THE THREE ORACLES, named by VERSION and not only by path. Every binary
+     * citation in this file was re-derived on all three, and all three agree on
+     * every tape cited, byte for byte including the three panic offsets:
+     *
+     *   * THE GO, and the authority. `$(go env GOMODCACHE)/github.com/
+     *     charmbracelet/vhs@v0.11.0` — see the procedure below.
+     *   * `vhs version v0.11.0 (c6af91a)`, 23,171,234 bytes, found at
+     *     `/usr/local/bin/vhs`.
+     *   * `vhs version v0.11.0`, 30,797,703 bytes, found at `/tmp/vhsbin/vhs`.
+     *     A DIFFERENT BUILD of the same tag — different size, and its version
+     *     string carries no commit — which is why the two are worth running
+     *     separately rather than treating either path as "the binary".
+     *
+     * Where a claim anywhere in this file says "both binaries" it means those two;
+     * where it says "all three oracles" it means those two and the Go.
+     *
+     * WHY BY VERSION. Five citations used to name `/tmp/vhsbin/vhs validate` and
+     * nothing else, and the round after them wrote "there is no vhs binary on this
+     * machine" into its commit message and hedged every binary claim to the Go
+     * alone. Both halves of that are explained by the mtimes: `/tmp/vhsbin/vhs` is
+     * `2026-08-17 08:33`, four hours and fifty-nine minutes BEFORE `2bd2263f`
+     * (`2026-08-17 13:32`, `git log -1 --format=%cI`), and it is not on `PATH`;
+     * `/usr/local/bin/vhs` is `13:36`, three minutes AFTER it. So a `command -v
+     * vhs` at that moment answered nothing while a usable binary the file already
+     * cited by absolute path sat on disk. A version string survives that; a path
+     * in `/tmp` does not.
+     *
      * HOW TO RE-CHECK ALL OF THIS, since a comment nobody measured is itself a
      * defect and this file has shipped three of those. The strongest available
      * oracle is not `vhs validate` (which exits 0 on every false green this
@@ -2500,9 +2965,14 @@ final class VhsTapeContractTest extends TestCase
      *
      *   1. `go env GOMODCACHE`/github.com/charmbracelet/vhs@v0.11.0 holds the
      *      real source. Copy `lexer/lexer.go`, `token/token.go` and
-     *      `parser/parser.go` into a scratch module, rewriting ONLY the three
-     *      `github.com/charmbracelet/vhs/...` import lines (`diff` against the
-     *      originals to prove nothing else moved).
+     *      `parser/parser.go` into a scratch module and do NOT touch their
+     *      imports: name the scratch module `github.com/charmbracelet/vhs` in
+     *      its own `go.mod` and all three `github.com/charmbracelet/vhs/...`
+     *      import lines resolve unchanged, so `diff` against the originals is
+     *      empty on all three files rather than three lines short of it. (An
+     *      earlier revision of this step rewrote the imports and diffed to prove
+     *      nothing ELSE moved, which works and leaves three edits to argue
+     *      about; renaming the module leaves none.)
      *   2. Add a `main` that prints, for a tape: the token stream
      *      (`Type` + `Literal` per token), `parser.Parse()`'s command list
      *      (`Type`/`Options`/`Args`) and `p.Errors()`. Wrap both in a
@@ -2809,8 +3279,11 @@ final class VhsTapeContractTest extends TestCase
      * whole set. The 128 bytes `\x80`-`\xff` were omitted although each is an
      * ILLEGAL one-byte token, lexically identical to the `}` the paragraph did
      * list: `Set Padding \x80Output x.gif` parses with zero errors and a live
-     * second OUTPUT (re-measured on the Go here; an earlier round also had a
-     * `vhs` binary to hand and got `validate` exit 0 from it).
+     * second OUTPUT, on all three oracles under THE THREE ORACLES in
+     * {@see directiveValues()} — `validate` exit 0 on both binaries. An earlier
+     * revision hedged this to the Go alone because the round writing it believed
+     * there was no vhs binary on the machine; there were two, and every claim
+     * that round hedged has since been re-derived on both.
      *
      * Those 64 are the SEVEN-BIT slice and not the printable one, which is what
      * `48e0690c` called them here and at two other sites. Of the 64, 35 are
@@ -2824,8 +3297,12 @@ final class VhsTapeContractTest extends TestCase
      * `Set Padding }Set Shell "sh"` is the shortest spelling: upstream reads
      * `SET Padding }` then `SET Shell sh` and the render aborts, while a
      * break-set model read one token `}Set` and reported OK.
-     * {@see testAGluedDirectiveHeadIsStillAHead()} pins ten of them end to end,
-     * one from the high half.
+     * {@see testAGluedDirectiveHeadIsStillAHead()} has TEN ROWS covering SEVEN
+     * DISTINCT glue bytes — `}` `0` `-` `%` `_` `[` and `\x80`, one of the seven
+     * from the high half — and the tenth row glues nothing at all, being the
+     * SPACED control. Rows and bytes are not the same count and the sentence
+     * that said "pins ten of them" conflated them: `}` carries three rows and
+     * `%` two.
      *
      * WHAT THIS MODEL SCORES over that same domain — the 198 of the 255 that
      * parse with zero errors, comparing this method's `Set Padding` and
@@ -2906,10 +3383,36 @@ final class VhsTapeContractTest extends TestCase
      * looping on one position forever. Three such infinite loops turned up the
      * last time this file was mutation-swept. Here the fall-through is a
      * one-byte ILLEGAL token and both reader arms consume their entry byte
-     * unconditionally, so no arm can produce a zero-width token and the failure
-     * mode does not exist. Re-measured: disabling the `{`, quote, comment,
-     * whitespace or identifier arm now fails tests in seconds instead of
-     * hanging.
+     * unconditionally, so DELETING AN ARM cannot produce a zero-width token:
+     * re-measured, disabling the `{`, quote, comment, whitespace or identifier
+     * arm fails tests in seconds instead of hanging.
+     *
+     * THAT IS THE WHOLE OF THE CLAIM, and a previous revision of this paragraph
+     * generalised it to "no arm can produce a zero-width token and the failure
+     * mode does not exist". IT CAN, AND IT DOES — the scope of the measurement
+     * was arm DELETION, and a single-conjunct mutation is a different domain.
+     * Dropping `$close !== false` from the string arm's `$terminated` below
+     * leaves `false < $lineEnd`, which PHP 8 evaluates by casting the int to
+     * bool: `false < true` is TRUE. So an UNTERMINATED string reports itself
+     * terminated, `$end` becomes `false` i.e. 0, `$i` is set to 1 and the walk
+     * goes BACKWARDS. Measured on `Type "echo abc` — a shape this suite already
+     * contains, from {@see directiveValues()}'s own notes — it never terminates.
+     *
+     * So: run any mutation sweep of this method under a hard `timeout`, and do
+     * NOT read a timeout as a harness bug. That inference is the reason this
+     * warning is here rather than left to be rediscovered: a sweeper who trusts
+     * the retired sentence concludes the harness hung, kills it and re-runs
+     * without the mutation.
+     *
+     * THE EQUIVALENT-MUTANT REGISTER, so a sweep can tell a known no-op from a
+     * finding. Five conjuncts in this file are unkillable, each for a reason
+     * written down beside it: the panic condition's `!$terminated` and
+     * `$length > 0` (both in this method, both argued at the condition itself),
+     * {@see scanRegex()}'s newline branch returning `false` rather than `true`,
+     * and the strict flag on each of the two `in_array` calls
+     * ({@see startsDirective()}, {@see skipSpeedSuffix()}). Anything else that
+     * survives is a gap, and the last three sweeps each found one after a round
+     * had declared the method closed.
      *
      * $regexPanic is set when the walk finds the one input shape that crashes
      * upstream's lexer outright rather than mis-lexing it — see
@@ -3091,6 +3594,19 @@ final class VhsTapeContractTest extends TestCase
      * consumes the byte after a backslash run untested is what lets `\` +
      * newline carry the regex onto the next line.
      *
+     * ONE EQUIVALENT MUTANT lives here and is recorded so the next sweep does not
+     * report it as a survivor: making the newline branch return `[$j, true]`
+     * instead of `[$j, false]` changes nothing observable. The flag has exactly
+     * two readers in {@see tokenize()}, and a newline close satisfies neither.
+     * `$i = $terminated ? $end + 1 : $end` differs only in whether the NEWLINE
+     * itself is consumed, and the newline is whitespace, so the very next
+     * iteration skips it either way. And the panic condition's `!$terminated`
+     * cannot be reached by a newline close at all: this branch returns from inside
+     * `$j < $length`, so `$end < $length` and the `$end === $length` conjunct is
+     * already false. The flag stays honest — a newline is NOT a delimiter, and
+     * that is what the name says — for the same reason `!$terminated` stays in the
+     * panic condition it cannot influence.
+     *
      * @return array{int, bool} the index the regex text ends at, and whether a
      *                          delimiter (rather than a newline or EOF) closed it
      */
@@ -3201,7 +3717,9 @@ final class VhsTapeContractTest extends TestCase
      * string and no entry of {@see KEYWORDS} is a numeric string, so PHP 8
      * compares the two as bytes either way. Same for {@see skipSpeedSuffix()}'s
      * `['ms', 's', 'm']`. Both flags stay because the file's convention is
-     * strict comparison everywhere, not because a test can tell.
+     * strict comparison everywhere, not because a test can tell. Both are in the
+     * EQUIVALENT-MUTANT REGISTER in {@see tokenize()}, which is the list a sweep
+     * should check a survivor against before calling it a finding.
      *
      * @param array{text: string, kind: string} $token
      */
@@ -3257,6 +3775,28 @@ final class VhsTapeContractTest extends TestCase
      * `parseKeypress` reaches, and nothing in this suite queries a `Set` value
      * that could be an `@`. If it is ever narrowed, that test's expectation
      * becomes `['@']` and the change is deliberate.
+     *
+     * WHAT PINS THE FOUR CONJUNCTS BELOW, because this method has now supplied a
+     * survivor to four consecutive mutation sweeps and the reason is always the
+     * same: its guards are invisible in the answer, or they only bite on a token
+     * kind or text no row happened to use.
+     *
+     *   `$i >= $count`, and both `$i < $count`
+     *       {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()}. Bounds, so
+     *       no answer changes — the kill is a PHP diagnostic promoted to a thrown
+     *       error by {@see valuesWithNoPhpDiagnostic()}.
+     *   `kind !== 'single'`
+     *       the `Type "@" "abc"` row of
+     *       {@see testASpeedSuffixBelongsToTheHeadNotTheValue()}.
+     *   `text !== '@'`
+     *       the `Set Padding -` row of the same test, which is the TEXT twin of
+     *       the row above it and stayed unpinned for a round after it went in.
+     *   `kind === 'number'`, `kind === 'ident'`, each of `ms`/`s`/`m`, and the
+     *   `in_array` AS A WHOLE
+     *       six rows of the same test, one per conjunct. The last of the six is
+     *       `Type@100 abc`: with the list gone but the kind gate kept, any bare
+     *       word after the number is eaten, and every other row puts a quoted
+     *       STRING there so the kind gate answered for them.
      *
      * @param list<array{text: string, kind: string}> $tokens
      */
