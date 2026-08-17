@@ -5484,3 +5484,127 @@ stripped**, which is F5's live half.
   reads as coverage.
 - Still open: review of `c075adcf` (the permission fix, never reviewed); **#88**
   README figure; plan steps **#14** → **#12** → **#17**.
+
+---
+
+## Sequencing changed: functionality first, hardening last
+
+**User instruction, 2026-08-17:** "move all security related fixes to the end .. i
+want the functionality stuff up front and all implemented first and everything
+working nicely we can tighten it all down at the end", and then: "security /
+tightening things that come up that can easily be delayed until the end do that".
+
+This defers more than containment work. **Audit-instrument correctness defers too** —
+mutation registers, censuses, inventories are audit hygiene, not functionality. So
+**lane B round 22 (the nine findings against `f0d95785`) is parked**, not next.
+Everything already found stays recorded above with its probes, so the final
+hardening pass starts from proof rather than re-discovery.
+
+Recorded in `crush_code.md`'s execution-status block as well (that file is
+UNTRACKED — deliberately, it seems — so its edits live only on disk).
+
+### Commits since the last worklog entry
+
+| commit | content |
+|---|---|
+| `dad90b18` | lane D round 10 — the tenth path was `require`; the eleventh was `CommandLoader` |
+| `15a2e605` | Phase 1 item 3 — foreign agent presets wired; foreign skills proven |
+
+### Lane D round 10 — closed, with the instrument inverted
+
+Both ACE spellings closed and proven **separately**, because different gates close
+them: neutering the directory anchor reds four tests incl. probe A; deleting the
+per-entry check reds two, **probe B only**. `bool $confineSymlinks` is gone rather
+than defaulted — its only `false` was the escape.
+
+`tests/Support/ReadPathCensusTest.php` (755 lines) inverts the failed instrument: it
+derives **every read/execute sink in `src/`** — 76 of them, `require`/`include`
+included, inside generated-code strings included — and demands a per-occurrence
+verdict, four verdict words measured against the mechanism rather than trusted. An
+ungated `file_get_contents` added anywhere in `src/` now reds it **by existing**.
+Its stated weakness, which is the honest one: it would **not** have auto-failed the
+tenth path (the file held two project-tier compares), it would have forced someone to
+write a sentence next to that `require` where the only true one was "none". It caught
+a wrong verdict of its author's own on first run, and forced a live residual into the
+record — `WorkflowEngine`'s pause files use the *configured* `workflowsPath()`, so a
+linked directory still relocates `.running/*.json`.
+
+**The tier count at the head of `ContainedPath` is DELETED, not re-incremented.** It
+said five, then seven, then eight, wrong within a round each time, and could not move
+at all while the tenth and eleventh paths were open.
+
+Known gap, unmeasurable on this host: `patternStaysInside()` still allows drive-
+relative `C:x`; no Windows host to establish the consequence.
+
+### Phase 1 item 3 — and a correction to my own brief
+
+**Phase 2 item 6 was already done.** `ForeignSkillDiscovery` has been called from
+`SkillManager::loadAll()` since `d1e0f2b1`, and the two docblocks the plan cites as
+falsely claiming the wiring say nothing about foreign skills at HEAD — **the plan's
+line numbers are stale by several commits**, and the supervisor passed that claim
+into a brief without checking it. What was missing was the PROOF; no test drove a
+foreign skill through `Bootstrap`. Mark the plan item accordingly.
+
+**Phase 1 item 3 was genuinely unwired**, and the brief's own wording was a trap:
+"wire it alongside the native registry construction", taken literally, ranks a cloned
+repo's `.claude/agents/reviewer.md` **above the built-in `reviewer`**, because
+`agentPresets()`' result is applied OVER the six built-ins. The agent declined the
+literal reading and used a separate `foreignAgentPresets()` so `agentRoster()` orders
+three layers in one place. Precedence: **foreign < built-in < native preset**,
+mirroring `SkillManager::loadAll()`.
+
+The plan's own cross-tool precedence claim was false: `discover()` cited
+`SkillLoader::loadAll()` as its authority, a method about NATIVE tiers, and the real
+rule resolves the pair the other way — **opencode wins for skills, Claude wins for
+agents**. Both directions now pinned in both files.
+
+Deliberately left for the hardening pass (recorded in code, unchanged):
+1. **Foreign agent presets scan user-then-project, last-write-wins**, so a cloned
+   repo's preset outranks the user's own — and `ForeignSkillDiscovery` deliberately
+   does the OPPOSITE, with the argument written out. The wiring does not widen it
+   (native still wins) but makes it reachable for the first time.
+2. `Agent::fromPreset()` silently drops `permissionMode`, `disallowedTools`,
+   `maxTurns`, `memory`, `background`, `effort`, `isolation`. That *bounds* the
+   wiring today, but the bound is only as good as `Agent`'s shape.
+3. `$projectTierRefusals` is reset only in `chat()`.
+
+### IN FLIGHT — Phase 3 item 1, uncommitted
+
+**The input box has no cursor movement at all** — `Chat::$inputBuf` is a hand-rolled
+append-only string, so a user cannot arrow left and fix a typo. Being replaced with
+`candy-forms`' `TextInput`/`TextArea`. 69 references in `src/Chat.php`, plus
+`src/Renderer.php`, `src/App/App.php`, and 8 test files.
+
+The brief's decision points, in case it needs re-issuing:
+- **`TextInput` vs `TextArea` must be measured, not assumed.** Alt/Shift/Ctrl+Enter
+  all insert newlines today (`Chat.php` ~`:817`), so the buffer already holds
+  multi-line content; `TextInput` is single-line. A wrong pick silently drops a
+  feature round 8 pinned.
+- Six key-routing invariants must survive: the ARMED permission prompt owning the
+  keyboard; overlay swallow; `?` on an empty line (and `??` typing a literal `?`);
+  Enter vs the three modifier+Enter newline producers; `↑` recall — **`Chat` and
+  `TextInput` both have history, one owner must be chosen**; and completion, where
+  both also have machinery.
+- Prefer keeping `Renderer`'s own painting, driven from the widget's state, over
+  `TextInput::view()` — two render paths would fight, and `Chat::view()` is already
+  double-diffed against `Program`'s renderer.
+- Dependency: `sugarcraft/*` resolves via **Packagist** now; the path-repo gotcha in
+  `CLAUDE.md` is stale. Add the require, `composer update`, only add a
+  `repositories[]` entry if resolution actually fails.
+
+### Queue
+
+1. **Phase 3 item 1** (in flight, uncommitted).
+2. **Phase 4** — `/model` as a real command, `/help`, `/clear`, `argumentHint` in the
+   popup.
+3. **Phase 5** — the base system prompt is one sentence today
+   (`'You are SugarCrush, an AI coding assistant.'`); `contextWindow()` is correctly
+   implemented on all seven providers and never called.
+4. **Rest of Phase 2** — `McpClient` de-duplication, `.mcp.json` builder,
+   `WorkflowEngine` construction, `CommandLoader` + the template-substitution engine
+   it needs to be useful, `LspTool`, `StreamingCommandBackend` swap.
+5. **Phase 7** docs.
+6. **THEN the hardening backlog**: lane B F1–F9 (incl. the `(G+T)−G−T` tautology),
+   lane D F3–F7 follow-ups, the three items above, `C:x`, the `.running/*.json`
+   residual. **#88** README figure (**6764 / 69788 / 1 skipped** at `15a2e605`).
+7. Never reviewed: `c075adcf` (the permission fix) and `15a2e605`.
