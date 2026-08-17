@@ -2957,3 +2957,93 @@ anything from any lane.
 2. **Suite totals are usable again.** For the first time this session a full run at 0 failures
    is a real check rather than a moving target. Per-sabotage judgement is still by the targeted
    test file flipping green→red — that rule does not relax.
+
+## Lane E (#38) landed — and the Chat.php hunk split that made it committable
+
+Lane E's fix round came back clean and is committed as **`98bee793`** (11 files,
++4376/-64). Independently verified before committing, not taken on the agent's
+word: **6386 tests / 45478 assertions / 0 failures / 1 skipped** in 1m51s, which
+matched its self-report exactly. The 1 skip is the legitimate
+`MCP/McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`.
+
+### Why the commit needed a patch filter
+
+`src/Chat.php` carries hunks from TWO lanes, and lane D's are unfinished. With
+`-U0` the file diffs as 14 hunks; at `-U3` they coalesce to 12. The split is
+clean at a line boundary:
+
+- **lane E**, 9 hunks, all at new-file line `< 3700`: the `$keyHelp` constructor
+  member (`+554`), the F6 permission prose (`+697`), the "cannot both be open"
+  arm (`+850`), the generation guard (`+1024`), the wheel-drives-the-reference
+  branch (`+2526`), `keyHelp` in the serialised state (`+3251`), and the
+  `/keys`-or-`/help` exact-match command (`+3338`).
+- **lane D**, 3 hunks, all `>= 3787`: the `#79` synchronous-freeze gap docblock,
+  the `isFailure()`/`firstFailure()` failure reporting, and the two-tier
+  "no workflows found" message.
+
+So the commit was built by filtering the `-U3` patch on the hunk header's
+new-start line and `git apply --cached`ing the result. Two checks before
+committing, because a partial-file commit can be syntactically valid and still
+reference symbols that only exist in the *other* lane's uncommitted work:
+`php -l` on `git show :sugar-crush/src/Chat.php`, and a grep of the staged blob
+for `firstFailure|isFailure` — both clean, so the committed intermediate state
+stands on its own.
+
+### Authorship: 9 commits reauthored
+
+This is a new server, so `user.name`/`user.email` had never been set and the
+whole session's commits were `Test User <test@example.com>`. Set globally to
+`Joe Huss <detain@interserver.net>`, then rewrote all 9 unpushed commits.
+
+`git filter-branch` was NOT usable: it refuses to run with a dirty tree, and
+this tree holds two lanes' uncommitted work. Instead the chain was rebuilt with
+`git commit-tree` — same trees, same messages, same author/committer dates, new
+identity — followed by `git update-ref`. That path never touches the working
+tree or the index. Verified: new HEAD tree `1af57090` identical to old,
+`git diff old new` empty, 9 commits before and after, `%s` list md5-identical,
+and `git status --porcelain` byte-identical at 32 entries. New HEAD `98bee793`
+(was `b21c362d`).
+
+### What lane E's round is worth remembering
+
+Three defects shared one shape — **process-global state a "this key does
+nothing" test cannot see**: `MenuBar::$activeMenu`/`$activeItem`, a
+`resetMenuBarState()` that reset one of those two and leaked the other into
+every later test in the file, and `KeyBindingRegistry`'s two rune memos letting
+a memo test pass against a warm store while the cold path returned something
+else. That is now the **third and fourth** instance of the partial-static-reset
+shape, after lane D's `PermissionGate` strike counter. Treat it as a known
+shape, not a coincidence.
+
+The fix agent's own strongest move was replacing enumeration with discovery:
+rather than list the statics it could think of, it walks `src/Tui/` +
+`src/Commands/` to find them (7), then cross-checks against what the handler can
+actually write. Same instinct on F3, where it re-measured instead of trusting the
+brief: max **2** derived rune sets per press over 3420 presses, histogram
+1710/938/772, plus a structural argument that 3 is impossible.
+
+It also declined twice to restate a figure it could not reproduce — dropping the
+reviewer's "23.8 µs" outright, and replacing a full-suite claim it could not
+verify with a bound it could (only 3 test files can construct a
+`PermissionRequestMsg`; 252 tests, exactly 1 red per mutation). That is the
+behaviour the standing domain rule is meant to produce.
+
+And it caught a bad needle in my own brief: `'session picker'` cannot be the
+picker's signature, because the reference screen documents the row *"Open the
+session picker"* — so the not-contains assertion fired on the reference's own
+text. That was the single red test at recovery; fixed with the picker's controls
+line `↑↓ browse`, not by relaxing the assertion.
+
+### All three lanes now running again
+
+Session limit is past, so all three are live in parallel, file-disjoint as
+before: lane E's **reviewer** against `98bee793` (read-only, and briefed that
+Chat.php's working tree carries lane D hunks below ~3780 that are NOT part of
+the commit), lane D **round 5**, lane B **round 15**. Both fix lanes were
+briefed to read their own round's findings out of this worklog rather than from
+my paraphrase — 2525–2648 for D, 2649–2756 for B, 2757–2897 for the round E
+just fixed.
+
+One collision to watch: if the lane E review demands a Chat.php fix, that fix
+and lane D's `>= 3780` hunks touch the same file. Serialise those two rather
+than running them together.
