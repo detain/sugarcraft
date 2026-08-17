@@ -5224,3 +5224,145 @@ suite runs, not just the edits.
 
 Queue item 1 above is now closed. Items 2–5 stand; #88's figure is **6678 / 69306
 / 1 skipped** at `c075adcf`.
+
+---
+
+## The tenth path is arbitrary code execution — review of `2c12bd9f`
+
+The re-review found what nine rounds of inventories did not. **Do not close this
+lane until Findings 1 and 2 are fixed.**
+
+### F1 — CRITICAL, LIVE. `WorkflowRegistry`'s user tier `require`s PHP from outside `$HOME`
+
+`src/Workflows/WorkflowRegistry.php` still carries the **refuted** sentence verbatim
+in its constructor doc-block (~`:105`): *"The user's own tier stays unconfined: it
+is the directory whose `.php` files this class `require`s, so a link inside it is
+the user pointing at their own file."* `readableProjectDir()` anchors only the
+PROJECT tier; `yamlDirectories()` adds the user directory as `$dirs[$userDir] =
+false` (symlinks unconfined); `load()` does a bare `require $phpPath` at `:241`.
+
+**There is no `ContainedPath` call on the user tier at all** — which is exactly why
+`ContainedPathInventoryTest`'s `'Workflows/WorkflowRegistry.php' => 2` is a GREEN
+row. It counts the two compares that are written. This is the lane's signature
+blindness, and this time it was hiding code execution.
+
+Reachable in production, not dormant: `Bootstrap::workflowEngine()`
+(`Bootstrap.php:402`) → `Chat.php:3921 → 4297` (`/workflow run`).
+
+Two driven probes, `$HOME` mode 0700 and **owned** (i.e. `HomeDirectory::owned()`
+passes — the exact "ownership cannot substitute" case), no `.git` anywhere:
+
+* **A, tarball-delivered directory symlink** (`.sugar-crush/workflows -> <outside>`):
+  `load('pwned')` → `CODE-EXECUTED = arbitrary php ran from OUTSIDE $HOME; uid=1000`.
+  The stack trace names it: `WorkflowRegistry.php(241): require()`.
+* **B, no directory link at all** — a real directory inside `$HOME` with one ENTRY
+  symlinked out (`entry.php -> <outside>/pwned.php`) → same code execution.
+
+Probe A is closed by the one-line anchor **the same commit added ~300 lines away in
+the same file** (`ContainedPath::below($userDir, $userHome)` in
+`agentPresetTiers()`). Probe B needs the per-entry `confine: true` the code
+deliberately disables, plus a `.php` containment check that does not exist.
+
+Compounding: the commit's own new `HomeDirectory::path()` inventory files
+`WorkflowRegistry` under *"STORE LOCATION (the fallback is a convenience, not a
+trust decision), six"*. A number travelling without its domain — this is not a
+store location, it locates the only directory in the package whose contents are
+`require`d.
+
+### F2 — HIGH. Eleventh path: `CommandLoader`'s user tier, same refuted premise
+
+`src/Commands/CommandLoader.php:138` — `loadUserCommands()` calls
+`loadFromDirectory($this->userCommandsDir())` with `$anchoredIn` omitted (null);
+`loadProjectCommands()` passes `$projectRoot`. The directory comes from
+`HomeDirectory::path()` (`:187`), not `owned()`. Driven: an outside file's body
+lands in `CommandSpec::$template` — the prompt — with `refusals=[]`. The per-entry
+`within($file, $realDir)` at `:109` does not help: it resolves `$realDir` too, so it
+travels with the directory link.
+
+**Same shape, and this commit TOUCHED it:** `ForeignSkillDiscovery` anchors its user
+tier to `self::homeDir()`, which is `HomeDirectory::path()` (`:97`), **not**
+`owned()` — while its sibling `ForeignAgentPresetRegistry::userDir()`, changed in the
+same commit, correctly uses `owned()`. The same new sentence is true in one file and
+false in the other.
+
+### F3 — MODERATE. The `.worktreeinclude` gate is skipped on the CONSTRUCTOR DEFAULT
+
+`resolveWorktreeInclude()` skips the gate when `$repoRoot === ''`, justified by
+*"the include file is a caller-supplied relative path against the process CWD."*
+False in both halves: it comes from `config.json`, and `$repoRoot = ''` is the
+constructor default (`WorktreeManager.php:33`). Driven, branch A read the outside
+file and its lines reached `error_log()` — verbatim the harm the commit says that
+gate exists to close. The refusal message prints `it leaves the repository root ()`:
+an operand that is the empty string.
+
+The COPY escape is genuinely closed in both directions — that part confirms.
+
+### F4 — MODERATE. `patternStaysInside()` claims the Windows domain and fails it
+
+Normalises `\`→`/` as a separator but tests absoluteness on the raw string with
+`str_starts_with($pattern, '/')`. `\etc\passwd`, `C:\Users\victim\.ssh\id_rsa`,
+`C:/Users/x` and bare `\` are all **ALLOWED**; `/etc/passwd` refused. Matters because
+the doc-block argues the lexical pattern guard is the DURABLE one against
+`within()`'s two-`realpath()` TOCTOU window — so on Windows the durable guard is the
+defeated one. The correct predicate is ~40 lines away in a file this commit edited:
+`owned()`'s `preg_match('#^[A-Za-z]:[\\\\/]#', $home)`.
+
+Every POSIX case behaves correctly — nothing found there.
+
+### F5 — MODERATE. The corpus's "legible failure" is unreachable for the shape CLAUDE.md mandates
+
+`isDispatchableTool()` now ends with `&& self::isConstructible(...)`, and a false
+there **silently drops** the class — so `instances()`'s throw ("add it … rather than
+silently skipping it") can never fire for a private-constructor tool needing
+arguments. Driven: `NeedsArgs` (`final` + `private __construct` + `public static
+new(\stdClass $dep)`) and `NonStaticNew` both vanish with no exception and no
+diagnostic; only the zero-arg control survives. Residual: `instances()` invokes
+`new()` with no `instanceof Tool` check.
+
+### F6 — LOW/MODERATE. `statementStartIn()` — two false-GREENs
+
+The direction the instrument exists to remove: `$x && ContainedPath::within(...)` →
+`used = true`, and a closure assigned but never called → `used = true`. Two
+false-REDs too (named-argument colon — the third kind of `:`, absent from the
+doc-block's enumeration; and `... or throw ...`). The ternary disambiguation the
+commit worried about is **correct in both directions**.
+
+### F7 — LOW. `ProviderFactory::defaultConfigPath()` (`:118`)
+
+`__DIR__ . '/../../.sugar-crush/config.dev.json'`, read at `:143`/`:320` and at
+launch via `Bootstrap::availableProviders()` (`:1052`). Same containment-free
+`__DIR__`-relative `.sugar-crush/*.json` construction the commit just closed in
+`WorktreeConfig`. On neither inventory.
+
+### Confirmed
+
+The headline `$HOME` anchor works in all four launch shapes, including row 4 (the
+previously-live one). The stated surviving layout survives. The whole `$HOME` shape
+matrix holds — trailing slash, `//`, `$HOME` a symlink, `HOME=""`, unset, `HOME=.`
+— **no shape makes anything newly reachable, and no cost beyond the stated one in
+the agent-preset path.** F12's nullable-sentinel fix is complete for both file-backed
+parameters, including an explicit value equal to the old hard default.
+`WorktreeConfig`'s two new gates are live. `owned()`'s sticky-bit reasoning holds and
+no bypass was found.
+
+### Refuted
+
+**"The cost is a roster symlinked outside `$HOME` stops working."** That is the cost
+in the agent-preset path. The change-set's actual cost is that the same anchor was
+not applied to the three remaining user tiers that need it most — one of which
+executes code — and the refusal-message rewrite reached `AgentPresetRegistry`,
+`ForeignAgentPresetRegistry` and `SkillLoader` but not
+`WorkflowRegistry::readableProjectDir()`, which still names "the checkout root".
+
+### Queue (revised)
+
+1. **Lane D round 10 — F1 and F2 first.** Anchor `WorkflowRegistry`'s user tier with
+   the same `below($userDir, $userHome)` already in `Bootstrap::agentPresetTiers()`;
+   decide the per-ENTRY `.php` case (probe B is not closed by a directory anchor);
+   switch `CommandLoader` and `ForeignSkillDiscovery` from `path()` to `owned()` and
+   pass `$anchoredIn`. Delete the refuted sentence wherever it still appears.
+2. F3–F7 in the same lane, after.
+3. Re-issue the **lane B round 21 review** (`f0d95785`) — brief above, never ran.
+4. Review `c075adcf` (the permission fix) — never reviewed.
+5. **#88** README figure. Deferred a fifth time; **6678 / 69306 / 1 skipped**.
+6. Plan steps **#14** → **#12** → **#17**.
