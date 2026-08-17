@@ -4546,3 +4546,90 @@ Per the standing instruction, no further agents were spawned after these commits
   by copying the three files into a scratch module named
   `github.com/charmbracelet/vhs` — then there are no import edits at all and `diff`
   is empty on all three.
+
+---
+
+## Session resume — #63 landed, and the queue's first review is running
+
+### #63 DONE — `4dbf5074` — the hang-catcher, and the half that makes it bite
+
+This is the item that had been waiting for "a window with no agent running the
+suite". That window opened, so it went first, before any agent was spawned.
+
+`sugar-crush/phpunit.xml` now carries `enforceTimeLimit="true"`,
+`defaultTimeLimit="60"` and `failOnRisky="true"`.
+
+**Why 60, with the domain in the file rather than only here.** A JUnit-logged run
+of all 6465 tests on this host (PHP 8.3.6) peaks at **9.321s**
+(`Tools\WebSearchToolTest::testHandlesRedirectResponse`), with **4** tests over 5s
+and **none** over 10s. The next four are `KeyHelpTest::testTheCuesFitTheNarrowest\
+BarAnyAppStateCanProduce` 7.666s and two `LspConnectionTest` cases at ~5.04s. So
+60s sits ~6x above the slowest real test — loose enough that host load or a slow
+network redirect cannot trip it, tight enough that an infinite loop reports in a
+minute. The figure and its measurement method are recorded in the XML comment, not
+just in this worklog, per the standing rule.
+
+**`failOnRisky` is the load-bearing half, and this was nearly a false green.** With
+only `enforceTimeLimit`, the deliberate infinite-loop probe DID abort at 60.09s —
+and PHPUnit printed it under a green `OK, but there were issues!` banner and
+**exited 0**. A hang would have been a notice CI scrolls past. With `failOnRisky`
+the same probe exits **1**. Safe to enable because the suite reports 0 risky today.
+
+**One gap accepted and documented in the XML.** php-invoker enforces the limit via
+`pcntl_alarm()`, and `tests/Agents/AgentWorkerPoolTest.php` arms and cancels
+`pcntl_alarm()` itself (`:171`, `:176`, `:971`, `:979`, `:1784`, `:1796`, `:1800`).
+Its `pcntl_alarm(0)` calls clear the enforcing alarm, so the limit does **not**
+apply inside those tests. They are bounded by their own alarms instead, which is
+why they are also the tests least in need of this one.
+
+Also recorded in the XML: **no test declares `#[Small]`/`#[Medium]`/`#[Large]`**, so
+`defaultTimeLimit` is the limit every test actually gets. Adding a size attribute
+anywhere silently switches that test to PHPUnit's own 1s/10s/60s instead.
+
+`phpunit/php-invoker` needs no explicit `require-dev`: `phpunit/phpunit` requires
+it directly (checked in `composer.lock`), so it cannot silently vanish.
+
+Suite after: **6465 / 68244 / 1 skipped / 0 failures / exit 0**, 1:58 against 2:06
+before — no meaningful overhead.
+
+### Corrections to the record
+
+- The 6465 / 68244 figure is now **independently confirmed twice** at HEAD, matching
+  what the previous session recorded for `cbdb5e2e`. #88's number is good.
+- An earlier measurement this session reported a 20-file uncommitted tree and a
+  6386/45478 suite. That does not describe the repository: HEAD has been
+  `68e6a325` throughout, all three lanes' files are **tracked** (`git ls-files`
+  confirms `ContainedPath.php`, `ResetsDerivedRuneSets.php`, `KeyHelpTest.php`,
+  `VhsTapeContractTest.php`), and the worktree carried only `.claude/settings.json`.
+  Treat 6465 / 68244 as the baseline; disregard 6386 / 45478.
+
+### Method note — a self-inflicted false signal worth not repeating
+
+Two suite runs this session died at exit 144 with no failure, and one full run was
+killed at ~966/6465. Cause: a watchdog of the form
+`(sleep 900 && pkill -f 'phpunit') &`. `pkill -f` matches the FULL command line of
+the wrapper shell, which contains the pattern text — so it killed its own shell.
+Use the bracket trick (`pkill -f '[p]hpunit'`) or, now that #63 exists, no watchdog
+at all: the 60s per-test limit is the hang guard, which is what it was for.
+
+### Running now
+
+**Lane B round-17 review** (queue item 1a) — adversarial, review-only, no fixes and
+no commits, one agent as instructed. Reviewing `cbdb5e2e` (one file,
+`tests/VhsTapeContractTest.php`, +596/−56) against its two headline claims: that the
+byte figure "now asserts itself", and that a fifth survivor is real. Briefed with
+the three oracles, the four-round "figure without its domain" defect class, the
+sabotage discipline, and the new `enforceTimeLimit`/`failOnRisky` facts.
+
+### Queue after it
+
+1. **Lane E round-4 review** — `8e1103c8`, 6 files, +648/−112. Unreviewed.
+2. **Lane D round 7** — six findings from its round-6 review, none fixed. **#89
+   [HIGH]** `InstructionFileLoader` has NO containment check (LIVE); **#90
+   [MEDIUM]** `BuiltInToolCorpus` blind to any `Tool` outside flat
+   `src/Tools/BuiltIn/`, incl. `src/LSP/LspTool.php`; plus F-B, F-E, F-F, F-G, F-H.
+3. **#88** README whole-suite figure, standalone, once nothing else is landing.
+   Deliberately deferred again: reviews are still pending and would re-drift it.
+4. Plan steps **#14** → **#12** → **#17**, one at a time (#14 and #12 both want
+   `Bootstrap.php`). **#17 must not start before #90**, or its `LspTool` lands
+   invisible to every corpus.
