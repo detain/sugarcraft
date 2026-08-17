@@ -2179,3 +2179,111 @@ Corollary that is now a standing rule for this file: **when you restate a measur
 figure, restate the domain it was measured over.** Round 12's finding exists
 because "0 miss-direction divergences" travelled without its corpus.
 
+
+---
+
+## Lane D (#13) — round-3 fix landed; round-4 review in flight
+
+The fix agent closed all five round-3 findings and, on the one that mattered, took
+the harder of the two options offered.
+
+### Finding 1 — the symlinked-boundary escape, closed with a trust anchor
+
+`containedIn()` resolves both sides of the comparison, so a boundary directory that
+is *itself* a symlink moves with the link and the check passes by construction. The
+exposure is reachable from a plain `git clone`: git stores `.sugar-crush/workflows`
+as a symlink happily, and `Bootstrap::workflowEngine()` builds exactly that path.
+The option to merely re-word the guarantee was rejected — it would have left a live
+escape behind a more careful sentence.
+
+What made a complete close look expensive earlier was that the registry had no
+trust anchor to compare against. It turned out to be one constructor argument:
+`Bootstrap` already holds `$root`, and `$root` is the one path in the pair a
+repository cannot forge, since a link that moved it would have to sit *above* the
+checkout.
+
+- New third param `?string $projectRoot = null`; `Bootstrap` passes `projectRoot: $root`.
+- New `readableProjectDir(): ?string` — the project workflows **directory** must
+  resolve inside the anchor (`$projectRoot`, else the directory's own parent).
+- Refusal **drops the tier** rather than emptying it, so a collided user-home
+  directory falls through to the user tier's unconfined reading instead of
+  vanishing from both.
+- Both project read paths gated identically: `yamlDirectories()` **and**
+  `projectYamlPath()` — the latter is `load()`'s project-first fast path, the one
+  place that bypasses the map.
+- A dangling directory link stays readable: nothing is behind it, and keeping it
+  preserves `loadYaml()`'s not-found message for a fresh checkout.
+- Docblocks and the README Workflows bullet now state **two** boundaries and name
+  the weaker fallback's exact limit (`.sugar-crush -> /elsewhere` is not caught
+  without a root). `containedIn()`'s `SkillLoader` cross-reference now says the
+  resemblance stops at the prefix idiom and that the skills side is **not** closed.
+
+Six layouts probed against the final code — plain link out, relative chain
+`a→b→../secret/id_rsa`, symlinked **sub**directory, dangling link, sibling-prefix
+`proj → ../projevil/x.yaml`, and a TOCTOU swap between `list()` and `load()` — all
+refused, none leaking the sentinel. The user tier still follows its own link out
+(deliberate), the legit project entry still loads, and a new in-checkout control
+(`.sugar-crush/workflows -> tools/workflows`) still loads.
+
+**The admitted weakness, reported rather than buried:** the wiring test's first form
+did not bite. A link *out of the checkout* is also out of the `dirname()` fallback
+anchor, so mutating `projectRoot: $root` → `null` left it green. The agent said so
+in that test's own docblock and added
+`testAnInCheckoutSymlinkedWorkflowsDirectoryIsStillHonouredByTheLaunch` — the only
+layout that separates the two anchors — where the mutation now goes RED.
+
+### Findings 2–5
+
+- **2, fixed not documented.** The duplicate-stage-name load error now reports
+  `(stages #0 and #2)` instead of echoing the name; `$seenStageNames` stores the
+  first index. A duplicate name is by definition written twice, so the indices say
+  where both are — strictly more useful, and the content-echo exception disappears.
+- **3, pinned.** Reflection on **`decide()`** rather than the private method, so the
+  `commitAutoStrikes: false` routing is pinned alongside the fail-closed branch.
+- **4, tested.** `testASiblingDirectorySharingTheProjectDirsNameIsNotContained`
+  covers the previously load-bearing, untested trailing-separator guard.
+- **5, pinned.** `assertSignalHandlerStackEmpty()` plus a test covering four exits:
+  plain run, two separate engines, an exception past every stage-level `catch`, and
+  a pre-flight refusal.
+
+Every fix carries its own sabotage, each judged by the targeted test file flipping
+green→red — not by suite totals, which moved under the agent three times
+(6252 → 6261 → 6293) as concurrent lanes added tests.
+
+### Divergences the fix agent reported against its own brief
+
+1. **`ext-gd` IS loaded on this host.** The brief's stated baseline (5 errors, 1
+   failure, 27 skips) does not reproduce; measured **0 errors / 0 failures / 1
+   skip**, and that skip is exactly the one legitimate `McpClientTest` case. The
+   test *count* matches, which confirms the extra assertions are previously
+   skipped/errored tests now running to completion.
+2. **`README.md:42` is not the test-count line** — tracker #83 was wrong. The stale
+   counts live at **`README.md:377`** (*"4,337 tests / 12,587 assertions"* against
+   an actual 6,293 / 38,319); `:42` is the EchoProvider quickstart. Left unfixed
+   deliberately: the number is unstable while other lanes are live.
+3. **Two test-helper `removeDirectory()` methods followed symlinked directories** —
+   `is_dir()` answers true *through* a link, so a teardown would have emptied a
+   link's target rather than removing the link. Given an `is_link()`-first branch in
+   `WorkflowRegistryTest` and `FeatWiringReachabilityTest`. Required by the new
+   fixtures; a latent hazard regardless.
+
+**Numbers, with domains.** Lane suites (`tests/Workflows` + `tests/Permissions`):
+347/823 → **353/848** (+6: 4 registry, 1 engine, 1 permissions).
+`tests/Integration` + `tests/Cli`: 799/3636 → **801/3642** (+2 wiring).
+Full suite: **6293 tests / 38319 assertions / 1 skipped / 0 errors / 0 failures**.
+
+### Tracker updates
+
+- **#83 corrected** — stale test counts are at `README.md:377`, not `:42`.
+- **#84 confirmed and sharpened** — `SkillLoader::contained()` carries the identical
+  symlinked-directory escape with a *larger* payload (`SKILL.md` bodies enter the
+  prompt) and the same absolute claim at `README.md:305` ("a repo cannot ship a link
+  that reads your files"). `src/Skills/` is out of lane D. The workflow-side code and
+  README now say explicitly that the skills half is open and tracked, so the repo no
+  longer asserts a guarantee it lacks — but this needs the same anchor treatment,
+  ideally via one shared predicate.
+
+Round-4 review is in flight, briefed to attack the anchor's forgeability (including
+the common case of a checkout reached *through* a symlink, where over-refusal would
+be its own regression), the new tier-drop as a possible name-shadowing vector, and
+`list()`/`load()` gate consistency.
