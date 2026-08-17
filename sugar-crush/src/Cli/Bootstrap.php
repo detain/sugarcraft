@@ -47,7 +47,10 @@ use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
+use SugarCraft\Crush\Tools\BuiltIn\Write;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Workflows\WorkflowEngine;
+use SugarCraft\Crush\Workflows\WorkflowRegistry;
 
 /**
  * Wires up the CLI's shared, side-effecting collaborators: backend
@@ -144,6 +147,27 @@ final class Bootstrap
     private static array $reportedSkillSkips = [];
 
     /**
+     * Every project-tier directory this launch refused to read, keyed by the
+     * path as configured — see {@see reportProjectTierRefusals()}.
+     *
+     * Both subsystems that hold a repository-chosen directory feed it: the
+     * workflow registry ({@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()})
+     * and the skill loader ({@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()}).
+     * One collector rather than two because the user does not care which class
+     * noticed that their repository's directory was rejected.
+     *
+     * @var array<string, string>
+     */
+    private static array $projectTierRefusals = [];
+
+    /**
+     * The subset of {@see $projectTierRefusals} already reported.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedProjectTierRefusals = [];
+
+    /**
      * Build the fully-wired Chat model the CLI binary hands to Program.
      *
      * $root defaults to getcwd() — the directory the CLI was invoked from —
@@ -210,7 +234,7 @@ final class Bootstrap
         // PermissionGateHook::NAME.
         $permissionGate = self::permissionGate();
 
-        return new Chat(
+        $chat = new Chat(
             backend: self::backend($root, $skills, $permissionGate),
             memoryStore: self::memoryStore(),
             sessionStore: $sessionStore,
@@ -261,7 +285,155 @@ final class Bootstrap
             // tested, and unreachable — `Chat::handleAgentsCommand()` answered
             // "Agent manager not configured" on every real run.
             agentManager: self::agentManager($root, $skills),
+            // crush_code.md Phase 2 item 3. `/workflow run|pause|resume|status|
+            // list` answered "Workflow engine not configured" on every real run
+            // because this argument was never passed — the 2,200-line
+            // Workflows/ subsystem, the shipped `workflows/deep-research.php`
+            // and `examples/workflows/lint-then-fix.yaml` included, was
+            // reachable only from its own tests.
+            //
+            // Chat's constructor is what links the two: an engine that arrives
+            // without a manager is given this launch's, so a parallel stage's
+            // sub-agents register where the renderer reads telemetry from — and
+            // it can only do that with both in hand. (Both are NAMED arguments
+            // and both are evaluated before the constructor body runs, so the
+            // order they appear in here is style, not mechanism.)
+            workflowEngine: self::workflowEngine($root, $permissionGate),
         );
+
+        // AFTER the construction above, not beside reportSkillSkips() further
+        // up: the workflow registry that decides whether this project's
+        // `.sugar-crush/workflows` is readable is built inside
+        // workflowEngine(), which is one of the named arguments to the
+        // constructor call. Still construction time, so still before Program
+        // takes the terminal — the requirement reportSkillSkips()'s doc-block
+        // states.
+        self::reportProjectTierRefusals();
+
+        return $chat;
+    }
+
+    /**
+     * The {@see WorkflowEngine} `/workflow` dispatches onto, reading workflows
+     * from this user's `~/.sugar-crush/workflows` and, when the launch has a
+     * root, that project's `.sugar-crush/workflows`.
+     *
+     * {@see trustedConfigDirPath()} rather than {@see configDirPath()}, and the
+     * distinction is not bookkeeping: {@see WorkflowRegistry::load()} reaches a
+     * `.php` workflow through `require`, so the user tier is a directory whose
+     * contents get EXECUTED, which is the same class of thing as `hooks.yaml`
+     * and not the class of thing the session store is. Under the stand-in home
+     * a local user could pre-create `/tmp/.sugar-crush/workflows/deploy.php`
+     * and own the session the moment its owner typed `/workflow run deploy`.
+     * {@see chat()} already refuses that launch on its first line, so this is
+     * not a second gate — it is the requirement stated where the directory it
+     * applies to is named, so a future second caller of this method inherits
+     * the refusal rather than having to remember it.
+     *
+     * The project tier needs no such refusal because it is `.yaml`-only by
+     * construction — see {@see WorkflowRegistry::__construct()} for why a
+     * checked-in `.php` workflow is not honoured at all.
+     *
+     * Both `$model` and `$provider` come from the launch's own selection rather
+     * than {@see WorkflowEngine}'s defaults; see that constructor for what the
+     * defaults were and why they are wrong for any session that did not select
+     * them.
+     *
+     * @param PermissionGate $gate The launch's ONE gate — the same instance
+     *        {@see chat()} hands the backend and the hook chain, for the reason
+     *        stated there. Required rather than defaulted precisely because a
+     *        default would let a future caller build a SECOND gate here without
+     *        noticing: two gates from one config enforce the same mode but split
+     *        PermissionGate's per-instance Auto-mode strike counter, which is the
+     *        thing {@see chat()} building exactly one exists to prevent. Passing
+     *        it is what makes a workflow-spawned
+     *        {@see \SugarCraft\Crush\Agents\SubAgent} carry a gate at all
+     *        (before this, every one of them was constructed with
+     *        `permissionGate: null`) and what lets the engine refuse a stage
+     *        whose DECLARED tools this session's mode denies. Read
+     *        {@see WorkflowEngine::__construct()} for the precise boundary of
+     *        what that does and does not enforce today — it is narrower than
+     *        "workflow tool calls are gated", and the difference is stated there
+     *        rather than implied here.
+     */
+    private static function workflowEngine(?string $root, PermissionGate $gate): WorkflowEngine
+    {
+        [$provider, $model] = self::selectedProviderLabel();
+
+        $registry = new WorkflowRegistry(
+            self::trustedConfigDirPath() . '/workflows',
+            $root === null ? null : rtrim($root, '/') . '/.sugar-crush/workflows',
+            // The root is passed, not merely used to build the path above,
+            // because it is the boundary the project workflows DIRECTORY is
+            // held inside — and it is the complete boundary only when the
+            // registry is told it. Without it the registry falls back to
+            // that directory's own parent, which a committed
+            // `.sugar-crush -> /elsewhere` walks straight past. See
+            // {@see WorkflowRegistry::readableProjectDir()}.
+            projectRoot: $root,
+        );
+
+        // Asked EAGERLY, here, rather than left for the first `/workflow list`
+        // to discover: the refusal is otherwise invisible in every direction a
+        // user looks — the not-found message stops naming the directory,
+        // `projectWorkflowsPath()` still reports it, and the listing simply has
+        // fewer names in it. See {@see reportProjectTierRefusals()}.
+        $refusal = $registry->projectTierRefusal();
+        if ($refusal !== null && $registry->projectWorkflowsPath() !== null) {
+            self::$projectTierRefusals[$registry->projectWorkflowsPath()] = $refusal;
+        }
+
+        return new WorkflowEngine(
+            $registry,
+            model: $model,
+            provider: $provider,
+            permissionGate: $gate,
+        );
+    }
+
+    /**
+     * Every project-tier directory this launch declined to read, keyed by the
+     * configured path, mapped to why.
+     *
+     * The pull-based seam {@see skillSkips()} is, for the other half of the same
+     * question: a repository can choose where its `.sugar-crush/workflows`,
+     * `.sugar-crush/skills`, `.claude/skills` and `.opencode/skills` point, and
+     * a directory that resolves out of the checkout is refused wholesale. Kept
+     * where a doctor report or a debug pane can ask for it, with
+     * {@see reportProjectTierRefusals()} putting one bounded line in front of
+     * the user at launch.
+     *
+     * @return array<string, string> configured path => why it was refused
+     */
+    public static function projectTierRefusals(): array
+    {
+        return self::$projectTierRefusals;
+    }
+
+    /**
+     * Tell the user, once per refused directory, that a project directory their
+     * repository ships was not read.
+     *
+     * NAMED INDIVIDUALLY, unlike {@see reportSkillSkips()}'s bare count, and the
+     * asymmetry is deliberate: a skipped SKILL.md is somebody else's malformed
+     * file and there can be dozens, while a refused directory is a deliberate
+     * refusal of something this repository committed, there is at most one per
+     * subsystem, and the path plus the reason is the whole of what a user needs
+     * to fix it. A count alone ("1 directory was refused") would be the same
+     * silence the notice exists to end.
+     *
+     * Construction time only, for the reason {@see reportSkillSkips()} states:
+     * stderr under a live alt screen lands inside a frame the renderer believes
+     * it owns.
+     */
+    public static function reportProjectTierRefusals(): void
+    {
+        $new = array_diff_key(self::$projectTierRefusals, self::$reportedProjectTierRefusals);
+
+        foreach ($new as $path => $reason) {
+            self::$reportedProjectTierRefusals[$path] = true;
+            self::warnPermissionConfig(sprintf('ignoring %s — %s', $path, rtrim($reason, '.')));
+        }
     }
 
     /**
@@ -494,6 +666,8 @@ final class Bootstrap
         // and the case this adds is a skill file that would otherwise have been
         // collected into skillSkips() and never mentioned to anybody.
         self::reportSkillSkips();
+        // Same argument for the second scan's directory refusals.
+        self::reportProjectTierRefusals();
 
         return App::new($provider, $model)
             ->withChat($chat)
@@ -884,6 +1058,12 @@ final class Bootstrap
         // switch), and a later scan finding nothing wrong must not erase what
         // an earlier one found.
         self::$skillSkips = [...self::$skillSkips, ...$manager->skipped()];
+
+        // The skills half of the project-tier refusal — a repository that
+        // committed `.sugar-crush/skills`, `.claude/skills` or `.opencode/skills`
+        // as a link out of the checkout gets the tree dropped, and said so
+        // nowhere. Merged, not replaced, for the reason above.
+        self::$projectTierRefusals = [...self::$projectTierRefusals, ...$manager->refusedDirectories()];
 
         return $registry;
     }
@@ -1885,8 +2065,14 @@ final class Bootstrap
     /**
      * Build the built-in coding tools, with a shared InstructionFileLoader
      * wired into every tool that surfaces nested CLAUDE.md/AGENTS.md content
-     * (Read/Edit/Glob) so those files are actually reachable when a user
+     * (Read/Edit/Glob/Write) so those files are actually reachable when a user
      * runs the real CLI binary.
+     *
+     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET — ten entries, and the
+     * count is the domain for every "N built-in tools" figure in `README.md`.
+     * `src/Tools/BuiltIn/` holds exactly these ten classes, so the two numbers
+     * agree by construction now; they did not before, because {@see Write}
+     * existed there and was never listed here.
      *
      * @param InstructionFileLoader|null $loader Pass the caller's loader to
      *        keep the engine's root-instruction reads and the tools' on-touch
@@ -1918,6 +2104,20 @@ final class Bootstrap
             new Edit($root, instructionLoader: $loader, skillNudge: $nudge),
             new Glob($root, instructionLoader: $loader, skillNudge: $nudge),
             new Grep($root),
+            // Write, and it was missing: {@see Edit} refuses a path that does
+            // not exist yet (it requires `file_exists()` AND a non-empty
+            // `old_string`), so with the set at nine the model's ONLY route to
+            // a new file was a `Bash` heredoc — which skips the diff preview
+            // entirely and reaches the permission gate as an opaque shell
+            // command instead of a reviewable write. The class, its jail
+            // routing and its diff rendering were all finished and tested
+            // (`tests/Tools/BuiltIn/WriteTest.php`,
+            // `tests/Tools/WorktreeJailRoutingTest.php`); only this line was
+            // absent, so no real run could reach it. Same three arguments as
+            // Edit deliberately — a write into a skill-scoped or
+            // CLAUDE.md-bearing directory has to announce that context exactly
+            // as touching the path through Read/Edit/Glob would.
+            new Write($root, instructionLoader: $loader, skillNudge: $nudge),
             new WebFetch(),
             new WebSearch(),
             new Doctor(),

@@ -103,6 +103,48 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->assertDirectoryExists($this->tempDir . '/home/.sugar-crush/memory');
     }
 
+    /**
+     * Same reachability class as the Doctor pin below, and the same cause: the
+     * tool existed, was tested, and was never listed in Bootstrap::tools(), so
+     * the live EngineBackend/Runtime loop — which resolves every model tool
+     * call against exactly that array — could not advertise or dispatch it.
+     * With Write absent, Edit's `file_exists()` precondition left `Bash` as the
+     * model's only way to create a file.
+     *
+     * The count is asserted alongside the class, because the failure mode this
+     * pins is an omission from a literal array: `assertArrayHasKey` alone would
+     * still pass if a later edit dropped a different tool. Ten is the whole of
+     * `src/Tools/BuiltIn/` — that directory and this array are the two halves
+     * that have to agree.
+     */
+    public function testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $this->assertArrayHasKey(\SugarCraft\Crush\Tools\BuiltIn\Write::class, $byClass);
+        $this->assertCount(10, $byClass);
+
+        $names = array_map(static fn (object $t): string => $t->name(), array_values($byClass));
+        sort($names);
+        $this->assertSame(
+            // `doctor` is lower-case where the other nine are TitleCase, which
+            // is the wire name the provider schema advertises — asserted as it
+            // actually is rather than as it ought to be, since renaming a tool
+            // the model already knows is not this test's business.
+            ['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'Skill', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
+            $names,
+        );
+
+        // The same loader instance Read/Edit/Glob hold, not merely a non-null
+        // one: loadForPath()'s "already injected this session" map is
+        // per-instance, so a Write on its own loader would re-announce a nested
+        // CLAUDE.md the model had already been shown.
+        $this->assertSame(
+            $this->instructionLoaderOf($byClass[Read::class]),
+            $this->instructionLoaderOf($byClass[\SugarCraft\Crush\Tools\BuiltIn\Write::class]),
+        );
+    }
+
     public function testReadEditGlobEachReceiveANonNullInstructionLoader(): void
     {
         $byClass = $this->toolsByClass();

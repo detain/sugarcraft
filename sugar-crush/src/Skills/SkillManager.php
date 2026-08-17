@@ -107,6 +107,27 @@ final class SkillManager
     }
 
     /**
+     * Every skills DIRECTORY the load refused to enter, keyed by path.
+     *
+     * A different event from {@see skipped()} and reported as one: that array
+     * counts files this loader could not parse, and this one names a whole tree
+     * a repository had moved out of the checkout
+     * ({@see SkillLoader::refusedDirectories()}). Read at launch by
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierRefusals()}.
+     *
+     * Reaches the foreign walks as well as the native ones for the reason the
+     * constructor shares one loader by default; a caller that hands in a
+     * {@see ForeignSkillDiscovery} built on a DIFFERENT loader gets only the
+     * native half, exactly as it already does for {@see skipped()}.
+     *
+     * @return array<string, string>
+     */
+    public function refusedDirectories(): array
+    {
+        return $this->loader->refusedDirectories();
+    }
+
+    /**
      * Get skills for a specific task.
      *
      * @return array<Skill>

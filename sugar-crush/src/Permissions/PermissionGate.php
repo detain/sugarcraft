@@ -16,12 +16,31 @@ use SugarCraft\Crush\ToolCall;
  * Four modes are implemented here (P2B.S2 + P2B.S3):
  * - Default:     reads silently; writes/networking always Ask
  * - AcceptEdits: scoped filesystem writes auto-Allow; everything else Ask
- * - Plan:        all writes Deny; reads Allow
+ * - Plan:        reads and non-redirecting `Bash` Allow; every other write Deny
  * - Auto:        everything runs gated by SafetyClassifier; 3-strike / 20-total circuit breaker
+ *
+ * That Plan line used to read "all writes Deny", which {@see evaluatePlan()}
+ * has never done and does not claim to: a `Bash` call is allowed for
+ * exploration and denied only when {@see isBashWriteCommand()} sees a
+ * redirection in its arguments. The summary is corrected rather than the
+ * evaluator because exploration under Plan is the deliberate behaviour (and
+ * the tested one) — but the difference matters to a caller reasoning about a
+ * `Bash` DECLARATION, which carries no arguments to redirect: see
+ * {@see refuses()}.
  *
  * The `rm -rf /` / `rm -rf ~` circuit breaker (R3) is evaluated unconditionally in
  * `evaluate()`, before rules and before mode dispatch — no rule and no mode can
  * override it.
+ *
+ * TWO ENTRY POINTS, and the difference between them is state:
+ * - {@see evaluate()} settles a real {@see ToolCall} and, in Auto, RECORDS the
+ *   outcome in this instance's circuit-breaker counters.
+ * - {@see refuses()} answers a {@see ToolDeclaration} — a name a definition
+ *   claims it will use — and touches nothing. Read that method before adding
+ *   any other read-only caller.
+ *
+ * Both go through the one private {@see decide()}, so no mode's policy exists
+ * in two places; the Auto arm is the only branch between them.
  *
  * @see PermissionMode for the full set of modes
  */
@@ -63,9 +82,85 @@ final class PermissionGate
     }
 
     /**
-     * Evaluate a tool call and return the permission decision for the current mode.
+     * Evaluate a REAL tool call and return the permission decision for the
+     * current mode.
+     *
+     * MUTATES in {@see PermissionMode::Auto}: the decision advances (or resets)
+     * this instance's circuit-breaker counters, which is how a third
+     * consecutive block of one category escalates to `Ask`. Never call this to
+     * ask a hypothetical question — a call that did not really happen must not
+     * move a counter a real one is judged by. {@see refuses()} is the read-only
+     * question, and it takes a type this method will not accept so the two
+     * cannot be mixed up at a call site.
      */
     public function evaluate(ToolCall $call): PermissionDecision
+    {
+        return $this->decide($call, commitAutoStrikes: true);
+    }
+
+    /**
+     * Would this gate refuse a tool a definition merely DECLARES?
+     *
+     * The read-only half of this class, for a caller holding a declaration
+     * rather than a call: a workflow stage's `tools: [Bash, Write]`, an agent
+     * preset's allow-list — untrusted text naming capability the session's own
+     * policy may refuse. Answers `true` only for {@see PermissionDecision::Deny};
+     * an `Ask` is not a refusal, because settling one needs the blocking
+     * permission prompt and a caller that cannot show one must not turn "would
+     * have asked" into "no".
+     *
+     * DOES NOT MUTATE, and that is the whole reason it exists rather than
+     * callers using {@see evaluate()} with a name-only {@see ToolCall}: doing
+     * that in `Auto` reset the strike counter (see {@see ToolDeclaration} for
+     * the measured sequence).
+     *
+     * Exactly what a declaration can and cannot be refused by, because an
+     * over-claimed check is worse than an absent one:
+     *
+     * - Name-pattern rules DO apply, in every mode: an explicit
+     *   `Deny Bash` / `Deny Bash*` / `Deny mcp__git__*` refuses the
+     *   declaration. This is the ONLY refusal available under `Auto`.
+     * - Argument-sensitive rules (`Bash(rm *)`) cannot match: a declaration has
+     *   no arguments. Left to the call site that has them.
+     * - The `rm -rf /` breaker cannot fire either, for the same reason — it
+     *   reads `arguments['command']`.
+     * - `Plan` refuses `Edit`, `Write` and every `mcp__*` declaration, but NOT
+     *   `Bash`: what makes a `Bash` call a write under Plan is a redirection in
+     *   its arguments ({@see isBashWriteCommand()}), so a bare `Bash` name is
+     *   allowed there exactly as an exploratory `git log` is.
+     * - `DontAsk` refuses every declaration that is not a read-only tool.
+     * - `Auto` refuses NOTHING through its mode evaluator, and this is
+     *   structural rather than an oversight: Auto's judgement is
+     *   {@see SafetyClassifier}'s, and the classifier reads
+     *   `arguments['command']` — a name alone is never dangerous to it. A
+     *   declaration under Auto is therefore only refusable by a Deny rule
+     *   (above). Auto's real enforcement is per-call, at whichever layer runs
+     *   the call, through {@see evaluate()}.
+     * - `Default` / `AcceptEdits` refuse nothing (they `Ask`), and
+     *   `BypassPermissions` refuses nothing by definition.
+     */
+    public function refuses(ToolDeclaration $declaration): bool
+    {
+        return $this->decide(
+            $declaration->asNamedCallForGateOnly(),
+            commitAutoStrikes: false,
+        ) === PermissionDecision::Deny;
+    }
+
+    /**
+     * The one copy of the decision path, shared by both entry points.
+     *
+     * Shared rather than duplicated because the alternative — a second
+     * "read-only" evaluator with its own mode table — is a policy that drifts
+     * from the enforced one silently, and a security check that no longer
+     * matches the thing it claims to predict is worse than no check.
+     *
+     * @param bool $commitAutoStrikes Whether an Auto-mode outcome may be
+     *        recorded in the circuit-breaker counters. TRUE only for a real
+     *        call: {@see evaluate()} passes true, {@see refuses()} passes
+     *        false. It is the ONLY difference between the two paths.
+     */
+    private function decide(ToolCall $call, bool $commitAutoStrikes): PermissionDecision
     {
         // 0. Circuit breaker: `rm -rf /` / `rm -rf ~` is refused unconditionally,
         // in every mode, before rules are considered — no Allow rule and no mode
@@ -85,7 +180,9 @@ final class PermissionGate
             PermissionMode::Default => $this->evaluateDefault($call),
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call),
             PermissionMode::Plan => $this->evaluatePlan($call),
-            PermissionMode::Auto => $this->evaluateAuto($call),
+            PermissionMode::Auto => $commitAutoStrikes
+                ? $this->evaluateAuto($call)
+                : $this->autoDeclarationDecision(),
             // P2B.S4: DontAsk and BypassPermissions have dedicated evaluators
             PermissionMode::DontAsk => $this->evaluateDontAsk($call),
             PermissionMode::BypassPermissions => $this->evaluateBypassPermissions($call),
@@ -169,6 +266,12 @@ final class PermissionGate
      * Auto: everything runs gated by SafetyClassifier; circuit breaker triggers Ask after
      * 3 consecutive blocks of the same category OR 20 total blocks in the session.
      *
+     * The ONLY stateful evaluator in this class, and the reason
+     * {@see refuses()} exists: every outcome here is recorded, including the
+     * safe one, which resets `$consecutiveBlocks`. That reset is correct for a
+     * real call (a safe command genuinely breaks a run of blocked ones) and
+     * corrupting for a hypothetical one — hence {@see autoDeclarationDecision()}.
+     *
      * @see SafetyClassifier for the 13 dangerous-action categories.
      */
     private function evaluateAuto(ToolCall $call): PermissionDecision
@@ -207,6 +310,34 @@ final class PermissionGate
         }
 
         return PermissionDecision::Deny;
+    }
+
+    /**
+     * Auto's answer for a {@see ToolDeclaration} — the one call path that must
+     * leave the circuit-breaker counters exactly as it found them.
+     *
+     * Takes no {@see ToolCall} on purpose. A declaration carries no arguments,
+     * and {@see SafetyClassifier::classify()} reads `arguments['command']`, so
+     * the classifier returns null for every possible declaration — running it
+     * would be theatre, and reproducing {@see evaluateAuto()}'s counter
+     * arithmetic below a category that cannot occur would be unreachable code
+     * dressed as rigour. Auto's declaration policy is the single statement
+     * below, and {@see refuses()} says so where a caller will read it: under
+     * Auto only an explicit Deny RULE (matched before this method, in
+     * {@see decide()}) refuses a declaration.
+     *
+     * Fail-closed parity with {@see evaluateAuto()} is kept for the
+     * missing-classifier case even though `refuses()` treats Ask and Allow
+     * alike, so that a misconfigured Auto gate never reads as a confident
+     * "allow" from either entry point.
+     */
+    private function autoDeclarationDecision(): PermissionDecision
+    {
+        if ($this->classifier === null) {
+            return PermissionDecision::Ask;
+        }
+
+        return PermissionDecision::Allow;
     }
 
     /**

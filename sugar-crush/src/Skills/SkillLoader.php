@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Skills;
 
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 use Symfony\Component\Yaml\Yaml;
 
@@ -31,6 +32,15 @@ final class SkillLoader
     private array $skipped = [];
 
     /**
+     * @var array<string, string> skills directory => why the whole tree was
+     *      refused, kept apart from {@see $skipped} on purpose: the one-line
+     *      launch notice built off that array says "N skill files could not be
+     *      read", and a refused DIRECTORY is not an unreadable file. Reporting
+     *      it through the same channel would have made a true message false.
+     */
+    private array $refusedDirectories = [];
+
+    /**
      * @param bool|null $reportSkips Force skip reporting on (true) or off
      *        (false) for this loader; null — the default every production
      *        caller uses — lets {@see DEBUG_SKIPS_ENV} decide.
@@ -44,14 +54,18 @@ final class SkillLoader
      *        directory a symlink inside $dir is allowed to resolve into,
      *        because the same person owns both. Null — the default, and what
      *        every PROJECT tree must use — confines the walk to $dir itself.
+     * @param string|null $anchoredIn See {@see skillFilesIn()}: the checkout
+     *        $dir was derived from, which $dir ITSELF must resolve strictly
+     *        inside. Every project tree must pass one; null means "this is not a
+     *        directory a repository chose the location of".
      *
      * @return array<string, Skill>
      */
-    public function loadFromDirectory(string $dir, ?string $ownedBy = null): array
+    public function loadFromDirectory(string $dir, ?string $ownedBy = null, ?string $anchoredIn = null): array
     {
         $skills = [];
 
-        foreach ($this->skillFilesIn($dir, $ownedBy) as $path) {
+        foreach ($this->skillFilesIn($dir, $ownedBy, $anchoredIn) as $path) {
             try {
                 $skill = Skill::fromFile($path);
                 $skillName = $this->skillKeyFor($dir, $path, $skill->name);
@@ -75,6 +89,25 @@ final class SkillLoader
     public function skipped(): array
     {
         return $this->skipped;
+    }
+
+    /**
+     * Every skills DIRECTORY this loader refused to walk at all, keyed by the
+     * path as it was spelled, mapped to why.
+     *
+     * Separate from {@see skipped()} because it is a different kind of answer: a
+     * skip is one file this loader could not parse, and this is a whole tree it
+     * declined to enter because a repository had moved it. Surfaced at launch by
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierRefusals()},
+     * alongside the workflow tier's equivalent — the two refusals are the same
+     * event in two subsystems and a user who hits one has no reason to care
+     * which class noticed.
+     *
+     * @return array<string, string>
+     */
+    public function refusedDirectories(): array
+    {
+        return $this->refusedDirectories;
     }
 
     /**
@@ -103,6 +136,23 @@ final class SkillLoader
         $report = $this->reportSkips ?? self::debugSkipsRequested();
         if ($report) {
             error_log("Failed to load skill from {$path}: {$reason}");
+        }
+    }
+
+    /**
+     * Note a skills directory refused wholesale and walk nothing in it.
+     *
+     * Same quiet-by-default contract as {@see recordSkip()} — the reasoning
+     * about stderr landing inside a frame the renderer owns applies identically —
+     * into a separate array for the reason {@see $refusedDirectories} states.
+     */
+    private function recordRefusedDirectory(string $dir, string $reason): void
+    {
+        $this->refusedDirectories[$dir] = $reason;
+
+        $report = $this->reportSkips ?? self::debugSkipsRequested();
+        if ($report) {
+            error_log("Refused skills directory {$dir}: {$reason}");
         }
     }
 
@@ -165,7 +215,47 @@ final class SkillLoader
      * path is therefore required to stay inside the tree it was reached from;
      * one that does not is recorded as a skip and not walked.
      *
-     * $ownedBy WIDENS that boundary to a second directory, and exists for
+     * CONFINEMENT TO $dir IS NOT ENOUGH ON ITS OWN, and that was this class's
+     * open half. `$root` below is `realpath($dir)`, so when $dir is ITSELF a
+     * symlink the boundary travels with it and nothing inside it can ever be
+     * outside it — per-entry containment is being asked the wrong question. A
+     * repository chooses where that directory is: `.sugar-crush/skills`,
+     * `.claude/skills` and `.opencode/skills` are all paths inside the checkout,
+     * and git stores a symlink happily. Measured on this host against the
+     * pre-fix build, for all three of those paths committed as
+     * `-> <a directory outside the checkout>`: `loadFromDirectory()` returned
+     * the planted skill with `SENTINEL-SKILL-BODY` in its `content`,
+     * `loadManifestsFromDirectory()` returned its `description`, and
+     * `skillDirectoriesIn()` returned its absolute path — with ZERO skips
+     * recorded, because nothing had been refused. A skill body is prompt
+     * context, so that is a file-disclosure primitive reachable by `git clone`,
+     * and it is a strictly LARGER payload than the workflow tier's equivalent
+     * (which discloses `.yaml` basenames and `description`s):
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::readableProjectDir()}
+     * had closed its half and this one was left open and documented as
+     * "tracked separately".
+     *
+     * $anchoredIn closes it, with the same trust anchor and the same predicate:
+     * $dir must resolve STRICTLY inside the checkout it was derived from
+     * ({@see ContainedPath::below()}), which is the one path in the pair a
+     * repository cannot have forged — moving it would mean a link ABOVE the
+     * checkout. A link that stays inside the checkout is honoured, because
+     * `.claude/skills -> shared/skills` is repository content pointing at
+     * repository content; a link resolving ONTO the checkout root is not, for
+     * the reason {@see ContainedPath} states. The refusal DROPS THE TREE rather
+     * than emptying it — the built-in and user tiers are unaffected, exactly as
+     * a refused workflow tier leaves the user's own directory alone — and it is
+     * recorded through {@see recordRefusedDirectory()} so the launch can say so.
+     *
+     * A tree with no $anchoredIn is unchanged: the user's own
+     * `~/.claude/skills` and the built-in directory are not locations a
+     * repository picked, so there is no second boundary for them to be held
+     * inside. Note also what needs no argument here that the workflow tier
+     * needed one for: a dangling or unresolvable $dir returns nothing at all,
+     * since `realpath($dir) === false` short-circuits below — this walker has no
+     * "leave it readable so an error message can name it" case to defend.
+     *
+     * $ownedBy WIDENS the per-entry boundary to a second directory, and exists for
      * exactly the real layout above: `~/.config/opencode/skills/db-query`
      * points OUT of the skills tree and into `~/.config/skillshare`, so
      * confining a user tree to itself would revert the fix that made those
@@ -191,13 +281,29 @@ final class SkillLoader
      *
      * @param string|null $ownedBy an additional containment root, for a tree
      *        whose links are the user's own; null confines the walk to $dir
+     * @param string|null $anchoredIn the checkout $dir was derived from, which
+     *        $dir itself must resolve strictly inside; null for a directory
+     *        whose location no repository chose
      *
      * @return list<string>
      */
-    private function skillFilesIn(string $dir, ?string $ownedBy = null): array
+    private function skillFilesIn(string $dir, ?string $ownedBy = null, ?string $anchoredIn = null): array
     {
         $root = realpath($dir);
         if ($root === false || !is_dir($dir)) {
+            return [];
+        }
+
+        if ($anchoredIn !== null && !ContainedPath::below($dir, $anchoredIn)) {
+            $this->recordRefusedDirectory($dir, sprintf(
+                'resolves to %s, %s the checkout it was reached from (%s) — a repository chooses where this '
+                . 'directory is, and a link out of the checkout would put unrelated files\' SKILL.md bodies '
+                . "in the model's prompt context",
+                $root,
+                realpath($anchoredIn) === $root ? 'which is exactly' : 'outside',
+                $anchoredIn,
+            ));
+
             return [];
         }
 
@@ -305,15 +411,16 @@ final class SkillLoader
      * (it `realpath()`ed the base directory and iterated that), and because a
      * caller keying by basename should not get two spellings of one directory.
      *
-     * @param string|null $ownedBy See {@see skillFilesIn()}.
+     * @param string|null $ownedBy    See {@see skillFilesIn()}.
+     * @param string|null $anchoredIn See {@see skillFilesIn()}.
      *
      * @return list<string>
      */
-    public function skillDirectoriesIn(string $dir, ?string $ownedBy = null): array
+    public function skillDirectoriesIn(string $dir, ?string $ownedBy = null, ?string $anchoredIn = null): array
     {
         $dirs = [];
 
-        foreach ($this->skillFilesIn($dir, $ownedBy) as $file) {
+        foreach ($this->skillFilesIn($dir, $ownedBy, $anchoredIn) as $file) {
             $real = realpath(\dirname($file));
             if ($real !== false) {
                 $dirs[$real] = true;
@@ -326,11 +433,24 @@ final class SkillLoader
     /**
      * Whether $path resolves inside one of $boundaries.
      *
+     * THE PREDICATE ITSELF LIVES IN {@see ContainedPath}, which is where the
+     * "resolve both sides, compare with a trailing separator" argument is
+     * written down once — including why the separator is load-bearing, and why
+     * an ENTRY resolving onto its boundary counts as contained while a
+     * DIRECTORY resolving onto its trust anchor does not. This class ran its own
+     * copy of that idiom until the copy was found to be missing the
+     * directory-level half; there is one implementation now, and
+     * {@see skillFilesIn()} asks it both questions.
+     *
      * A path that will not resolve at all is NOT contained: `realpath()`
      * answers false for a dangling link and for a target this process cannot
      * reach, and neither is something to walk. Refused paths are recorded as
      * skips by the caller's own arm rather than here, so the diagnostic names
      * the escape rather than the check.
+     *
+     * $boundaries arrive already canonical; asking {@see ContainedPath} to
+     * resolve them again is one cached stat per boundary and the price of the
+     * predicate not living at its call sites.
      *
      * @param list<string> $boundaries already-canonical containment roots
      */
@@ -342,10 +462,7 @@ final class SkillLoader
         }
 
         foreach ($boundaries as $boundary) {
-            // The trailing separator on both sides is what stops `/a/b` being
-            // read as containing `/a/bevil` — the prefix match that would have
-            // made the boundary decorative.
-            if ($real === $boundary || str_starts_with($real . '/', rtrim($boundary, '/') . '/')) {
+            if (ContainedPath::within($path, $boundary)) {
                 return true;
             }
         }
@@ -380,7 +497,10 @@ final class SkillLoader
      */
     public function loadProjectSkills(string $projectRoot): array
     {
-        return $this->loadFromDirectory($this->projectSkillsDir($projectRoot));
+        // $projectRoot is passed on, not merely used to build the path: it is
+        // the boundary the skills DIRECTORY is itself held inside. See
+        // {@see skillFilesIn()}'s $anchoredIn for the escape that leaves open.
+        return $this->loadFromDirectory($this->projectSkillsDir($projectRoot), null, $projectRoot);
     }
 
     /**
@@ -525,15 +645,16 @@ final class SkillLoader
      * (loadSkillManifest()) instead of the full Skill (Skill::fromFile()),
      * so no body content is read from disk at this stage.
      *
-     * @param string|null $ownedBy See {@see loadFromDirectory()}.
+     * @param string|null $ownedBy    See {@see loadFromDirectory()}.
+     * @param string|null $anchoredIn See {@see loadFromDirectory()}.
      *
      * @return array<string, array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, paths: array<string>, sourcePath: string}>
      */
-    public function loadManifestsFromDirectory(string $dir, ?string $ownedBy = null): array
+    public function loadManifestsFromDirectory(string $dir, ?string $ownedBy = null, ?string $anchoredIn = null): array
     {
         $manifests = [];
 
-        foreach ($this->skillFilesIn($dir, $ownedBy) as $path) {
+        foreach ($this->skillFilesIn($dir, $ownedBy, $anchoredIn) as $path) {
             try {
                 $manifest = $this->loadSkillManifest(dirname($path));
                 $manifest['name'] = $this->skillKeyFor($dir, $path, $manifest['name']);
@@ -584,8 +705,13 @@ final class SkillLoader
         // Same $ownedBy widening the eager walk gets — see {@see loadUserSkills()}.
         $manifests = array_merge($manifests, $this->loadManifestsFromDirectory($this->userSkillsDir(), self::homeDir()));
 
-        // Project skills override everything else
-        $manifests = array_merge($manifests, $this->loadManifestsFromDirectory($this->projectSkillsDir($projectRoot)));
+        // Project skills override everything else — and are the one tier whose
+        // directory a repository picked the location of, so the root is passed
+        // as the anchor it must resolve inside ({@see loadProjectSkills()}).
+        $manifests = array_merge(
+            $manifests,
+            $this->loadManifestsFromDirectory($this->projectSkillsDir($projectRoot), null, $projectRoot),
+        );
 
         return $manifests;
     }

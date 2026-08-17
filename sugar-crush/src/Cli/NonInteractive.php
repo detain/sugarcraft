@@ -172,6 +172,9 @@ final class NonInteractive
             // when a backend was actually built here: a caller that supplied
             // one (the tests, a headless server) has scanned nothing.
             Bootstrap::reportSkillSkips();
+            // And the other half of the same silence: a project skills
+            // directory refused wholesale for resolving out of the checkout.
+            Bootstrap::reportProjectTierRefusals();
         }
 
         $history = self::historyFrom($args->prompt, self::readStdinIfPiped());

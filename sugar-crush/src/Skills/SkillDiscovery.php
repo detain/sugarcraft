@@ -46,6 +46,21 @@ final class SkillDiscovery
     }
 
     /**
+     * Every skills directory these walks refused wholesale, keyed by path —
+     * {@see SkillLoader::refusedDirectories()} for the instance behind them.
+     *
+     * Exposed alongside {@see skipped()} so the future caller this dormant seam
+     * is waiting for inherits both halves of the diagnostic rather than only the
+     * per-file one.
+     *
+     * @return array<string, string>
+     */
+    public function refusedDirectories(): array
+    {
+        return $this->loader->refusedDirectories();
+    }
+
+    /**
      * Discover project-level skills under {projectRoot}/.sugar-crush/skills/.
      *
      * @return array<string> absolute skill directory paths
@@ -54,7 +69,12 @@ final class SkillDiscovery
     {
         $path = $this->buildProjectPath($projectRoot);
 
-        return $this->discoverSkillsAt($path);
+        // The root is the anchor the directory itself is held inside, not just
+        // the thing the path was built from — see
+        // {@see SkillLoader::skillFilesIn()}'s $anchoredIn. A dormant seam
+        // inheriting the escape the live one closed is exactly what this class's
+        // own doc-block warns about.
+        return $this->discoverSkillsAt($path, null, $projectRoot);
     }
 
     /**
@@ -91,7 +111,10 @@ final class SkillDiscovery
     {
         $path = rtrim($libPath, '/') . '/.sugar-crush/skills';
 
-        return $this->discoverSkillsAt($path);
+        // A lib path is a checkout too — a vendored dependency is somebody
+        // else's repository content, which is the same provenance the project
+        // tree's anchor exists for.
+        return $this->discoverSkillsAt($path, null, $libPath);
     }
 
     /**
@@ -197,14 +220,17 @@ final class SkillDiscovery
      * which is where it belongs: `error_log()` writes to stderr, and this is
      * reachable from a path where the TUI owns the screen.
      *
-     * @param string|null $ownedBy widens containment to a second root, for a
+     * @param string|null $ownedBy   widens containment to a second root, for a
      *        tree whose links are the user's own; null confines the walk
+     * @param string|null $anchoredIn the checkout $path must itself resolve
+     *        strictly inside; null for a directory whose location no repository
+     *        chose ({@see SkillLoader::skillFilesIn()})
      *
      * @return array<string>
      */
-    private function discoverSkillsAt(string $path, ?string $ownedBy = null): array
+    private function discoverSkillsAt(string $path, ?string $ownedBy = null, ?string $anchoredIn = null): array
     {
-        return $this->loader->skillDirectoriesIn($path, $ownedBy);
+        return $this->loader->skillDirectoriesIn($path, $ownedBy, $anchoredIn);
     }
 
     /**

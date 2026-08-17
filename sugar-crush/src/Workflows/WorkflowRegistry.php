@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Workflows;
 
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
+use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -28,14 +30,158 @@ final class WorkflowRegistry
     /** @var array<string, Workflow> */
     private array $registered = [];
 
+    /**
+     * Why the project tier's directory was refused the last time
+     * {@see readableProjectDir()} judged it, or null when it was not refused.
+     *
+     * The diagnostic half of the refusal, kept rather than thrown away, for the
+     * reason {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()} keeps
+     * its skips: the refusal is silent everywhere else — the not-found message
+     * stops naming the directory and {@see projectWorkflowsPath()} still
+     * reports it — so a user whose repository ships a workflows directory this
+     * loader will not read had nothing at all telling them so. Read through
+     * {@see projectTierRefusal()}, surfaced at launch by
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierRefusals()}.
+     */
+    private ?string $projectDirRefusal = null;
+
+    /**
+     * @param string      $workflowsPath        The user's own workflow directory. Both
+     *        forms load from here: a `.php` file is `require`d, which is running its
+     *        code, and this is the directory whose contents the user wrote.
+     * @param string|null $projectWorkflowsPath A project's checked-in workflow
+     *        directory, or null for none. `.yaml` ONLY, and that asymmetry is the
+     *        whole point of the parameter: {@see load()} reaches a `.php` workflow
+     *        through `require`, so honouring one out of a cloned repository would
+     *        make `/workflow run <name>` arbitrary code execution from repository
+     *        content. A YAML workflow is declarative — agent labels, prompts and
+     *        tool-name lists — and the tasks it names are dispatched as
+     *        {@see \SugarCraft\Crush\Agents\SubAgent}s that carry the launch's
+     *        {@see \SugarCraft\Crush\Permissions\PermissionGate}, which refuses
+     *        any tool the definition DECLARES and this session's mode denies
+     *        before the stage is dispatched at all
+     *        ({@see WorkflowEngine::refuseDeniedTools()}). What that gate does
+     *        not yet do is decide an individual tool call mid-run, and the
+     *        reason is not a missing gate: the pool's executor is still the
+     *        simulation described on {@see \SugarCraft\Crush\Agents\ProcessExecutor},
+     *        so a workflow stage issues no provider request and no tool call for
+     *        anything to evaluate. Read this parameter's safety story as
+     *        "declarative, and its declared capability is gated", NOT as
+     *        "identical enforcement to a typed delegation" — a typed delegation
+     *        through {@see \SugarCraft\Crush\Agents\AgentManager::executeSubAgent()}
+     *        does evaluate real tool calls, and no production caller reaches
+     *        that path either.
+     *
+     *        So a `.php` file sitting in a project directory is not a workflow at
+     *        all here: it is not listed and not loaded, which is also what stops
+     *        it shadowing a same-named one of the user's own.
+     *
+     *        Symlinks in this tier are CONFINED to it, and the DIRECTORY itself
+     *        is confined to $projectRoot — {@see readableProjectDir()} states
+     *        why per-entry confinement could not see a symlinked workflows
+     *        directory, and what boundary each of the two checks enforces. Both
+     *        halves are decided by {@see \SugarCraft\Crush\Support\ContainedPath},
+     *        which is also what a project's `.claude/skills` now asks
+     *        ({@see \SugarCraft\Crush\Skills\SkillLoader::skillFilesIn()}) — the
+     *        two tiers ran their own copies of the idiom until the skills one
+     *        was found to be missing the directory-level half entirely, which is
+     *        why there is one implementation and no restatement of it here.
+     *
+     *        This used to be the one tier-difference in the other direction,
+     *        justified by "nothing here reads a byte that is not the value of a
+     *        known workflow key". That justification was false, and what made it
+     *        false was the loader's own error reporting: a committed
+     *        `leak.yaml -> ../../secret/id_rsa` was LISTED by {@see list()}, and
+     *        `/workflow run leak` answered with the YAML parser's message —
+     *        which quotes the offending line of the file it was parsing. A line
+     *        of the linked target's content reached the transcript and the
+     *        session store, so a REJECTED target leaked more than an accepted
+     *        one would. Both halves are closed: the parse error no longer
+     *        carries the parser's snippet (see {@see buildFromYamlFile()}), and
+     *        a project-tier entry whose real path is outside this directory —
+     *        or whose directory's own real path is outside the checkout it was
+     *        reached from — is neither listed nor loaded.
+     *
+     *        The user's own tier stays unconfined: it is the directory whose
+     *        `.php` files this class `require`s, so a link inside it is the
+     *        user pointing at their own file, not repository content reaching
+     *        for a path the session happens to be able to read. When one
+     *        directory is BOTH tiers (a session rooted at the user's home), the
+     *        project tier's confinement is what applies — the stricter answer,
+     *        deliberately, because "is this repository content?" cannot be told
+     *        apart there and the safe reading of an ambiguous case is the strict
+     *        one. {@see list()} and {@see load()} apply the identical predicate,
+     *        so the two never disagree about what exists.
+     * @param string|null $projectRoot The checkout $projectWorkflowsPath was
+     *        derived from, when the caller knows it. It is the boundary the
+     *        project workflows DIRECTORY is itself held inside, which is a
+     *        different question from the one {@see containedIn()} answers about
+     *        an entry — {@see readableProjectDir()} states why the second
+     *        question exists, what a caller that omits this gets instead, and
+     *        why the answer is not simply "refuse every link".
+     *
+     *        BE PRECISE ABOUT WHAT IT BUYS, because "inside the checkout" and
+     *        "repository content" are not the same set and this doc-block used
+     *        to equate them. A checkout also holds untracked, gitignored,
+     *        developer-local files. The residual that survives is therefore: a
+     *        repository can commit `.sugar-crush/workflows -> <some other
+     *        directory in the checkout>` and have {@see list()} disclose the
+     *        basenames of every `[a-zA-Z0-9_-]+\.yaml` in it, plus the
+     *        `description` of each one that parses as a workflow map. What
+     *        {@see readableProjectDir()}'s strictness removes is the version of
+     *        that primitive worth having — a link resolving ONTO the checkout
+     *        root, which is where a developer's `local-secrets.yaml` and
+     *        `kubeconfig.yaml` actually sit, and which `-> ..` reached in one
+     *        committed line.
+     */
     public function __construct(
         private readonly string $workflowsPath = '~/.sugar-crush/workflows/',
+        private readonly ?string $projectWorkflowsPath = null,
+        private readonly ?string $projectRoot = null,
     ) {}
+
+    /**
+     * The user's own workflow directory, tilde expanded and without its
+     * trailing slash.
+     *
+     * Public because it is also where {@see WorkflowEngine} keeps its pause
+     * files: the engine anchors those to this registry's directory rather than
+     * to `~` so that a registry pointed somewhere trusted does not pause into a
+     * directory nobody vetted. See {@see WorkflowEngine::getPauseFilePath()}.
+     */
+    public function workflowsPath(): string
+    {
+        return $this->expandPath($this->workflowsPath);
+    }
+
+    /**
+     * The project's checked-in workflow directory, expanded, or null when this
+     * registry was built without one.
+     *
+     * The CONFIGURED directory, not a promise that anything is read from it:
+     * {@see readableProjectDir()} can refuse the directory itself, and this
+     * accessor still names it. Callers wanting "where workflows actually come
+     * from" want {@see list()}.
+     */
+    public function projectWorkflowsPath(): ?string
+    {
+        return $this->projectWorkflowsPath === null
+            ? null
+            : $this->expandPath($this->projectWorkflowsPath);
+    }
 
     /**
      * Load a workflow by name from the filesystem or registered sessions.
      *
      * Tries .php first, then falls back to .yaml.
+     *
+     * VALIDATION BELOW COVERS YAML ONLY, and the gap is not fixable here: a
+     * user-tier `.php` workflow is reached by `require`, so a syntax error in it
+     * is a COMPILE fatal — uncatchable, which means {@see \SugarCraft\Crush\Chat}'s
+     * `catch (\Throwable)` around `/workflow run` cannot keep the session alive
+     * through one. A PHP workflow that does not parse takes the TUI with it. The
+     * YAML path, by contrast, reports every malformed shape as a
+     * {@see WorkflowLoadException} the command turns into one transcript line.
      *
      * @throws WorkflowNotFoundException When the workflow file does not exist.
      * @throws WorkflowLoadException When the file does not return a Workflow instance.
@@ -47,10 +193,51 @@ final class WorkflowRegistry
             return $this->registered[$name];
         }
 
-        // Try PHP file first
+        $this->validateName($name);
+
+        // The project tier is consulted BEFORE the user's own directory, the
+        // same precedence {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()}
+        // gives a checked-in agent preset: what `deploy` means is a property of
+        // the checkout you are sitting in.
+        //
+        // THAT CROSSES EXTENSIONS, and the previous phrasing here ("the override
+        // it can perform is bounded to data") was true about the PAYLOAD and
+        // silent about the SUBSTITUTION. Because this fast path runs before
+        // {@see resolvePhpPath()} below, a cloned `deploy.yaml` shadows the
+        // user's own `deploy.php`: `/workflow run deploy` runs the repository's
+        // declarative stages instead of the PHP workflow the user wrote.
+        // Deliberate, and pinned by
+        // `testAProjectYamlShadowsASameNamedUserPhpWorkflow`. The alternative —
+        // letting a `.php` win by extension — makes what a name means depend on
+        // which spelling each tier happens to use, and hands a stale
+        // `~/.sugar-crush/workflows/deploy.php` the power to shadow the curated
+        // `deploy.yaml` a repository ships, which is the same surprise pointing
+        // the other way. What the tier still cannot do is ADD code: it is
+        // `.yaml`-only (see the constructor), so the substitution replaces code
+        // with data and never the reverse.
+        //
+        // is_file() AND contained: is_file() stats THROUGH a symlink, so
+        // without the second test a committed `deploy.yaml -> /etc/shadow`
+        // would be opened here. The listing filters the same entry with the
+        // same predicate (see baseNames()), which is what keeps "listed" and
+        // "loadable" the same set.
+        $projectYaml = $this->projectYamlPath($name);
+        if ($projectYaml !== null && is_file($projectYaml) && $this->containedIn($projectYaml, dirname($projectYaml))) {
+            return $this->buildFromYamlFile($projectYaml)->build();
+        }
+
+        // Try PHP file first.
+        //
+        // is_file(), NOT file_exists(): a DIRECTORY named `<name>.php` satisfies
+        // file_exists(), and `require`ing a directory emits a PHP Warning on
+        // stderr — which lands in the middle of a live TUI frame — before
+        // failing with an uncatchable "Failed opening required" compile error.
+        // list() has always filtered directories out (see baseNames()), so
+        // file_exists() here made load() strictly MORE permissive than the
+        // listing, which is the one direction that can hurt.
         $phpPath = $this->resolvePhpPath($name);
 
-        if (file_exists($phpPath)) {
+        if (is_file($phpPath)) {
             $workflow = require $phpPath;
 
             if (!$workflow instanceof Workflow) {
@@ -69,20 +256,82 @@ final class WorkflowRegistry
     /**
      * List all available workflow names from the filesystem.
      *
-     * Returns base names of .php and .yaml files in the workflows directory,
-     * excluding hidden files and directories.
+     * Returns base names of .php and .yaml files in the user's workflow
+     * directory plus .yaml files in the project one, excluding hidden files
+     * and directories.
+     *
+     * Deliberately the exact set of names {@see load()} will look a file up for,
+     * which is why three kinds of entry are absent: a project `.php` file (that
+     * tier does not honour PHP at all), a directory that merely ends in `.yaml`
+     * or `.php`, and a file whose stripped basename is not a name
+     * {@see validateName()} accepts — `lint.v2.yaml` among them. Listing a name
+     * whose `/workflow run` answers "not found" or "Invalid workflow name" is
+     * worse than not listing it.
+     *
+     * The set of names, not the set of names that will SUCCEED: a listed
+     * `deploy` whose YAML is malformed is still listed, and `load()` reports the
+     * malformed shape. Discovery and validity are separate answers.
+     *
+     * "From the filesystem", also literally: a workflow put in this session's
+     * memory by {@see register()} is deliberately absent, even though
+     * {@see load()} resolves it first of all. A registered workflow is a value
+     * the calling code already holds — it needs no discovering, it exists only
+     * for this process, and listing it would advertise as available-to-run
+     * something no later session can resolve. That is the one direction in
+     * which this listing is narrower than the loader, and it is intentional.
      *
      * @return string[]
      */
     public function list(): array
     {
-        $expandedPath = $this->expandPath($this->workflowsPath);
+        $names = [];
 
-        if (!is_dir($expandedPath)) {
+        foreach ($this->yamlDirectories() as $dir => $confineSymlinks) {
+            foreach ($this->baseNames($dir, '.yaml', $confineSymlinks) as $name) {
+                $names[$name] = true;
+            }
+        }
+
+        foreach ($this->baseNames($this->workflowsPath(), '.php') as $name) {
+            $names[$name] = true;
+        }
+
+        $names = array_keys($names);
+        sort($names);
+
+        return $names;
+    }
+
+    /**
+     * Base names of the $suffix files directly inside $dir, hidden entries and
+     * subdirectories skipped, and names {@see load()} would refuse skipped too.
+     *
+     * That last filter is what makes {@see list()}'s "exactly the set load() can
+     * resolve" claim true rather than nearly true. Stripping the suffix leaves
+     * the REST of the basename intact, so `lint.v2.yaml` used to be listed as
+     * `lint.v2` — a name {@see validateName()} then rejects, i.e. `/workflow
+     * list` offering an entry whose `/workflow run` answers "Invalid workflow
+     * name". Pre-existing for a user's own directory; the project tier is what
+     * made it reachable by committing a file, which is why it is filtered here
+     * rather than left as a curiosity.
+     *
+     * @param bool $confineSymlinks Skip an entry whose real path resolves
+     *        outside $dir. True for the project tier, where an entry is
+     *        repository content and a link out of the directory is a request to
+     *        read a path that has nothing to do with the checkout — see the
+     *        constructor for what one used to leak. {@see load()} applies the
+     *        identical predicate, so a name dropped here is also a name the
+     *        loader refuses to resolve, and the two answers stay one answer.
+     *
+     * @return list<string>
+     */
+    private function baseNames(string $dir, string $suffix, bool $confineSymlinks = false): array
+    {
+        if (!is_dir($dir)) {
             return [];
         }
 
-        $files = scandir($expandedPath);
+        $files = scandir($dir);
         if ($files === false) {
             return [];
         }
@@ -90,20 +339,287 @@ final class WorkflowRegistry
         $names = [];
         foreach ($files as $file) {
             // Skip hidden files, '.', and '..'
-            if ($file[0] === '.') {
+            if ($file === '' || $file[0] === '.') {
                 continue;
             }
 
-            if (str_ends_with($file, '.php')) {
-                $names[] = basename($file, '.php');
-            } elseif (str_ends_with($file, '.yaml')) {
-                $names[] = basename($file, '.yaml');
+            if (!str_ends_with($file, $suffix) || !is_file($dir . '/' . $file)) {
+                continue;
+            }
+
+            if ($confineSymlinks && !$this->containedIn($dir . '/' . $file, $dir)) {
+                continue;
+            }
+
+            $name = basename($file, $suffix);
+            if ($this->nameIsValid($name)) {
+                $names[] = $name;
             }
         }
 
-        sort($names);
-
         return $names;
+    }
+
+    /**
+     * Does $path really live under $dir, rather than merely being named there?
+     *
+     * `is_file()` and `Yaml::parseFile()` both stat and read THROUGH a symlink,
+     * so this is the only thing standing between a committed
+     * `deploy.yaml -> /etc/shadow` and the loader opening it.
+     *
+     * THE PREDICATE ITSELF LIVES IN {@see ContainedPath}, which is where the
+     * "resolve both sides, compare with a trailing separator" argument is
+     * written down once — including why the separator is load-bearing and what
+     * an unresolvable path answers. This method exists for the ENTRY question
+     * ({@see ContainedPath::within()}, equality counted as contained) and for
+     * the sentence below, which is specific to this class.
+     *
+     * $dir is resolved too, which is what makes this predicate blind to a $dir
+     * that is ITSELF a link: the boundary moves with it. That is a real escape
+     * and it is answered separately, on the directory rather than the entry, by
+     * {@see readableProjectDir()} — which asks the STRICTER
+     * {@see ContainedPath::below()} precisely because the two questions differ
+     * about equality.
+     *
+     * The separator half is pinned by
+     * `testASiblingDirectorySharingTheProjectDirsNameIsNotContained`: dropping
+     * the `. '/'` from either side of that comparison left the whole suite green
+     * while making a `proj/sib.yaml -> ../projevil/x.yaml` link loadable.
+     */
+    private function containedIn(string $path, string $dir): bool
+    {
+        return ContainedPath::within($path, $dir);
+    }
+
+    /**
+     * Every directory a `.yaml` workflow may be read from, project tier first,
+     * mapped to whether symlinks inside it are confined to it.
+     *
+     * Deduplicated because the two tiers genuinely can name one directory — a
+     * session rooted at the user's own home resolves both to
+     * `~/.sugar-crush/workflows` — and a repeated entry would put the same
+     * directory twice into {@see loadYaml()}'s not-found message. The dedupe
+     * keeps the PROJECT entry when they collide, which now decides a policy
+     * question as well as a cosmetic one: the collided directory is read under
+     * the project tier's confinement, i.e. the stricter of the two. See the
+     * constructor for why the strict reading is the right answer for a
+     * directory whose tier cannot be told apart.
+     *
+     * With ONE exception, and it is the deliberate one stated on
+     * {@see readableProjectDir()}: a project entry whose own directory is
+     * refused is not added at all, so a collided directory falls through to the
+     * user tier's unconfined reading rather than vanishing from both.
+     *
+     * @return array<string, bool> directory => confine symlinks to it
+     */
+    private function yamlDirectories(): array
+    {
+        $dirs = [];
+
+        $projectDir = $this->readableProjectDir();
+        if ($projectDir !== null) {
+            $dirs[$projectDir] = true;
+        }
+
+        // Not `[$dir] = false` unconditionally: that would downgrade a
+        // collided directory to the user tier's unconfined reading and undo
+        // the paragraph above.
+        $userDir = $this->expandPath($this->workflowsPath);
+        if (!array_key_exists($userDir, $dirs)) {
+            $dirs[$userDir] = false;
+        }
+
+        return $dirs;
+    }
+
+    /**
+     * Where a project-tier `$name.yaml` would be, or null when this registry
+     * was built without a project tier — or with one whose directory
+     * {@see readableProjectDir()} refuses. Caller checks existence.
+     *
+     * Null for a refused directory rather than a path the caller then filters,
+     * because {@see load()}'s project-first fast path is the ONE place that
+     * reads a project entry without going through {@see yamlDirectories()}. A
+     * directory dropped from that map and still reachable here would be exactly
+     * the "listed and loadable are the same set" claim breaking in the
+     * dangerous direction.
+     */
+    private function projectYamlPath(string $name): ?string
+    {
+        $dir = $this->readableProjectDir();
+        if ($dir === null) {
+            return null;
+        }
+
+        $this->validateName($name);
+
+        return $dir . "/{$name}.yaml";
+    }
+
+    /**
+     * May the project tier's own DIRECTORY be read from at all?
+     *
+     * {@see containedIn()} judges an entry against the directory it was reached
+     * from, and it resolves that directory too — so when the directory is
+     * itself a link, the boundary travels with it and nothing inside it can
+     * ever be outside it. A repository can ship precisely that: the path
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()} builds is
+     * `<root>/.sugar-crush/workflows`, and committing that as a symlink was
+     * enough to have {@see list()} enumerate every `[a-zA-Z0-9_-]+\.yaml`
+     * basename in the target directory and {@see load()} read any of them that
+     * parsed as a workflow map — its `description` into the listing, its
+     * prompts into agent tasks. Per-entry confinement cannot see that, because
+     * per-entry confinement is being asked the wrong question.
+     *
+     * So the directory gets its own, coarser boundary: it must resolve STRICTLY
+     * inside the checkout. $projectRoot is the one path in this pair a
+     * repository cannot have forged, since a link that moved it would have to
+     * sit ABOVE the checkout. A link that stays inside the checkout is honoured
+     * — refusing every link would break the ordinary
+     * `.sugar-crush/workflows -> tools/workflows` layout for no gain.
+     *
+     * STRICTLY, and the word replaced a measured leak. {@see containedIn()}
+     * counts "resolves onto the boundary" as contained, which is right for an
+     * entry and wrong for this: a repository committing the single line
+     * `.sugar-crush/workflows -> ..` resolved its workflows directory exactly
+     * onto the checkout root and was accepted. Measured on this host against
+     * the pre-fix build, with a checkout holding two gitignored developer-local
+     * files: `list()` returned `["kubeconfig","local-secrets"]` and
+     * `load('local-secrets')->description` was `TOKEN=sk-live-DEADBEEF`. So
+     * `/workflow list` enumerated the basenames of every
+     * `[a-zA-Z0-9_-]+\.yaml` in the developer's checkout regardless of
+     * provenance, and any that parsed as a workflow map put its `description`
+     * in the listing and the transcript. {@see ContainedPath::below()} refuses
+     * the equality arm, and the checkout root is the one directory in the tree
+     * where untracked local files conventionally sit.
+     *
+     * WHAT IS LEFT, stated rather than implied: a link to some OTHER directory
+     * inside the checkout is still honoured, and a checkout is not the same set
+     * as repository content — it holds untracked and gitignored files too. A
+     * repository that commits `.sugar-crush/workflows -> vendor` can still
+     * disclose `vendor/*.yaml` basenames. That residual is bounded by the
+     * attacker having to name a directory whose contents they cannot see, and
+     * closing it entirely would mean refusing the `-> tools/workflows` layout
+     * this method exists not to refuse. It is a reduction, not an elimination.
+     *
+     * With no $projectRoot the anchor falls back to the directory's own parent.
+     * Be precise about what that does and does not catch: it refuses a link AT
+     * the workflows directory, and it does NOT refuse one at a component above
+     * it (a committed `.sugar-crush -> /elsewhere` leaves `<...>/workflows`
+     * resolving inside its own parent). That is the whole of what a registry
+     * holding only the leaf path can check, which is why
+     * {@see \SugarCraft\Crush\Cli\Bootstrap} passes the root — the production
+     * path gets the complete boundary, and a caller that omits it gets a
+     * partial one that is written down rather than a guarantee only somebody
+     * else has.
+     *
+     * A directory that does not resolve AT ALL splits in two, and it used to
+     * not. "Left readable, because nothing is behind a path that does not
+     * resolve" was true per-instant and false across the call: granting is one
+     * syscall and reading is another, so a target created in between is read
+     * through a boundary that has moved with it — and per-ENTRY confinement
+     * cannot refuse that, because by then both sides resolve through the same
+     * link. Structurally: grant the dangling directory, create the target, and
+     * `baseNames($granted, '.yaml', confine: true)` returns its contents.
+     *
+     * The half worth keeping is the fresh checkout that simply has no
+     * `.sugar-crush/workflows` — keeping it is what lets {@see loadYaml()}'s
+     * not-found message still name the directory the user was expecting. The
+     * half worth refusing is a DANGLING SYMLINK, which is the only spelling of
+     * "does not resolve" a repository can commit: a link naming a path that
+     * does not exist yet is a request to read whatever appears there later, and
+     * a link that names nothing has no workflows to lose. `is_link()` tells the
+     * two apart with no extra trust.
+     *
+     * That narrows the window rather than closing it, and the remainder is
+     * stated instead of implied: the not-a-link grant is still a grant followed
+     * by a read, so a directory or link created at that path between the two is
+     * read. The difference is what it costs the attacker — a committed dangling
+     * link needs only `git clone`, while creating a path inside the checkout
+     * needs write access to the checkout, and anything with that can simply
+     * commit a `.yaml`. Across CALLS there is no residue at all: every
+     * {@see list()} and {@see load()} re-evaluates this method, so a link whose
+     * target has appeared is refused on the next one (measured: `list()` returns
+     * `[]` both while the link dangles and after its outside-the-checkout target
+     * is created).
+     *
+     * The refusal drops the tier rather than emptying it, which matters for the
+     * one directory that is BOTH tiers: the dedupe in {@see yamlDirectories()}
+     * then adds it back under the user tier's unconfined reading. That is the
+     * right answer there and not a weakening — the user tier `require`s the
+     * `.php` files out of that same directory, so a stricter YAML reading of it
+     * would be guarding a door beside an open one. Pinned by
+     * `testACollidedDirectoryRefusedAsTheProjectTierIsStillReadAsTheUserTier`,
+     * because "drops rather than empties" was documented three times and
+     * measured nowhere.
+     */
+    private function readableProjectDir(): ?string
+    {
+        // Reset first: this method is re-evaluated on every list()/load(), and a
+        // stale refusal outliving the condition that caused it would report a
+        // directory as refused after it had started working.
+        $this->projectDirRefusal = null;
+
+        if ($this->projectWorkflowsPath === null) {
+            return null;
+        }
+
+        $dir = $this->expandPath($this->projectWorkflowsPath);
+        $real = realpath($dir);
+
+        if ($real === false) {
+            if (is_link($dir)) {
+                $this->projectDirRefusal = "{$dir} is a symlink that resolves to nothing this process can "
+                    . 'read, so it names no workflows — and a committed link to a path that does not exist '
+                    . 'yet is a request to read whatever appears there later.';
+
+                return null;
+            }
+
+            return $dir;
+        }
+
+        $anchor = $this->projectRoot !== null ? $this->expandPath($this->projectRoot) : dirname($dir);
+
+        if (ContainedPath::below($dir, $anchor)) {
+            return $dir;
+        }
+
+        $this->projectDirRefusal = sprintf(
+            '%s resolves to %s, which is %s %s, so it is not this repository pointing at its own '
+            . 'workflows; the directory is skipped and no name in it is listed or loadable.',
+            $dir,
+            $real,
+            realpath($anchor) === $real ? 'exactly' : 'outside',
+            $this->projectRoot !== null ? 'the checkout root' : "this directory's own parent",
+        );
+
+        return null;
+    }
+
+    /**
+     * Why this registry refuses to read its project tier's directory, or null
+     * when it does not refuse it.
+     *
+     * The seam the refusal needed to stop being invisible. Everything else about
+     * a refused tier is silent by design: {@see loadYaml()}'s not-found message
+     * drops the directory from `$searched` (so a user reads `not found at
+     * /…/home/zzz.yaml` and concludes the loader never looked in their repo),
+     * {@see projectWorkflowsPath()} still reports the CONFIGURED path, and
+     * {@see list()} simply returns fewer names. None of those can say "your
+     * repository's workflows directory was rejected, and here is why".
+     *
+     * Public and pull-based rather than a stderr write, for the reason
+     * {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()} is: a write from
+     * here can land mid-frame under the alt screen.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierRefusals()} asks
+     * for it at construction time, before Program takes the terminal.
+     */
+    public function projectTierRefusal(): ?string
+    {
+        $this->readableProjectDir();
+
+        return $this->projectDirRefusal;
     }
 
     /**
@@ -127,15 +643,92 @@ final class WorkflowRegistry
     {
         $this->validateName($name);
 
-        $yamlPath = $this->expandPath($this->workflowsPath) . "/{$name}.yaml";
+        $searched = [];
+        foreach ($this->yamlDirectories() as $dir => $confineSymlinks) {
+            $yamlPath = $dir . "/{$name}.yaml";
 
-        if (!file_exists($yamlPath)) {
-            throw new WorkflowNotFoundException(
-                "Workflow '{$name}' not found at {$yamlPath}"
-            );
+            // A confined tier's entry that resolves outside its directory is
+            // treated as absent — the same answer {@see list()} gives for it,
+            // and the reason the two cannot disagree. It stays in $searched so
+            // the not-found message still names where the loader looked.
+            if (is_file($yamlPath) && (!$confineSymlinks || $this->containedIn($yamlPath, $dir))) {
+                return $this->buildFromYamlFile($yamlPath)->build();
+            }
+
+            $searched[] = $yamlPath;
         }
 
-        $data = Yaml::parseFile($yamlPath);
+        throw new WorkflowNotFoundException(
+            "Workflow '{$name}' not found at " . implode(', ', $searched)
+        );
+    }
+
+    /**
+     * Parse, validate and map one YAML workflow file onto a builder chain.
+     *
+     * Every key this loader READS is shape-checked, and every failed check
+     * reports a {@see WorkflowLoadException} naming the file — because these
+     * files are hand-authored and, since the project tier exists, may have been
+     * hand-authored by somebody else. Without them a `stages:` entry missing its
+     * `name` reached {@see WorkflowBuilder::stage()} as null and the user's
+     * `/workflow run` answered with a raw TypeError about an argument they never
+     * passed.
+     *
+     * The checked set, exhaustively, so this claim can be audited rather than
+     * trusted: the document is a map; `name` is a non-empty string that
+     * {@see nameIsValid()} accepts; `description` is a string if present;
+     * `stages` is a LIST if present (`array_is_list()`, not merely an array);
+     * each stage is a map with a non-empty string `name`, and no two stages
+     * share one; `parallel` is a real boolean if present; `agent`/`prompt` (and
+     * a parallel agent's `type`/`name`/`prompt`) are strings if present;
+     * `tools` is a list of strings; a parallel stage's `agents` is a list of
+     * maps; `config` is a map whose `maxConcurrent`/`timeout` are whole numbers
+     * >= 1.
+     *
+     * "Is a list" means `array_is_list()`. It used to mean `is_array()`, which
+     * is a different claim: `stages: {a: {...}}`, `tools: {a: Read}` and a
+     * parallel `agents: {x: {...}}` all satisfied the check and loaded, the
+     * keys silently discarded. An author who wrote a map meant something by the
+     * keys, and quietly reindexing them is the loader deciding it knows better.
+     *
+     * A key that is PRESENT with an explicit null (`stages: ~`, `prompt: ~`,
+     * `timeout: ~`) is refused, not treated as absent. `isset()` cannot tell
+     * the two apart, and the difference was doing real damage at the top:
+     * `stages: ~` loaded as a workflow with zero stages, which `/workflow run`
+     * then reported as `completed` having executed nothing — the same silent
+     * success `stages: nope` used to produce.
+     *
+     * What is deliberately NOT checked: unknown keys. A `stagez:` typo, or a key
+     * a future version adds, is ignored rather than refused, so an older build
+     * reading a newer file degrades instead of failing — but note the corollary,
+     * that a misspelled key is silently a missing key. This exemption covers
+     * only keys nothing here READS; a key the loader acts on gets a shape check
+     * (which is why `parallel` is in the list above and not here).
+     *
+     * @throws WorkflowLoadException When the file is not a valid workflow map.
+     */
+    private function buildFromYamlFile(string $yamlPath): WorkflowBuilder
+    {
+        try {
+            $data = Yaml::parseFile($yamlPath);
+        } catch (ParseException $e) {
+            // The parser's message, NOT included on purpose. ParseException
+            // quotes the offending line of the file it was reading, and this
+            // string is rendered into the transcript and written to the session
+            // store. For a project-tier `leak.yaml -> ../secret/id_rsa` that
+            // put a line of the linked target's content on screen and on disk —
+            // a rejected file leaking more than an accepted one. The parsed
+            // LINE NUMBER is kept, because it is what the author of a genuinely
+            // malformed file needs and it reveals nothing about the content.
+            // (Symlinks out of the project tier are also refused outright now;
+            // this is the half that holds for any unreadable-but-present file.)
+            $line = $e->getParsedLine();
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} is not valid YAML"
+                . ($line > 0 ? " (line {$line})" : '')
+                . '. The parser message is withheld because it quotes the file being parsed.'
+            );
+        }
 
         if (!is_array($data)) {
             throw new WorkflowLoadException(
@@ -143,57 +736,281 @@ final class WorkflowRegistry
             );
         }
 
-        if (!isset($data['name']) || $data['name'] === '') {
+        if (!array_key_exists('name', $data) || !is_string($data['name']) || $data['name'] === '') {
             throw new WorkflowLoadException(
                 "Workflow file {$yamlPath} must have a \"name\" field"
             );
         }
 
-        return $this->parseYamlWorkflow($data)->build();
+        // The document's own name held to the same rule as the name used to
+        // look it up ({@see validateName()}), which it was not before: `name:
+        // " w "` loaded, and flowed through
+        // {@see WorkflowEngine::generateWorkflowId()} into a pause FILENAME.
+        // `getPauseFilePath()` bounds that with its own `..`/`/` guard, so this
+        // is asymmetry rather than a hole — but a name the loader accepts and
+        // the lookup would reject is a name `/workflow run` can never be used
+        // on, so accepting it only defers the error.
+        if (!$this->nameIsValid($data['name'])) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} has an unusable \"name\" ('{$data['name']}'). "
+                . 'Use only alphanumeric characters, underscores, and hyphens.'
+            );
+        }
+
+        return $this->parseYamlWorkflow($data, $yamlPath);
     }
 
     /**
      * Map parsed YAML data to a WorkflowBuilder chain.
      *
      * @param array{name: string, description?: string, stages?: array, config?: array} $data
+     * @param string $yamlPath The file $data came out of, for error messages.
      */
-    private function parseYamlWorkflow(array $data): WorkflowBuilder
+    private function parseYamlWorkflow(array $data, string $yamlPath): WorkflowBuilder
     {
         $builder = (new WorkflowBuilder())
             ->name($data['name']);
 
-        if (isset($data['description']) && $data['description'] !== '') {
-            $builder = $builder->description($data['description']);
+        // requireString() rather than an `is_string()` that silently skips: a
+        // `description: 42` used to be dropped on the floor and the workflow
+        // loaded with an empty description, so the author's only signal that
+        // their file was wrong was a blank line in the listing.
+        $description = $this->requireString($data, 'description', '', "Workflow file {$yamlPath}");
+        if ($description !== '') {
+            $builder = $builder->description($description);
         }
 
-        if (isset($data['stages']) && is_array($data['stages'])) {
-            foreach ($data['stages'] as $stage) {
-                $parsed = $this->parseYamlStage($stage);
+        // A `stages:` that is present but not a list is REPORTED, not skipped.
+        // `stages: nope` used to load as a workflow with zero stages, and
+        // `/workflow run` then printed "Workflow 'w' completed … Status:
+        // completed" for a run that executed nothing at all — a silent failure
+        // reported as a success, which is the worst answer available. An empty
+        // list stays legal: `stages: []` is a workflow that deliberately does
+        // nothing, and it is what the wiring tests drive.
+        if (array_key_exists('stages', $data) && !is_array($data['stages'])) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} \"stages\" must be a list of stages, got " . get_debug_type($data['stages'])
+            );
+        }
 
-                if (isset($stage['parallel']) && $stage['parallel'] === true) {
+        if (array_key_exists('stages', $data) && is_array($data['stages'])) {
+            // A MAP of stages is refused too, for the reason on
+            // buildFromYamlFile(): `stages: {first: {...}}` used to load with
+            // the keys thrown away, so the author's `first:` meant nothing and
+            // nothing said so.
+            if (!array_is_list($data['stages'])) {
+                throw new WorkflowLoadException(
+                    "Workflow file {$yamlPath} \"stages\" must be a list of stages, got a map"
+                );
+            }
+
+            $seenStageNames = [];
+
+            foreach ($data['stages'] as $index => $stage) {
+                $stageName = $this->requireStageName($stage, $index, $yamlPath);
+
+                // Duplicates refused: `{{build.output}}` names a stage, and
+                // {@see WorkflowEngine::runFromWorkflow()} keys stage output as
+                // `<name>.output`, so two stages called `build` make every
+                // reference to either one mean "whichever ran last". There is no
+                // answer the interpolation can give that is not a guess.
+                //
+                // Reported by the two STAGE INDICES, not by the name, and the
+                // reason is usefulness rather than policy. A previous revision
+                // of this comment claimed it was "the one load-error path that
+                // interpolated a value read out of the file"; that was measured
+                // false over the complete domain of all 20
+                // `throw new WorkflowLoadException` sites in this file — 9 of
+                // them interpolate file content, and still do: the `name` arm in
+                // {@see buildFromYamlFile()} quotes the document's own name, the
+                // {@see requirePositiveInt()} arm quotes a `config:` value, and
+                // the seven `$where`-carrying arms quote the STAGE NAME verbatim
+                // (`$where` is built as `Workflow file … stage '<name>'`).
+                //
+                // ECHOING IT IS FINE, which is why those nine are left alone.
+                // The project tier is confined to checkout content
+                // ({@see readableProjectDir()}), so a message quoting a value
+                // this loader read out of a validated key tells the repository
+                // only what the repository already wrote; the user tier is the
+                // user's own files. The genuinely different case is the
+                // parse-error arm, and the difference is not "content vs no
+                // content" but BOUNDEDNESS: it would quote an arbitrary line of
+                // a file the parser could not make sense of, chosen by the file
+                // rather than by a key this loader asked for.
+                //
+                // So the index form is kept on its own merits, not as a policy
+                // closure: a duplicate name is by definition written twice, and
+                // `#0 and #3` says where both are while the name says neither.
+                // The indices are 0-based to match `stage #{$index}` in
+                // {@see requireStageName()} and `agent #{$agentIndex}` in
+                // {@see parseYamlStage()}; nothing in the README, `workflows/`
+                // or `examples/workflows/` numbers stages from 1.
+                if (isset($seenStageNames[$stageName])) {
+                    throw new WorkflowLoadException(
+                        "Workflow file {$yamlPath} has two stages with the same name "
+                        . "(stages #{$seenStageNames[$stageName]} and #{$index}); stage names are how "
+                        . '{{<name>.output}} refers to one, so they must be unique.'
+                    );
+                }
+                $seenStageNames[$stageName] = $index;
+
+                $isParallel = $this->requireParallelFlag($stage, "Workflow file {$yamlPath} stage '{$stageName}'");
+                $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
+
+                if ($isParallel) {
                     // $parsed is an array of TaskBuilders for parallel stages
                     // This delegates to WorkflowBuilder::parallel(), which feeds
                     // executeParallelStage() in WorkflowEngine.php.  The full
                     // parallel() primitive chain spans: WorkflowEngine,
                     // WorkflowBuilder, Workflow, WorkflowRegistry, AgentWorkerPool.
-                    $builder = $builder->parallel($stage['name'], $parsed);
+                    $builder = $builder->parallel($stageName, $parsed);
                 } else {
                     // $parsed is a single TaskBuilder for regular stages
-                    $builder = $builder->stage($stage['name'], $parsed);
+                    $builder = $builder->stage($stageName, $parsed);
                 }
             }
         }
 
-        if (isset($data['config']) && is_array($data['config'])) {
-            if (isset($data['config']['maxConcurrent'])) {
-                $builder = $builder->maxConcurrent((int) $data['config']['maxConcurrent']);
+        if (array_key_exists('config', $data) && !is_array($data['config'])) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} \"config\" must be a map, got " . get_debug_type($data['config'])
+            );
+        }
+
+        if (array_key_exists('config', $data) && is_array($data['config'])) {
+            // array_key_exists(), not isset(): `timeout: ~` is a key the author
+            // wrote, and isset() reported it absent so it silently took the
+            // default the docblock says it must be a whole number instead of.
+            if (array_key_exists('maxConcurrent', $data['config'])) {
+                $builder = $builder->maxConcurrent($this->requirePositiveInt(
+                    $data['config']['maxConcurrent'],
+                    'config.maxConcurrent',
+                    $yamlPath,
+                ));
             }
-            if (isset($data['config']['timeout'])) {
-                $builder = $builder->timeout((int) $data['config']['timeout']);
+            if (array_key_exists('timeout', $data['config'])) {
+                $builder = $builder->timeout($this->requirePositiveInt(
+                    $data['config']['timeout'],
+                    'config.timeout',
+                    $yamlPath,
+                ));
             }
         }
 
         return $builder;
+    }
+
+    /**
+     * Is this stage a fan-out? Decided ONCE, from a value that must be a real
+     * boolean.
+     *
+     * Two separate `$stage['parallel'] === true` tests used to answer this —
+     * one here in {@see parseYamlWorkflow()} choosing `parallel()` over
+     * `stage()`, one in {@see parseYamlStage()} choosing what to build — and a
+     * strict comparison against a value nobody had shape-checked. So
+     * `parallel: "true"` (the quoted form, which is what a YAML author writes
+     * by accident) failed BOTH tests: the whole `agents:` list, including every
+     * tool it declared, was never read and never permission-checked, one
+     * no-tool agent ran on the stage-level prompt, and `/workflow run` reported
+     * the workflow **completed**. That is the same "silent failure reported as a
+     * success" the `stages: nope` check above exists to stop, one level down.
+     *
+     * Refused rather than coerced, unlike {@see requirePositiveInt()}'s
+     * acceptance of `timeout: "600"`. A quoted integer has exactly one meaning;
+     * a truthy string does not — `"true"`, `"yes"`, `"on"`, `"1"` and YAML 1.1's
+     * history of treating some of them as booleans and some not is a family of
+     * spellings, and guessing which one an author meant is how the next silent
+     * mis-parse gets built. The exception says what to write instead.
+     *
+     * @param array<array-key, mixed> $stage
+     *
+     * @throws WorkflowLoadException When `parallel` is present and not a boolean.
+     */
+    private function requireParallelFlag(array $stage, string $where): bool
+    {
+        if (!array_key_exists('parallel', $stage)) {
+            return false;
+        }
+
+        if (!is_bool($stage['parallel'])) {
+            throw new WorkflowLoadException(
+                "{$where} \"parallel\" must be a boolean (true or false, unquoted), got "
+                . get_debug_type($stage['parallel'])
+            );
+        }
+
+        return $stage['parallel'];
+    }
+
+    /**
+     * A `config:` value as a count of things, at least 1.
+     *
+     * The `(int)` casts this replaces were the quietest defect in the loader.
+     * `maxConcurrent: [1,2]` cast to 1, `timeout: abc` cast to 0, and
+     * `maxConcurrent: 0` was taken literally — which
+     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::executeAll()} turns into a
+     * `while (count($active) < 0)` that never runs, so it yields no results at
+     * all, and {@see WorkflowEngine::executeParallelStage()} maps "no failures
+     * among zero results" onto Completed. A repo-shipped `config: {maxConcurrent:
+     * 0}` plus one parallel stage therefore reported a stage complete having
+     * executed nothing. Refusing the value at load time is the only place that
+     * can distinguish "ran nothing because you asked for nothing" from "ran
+     * nothing and told you it worked".
+     *
+     * An integer-valued string is accepted (`timeout: "600"` is how a quoted
+     * YAML scalar arrives, and it means exactly what the unquoted form means);
+     * a float, a list, a map, a boolean and a non-numeric string are not.
+     *
+     * @throws WorkflowLoadException When the value is not a whole number >= 1.
+     */
+    private function requirePositiveInt(mixed $value, string $key, string $yamlPath): int
+    {
+        $int = null;
+        if (is_int($value)) {
+            $int = $value;
+        } elseif (is_string($value) && preg_match('/^-?\d+$/', trim($value)) === 1) {
+            $int = (int) trim($value);
+        }
+
+        if ($int === null) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} \"{$key}\" must be a whole number, got " . get_debug_type($value)
+            );
+        }
+
+        if ($int < 1) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} \"{$key}\" must be at least 1, got {$int}"
+            );
+        }
+
+        return $int;
+    }
+
+    /**
+     * The `name` of one `stages:` entry.
+     *
+     * @param mixed $stage The raw YAML value, which is why this takes mixed:
+     *        `stages: [just-a-string]` is legal YAML and used to reach
+     *        {@see parseYamlStage()} as a string.
+     *
+     * @throws WorkflowLoadException When the entry is not a named map.
+     */
+    private function requireStageName(mixed $stage, int|string $index, string $yamlPath): string
+    {
+        if (!is_array($stage)) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} stage #{$index} must be a map, got " . get_debug_type($stage)
+            );
+        }
+
+        if (!array_key_exists('name', $stage) || !is_string($stage['name']) || $stage['name'] === '') {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} stage #{$index} must have a \"name\" field"
+            );
+        }
+
+        return $stage['name'];
     }
 
     /**
@@ -203,39 +1020,123 @@ final class WorkflowRegistry
      * TaskBuilder for regular stages.
      *
      * @param array{name: string, agent?: string, prompt?: string, tools?: array, parallel?: bool, agents?: array} $stage
+     * @param bool $isParallel Already decided by {@see requireParallelFlag()}
+     *        and PASSED IN rather than re-derived here, so this method and its
+     *        caller cannot disagree about what the stage is — which is exactly
+     *        what happened while both tested the raw value themselves.
      * @return TaskBuilder|array<int, TaskBuilder>
      */
-    private function parseYamlStage(array $stage): TaskBuilder|array
+    private function parseYamlStage(array $stage, string $stageName, string $yamlPath, bool $isParallel): TaskBuilder|array
     {
-        if (isset($stage['parallel']) && $stage['parallel'] === true) {
+        $where = "Workflow file {$yamlPath} stage '{$stageName}'";
+
+        if ($isParallel) {
+            $agents = array_key_exists('agents', $stage) ? $stage['agents'] : [];
+            if (!is_array($agents) || !array_is_list($agents)) {
+                throw new WorkflowLoadException(
+                    "{$where} is parallel, so its \"agents\" must be a list, got "
+                    . (is_array($agents) ? 'a map' : get_debug_type($agents))
+                );
+            }
+
             $builders = [];
-            foreach ($stage['agents'] ?? [] as $agent) {
-                $b = Tasks::agent($agent['type'] ?? 'coder');
-                if (isset($agent['name'])) {
-                    $b = $b->name($agent['name']);
+            foreach ($agents as $agentIndex => $agent) {
+                if (!is_array($agent)) {
+                    throw new WorkflowLoadException(
+                        "{$where} agent #{$agentIndex} must be a map, got " . get_debug_type($agent)
+                    );
                 }
-                if (isset($agent['prompt'])) {
-                    $b = $b->prompt($agent['prompt']);
+
+                $b = Tasks::agent($this->requireString($agent, 'type', 'coder', "{$where} agent #{$agentIndex}"));
+                if (array_key_exists('name', $agent)) {
+                    $b = $b->name($this->requireString($agent, 'name', '', "{$where} agent #{$agentIndex}"));
                 }
-                if (isset($agent['tools'])) {
-                    $b = $b->tools($agent['tools']);
+                if (array_key_exists('prompt', $agent)) {
+                    $b = $b->prompt($this->requireString($agent, 'prompt', '', "{$where} agent #{$agentIndex}"));
+                }
+                if (array_key_exists('tools', $agent)) {
+                    $b = $b->tools($this->requireToolList($agent['tools'], "{$where} agent #{$agentIndex}"));
                 }
                 $builders[] = $b;
             }
             return $builders;
         }
 
-        $b = Tasks::agent($stage['agent'] ?? 'coder');
+        $b = Tasks::agent($this->requireString($stage, 'agent', 'coder', $where));
 
-        if (isset($stage['prompt'])) {
-            $b = $b->prompt($stage['prompt']);
+        if (array_key_exists('prompt', $stage)) {
+            $b = $b->prompt($this->requireString($stage, 'prompt', '', $where));
         }
 
-        if (isset($stage['tools'])) {
-            $b = $b->tools($stage['tools']);
+        if (array_key_exists('tools', $stage)) {
+            $b = $b->tools($this->requireToolList($stage['tools'], $where));
         }
 
         return $b;
+    }
+
+    /**
+     * $data[$key] as a string, or $default when the key is ABSENT.
+     *
+     * Absent, not "absent or null": `array_key_exists()` rather than `isset()`,
+     * so `prompt: ~` is refused as the wrong shape instead of silently taking
+     * the default. A key the author wrote is a key the author meant.
+     *
+     * @param array<array-key, mixed> $data
+     *
+     * @throws WorkflowLoadException When the key is present but not a string.
+     */
+    private function requireString(array $data, string $key, string $default, string $where): string
+    {
+        if (!array_key_exists($key, $data)) {
+            return $default;
+        }
+
+        if (!is_string($data[$key])) {
+            throw new WorkflowLoadException(
+                "{$where} \"{$key}\" must be a string, got " . get_debug_type($data[$key])
+            );
+        }
+
+        return $data[$key];
+    }
+
+    /**
+     * A `tools:` value as a list of tool names.
+     *
+     * @return list<string>
+     *
+     * @throws WorkflowLoadException When it is not a list of strings.
+     */
+    private function requireToolList(mixed $tools, string $where): array
+    {
+        if (!is_array($tools)) {
+            throw new WorkflowLoadException(
+                "{$where} \"tools\" must be a list of tool names, got " . get_debug_type($tools)
+            );
+        }
+
+        // `tools: {a: Read}` used to load as `["Read"]` — the key discarded, no
+        // warning. A tool list is a list; a map is a different intention that
+        // this loader has no meaning for.
+        if (!array_is_list($tools)) {
+            throw new WorkflowLoadException(
+                "{$where} \"tools\" must be a list of tool names, got a map"
+            );
+        }
+
+        $names = [];
+        foreach ($tools as $tool) {
+            if (!is_string($tool)) {
+                throw new WorkflowLoadException(
+                    "{$where} \"tools\" must be a list of tool names, got " . get_debug_type($tool) . ' in it'
+                );
+            }
+
+            $names[] = $tool;
+        }
+
+        return $names;
     }
 
     /**
@@ -255,7 +1156,7 @@ final class WorkflowRegistry
      */
     private function validateName(string $name): void
     {
-        if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $name)) {
+        if (!$this->nameIsValid($name)) {
             throw new WorkflowNotFoundException(
                 "Invalid workflow name '{$name}'. Use only alphanumeric characters, underscores, and hyphens."
             );
@@ -263,7 +1164,20 @@ final class WorkflowRegistry
     }
 
     /**
-     * Expand tilde in paths.
+     * Whether $name is a name this registry can resolve at all.
+     *
+     * Split out of {@see validateName()} so {@see baseNames()} can ask the
+     * question without the answer being an exception — the listing has to make
+     * the SAME judgement the loader makes, and a second copy of the pattern is
+     * how the two would drift apart.
+     */
+    private function nameIsValid(string $name): bool
+    {
+        return preg_match('/^[a-zA-Z0-9_\-]+$/', $name) === 1;
+    }
+
+    /**
+     * Expand tilde in paths and drop the trailing separator.
      */
     private function expandPath(string $path): string
     {
@@ -274,6 +1188,16 @@ final class WorkflowRegistry
         // match here in the first place; the test is one leading character.
         $home = str_starts_with($path, '~') ? HomeDirectory::path() . substr($path, 1) : $path;
 
-        return rtrim($home, '/');
+        $trimmed = rtrim($home, '/');
+
+        // A path that is NOTHING BUT separators keeps one, and the special case
+        // is not cosmetic: `rtrim('/', '/')` is the empty string, `realpath('')`
+        // is the process CWD, and this method's result is what
+        // {@see readableProjectDir()} anchors containment on. So
+        // `--root /` — which {@see \SugarCraft\Crush\Cli\ArgvParser} accepts,
+        // since `/` is a directory — silently anchored the boundary at
+        // `getcwd()` instead of at `/`. It failed SAFE (a narrower anchor
+        // refuses more), but the anchor was a path nobody named.
+        return $trimmed === '' && $home !== '' ? '/' : $trimmed;
     }
 }

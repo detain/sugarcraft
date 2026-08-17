@@ -51,6 +51,30 @@ final readonly class WorkflowResult
     }
 
     /**
+     * The first stage that failed, or null when none did.
+     *
+     * The engine puts the REASON a run failed on the stage it belongs to (a
+     * declared tool this session's permission mode refuses, a stage with no
+     * tasks, an agent error), and {@see $status} carries only that something
+     * did. Without this, a caller rendering a result has the word "failed" and
+     * nothing else to say — which is what `/workflow run` printed.
+     *
+     * The FIRST, not all of them: {@see WorkflowEngine::runFromWorkflow()} fails
+     * fast, so there is at most one failed stage per run today. Written to
+     * survive that changing rather than to assume it.
+     */
+    public function firstFailure(): ?StageResult
+    {
+        foreach ($this->stageResults as $stage) {
+            if ($stage->isFailure()) {
+                return $stage;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Elapsed time in milliseconds for this workflow.
      * Returns 0 if completedAt is null (workflow is still running).
      */

@@ -45,13 +45,16 @@ final class ForeignSkillDiscovery
     {
         return $this->discover(
             [
-                // The project tree is confined to itself; the user's own tree
-                // may follow links into the rest of the user's home. See
-                // {@see SkillLoader::skillFilesIn()}'s $ownedBy — the same
-                // "who wrote this file" line this method's PRECEDENCE rule
-                // below is drawn on.
-                $projectRoot . '/.claude/skills' => null,
-                self::homeDir() . '/.claude/skills' => self::homeDir(),
+                // The project tree is confined to itself AND held inside the
+                // checkout; the user's own tree may follow links into the rest
+                // of the user's home and is anchored to nothing, because its
+                // location is not a repository's choice. See
+                // {@see SkillLoader::skillFilesIn()}'s $ownedBy and $anchoredIn
+                // — the same "who wrote this file" line this method's PRECEDENCE
+                // rule below is drawn on, applied to the directory as well as to
+                // the links inside it.
+                $projectRoot . '/.claude/skills' => [null, $projectRoot],
+                self::homeDir() . '/.claude/skills' => [self::homeDir(), null],
             ],
             SkillSource::Claude,
         );
@@ -71,8 +74,8 @@ final class ForeignSkillDiscovery
         return $this->discover(
             [
                 // See {@see discoverClaude()} for the per-tree containment.
-                $projectRoot . '/.opencode/skills' => null,
-                self::homeDir() . '/.config/opencode/skills' => self::homeDir(),
+                $projectRoot . '/.opencode/skills' => [null, $projectRoot],
+                self::homeDir() . '/.config/opencode/skills' => [self::homeDir(), null],
             ],
             SkillSource::Opencode,
         );
@@ -93,16 +96,18 @@ final class ForeignSkillDiscovery
      * last-write-wins, so a later directory's skill overrides an earlier
      * one sharing its name.
      *
-     * @param array<string, string|null> $dirs directory => the extra
-     *        containment root its symlinks may resolve into, or null to
-     *        confine them to the directory itself
+     * @param array<string, array{0: string|null, 1: string|null}> $dirs
+     *        directory => [the extra containment root its symlinks may resolve
+     *        into (null confines them to the directory itself), the checkout the
+     *        directory itself must resolve strictly inside (null for a directory
+     *        whose location no repository chose)]
      * @return array<string, Skill>
      */
     private function discover(array $dirs, SkillSource $source): array
     {
         $skills = [];
-        foreach ($dirs as $dir => $ownedBy) {
-            foreach ($this->loader->loadFromDirectory($dir, $ownedBy) as $name => $skill) {
+        foreach ($dirs as $dir => [$ownedBy, $anchoredIn]) {
+            foreach ($this->loader->loadFromDirectory($dir, $ownedBy, $anchoredIn) as $name => $skill) {
                 $skills[$name] = $this->tag($skill, $source);
             }
         }

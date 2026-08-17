@@ -3786,6 +3786,16 @@ final class Chat implements Model
     /**
      * Handle /workflow run command.
      *
+     * KNOWN GAP (issue #79): `run()` below is called SYNCHRONOUSLY, on the
+     * ReactPHP loop, so the TUI is frozen — no repaint, no keystrokes, no
+     * spinner — for as long as the workflow takes; each stage blocks in
+     * `stream_select` until its worker answers or `ProcessExecutor`'s own 300s
+     * timeout expires (that one, not the sub-agent's — the executor is what
+     * enforces a deadline here). The fix is the fork-plus-socket pattern
+     * {@see Backend\EngineBackend::completeAsync()} already uses, and it is its
+     * own change-set rather than part of the wiring that made this command
+     * reachable at all.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function workflowRun(string $inputText, string $args): array
@@ -3808,12 +3818,24 @@ final class Chat implements Model
 
         try {
             $result = $this->workflowEngine->run($workflowName, $context);
-            $response = "**Workflow '{$workflowName}' completed**\n\n";
+            $response = $result->isFailure()
+                ? "**Workflow '{$workflowName}' failed**\n\n"
+                : "**Workflow '{$workflowName}' completed**\n\n";
             $response .= "ID: `{$result->workflowId}`\n";
             $response .= "Status: {$result->status->value}\n";
             $response .= "Stages completed: " . count($result->stageResults) . "\n";
             $response .= "Total tokens: {$result->totalTokens}\n";
             $response .= "Total cost: \${$result->totalCost}";
+            // The failing stage's message, or the reason never reaches the
+            // user at all: a failed run used to print the word "completed" in
+            // bold with `Status: failed` under it and nothing else, so a stage
+            // refused for declaring a tool this session's mode denies looked
+            // like a workflow that had simply not worked. The engine puts the
+            // reason on the stage; this is the only place that can show it.
+            $failure = $result->firstFailure();
+            if ($failure !== null && ($failure->error ?? '') !== '') {
+                $response .= "\n\nStage '{$failure->stageName}': {$failure->error}";
+            }
         } catch (WorkflowNotFoundException $e) {
             $response = "**Error:** {$e->getMessage()}";
         } catch (WorkflowLoadException $e) {
@@ -3925,7 +3947,17 @@ final class Chat implements Model
         $workflows = $this->workflowEngine->listWorkflows();
 
         if ($workflows === []) {
-            $response = "No workflows found in `~/.sugar-crush/workflows/`.";
+            // BOTH tiers named, because Bootstrap::workflowEngine() searches
+            // both: naming only the home one sends a user who checked a
+            // workflow into their repo off to fix the wrong directory. The
+            // project tier's `.yaml`-only rule is named for the same reason —
+            // otherwise a user who committed `deploy.php` is pointed at the
+            // right directory and the wrong extension (see
+            // WorkflowRegistry::__construct() for why that tier refuses PHP).
+            $response = "No workflows found. They are read from `.sugar-crush/workflows/*.yaml` "
+                . "(project, YAML only — skipped entirely if that directory resolves outside the "
+                . "checkout, which the launch reports on stderr) or "
+                . "`~/.sugar-crush/workflows/*.{yaml,php}`.";
         } else {
             $lines = ['**Available workflows:**'];
             foreach ($workflows as $i => $name) {

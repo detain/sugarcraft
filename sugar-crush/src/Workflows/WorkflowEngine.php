@@ -11,6 +11,8 @@ use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\ToolDeclaration;
 use SugarCraft\Crush\Providers\CompleteRequest;
 
 /**
@@ -42,9 +44,16 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  * that installed the handler ever calls pause(); forked children just
  * exit under the signal convention, same as their pre-fix behaviour).
  * installInterruptHandlers()/restoreInterruptHandlers() also restore
- * pcntl_async_signals() to whatever it was before run()/resume() was
- * called, rather than leaking async-dispatch mode into the rest of the
- * calling process once the run finishes.
+ * pcntl_async_signals(), AND the SIGINT/SIGTERM dispositions that were in
+ * effect before this run, to whatever they were before run()/resume() was
+ * called — rather than leaking async-dispatch mode, or resetting a handler
+ * the calling process installed, into the rest of that process once the run
+ * finishes. That second half matters now that {@see \SugarCraft\Crush\Chat}
+ * dispatches run() inside a live TUI: candy-core's `Program` installs its own
+ * SIGINT closure for graceful shutdown, and resetting to `SIG_DFL` here left
+ * an external `kill -INT` killing the process outright, so PHP's shutdown
+ * sequence — and with it PosixBackend's destructor, which is what puts termios
+ * back — never ran, leaving the terminal in raw mode inside the alt screen.
  *
  * Mirrors charmbracelet/charmcrush WorkflowEngine implementation.
  */
@@ -55,11 +64,133 @@ final class WorkflowEngine implements WorkflowEngineInterface
     /** @var array<string, WorkflowResult> */
     private array $resultsByName = [];
 
+    /**
+     * SIGINT/SIGTERM dispositions as they were before each run installed its
+     * own — one frame per live {@see runFromWorkflow()}, pushed by
+     * {@see installInterruptHandlers()} and popped by
+     * {@see restoreInterruptHandlers()}.
+     *
+     * A property rather than a return value for the same reason
+     * {@see \SugarCraft\Core\Program::$prevSignalHandlers} is one: install and
+     * restore are a matched pair around one stage-execution loop, and the value
+     * has no meaning to anybody else.
+     *
+     * A STACK rather than one frame, because runs nest. `runFromPhp(callable)`
+     * invokes arbitrary caller code to produce its Workflow, and that callable
+     * may itself call `run()` on this same engine; a single frame meant the
+     * inner restore installed the OUTER run's handler (correct so far) and then
+     * cleared the array, so the outer restore found nothing captured and fell
+     * back to `SIG_DFL` — reinstating, one level in, the exact defect
+     * {@see restoreInterruptHandlers()} exists to fix. Push/pop keeps each
+     * run's frame with that run.
+     *
+     * @var list<array<int, callable|int>>
+     */
+    private array $previousSignalHandlers = [];
+
+    /**
+     * @param string $model    The model every stage's agent runs on. A workflow
+     *        stage names an agent TYPE ('reviewer', 'coder'), never a model, so
+     *        the model has to come from the run — and until this parameter
+     *        existed it was the literal `claude-sonnet-4-6` written into all six
+     *        `new Agent(...)` sites below. That was invisible while nothing
+     *        constructed this class; the moment {@see
+     *        \SugarCraft\Crush\Cli\Bootstrap::chat()} does, a session on any
+     *        other deployment would have had `/workflow run` dispatch its
+     *        sub-agents at a model that session never selected. The old literals
+     *        remain the defaults so a caller that does not care keeps today's
+     *        behaviour.
+     * @param string $provider The provider label those agents carry, same
+     *        reasoning. {@see \SugarCraft\Crush\Agents\ProcessExecutor} sends the
+     *        MODEL to the worker and not this, so this one is what the agent
+     *        reports about itself rather than what dispatch keys off.
+     * @param PermissionGate|null $permissionGate The launch's safety gate, or
+     *        null for an ungated engine. What it does here, EXACTLY, because a
+     *        workflow can be authored by a cloned repository and an
+     *        over-claimed gate is worse than an absent one:
+     *
+     *        1. Every {@see SubAgent} this engine builds carries it, so the
+     *           field holds this launch's policy rather than the `null` every
+     *           workflow-spawned sub-agent used to be built with. Read as a
+     *           correct DORMANT value, not as enforcement: the only code that
+     *           reads `SubAgent::$permissionGate` is inside
+     *           {@see AgentManager::executeSubAgent()}'s streaming-provider
+     *           path (AgentManager.php:396, :413, :466-471), and this engine
+     *           never enters it — every dispatch here goes through
+     *           `AgentWorkerPool::executeOne()` or `executeAll()`, and the
+     *           manager's `executeAll()` drains the pool without touching the
+     *           field. An earlier version of this note claimed the threading
+     *           un-short-circuits `evaluateToolCalls()`; that short-circuit is
+     *           unreachable from here whatever the field holds, which is
+     *           precisely why item 2 and not item 1 is the enforcement.
+     *        2. Before any stage is dispatched — and, since a stage 5 refusal
+     *           must not cost four stages of real work, before the FIRST stage
+     *           of the run at all ({@see firstDeclarationRefusal()}) — every
+     *           tool name the definition DECLARES is put to
+     *           {@see PermissionGate::refuses()} and a refusal fails the stage.
+     *           That is the one enforcement this layer performs on its own, and
+     *           it is the one that answers the repository-authored case: a
+     *           checked-in YAML naming a tool this session's mode refuses
+     *           cannot dispatch it. {@see refuseDeniedTools()} states, per
+     *           mode, which refusals are actually available — the set is
+     *           narrower than "denied tools are refused", and under `auto` it
+     *           is empty but for explicit Deny rules.
+     *
+     *        What it does NOT do, today: gate an individual tool call at the
+     *        moment a model asks for one. Not because the gate is missing but
+     *        because no such call exists on this path —
+     *        {@see \SugarCraft\Crush\Agents\ProcessExecutor}'s worker is still
+     *        the P1.S5 simulation, so a pool-executed stage makes no provider
+     *        request and issues no tool call at all. `Ask` is likewise not a
+     *        refusal here: settling one needs the blocking prompt UI, which
+     *        this engine has no channel to, so an Ask passes the declaration
+     *        check and is left to whichever layer eventually owns the call.
+     *
+     *        And one corollary a reader of the two paragraphs above would
+     *        otherwise assume the other way: a stage's DECLARED tool list is
+     *        advisory, not a capability boundary.
+     *        {@see \SugarCraft\Crush\Agents\AgentWorkerPool::executeAll()}
+     *        (AgentWorkerPool.php:333-342) builds every per-agent request with
+     *        `tools: $request->tools` — the FIRST task's list — so a parallel
+     *        agent that declared `[Read]` is handed the first agent's tools
+     *        instead. That is not a bypass of the check above, because the
+     *        check examines every task's declaration and the set actually
+     *        handed out is therefore a subset of the checked union; but it does
+     *        mean the list is a request for capability, and nothing downstream
+     *        enforces that an agent receives only what it declared.
+     */
     public function __construct(
         private readonly WorkflowRegistry $registry = new WorkflowRegistry(),
         private readonly AgentWorkerPool $pool = new AgentWorkerPool(),
         private ?AgentManager $agentManager = null,
+        private readonly string $model = 'claude-sonnet-4-6',
+        private readonly string $provider = 'anthropic',
+        private readonly ?PermissionGate $permissionGate = null,
     ) {}
+
+    /**
+     * The model every stage's agent is dispatched on.
+     */
+    public function model(): string
+    {
+        return $this->model;
+    }
+
+    /**
+     * The provider label every stage's agent carries.
+     */
+    public function provider(): string
+    {
+        return $this->provider;
+    }
+
+    /**
+     * The gate this engine's sub-agents carry, or null when none was given.
+     */
+    public function permissionGate(): ?PermissionGate
+    {
+        return $this->permissionGate;
+    }
 
     /**
      * Attach the AgentManager that parallel-stage sub-agents register with.
@@ -275,15 +406,27 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
     /**
      * Build the filesystem path to a workflow's pause file.
+     *
+     * Anchored to the REGISTRY's own user-tier directory rather than to
+     * {@see HomeDirectory::path()}. The two agree for the default registry — it
+     * expands `~/.sugar-crush/workflows/` through the same resolver — but they
+     * stop agreeing the moment a caller points a registry somewhere else, and
+     * this directory is not a cache: {@see resume()} reads `workflowPath` and
+     * `context` back out of it and hands them to `load()`. A registry pointed at
+     * a trusted directory that still paused into `~` under the stand-in home
+     * (which is `sys_get_temp_dir()`, i.e. world-writable) would be resumable
+     * from a file any local user could have written — the exact hazard
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()}'s docblock claims
+     * this subsystem is held to. Deriving it from the registry is what makes
+     * that claim structural instead of incidental.
      */
     private function getPauseFilePath(string $workflowId): string
     {
         if (str_contains($workflowId, '..') || str_contains($workflowId, '/')) {
             throw new \InvalidArgumentException('workflowId must not contain path separators or ..');
         }
-        $home = HomeDirectory::path();
 
-        return $home . '/.sugar-crush/workflows/' . self::PAUSE_DIR . '/' . $workflowId . '.json';
+        return $this->registry->workflowsPath() . '/' . self::PAUSE_DIR . '/' . $workflowId . '.json';
     }
 
     /**
@@ -359,6 +502,36 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $resolvedWorkflowId = $workflowIdOverride ?? $this->generateWorkflowId($workflow);
         $interruptId = $pauseId ?? $resolvedWorkflowId;
+
+        // Whole-workflow pre-flight: a stage 5 that declares a refused tool
+        // must not cost four stages of real agent work first. See
+        // firstDeclarationRefusal() for why the per-stage checks stay as well.
+        // Reported as that stage's failure rather than thrown, so the shape a
+        // caller sees is the same one a refusal discovered inside the stage
+        // produces -- a Failed WorkflowResult carrying the message on the
+        // stage it belongs to. Nothing ran, so there are no agents on it and
+        // no tokens or cost.
+        $refusal = $this->firstDeclarationRefusal($workflow);
+        if ($refusal !== null) {
+            [$refusedStageName, $refusalMessage] = $refusal;
+
+            return new WorkflowResult(
+                workflowId: $resolvedWorkflowId,
+                status: WorkflowStatus::Failed,
+                stageResults: [new StageResult(
+                    stageName: $refusedStageName,
+                    status: WorkflowStatus::Failed,
+                    error: $refusalMessage,
+                    startedAt: $startedAt,
+                    completedAt: new \DateTimeImmutable(),
+                )],
+                context: $context,
+                totalTokens: 0,
+                totalCost: 0.0,
+                startedAt: $startedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
 
         $previousAsyncSignals = $this->installInterruptHandlers(
             $interruptId,
@@ -503,6 +676,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         /** @var WorkflowTask $task */
         $task = $tasks[0];
 
+        $this->refuseDeniedTools($task, "Stage '{$stageName}'");
+
         // Interpolate prompt with context
         $interpolatedPrompt = $this->interpolateContext($task->prompt, $context);
 
@@ -511,8 +686,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             name: $task->name ?? $task->agentType,
             description: $interpolatedPrompt,
             prompt: '', // system prompt is set via CompleteRequest
-            model: 'claude-sonnet-4-6', // default model; could be configurable
-            provider: 'anthropic',
+            model: $this->model,
+            provider: $this->provider,
             tools: $task->tools,
             skillNames: [],
             hooks: [],
@@ -526,6 +701,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             timeout: $task->timeout ?? 300,
             maxRetries: $task->retries ?? 0,
             isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+            permissionGate: $this->permissionGate,
         );
 
         // Build CompleteRequest
@@ -576,6 +752,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
 
+        // Every step's declaration is checked BEFORE the first one is
+        // dispatched: a refusal is knowable from the definition alone, so
+        // discovering it at step 3 would mean two steps' worth of real agent
+        // work done on the way to a stage that was always going to be refused.
+        foreach ($nestedStages as $nestedStage) {
+            $nestedTask = ($nestedStage['tasks'] ?? [])[0] ?? null;
+            if ($nestedTask instanceof WorkflowTask) {
+                $this->refuseDeniedTools(
+                    $nestedTask,
+                    "Pipeline stage '{$stageName}' step '" . ($nestedStage['name'] ?? 'unknown') . "'",
+                );
+            }
+        }
+
         $prevResult = '';
         $allOutputs = [];
         $allAgents = [];
@@ -607,8 +797,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 name: $task->name ?? $task->agentType,
                 description: $interpolatedPrompt,
                 prompt: '',
-                model: 'claude-sonnet-4-6',
-                provider: 'anthropic',
+                model: $this->model,
+                provider: $this->provider,
                 tools: $task->tools,
                 skillNames: [],
                 hooks: [],
@@ -622,6 +812,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? 300,
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+                permissionGate: $this->permissionGate,
             );
 
             $request = new CompleteRequest(
@@ -696,6 +887,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
 
+        // Both halves up front: a verifier whose declaration is refused would
+        // otherwise be discovered only after the task it verifies had run.
+        $this->refuseDeniedTools($task, "Verification stage '{$stageName}' task");
+        $this->refuseDeniedTools($verifier, "Verification stage '{$stageName}' verifier");
+
         // --- Run the task ---
         $taskPrompt = $this->interpolateContext($task->prompt, $context);
 
@@ -703,8 +899,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             name: $task->name ?? $task->agentType,
             description: $taskPrompt,
             prompt: '',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
+            model: $this->model,
+            provider: $this->provider,
             tools: $task->tools,
             skillNames: [],
             hooks: [],
@@ -718,6 +914,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             timeout: $task->timeout ?? 300,
             maxRetries: $task->retries ?? 0,
             isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+            permissionGate: $this->permissionGate,
         );
 
         $taskRequest = new CompleteRequest(
@@ -744,8 +941,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             name: $verifier->name ?? $verifier->agentType,
             description: $verifierPrompt,
             prompt: '',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
+            model: $this->model,
+            provider: $this->provider,
             tools: $verifier->tools,
             skillNames: [],
             hooks: [],
@@ -759,6 +956,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             timeout: $verifier->timeout ?? 300,
             maxRetries: $verifier->retries ?? 0,
             isolation: $verifier->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+            permissionGate: $this->permissionGate,
         );
 
         $verifierRequest = new CompleteRequest(
@@ -826,6 +1024,22 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
 
+        // Every task's declaration is checked before this method builds
+        // anything. The reason is NOT that a refusal mid-loop could fork the
+        // first two agents and then refuse the third: the build loop below
+        // creates SubAgents only, and not one of them is dispatched until
+        // executeAll() is reached, so a check inside it would fork nothing
+        // either. The reason is symmetry with the other three stage types and
+        // with firstDeclarationRefusal() -- one place per executor where the
+        // whole stage's declaration is settled, ahead of any of its work, so
+        // "refused stages dispatch nothing" holds for a caller that reaches
+        // this method directly rather than through runFromWorkflow().
+        foreach ($tasks as $task) {
+            if ($task instanceof WorkflowTask) {
+                $this->refuseDeniedTools($task, "Parallel stage '{$stageName}'");
+            }
+        }
+
         // Build a SubAgent for each task.  A $defaultRequest is created from the first
         // task to supply tools/systemPrompt for the pool, but AgentWorkerPool::executeAll()
         // builds a per-agent CompleteRequest using each agent's own task field, so
@@ -838,8 +1052,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             name: $firstTask->name ?? $firstTask->agentType,
             description: $firstInterpolated,
             prompt: '',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
+            model: $this->model,
+            provider: $this->provider,
             tools: $firstTask->tools,
             skillNames: [],
             hooks: [],
@@ -866,8 +1080,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 name: $task->name ?? $task->agentType,
                 description: $interpolatedPrompt,
                 prompt: '',
-                model: 'claude-sonnet-4-6',
-                provider: 'anthropic',
+                model: $this->model,
+                provider: $this->provider,
                 tools: $task->tools,
                 skillNames: [],
                 hooks: [],
@@ -881,6 +1095,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? 300,
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+                permissionGate: $this->permissionGate,
             );
         }
 
@@ -935,6 +1150,174 @@ final class WorkflowEngine implements WorkflowEngineInterface
             startedAt: $firstResult?->startedAt ?? $stageStartedAt,
             completedAt: $firstResult?->completedAt ?? new \DateTimeImmutable(),
         );
+    }
+
+    /**
+     * Refuse a task whose DECLARED tool list contains a tool this engine's
+     * {@see PermissionGate} denies.
+     *
+     * The check a workflow definition can actually be held to. A stage names
+     * its tools in the definition — `tools: [Bash, Write]` — and since a
+     * workflow may be checked into a cloned repository, that list is untrusted
+     * input describing capability the session's own policy may refuse. Denying
+     * it here, before {@see AgentWorkerPool} is handed anything, is the one
+     * evaluation this layer can make on its own: it needs no UI (unlike an
+     * `Ask`) and no in-flight tool call (unlike per-call gating, which has
+     * nothing to gate while ProcessExecutor's worker is a simulation — see the
+     * constructor).
+     *
+     * Asked through {@see PermissionGate::refuses()}, which takes a
+     * {@see ToolDeclaration} and is the gate's READ-ONLY entry point. Not
+     * `evaluate()`, and the difference is not stylistic: `evaluate()` records
+     * its Auto-mode outcome, and a name-only call classifies as safe, so the
+     * first version of this method reset the session gate's consecutive-block
+     * counter once per declared tool per stage — disarming the three-strike
+     * escalation to `Ask` that is Auto mode's only route to a human decision.
+     * See {@see ToolDeclaration} for the measured sequence.
+     *
+     * WHICH MODES CAN ACTUALLY REFUSE, measured per mode rather than asserted
+     * (the table lives on {@see PermissionGate::refuses()}), because "the gate
+     * refuses denied declarations" reads as more than it is:
+     *
+     * - `dont-ask` refuses every non-read-only declaration. The example the
+     *   README cites, and the one the tests drive.
+     * - `plan` refuses `Edit`, `Write` and `mcp__*`, but NOT `Bash`: Plan's
+     *   write test for Bash reads the command's redirection out of the
+     *   arguments, and a declaration has none.
+     * - `auto` refuses nothing through its mode evaluator — the
+     *   {@see \SugarCraft\Crush\Permissions\SafetyClassifier} judges arguments,
+     *   and a bare tool name is never dangerous to it. An explicit `Deny` RULE
+     *   still refuses under `auto`, and that is the whole of it. Auto's real
+     *   enforcement is per-call, at whichever layer runs the call.
+     * - `default`, `accept-edits` and `bypass-permissions` refuse nothing; the
+     *   first two `Ask`, which is deliberately not a refusal (below).
+     *
+     * Only `Deny` refuses. `Ask` is not a refusal because settling one requires
+     * the blocking permission prompt, and an engine that treated "would have
+     * asked" as "no" would make every write-capable stage unrunnable in
+     * {@see \SugarCraft\Crush\Permissions\PermissionMode::Default} — a policy
+     * change dressed up as a safety check.
+     *
+     * The declaration carries the NAME only, so an argument-sensitive rule
+     * (`Bash(rm *)`) cannot match here and is left to the call site that has
+     * the arguments. A name-pattern rule (`Bash`, `Bash*`) does match.
+     *
+     * @throws \RuntimeException When any declared tool is denied, and when the
+     *         declared list is not a list of non-empty strings at all. Both are
+     *         thrown rather than returned: {@see runFromWorkflow()} already
+     *         wraps every stage executor in a catch that turns a \Throwable
+     *         into a failed StageResult carrying its message, so this reaches
+     *         the user as the stage failure it is, on all four stage types,
+     *         with no new plumbing.
+     */
+    private function refuseDeniedTools(WorkflowTask $task, string $where): void
+    {
+        if ($this->permissionGate === null) {
+            return;
+        }
+
+        foreach ($task->tools as $tool) {
+            // Refused, not skipped. The YAML loader cannot produce a non-string
+            // tool name any more ({@see WorkflowRegistry::requireToolList()}),
+            // but the PHP DSL's `->tools([42])` can, and silently dropping an
+            // entry INSIDE a safety check is the failure mode with no upper
+            // bound on how wrong it can be: the caller believes the list was
+            // examined. CONTRIBUTING.md's "no silent failures" applies with
+            // extra force here.
+            if (!is_string($tool) || $tool === '') {
+                throw new \RuntimeException(sprintf(
+                    '%s declares a tool that is not a non-empty tool name (%s), so its permissions cannot be checked.',
+                    $where,
+                    get_debug_type($tool),
+                ));
+            }
+
+            if ($this->permissionGate->refuses(new ToolDeclaration($tool))) {
+                throw new \RuntimeException(sprintf(
+                    '%s declares tool "%s", which this session\'s permission mode (%s) denies.',
+                    $where,
+                    $tool,
+                    $this->permissionGate->mode()->value,
+                ));
+            }
+        }
+    }
+
+    /**
+     * The FIRST declaration refusal anywhere in a whole workflow, or null when
+     * nothing in it is refused.
+     *
+     * The per-stage checks below ({@see executeStage()},
+     * {@see executePipelineStage()}, {@see executeVerificationStage()},
+     * {@see executeParallelStage()}) each fire as their own stage starts, which
+     * is one level too late for the argument they were introduced with: a
+     * 5-stage workflow whose stage 5 declares a refused tool ran four stages'
+     * worth of real agent work first. The reason a pipeline checks all of its
+     * steps up front is the same reason a workflow must check all of its
+     * stages up front — the refusal is knowable from the definition alone,
+     * before anything is dispatched.
+     *
+     * The per-stage checks stay, and are not redundant: every stage executor is
+     * a private method with its own build-then-dispatch sequence, and they are
+     * what guarantees the property for a future caller that runs one stage
+     * without coming through {@see runFromWorkflow()}. This is the earlier of
+     * two nets, not a replacement for the tighter one.
+     *
+     * @return array{0: string, 1: string}|null The offending stage's name and
+     *         the refusal message, so the caller can report it as that stage's
+     *         failure rather than as a nameless workflow error.
+     */
+    private function firstDeclarationRefusal(Workflow $workflow): ?array
+    {
+        if ($this->permissionGate === null) {
+            return null;
+        }
+
+        foreach ($workflow->stages as $stage) {
+            $stageName = $stage['name'] ?? 'unknown';
+            $stageType = $stage['type'] ?? '';
+
+            // Every WorkflowTask a stage of this type will dispatch, paired
+            // with the label refuseDeniedTools() would have used for it, so
+            // the up-front message is the same text the per-stage check emits.
+            $checks = [];
+            if ($stageType === 'stage') {
+                $first = ($stage['tasks'] ?? [])[0] ?? null;
+                $checks[] = [$first, "Stage '{$stageName}'"];
+            } elseif ($stageType === 'parallel') {
+                foreach ($stage['tasks'] ?? [] as $task) {
+                    $checks[] = [$task, "Parallel stage '{$stageName}'"];
+                }
+            } elseif ($stageType === 'pipeline') {
+                foreach ($stage['stages'] ?? [] as $nested) {
+                    $checks[] = [
+                        ($nested['tasks'] ?? [])[0] ?? null,
+                        "Pipeline stage '{$stageName}' step '" . ($nested['name'] ?? 'unknown') . "'",
+                    ];
+                }
+            } elseif ($stageType === 'verification') {
+                $checks[] = [$stage['task'] ?? null, "Verification stage '{$stageName}' task"];
+                $checks[] = [$stage['verifier'] ?? null, "Verification stage '{$stageName}' verifier"];
+            }
+
+            foreach ($checks as [$task, $where]) {
+                if (!$task instanceof WorkflowTask) {
+                    // A malformed stage is the stage executor's error to
+                    // report, with the message it already has for it. Not
+                    // this method's — pre-flight only answers the permission
+                    // question.
+                    continue;
+                }
+
+                try {
+                    $this->refuseDeniedTools($task, $where);
+                } catch (\RuntimeException $e) {
+                    return [$stageName, $e->getMessage()];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1083,6 +1466,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param StageResult[]       $stageResults Reference to the live list of completed stage results.
      * @param int                 $totalTokens  Reference to the live running token total.
      * @param float               $totalCost    Reference to the live running cost total.
+     * The SIGINT/SIGTERM dispositions in effect on the way in are captured into
+     * {@see $previousSignalHandlers} for {@see restoreInterruptHandlers()} to put
+     * back; see that method for why putting them back is not the same thing as
+     * resetting them to the default.
+     *
      * @return bool|null The previous pcntl_async_signals() setting to restore in
      *                    restoreInterruptHandlers() once this run finishes, or null
      *                    when handlers were not installed (pcntl unavailable).
@@ -1108,6 +1496,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // how it found it rather than unconditionally leaving async
         // dispatch on for the rest of the process's life.
         $previousAsyncSignals = pcntl_async_signals(true);
+
+        // Captured BEFORE the handlers below overwrite them, so
+        // restoreInterruptHandlers() can put back what the calling process had
+        // rather than guessing that it had nothing. pcntl_signal_get_handler()
+        // answers with the callable, or SIG_DFL/SIG_IGN as an int, and
+        // pcntl_signal() accepts either form back — the same round trip
+        // {@see \SugarCraft\Core\Program} does around its own handlers.
+        $frame = [];
+        if (function_exists('pcntl_signal_get_handler')) {
+            foreach ([\SIGINT, \SIGTERM] as $signo) {
+                $frame[$signo] = pcntl_signal_get_handler($signo);
+            }
+        }
+        // Pushed even when it is empty (no pcntl_signal_get_handler()), so the
+        // stack stays balanced with the pops in restoreInterruptHandlers() —
+        // an unbalanced stack would have one run restoring another's frame.
+        $this->previousSignalHandlers[] = $frame;
 
         $installPid = getmypid();
 
@@ -1164,11 +1569,32 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * Restore default SIGINT/SIGTERM disposition, and the pcntl_async_signals()
-     * setting that was in effect before installInterruptHandlers() ran, after a
-     * stage-execution loop finishes — so neither the signal handlers nor the
-     * async-dispatch mode leak past this run() into the rest of the calling
-     * process (e.g. the PHPUnit process running this very test suite).
+     * Put the SIGINT/SIGTERM dispositions, and the pcntl_async_signals()
+     * setting, back to whatever was in effect before installInterruptHandlers()
+     * ran — so neither the signal handlers nor the async-dispatch mode leak past
+     * this run() into the rest of the calling process (e.g. the PHPUnit process
+     * running this very test suite).
+     *
+     * RESTORED, not reset. This used to `pcntl_signal(SIGINT, SIG_DFL)`, which
+     * is only equivalent when the caller had no handler of its own — and the
+     * caller that matters does: candy-core's `Program` installs a SIGINT closure
+     * that flips `$running = false` and stops the loop, which is how a
+     * `bin/sugarcrush` session shuts down gracefully and how PHP gets to run its
+     * shutdown sequence at all — `SugarCraft\Core\Util\Tty\PosixBackend` puts
+     * termios back from its DESTRUCTOR, which a process killed under SIG_DFL
+     * never reaches. Since {@see \SugarCraft\Crush\Chat} dispatches `/workflow run`
+     * synchronously inside `Chat::update()`, resetting to the default here left
+     * every session that ran one workflow dying on an external `kill -INT` with
+     * the terminal still in raw mode inside the alt screen. Nothing in the TUI
+     * noticed, because the raw mode it runs under clears ISIG and an
+     * interactive Ctrl+C therefore arrives as a byte rather than as a signal at
+     * all: `PosixBackend` delegates to candy-pty's `TermiosFactory`, whose two
+     * implementations are `SugarCraft\Pty\Posix\PosixTermios::makeRaw()`
+     * (libc `cfmakeraw()`) and `SugarCraft\Pty\Posix\SttyTermios::makeRaw()`
+     * (`stty raw -echo`) — both of which clear ISIG by definition. So this was
+     * an external-signal-only defect, and the async half of the same
+     * restoration was already correct, which is what made the broken half easy
+     * to miss.
      *
      * @param bool $previousAsyncSignals The pcntl_async_signals() setting to
      *                                   restore, as returned by installInterruptHandlers().
@@ -1179,8 +1605,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
             return;
         }
 
-        pcntl_signal(\SIGINT, \SIG_DFL);
-        pcntl_signal(\SIGTERM, \SIG_DFL);
+        // This run's own frame, popped so a run nested inside it (see the
+        // property) leaves the outer run's frame untouched for the outer
+        // restore to find.
+        $frame = array_pop($this->previousSignalHandlers) ?? [];
+
+        foreach ([\SIGINT, \SIGTERM] as $signo) {
+            // SIG_DFL when nothing was captured: the only way that happens is a
+            // build without pcntl_signal_get_handler(), where "what it was
+            // before" is unknowable and the pre-fix behaviour is the honest
+            // fallback.
+            pcntl_signal($signo, $frame[$signo] ?? \SIG_DFL);
+        }
+
         pcntl_async_signals($previousAsyncSignals);
     }
 }

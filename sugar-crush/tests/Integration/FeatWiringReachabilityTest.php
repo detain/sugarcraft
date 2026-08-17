@@ -30,6 +30,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
@@ -663,8 +664,428 @@ final class FeatWiringReachabilityTest extends TestCase
     }
 
     // =========================================================================
+    // Row: Workflows (WorkflowEngine + WorkflowRegistry + the PHP/YAML DSL)
+    // "`Chat`'s constructor accepts an optional `?WorkflowEngineInterface
+    //  $workflowEngine` and `handleWorkflowCommand()` guards on it being
+    //  non-null [...] So `/workflow run|pause|resume|status|list` on a real
+    //  `bin/sugarcrush` invocation ALWAYS prints 'Workflow engine not
+    //  configured,' regardless of any `.sugar-crush/workflows/*.yaml` a user
+    //  might author." — crush_code.md §10 Finding 3 / Phase 2 item 3.
+    // =========================================================================
+
+    /**
+     * The launch has to carry ONE engine — and it has to survive the App shell
+     * `bin/sugarcrush` actually runs, since the hosted Chat is what `/workflow`
+     * dispatches through.
+     */
+    public function testTheLaunchedChatCarriesALiveWorkflowEngine(): void
+    {
+        $this->assertInstanceOf(
+            WorkflowEngine::class,
+            Bootstrap::chat($this->tempDir . '/repo')->workflowEngine(),
+        );
+
+        $this->assertInstanceOf(
+            WorkflowEngine::class,
+            Bootstrap::app($this->tempDir . '/repo')->chat?->workflowEngine(),
+        );
+    }
+
+    /**
+     * The headline claim of the row, driven the way a user reaches it: a
+     * workflow checked into the repo the session was launched against must be
+     * listed by `/workflow list` instead of the refusal every pre-wiring run
+     * produced.
+     */
+    public function testWorkflowListOnTheLaunchedChatFindsAProjectWorkflow(): void
+    {
+        $this->writeProjectWorkflow('reach-workflow', "name: reach-workflow\nstages: []\n");
+
+        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow list');
+
+        $transcript = $this->transcript($next);
+        $this->assertStringNotContainsString('Workflow engine not configured', $transcript);
+        $this->assertStringContainsString('reach-workflow', $transcript);
+    }
+
+    /**
+     * The other side of that reachability: a repository that ships its
+     * `.sugar-crush/workflows` as a SYMLINK out of the checkout discloses
+     * nothing through the launched chat.
+     *
+     * Driven through `Bootstrap` rather than against `WorkflowRegistry`
+     * directly because what is at risk here is the WIRING: this asserts the
+     * boundary is reached at all from a real launch. It deliberately does NOT
+     * prove the launch passed its project ROOT — a link out of the checkout is
+     * also out of the fallback anchor, so this test passes either way (measured:
+     * mutating `projectRoot: $root` to `null` leaves it green). The test below
+     * is the one that pins the argument.
+     */
+    public function testASymlinkedProjectWorkflowsDirectoryDisclosesNothingThroughTheLaunchedChat(): void
+    {
+        $victim = $this->tempDir . '/victim';
+        mkdir($victim, 0755, true);
+        file_put_contents($victim . '/leaked.yaml', "name: leaked\ndescription: SENTINEL-OUTSIDE-CHECKOUT\nstages: []\n");
+
+        mkdir($this->tempDir . '/repo/.sugar-crush', 0755, true);
+        $this->assertTrue(
+            symlink($victim, $this->tempDir . '/repo/.sugar-crush/workflows'),
+            'test needs a real symlinked directory',
+        );
+
+        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow list');
+
+        $transcript = $this->transcript($next);
+        $this->assertStringNotContainsString('Workflow engine not configured', $transcript);
+        $this->assertStringNotContainsString('leaked', $transcript);
+        $this->assertStringNotContainsString('SENTINEL-OUTSIDE-CHECKOUT', $transcript);
+    }
+
+    /**
+     * The launch passes its project ROOT to the registry, pinned by the one
+     * layout that tells the two anchors apart.
+     *
+     * `.sugar-crush/workflows -> tools/workflows` leaves the workflows
+     * directory's own parent but stays inside the checkout. With the root it is
+     * honoured (repo content pointing at repo content, the same trust as a
+     * committed `.yaml`); without it the registry falls back to that parent as
+     * the anchor and the whole tier disappears. So this is simultaneously the
+     * usability control for the test above and the only assertion that fails
+     * when `Bootstrap::workflowEngine()` stops passing `projectRoot`.
+     */
+    public function testAnInCheckoutSymlinkedWorkflowsDirectoryIsStillHonouredByTheLaunch(): void
+    {
+        mkdir($this->tempDir . '/repo/tools/workflows', 0755, true);
+        mkdir($this->tempDir . '/repo/.sugar-crush', 0755, true);
+        file_put_contents(
+            $this->tempDir . '/repo/tools/workflows/in-repo-link.yaml',
+            "name: in-repo-link\nstages: []\n",
+        );
+        $this->assertTrue(symlink(
+            $this->tempDir . '/repo/tools/workflows',
+            $this->tempDir . '/repo/.sugar-crush/workflows',
+        ));
+
+        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow list');
+
+        $this->assertStringContainsString(
+            'in-repo-link',
+            $this->transcript($next),
+            'a workflows directory linked to elsewhere INSIDE the checkout must still be read — '
+            . 'if this fails, the launch stopped telling the registry where the checkout is',
+        );
+    }
+
+    /**
+     * The refusal is not silent: a launch whose repository ships a workflows or
+     * skills directory pointing out of the checkout SAYS SO, once, naming the
+     * path.
+     *
+     * The gap this closes had the user looking at three separate half-truths and
+     * no statement of fact: `loadYaml()`'s not-found message drops the refused
+     * directory from the list it searched, `projectWorkflowsPath()` still reports
+     * it, and `/workflow list`'s empty answer named it as a place that had been
+     * looked in. Nothing said "your repository's directory was rejected".
+     *
+     * DRIVEN AS A SUBPROCESS, because the notice is a real `fwrite(STDERR, …)`
+     * and the point is that it reaches a stream — an in-process assertion on
+     * `Bootstrap::projectTierRefusals()` would pass against a build that
+     * collected the refusal and printed nothing, which is the previous state of
+     * this defect one layer up. The subprocess also sidesteps the report-once
+     * bookkeeping being static: a second in-process launch prints nothing by
+     * design.
+     *
+     * BOTH SUBSYSTEMS in one launch, deliberately: they reach the collector by
+     * different routes (`workflowEngine()` asks the registry eagerly,
+     * `skillRegistry()` merges the loader's) and one route working is not the
+     * other working.
+     */
+    public function testALaunchNamesEveryProjectDirectoryItRefusedOnStderr(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $victim = $this->tempDir . '/victim';
+        mkdir($victim . '/leak', 0755, true);
+        file_put_contents($victim . '/leak/SKILL.md', "---\nname: leak\ndescription: SENTINEL-SKILL\n---\nbody\n");
+        file_put_contents($victim . '/leaked.yaml', "name: leaked\ndescription: SENTINEL-WORKFLOW\nstages: []\n");
+
+        mkdir($root . '/.sugar-crush', 0755, true);
+        $this->assertTrue(symlink($victim, $root . '/.sugar-crush/workflows'));
+        $this->assertTrue(symlink($victim, $root . '/.sugar-crush/skills'));
+
+        $script = $this->tempDir . '/launch.php';
+        file_put_contents($script, sprintf(
+            '<?php require %s; SugarCraft\Crush\Cli\Bootstrap::chat(%s);',
+            var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            var_export($root, true),
+        ));
+
+        $process = proc_open(
+            [PHP_BINARY, $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            ['HOME' => $this->tempDir . '/home', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
+        );
+        $this->assertIsResource($process);
+
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        $this->assertStringContainsString(
+            $root . '/.sugar-crush/workflows',
+            $stderr,
+            'the launch must name the refused workflows directory: ' . $stderr . $stdout,
+        );
+        $this->assertStringContainsString(
+            $root . '/.sugar-crush/skills',
+            $stderr,
+            'and the refused skills directory: ' . $stderr . $stdout,
+        );
+        // The notice explains rather than merely announcing, and it leaks
+        // nothing from behind the link it refused.
+        $this->assertStringContainsString($victim, $stderr, 'and where each one actually resolved to');
+        $this->assertStringNotContainsString('SENTINEL-SKILL', $stderr . $stdout);
+        $this->assertStringNotContainsString('SENTINEL-WORKFLOW', $stderr . $stdout);
+    }
+
+    /**
+     * The control: an ordinary launch says nothing at all.
+     *
+     * A notice that fires on every launch is the failure mode
+     * `SkillLoader::recordSkip()` was written to end, so the quiet case is worth
+     * an assertion of its own.
+     */
+    public function testAnOrdinaryLaunchRefusesNothingAndSaysNothing(): void
+    {
+        $this->writeProjectWorkflow('quiet', "name: quiet\nstages: []\n");
+
+        $script = $this->tempDir . '/launch-quiet.php';
+        file_put_contents($script, sprintf(
+            '<?php require %s; SugarCraft\Crush\Cli\Bootstrap::chat(%s);',
+            var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            var_export($this->tempDir . '/repo', true),
+        ));
+
+        $process = proc_open(
+            [PHP_BINARY, $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            ['HOME' => $this->tempDir . '/home', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
+        );
+        $this->assertIsResource($process);
+
+        fclose($pipes[0]);
+        stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        $this->assertStringNotContainsString('ignoring', $stderr, 'stderr: ' . $stderr);
+    }
+
+    /**
+     * `/workflow list` only proves the REGISTRY is reachable — it never calls
+     * the engine. This drives a workflow all the way to a `WorkflowResult`
+     * through `Chat::update()`, which is the only assertion here that fails if
+     * `WorkflowEngine::run()` itself is unreachable from a real launch.
+     *
+     * SCOPE, stated exactly, because a zero-stage workflow proves less than it
+     * looks like it does. What this genuinely reaches: `Chat::workflowRun()` →
+     * `WorkflowEngine::run()` → `WorkflowRegistry::load()` (the project tier,
+     * YAML, parsed and built) → `runFromWorkflow()` → `installInterruptHandlers()`
+     * / `restoreInterruptHandlers()` → the `WorkflowResult` the command formats.
+     * That is the dispatchability claim of this row, and it is the whole claim.
+     *
+     * What it does NOT reach: `foreach ($workflow->stages ...)` iterates zero
+     * times, so none of `executeStage()`, `executeParallelStage()`,
+     * `executePipelineStage()` or `executeVerificationStage()` runs, no
+     * `AgentWorkerPool` is touched, and none of the six `new Agent(...)` sites is
+     * evaluated. Those are covered from `tests/Workflows/WorkflowEngineTest.php`,
+     * which drives real stages through an injected `ExecutorInterface` — see
+     * `testEachStageTypeDispatchesOnTheEnginesOwnModelAndProvider()` there for
+     * the model/provider assertion this test cannot make.
+     *
+     * Zero stages is deliberate all the same: a real stage here would fork a
+     * worker from a wiring test. And note the limitation it hides — `run()` is
+     * called synchronously inside `Chat::update()`, so a workflow with real
+     * stages would block the whole TUI for its duration (known issue #79).
+     */
+    public function testWorkflowRunOnTheLaunchedChatCompletesAProjectWorkflow(): void
+    {
+        $this->writeProjectWorkflow('run-reach', "name: run-reach\nstages: []\n");
+
+        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow run run-reach');
+
+        $transcript = $this->transcript($next);
+        $this->assertStringNotContainsString('Workflow engine not configured', $transcript);
+        $this->assertStringNotContainsString('**Error:**', $transcript);
+        $this->assertStringContainsString("**Workflow 'run-reach' completed**", $transcript);
+        $this->assertStringContainsString('Status: completed', $transcript);
+    }
+
+    /**
+     * The user's own `~/.sugar-crush/workflows` tier has to reach the same
+     * launch — a wiring that only threaded the project root would leave every
+     * workflow a user has ever written unreachable.
+     */
+    public function testWorkflowListOnTheLaunchedChatAlsoFindsTheUsersOwnWorkflow(): void
+    {
+        $dir = $this->tempDir . '/home/.sugar-crush/workflows';
+        mkdir($dir, 0700, true);
+        file_put_contents($dir . '/home-workflow.yaml', "name: home-workflow\nstages: []\n");
+
+        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow list');
+
+        $this->assertStringContainsString('home-workflow', $this->transcript($next));
+    }
+
+    /**
+     * Wiring the registry to a project directory is what turns a cloned
+     * repository into an input, so the tier's `.yaml`-only rule is asserted
+     * from the live entry point and not only on the registry: a `.php`
+     * workflow committed to a checkout must not be `require`d by `/workflow
+     * run`. The marker file is the load-bearing assertion — a test that only
+     * checked for an error message would still pass against a build that
+     * executed the file first.
+     */
+    public function testRunningAProjectPhpWorkflowFromTheLaunchedChatExecutesNothing(): void
+    {
+        $marker = $this->tempDir . '/repo-rce-marker';
+        $this->writeProjectWorkflow(
+            'pwn',
+            "<?php\nfile_put_contents('" . $marker . "', 'executed');\nreturn null;\n",
+            '.php',
+        );
+
+        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow run pwn');
+
+        $this->assertFileDoesNotExist($marker);
+        $this->assertStringContainsString('**Error:**', $this->transcript($next));
+    }
+
+    /**
+     * The refusal branch still has to exist for a Chat built without an engine
+     * — without this, the tests above could pass against a build that had
+     * simply deleted the guard rather than wired the engine.
+     */
+    public function testAChatWithNoWorkflowEngineStillRefusesExplicitly(): void
+    {
+        [$next] = $this->submit(new Chat(), '/workflow list');
+
+        $this->assertStringContainsString('Workflow engine not configured', $this->transcript($next));
+    }
+
+    /**
+     * A workflow stage names an agent TYPE, never a model, so the engine
+     * supplies one to every sub-agent it dispatches. Wired straight from the
+     * class defaults that would have been the literal `claude-sonnet-4-6` on a
+     * session that selected something else entirely.
+     */
+    public function testTheLaunchedEngineDispatchesOnTheSessionsOwnProviderAndModel(): void
+    {
+        $provider = getenv('SUGARCRUSH_PROVIDER');
+        $model = getenv('SUGARCRUSH_MODEL');
+        $command = getenv('SUGARCRUSH_BACKEND_CMD');
+        putenv('SUGARCRUSH_PROVIDER');
+        putenv('SUGARCRUSH_MODEL');
+        putenv('SUGARCRUSH_BACKEND_CMD');
+
+        try {
+            $engine = Bootstrap::chat($this->tempDir . '/repo')->workflowEngine();
+            [$expectedProvider, $expectedModel] = Bootstrap::selectedProviderLabel();
+        } finally {
+            $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
+            $model === false ? putenv('SUGARCRUSH_MODEL') : putenv('SUGARCRUSH_MODEL=' . $model);
+            $command === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $command);
+        }
+
+        $this->assertInstanceOf(WorkflowEngine::class, $engine);
+        $this->assertSame($expectedModel, $engine->model());
+        $this->assertSame($expectedProvider, $engine->provider());
+        $this->assertNotSame(
+            'claude-sonnet-4-6',
+            $engine->model(),
+            'the launch must supply its own model, not fall through to the engine default',
+        );
+    }
+
+    /**
+     * The launch's ONE {@see \SugarCraft\Crush\Permissions\PermissionGate} has
+     * to reach the engine, because it is the only thing that can refuse a stage
+     * a cloned repository's YAML declared. Before this it did not: every
+     * workflow-spawned sub-agent was built with `permissionGate: null`.
+     *
+     * Asserted as identity against the gate the rest of the launch carries —
+     * a second gate built from the same config would satisfy an
+     * assertInstanceOf and still split PermissionGate's per-instance Auto-mode
+     * strike counter in half, which is the exact reason
+     * {@see Bootstrap::chat()} builds only one.
+     */
+    public function testTheLaunchedEngineCarriesTheLaunchsOwnPermissionGate(): void
+    {
+        $chat = $this->launchedChat();
+        $engine = $chat->workflowEngine();
+        $backend = $chat->backend();
+
+        $this->assertInstanceOf(EngineBackend::class, $backend);
+        $this->assertInstanceOf(WorkflowEngine::class, $engine);
+        $this->assertNotNull($engine->permissionGate());
+        $this->assertSame(
+            $backend->permissionGate(),
+            $engine->permissionGate(),
+            'the engine must carry the launch gate itself, not a second one built from the same config',
+        );
+    }
+
+    /**
+     * Chat is the only object holding both collaborators, so it is where the
+     * engine learns which manager a parallel stage's sub-agents register with.
+     * Passing the engine without that link would leave a `/workflow run`'s
+     * agents invisible to the renderer that reads the manager for telemetry.
+     */
+    public function testTheLaunchedEngineIsLinkedToTheLaunchsAgentManager(): void
+    {
+        $chat = Bootstrap::chat($this->tempDir . '/repo');
+        $engine = $chat->workflowEngine();
+
+        $this->assertInstanceOf(WorkflowEngine::class, $engine);
+        $this->assertNotNull($chat->agentManager());
+        $this->assertSame($chat->agentManager(), $engine->agentManager());
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    /**
+     * Drop a workflow definition into the launch root's project workflow
+     * directory — the tier {@see \SugarCraft\Crush\Workflows\WorkflowRegistry}
+     * consults before the user's own.
+     */
+    private function writeProjectWorkflow(string $name, string $body, string $extension = '.yaml'): void
+    {
+        $dir = $this->tempDir . '/repo/.sugar-crush/workflows';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        file_put_contents($dir . '/' . $name . $extension, $body);
+    }
+
+    /**
+     * Every message body of a Chat's transcript, joined — what a user would be
+     * looking at after the turn.
+     */
+    private function transcript(Chat $chat): string
+    {
+        return implode("\n", array_map(static fn($m) => $m->content, $chat->history));
+    }
 
     /**
      * The painted body of the first frame of a real launch — `Bootstrap::app()`
@@ -742,21 +1163,33 @@ final class FeatWiringReachabilityTest extends TestCase
      */
     private function launchedEngineBackend(): EngineBackend
     {
+        $backend = $this->launchedChat()->backend();
+
+        $this->assertInstanceOf(EngineBackend::class, $backend);
+
+        return $backend;
+    }
+
+    /**
+     * A launch whose backend is guaranteed to be the {@see EngineBackend} — the
+     * env dance from {@see launchedEngineBackend()}, split out so a test can
+     * hold the Chat itself and compare two of its collaborators for identity
+     * (which needs ONE launch; two calls to Bootstrap::chat() build two of
+     * everything and would compare unrelated instances).
+     */
+    private function launchedChat(): Chat
+    {
         $provider = getenv('SUGARCRUSH_PROVIDER');
         $command = getenv('SUGARCRUSH_BACKEND_CMD');
         putenv('SUGARCRUSH_PROVIDER');
         putenv('SUGARCRUSH_BACKEND_CMD');
 
         try {
-            $backend = Bootstrap::chat($this->tempDir . '/repo')->backend();
+            return Bootstrap::chat($this->tempDir . '/repo');
         } finally {
             $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
             $command === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $command);
         }
-
-        $this->assertInstanceOf(EngineBackend::class, $backend);
-
-        return $backend;
     }
 
     /**
@@ -980,7 +1413,17 @@ final class FeatWiringReachabilityTest extends TestCase
                 continue;
             }
             $path = $dir . '/' . $item;
-            is_dir($path) ? $this->removeDirectory($path) : unlink($path);
+
+            // is_link() FIRST: is_dir() answers true THROUGH a link to a
+            // directory, so recursing on that answer would empty the link's
+            // TARGET rather than remove the link. One fixture below points a
+            // project workflows directory at another directory on purpose.
+            if (is_link($path) || !is_dir($path)) {
+                unlink($path);
+                continue;
+            }
+
+            $this->removeDirectory($path);
         }
 
         rmdir($dir);
