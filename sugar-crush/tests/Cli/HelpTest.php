@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Cli;
 
+use Composer\InstalledVersions;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Help;
 
@@ -205,20 +206,120 @@ final class HelpTest extends TestCase
     }
 
     /**
-     * A dev checkout must carry its commit reference: every checkout since the
-     * branch existed reports the same `dev-master`, so the bare version
-     * identifies nothing on its own. A tagged install is already exact and is
-     * deliberately left undecorated.
+     * A dev checkout carries its commit reference *when Composer knows one*:
+     * every checkout since the branch existed reports the same `dev-master`, so
+     * the bare version identifies nothing on its own. A tagged install is
+     * already exact and is deliberately left undecorated.
+     *
+     * The precondition is the REFERENCE, not the word "dev", and the difference
+     * is a real environment split rather than a hypothetical. Composer guesses
+     * the root package's version from VCS only when `COMPOSER_ROOT_VERSION` is
+     * unset; with it set, the pretty version comes from the variable and the
+     * reference stays null. `.github/workflows/ci.yml` sets it to `dev-master`
+     * for the whole workflow, so CI's own install is exactly the referenceless
+     * dev case — measured there as a bare `dev-master` — while a local
+     * `composer install` in this checkout guesses from git and has a reference.
+     * Asserting the decoration on the word "dev" alone is what made the earlier
+     * version of this test pass on every developer machine and fail on every CI
+     * run, which is a claim that had travelled without its domain.
+     *
+     * Both arms therefore assert the exact string, not a shape: with a
+     * reference, the decoration must be THAT reference's first 7 characters,
+     * which the old `[0-9a-f]{7}` pattern would have accepted from any commit.
      */
-    public function testDevVersionsCarryACommitReference(): void
+    public function testDevVersionsCarryACommitReferenceWhenComposerKnowsOne(): void
     {
         $resolved = Help::versionString();
 
-        if (!str_contains($resolved, 'dev')) {
+        // Read through the class's own constant so the package name cannot
+        // drift between production and this test.
+        $package = (new \ReflectionClass(Help::class))->getConstant('PACKAGE');
+        self::assertIsString($package);
+
+        $pretty = InstalledVersions::getPrettyVersion($package);
+        $reference = InstalledVersions::getReference($package);
+
+        if ($pretty === null || !str_contains($pretty, 'dev')) {
+            $this->assertSame($pretty, $resolved, 'a tagged install is left undecorated');
             $this->assertDoesNotMatchRegularExpression('/\([0-9a-f]{7}\)$/', $resolved);
+
             return;
         }
 
-        $this->assertMatchesRegularExpression('/ \([0-9a-f]{7}\)$/', $resolved);
+        if ($reference === null) {
+            $this->assertSame(
+                $pretty,
+                $resolved,
+                'with no reference to append there is nothing to decorate with',
+            );
+            $this->assertDoesNotMatchRegularExpression('/\([0-9a-f]{7}\)$/', $resolved);
+
+            return;
+        }
+
+        $this->assertSame($pretty . ' (' . substr($reference, 0, 7) . ')', $resolved);
+    }
+
+    /**
+     * The environment split above leaves one arm unreachable in any single
+     * environment: locally there is always a reference, under CI's
+     * `COMPOSER_ROOT_VERSION` there is never one. A test that only runs the arm
+     * its own environment permits is not a test of the rule — that is precisely
+     * how a bare `dev-master` reached CI while every local run stayed green — so
+     * the rule itself is driven through {@see Help::versionStringFor()}, which
+     * takes the metadata instead of reading it.
+     *
+     * Note what is deliberately NOT used here. `InstalledVersions::reload()`
+     * looks like the seam for this and is not one: it clears the by-vendor
+     * cache, but `getInstalled()` then re-reads `installed.php` from every
+     * registered ClassLoader and puts those data sets AHEAD of the reloaded
+     * array, so the real reference wins every lookup. Measured — faking
+     * `dev-master` with reference `abcdef0…` still returned the real `3f9eac2`.
+     * A pure argument has no such back door, and mutates no process global.
+     *
+     * The fake reference is a recognisable non-SHA whose first 7 characters are
+     * `abcdef0`, so a truncation bug cannot coincidentally match the real one.
+     *
+     * @dataProvider versionDecorationCases
+     */
+    public function testTheReferenceIsAppendedToDevVersionsAndOnlyToThem(
+        ?string $pretty,
+        ?string $reference,
+        string $expected,
+    ): void {
+        $this->assertSame($expected, Help::versionStringFor($pretty, $reference));
+    }
+
+    /** @return array<string,array{0:?string,1:?string,2:string}> */
+    public static function versionDecorationCases(): array
+    {
+        $fake = 'abcdef0' . str_repeat('9', 33);
+
+        return [
+            'dev branch with a reference' => ['dev-master', $fake, 'dev-master (abcdef0)'],
+            'dev branch without one'      => ['dev-master', null, 'dev-master'],
+            'tagged release is undecorated even with a reference' => ['v1.2.0', $fake, 'v1.2.0'],
+            'a dev alias still reads as dev' => ['dev-feature/x', $fake, 'dev-feature/x (abcdef0)'],
+            'no version at all'           => [null, $fake, 'unknown'],
+            'empty version'               => ['', $fake, 'unknown'],
+        ];
+    }
+
+    /**
+     * And the reader still agrees with the rule on this install, so splitting
+     * the rule out cannot drift from what `--version` actually prints.
+     */
+    public function testTheReaderAgreesWithTheRuleOnThisInstall(): void
+    {
+        $package = (new \ReflectionClass(Help::class))->getConstant('PACKAGE');
+        self::assertIsString($package);
+
+        $this->assertSame(
+            Help::versionStringFor(
+                InstalledVersions::getPrettyVersion($package),
+                InstalledVersions::getReference($package),
+            ),
+            Help::versionString(),
+        );
     }
 }

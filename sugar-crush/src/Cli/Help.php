@@ -154,6 +154,28 @@ HELP;
             return 'unknown';
         }
 
+        return self::versionStringFor($pretty, $reference);
+    }
+
+    /**
+     * The decoration rule on its own, given metadata rather than reading it.
+     *
+     * Split out because the rule has two arms and no single environment can run
+     * both: Composer guesses the root package's reference from VCS only when
+     * `COMPOSER_ROOT_VERSION` is unset, so a developer checkout ALWAYS has one
+     * and CI — which sets that variable workflow-wide — NEVER does. Measured
+     * with `composer show --self`: without the variable the source reference is
+     * the real commit, with it the reference is empty. A test calling
+     * {@see versionString()} therefore only ever exercises whichever arm its own
+     * environment permits, which is how a bare `dev-master` reached CI while
+     * every local run stayed green.
+     *
+     * @param ?string $pretty    Composer's pretty version, or null when absent.
+     * @param ?string $reference The install's commit, or null when Composer did
+     *                           not resolve one.
+     */
+    public static function versionStringFor(?string $pretty, ?string $reference): string
+    {
         if ($pretty === null || $pretty === '') {
             return 'unknown';
         }
