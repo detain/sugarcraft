@@ -3355,10 +3355,24 @@ remove it every single time. Both briefs make that an explicit attack line.
 
 ### Where the tree is
 
-`master` == `origin/master` at **`76ca9e9a`** (this worklog commit). Everything
-below it is pushed. Working tree is CLEAN except two untracked paths that are the
-user's own work and must never be touched: `docs/plans/plans_cleaning.md` and
+All sugar-crush work is pushed. The last code commit is **`165f5874`**, and CI is
+**GREEN** on it — `CI`, `VHS demos`, `VHS smoke test` and `Sync to sugarcraft org`
+all succeeded. Working tree is CLEAN except two untracked paths that are the user's
+own work and must never be touched: `docs/plans/plans_cleaning.md` and
 `sugar-crush/python_port/`.
+
+Note for anyone reconciling history: CI pushes its own commits, so `master` goes
+behind on its own. `1800152e` (211 GIFs, the full re-render) and `5aa7edfc` (the 5
+sugar-crush GIFs) are both CI's. `5aa7edfc`'s parent is `165f5874`, which is how it
+became clear the worklog commits above it had NOT been pushed — a `git pull
+--ff-only` refused as diverged, and the fix was to rebase the docs commits onto
+CI's, not to merge. Expect that shape after every push that touches a lib's
+`src/`, `examples/`, `bin/` or `.vhs/*.tape`.
+
+**`5aa7edfc` is the proof the GIF fix works on the path that was broken.** It is a
+SINGLE-lib render — the exactly-one-artifact case — and it committed
+`agents/chat/cli/diff/permission.gif`. Before `de15ee6d` that same case rendered 5
+GIFs, staged 0, and reported success.
 
 Suite: **6418 tests / 49631 assertions / 0 failures / 1 skipped**, ~2m20s. The one
 skip is the legitimate
