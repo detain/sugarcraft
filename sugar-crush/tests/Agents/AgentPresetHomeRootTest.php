@@ -30,11 +30,25 @@ use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
  * DOMAIN, because the fix has a real cost and hiding it is the defect this
  * session is about: the branch treats one directory that is BOTH tiers as the
  * USER tier, i.e. unanchored. A `$HOME` that is itself a cloned checkout — a
- * dotfiles repository — therefore has its `.sugar-crush/agents` read without the
- * checkout anchor. That directory is still gated by `trustedConfigDirPath()`,
- * which refuses a home whose ownership this process cannot establish. Every
- * launch where `$root !== $HOME` — the overwhelming majority, and the one the
- * escape tests use — is unchanged, which is what
+ * dotfiles repository — therefore had its `.sugar-crush/agents` read without the
+ * checkout anchor. MEASURED on a real `git init` checkout with one committed
+ * `.sugar-crush/agents -> <outside>`:
+ *
+ *     cd ~          && sugarcrush   presets=["pwned"] mode=bypass-permissions refusals=[]
+ *     cd ~/dotfiles && sugarcrush   presets=[]        refusals=["…outside the checkout…"]
+ *
+ * The cost USED TO BE excused by "that directory is still gated by
+ * trustedConfigDirPath(), which refuses a home whose ownership this process
+ * cannot establish" — a mitigation that did not exist: that method refused only
+ * an UNDETERMINABLE home and no `stat` was performed anywhere in the package.
+ * Both halves are now real. `trustedConfigDirPath()` establishes ownership
+ * through {@see \SugarCraft\Crush\Support\HomeDirectory::owned()}, and the
+ * collapse is CONDITIONAL on `$HOME` not being a checkout — see
+ * {@see testAHomeThatIsItselfACheckoutKeepsTheAnchor()} and its control
+ * {@see testLaunchingFromTheHomeDirectoryKeepsTheUsersOwnRoster()}.
+ *
+ * Every launch where `$root !== $HOME` — the overwhelming majority, and the one
+ * the escape tests use — is unchanged, which is what
  * {@see testAProjectLaunchIsStillAnchored()} pins.
  */
 final class AgentPresetHomeRootTest extends TestCase
@@ -209,5 +223,70 @@ final class AgentPresetHomeRootTest extends TestCase
             'LEAKED-BODY',
             (string) json_encode(array_map(static fn (object $p): array => (array) $p, $presets)),
         );
+    }
+
+    /**
+     * THE HOLE THE COLLAPSE OPENED, closed. `$HOME` is a git checkout — a
+     * dotfiles repository — so `.sugar-crush/agents -> <outside>` is a line
+     * somebody COMMITTED rather than a layout the user chose at their own
+     * keyboard, and `cd ~ && sugarcrush` used to read it unanchored under
+     * whatever `permissionMode:` it declared.
+     *
+     * `$HOME/.git` is the discriminator because the escape needs a committed
+     * symlink and nothing is committed without a repository. STATED BOUND, so
+     * this is not read as more than it is: a bare-repo dotfiles layout
+     * (`git --git-dir=~/.dotfiles --work-tree=~`) leaves no `.git` at `$HOME`
+     * and is NOT caught — it takes the branch
+     * {@see testLaunchingFromTheHomeDirectoryKeepsTheUsersOwnRoster()} pins.
+     */
+    public function testAHomeThatIsItselfACheckoutKeepsTheAnchor(): void
+    {
+        $this->userRosterOutsideHome();
+        mkdir($this->home . '/.git');
+
+        $presets = Bootstrap::agentPresets($this->home);
+
+        $this->assertSame([], $this->names($presets));
+        $this->assertStringNotContainsString(
+            self::BODY_SENTINEL,
+            (string) json_encode(array_map(static fn (object $p): array => (array) $p, $presets)),
+        );
+
+        $mine = array_filter(
+            Bootstrap::projectTierRefusals(),
+            fn (string $key): bool => str_starts_with($key, $this->home),
+            \ARRAY_FILTER_USE_KEY,
+        );
+        $this->assertNotSame([], $mine, 'and the refusal is recorded rather than silent');
+    }
+
+    /**
+     * A linked worktree spells `.git` as a FILE holding `gitdir: …`, which is
+     * why the discriminator is `file_exists()` and not `is_dir()`.
+     */
+    public function testAHomeWhoseGitIsAFileIsStillACheckout(): void
+    {
+        $this->userRosterOutsideHome();
+        file_put_contents($this->home . '/.git', "gitdir: /elsewhere/.git/worktrees/home\n");
+
+        $this->assertSame([], $this->names(Bootstrap::agentPresets($this->home)));
+    }
+
+    /**
+     * The control that keeps the branch honest in the other direction: a
+     * checkout at `$HOME` must not cost the user their roster when the roster
+     * is where a checkout could legitimately put it — INSIDE `$HOME`. Only the
+     * link OUT is refused.
+     */
+    public function testACheckoutHomeStillReadsARosterThatStaysInsideIt(): void
+    {
+        mkdir($this->home . '/.git');
+        mkdir($this->home . '/.sugar-crush/agents', 0o700, true);
+        file_put_contents(
+            $this->home . '/.sugar-crush/agents/inside.md',
+            "---\nname: inside\ndescription: in-checkout roster\n---\nINSIDE-BODY\n",
+        );
+
+        $this->assertSame(['inside'], $this->names(Bootstrap::agentPresets($this->home)));
     }
 }

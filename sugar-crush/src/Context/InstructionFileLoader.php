@@ -34,6 +34,13 @@ use SugarCraft\Crush\Support\ContainedPath;
  * were reproduced on this host before being closed; see
  * {@see \SugarCraft\Crush\Tests\Context\InstructionFileLoaderContainmentTest},
  * which drives them and holds the measured bytes.
+ *
+ * A REFUSAL IS NO LONGER SILENT IN EVERY DIRECTION. Each refusal is still
+ * skipped rather than raised — this class's callers are tool results and it has
+ * no channel to the user — but it is now RECORDED, and {@see refusedPaths()} is
+ * the pull-based seam the other three repository-chosen tiers already expose.
+ * See that method for the layout that motivated it and for what still does not
+ * drain it.
  */
 final class InstructionFileLoader
 {
@@ -54,6 +61,32 @@ final class InstructionFileLoader
      * @var array<string, true>
      */
     private array $emittedPaths = [];
+
+    /**
+     * Every path this loader declined to read, path as spelled => why.
+     *
+     * THE SEAM, added because "skipped silently" was defended with an argument
+     * that was weaker than it looked. Each of `loadRoot()`, `loadForced()` and
+     * `loadForPath()` refuses a candidate without a word to anyone, and the
+     * reason given was that a channel "would mean touching Runtime/Bootstrap".
+     * That is true of a DISPLAY and false of a seam: the other three
+     * repository-chosen tiers each expose a pull-based one
+     * ({@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()},
+     * {@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()},
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()})
+     * and nothing but the display touches `Bootstrap`.
+     *
+     * The case that made it worth having is not exotic: a per-library
+     * `CLAUDE.md` symlinked to the monorepo root's shared one is the natural
+     * layout for a `--root <lib>` run in a monorepo whose root `CLAUDE.md` IS
+     * the shared file — and it is refused, correctly, with no signal anywhere.
+     * `find` confirms this repository ships no symlinked `CLAUDE.md`/`AGENTS.md`
+     * today, so nothing is broken; the seam is here so the next person to hit it
+     * has something to ask.
+     *
+     * @var array<string, string>
+     */
+    private array $refusedPaths = [];
 
     private readonly ImportResolver $importResolver;
 
@@ -141,11 +174,16 @@ final class InstructionFileLoader
             // The `realpath()` on the next line was computed but spent only as
             // a cache key.
             //
-            // within(), not below(): the question is "may this ENTRY be read",
-            // and the entry is a file, so it cannot resolve ONTO the boundary
-            // for below()'s strictness to matter. below() would also be the
-            // wrong QUESTION to record here even where the two agree.
+            // within() rather than below() records the QUESTION — "may this
+            // ENTRY be read" — and NOT a behavioural choice: the entry is a
+            // file, so it cannot resolve onto a directory boundary, and
+            // swapping the predicate here changes no verdict. That is measured
+            // rather than asserted; see {@see \SugarCraft\Crush\Tests\Context\InstructionFileLoaderContainmentTest}'s
+            // predicate-swap note for the four sites where the two agree and
+            // the one place in this package where they do not.
             if (!ContainedPath::within($path, $this->repoRoot)) {
+                $this->refusedPaths[$path] = 'resolves outside the checkout (' . $this->repoRoot . ')';
+
                 continue;
             }
 
@@ -158,7 +196,17 @@ final class InstructionFileLoader
             // the already-included note rather than recursing to MAX_DEPTH.
             $this->emittedPaths[$realPath] = true;
 
-            $raw = file_get_contents($path);
+            // The RESOLVED path is what is read, matching {@see loadForced()}.
+            // Both were gated on `realpath()` and then read the SPELLED path,
+            // which re-resolves the whole chain a second time and widens the
+            // window between the verdict and the read for every symlinked
+            // component, not just the last one. Narrower, not closed — see the
+            // TOCTOU paragraph on {@see ContainedPath}. The import base
+            // directory stays the SPELLED `dirname($path)`: an `@./x.md` in a
+            // CLAUDE.md that a repository vendored through a link means "next
+            // to where the repository put it", and resolving that too would
+            // silently change which file an import names.
+            $raw = file_get_contents($realPath);
             $contents[] = $raw === false ? '' : $this->expandImports($raw, dirname($path));
         }
 
@@ -230,6 +278,9 @@ final class InstructionFileLoader
                 // NO compare to find. One extra `realpath()` per glob match (a
                 // cached stat) buys the file zero local containment idiom.
                 if (!ContainedPath::within($path, $this->repoRoot)) {
+                    $this->refusedPaths[$path] = 'a forced-instruction match resolving outside the checkout ('
+                        . $this->repoRoot . ')';
+
                     continue;
                 }
 
@@ -299,10 +350,17 @@ final class InstructionFileLoader
         // merely SPELLED through a symlink ($repoRoot is resolved, $dir was
         // not), which climbed above the root with nothing committed at all.
         //
-        // within(), not below(): a file sitting in the checkout ROOT is inside
-        // the checkout. The loop then stops before its first iteration, which
-        // is exactly what the old string compare did for that case, so the
-        // "root instruction files belong to loadRoot()" split is unchanged.
+        // within() rather than below() records the question, and NOT a
+        // behavioural choice — an earlier revision argued it as one. `$dir ===
+        // $repoRoot` returns null under EITHER predicate, because `while ($dir
+        // !== $repoRoot)` never runs, so the two are indistinguishable here.
+        // Measured: swapping this to below() leaves the whole containment suite
+        // green. The distinction IS observable, but at the DIRECTORY anchors of
+        // the other tiers — {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::readableProjectDir()},
+        // {@see \SugarCraft\Crush\Skills\SkillLoader::skillFilesIn()},
+        // {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::readableSearchPaths()}
+        // and {@see \SugarCraft\Crush\Commands\CommandLoader::loadFromDirectory()},
+        // each of which has a test that fails under the wrong predicate.
         //
         // $dir is RESOLVED here so that the loop's remaining `$dir !==
         // $repoRoot` is a compare between two canonical paths, which is what
@@ -316,6 +374,10 @@ final class InstructionFileLoader
         // the fully-nonexistent path this class is tested on.
         $dir = realpath(dirname($touchedPath));
         if ($dir === false || !ContainedPath::within($dir, $repoRoot)) {
+            $this->refusedPaths[$touchedPath] = $dir === false
+                ? 'the directory holding it does not resolve, so no walk was started'
+                : 'the directory holding it (' . $dir . ') is outside the checkout (' . $repoRoot . ')';
+
             return null;
         }
 
@@ -330,17 +392,22 @@ final class InstructionFileLoader
 
                 // GATE 2 — $dir is contained, but the ENTRY inside it need not
                 // be: `<root>/src/CLAUDE.md -> <outside>/secret.md` is one
-                // committed line and `is_file()` follows it. within() for the
-                // same reason as loadRoot()'s: this asks whether an entry may
-                // be read.
+                // committed line and `is_file()` follows it. within() records
+                // the entry question, as in loadRoot(); a file cannot resolve
+                // onto a directory boundary, so the predicate choice is not
+                // observable here either.
                 if (!ContainedPath::within($fullPath, $repoRoot)) {
+                    $this->refusedPaths[$fullPath] = 'resolves outside the checkout (' . $repoRoot . ')';
+
                     continue;
                 }
 
                 $realPath = realpath($fullPath) ?: $fullPath;
                 if (!isset($this->emittedPaths[$realPath])) {
                     $this->emittedPaths[$realPath] = true;
-                    $raw = file_get_contents($fullPath);
+                    // Resolved, for the reason loadRoot() reads resolved; the
+                    // import base stays spelled, for the reason it stays spelled.
+                    $raw = file_get_contents($realPath);
                     return $raw === false ? null : $this->expandImports($raw, dirname($fullPath));
                 }
             }
@@ -378,6 +445,30 @@ final class InstructionFileLoader
     public function emittedPaths(): array
     {
         return array_map(strval(...), array_keys($this->emittedPaths));
+    }
+
+    /**
+     * The instruction files this loader declined to read, and why.
+     *
+     * ACCUMULATED, not recomputed, which is the opposite of every sibling seam
+     * and is deliberate: {@see loadRoot()} and {@see loadForced()} memoize, so a
+     * second call returns the cache without re-deciding anything, and
+     * {@see loadForPath()} is called once per touched path over a whole session.
+     * A map rebuilt per call would therefore report the LAST touched path's
+     * refusals and forget the root file's. One loader is one session here
+     * (`Runtime` builds it once), so the accumulation has the same lifetime the
+     * siblings' per-call maps have.
+     *
+     * NOT drained by anything yet. {@see \SugarCraft\Crush\Cli\Bootstrap}'s
+     * collector is fed by the three tiers whose refusals are DIRECTORY-shaped
+     * and known at launch; these are file-shaped and arrive as the session
+     * touches paths, so surfacing them is a display decision this does not make.
+     *
+     * @return array<string, string> path as spelled => why it was not read
+     */
+    public function refusedPaths(): array
+    {
+        return $this->refusedPaths;
     }
 
     /**
@@ -444,6 +535,13 @@ final class InstructionFileLoader
             // within()'s re-resolution of it cannot change the verdict — it
             // costs one cached stat to keep this file free of a local idiom.
             if (!ContainedPath::within($realPath, $this->repoRoot)) {
+                // Recorded as well as noted inline: this is the ONE refusal in
+                // this class that was never silent, and leaving it out of the
+                // map would make `refusedPaths()` an incomplete picture of the
+                // same question.
+                $this->refusedPaths[$realPath] = "an @import from '{$pathFragment}' resolving outside the "
+                    . 'checkout (' . $this->repoRoot . ')';
+
                 return "<import-blocked reason=\"outside-repo-root\">Import '{$pathFragment}' resolves to"
                     . " '{$realPath}', outside the repository root, and was not followed.</import-blocked>";
             }

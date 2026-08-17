@@ -114,8 +114,16 @@ final class AgentPresetRegistry
     }
 
     /**
-     * One trailing separator's worth of spelling difference removed from both
-     * sides of the anchor lookup.
+     * Trailing separators removed from both sides of the anchor lookup.
+     *
+     * ALL of them, not one: `rtrim($path, '/')` strips every trailing `/`, so
+     * `<root>/agents///` and `<root>/agents` normalise to the same key. This
+     * said "one trailing separator's worth" for a round while the code did the
+     * wider thing — and the wider thing is the one the anchor lookup needs,
+     * since a key and a search path differing by any number of separators is
+     * the mismatch that silently REMOVES an anchor rather than weakening it.
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentPresetAnchorKeyTest::testSeveralTrailingSeparatorsAreStillOneDirectory()}
+     * is written against the wider behaviour.
      *
      * `rtrim($path, '/')` on its own turns a root of `/` into the empty string,
      * which {@see ContainedPath} then refuses outright — so `/` is returned as
@@ -205,7 +213,15 @@ final class AgentPresetRegistry
      * Recomputed by {@see load()}/{@see list()} on every call rather than
      * accumulated, so a refusal never outlives the condition that caused it.
      *
-     * @return array<string, string> search path as spelled => why it was refused
+     * KEYED BY THE NORMALISED SPELLING, not by the spelling the caller passed:
+     * {@see __construct()} strips trailing separators from every search path
+     * before storing it (`<root>/.sugar-crush/agents/` becomes
+     * `<root>/.sugar-crush/agents`), and this map is built from those. The
+     * `@return` here said "as spelled" for a round after that normalisation
+     * landed, which is the kind of one-word drift that makes a consumer key a
+     * lookup on the wrong string.
+     *
+     * @return array<string, string> search path, normalised => why it was refused
      */
     public function refusedDirectories(): array
     {

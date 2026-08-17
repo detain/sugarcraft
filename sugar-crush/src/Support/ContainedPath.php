@@ -5,11 +5,30 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Support;
 
 /**
- * "Does this path really live under that one?" — the one resolution the FIVE
- * READ TIERS go through (workflows, skills, agent presets, custom commands and
- * instruction files: the reads whose LOCATION a cloned repository chooses), for
- * the reason {@see HomeDirectory} is the one home-directory resolution: two
+ * "Does this path really live under that one?" — the one resolution every read
+ * whose LOCATION a cloned repository chooses goes through, for the reason
+ * {@see HomeDirectory} is the one home-directory resolution: two
  * implementations of a security predicate is how the second one stays wrong.
+ *
+ * SEVEN TIERS, and this paragraph said FIVE for a round — which is the same
+ * failure as the counts below, in the sentence that frames them. The three it
+ * omitted were not oversights of wording: they were three read paths with NO
+ * containment at all, in two DORMANT classes whose doc-blocks honestly said
+ * they were unwired, and "unwired" was doing the work "gated" should have been.
+ * Native workflows, native skills, native agent presets, native custom commands
+ * and instruction files were the five; {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}'s
+ * `{projectRoot}/.claude/agents` and `{projectRoot}/.opencode/agents`, and
+ * {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}'s
+ * `{projectRoot}/.opencode/memory`, are the three that were missing. MEASURED
+ * on this host before they were gated, with `.claude/agents` symlinked out of a
+ * fixture checkout:
+ *
+ *     FOREIGN discoverClaude:  presets=["leak"] permissionMode=bypass-permissions
+ *                              initialPrompt='SIXTH-ESCAPE-BODY sk-live-CAFEBABE'
+ *     NATIVE  agentPresets():  presets=[]       refusals={…"outside the checkout"…}
+ *
+ * — the native tier refusing the byte-identical shape, with a message
+ * describing exactly the harm the foreign tier was performing.
  *
  * THE INVENTORY BELOW IS NOT MAINTAINED BY HAND. Every figure in it is derived
  * from `src/` and asserted by
@@ -19,14 +38,17 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - FIFTEEN call sites in FIVE files ask this class:
+ *   - NINETEEN call sites in SEVEN files ask this class:
  *     {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (2 — entry, directory
  *     anchor), {@see \SugarCraft\Crush\Skills\SkillLoader} (3 — entry, directory
  *     anchor, skill asset), {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}
  *     (3 — the same pair, plus `load()`'s single-file arm),
- *     {@see \SugarCraft\Crush\Commands\CommandLoader} (2) and
+ *     {@see \SugarCraft\Crush\Commands\CommandLoader} (2),
  *     {@see \SugarCraft\Crush\Context\InstructionFileLoader} (5 — one per read
- *     decision it makes).
+ *     decision it makes),
+ *     {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} (2 — entry,
+ *     directory anchor) and {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
+ *     (2 — the same pair).
  *   - EIGHT spellings remain by hand, in FOUR files, and they are a DIFFERENT
  *     CONTRACT rather than copies waiting to be swept up:
  *
@@ -75,7 +97,10 @@ namespace SugarCraft\Crush\Support;
  *
  * WHAT THIS INVENTORY STILL CANNOT SEE, stated because assuming otherwise is how
  * finding #89 survived six review rounds: it counts the compares that are
- * WRITTEN. A read path with NO compare at all is invisible to it. That is
+ * WRITTEN AND ENFORCING (see
+ * {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest} for what
+ * "enforcing" is measured to mean, and for the residue it still misses). A read
+ * path with NO compare at all is invisible to it. That is
  * exactly what {@see \SugarCraft\Crush\Context\InstructionFileLoader} was — it
  * appeared in an earlier revision of this list on its two already-correct
  * compares, which is how a sweep instrumented on `grep -rn str_starts_with src/`
@@ -122,6 +147,19 @@ namespace SugarCraft\Crush\Support;
  * it later must say so where they grant it — see
  * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::readableProjectDir()},
  * which narrows its own window rather than pretending it has none.
+ *
+ * NEITHER ANSWER SEES A HARD LINK, and this is the THIRD limit rather than a
+ * newly-discovered one — it was simply the one not written beside the two above.
+ * MEASURED on this host: a hard link inside the boundary to a file outside it
+ * answers `within = true, below = true`, and `file_get_contents()` on it returns
+ * the outside file's bytes. That is `realpath()` behaving correctly — a hard
+ * link is not a reference to another path, it is a second name for the same
+ * inode, and there is no "original" for a resolver to find. It is out of the
+ * threat model every caller here is written against, which is a CLONED
+ * REPOSITORY: git cannot represent or commit a hard link, so no `git clone`
+ * produces one. It is in scope for nothing this package currently does, and it
+ * is written down so the next reviewer measures it once rather than
+ * rediscovering it.
  */
 final class ContainedPath
 {

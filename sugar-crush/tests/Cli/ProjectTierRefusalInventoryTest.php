@@ -21,12 +21,25 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  * behaviour bug; both are a security argument's inventory describing a tree it no
  * longer matched, which is the defect class this session keeps finding.
  *
+ * AND THE ENUMERATION ITSELF WAS THE NEXT INSTANCE. Its replacement's doc-block
+ * said "Derived from `src/`, so the enumeration cannot drift from the tiers that
+ * exist" over a hard-coded five-element literal whose only contact with the tree
+ * was `assertStringContainsString()` on names it already held, closing with
+ * `assertCount(5, $names)` — a literal asserted to have the length it was
+ * written with. It could not discover a sixth tier, and the two it was missing
+ * were already `true` in its own haystack. Derived-in-name is worse than prose,
+ * because it reads as proven; see
+ * {@see testTheDotPathEnumerationIsDerivedFromSrc()} for what replaced it.
+ *
  * WHAT THIS PINS AND WHAT IT DOES NOT: it pins the number of subsystems that
- * EXPOSE a refusal seam and the number of repository-chosen directory names that
- * appear in `src/`. It cannot tell whether a subsystem that should refuse does —
- * that is what each tier's own containment test is for
- * ({@see \SugarCraft\Crush\Tests\Agents\AgentPresetDirContainmentTest} and its
- * siblings).
+ * EXPOSE a refusal seam, every dot-path literal in `src/` and its
+ * classification, and the presence of both containment gates in each dormant
+ * holder. It cannot tell whether a gate that is present is CORRECT — that is
+ * what each tier's own containment test is for
+ * ({@see \SugarCraft\Crush\Tests\Agents\AgentPresetDirContainmentTest},
+ * {@see \SugarCraft\Crush\Tests\Agents\ForeignAgentPresetDirContainmentTest} and
+ * their siblings) — and it cannot see a repository-chosen path built from
+ * fragments rather than written as one literal.
  */
 final class ProjectTierRefusalInventoryTest extends TestCase
 {
@@ -80,52 +93,209 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * FIVE repository-chosen directory names, which is what the enumeration in
-     * {@see Bootstrap::projectTierRefusals()} claims. Derived from `src/`, so the
-     * enumeration cannot drift from the tiers that exist.
+     * The dot-paths that exist in `src/`, CLASSIFIED — every one of them, not a
+     * list of the ones somebody remembered.
+     *
+     * The KEYS are asserted against a derivation over `src/`, so this map cannot
+     * be short: a new dot-path literal anywhere in `src/` reds
+     * {@see testTheDotPathEnumerationIsDerivedFromSrc()} until it is classified
+     * here. The VALUES are a judgement — "is this a path a cloned REPOSITORY
+     * chooses" is not visible in a string literal — and they are written down so
+     * the judgement is reviewable rather than implicit.
+     *
+     * @var array<string, string>
      */
-    public function testTheFiveRepositoryChosenDirectoryNames(): void
+    private const DOT_PATHS = [
+        // Repository-chosen: the checkout says where these point.
+        '.claude/agents' => self::REPOSITORY,
+        '.claude/skills' => self::REPOSITORY,
+        '.opencode/agents' => self::REPOSITORY,
+        '.opencode/memory' => self::REPOSITORY,
+        '.opencode/skills' => self::REPOSITORY,
+        '.sugar-crush/agents' => self::REPOSITORY,
+        '.sugar-crush/commands' => self::REPOSITORY,
+        '.sugar-crush/hooks.yaml' => self::REPOSITORY,
+        '.sugar-crush/skills' => self::REPOSITORY,
+        '.sugar-crush/workflows' => self::REPOSITORY,
+
+        // User-tier: rooted at `~`, so nobody but the user chose the location.
+        '.config/opencode' => self::USER,
+        '.config/sugarcraft-crush' => self::USER,
+        '.local/share' => self::USER,
+        '.sugar-crush/config.dev.json' => self::USER,
+        '.sugar-crush/config.json' => self::USER,
+        '.sugar-crush/config.json.' => self::USER,
+        '.sugar-crush/teams' => self::USER,
+        '.sugar-crush/worktrees' => self::USER,
+
+        // Neither: not a tier this collector is about.
+        '.git/info' => self::NOT_A_TIER,
+        '.well-known/oauth-authorization-server' => self::NOT_A_TIER,
+    ];
+
+    private const REPOSITORY = 'repository-chosen';
+    private const USER = 'user-tier';
+    private const NOT_A_TIER = 'not a tier';
+
+    /**
+     * THE DERIVATION, and it is the whole point of this revision.
+     *
+     * The test this replaces carried the sentence "Derived from `src/`, so the
+     * enumeration cannot drift from the tiers that exist" above a hard-coded
+     * five-element literal. Its only contact with `src/` was
+     * `assertStringContainsString($name, $wholeSrcConcatenated)` — an assertion
+     * that each name it already knew was somewhere in the tree — and it closed
+     * with `assertCount(5, $names)`, asserting that a five-element literal has
+     * five elements. It was structurally incapable of discovering a sixth tier,
+     * and BOTH names it was missing (`.claude/agents` and `.opencode/agents`)
+     * were already in its own haystack, `true` on both counts. A test that calls
+     * itself derived and is a literal is worse than prose, because it reads as
+     * proven.
+     *
+     * This walks `src/` with `token_get_all()`, takes every string literal, and
+     * pulls out every `.<dot-dir>/<segment>` it contains. On this tree that is
+     * TWENTY, of which TEN are repository-chosen. A new one anywhere in `src/`
+     * fails here by name until somebody classifies it.
+     */
+    public function testTheDotPathEnumerationIsDerivedFromSrc(): void
     {
-        $src = \dirname(__DIR__, 2) . '/src';
-        $haystack = '';
+        $derived = $this->dotPathsIn(\dirname(__DIR__, 2) . '/src');
+
+        // Sorted on both sides: the map above is grouped by classification for
+        // a reader, the derivation is `ksort`ed, and the comparison is about
+        // membership rather than either ordering.
+        $classified = array_keys(self::DOT_PATHS);
+        sort($classified);
+
+        $this->assertSame(
+            $classified,
+            array_keys($derived),
+            'a dot-path in src/ that this inventory does not classify: '
+            . implode(', ', array_diff(array_keys($derived), array_keys(self::DOT_PATHS))),
+        );
+    }
+
+    /**
+     * TEN repository-chosen paths, and the enumeration in
+     * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
+     * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
+     * ten.
+     */
+    public function testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade(): void
+    {
+        $repository = array_keys(
+            array_filter(self::DOT_PATHS, static fn (string $kind): bool => $kind === self::REPOSITORY),
+        );
+
+        $this->assertCount(10, $repository);
+
+        // SCOPED TO THE DOC-BLOCKS THAT MAKE THE CLAIM, not to the file. Asserted
+        // file-wide, this passed while the enumeration itself was missing a name,
+        // because the same name appears backticked in another comment a few
+        // hundred lines away — a false green of exactly the shape being fixed.
+        $bootstrap = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
+        $enumeration = $this->docBlockAbove($bootstrap, 'public static function projectTierRefusals()')
+            . "\n" . $this->docBlockAbove($bootstrap, 'private static array $projectTierRefusals = [];');
+
+        foreach ($repository as $name) {
+            $this->assertStringContainsString(
+                '`' . $name . '`',
+                $enumeration,
+                "the collector's own doc-blocks must name {$name}",
+            );
+        }
+    }
+
+    /**
+     * Which of the ten reach the collector, and which are gated elsewhere. FIVE
+     * and FIVE — stated here so "three feeders" cannot quietly stand in for "and
+     * five paths nobody drains".
+     */
+    public function testTheFiveThatFeedTheCollectorAndTheFiveThatAreNamedGaps(): void
+    {
+        $feeders = ['.claude/skills', '.opencode/skills', '.sugar-crush/agents',
+            '.sugar-crush/skills', '.sugar-crush/workflows'];
+        $gaps = ['.claude/agents', '.opencode/agents', '.opencode/memory',
+            '.sugar-crush/commands', '.sugar-crush/hooks.yaml'];
+
+        $repository = array_keys(
+            array_filter(self::DOT_PATHS, static fn (string $kind): bool => $kind === self::REPOSITORY),
+        );
+
+        $union = array_merge($feeders, $gaps);
+        sort($union);
+
+        $this->assertSame($repository, $union, 'every repository-chosen path is one or the other');
+        $this->assertSame([], array_intersect($feeders, $gaps), 'and never both');
+    }
+
+    /**
+     * DORMANT IS NOT UNGATED — the finding this round's gating work came from.
+     * Each of the four dormant holders routes its repository-chosen directory
+     * through {@see \SugarCraft\Crush\Support\ContainedPath}, so "nothing
+     * constructs it yet" is never again the whole answer to "is it contained".
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function dormantHolders(): array
+    {
+        return [
+            'foreign agent presets' => ['src/Agents/ForeignAgentPresetRegistry.php'],
+            'foreign memory import' => ['src/Memory/ForeignMemoryImporter.php'],
+            'custom commands' => ['src/Commands/CommandLoader.php'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('dormantHolders')]
+    public function testEveryDormantHolderOfARepositoryChosenDirectoryIsGated(string $relative): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/' . $relative);
+
+        $this->assertStringContainsString('ContainedPath::below(', $source, "{$relative} anchors its directory");
+        $this->assertStringContainsString('ContainedPath::within(', $source, "{$relative} bounds its entries");
+    }
+
+    /**
+     * Every `.<dir>/<segment>` appearing in a string literal under $src.
+     *
+     * Token-derived rather than grepped: a `.claude/agents` inside a doc-comment
+     * is a cross-reference, and the previous instrument's whole-file
+     * concatenation could not tell one from a path the code builds.
+     *
+     * @return array<string, list<string>> dot-path => files it appears in, sorted
+     */
+    private function dotPathsIn(string $src): array
+    {
+        $found = [];
         $walk = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
         );
 
         /** @var \SplFileInfo $file */
         foreach ($walk as $file) {
-            if ($file->isFile() && $file->getExtension() === 'php') {
-                $haystack .= (string) file_get_contents($file->getPathname());
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $relative = substr($file->getPathname(), \strlen($src) + 1);
+            foreach (token_get_all((string) file_get_contents($file->getPathname())) as $token) {
+                if (!\is_array($token)
+                    || !\in_array($token[0], [\T_CONSTANT_ENCAPSED_STRING, \T_ENCAPSED_AND_WHITESPACE], true)
+                ) {
+                    continue;
+                }
+
+                if (preg_match_all('#(?:^|/|\'|")(\.[a-z][a-z0-9._-]*/[A-Za-z0-9._-]+)#', $token[1], $matches)) {
+                    foreach ($matches[1] as $hit) {
+                        $found[$hit][$relative] = true;
+                    }
+                }
             }
         }
 
-        $names = [
-            '.sugar-crush/workflows',
-            '.sugar-crush/skills',
-            '.claude/skills',
-            '.opencode/skills',
-            '.sugar-crush/agents',
-        ];
+        ksort($found);
 
-        foreach ($names as $name) {
-            $this->assertStringContainsString($name, $haystack, "{$name} is one of the five");
-        }
-
-        // SCOPED TO THE DOC-BLOCK THAT MAKES THE CLAIM, not to the file. Asserted
-        // file-wide, this passed while the enumeration itself was missing a name,
-        // because the same name appears backticked in another comment a few
-        // hundred lines away — a false green of exactly the shape being fixed.
-        $enumeration = $this->docBlockAbove($src . '/Cli/Bootstrap.php', 'public static function projectTierRefusals()');
-
-        foreach ($names as $name) {
-            $this->assertStringContainsString(
-                '`' . $name . '`',
-                $enumeration,
-                "projectTierRefusals()'s own doc-block must name {$name}",
-            );
-        }
-
-        $this->assertCount(5, $names);
+        return array_map(static fn (array $files): array => array_keys($files), $found);
     }
 
     /**

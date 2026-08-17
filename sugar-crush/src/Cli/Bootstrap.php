@@ -158,11 +158,28 @@ final class Bootstrap
      * the agent-preset registry
      * ({@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()}),
      * merged in {@see agentPresets()} on both its return and its degradation
-     * paths. A FOURTH holder of a repository-chosen directory,
-     * {@see \SugarCraft\Crush\Commands\CommandLoader}, does NOT feed this: it
-     * `error_log()`s its refusal instead, and it is dormant (nothing in `src/` or
-     * `bin/` constructs it with an anchor yet), so it is listed here as the known
-     * gap rather than counted as a contributor.
+     * paths.
+     *
+     * FOUR OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
+     * is named rather than counted, because "three feeders" quietly becoming
+     * "three feeders and four things nobody drains" is the drift this collector
+     * keeps producing. All four are DORMANT — nothing in `src/` or `bin/`
+     * constructs them — and all four are GATED, which dormant does not imply and
+     * for one round did not mean:
+     *
+     *  - {@see \SugarCraft\Crush\Commands\CommandLoader} (`.sugar-crush/commands`)
+     *    `error_log()`s its refusal instead of exposing a seam;
+     *  - {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}
+     *    (`.claude/agents`, `.opencode/agents`) and
+     *    {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
+     *    (`.opencode/memory`) each expose `refusedDirectories()` with nothing
+     *    reading it yet;
+     *  - `.sugar-crush/hooks.yaml` has its own trust gate
+     *    ({@see projectHooksAreTrusted()}) and refuses the LAUNCH rather than
+     *    degrading, so a collector entry would be unreachable.
+     *
+     * The full enumeration and its derivation live in
+     * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}.
      *
      * One collector rather than three because the user does not care which class
      * noticed that their repository's directory was rejected.
@@ -422,14 +439,24 @@ final class Bootstrap
      * configured path, mapped to why.
      *
      * The pull-based seam {@see skillSkips()} is, for the other half of the same
-     * question: a repository can choose where its `.sugar-crush/workflows`,
-     * `.sugar-crush/skills`, `.claude/skills`, `.opencode/skills` and
-     * `.sugar-crush/agents` point — FIVE, and this list said four for a round
-     * after the agents tier was added ({@see agentPresets()}) — and a directory
-     * that resolves out of the checkout is refused wholesale. Kept
-     * where a doctor report or a debug pane can ask for it, with
+     * question: a repository chooses where these paths point, and one that
+     * resolves out of the checkout is refused wholesale. Kept where a doctor
+     * report or a debug pane can ask for it, with
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
+     *
+     * TEN repository-chosen paths exist in `src/`. This list said FOUR, then
+     * FIVE, and both figures were hand-written; it is now DERIVED from `src/` by
+     * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
+     * reds when an eleventh appears. The five whose refusals reach THIS map:
+     *
+     *   `.sugar-crush/workflows`  `.sugar-crush/skills`  `.claude/skills`
+     *   `.opencode/skills`        `.sugar-crush/agents`
+     *
+     * and the five that are gated elsewhere and named as gaps rather than
+     * counted here — `.sugar-crush/commands`, `.claude/agents`,
+     * `.opencode/agents`, `.opencode/memory`, `.sugar-crush/hooks.yaml` — are
+     * itemised on {@see $projectTierRefusals}.
      *
      * @return array<string, string> configured path => why it was refused
      */
@@ -658,13 +685,31 @@ final class Bootstrap
         //
         // The union of the two tiers' permissions is the right answer when one
         // directory IS both, and the user tier is deliberately unanchored (see
-        // {@see AgentPresetRegistry::__construct()}). The narrow cost is stated
-        // rather than hidden: a $HOME that is itself a cloned checkout — a
-        // dotfiles repo — has its `.sugar-crush/agents` read unanchored. That
-        // directory is still gated by {@see trustedConfigDirPath()}, which
-        // refuses a home this process cannot establish ownership of, and a user
-        // who cloned a repository onto their own home directory has adopted its
-        // config as theirs.
+        // {@see AgentPresetRegistry::__construct()}).
+        //
+        // THE COST OF THAT COLLAPSE WAS ONCE STATED AND MITIGATED WITH A
+        // MITIGATION THAT DID NOT EXIST. The sentence here used to read "that
+        // directory is still gated by trustedConfigDirPath(), which refuses a
+        // home this process cannot establish ownership of"; that method refused
+        // only an UNDETERMINABLE home and performed no `stat` at all, so a
+        // $HOME that is itself a cloned checkout — a dotfiles repo — had its
+        // committed `.sugar-crush/agents -> <outside>` read unanchored.
+        // MEASURED on a real `git init` checkout, one committed symlink:
+        //
+        //     cd ~        && sugarcrush  presets=["pwned"] mode=bypass-permissions refusals=[]
+        //     cd ~/dotfiles && sugarcrush  presets=[]        refusals=["…outside the checkout…"]
+        //
+        // Two things changed rather than the sentence. {@see trustedConfigDirPath()}
+        // now genuinely establishes ownership, and the collapse below is
+        // CONDITIONAL: when the home directory is itself a git checkout the
+        // anchor is kept, because that is precisely the state in which "a
+        // repository chose where this directory points" can be true of the
+        // user's own home. `$HOME/.git` is the discriminator because the escape
+        // needs a COMMITTED symlink and nothing can be committed without a
+        // repository; `file_exists()` rather than `is_dir()` because a linked
+        // worktree spells `.git` as a file. STATED BOUND: a bare-repo dotfiles
+        // layout (`git --git-dir=~/.dotfiles --work-tree=~`) leaves no `.git`
+        // at $HOME and is NOT caught by this.
         //
         // WHICH HALF IS THE FIX, measured rather than implied: the ANCHOR branch
         // is. Collapsing the two search paths to one changes no verdict — with
@@ -682,6 +727,14 @@ final class Bootstrap
         // directory for being "outside the checkout it was reached from".
         $sameDirectory = $projectAgents === $userAgents
             || (realpath($projectAgents) !== false && realpath($projectAgents) === realpath($userAgents));
+
+        // The one state in which the collapse above is NOT the user's own
+        // choice — see the comment block. A home that is a checkout keeps the
+        // anchor, so the roster is judged the way the same directory would be
+        // judged if it were reached as a project.
+        if ($sameDirectory && file_exists(rtrim($root, '/') . '/.git')) {
+            $sameDirectory = false;
+        }
 
         $registry = new AgentPresetRegistry(
             $sameDirectory ? [$userAgents] : [$projectAgents, $userAgents],
@@ -2726,7 +2779,25 @@ final class Bootstrap
      * policy the user did write. It costs one exported variable to fix and
      * says so.
      *
+     * TWO REFUSALS, not one, and the second is new because the first was being
+     * CITED as the second. This method used to ask {@see resolvedHomePath()},
+     * which answers "can a home be NAMED" — a question `HOME=/tmp` passes. The
+     * `/tmp` stand-in the paragraph above describes as the thing being defended
+     * against was therefore reachable simply by pointing `HOME` at it, and
+     * {@see agentPresets()} carried a comment asserting this method "refuses a
+     * home this process cannot establish ownership of" when no `stat` was
+     * performed anywhere in the package. MEASURED before {@see HomeDirectory::owned()}:
+     *
+     *     HOME=<mode 1777 dir>  ->  trustedConfigDirPath() = <that dir>/.sugar-crush
+     *                           ->  user-tier presets read from it = ["notmine"]
+     *
+     * The second refusal is that measurement closed: the resolved home must
+     * exist, must not be world-writable, and must be owned by this process's
+     * effective uid. Its bounds — group-writable homes accepted, ownership
+     * clause skipped on non-POSIX hosts — are written where the check is.
+     *
      * @throws PermissionConfigException when this user's home cannot be determined
+     *         or cannot be established as this user's
      */
     private static function trustedConfigDirPath(): string
     {
@@ -2741,7 +2812,19 @@ final class Bootstrap
             );
         }
 
-        return $home . '/.sugar-crush';
+        $owned = HomeDirectory::owned();
+        if ($owned === null) {
+            throw new PermissionConfigException(sprintf(
+                'the home directory this process resolved (%s) cannot be established as yours — it does not '
+                . 'exist, or it is world-writable, or it is owned by another account. The permission policy '
+                . 'and hook chain in ~/.sugar-crush would then be whatever the last local user to write '
+                . 'there put in them, so they are not read. Export HOME to the account this session belongs '
+                . 'to, or fix that directory\'s ownership and mode.',
+                $home,
+            ));
+        }
+
+        return $owned . '/.sugar-crush';
     }
 
     private static function ensureDir(string $dir): void

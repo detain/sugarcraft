@@ -175,6 +175,11 @@ final class BuiltInToolCorpusTest extends TestCase
      * LAST one: `abstract` is the only shape the old `class_exists()`-only guard
      * classified correctly, and there are none — while the 16 interfaces and 6
      * traits it would have thrown on are already here.
+     *
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 267 files declare
+     * 286 top-level types, so this is not a census of the tree's types and never
+     * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
+     * for the blind spot that equating the two produced.
      */
     public function testTheSymbolKindCensusTheDocBlockQuotes(): void
     {
@@ -229,6 +234,183 @@ final class BuiltInToolCorpusTest extends TestCase
             $exempt,
             'PSR-4-exempt src/ files (skipped by the corpus scan): ' . implode(', ', $exempt),
         );
+    }
+
+    /**
+     * THE CENSUS THE SCAN USED TO EQUATE WITH FILES. `classNames()` derived one
+     * class per FILENAME, so "the SOURCE TREE is the corpus … a new tool class is
+     * in every one of these tests the moment it exists" held only for
+     * one-type-per-file — and `src/` ships nineteen counterexamples.
+     *
+     * Derived with `token_get_all()` rather than `class_exists()`, because the
+     * secondary symbols are not autoloadable by their own names: 267 `.php`
+     * files, 286 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * per file, so a second declaration arriving in a scanned file reds THIS test
+     * with the file named rather than silently widening the blind spot.
+     *
+     * `src/ToolRegistry.php` declaring `SugarCraft\Crush\Tool` is reported rather
+     * than moved: `src/ToolRegistry.php` is outside this change-set's ownership.
+     * It is one `use` away from colliding with `SugarCraft\Crush\Tools\Tool`, and
+     * `tests/ToolRegistryTest.php` already imports it.
+     */
+    public function testTheSecondaryDeclarationCensus(): void
+    {
+        $secondary = [];
+        foreach (BuiltInToolCorpus::sourceFiles($this->srcDir) as $relative) {
+            $primary = 'SugarCraft\\Crush\\' . str_replace('/', '\\', substr($relative, 0, -4));
+            $extra = array_values(array_diff(
+                BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative),
+                [$primary],
+            ));
+
+            if ($extra !== []) {
+                $secondary[$relative] = $extra;
+            }
+        }
+
+        $this->assertSame(
+            [
+                'App/App.php' => 11,
+                'Cli/ArgvParser.php' => 1,
+                'CommandParser.php' => 1,
+                'Compactor.php' => 1,
+                'MCP/McpAuthStore.php' => 1,
+                'MCP/OAuthClientRegistration.php' => 1,
+                'ToolRegistry.php' => 2,
+                'Tui/StallDetector.php' => 1,
+            ],
+            array_map('count', $secondary),
+        );
+
+        $this->assertSame(19, array_sum(array_map('count', $secondary)));
+        $this->assertContains('SugarCraft\\Crush\\Tool', $secondary['ToolRegistry.php']);
+    }
+
+    /**
+     * THE INVARIANT, which is the load-bearing half: whatever the census says,
+     * no secondary declaration may be a dispatchable tool. This is the assertion
+     * that would have caught the blind spot without anybody having to notice the
+     * census first, and it stays correct when the census legitimately changes.
+     */
+    public function testNoSecondaryDeclarationIsADispatchableTool(): void
+    {
+        $offenders = [];
+        foreach (BuiltInToolCorpus::sourceFiles($this->srcDir) as $relative) {
+            $primary = 'SugarCraft\\Crush\\' . str_replace('/', '\\', substr($relative, 0, -4));
+
+            foreach (BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative) as $declared) {
+                if ($declared === $primary || !class_exists($declared)) {
+                    continue;
+                }
+
+                $reflection = new \ReflectionClass($declared);
+                if (!$reflection->isAbstract() && $reflection->implementsInterface(Tool::class)) {
+                    $offenders[] = "{$declared} (src/{$relative})";
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            'a Tool implementor declared as a secondary symbol is dispatchable by nothing: '
+            . implode(', ', $offenders),
+        );
+    }
+
+    /**
+     * The scanner half of the same fix, on a synthetic tree: a `Tool`
+     * implementor declared as a SECOND type in a file is now in the corpus. Under
+     * the filename-derived scan it was invisible, and — this is what made it
+     * dangerous rather than merely incomplete — `nonClassSources()` still
+     * returned `[]`, because the file's primary symbol does exist.
+     */
+    public function testAToolImplementorDeclaredAsASecondarySymbolIsSeen(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Support/Bundle.php', <<<'PHP'
+            namespace CorpusProbe\Support;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class Bundle
+            {
+            }
+
+            final class HiddenTool implements Tool
+            {
+                public function name(): string
+                {
+                    return 'hidden';
+                }
+
+                public function description(): string
+                {
+                    return 'hidden';
+                }
+
+                public function inputSchema(): array
+                {
+                    return [];
+                }
+
+                public function execute(array $args): ToolResult
+                {
+                    return ToolResult::error('hidden');
+                }
+            }
+            PHP);
+
+        $this->assertSame(
+            ['CorpusProbe\\Support\\HiddenTool', 'CorpusProbe\\Tools\\BuiltIn\\Anchor'],
+            $this->scanProbe(),
+        );
+
+        // The silence that made it dangerous, pinned: nothing was exempt.
+        $this->assertSame([], BuiltInToolCorpus::nonClassSources($this->probeDir, self::PROBE_PREFIX));
+    }
+
+    /**
+     * The declaration scanner's own edges, so a token walk that quietly stopped
+     * matching would not make every census above read as zero-drift.
+     *
+     * @return array<string, array{0: string, 1: list<string>}>
+     */
+    public static function declarationShapes(): array
+    {
+        return [
+            'two top-level classes' => [
+                "<?php\nnamespace N;\nfinal class A {}\nfinal class B {}\n",
+                ['N\\A', 'N\\B'],
+            ],
+            'every kind' => [
+                "<?php\nnamespace N;\nclass A {}\ninterface B {}\ntrait C {}\nenum D {}\n",
+                ['N\\A', 'N\\B', 'N\\C', 'N\\D'],
+            ],
+            'a nested class is not top-level' => [
+                "<?php\nnamespace N;\nfinal class A { public function f() { return new class {}; } }\n",
+                ['N\\A'],
+            ],
+            '::class is not a declaration' => [
+                "<?php\nnamespace N;\nfinal class A { public function f(): string { return \\stdClass::class; } }\n",
+                ['N\\A'],
+            ],
+            'no namespace' => ["<?php\nfinal class A {}\n", ['A']],
+            'a braced string does not unbalance the walk' => [
+                "<?php\nnamespace N;\nfinal class A { public function f(\$b) { return \"{\$b}/x\"; } }\nfinal class B {}\n",
+                ['N\\A', 'N\\B'],
+            ],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('declarationShapes')]
+    public function testTheDeclarationScannerSeesExactlyTheTopLevelTypes(string $code, array $expected): void
+    {
+        $path = $this->probeDir . '/decl_' . md5($code) . '.php';
+        file_put_contents($path, $code);
+
+        $this->assertSame($expected, BuiltInToolCorpus::declaredTypes($path));
     }
 
     public function testEveryCorpusInstanceIsATool(): void
@@ -379,6 +561,69 @@ final class BuiltInToolCorpusTest extends TestCase
         $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $this->scanProbe());
     }
 
+    /**
+     * THE ONE DANGEROUS SHAPE, and the one that was untested. The guard's
+     * doc-block asserted that enums "are rejected here on the interface clause".
+     * MEASURED on PHP 8.3.6 for `enum ModeTool: string implements Tool`:
+     *
+     *     class_exists = true   isAbstract = false   implementsInterface(Tool) = true
+     *
+     * — BOTH clauses passed. It entered the corpus, and
+     * {@see BuiltInToolCorpus::instances()} then raised
+     * `Error: Cannot instantiate enum …` inside data-provider construction: an
+     * uncatchable abort of the whole suite's enumeration, which is verbatim the
+     * failure mode this class was refactored to remove.
+     *
+     * {@see testAnEnumIsSkipped()} probed a PLAIN enum, which the interface
+     * clause rejects for the same reason it rejects any unrelated class — so the
+     * test that looked like coverage of this was coverage of something else.
+     */
+    public function testAnEnumImplementingToolNeitherEntersTheCorpusNorFatals(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/ModeTool.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            enum ModeTool: string implements Tool
+            {
+                case Fast = 'fast';
+
+                public function name(): string
+                {
+                    return 'mode';
+                }
+
+                public function description(): string
+                {
+                    return 'mode';
+                }
+
+                public function inputSchema(): array
+                {
+                    return [];
+                }
+
+                public function execute(array $args): ToolResult
+                {
+                    return ToolResult::error('mode');
+                }
+            }
+            PHP);
+
+        $names = $this->scanProbe();
+
+        $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $names);
+
+        // The consequence, driven rather than argued: every name the corpus
+        // returns must be `new`-able, because instances() does exactly that.
+        foreach ($names as $class) {
+            $this->assertFalse((new \ReflectionClass($class))->isEnum());
+        }
+    }
+
     /** An enum in the tree is neither a tool nor a reason to abort. */
     public function testAnEnumIsSkipped(): void
     {
@@ -450,12 +695,43 @@ final class BuiltInToolCorpusTest extends TestCase
         );
     }
 
-    public function testAnEmptyTreeThrowsRatherThanHandingBackAnEmptyCorpus(): void
+    /**
+     * TWO EMPTINESSES, and telling them apart is what stops
+     * {@see BuiltInToolCorpus::nonClassSources()} passing vacuously. An empty
+     * DIRECTORY means nothing was scanned; a scanned tree with no tools in it
+     * means the corpus is empty. The first used to be indistinguishable from the
+     * second here, and indistinguishable from success in `nonClassSources()`.
+     */
+    public function testAnExistingButEmptyTreeThrowsBecauseNothingWasScanned(): void
     {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/No PHP sources found/');
+
+        $this->scanProbe();
+    }
+
+    public function testATreeWithSourcesButNoToolsThrowsRatherThanHandingBackAnEmptyCorpus(): void
+    {
+        $this->writeProbe('Support/Helper.php', "namespace CorpusProbe\\Support;\n\nfinal class Helper\n{\n}\n");
+
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/No built-in tool sources found/');
 
         $this->scanProbe();
+    }
+
+    /**
+     * The other half of the same guard, and the reason it exists: pointed at an
+     * existing-but-empty root, `nonClassSources()` used to return `[]` and make
+     * `assertSame([], $exempt)` pass having scanned NOTHING. "0 of 267" was never
+     * asserted to have looked at 267 files.
+     */
+    public function testNonClassSourcesRefusesToReportZeroOutOfNothing(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/No PHP sources found/');
+
+        BuiltInToolCorpus::nonClassSources($this->probeDir, self::PROBE_PREFIX);
     }
 
     /** Deterministic order is a contract three providers name their cases from. */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Skills\SkillSource;
@@ -37,6 +38,27 @@ use Symfony\Component\Yaml\Yaml;
  * item 3 — call {@see discover()} alongside it from the same place (mirroring
  * how `Bootstrap::skillRegistry()` consumes ForeignSkillDiscovery) and badge
  * the imported presets in the palette.
+ *
+ * DORMANT IS NOT UNGATED, and for one round it was. This class reads TWO
+ * repository-chosen directories — `{projectRoot}/.claude/agents` and
+ * `{projectRoot}/.opencode/agents` — and the body of every `*.md` in them
+ * becomes a sub-agent's `initialPrompt`, under whatever `permissionMode:` the
+ * file declares. Until the gates below existed it did that with no containment
+ * of any kind, while the NATIVE tier refused the byte-identical shape. MEASURED
+ * on this host with `{projectRoot}/.claude/agents -> <a directory outside the
+ * checkout>`, one committed line:
+ *
+ *     FOREIGN discoverClaude:   presets=["leak"] permissionMode=bypass-permissions
+ *                               initialPrompt='SIXTH-ESCAPE-BODY sk-live-CAFEBABE'
+ *     NATIVE  agentPresets():   presets=[]       refusals={…"outside the checkout"…}
+ *
+ * Gated NOW rather than at wiring time, for the reason
+ * {@see \SugarCraft\Crush\Commands\CommandLoader::loadFromDirectory()} states
+ * for its own anchor: a containment rule added when the consumer lands is one
+ * written after the consumer already trusts the loader. The refusals are pulled
+ * through {@see refusedDirectories()}, the same pull-based seam
+ * {@see AgentPresetRegistry::refusedDirectories()} exposes, so the wiring step
+ * has a collector to drain instead of a reason to add one.
  */
 final class ForeignAgentPresetRegistry
 {
@@ -76,6 +98,14 @@ final class ForeignAgentPresetRegistry
     private array $warnings = [];
 
     /**
+     * Directories the most recent discover* call declined to read, path as
+     * spelled => why — see {@see refusedDirectories()}.
+     *
+     * @var array<string, string>
+     */
+    private array $refusedDirectories = [];
+
+    /**
      * Discover every foreign agent preset reachable from $projectRoot.
      *
      * Claude Code presets win a filename collision with an opencode preset --
@@ -92,7 +122,7 @@ final class ForeignAgentPresetRegistry
      */
     public function discover(string $projectRoot): array
     {
-        $this->warnings = [];
+        $this->reset();
 
         $claude = $this->scanClaude($projectRoot);
 
@@ -107,7 +137,7 @@ final class ForeignAgentPresetRegistry
      */
     public function discoverClaude(string $projectRoot): array
     {
-        $this->warnings = [];
+        $this->reset();
 
         return $this->scanClaude($projectRoot);
     }
@@ -120,7 +150,7 @@ final class ForeignAgentPresetRegistry
      */
     public function discoverOpencode(string $projectRoot): array
     {
-        $this->warnings = [];
+        $this->reset();
 
         return $this->scanOpencode($projectRoot);
     }
@@ -137,14 +167,43 @@ final class ForeignAgentPresetRegistry
     }
 
     /**
+     * Which directories this registry refused to read, and why.
+     *
+     * The pull-based seam {@see AgentPresetRegistry::refusedDirectories()},
+     * {@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()} and
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()}
+     * each expose for their own tier, provided here for the same reason: a
+     * dropped directory is otherwise indistinguishable from an empty one, and
+     * "your repository's `.claude/agents` was rejected" is not something a
+     * shorter roster can say. Nothing drains it yet — see the class doc-block
+     * — which is exactly why it exists before the wiring rather than after.
+     *
+     * Recomputed by every discover* call rather than accumulated, so a refusal
+     * never outlives the condition that caused it.
+     *
+     * @return array<string, string> directory as spelled => why it was refused
+     */
+    public function refusedDirectories(): array
+    {
+        return $this->refusedDirectories;
+    }
+
+    /** One launch's notices, not one object's — see {@see refusedDirectories()}. */
+    private function reset(): void
+    {
+        $this->warnings = [];
+        $this->refusedDirectories = [];
+    }
+
+    /**
      * @return array<string, AgentPreset>
      */
     private function scanClaude(string $projectRoot): array
     {
         return $this->scan(
             [
-                HomeDirectory::path() . '/.claude/agents',
-                rtrim($projectRoot, '/') . '/.claude/agents',
+                [self::userDir('/.claude/agents'), null],
+                [rtrim($projectRoot, '/') . '/.claude/agents', $projectRoot],
             ],
             SkillSource::Claude,
         );
@@ -157,11 +216,31 @@ final class ForeignAgentPresetRegistry
     {
         return $this->scan(
             [
-                HomeDirectory::path() . '/.config/opencode/agents',
-                rtrim($projectRoot, '/') . '/.opencode/agents',
+                [self::userDir('/.config/opencode/agents'), null],
+                [rtrim($projectRoot, '/') . '/.opencode/agents', $projectRoot],
             ],
             SkillSource::Opencode,
         );
+    }
+
+    /**
+     * The user-tier directory $suffix names, or null when this process cannot
+     * establish that the home it resolved is this user's.
+     *
+     * {@see HomeDirectory::owned()} rather than {@see HomeDirectory::path()},
+     * and the difference is the whole point: `path()`'s documented stand-in is
+     * `sys_get_temp_dir()`, mode 1777 on every stock Linux, and the bodies read
+     * out of these directories become sub-agent prompts. MEASURED on this host
+     * with `php -d disable_functions=posix_geteuid,posix_getpwuid` and `HOME`
+     * unset — the exact condition the stand-in exists for — `path()` returned
+     * `/tmp` (drwxrwxrwt). A user tier that cannot be attributed to the user is
+     * therefore skipped rather than read out of a directory anyone can write.
+     */
+    private static function userDir(string $suffix): ?string
+    {
+        $home = HomeDirectory::owned();
+
+        return $home === null ? null : $home . $suffix;
     }
 
     /**
@@ -174,7 +253,28 @@ final class ForeignAgentPresetRegistry
      * too -- foreign and native presets have to share one key space to be
      * mergeable.
      *
-     * @param  list<string> $dirs
+     * TWO BOUNDARIES, the pair {@see \SugarCraft\Crush\Skills\SkillLoader::skillFilesIn()}
+     * and {@see \SugarCraft\Crush\Commands\CommandLoader::loadFromDirectory()}
+     * each need. The DIRECTORY a repository chose must resolve strictly inside
+     * the checkout that named it ({@see ContainedPath::below()}), and each
+     * `*.md` ENTRY must still resolve inside the directory it was listed from
+     * ({@see ContainedPath::within()}). Without the first the second is
+     * relocatable rather than binding: `realpath()` on both sides means a
+     * boundary directory that is itself a symlink travels with the link.
+     *
+     * A null anchor is an UNANCHORED read, which is the right answer for the
+     * user's own `~/.claude/agents` — nobody but the user chose where it points
+     * — and matches {@see AgentPresetRegistry::__construct()}'s treatment of the
+     * same tier. A null DIRECTORY is a user tier that could not be attributed to
+     * this user at all; see {@see userDir()}.
+     *
+     * A LIST OF PAIRS rather than a `directory => anchor` map, for the reason
+     * {@see AgentPresetRegistry::__construct()} had to grow a normaliser and a
+     * throw: a map keyed by path makes a one-byte spelling difference between
+     * the key and the search path silently REMOVE the anchor rather than weaken
+     * it. There is no key here to mismatch.
+     *
+     * @param  list<array{0: string|null, 1: string|null}> $dirs [directory, checkout anchor]
      * @return array<string, AgentPreset>
      */
     private function scan(array $dirs, SkillSource $source): array
@@ -195,12 +295,38 @@ final class ForeignAgentPresetRegistry
 
         $presets = [];
 
-        foreach ($dirs as $dir) {
-            if (!is_dir($dir)) {
+        foreach ($dirs as [$dir, $anchor]) {
+            if ($dir === null || !is_dir($dir)) {
+                continue;
+            }
+
+            if ($anchor !== null && !ContainedPath::below($dir, $anchor)) {
+                $this->refusedDirectories[$dir] = sprintf(
+                    'resolves to %s, %s the checkout it was reached from (%s) — a repository chooses where '
+                    . 'this directory is, and a link out of the checkout would put unrelated files\' bodies '
+                    . "in a sub-agent's prompt, under whatever permissionMode they declare",
+                    (string) realpath($dir),
+                    realpath($anchor) === realpath($dir) ? 'which is exactly' : 'outside',
+                    $anchor,
+                );
+
                 continue;
             }
 
             foreach (glob(rtrim($dir, '/') . '/*.md') ?: [] as $file) {
+                // The directory is contained; an ENTRY inside it need not be.
+                // `agents/link.md -> ~/.ssh/config` is one committed line, and
+                // `glob()` does not resolve it.
+                if (!ContainedPath::within($file, $dir)) {
+                    $this->refusedDirectories[$file] = sprintf(
+                        'resolves outside %s, the directory it was listed from, so it is not an agent that '
+                        . 'directory declares',
+                        $dir,
+                    );
+
+                    continue;
+                }
+
                 try {
                     [$data, $body] = $this->frontmatter($file);
                     $name = basename($file, '.md');

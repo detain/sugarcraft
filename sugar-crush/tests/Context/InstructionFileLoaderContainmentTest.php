@@ -36,6 +36,21 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
  * FIXTURES LIVE OUTSIDE ANY CHECKOUT, in this process's temp directory, because
  * the escapes are only expressible as symlinks and a symlink pointing out of a
  * repository must never be committed into one.
+ *
+ * THE PREDICATE-SWAP NOTE, recorded here because the source used to argue a
+ * distinction it does not make. Swapping `within()` to `below()` at each of
+ * `InstructionFileLoader`'s five EXECUTABLE call sites (the sixth match is a
+ * `{@see}` cross-reference), one at a time, in a sandbox copy of `src/` +
+ * `tests/`, leaves THIS FILE at **OK (27 tests, 37 assertions)** every time —
+ * re-measured against this revision; the figure was 18/22 before this file grew
+ * its finding-9/10/14 cases. Four of the five judge FILE entries, where equality
+ * with a directory boundary is unreachable. The fifth — `loadForPath()`'s START
+ * gate — was argued as a real decision ("a file sitting in the checkout ROOT is
+ * inside the checkout") and is not one either: `$dir === $repoRoot` returns null
+ * under BOTH predicates, because `while ($dir !== $repoRoot)` never runs. The
+ * comments in `InstructionFileLoader` now say that rather than the reverse, and
+ * they name the four DIRECTORY anchors elsewhere in the package where the two
+ * predicates genuinely diverge and are each pinned by a test.
  */
 final class InstructionFileLoaderContainmentTest extends TestCase
 {
@@ -349,5 +364,176 @@ final class InstructionFileLoaderContainmentTest extends TestCase
 
         $this->assertCount(1, $documents);
         $this->assertStringContainsString('DETAIL-CCC', $documents[0]);
+    }
+
+    // ─── the walk climbs the RESOLVED tree, not the spelled one ─────
+
+    /**
+     * WHICH FILE GOVERNS, when the touched path is inside a symlinked in-repo
+     * subtree. Documented when the `realpath()` on the start directory landed,
+     * pinned by nothing until now.
+     *
+     * `<root>/spelled -> <root>/a/b/nested`. Climbing the SPELLED tree goes
+     * `<root>/spelled` -> `<root>` and stops at the root with nothing found.
+     * Climbing the RESOLVED tree goes `<root>/a/b/nested` -> `<root>/a/b` ->
+     * `<root>/a`, where the instruction file is. Both are defensible readings;
+     * only one is what the code does, and this is it.
+     */
+    public function testTheWalkClimbsTheResolvedTreeNotTheSpelledOne(): void
+    {
+        mkdir($this->repoRoot . '/a/b/nested', 0o777, true);
+        file_put_contents($this->repoRoot . '/a/CLAUDE.md', '# A-GOVERNS');
+        symlink($this->repoRoot . '/a/b/nested', $this->repoRoot . '/spelled');
+
+        $this->assertSame(
+            '# A-GOVERNS',
+            (new InstructionFileLoader($this->repoRoot))
+                ->loadForPath($this->repoRoot . '/spelled/Component.php'),
+        );
+    }
+
+    /**
+     * The DORMANT half of the same narrowing, pinned so it stops being an
+     * argument. {@see \SugarCraft\Crush\Tools\BuiltIn\Write} takes a
+     * `$worktreeJail` constructor argument; a write routed through a jail
+     * OUTSIDE `repoRoot` gets no nested instruction file, where the pre-gate
+     * lexical walk would have delivered the worktree's own.
+     *
+     * Latent, not live: `Bootstrap::tools()` constructs `Write` with
+     * `$root` and no jail, so nothing reaches this today. It is a test rather
+     * than a sentence because the next person to pass a jail needs the
+     * consequence to be visible, and because "a worktree's own CLAUDE.md is
+     * silently not delivered" is not something a shorter prompt can say.
+     */
+    public function testAWorktreeOutsideTheCheckoutGetsNoNestedInstructionFile(): void
+    {
+        $worktree = $this->sandbox . '/worktree';
+        mkdir($worktree . '/src', 0o777, true);
+        file_put_contents($worktree . '/src/CLAUDE.md', '# WORKTREE-CONVENTIONS');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+
+        $this->assertNull($loader->loadForPath($worktree . '/src/Component.php'));
+        $this->assertArrayHasKey($worktree . '/src/Component.php', $loader->refusedPaths());
+    }
+
+    // ─── the refusal seam ───────────────────────────────────────────
+
+    /**
+     * THE MONOREPO LAYOUT THE SILENT SKIP COSTS. A per-library `CLAUDE.md`
+     * symlinked to the monorepo root's shared one is the natural shape for a
+     * `--root <lib>` run in a repository whose root `CLAUDE.md` IS the shared
+     * file — and it is refused, correctly, with nothing said anywhere.
+     *
+     * Adding the SEAM needs neither `Runtime` nor `Bootstrap`; only a DISPLAY
+     * would. This pins the seam. Whether anything shows it is a separate call.
+     */
+    public function testARefusedRootFileIsRecordedRatherThanOnlySkipped(): void
+    {
+        symlink($this->outside . '/secret.txt', $this->repoRoot . '/CLAUDE.md');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $this->assertSame([], $loader->loadRoot());
+
+        $refusals = $loader->refusedPaths();
+        $this->assertArrayHasKey($this->repoRoot . '/CLAUDE.md', $refusals);
+        $this->assertStringContainsString($this->repoRoot, $refusals[$this->repoRoot . '/CLAUDE.md']);
+        $this->assertStringNotContainsString('TOP-SECRET-AAA', implode("\n", $refusals));
+    }
+
+    public function testARefusedNestedCandidateIsRecorded(): void
+    {
+        symlink($this->outside . '/secret.txt', $this->repoRoot . '/src/CLAUDE.md');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $loader->loadForPath($this->repoRoot . '/src/Component.php');
+
+        $this->assertArrayHasKey($this->repoRoot . '/src/CLAUDE.md', $loader->refusedPaths());
+    }
+
+    public function testARefusedForcedMatchIsRecorded(): void
+    {
+        symlink($this->outside . '/secret.txt', $this->repoRoot . '/vendored.md');
+
+        $loader = new InstructionFileLoader($this->repoRoot, ['*.md']);
+        $loader->loadForced();
+
+        $this->assertArrayHasKey($this->repoRoot . '/vendored.md', $loader->refusedPaths());
+    }
+
+    public function testABlockedImportIsRecordedAsWellAsNoted(): void
+    {
+        file_put_contents($this->repoRoot . '/CLAUDE.md', "# root\n@../outside/secret.md\n");
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $loader->loadRoot();
+
+        $this->assertArrayHasKey((string) realpath($this->outside . '/secret.md'), $loader->refusedPaths());
+    }
+
+    /**
+     * ACCUMULATED, not per-call, and the asymmetry with the sibling seams is
+     * deliberate: `loadRoot()`/`loadForced()` memoize and `loadForPath()` is
+     * called once per touched path, so a map rebuilt per call would report the
+     * last touched path's refusals and forget the root file's.
+     */
+    public function testRefusalsFromDifferentReadPathsAccumulate(): void
+    {
+        symlink($this->outside . '/secret.txt', $this->repoRoot . '/CLAUDE.md');
+        symlink($this->outside . '/secret.txt', $this->repoRoot . '/src/AGENTS.md');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $loader->loadRoot();
+        $loader->loadForPath($this->repoRoot . '/src/Component.php');
+
+        $this->assertSame(
+            [$this->repoRoot . '/CLAUDE.md', $this->repoRoot . '/src/AGENTS.md'],
+            array_keys($loader->refusedPaths()),
+        );
+    }
+
+    /** A clean checkout refuses nothing, so the map is not a permanent noise source. */
+    public function testACleanCheckoutRecordsNoRefusals(): void
+    {
+        file_put_contents($this->repoRoot . '/CLAUDE.md', '# C');
+        file_put_contents($this->repoRoot . '/src/CLAUDE.md', '# src');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $loader->loadRoot();
+        $loader->loadForPath($this->repoRoot . '/src/Component.php');
+
+        $this->assertSame([], $loader->refusedPaths());
+    }
+
+    // ─── the read is on the RESOLVED path ───────────────────────────
+
+    /**
+     * The narrowing behind finding #14: `loadForced()` read the `realpath()` it
+     * had already resolved while `loadRoot()`/`loadForPath()` re-resolved the
+     * SPELLED path a second time at read, which is a wider TOCTOU window in the
+     * two paths the containment work had just fixed than in the one it left
+     * alone. All three now read resolved.
+     *
+     * WHAT THIS ASSERTS AND WHAT IT CANNOT: the window is narrowed, not closed
+     * — the read still follows whatever the resolved path names at read time —
+     * so this pins the OBSERVABLE consequence instead, which is that the import
+     * base directory did NOT move with it. An `@./detail.md` inside a CLAUDE.md
+     * a repository vendored through a link still means "next to where the
+     * repository put the link", and reading the resolved file while resolving
+     * imports from the resolved directory would silently rename that import.
+     */
+    public function testASymlinkedRootFileResolvesItsImportsFromWhereTheRepositoryPutIt(): void
+    {
+        mkdir($this->repoRoot . '/docs');
+        file_put_contents($this->repoRoot . '/docs/conventions.md', "# vendored\n@./detail.md\n");
+        file_put_contents($this->repoRoot . '/docs/detail.md', 'DOCS-SIDE-DETAIL');
+        file_put_contents($this->repoRoot . '/detail.md', 'ROOT-SIDE-DETAIL');
+        symlink($this->repoRoot . '/docs/conventions.md', $this->repoRoot . '/CLAUDE.md');
+
+        $documents = (new InstructionFileLoader($this->repoRoot))->loadRoot();
+
+        $this->assertCount(1, $documents);
+        $this->assertStringContainsString('ROOT-SIDE-DETAIL', $documents[0]);
+        $this->assertStringNotContainsString('DOCS-SIDE-DETAIL', $documents[0]);
     }
 }

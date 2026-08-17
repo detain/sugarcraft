@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Memory;
 
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Skills\SkillSource;
@@ -40,6 +41,15 @@ use Symfony\Component\Yaml\Yaml;
  * `Chat::handleMemoryCommand()`) or a first-run one-shot prompt; both live in
  * `Chat.php`, which a later step owns. Until that lands, importing a foreign
  * memory tree has no runtime effect.
+ *
+ * DORMANT IS NOT UNGATED. One of the two directories this class reads —
+ * `{projectRoot}/.opencode/memory` — is a path a CLONED REPOSITORY chooses, and
+ * for one round it was read with no containment at all, which is the same shape
+ * as the escape the native agent-preset tier already refuses. Both boundaries
+ * are now here: the directory against the checkout that named it
+ * ({@see importOpencode()}), and each `*.md` entry against the directory it was
+ * listed from ({@see markdownFiles()}). Refusals are pulled through
+ * {@see refusedDirectories()}.
  */
 final class ForeignMemoryImporter
 {
@@ -53,7 +63,36 @@ final class ForeignMemoryImporter
      */
     private const INDEX_FILENAME = 'MEMORY.md';
 
+    /**
+     * Directories and entries the most recent import declined to read, path as
+     * spelled => why — see {@see refusedDirectories()}.
+     *
+     * @var array<string, string>
+     */
+    private array $refusedDirectories = [];
+
     public function __construct(private readonly MemoryStore $store) {}
+
+    /**
+     * What this importer refused to read, and why.
+     *
+     * The pull-based seam three other tiers already expose
+     * ({@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()},
+     * {@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()},
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()}),
+     * provided before the wiring rather than after it: an import that returns
+     * `0` because the directory was REFUSED is otherwise indistinguishable from
+     * one that returns `0` because the directory was empty.
+     *
+     * Recomputed by every import* call rather than accumulated, so a refusal
+     * never outlives the condition that caused it.
+     *
+     * @return array<string, string> path as spelled => why it was refused
+     */
+    public function refusedDirectories(): array
+    {
+        return $this->refusedDirectories;
+    }
 
     /**
      * Import Claude Code's per-project auto-memory entries.
@@ -70,6 +109,8 @@ final class ForeignMemoryImporter
      */
     public function importClaudeCode(string $projectRoot, ?string $claudeHome = null): int
     {
+        $this->refusedDirectories = [];
+
         $home = $claudeHome ?? (HomeDirectory::path() . '/.claude');
         $dir = rtrim($home, '/') . '/projects/' . $this->claudeProjectSlug($projectRoot) . '/memory';
 
@@ -122,8 +163,38 @@ final class ForeignMemoryImporter
      */
     public function importOpencode(string $projectRoot): int
     {
+        $this->refusedDirectories = [];
+
         $dir = rtrim($projectRoot, '/') . '/.opencode/memory';
         $imported = 0;
+
+        // THE ONE REPOSITORY-CHOSEN DIRECTORY THIS CLASS READS, anchored for the
+        // reason {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::scan()}
+        // and {@see \SugarCraft\Crush\Commands\CommandLoader::loadFromDirectory()}
+        // anchor theirs: `{projectRoot}/.opencode/memory` is a path a clone
+        // chooses, so a committed `.opencode/memory -> <outside>` would import
+        // arbitrary files into this session's memory store under a
+        // `source:opencode` tag that says they came from the project. Dormant
+        // (nothing constructs this class yet) is not a reason to leave it open —
+        // a containment rule added when the consumer lands is one written after
+        // the consumer already trusts the importer.
+        //
+        // The refusal NOTICE is narrower than the decision, matching
+        // {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::readableSearchPaths()}:
+        // a directory that simply is not there is the overwhelmingly common
+        // case and says nothing worth reporting, so only a directory that
+        // EXISTS and resolves out is named.
+        if (is_dir($dir) && !ContainedPath::below($dir, $projectRoot)) {
+            $this->refusedDirectories[$dir] = sprintf(
+                'resolves to %s, %s the checkout it was reached from (%s), so its files are not this '
+                . "project's memory",
+                (string) realpath($dir),
+                realpath($projectRoot) === realpath($dir) ? 'which is exactly' : 'outside',
+                $projectRoot,
+            );
+
+            return 0;
+        }
 
         foreach ($this->markdownFiles($dir) as $file) {
             $content = file_get_contents($file);
@@ -143,9 +214,16 @@ final class ForeignMemoryImporter
     }
 
     /**
-     * Every `*.md` in $dir, or an empty list when the directory is absent
-     * (a user who has never run the foreign tool is the common case, not an
-     * error) or unreadable (glob() returns false).
+     * Every `*.md` in $dir that still RESOLVES inside it, or an empty list when
+     * the directory is absent (a user who has never run the foreign tool is the
+     * common case, not an error) or unreadable (glob() returns false).
+     *
+     * The per-ENTRY containment is the second of the two boundaries
+     * {@see importOpencode()} describes, and it applies to BOTH importers rather
+     * than only the anchored one: `glob()` does not resolve symlinks, so
+     * `memory/notes.md -> ~/.ssh/id_ed25519` is one committed line that would
+     * otherwise land in the memory store under a `source:` tag naming the
+     * project. Refusals are named through {@see refusedDirectories()}.
      *
      * @return list<string>
      */
@@ -155,7 +233,22 @@ final class ForeignMemoryImporter
             return [];
         }
 
-        return array_values(glob(rtrim($dir, '/') . '/*.md') ?: []);
+        $files = [];
+        foreach (glob(rtrim($dir, '/') . '/*.md') ?: [] as $file) {
+            if (!ContainedPath::within($file, $dir)) {
+                $this->refusedDirectories[$file] = sprintf(
+                    'resolves outside %s, the directory it was listed from, so it is not a memory entry that '
+                    . 'directory holds',
+                    $dir,
+                );
+
+                continue;
+            }
+
+            $files[] = $file;
+        }
+
+        return $files;
     }
 
     /**

@@ -197,6 +197,44 @@ final class ContainedPathTest extends TestCase
         }
     }
 
+    /**
+     * THE THIRD LIMIT, executable. `ContainedPath` documents its TOCTOU window
+     * and its unresolvable-path behaviour; the hard link was the one bound not
+     * written beside them, and a limit stated only in prose is a limit the next
+     * reviewer rediscovers.
+     *
+     * Both questions answer TRUE for a hard link inside the boundary to a file
+     * outside it, and reading it returns the outside file's bytes. That is
+     * `realpath()` behaving correctly rather than failing: a hard link is not a
+     * reference to another path, it is a second name for the same inode, and
+     * there is no "original" to resolve to.
+     *
+     * OUT OF THE THREAT MODEL every caller here is written against, which is a
+     * CLONED REPOSITORY: git can neither represent nor commit a hard link, so no
+     * `git clone` produces one. Asserted as the CURRENT answer, not as a
+     * desirable one — if a future caller's threat model includes a local user
+     * with write access inside the checkout, this is the assertion that will
+     * have to change and it will say so by failing.
+     */
+    public function testAHardLinkIsNotSeenByEitherQuestion(): void
+    {
+        $root = $this->dir . '/root';
+        file_put_contents($this->dir . '/outside/secret.txt', "HARD-LINK-BYTES\n");
+
+        if (!@link($this->dir . '/outside/secret.txt', $root . '/hard.txt')) {
+            $this->markTestSkipped('this filesystem does not support hard links');
+        }
+
+        $this->assertTrue(ContainedPath::within($root . '/hard.txt', $root));
+        $this->assertTrue(ContainedPath::below($root . '/hard.txt', $root));
+        $this->assertSame(
+            fileinode($this->dir . '/outside/secret.txt'),
+            fileinode($root . '/hard.txt'),
+            'one inode, two names — which is why there is nothing for realpath() to resolve',
+        );
+        $this->assertSame("HARD-LINK-BYTES\n", file_get_contents($root . '/hard.txt'));
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

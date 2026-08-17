@@ -28,6 +28,18 @@ use SugarCraft\Crush\Tools\Tool;
  * why that widening changes nothing on today's tree. A new tool class is in every
  * one of these tests the moment it exists, and it fails them until it is wired.
  *
+ * "THE SOURCE TREE IS THE CORPUS" USED TO MEAN "ONE TYPE PER FILE", and `src/`
+ * already ships nineteen counterexamples. The scan derived exactly one class per
+ * FILENAME, so a `Tool` implementor declared as a SECOND top-level symbol in a
+ * file was invisible to all four consumers while {@see nonClassSources()} still
+ * returned `[]` — silently, because the file's PRIMARY symbol does exist.
+ * MEASURED with `token_get_all()` rather than `class_exists()`: 267 `.php` files
+ * under `src/` declare 286 top-level types, 19 of them secondary, in 8 files.
+ * `src/App/App.php` alone declares twelve (`Msg`, `Cmd`, `UserInputMsg`, …), and
+ * `src/ToolRegistry.php` declares `SugarCraft\Crush\Tool` — one `use` away from
+ * colliding with the tool interface, and `tests/ToolRegistryTest.php` already
+ * imports it. {@see declaredTypes()} is what the scan reads now.
+ *
  * NOT a trait, and not a static in one of the test classes: three test files in
  * three namespaces need the same list, and a copy per file is the shape being
  * removed. It carries no `Test` suffix, so PHPUnit does not collect it.
@@ -61,8 +73,11 @@ final class BuiltInToolCorpus
      * verbatim the recurrence this corpus was written to prevent.
      *
      * THE GUARD FIX BELOW IS A PREREQUISITE FOR THAT WIDENING, not a nicety
-     * beside it. Symbol kinds measured across the same 267 files: 220 concrete
-     * classes, 25 enums, 16 interfaces, 6 traits, **0 abstract classes**. So the
+     * beside it. Symbol kinds measured across the PRIMARY (PSR-4-named) symbol of
+     * each of the same 267 files — one per file, which is the census's stated
+     * domain and NOT the same as the 286 top-level types those files declare:
+     * 220 concrete classes, 25 enums, 16 interfaces, 6 traits, **0 abstract
+     * classes**. So the
      * one shape the old `class_exists()`-only guard classified correctly is the
      * one shape that does not occur, and the 22 files it would have thrown on are
      * already in the tree — `src/LSP/` alone ships `LspCacheInterface` and
@@ -135,17 +150,26 @@ final class BuiltInToolCorpus
                 continue;
             }
 
-            $reflection = new \ReflectionClass($class);
-            // The filter that does the classifying, for all four non-tool shapes:
-            // abstract bases, interfaces (abstract, per the measurement above),
-            // traits and enums (`class_exists()` answers true for an enum, and it
-            // is rejected here on the interface clause).
-            if ($reflection->isAbstract() || !$reflection->implementsInterface(Tool::class)) {
-                continue;
-            }
+            // EVERY top-level type the file declares, not just the one its
+            // FILENAME names. The primary symbol is loaded by the guard above, so
+            // by this line PHP has executed the file and its secondary symbols
+            // are defined too — which is what makes them reflectable without a
+            // second `require`.
+            //
+            // WHY IT IS NOT ENOUGH TO SCAN FILENAMES: the miss is SILENT. A
+            // `Tool` implementor declared as a second type in a file whose
+            // primary type exists is invisible to all four consumers while
+            // {@see nonClassSources()} still reports `[]`, because nothing was
+            // exempt — the primary really is there. `src/` ships 19 such
+            // secondary declarations in 8 files today.
+            foreach (self::declaredTypes($srcDir . '/' . $relative, $class) as $declared) {
+                if (!self::isDispatchableTool($declared)) {
+                    continue;
+                }
 
-            /** @var class-string<Tool> $class */
-            $classes[] = $class;
+                /** @var class-string<Tool> $declared */
+                $classes[] = $declared;
+            }
         }
 
         if ($classes === []) {
@@ -158,6 +182,139 @@ final class BuiltInToolCorpus
     }
 
     /**
+     * Is $symbol a class a real run could DISPATCH as a tool?
+     *
+     * The filter, and the enum clause is the fix for a doc-block that asserted
+     * the OPPOSITE of what the code did. It read: "all four non-tool shapes:
+     * abstract bases, interfaces (abstract, per the measurement above), traits
+     * and enums (`class_exists()` answers true for an enum, and it is rejected
+     * here on the interface clause)". MEASURED on PHP 8.3.6, for
+     * `enum E: string implements Tool`:
+     *
+     *     class_exists = true   isAbstract = false   implementsInterface(Tool) = true
+     *
+     * — so an enum implementing `Tool` passed BOTH clauses, entered the corpus,
+     * and `instances()` then died with `Error: Cannot instantiate enum E`. Inside
+     * a data provider that is an uncatchable abort during suite construction,
+     * which is the exact failure mode this class was refactored to remove. The
+     * one dangerous shape was also the one shape untested: `testAnEnumIsSkipped`
+     * probed a PLAIN enum, which the interface clause rejects for the same reason
+     * it rejects any unrelated class.
+     *
+     * `isEnum()` rather than `enum_exists()` because the reflection object is
+     * already in hand and the two answer the same question here.
+     */
+    private static function isDispatchableTool(string $symbol): bool
+    {
+        if (!class_exists($symbol)) {
+            return false;
+        }
+
+        $reflection = new \ReflectionClass($symbol);
+
+        return !$reflection->isAbstract()
+            && !$reflection->isEnum()
+            && $reflection->implementsInterface(Tool::class);
+    }
+
+    /**
+     * Every top-level class/interface/trait/enum $file declares, as fully
+     * qualified names, primary first.
+     *
+     * DERIVED FROM TOKENS, not from the filename and not from `get_declared_*()`:
+     * the filename gives one name per file (the blindness this exists to remove)
+     * and the declared-symbol lists are process-global and would attribute every
+     * previously-loaded class to whichever file happened to be scanned first.
+     *
+     * $primary is the file's PSR-4 name; it is placed first so a wired tool's own
+     * class keeps its position, and it is included even when the token scan
+     * cannot see it (a file whose declaration is inside a conditional).
+     *
+     * THE BOUND, because this is an instrument and instruments here have to carry
+     * their domain: a secondary type is only REFLECTABLE once its file has been
+     * loaded, which happens as a side effect of the primary symbol autoloading.
+     * A file whose primary symbol does NOT exist is a PSR-4 exemption, is
+     * reported by {@see nonClassSources()}, and its secondary declarations are
+     * named here but will not reflect. `src/` has zero such files.
+     *
+     * @return list<string>
+     */
+    public static function declaredTypes(string $file, string $primary = ''): array
+    {
+        $tokens = token_get_all((string) file_get_contents($file));
+        $namespace = '';
+        $names = [];
+        $depth = 0;
+
+        for ($i = 0, $n = \count($tokens); $i < $n; ++$i) {
+            $token = $tokens[$i];
+
+            if (\is_string($token)) {
+                $depth += $token === '{' ? 1 : ($token === '}' ? -1 : 0);
+
+                continue;
+            }
+
+            // An interpolation brace opens a scope the closing `}` will decrement.
+            if (\in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                ++$depth;
+
+                continue;
+            }
+
+            if ($token[0] === \T_NAMESPACE) {
+                $namespace = '';
+                for ($j = $i + 1; $j < $n; ++$j) {
+                    if (\is_string($tokens[$j]) && \in_array($tokens[$j], [';', '{'], true)) {
+                        break;
+                    }
+                    if (\is_array($tokens[$j])
+                        && \in_array($tokens[$j][0], [\T_STRING, \T_NAME_QUALIFIED], true)
+                    ) {
+                        $namespace .= $tokens[$j][1];
+                    }
+                }
+
+                continue;
+            }
+
+            if ($depth !== 0
+                || !\in_array($token[0], [\T_CLASS, \T_INTERFACE, \T_TRAIT, \T_ENUM], true)
+            ) {
+                continue;
+            }
+
+            // `Foo::class` is a constant expression, not a declaration.
+            $previous = $i - 1;
+            while ($previous >= 0 && \is_array($tokens[$previous])
+                && \in_array($tokens[$previous][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+            ) {
+                --$previous;
+            }
+            if ($previous >= 0 && \is_array($tokens[$previous]) && $tokens[$previous][0] === \T_DOUBLE_COLON) {
+                continue;
+            }
+
+            $next = $i + 1;
+            while ($next < $n && \is_array($tokens[$next])
+                && \in_array($tokens[$next][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+            ) {
+                ++$next;
+            }
+            // An anonymous class has no name token here.
+            if ($next < $n && \is_array($tokens[$next]) && $tokens[$next][0] === \T_STRING) {
+                $names[] = ($namespace === '' ? '' : $namespace . '\\') . $tokens[$next][1];
+            }
+        }
+
+        if ($primary !== '') {
+            array_unshift($names, $primary);
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
      * The `src/` files that declare no symbol at their PSR-4 name.
      *
      * The visible half of {@see classNames()}'s one non-throwing skip. MEASURED
@@ -165,6 +322,10 @@ final class BuiltInToolCorpus
      * {@see BuiltInToolCorpusTest::testEverySourceFileDeclaresItsPsr4Symbol()},
      * so a file that becomes exempt turns ONE test red with its own name in the
      * message rather than aborting the whole suite's construction.
+     *
+     * The "of 267" half is now load-bearing rather than decorative:
+     * {@see sourceFiles()} throws on an empty tree, so an empty result here can
+     * no longer mean "nothing was scanned".
      *
      * @return list<string> paths relative to `src/`
      */
@@ -184,9 +345,24 @@ final class BuiltInToolCorpus
         return $skipped;
     }
 
-    /** @return list<string> every `.php` file under $src, relative to it, sorted */
-    private static function sourceFiles(string $src): array
+    /**
+     * Every `.php` file under $src, relative to it, sorted.
+     *
+     * THROWS ON AN EMPTY-BUT-EXISTING TREE, and that guard is what stops
+     * {@see nonClassSources()} being vacuous. `classNames()` has always thrown on
+     * an empty RESULT; `nonClassSources()` had no such guard, so pointed at an
+     * existing-but-empty injected root it returned `[]` and
+     * `assertSame([], $exempt)` passed having scanned nothing. "0 of 267" was
+     * never asserted to have looked at 267 files. The guard lives here rather
+     * than in each caller because both of them need it and there is one place a
+     * scan can come back empty.
+     *
+     * @return list<string>
+     */
+    public static function sourceFiles(?string $src = null): array
     {
+        $src ??= self::srcDir();
+
         if (!is_dir($src)) {
             throw new \RuntimeException("No source tree found at {$src}");
         }
@@ -201,6 +377,10 @@ final class BuiltInToolCorpus
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $files[] = substr($file->getPathname(), \strlen($src) + 1);
             }
+        }
+
+        if ($files === []) {
+            throw new \RuntimeException("No PHP sources found under {$src}");
         }
 
         // Sorted here rather than only in classNames(), so nonClassSources()
