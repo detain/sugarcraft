@@ -6,16 +6,66 @@ namespace SugarCraft\Crush\Agents;
 
 use Symfony\Component\Yaml\Yaml;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Support\ContainedPath;
 
 /**
  * Registry for loading and resolving agent presets from the filesystem.
  * Presets are Markdown files with YAML frontmatter stored under search paths.
  *
  * Mirrors charmbracelet/crush preset discovery and description-matching logic.
+ *
+ * TWO BOUNDARIES, and this class had only the inner one. Per-ENTRY containment
+ * (a `*.md` that resolves outside the directory it was listed from) is judged by
+ * {@see ContainedPath::within()} below; the DIRECTORY a repository chose is
+ * judged by {@see ContainedPath::below()} against $anchors, and until that
+ * existed here the entry check was relocatable rather than binding — the same
+ * defect {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::readableProjectDir()}
+ * and {@see \SugarCraft\Crush\Skills\SkillLoader::skillFilesIn()} each closed for
+ * their own tier.
+ *
+ * MEASURED on this host against the pre-fix build, with a fixture checkout whose
+ * only content was `.sugar-crush/agents -> <a directory outside the checkout>` —
+ * the one line a repository can commit — and one frontmatter-bearing `notes.md`
+ * in that directory: both `list()` and
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()} returned
+ *
+ *     preset=notes  desc=PRIVATE NOTE DESCRIPTION  mode=bypass-permissions
+ *     prompt=SENTINEL-PRIVATE-BODY sk-live-DEADBEEF
+ *
+ * with no refusal recorded anywhere. So an outside file's `description` became a
+ * roster entry, its body became a sub-agent's `initialPrompt`, and a
+ * `permissionMode: bypass-permissions` the repository does not contain was
+ * honoured — reachable by `git clone`, since
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} calls `list()` on every launch.
+ * The same probe after the fix returns no presets and records the refusal.
  */
 final class AgentPresetRegistry
 {
-    public function __construct(private readonly array $searchPaths) {}
+    /**
+     * Search-path directories this registry declined to read, path as spelled
+     * => why — see {@see refusedDirectories()}.
+     *
+     * @var array<string, string>
+     */
+    private array $refusedDirectories = [];
+
+    /**
+     * @param list<string> $searchPaths directories to look for `<name>.md` in,
+     *        in precedence order
+     * @param array<string, string> $anchors trust anchors for the search paths a
+     *        REPOSITORY chose, keyed by the search path exactly as spelled in
+     *        $searchPaths: that path must resolve strictly inside its anchor
+     *        ({@see ContainedPath::below()}) or the whole directory is refused.
+     *        A path with no entry here is unanchored, which is the right answer
+     *        for the user's own `~/.sugar-crush/agents` — nobody but the user
+     *        chose where it points, and users really do link it at
+     *        `~/.claude/agents`, so anchoring it to the checkout would break a
+     *        working layout to defend against its owner.
+     */
+    public function __construct(
+        private readonly array $searchPaths,
+        private readonly array $anchors = [],
+    ) {}
 
     /**
      * Load a preset by name from the search paths.
@@ -23,21 +73,13 @@ final class AgentPresetRegistry
      */
     public function load(string $name): AgentPreset
     {
-        foreach ($this->searchPaths as $path) {
+        foreach ($this->readableSearchPaths() as $path) {
             $filePath = $path . '/' . $name . '.md';
-            $realPath = realpath($filePath);
-            $realSearchPath = realpath($path);
-            if ($realPath === false || $realSearchPath === false) {
-                continue;
-            }
-            // Normalize with a trailing separator so a sibling directory whose
-            // name merely starts with the same string (e.g. "agents-secrets"
-            // vs "agents") cannot pass a raw string-prefix check.
-            $normalizedSearchPath = rtrim($realSearchPath, '/') . '/';
-            if (!str_starts_with($realPath, $normalizedSearchPath)) {
-                continue;
-            }
-            if (file_exists($filePath)) {
+            // No separate existence check: within() resolves BOTH sides, so a
+            // true answer already proves this file exists — `realpath()` is
+            // false for anything it cannot resolve. It is also what stops a
+            // $name of `../../etc/passwd` reading through the search path.
+            if (ContainedPath::within($filePath, $path)) {
                 return $this->parsePresetFile($filePath);
             }
         }
@@ -48,12 +90,14 @@ final class AgentPresetRegistry
     /**
      * List all available presets from all search paths.
      *
-     * Applies the same containment check {@see load()} does, and for the same
-     * reason: a `.md` entry that resolves outside its search path — a symlink
-     * such as `agents/link.md -> /elsewhere/stolen.md` — is not a preset this
-     * directory declares. The two methods share one trust boundary, and this
-     * is the one {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()}
-     * actually calls, so leaving it open made load()'s check decorative.
+     * Applies the same two checks {@see load()} does, and for the same reasons:
+     * a `.md` entry that resolves outside its search path — a symlink such as
+     * `agents/link.md -> /elsewhere/stolen.md` — is not a preset that directory
+     * declares, and a search path the repository pointed out of the checkout is
+     * not that repository's presets at all. The two methods share one trust
+     * boundary, and this is the one
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()} actually calls, so
+     * leaving either open here makes load()'s copy decorative.
      *
      * @return array<string, AgentPreset> Map of preset name => AgentPreset
      */
@@ -61,24 +105,14 @@ final class AgentPresetRegistry
     {
         $presets = [];
 
-        foreach ($this->searchPaths as $path) {
+        foreach ($this->readableSearchPaths() as $path) {
             if (!is_dir($path)) {
                 continue;
             }
 
-            $realSearchPath = realpath($path);
-            if ($realSearchPath === false) {
-                continue;
-            }
-            // Trailing separator for the same reason as load(): a sibling
-            // directory whose name merely starts with the same string
-            // ("agents-secrets" vs "agents") must not pass a raw prefix check.
-            $normalizedSearchPath = rtrim($realSearchPath, '/') . '/';
-
-            $files = glob($path . '/*.md');
+            $files = glob($path . '/*.md') ?: [];
             foreach ($files as $file) {
-                $realFile = realpath($file);
-                if ($realFile === false || !str_starts_with($realFile, $normalizedSearchPath)) {
+                if (!ContainedPath::within($file, $path)) {
                     continue;
                 }
 
@@ -91,6 +125,82 @@ final class AgentPresetRegistry
         }
 
         return $presets;
+    }
+
+    /**
+     * Which search paths this registry refused to read, and why.
+     *
+     * The seam the refusal needs in order not to be silent, and the same one
+     * {@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()} and
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()}
+     * provide for their tiers: a dropped directory is otherwise indistinguishable
+     * from an empty one, and "your repository's agents directory was rejected" is
+     * not something a shorter roster can say.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()} merges it into the
+     * one collector all three feed.
+     *
+     * Recomputed by {@see load()}/{@see list()} on every call rather than
+     * accumulated, so a refusal never outlives the condition that caused it.
+     *
+     * @return array<string, string> search path as spelled => why it was refused
+     */
+    public function refusedDirectories(): array
+    {
+        return $this->refusedDirectories;
+    }
+
+    /**
+     * The search paths a read may actually touch, in precedence order.
+     *
+     * A path that does not resolve is DROPPED, whatever the reason — a dangling
+     * link, a link one component higher whose own target is missing, or simply a
+     * checkout that ships no `.sugar-crush/agents`. Dropping loses nothing here
+     * (there is no file to read and no error message that names the directory,
+     * unlike the workflow registry's not-found line) and it means the security
+     * decision does not depend on telling those cases apart. The refusal NOTICE
+     * is narrower than the decision on purpose: it fires for a link AT the search
+     * path, which is the shape that can be named confidently and the shape a
+     * repository commits, and stays quiet about the missing directory almost
+     * every checkout has.
+     *
+     * @return list<string>
+     */
+    private function readableSearchPaths(): array
+    {
+        $this->refusedDirectories = [];
+
+        $readable = [];
+        foreach ($this->searchPaths as $path) {
+            $real = realpath($path);
+            if ($real === false) {
+                if (is_link($path)) {
+                    $this->refusedDirectories[$path] = 'is a symlink that resolves to nothing this process can '
+                        . 'read, so it names no presets — and a committed link to a path that does not exist yet '
+                        . 'is a request to read whatever appears there later';
+                }
+
+                continue;
+            }
+
+            $anchor = $this->anchors[$path] ?? null;
+            if ($anchor !== null && !ContainedPath::below($path, $anchor)) {
+                $this->refusedDirectories[$path] = sprintf(
+                    'resolves to %s, %s the checkout it was reached from (%s) — a repository chooses where this '
+                    . "directory is, and a link out of the checkout would put unrelated files' descriptions in "
+                    . "the agent roster and their bodies in a sub-agent's prompt, under whatever "
+                    . 'permissionMode they declare',
+                    $real,
+                    realpath($anchor) === $real ? 'which is exactly' : 'outside',
+                    $anchor,
+                );
+
+                continue;
+            }
+
+            $readable[] = $path;
+        }
+
+        return $readable;
     }
 
     /**

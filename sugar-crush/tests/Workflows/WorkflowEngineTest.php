@@ -716,7 +716,15 @@ final class WorkflowEngineTest extends TestCase
             $this->assertFileExists($pauseFile);
 
             $data = json_decode(file_get_contents($pauseFile), true);
-            $this->assertSame('pause-test', $data['workflowId']);
+            // TWO DIFFERENT IDENTIFIERS, and they used to be the same string in
+            // both fields. `workflowPath` is what resume() hands load(), so it
+            // must stay the registry name; `workflowId` is the `<name>-<hash>`
+            // the transcript printed, and recording it is what lets a LATER
+            // process resolve that spelling back to this file. Writing the
+            // identifier-as-typed into both is what made a pause file taken after
+            // a resume unloadable.
+            $this->assertSame('pause-test', $data['workflowPath']);
+            $this->assertMatchesRegularExpression('/^pause-test-[0-9a-f]{8}$/', $data['workflowId']);
             $this->assertSame('paused', $data['status']);
             // Context should contain stage outputs
             $this->assertSame('output-1', $data['context']['stage-1.output'] ?? null);

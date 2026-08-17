@@ -1806,8 +1806,20 @@ PHP);
 
         $refusal = $registry->projectTierRefusal();
         $this->assertNotNull($refusal);
-        $this->assertStringContainsString($projectDir, $refusal, 'the refusal must name the configured path');
-        $this->assertStringContainsString($outside, $refusal, 'and where it actually resolved to');
+        $this->assertStringContainsString($outside, $refusal, 'the refusal must say where it actually resolved to');
+
+        // A REASON, NOT A SENTENCE, and pinned as such: the path belongs to the
+        // caller (`projectWorkflowsPath()` here, the map key in
+        // Bootstrap::projectTierRefusals()), and the one notice that prints it
+        // composes `ignoring <path> — <reason>`. Repeating it inside the reason
+        // put it in that line twice where the skills tier's equivalent printed it
+        // once — three subsystems feed one collector and they now say it the same
+        // way, so this asserts the ABSENCE rather than leaving it to prose.
+        $this->assertStringNotContainsString(
+            $projectDir,
+            $refusal,
+            'the reason must not repeat the path its caller already has',
+        );
 
         // The silences the accessor exists to compensate for.
         $this->assertSame($projectDir, $registry->projectWorkflowsPath());

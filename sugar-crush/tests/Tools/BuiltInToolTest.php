@@ -59,19 +59,21 @@ final class BuiltInToolTest extends TestCase
     }
 
     /**
+     * Every built-in tool, SCANNED out of `src/Tools/BuiltIn/`.
+     *
+     * It was a literal list, and it listed NINE of the ten classes that existed —
+     * `SkillTool` was absent, so the one tool in the set with a constructor
+     * dependency was the one tool not covered by the interface-conformance checks
+     * above. That is the omitted-from-a-literal-array direction, in the file whose
+     * whole subject is "all built-in tools".
+     *
      * @return iterable<string, array{class-string}>
      */
     public static function builtInToolProvider(): iterable
     {
-        yield Read::class => [Read::class];
-        yield Bash::class => [Bash::class];
-        yield Edit::class => [Edit::class];
-        yield Write::class => [Write::class];
-        yield Grep::class => [Grep::class];
-        yield Glob::class => [Glob::class];
-        yield WebFetch::class => [WebFetch::class];
-        yield WebSearch::class => [WebSearch::class];
-        yield Doctor::class => [Doctor::class];
+        foreach (BuiltInToolCorpus::classNames() as $className) {
+            yield $className => [$className];
+        }
     }
 
     // =========================================================================
@@ -634,20 +636,20 @@ final class BuiltInToolTest extends TestCase
     // Helper Methods
     // =========================================================================
 
+    /**
+     * One construction rule for the whole suite, in {@see BuiltInToolCorpus}: a
+     * per-file `match` is what let this file's corpus and the directory drift by
+     * one class without anything noticing.
+     */
     private function createTool(string $className): Tool
     {
-        return match ($className) {
-            Read::class => new Read(),
-            Bash::class => new Bash(),
-            Edit::class => new Edit(),
-            Write::class => new Write(),
-            Grep::class => new Grep(),
-            Glob::class => new Glob(),
-            WebFetch::class => new WebFetch(),
-            WebSearch::class => new WebSearch(),
-            Doctor::class => new Doctor(),
-            default => throw new \InvalidArgumentException("Unknown tool class: $className"),
-        };
+        foreach (BuiltInToolCorpus::instances() as $tool) {
+            if ($tool::class === $className) {
+                return $tool;
+            }
+        }
+
+        throw new \InvalidArgumentException("Unknown tool class: $className");
     }
 
     private function createTempFile(string $content): string

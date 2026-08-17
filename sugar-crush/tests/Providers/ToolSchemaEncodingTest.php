@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Providers;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\BuiltIn\Doctor;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -165,21 +166,22 @@ final class ToolSchemaEncodingTest extends TestCase
         }
     }
 
-    /** Every built-in tool, constructed with its default (standalone) wiring. */
+    /**
+     * Every built-in tool, constructed with its default (standalone) wiring —
+     * SCANNED out of `src/Tools/BuiltIn/` by {@see BuiltInToolCorpus}, not listed
+     * here.
+     *
+     * This used to be a literal array of ten. A tool added to the directory and
+     * never added to the array would have been exempt from the schema check it
+     * most needs: the defect this file guards (a parameter-less tool encoding
+     * `"properties": []`) is one a NEW tool is most likely to reintroduce, and a
+     * hand-maintained corpus omits new tools by construction.
+     *
+     * @return list<Tool>
+     */
     private static function builtInTools(): array
     {
-        return [
-            new \SugarCraft\Crush\Tools\BuiltIn\Bash(),
-            new \SugarCraft\Crush\Tools\BuiltIn\Doctor(),
-            new \SugarCraft\Crush\Tools\BuiltIn\Edit(),
-            new \SugarCraft\Crush\Tools\BuiltIn\Glob(),
-            new \SugarCraft\Crush\Tools\BuiltIn\Grep(),
-            new \SugarCraft\Crush\Tools\BuiltIn\Read(),
-            new \SugarCraft\Crush\Tools\BuiltIn\SkillTool(new \SugarCraft\Crush\Skills\SkillRegistry()),
-            new \SugarCraft\Crush\Tools\BuiltIn\WebFetch(),
-            new \SugarCraft\Crush\Tools\BuiltIn\WebSearch(),
-            new \SugarCraft\Crush\Tools\BuiltIn\Write(),
-        ];
+        return BuiltInToolCorpus::instances();
     }
 
     /**

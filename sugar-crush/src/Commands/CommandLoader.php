@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands;
 
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -18,7 +19,9 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * `/test`, `deploy/staging.md` gives `/deploy/staging`.
  *
  * Everything walked here is user-controlled: paths are resolved and
- * containment-checked before reading, and a file that fails to parse is
+ * containment-checked before reading through {@see ContainedPath} — the entry
+ * against the directory it was listed from, and the project directory itself
+ * against the checkout that named it — and a file that fails to parse is
  * logged and skipped rather than aborting discovery, so one malformed
  * command cannot make every other command disappear.
  *
@@ -46,12 +49,41 @@ final class CommandLoader
      * A missing directory is normal (most projects have none) and yields an
      * empty array rather than an error.
      *
+     * TWO BOUNDARIES, for the reason
+     * {@see \SugarCraft\Crush\Skills\SkillLoader::skillFilesIn()} needs two: the
+     * per-ENTRY check below resolves each `*.md` and requires it to still live
+     * under $dir, and $anchoredIn requires $dir ITSELF to resolve strictly inside
+     * the checkout that named it. Without the second one the first is
+     * relocatable rather than binding — `realpath()` on both sides means a
+     * boundary directory that is itself a symlink travels with the link, so a
+     * committed `.sugar-crush/commands -> <outside>` would have every `*.md`
+     * under the target pass the entry check and become a slash command whose
+     * body is a prompt. Anchored NOW rather than when step #14 wires this class,
+     * because a containment rule added at wiring time is one written after the
+     * consumer already trusts the loader.
+     *
+     * @param string|null $anchoredIn the checkout $dir was derived from, which
+     *        $dir must resolve strictly inside; null for a directory whose
+     *        location no repository chose (the user's own tree)
+     *
      * @return array<string, CommandSpec>
      */
-    public function loadFromDirectory(string $dir): array
+    public function loadFromDirectory(string $dir, ?string $anchoredIn = null): array
     {
         $realDir = realpath($dir);
         if ($realDir === false || !is_dir($realDir)) {
+            return [];
+        }
+
+        if ($anchoredIn !== null && !ContainedPath::below($dir, $anchoredIn)) {
+            error_log(sprintf(
+                'Skipping commands directory %s: resolves to %s, %s the checkout it was reached from (%s)',
+                $dir,
+                $realDir,
+                realpath($anchoredIn) === $realDir ? 'which is exactly' : 'outside',
+                $anchoredIn,
+            ));
+
             return [];
         }
 
@@ -69,15 +101,18 @@ final class CommandLoader
                 continue;
             }
 
-            $realPath = realpath($file->getPathname());
             // A symlink inside the commands directory can point anywhere;
             // resolve it and require the target to still live under $realDir
             // so a command file cannot smuggle in ~/.ssh/config as a prompt.
-            if ($realPath === false || !str_starts_with($realPath, $realDir . DIRECTORY_SEPARATOR)) {
+            // {@see ContainedPath} rather than a local prefix compare, so this
+            // class is not a fourth spelling of the predicate.
+            if (!ContainedPath::within($file->getPathname(), $realDir)) {
                 error_log("Skipping command file outside {$realDir}: {$file->getPathname()}");
 
                 continue;
             }
+
+            $realPath = (string) realpath($file->getPathname());
 
             $name = $this->commandNameFor($realDir, $realPath);
 
@@ -108,11 +143,16 @@ final class CommandLoader
     /**
      * Load project commands from <projectRoot>/.sugar-crush/commands/.
      *
+     * $projectRoot is passed on as the trust anchor, not merely used to build the
+     * path: it is the one path in the pair a repository cannot have forged, since
+     * a link that moved it would have to sit above the clone. See
+     * {@see loadFromDirectory()}.
+     *
      * @return array<string, CommandSpec>
      */
     public function loadProjectCommands(string $projectRoot): array
     {
-        return $this->loadFromDirectory($this->projectCommandsDir($projectRoot));
+        return $this->loadFromDirectory($this->projectCommandsDir($projectRoot), $projectRoot);
     }
 
     /**

@@ -10,10 +10,13 @@ use SugarCraft\Crush\Support\ContainedPath;
 /**
  * The shared containment predicate, tested where it lives.
  *
- * Its two callers -- {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} and
- * {@see \SugarCraft\Crush\Skills\SkillLoader} -- each pin it through their own
- * fixtures, and that is the right place to prove a TIER behaves. It is the
- * wrong place to prove the PREDICATE does: neither of them can reach a boundary
+ * Its callers -- FOUR files as measured this session
+ * (`grep -rn 'ContainedPath::' src/`): {@see \SugarCraft\Crush\Workflows\WorkflowRegistry},
+ * {@see \SugarCraft\Crush\Skills\SkillLoader},
+ * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry} and
+ * {@see \SugarCraft\Crush\Commands\CommandLoader} -- each pin it through their
+ * own fixtures, and that is the right place to prove a TIER behaves. It is the
+ * wrong place to prove the PREDICATE does: none of them can reach a boundary
  * of `/`, and the difference between {@see ContainedPath::within()} and
  * {@see ContainedPath::below()} is a single `bool` that only the equality case
  * distinguishes. Both arms of that case are asserted here, in both directions,

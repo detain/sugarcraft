@@ -5,12 +5,55 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Support;
 
 /**
- * "Does this path really live under that one?" — the ONE resolution every
- * symlink-containment decision in this package goes through, for the reason
+ * "Does this path really live under that one?" — the one resolution the FOUR
+ * DISCOVERY TIERS go through (workflows, skills, agent presets, custom commands:
+ * the directories whose LOCATION a cloned repository chooses), for the reason
  * {@see HomeDirectory} is the one home-directory resolution: two
  * implementations of a security predicate is how the second one stays wrong.
  *
- * It was two. {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::containedIn()}
+ * THE DOMAIN OF THAT CLAIM, because a previous revision of this doc-block
+ * asserted it over the whole package and the whole package is not what was
+ * measured. Sweep run this session over `src/` — `grep -rn str_starts_with src/`
+ * filtered to the lines comparing a path against a path — and read line by line:
+ *
+ *   - TEN executable call sites in FOUR files ask this class, and those four are
+ *     exactly the discovery tiers a cloned repository can point somewhere:
+ *     {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (2 — entry, directory
+ *     anchor), {@see \SugarCraft\Crush\Skills\SkillLoader} (3 — entry, directory
+ *     anchor, skill asset), {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}
+ *     (3 — the same pair, plus `load()`'s single-file arm) and
+ *     {@see \SugarCraft\Crush\Commands\CommandLoader} (2). The preset,
+ *     custom-command and skill-asset ones arrived here in the round that wrote
+ *     this paragraph; before it they were hand-spelled, and the two preset ones
+ *     had NO directory anchor at all — a third live instance of the identical
+ *     relocatable-boundary escape, sitting in a subsystem the round that closed
+ *     the other two named as sharing their trust model.
+ *   - TEN spellings remain by hand, and they are a DIFFERENT CONTRACT rather
+ *     than copies waiting to be swept up. {@see \SugarCraft\Crush\Tools\PathJail}
+ *     (5: two arms of `resolve()`, two of `resolveForCreate()`, one in
+ *     `resolveDir()`) has to answer for paths that do not exist yet — two of
+ *     those five run on the `realpath() === false` branch, anchoring on the
+ *     nearest existing ancestor so a file can be CREATED, and a predicate whose
+ *     false covers "unresolvable" cannot express that. The other three want the
+ *     canonical path back, not a verdict, which is the return type this class
+ *     does not have.
+ *     {@see \SugarCraft\Crush\Context\InstructionFileLoader} (2) and
+ *     {@see \SugarCraft\Crush\Tools\BuiltIn\Glob} (1) compare two paths this
+ *     process ALREADY resolved in the same statement, so routing them here would
+ *     add a syscall to re-derive what is in the local variable.
+ *     {@see \SugarCraft\Crush\Tools\IgnoreRules}'s `relative()` needs the
+ *     REMAINDER, not a verdict, and {@see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook}'s
+ *     `within()` judges a LEXICALLY collapsed path that deliberately need not
+ *     exist — `realpath()` returns false for the `rm -rf /nonexistent` it is
+ *     there to deny, and false means "not contained" here, which for a DENY hook
+ *     inverts into an allow. Those two would be actively wrong to consolidate.
+ *
+ * So: one implementation for the tiers whose boundary a repository can move, an
+ * inventory rather than a claim for the rest, and a re-measurement is one `grep`
+ * away in either direction.
+ *
+ * It was two implementations here.
+ * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::containedIn()}
  * and {@see \SugarCraft\Crush\Skills\SkillLoader::contained()} each spelled out
  * `realpath` both sides, compare with a trailing separator — and the workflow
  * one grew a directory-level trust anchor that the skills one did not, so a

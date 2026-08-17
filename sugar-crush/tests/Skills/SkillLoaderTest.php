@@ -688,6 +688,82 @@ SKILL
         $loader->loadSkillAsset($skillPath, 'otherdir/file.txt');
     }
 
+    /**
+     * The CONTAINMENT arm of loadSkillAsset(), which was unpinned.
+     *
+     * The two traversal tests above are both settled by the earlier
+     * `scripts|references|assets` first-component gate — `/etc/passwd` and
+     * `otherdir/file.txt` never reach the containment check, and both assert on
+     * its "must be within" message rather than the containment one. MEASURED:
+     * deleting the containment check entirely left `tests/Skills` at
+     * `OK (311 tests, 793 assertions)`. So the guard on a `file_get_contents()`
+     * of a user-controlled path had no test at all, in the method that turned out
+     * to be a SECOND hand-spelled copy of the shared predicate.
+     *
+     * `scripts/../..` keeps `scripts` as the first component, so it passes the
+     * subdirectory gate and is decided by containment — which is the only way to
+     * reach that branch.
+     */
+    public function testLoadSkillAssetRejectsAnAssetResolvingOutOfTheSkillDirectory(): void
+    {
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/escape-skill/SKILL.md';
+        mkdir($this->tempDir . '/escape-skill/scripts', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Escape test\n---\nBody");
+        file_put_contents($this->tempDir . '/outside-secret.txt', 'SENTINEL-ASSET-SECRET');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('escapes skill directory');
+
+        $loader->loadSkillAsset($skillPath, 'scripts/../../outside-secret.txt');
+    }
+
+    /**
+     * And the same refusal for the spelling a repository can actually commit: a
+     * SYMLINK inside `scripts/` whose target is outside the skill.
+     *
+     * Distinct from the `..` case because there is no `..` in the relative path
+     * at all — every string check passes, and only resolving both sides catches
+     * it.
+     */
+    public function testLoadSkillAssetRejectsASymlinkedAssetPointingOutOfTheSkill(): void
+    {
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/linked-skill/SKILL.md';
+        mkdir($this->tempDir . '/linked-skill/scripts', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Link test\n---\nBody");
+        file_put_contents($this->tempDir . '/outside-linked.sh', 'SENTINEL-ASSET-SECRET');
+        $this->assertTrue(symlink(
+            $this->tempDir . '/outside-linked.sh',
+            $this->tempDir . '/linked-skill/scripts/run.sh',
+        ));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('escapes skill directory');
+
+        $loader->loadSkillAsset($skillPath, 'scripts/run.sh');
+    }
+
+    /**
+     * The control: an asset reached through a link that stays INSIDE the skill is
+     * still read, so the refusals above are not "refuse every symlink".
+     */
+    public function testLoadSkillAssetFollowsALinkThatStaysInsideTheSkill(): void
+    {
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/inside-skill/SKILL.md';
+        mkdir($this->tempDir . '/inside-skill/scripts', 0777, true);
+        mkdir($this->tempDir . '/inside-skill/shared', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Inside test\n---\nBody");
+        file_put_contents($this->tempDir . '/inside-skill/shared/real.sh', 'INSIDE-ASSET');
+        $this->assertTrue(symlink(
+            $this->tempDir . '/inside-skill/shared/real.sh',
+            $this->tempDir . '/inside-skill/scripts/run.sh',
+        ));
+
+        $this->assertSame('INSIDE-ASSET', $loader->loadSkillAsset($skillPath, 'scripts/run.sh'));
+    }
+
     // -------------------------------------------------------------------------
     // loadManifestsFromDirectory() / loadAllManifests() -- lazy progressive
     // loading (crush_feat.md section 7.E3)

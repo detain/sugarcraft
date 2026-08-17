@@ -525,23 +525,42 @@ final class WorkflowRegistry
      * The half worth keeping is the fresh checkout that simply has no
      * `.sugar-crush/workflows` — keeping it is what lets {@see loadYaml()}'s
      * not-found message still name the directory the user was expecting. The
-     * half worth refusing is a DANGLING SYMLINK, which is the only spelling of
-     * "does not resolve" a repository can commit: a link naming a path that
-     * does not exist yet is a request to read whatever appears there later, and
-     * a link that names nothing has no workflows to lose. `is_link()` tells the
-     * two apart with no extra trust.
+     * half worth refusing is a DANGLING SYMLINK: a link naming a path that does
+     * not exist yet is a request to read whatever appears there later, and a link
+     * that names nothing has no workflows to lose. `is_link()` tells those two
+     * apart with no extra trust.
      *
-     * That narrows the window rather than closing it, and the remainder is
-     * stated instead of implied: the not-a-link grant is still a grant followed
-     * by a read, so a directory or link created at that path between the two is
-     * read. The difference is what it costs the attacker — a committed dangling
-     * link needs only `git clone`, while creating a path inside the checkout
-     * needs write access to the checkout, and anything with that can simply
-     * commit a `.yaml`. Across CALLS there is no residue at all: every
-     * {@see list()} and {@see load()} re-evaluates this method, so a link whose
-     * target has appeared is refused on the next one (measured: `list()` returns
-     * `[]` both while the link dangles and after its outside-the-checkout target
-     * is created).
+     * `is_link()` DOES NOT COVER EVERY NON-RESOLVING LAYOUT A REPOSITORY CAN
+     * COMMIT, and an earlier revision of this paragraph claimed it did. Measured
+     * this session with the link one component higher — `.sugar-crush -> <a
+     * directory that exists but holds no workflows/>` — `realpath()` of this
+     * method's `$dir` is false AND `is_link($dir)` is false, because the link is
+     * on the parent: the refusal does not fire and the directory is granted.
+     * `is_link()` is still worth keeping (it catches the one-line spelling that
+     * needs no second component), but the honest statement is that NOT RESOLVING
+     * is granted except for the leaf-link case.
+     *
+     * So the window is narrowed, not closed, and the cost of the remainder is
+     * lower than this paragraph used to claim. It said the grant-then-read
+     * remainder needs "write access to the checkout, and anything with that can
+     * simply commit a `.yaml`" — false for the layout above, where the path that
+     * must appear is `<the link's target>/workflows`, OUTSIDE the checkout: for
+     * `.sugar-crush -> /tmp/pwn` it costs write access to `/tmp`, which any local
+     * user has. What the attacker must then win is a race inside ONE call, between
+     * this method returning $dir and `baseNames($dir, …)` reading it.
+     *
+     * Across CALLS there is no residue: every {@see list()} and {@see load()}
+     * re-evaluates this method, so a target that has appeared is refused on the
+     * next one — measured for both layouts (`list()` returns `[]` while the leaf
+     * link dangles, `[]` after its outside-the-checkout target is created, `[]`
+     * before the parent-link target's `workflows/` exists and `[]` after, the
+     * last one now carrying a refusal). Nor could the in-call race be won here:
+     * measured over 20,000 `list()` calls in the parent-link layout above, with a
+     * forked child creating and removing `/tmp/pwn/workflows` as fast as it could
+     * for the whole run, **0** returned a name. So this is recorded as a claim
+     * defect over "the spellings a repository can commit" — the `is_link()`
+     * sentence was false and the cost sentence was wrong by one component — and
+     * not as a live escape.
      *
      * The refusal drops the tier rather than emptying it, which matters for the
      * one directory that is BOTH tiers: the dedupe in {@see yamlDirectories()}
@@ -569,7 +588,7 @@ final class WorkflowRegistry
 
         if ($real === false) {
             if (is_link($dir)) {
-                $this->projectDirRefusal = "{$dir} is a symlink that resolves to nothing this process can "
+                $this->projectDirRefusal = 'is a symlink that resolves to nothing this process can '
                     . 'read, so it names no workflows — and a committed link to a path that does not exist '
                     . 'yet is a request to read whatever appears there later.';
 
@@ -586,9 +605,8 @@ final class WorkflowRegistry
         }
 
         $this->projectDirRefusal = sprintf(
-            '%s resolves to %s, which is %s %s, so it is not this repository pointing at its own '
+            'resolves to %s, which is %s %s, so it is not this repository pointing at its own '
             . 'workflows; the directory is skipped and no name in it is listed or loadable.',
-            $dir,
             $real,
             realpath($anchor) === $real ? 'exactly' : 'outside',
             $this->projectRoot !== null ? 'the checkout root' : "this directory's own parent",
@@ -608,6 +626,17 @@ final class WorkflowRegistry
      * {@see projectWorkflowsPath()} still reports the CONFIGURED path, and
      * {@see list()} simply returns fewer names. None of those can say "your
      * repository's workflows directory was rejected, and here is why".
+     *
+     * A REASON, NOT A SENTENCE: the string starts mid-clause ("resolves to …")
+     * and does not name the path, because the path is what the caller already has
+     * — {@see projectWorkflowsPath()} here, the map key in
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::projectTierRefusals()} — and the one
+     * notice that prints it composes `ignoring <path> — <reason>`. It used to
+     * repeat the path inside the reason, which put it in that line twice while
+     * the skills tier's equivalent
+     * ({@see \SugarCraft\Crush\Skills\SkillLoader::recordRefusedDirectory()})
+     * printed it once. Three subsystems feed one collector; they say it the same
+     * way.
      *
      * Public and pull-based rather than a stderr write, for the reason
      * {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()} is: a write from

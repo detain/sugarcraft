@@ -182,6 +182,21 @@ final class Bootstrap
         // clear error rather than handing a path jail a `false`.
         $root ??= getcwd() ?: null;
 
+        // A LAUNCH's refusals, not a PROCESS's. This map is what
+        // {@see projectTierRefusals()} advertises to a doctor report or a debug
+        // pane, and without the reset `chat($badRepo)` followed by
+        // `chat($goodRepo)` still reported $badRepo's directory as refused —
+        // harmless for the one launch a real binary makes, wrong for every
+        // consumer the accessor's doc-block invites.
+        //
+        // {@see $reportedProjectTierRefusals} is deliberately NOT reset with it,
+        // and the asymmetry is the point rather than a half-done one: that set is
+        // process-scoped noise control of the same kind
+        // {@see warnPermissionConfigOnce()} keeps — "say this once per process"
+        // stays true across launches, while "these are the directories refused"
+        // is a fact about the launch being built.
+        self::$projectTierRefusals = [];
+
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell
         // whose home it is in, which is what stops the launch reading policy
@@ -590,6 +605,17 @@ final class Bootstrap
      * a far worse failure than losing the roster's optional half. stderr is
      * where this class already reports provider fallbacks and pruned sessions.
      *
+     * The project half is ANCHORED to $root, and that is a containment boundary
+     * rather than a tidiness rule: `<root>/.sugar-crush/agents` is a path the
+     * repository chose, so a committed `.sugar-crush/agents -> <outside>` used to
+     * relocate the per-entry check instead of tripping it — measured on this host
+     * against the pre-fix build, a fixture whose only content was that one line
+     * had this method return a preset carrying an outside file's description, its
+     * body as `initialPrompt`, and `permissionMode: bypass-permissions`. See
+     * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}. The user half is NOT
+     * anchored: `~/.sugar-crush/agents` is the user's own directory and linking
+     * it at `~/.claude/agents` is a working layout, not an escape.
+     *
      * @return array<string, \SugarCraft\Crush\Agents\AgentPreset> keyed by preset name
      */
     public static function agentPresets(string $root): array
@@ -603,18 +629,39 @@ final class Bootstrap
         // built-in agents, and "this process cannot tell whose home this is" is
         // not a degradable condition: it is the launch refusal
         // {@see trustedConfigDirPath()} exists to raise.
-        $registry = new AgentPresetRegistry([
-            rtrim($root, '/') . '/.sugar-crush/agents',
-            self::trustedConfigDirPath() . '/agents',
-        ]);
+        $projectAgents = rtrim($root, '/') . '/.sugar-crush/agents';
+
+        $registry = new AgentPresetRegistry(
+            [
+                $projectAgents,
+                self::trustedConfigDirPath() . '/agents',
+            ],
+            // Keyed by the path AS SPELLED above, which is why the string is a
+            // variable rather than repeated: an anchor keyed by a path that
+            // differs by one separator would silently anchor nothing.
+            anchors: [$projectAgents => $root],
+        );
 
         try {
-            return $registry->list();
+            $presets = $registry->list();
         } catch (\Throwable $e) {
             fwrite(STDERR, "sugarcrush: agent presets unavailable ({$e->getMessage()}); continuing with the built-in agents.\n");
 
+            // Collected on the throwing path TOO: list() records its refusals
+            // before it parses anything, so a launch that both refused a
+            // directory and then tripped over a malformed preset elsewhere must
+            // not lose the refusal to the degradation.
+            self::$projectTierRefusals = [...self::$projectTierRefusals, ...$registry->refusedDirectories()];
+
             return [];
         }
+
+        // The agents third of the project-tier refusal, joining the workflow
+        // registry's and the skill loader's in one collector — see
+        // {@see projectTierRefusals()}.
+        self::$projectTierRefusals = [...self::$projectTierRefusals, ...$registry->refusedDirectories()];
+
+        return $presets;
     }
 
     /**
@@ -2068,11 +2115,23 @@ final class Bootstrap
      * (Read/Edit/Glob/Write) so those files are actually reachable when a user
      * runs the real CLI binary.
      *
-     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET — ten entries, and the
-     * count is the domain for every "N built-in tools" figure in `README.md`.
-     * `src/Tools/BuiltIn/` holds exactly these ten classes, so the two numbers
-     * agree by construction now; they did not before, because {@see Write}
-     * existed there and was never listed here.
+     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET — ten entries as of this
+     * writing, and that count is the domain for every "N built-in tools" figure in
+     * `README.md`. `src/Tools/BuiltIn/` holds exactly these ten concrete `Tool`
+     * classes.
+     *
+     * NOT "BY CONSTRUCTION", which is what this doc-block used to say. Nothing
+     * derives this array from that directory or that directory from this array;
+     * they are two hand-maintained halves, and the reason they agree is a TEST
+     * that scans the directory —
+     * `BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`,
+     * whose expected set comes from `glob()` over `src/Tools/BuiltIn/` rather than
+     * a literal. Measured with the old literal assertions in place: an eleventh
+     * implementor added to that directory and not listed here left the whole
+     * Integration tier at `OK (467 tests, 2681 assertions)`, which is exactly how
+     * {@see Write} came to be written, tested, named in the README and unreachable
+     * from any real run. If you add a tool class, add it here — the mechanism that
+     * tells you is a red test, not the type system.
      *
      * @param InstructionFileLoader|null $loader Pass the caller's loader to
      *        keep the engine's root-instruction reads and the tools' on-touch

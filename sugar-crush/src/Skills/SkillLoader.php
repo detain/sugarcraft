@@ -437,10 +437,18 @@ final class SkillLoader
      * "resolve both sides, compare with a trailing separator" argument is
      * written down once — including why the separator is load-bearing, and why
      * an ENTRY resolving onto its boundary counts as contained while a
-     * DIRECTORY resolving onto its trust anchor does not. This class ran its own
+     * DIRECTORY resolving onto its trust anchor does not. This method ran its own
      * copy of that idiom until the copy was found to be missing the
-     * directory-level half; there is one implementation now, and
-     * {@see skillFilesIn()} asks it both questions.
+     * directory-level half, and {@see skillFilesIn()} asks it both questions.
+     *
+     * BE PRECISE ABOUT THE DOMAIN: this class makes THREE containment decisions
+     * and all three ask {@see ContainedPath} now — {@see skillFilesIn()}'s
+     * directory anchor, this method's per-entry check, and
+     * {@see loadSkillAsset()}'s asset check. That third one was a hand-spelled
+     * copy over 300 lines below this doc-block while the doc-block claimed there
+     * was one implementation. Package-wide the claim is narrower still, and
+     * {@see ContainedPath}'s own class doc-block carries the measured inventory of
+     * the spellings that remain.
      *
      * A path that will not resolve at all is NOT contained: `realpath()`
      * answers false for a dangling link and for a target this process cannot
@@ -774,8 +782,13 @@ final class SkillLoader
             throw new \RuntimeException("Asset path does not exist: $relativePath");
         }
 
-        // Must be within skill directory (no path traversal)
-        if (!str_starts_with($realAssetPath . '/', $realSkillDir . '/')) {
+        // Must be within skill directory (no path traversal). {@see ContainedPath}
+        // rather than a local prefix compare: this was a hand-spelled copy of that
+        // idiom over 300 lines below the doc-block on {@see contained()} claiming
+        // there was one implementation — and a dormant one (measured: no caller in
+        // `src/` or `bin/`, only this suite), which is the shape that produced the
+        // directory-level miss that doc-block describes.
+        if (!ContainedPath::within($assetPath, $skillDir)) {
             throw new \RuntimeException("Asset path escapes skill directory: $relativePath");
         }
 

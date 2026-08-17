@@ -124,7 +124,13 @@ final class WorkflowResumptionTest extends TestCase
 
         // Verify pause file contents
         $data = json_decode(file_get_contents($pauseFile), true);
-        $this->assertSame('pause-file-test', $data['workflowId']);
+        // `workflowId` is the RUN's own `<name>-<hash>` — the identifier the
+        // transcript prints and `/workflow pause|resume|status` now accept —
+        // while `workflowPath` is the loadable name resume() hands the registry.
+        // The two fields used to hold the same string, which is what made a pause
+        // file taken after a resume-by-ID unloadable.
+        $this->assertMatchesRegularExpression('/^pause-file-test-[0-9a-f]{8}$/', $data['workflowId']);
+        $this->assertSame('pause-file-test', $data['workflowPath']);
         $this->assertSame('paused', $data['status']);
         $this->assertSame(2, $data['stagesCompleted']);
         $this->assertSame('output-1', $data['context']['stage-1.output']);
@@ -505,7 +511,13 @@ final class WorkflowResumptionTest extends TestCase
         $this->assertFileExists($pauseFile, 'A real SIGTERM mid-workflow should materialize a genuine pause file on disk.');
 
         $data = json_decode(file_get_contents($pauseFile), true);
-        $this->assertSame('real-sigterm-test', $data['workflowId']);
+        // Same two fields as the cooperative pause above, and asserted here
+        // BECAUSE this is the interrupt path: the two used to be keyed
+        // differently by the two code paths (run() by name, the SIGINT handler by
+        // the generated ID), so which spelling `/workflow pause` accepted
+        // depended on how the run had ended.
+        $this->assertMatchesRegularExpression('/^real-sigterm-test-[0-9a-f]{8}$/', $data['workflowId']);
+        $this->assertSame('real-sigterm-test', $data['workflowPath']);
         $this->assertSame('paused', $data['status']);
         $this->assertSame(1, $data['stagesCompleted'], 'Only the already-finished "quick" stage should be captured.');
         $this->assertSame('quick', $data['stageResults'][0]['stageName']);
@@ -551,6 +563,11 @@ final class WorkflowResumptionTest extends TestCase
         $installMethod->setAccessible(true);
         $previousAsyncSignals = $installMethod->invokeArgs($this->engine, [
             $workflowId,
+            $workflowId,
+            // $loadPath: the registry name the interrupted run could be reloaded
+            // from, threaded so a pause file taken by the signal handler records a
+            // loadable `workflowPath` rather than whatever identifier the caller
+            // happened to use.
             $workflowId,
             $startedAt,
             &$context,

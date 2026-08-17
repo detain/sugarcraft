@@ -61,8 +61,44 @@ final class WorkflowEngine implements WorkflowEngineInterface
 {
     private const PAUSE_DIR = '.running';
 
-    /** @var array<string, WorkflowResult> */
+    /**
+     * Finished (or interrupted) runs this engine can still pause, keyed by the
+     * NAME {@see run()} was called with — which is also the name
+     * {@see WorkflowRegistry::load()} resolves.
+     *
+     * @var array<string, WorkflowResult>
+     */
     private array $resultsByName = [];
+
+    /**
+     * The generated run ID ({@see generateWorkflowId()}, `<name>-<8 hex>`) of
+     * each remembered run => its key in {@see $resultsByName}.
+     *
+     * THIS IS THE IDENTIFIER THE USER HAS. `/workflow run safe` prints
+     * ``ID: `safe-252630d0` `` and the help text reads
+     * `/workflow pause <workflowId>`, but this map's absence meant `pause`,
+     * `resume` and `status` all keyed off the NAME — so measured on a real
+     * launch, three of the five verbs rejected the only identifier the UI hands
+     * out (`No result found for workflow 'safe-252630d0'`) and accepted one it
+     * never prints. Both spellings resolve now; see {@see runKeyFor()} and
+     * {@see pauseFileFor()} for the two directions.
+     *
+     * @var array<string, string>
+     */
+    private array $runKeysById = [];
+
+    /**
+     * Key in {@see $resultsByName} => the registry name that key's workflow can
+     * be loaded from, for the pause file's `workflowPath` field.
+     *
+     * Separate from the key itself because they stop agreeing the moment a run is
+     * RESUMED: a resumed run is remembered under its pause file's name, while the
+     * string {@see WorkflowRegistry::load()} needs is the one the original
+     * `/workflow run` used.
+     *
+     * @var array<string, string>
+     */
+    private array $loadPathsByKey = [];
 
     /**
      * SIGINT/SIGTERM dispositions as they were before each run installed its
@@ -225,8 +261,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public function run(string $workflowPath, array $context = []): WorkflowResult
     {
         $workflow = $this->registry->load($workflowPath);
-        $result = $this->runFromWorkflow($workflow, $context, 0, null, $workflowPath);
-        $this->resultsByName[$workflowPath] = $result;
+        $result = $this->runFromWorkflow($workflow, $context, 0, null, $workflowPath, $workflowPath);
+        $this->rememberResult($workflowPath, $result, $workflowPath);
 
         return $result;
     }
@@ -283,23 +319,37 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * and will be re-run from scratch on resume() — there is no
      * partial-credit capture for an in-progress parallel sub-stage.
      *
-     * @param string $workflowId The workflow name/path used when calling run().
+     * EITHER IDENTIFIER WORKS: the workflow name/path {@see run()} was called
+     * with, or the `<name>-<hash>` run ID the transcript printed for it. The
+     * pause FILE is named by the former, because that is the string
+     * {@see resume()} has to hand back to `load()`, and {@see pauseFileFor()}
+     * is what makes the latter find it again.
+     *
+     * @param string $workflowId The workflow name/path used when calling run(),
+     *        or the run ID printed for that run.
      * @throws WorkflowNotRunningException When no result is found for this workflowId.
      */
     public function pause(string $workflowId): void
     {
-        if (!isset($this->resultsByName[$workflowId])) {
+        $key = $this->runKeyFor($workflowId);
+        if ($key === null) {
             throw new WorkflowNotRunningException(
                 "No result found for workflow '{$workflowId}'. Run the workflow first before pausing."
             );
         }
 
-        $result = $this->resultsByName[$workflowId];
-        $pauseFile = $this->getPauseFilePath($workflowId);
+        $result = $this->resultsByName[$key];
+        $pauseFile = $this->getPauseFilePath($key);
 
         $data = [
-            'workflowId' => $workflowId,
-            'workflowPath' => $workflowId,
+            // The RUN's own ID, not the key this was stored under: it is what the
+            // transcript showed the user, and recording it is what lets a later
+            // process resolve that spelling back to this file. `workflowPath` is
+            // the loadable name, and the two are deliberately different fields —
+            // writing the same string into both is what made a pause file taken
+            // after a resume unloadable, since resume()'s identifier is an ID.
+            'workflowId' => $result->workflowId,
+            'workflowPath' => $this->loadPathsByKey[$key] ?? $key,
             'status' => WorkflowStatus::Paused->value,
             'stagesCompleted' => count($result->stageResults),
             'context' => $result->context,
@@ -324,25 +374,40 @@ final class WorkflowEngine implements WorkflowEngineInterface
     /**
      * Reload a paused workflow from its persisted state and continue execution.
      *
-     * @param string $workflowId The unique workflow identifier.
+     * Accepts either identifier, for the reason {@see pause()} does — the run ID
+     * the transcript printed, or the workflow name.
+     *
+     * WHAT THIS DELIBERATELY DOES NOT CHANGE: the resumed result is not written
+     * back into {@see $resultsByName}, so a cooperative {@see pause()} after a
+     * resume persists the state of the run that was resumed FROM. Remembering it
+     * instead would be worse, not better, until stage accounting across a resume
+     * is fixed: a resumed {@see WorkflowResult} carries only the stages this call
+     * ran, so its `count($result->stageResults)` is a RESUME-relative number, and
+     * writing that into `stagesCompleted` would tell the next resume to restart
+     * partway through. The two halves of that (an honest total across resumes, and
+     * the "Stages completed" line the UI prints from it) belong to the same
+     * separate fix and are not attempted here.
+     *
+     * @param string $workflowId The run ID or the workflow name.
      * @return WorkflowResult The final result after the resumed workflow completes.
      * @throws WorkflowNotRunningException When no pause file exists for this workflow.
      * @throws WorkflowNotFoundException   When the workflow definition can no longer be loaded.
      */
     public function resume(string $workflowId): WorkflowResult
     {
-        $pauseFile = $this->getPauseFilePath($workflowId);
+        $pauseFile = $this->pauseFileFor($workflowId);
 
-        if (!file_exists($pauseFile)) {
+        if ($pauseFile === null) {
             throw new WorkflowNotRunningException(
                 "No paused workflow found with ID '{$workflowId}'"
             );
         }
 
-        $data = json_decode(file_get_contents($pauseFile), true);
+        $data = json_decode((string) file_get_contents($pauseFile), true);
+        $data = is_array($data) ? $data : [];
 
         $workflowPath = $data['workflowPath'] ?? null;
-        if ($workflowPath === null) {
+        if (!is_string($workflowPath) || $workflowPath === '') {
             throw new WorkflowNotRunningException(
                 "Pause file for '{$workflowId}' is corrupt: missing 'workflowPath' field"
             );
@@ -350,12 +415,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $workflow = $this->registry->load($workflowPath);
 
+        // The pause file's OWN name is the pause identity, not the string the
+        // user typed: a second interrupt during this resumed run must land on the
+        // same file rather than forking a second one under the other spelling.
+        // And $loadPath is threaded separately so that file stays loadable — it
+        // used to be written as whatever identifier resume() was called with,
+        // which for a run ID is not a name load() can resolve.
+        $pauseKey = basename($pauseFile, '.json');
+
         return $this->runFromWorkflow(
             $workflow,
             $data['context'] ?? [],
             $data['stagesCompleted'] ?? 0,
-            $workflowId,
-            $workflowId,
+            is_string($data['workflowId'] ?? null) && $data['workflowId'] !== '' ? $data['workflowId'] : $workflowId,
+            $pauseKey,
+            $workflowPath,
         );
     }
 
@@ -372,21 +446,24 @@ final class WorkflowEngine implements WorkflowEngineInterface
     /**
      * Return the current status of a workflow from its persisted pause file.
      *
-     * @param string $workflowId The unique workflow identifier.
+     * Accepts either identifier, for the reason {@see pause()} does.
+     *
+     * @param string $workflowId The run ID or the workflow name.
      * @return WorkflowStatus The status stored in the pause file.
      * @throws WorkflowNotRunningException When no pause file exists for this workflow.
      */
     public function getStatus(string $workflowId): WorkflowStatus
     {
-        $pauseFile = $this->getPauseFilePath($workflowId);
+        $pauseFile = $this->pauseFileFor($workflowId);
 
-        if (!file_exists($pauseFile)) {
+        if ($pauseFile === null) {
             throw new WorkflowNotRunningException(
                 "No pause file found for workflow '{$workflowId}'"
             );
         }
 
-        $data = json_decode(file_get_contents($pauseFile), true);
+        $data = json_decode((string) file_get_contents($pauseFile), true);
+        $data = is_array($data) ? $data : [];
         $statusValue = $data['status'] ?? null;
 
         if ($statusValue === null) {
@@ -427,6 +504,98 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         return $this->registry->workflowsPath() . '/' . self::PAUSE_DIR . '/' . $workflowId . '.json';
+    }
+
+    /**
+     * Remember a run so {@see pause()} can find it under EITHER identifier.
+     *
+     * One method rather than three assignments at each of the two call sites,
+     * because the two sites disagreeing about the keying is precisely the defect
+     * this closes: {@see run()} keyed by NAME and the SIGINT handler keyed by the
+     * composite run ID, so which spelling `/workflow pause` accepted depended on
+     * how the run had ended.
+     *
+     * @param string      $key      the identifier this result is stored under —
+     *                              the name for a fresh run, the pause file's own
+     *                              name for a resumed one
+     * @param string|null $loadPath the registry name {@see WorkflowRegistry::load()}
+     *                              resolves, when there is one (a `runFromPhp()`
+     *                              workflow has none)
+     */
+    private function rememberResult(string $key, WorkflowResult $result, ?string $loadPath): void
+    {
+        $this->resultsByName[$key] = $result;
+        $this->runKeysById[$result->workflowId] = $key;
+
+        if ($loadPath !== null) {
+            $this->loadPathsByKey[$key] = $loadPath;
+        }
+    }
+
+    /**
+     * The {@see $resultsByName} key an identifier names, or null for one this
+     * engine has no run for.
+     *
+     * Exact key first, so a workflow literally named `safe-252630d0` still means
+     * itself.
+     */
+    private function runKeyFor(string $identifier): ?string
+    {
+        if (isset($this->resultsByName[$identifier])) {
+            return $identifier;
+        }
+
+        return $this->runKeysById[$identifier] ?? null;
+    }
+
+    /**
+     * The pause file an identifier names, or null when there is none.
+     *
+     * THREE LOOKUPS, in cost order, because the identifier a user types comes
+     * from a transcript that may belong to a previous process:
+     *
+     *  1. `<identifier>.json` — the name it was paused under.
+     *  2. this process's own {@see $runKeysById}, for the run ID of a run it
+     *     performed itself.
+     *  3. the recorded `workflowId` INSIDE each pause file, which is the only
+     *     thing that can map a printed run ID back to a file after the process
+     *     that printed it has exited. Bounded by the number of paused workflows,
+     *     and each candidate is decoded rather than pattern-matched — deriving
+     *     the name by stripping a trailing `-[0-9a-f]{8}` would guess at
+     *     {@see generateWorkflowId()}'s shape and get a workflow named
+     *     `deploy-1a2b3c4d` wrong.
+     *
+     * {@see getPauseFilePath()} is still what builds every candidate, so its
+     * refusal of `/` and `..` in an identifier applies here unchanged.
+     */
+    private function pauseFileFor(string $identifier): ?string
+    {
+        $exact = $this->getPauseFilePath($identifier);
+        if (file_exists($exact)) {
+            return $exact;
+        }
+
+        $key = $this->runKeysById[$identifier] ?? null;
+        if ($key !== null) {
+            $byKey = $this->getPauseFilePath($key);
+            if (file_exists($byKey)) {
+                return $byKey;
+            }
+        }
+
+        $candidates = glob($this->registry->workflowsPath() . '/' . self::PAUSE_DIR . '/*.json') ?: [];
+        // Sorted, because two pause files recording the same run ID must resolve
+        // the same way on every machine — readdir order is not a contract.
+        sort($candidates);
+
+        foreach ($candidates as $candidate) {
+            $data = json_decode((string) file_get_contents($candidate), true);
+            if (is_array($data) && ($data['workflowId'] ?? null) === $identifier) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -481,8 +650,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param int              $currentStageIndex  Index of the first stage to execute (0 = start fresh).
      * @param string|null      $workflowIdOverride Use this workflowId instead of generating a new one (for resume).
      * @param string|null      $pauseId            Identifier to pause() under if a real interrupt lands mid-run
-     *                                              (the workflow name/path for run(), the workflowId for resume()).
-     *                                              Defaults to the resolved workflowId when not given.
+     *                                              (the workflow name/path for run(), the pause file's own name
+     *                                              for resume()). Defaults to the resolved workflowId.
+     * @param string|null      $loadPath           The registry name this workflow can be re-loaded from, recorded
+     *                                              in the pause file so resume() has something load() resolves.
+     *                                              Null for a runFromPhp() workflow, which has no registry name.
      * @return WorkflowResult
      */
     private function runFromWorkflow(
@@ -491,6 +663,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         int $currentStageIndex,
         ?string $workflowIdOverride,
         ?string $pauseId = null,
+        ?string $loadPath = null,
     ): WorkflowResult {
         $startedAt = new \DateTimeImmutable();
         $stageResults = [];
@@ -536,6 +709,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $previousAsyncSignals = $this->installInterruptHandlers(
             $interruptId,
             $resolvedWorkflowId,
+            $loadPath,
             $startedAt,
             $context,
             $stageResults,
@@ -1461,6 +1635,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param string              $interruptId         Identifier used to correlate the pause file with this run.
      * @param string              $resolvedWorkflowId  The workflow ID the in-flight run is executing under.
+     * @param string|null         $loadPath            The registry name the run can be re-loaded from, or null.
      * @param \DateTimeImmutable  $startedAt            When this run originally started.
      * @param array               $context      Reference to the live workflow context.
      * @param StageResult[]       $stageResults Reference to the live list of completed stage results.
@@ -1478,6 +1653,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private function installInterruptHandlers(
         string $interruptId,
         string $resolvedWorkflowId,
+        ?string $loadPath,
         \DateTimeImmutable $startedAt,
         array &$context,
         array &$stageResults,
@@ -1519,6 +1695,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $handler = function (int $signo) use (
             $interruptId,
             $resolvedWorkflowId,
+            $loadPath,
             $startedAt,
             $installPid,
             &$context,
@@ -1547,8 +1724,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
             // Reuse the exact same pause() path a cooperative pause would
             // take, so the persisted file format never drifts between the
-            // two code paths.
-            $this->resultsByName[$interruptId] = $partialResult;
+            // two code paths — INCLUDING the identifier bookkeeping, which is
+            // what the two sites used to disagree about: this one keyed the
+            // result map by the run ID while run() keyed it by the name, so
+            // whether `/workflow pause <id>` worked depended on how the run had
+            // ended.
+            $this->rememberResult($interruptId, $partialResult, $loadPath);
 
             try {
                 $this->pause($interruptId);

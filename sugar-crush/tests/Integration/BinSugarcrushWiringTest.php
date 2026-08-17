@@ -11,6 +11,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
@@ -111,26 +112,53 @@ final class BinSugarcrushWiringTest extends TestCase
      * With Write absent, Edit's `file_exists()` precondition left `Bash` as the
      * model's only way to create a file.
      *
-     * The count is asserted alongside the class, because the failure mode this
-     * pins is an omission from a literal array: `assertArrayHasKey` alone would
-     * still pass if a later edit dropped a different tool. Ten is the whole of
-     * `src/Tools/BuiltIn/` — that directory and this array are the two halves
-     * that have to agree.
+     * THE EXPECTED SET IS SCANNED, NOT WRITTEN DOWN, and that is the whole point
+     * of this revision. The previous version asserted `assertCount(10, …)` plus a
+     * literal name list, which pins only the direction where a tool is ADDED to
+     * `Bootstrap::tools()`.
+     *
+     * MEASURED, in a scratch copy of the lib with an eleventh `Tool` implementor
+     * (`src/Tools/BuiltIn/Notify.php`) present and deliberately NOT listed in
+     * `Bootstrap::tools()`:
+     *
+     *   - with the old literal assertions: this file `OK (298 tests, 1692
+     *     assertions)`, the whole Integration tier `OK (467 tests, 2681
+     *     assertions)` — the omitted-from-the-array direction, the one that
+     *     actually happened to `Write`, was invisible;
+     *   - with the scanned set below: `1 failure` in this file, naming the class.
+     *
+     * `Bootstrap::tools()`' doc-block claimed the two halves "agree by
+     * construction"; nothing constructs either from the other, so this assertion
+     * is the mechanism that makes them agree, and it is named as such there now.
      */
     public function testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet(): void
     {
         $byClass = $this->toolsByClass();
 
         $this->assertArrayHasKey(\SugarCraft\Crush\Tools\BuiltIn\Write::class, $byClass);
-        $this->assertCount(10, $byClass);
+
+        $expected = BuiltInToolCorpus::classNames();
+        $wired = array_keys($byClass);
+        sort($wired);
+
+        $this->assertSame(
+            $expected,
+            $wired,
+            'every concrete Tool under src/Tools/BuiltIn/ must be wired into Bootstrap::tools(), and nothing '
+            . 'else may be: a class in that directory that no run can dispatch is the Write defect again',
+        );
 
         $names = array_map(static fn (object $t): string => $t->name(), array_values($byClass));
         sort($names);
         $this->assertSame(
-            // `doctor` is lower-case where the other nine are TitleCase, which
-            // is the wire name the provider schema advertises — asserted as it
-            // actually is rather than as it ought to be, since renaming a tool
-            // the model already knows is not this test's business.
+            // Still a literal, and deliberately: this asserts the WIRE NAMES the
+            // provider schema advertises, which the class names do not determine
+            // (`SkillTool` announces itself as `Skill`) and which the model has
+            // learned. `doctor` is lower-case where the other nine are TitleCase —
+            // asserted as it actually is rather than as it ought to be, since
+            // renaming a tool the model already knows is not this test's business.
+            // A NEW tool fails the scanned assertion above before it reaches here,
+            // so this list cannot silently go stale.
             ['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'Skill', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
             $names,
         );
