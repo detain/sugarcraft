@@ -2380,3 +2380,142 @@ that found the bug. Both are briefed as primary targets, alongside an exhaustive
 256-byte enumeration of the glue class (the nine tapes are a sample; the byte space is
 small enough to enumerate) and a check that `SINGLE_BYTE_TOKENS` is never interpolated
 into a regex character class, where `[-%` would form a reversed range.
+
+---
+
+## Lane E (#38) — fix round landed; review in flight
+
+All four findings and five nits closed. Two of the four were resolved by *measuring
+the alternative* rather than by applying the obvious remedy, and in both cases the
+measurement is what justified keeping the current behaviour.
+
+### F-A1 — the criterion had two conditions, not one
+
+The old docblock justified leaving `Ctrl+P` unyielded on a premise the previous review
+measured false. The fix agent re-drove the table, confirmed it, then measured the thing
+the review had not: **what the shell would actually do with a yielded `Ctrl+P`.**
+
+| state | shell `handle()` | result |
+|---|---|---|
+| `ctrl+p` in `Agents` | `ProviderSelectCmd` | `consumeShellCmd` → palette mode=providers |
+| `ctrl+p` in `SkillPicker` | `ProviderSelectCmd` | same |
+| `ctrl+p` in `MenuOpen` | `ProviderSelectCmd` | same |
+| `ctrl+r` in all three | `null` | default arm no-op |
+
+So yielding `p` does **not** swallow the chord the way yielding `r` does — it rebinds
+`Ctrl+P` to `/model`, opening a *providers* palette that in `Pane::Agents` is exactly
+as unpaintable as the command palette it replaced. `Ctrl+R` is yieldable only because
+`handleCtrl('r')` has no arm. The criterion therefore has two conditions: `Ctrl+P`
+meets the first and fails the second. That is now what the docblock says, and it is
+**enforceable rather than prose** — `testEveryYieldedChordIsAnsweredByANoOp()` drives
+every rune of the derived set through all three states and requires `[$app unchanged,
+null]`.
+
+The previous review's routing table was corrected in one place: `Pane::Agents` palette
+is invisible **and** undrivable; the skill-picker and menu states paint the palette but
+still route `Down` to the picker/menu.
+
+`testChatOwnedChordsSurviveTheAgentsPane` survives, and correctly — it pins "the shell
+does not steal a live Chat chord", not "an invisible palette is good", and the measured
+alternative is worse rather than better. Sabotage S1 (adding `yieldsToShellReason` to
+`chat.palette`) turns **4** tests red, so the collision is real and documented rather
+than hidden. The residual gap is named in the docblock under a
+`── the gap this leaves open (tracker #85) ──` heading with all three measured states,
+and `testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives()` pins current behaviour so
+that the day it is fixed, a test says so.
+
+### F-A2 — dormant guard documented, not deleted and not faked
+
+The provably-unobservable conjunct was neither removed nor given an artificial effect
+(any such change is a routing change with no user benefit). `shellOwnsKeyboard()`'s
+docblock now states plainly that the second read is unobservable, names **both**
+overlapping guarantees that make it so, and states what it protects against: rule 2
+narrowing, which would otherwise leak the yield into every ordinary pane and kill
+`Ctrl+R`. Pinned by `testChatOwnsYieldsTheChordOnlyWhileTheShellOwnsTheKeyboard()`
+via reflection on private `chatOwns()`. Sabotage S2 → **exactly 1 failure, that test**,
+proving both that it bites and that it is the only detector.
+
+### F-B1 — the cue, plus the gap that made it necessary
+
+- **Generation check:** `Chat::requestPermission()` now drops a stamped ASK whose
+  generation is not current. **Unstamped still applies** — every internal caller relies
+  on that. Sabotage S4 → `testASupersededAskNeverPutsUpAPrompt` red.
+- **Cue:** new `Renderer::KEY_HELP_OVER_PROMPT = 'keys: ? closes · permission waiting'`,
+  a whole-bar replacement following the `KEY_HELP_TOO_SMALL` precedent. The floor of the
+  bar it replaces while a prompt pends was measured at **36 columns**
+  (`0% · ⠴ thinking… · Esc Esc to cancel`) against the cue's **35**, and the bound is
+  asserted at 5 sizes so the never-truncated invariant cannot rot.
+- `Chat.php`'s own "It cannot collide with the permission prompt" comment was the same
+  defect class; corrected to state what remains reachable (an unstamped ASK) and that
+  the pair is ordered *and announced* rather than assumed away.
+
+### F-B2 — false sentence replaced with an enumeration
+
+Measured: with the reference open the box never reaches the last two rows, so the status
+bar's `pane:menu` zone stays live at col 43 row 30 — clicking it opens the palette with
+`keyHelp` still `0`, and the reference keeps both slot and keyboard. The comment now
+enumerates each reachable pair. New
+`testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()`; S11 (palette first in the
+chain) → red, catching a reorder the existing precedence test does not.
+
+### Nits
+
+- **N1** comment was inverted. Fixed to measured behaviour (`E` / `E S` / `En S` at cols
+  5/7/8), and the counterfactual measured too: `Style::width()` **truncates**, so
+  dropping the cap loses the description entirely rather than wrapping. Behaviour kept,
+  reason stated, tested.
+- **N2** `KEY_HELP_CHROME_COLS` made checkable — box width `=== min(64, cols-chrome) +
+  chrome` at 6 widths.
+- **N3** accounting rewritten off the call sites: up to **three** lookups per keystroke,
+  and the uncounted one was the yielded set, walking `all()` on every call at ~23.8 µs.
+  Now memoised — 2 cold rebuilds **49.0 µs** vs 2 memoised **0.294 µs** (~166×,
+  machine-scoped), pinned by `testEveryDerivedSetTheHotPathReadsIsMemoised()`.
+- **N4** regex tightened (case-insensitive, `Ctrl-C`/`^C`, `Escape`, `Return`, `Home`,
+  `End`, `Page Up`, `F\d{1,2}`): 8 previously-missed spellings caught, **0** false
+  positives across all 57 rows. Two remaining holes documented with reasons —
+  `Delete`/`Insert` are the verbs three live rows use, and a bare letter is
+  indistinguishable from prose.
+- **N5** `/help` registered as its own row (no alias field exists), with a comment on why.
+
+### Verification
+
+11 mutations, **all 11 bit**, all restored with md5 match, post-restore sweep green.
+Every mutation ran in a **full sandbox copy** of the lib — vendor copied,
+`vendor/sugarcraft/*` symlinks re-pointed at absolute real paths, and
+`ReflectionClass::getFileName()` asserted inside the sandbox for all five mutated
+classes and the test classes. The shared working tree was never mutated, because two
+sibling lanes were running suites in it. Lane-only 171/7749 → **181/7826**. Full suite
+**6294 / 38324 / 1 skipped / 0 failures / 0 errors**.
+
+### Two false claims found in the code, neither in the brief
+
+`KeyboardHandler`'s `p` bullet asserted "`ProviderSelectCmd` is inert" — measured live,
+it routes to `/model`. That correction is also what supplies F-A1's real justification.
+The `a` bullet's reachability wording and `Chat.php`'s "cannot collide" comment were the
+same class. Every one of these is a sentence that was never measured; the pattern is now
+three-for-three across lanes B, D and E in the same round.
+
+### Tracker
+
+- **#85** — `Ctrl+P` (and `Ctrl+K`, which translates to it) opens a hosted-Chat palette
+  the shell's full-pane agent dashboard never paints and never drives; visible-but-
+  undrivable in the skill-picker and F10-menu states. Wants the shell to composite, or
+  to stand down for a hosted overlay. Yielding the chord makes it *worse*
+  (`ProviderSelectCmd` → `/model`). `Tui\Renderer::renderAgentDashboard()` never renders
+  the hosted chat at all — verified.
+- Considered and **rejected in-lane**: a shell-side cue for the invisible palette
+  (`hostedNotice`/dashboard footer). Both change the chrome line count, hence `paneRows`
+  and dashboard geometry — a layout change belonging to #85, not to a review-fix round.
+
+### What the review in flight is briefed to attack
+
+The one-column margin on the cue (35 against a measured floor of 36) across every
+spinner frame, percentage string **and locale** — the repo does i18n via `Lang::t()`, a
+translated bar is free to be longer, and a hardcoded English constant is a convention
+question in its own right. Also: whether `[$app unchanged, null]` can distinguish a
+routing change that returns a new-but-equivalent `App`; whether the deliberate
+"unstamped ASKs still apply" hole leaves an equivalent stale path open across the
+`completeAsync()` fork boundary; and the fact that the cue test reads
+`renderStatusBar()` directly rather than the composed frame — documented as a trap for
+the next reviewer, but the consequence is that it does not prove the cue reaches the
+user-visible frame at all.
