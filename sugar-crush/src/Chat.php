@@ -880,25 +880,43 @@ final class Chat implements Model
             // where typing "/keys" onto the draft and pressing Enter opened the
             // reference while "?" typed " ?" instead - so "/keys" WAS an escape
             // hatch there, which is the one thing the docs for it say it is not.
-            // Four blank drafts (" ", "  ", "\t", " \t ") disagreed and the
-            // remaining members of that corpus agreed, as did all six of the
-            // non-draft states in KeyHelpTest::openRouteStates(). That is the whole
-            // corpus the claim rests on -- it does not range over states nobody has
-            // built.
+            // Every blank-but-not-empty draft disagreed -- six of them in today's
+            // corpus (" ", "  ", "\0", "\n", "\t", " \t "), four when this was
+            // written -- and the remaining members agreed, as did all six of the
+            // non-draft states in KeyHelpTest::openRouteStates(). No count is load-
+            // bearing here: the class is "trim()-empty but not ===''", and the
+            // corpus grows into it whenever a further member of that class is found
+            // reachable, which is exactly what happened to "\0" and "\n".
             // Pinned in both directions by
             // KeyHelpTest::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft().
             //
-            // Two of those four are SYNTHETIC drafts and are labelled as such
-            // there: no keystroke produces them. Measured at candy-core's decoder,
-            // InputReader::parse("\t") yields KeyType::Tab, not
+            // Four of those six -- "\t", " \t ", plus "\r" and "\x0B", which the
+            // corpus does not carry -- cannot be TYPED, and the verb is the whole
+            // correction: the previous revision called them "SYNTHETIC drafts: no
+            // keystroke produces them", which is wrong. Measured at candy-core's
+            // decoder, InputReader::parse("\t") yields KeyType::Tab, not
             // KeyType::Char "\t", and the Tab arm below leaves the buffer alone, so
-            // "\t" and " \t " can only be built by handing the Char arm a rune the
-            // decoder never emits. Nor is there a paste route in: the decoder DOES
-            // emit PasteMsg for bracketed paste (measured), but `grep -rn PasteMsg
-            // src/` is empty, so this model drops it -- which is the same fact the
-            // "no paste path" sentence below states, from the decoder's side. So the
-            // conclusion rests on " " and "  ". Both decoding facts are asserted in
-            // that test rather than reasoned about here.
+            // no rune puts "\t" or " \t " in the box. Space and "\0" (Ctrl+Space)
+            // are the only two of trim()'s six bytes a keystroke lands, and that
+            // whole map is asserted byte by byte in the test named above.
+            //
+            // Untypeable is not unreachable. The Up arm above copies
+            // lastUserMessageContent() in VERBATIM, and
+            // Chat::reviveCheckpointMessage() turns every non-'assistant'
+            // checkpoint row -- a 'tool' row, whose output is full of tabs -- into
+            // a user message with its content unchanged. Driven end to end in that
+            // test: a revived tool row plus one Up puts "\t/keys" (or "\t", or
+            // " \t ") in the box. These are drafts a user can hold; they are just
+            // not drafts a user can type. Same for "\u{000C}", which is in the
+            // NON-blank set: parse("\x0C") is Ctrl+L and types the letter, so a
+            // form feed is recalled-only too.
+            // Nor is there a paste route in: candy-core's decoder DOES emit a paste
+            // message for bracketed paste, and update() returns the IDENTICAL object
+            // when handed one -- both now asserted in that test. That pair replaces
+            // the instrument this comment used to cite, "`grep -rn PasteMsg src/` is
+            // empty", which stopped being true the moment it was written: every hit
+            // that grep returns today is prose in this file claiming there are none.
+            // A driven assertion cannot refute itself that way.
             //
             // Space is driven twice in that corpus, as KeyType::Space and as
             // KeyType::Char " ". Measured, InputReader::parse(" ") yields only the
@@ -1101,12 +1119,15 @@ final class Chat implements Model
         //
         // What that bounds is which tests can watch this guard FIRE. It does
         // NOT bound which tests reach a STAMPED ask, and the first version of
-        // this comment claimed the second: measured, 14 ChatTest tests reach
-        // one, through exactly the two producers above. They cannot make the
-        // comparison true, which is the property -- not that they never get
-        // here.
+        // this comment claimed the second: ChatTest's whole permission suite
+        // reaches one, through exactly the two producers above. They cannot
+        // make the comparison true, which is the property -- not that they
+        // never get here. No count is given for that suite either; the
+        // previous revision said "14 ChatTest tests" and it was correct when
+        // written, which is the exact shape every stale figure in this comment
+        // has had. Rows 3 and 4 below measure it when a reader mutates.
         //
-        // READ THE LINE NUMBER BEFORE MUTATING. This exact predicate --
+        // FIND THE RIGHT SITE BEFORE MUTATING. This exact predicate --
         // `$msg->generation !== null && $msg->generation !== $this->generation`
         // -- appears FOUR times in this file, in four byte-identical three-line
         // blocks that differ only in indentation: update()'s AssistantMsg arm,
@@ -1123,90 +1144,116 @@ final class Chat implements Model
         // KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods().
         //
         // Mutations of the guard belonging to THIS method -- the block
-        // immediately below this comment, inside requestPermission() -- line 1220
-        // as this was written, and re-check with the grep above rather than trusting
-        // that number, since editing this comment moves it -- each judged by the targeted
-        // files going red. The trio column counts BEHAVIOURAL reds only; see the
-        // note under the table for the one test every row also trips:
+        // immediately below this comment, inside requestPermission() -- each judged
+        // by the targeted files going red. NO LINE NUMBER is given, deliberately:
+        // the previous two revisions carried one ("1175", corrected to "1220"), it
+        // was wrong both times because editing this comment moves the guard under
+        // it, and the grep above plus the four-site test already name the site
+        // exactly. A figure that cannot survive its own paragraph does not belong
+        // in the paragraph.
         //
-        //   | mutation                        | trio       | ChatTest           |
-        //   |---------------------------------|------------|--------------------|
-        //   | guard deleted                   | 1 failure  | green              |
-        //   | throw when the guard FIRES      | 1 error    | green              |
-        //   | throw on ANY stamped ask        | 1 error    | 14 errors          |
-        //   | 2nd conjunct dropped, so every  | 1 failure  | 1 error,           |
-        //   | stamped ask is discarded        |            | 11 failures,       |
-        //   |                                 |            | 6 warnings         |
+        // The rows carry NAMES, not counts, for the same reason. The previous
+        // revision recorded "1 failure / 1 error / 1 error / 1 failure" and "raw
+        // trio totals 2 / 2 / 2 / 2"; rows 3 and 4 were 3 raw / 2 behavioural even
+        // as it was written, because the test added in that very commit
+        // (testThePromptAndTheReferenceCannotBothBeRaisedByRealInput) reaches a
+        // stamped-and-current ask and so trips them. A count here is fed by the
+        // files being measured; a name is not.
         //
-        // Neither column carries a test COUNT, and that is deliberate: a population
-        // figure here is fed by the very files the table is measured over, so it
-        // goes stale the moment one of them grows. The previous revision carried
-        // "trio (268)" and "ChatTest (215)" in these headings AND a third copy of
-        // the trio figure in KeyHelpTest, where it was already stale at 265 in the
-        // same commit that updated the two here. The reproducible figures are the
-        // per-row failure counts, and the DOMAIN is a file set rather than a number
-        // -- asserted by
-        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg().
+        //   | mutation                     | trio (behavioural)   | ChatTest       |
+        //   |------------------------------|----------------------|----------------|
+        //   | guard deleted                | STALE only           | green          |
+        //   | throw when the guard FIRES   | STALE only           | green          |
+        //   | throw on ANY stamped ask     | STALE + CURRENT      | the permission |
+        //   |                              |                      | suite, erroring|
+        //   | 2nd conjunct dropped, so     | STALE + CURRENT      | the permission |
+        //   | every stamped ask is dropped |                      | suite, failing |
         //
-        // Row 2 is the honest bound: exactly ONE test anywhere can observe this
-        // branch being taken, KeyHelpTest::testASupersededAskNeverPutsUpAPrompt(),
-        // which hand-builds the Msg -- and rows 1, 3 AND 4 put that same single
-        // test, and only it, red in the trio (verified by NAME, not by count, which
-        // is the only way to tell "the right test" from "a test").
-        // Row 3 is what refutes the wording that claimed no other test can even
-        // REACH a stamped ask. Row 4 changes BEHAVIOUR as well as observability,
-        // which is why its ChatTest column is the loud one: the
-        // stamped-and-current path is what ChatTest exercises.
+        // where the two trio classes are, and this is the RULE that keeps the table
+        // true as tests are added:
+        //
+        //   STALE   -- a test that hands this method a stamped ask from a SUPERSEDED
+        //              turn. Exactly one exists and only one can exist per distinct
+        //              way of building one:
+        //              KeyHelpTest::testASupersededAskNeverPutsUpAPrompt().
+        //   CURRENT -- every test that reaches a stamped ask AT ALL, whoever built
+        //              it. Open-ended by construction, and it grew by one this
+        //              round; today it adds
+        //              KeyHelpTest::testThePromptAndTheReferenceCannotBothBeRaisedByRealInput(),
+        //              whose prompt comes from a PreToolUse hook rather than by
+        //              hand.
+        //
+        // Rows 1 and 2 are bounded, rows 3 and 4 are not, and that difference is the
+        // whole content of the table. Row 2 is the honest bound on OBSERVABILITY:
+        // exactly one test anywhere can watch this branch being taken. Row 3 is what
+        // refutes the wording that claimed no other test can even REACH a stamped
+        // ask. Row 4 changes BEHAVIOUR as well as observability, which is why its
+        // ChatTest column is the loud one: the stamped-and-current path is what
+        // ChatTest exercises.
+        //
+        // Measured with this comment: RendererTest and Commands/KeyBindingDriftTest
+        // contribute ZERO behavioural reds to all four rows, even though they are
+        // two thirds of the "trio" by file count -- their asks are UNSTAMPED, and
+        // none of these four mutations touches an unstamped ask. The trio is the
+        // domain the rows were measured over; it is not the set of files that react.
         //
         // Every row ALSO reds
         // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(), because
         // each of these mutations edits the guard's TEXT and that test reads the four
         // blocks back. By design, and the reason it is excluded from the column
         // above rather than folded into it: it is a "you changed the guard, re-read
-        // this table" alarm, not evidence about the guard's reach. Raw trio totals
-        // including it are 2 / 2 / 2 / 2 for the four rows.
+        // this table" alarm, not evidence about the guard's reach. So raw = the
+        // column above plus exactly one, on every row -- stated as a rule, because
+        // the revision that stated it as "2 / 2 / 2 / 2" was already wrong on two.
         //
         // The variant that made the previous revision's error visible: discarding
         // EVERY ask rather than only stamped ones (`if (true)`) reds every trio test
         // that needs a prompt to appear at all, plus ChatTest 1 error, 11 failures,
-        // 6 warnings -- so the trio is NOT silent about it, and the row above is not
-        // covering it either.
-        //
-        // The EXCLUSION RULE, stated rather than left to be inferred, because the
-        // previous revision recorded a total that no rule produced: raw failures
-        // MINUS exactly one, the text-reading pin excluded from every row above,
-        // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods. Nothing
-        // else is excluded. Measured with this comment: 17 raw / 16 behavioural,
+        // 6 warnings -- so the trio is NOT silent about it, and the rows above are
+        // not covering it either. It is the ONE figure in this comment kept as a
+        // count, because it is the mis-site tell described below and a tell needs a
+        // magnitude. Re-measured with this comment: 17 raw / 16 behavioural,
         // composed of 5 in RendererTest (the permission-modal render tests), 9 in
         // KeyHelpTest (including the pin), and 3 KeyBindingDriftTest data sets
-        // (permission.once / .always / .deny). The previous revision recorded "14
-        // behavioural (16 raw)", which is wrong under this rule and under any other:
-        // 16 raw minus the one pin was 15 at the time it was written.
+        // (permission.once / .always / .deny). The EXCLUSION RULE that produces the
+        // second number, stated because the revision before last recorded a total no
+        // rule produced ("14 behavioural (16 raw)"): raw MINUS exactly one, the
+        // text-reading pin, testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods.
+        // Nothing else is excluded.
         //
-        // That total is not the load-bearing part and MUST NOT be read as fixed --
-        // it grows by one for every prompt-dependent test added to those three
-        // files, and did so within this round. What is load-bearing is the rule
-        // above and the fact that the figure is not zero, which is the tell for a
-        // mis-sited mutation (see the wrong-site paragraph below).
+        // That total MUST NOT be read as fixed -- it grows by one for every
+        // prompt-dependent test added to those three files. What is load-bearing is
+        // the rule and the fact that the figure is not zero.
         //
-        // At the WRONG site (update()'s AssistantMsg arm, line 607) the same two
-        // mutations give: 2nd-conjunct-dropped -> trio 0 behavioural reds /
-        // ChatTest 6 failures, and `if (true)` -> trio 0 behavioural reds /
-        // ChatTest 1 error, 36 failures, 6 warnings. Those are the figures the
-        // previous revision published as this method's, together with a causal
-        // story about mixed-up rounds that was invented to explain a mis-site.
-        // **If a re-measurement of this table shows zero behavioural trio reds, the
-        // mutation went in the wrong place.** The four-site test fires at the wrong
-        // site too, which is the cheapest available tell.
+        // At the WRONG site (update()'s AssistantMsg arm) the same two mutations
+        // give: 2nd-conjunct-dropped -> trio 0 behavioural reds / ChatTest 6
+        // failures, and `if (true)` -> trio 1 behavioural red / ChatTest 1 error, 36
+        // failures, 6 warnings. Those are close to the figures a previous revision
+        // published as this method's, together with a causal story about mixed-up
+        // rounds that was invented to explain a mis-site.
+        //
+        // The old tell -- "zero behavioural trio reds means you mutated the wrong
+        // place" -- is now HALF TRUE and is corrected rather than repeated: it holds
+        // for 2nd-conjunct-dropped and no longer for `if (true)`, because
+        // testThePromptAndTheReferenceCannotBothBeRaisedByRealInput() drives a real
+        // AssistantMsg through update() and so reacts at BOTH sites. The tell that
+        // does not decay is the magnitude: at the right site `if (true)` reds the
+        // whole prompt-dependent population of the trio, at the wrong site one test.
+        // And the four-site text pin fires at either site, which is the cheapest
+        // signal that you edited SOMETHING and must re-read this table.
         //
         // Domains: "trio" is tests/RendererTest.php +
         // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
-        // the three files that construct a PermissionRequestMsg at all --
-        // `grep -rl PermissionRequestMsg tests/` finds exactly those three, and
-        // that set is asserted, not narrated, by
-        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg().
-        // PHP 8.3.6. ChatTest is measured separately BECAUSE rows 3 and 4 show the
-        // trio's silence does not cover it.
+        // the three files that CONSTRUCT a PermissionRequestMsg -- asserted, not
+        // narrated, and by a token scan for `new …PermissionRequestMsg` rather than
+        // by the `grep -rl PermissionRequestMsg tests/` this line used to cite,
+        // which also matches files that merely mention the class in a comment:
+        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(),
+        // whose docblock states what that instrument can and cannot see. PHP 8.3.6.
+        // ChatTest is measured separately BECAUSE rows 3 and 4 show the trio's
+        // silence does not cover it -- and note that the trio's reds in all four
+        // rows come from KeyHelpTest ALONE: RendererTest and KeyBindingDriftTest
+        // build UNSTAMPED asks, which no row of this table touches.
         //
         // So this is not what makes the reference-over-prompt state
         // unreachable, and the sentence claiming it was "the one way that state
