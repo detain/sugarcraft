@@ -486,12 +486,18 @@ final class BuiltInToolCorpusTest extends TestCase
     }
 
     /**
-     * The other half of the same question: a private constructor with NO public
-     * zero-argument factory cannot be built by anything a real run does, so it is
-     * not a dispatchable tool and is left out of the corpus rather than fatalled
-     * on.
+     * THE SILENT DROP, INVERTED. This test asserted that a private constructor
+     * with no factory left the class OUT of the corpus — "not a dispatchable tool
+     * and left out rather than fatalled on" — and that is exactly how a would-be
+     * built-in tool disappeared from every built-in-tool test with no exception
+     * and no diagnostic. {@see BuiltInToolCorpus::instances()}'s own throw says
+     * "rather than silently skipping it", and the filter above it made that
+     * unreachable for the one shape `CLAUDE.md` mandates writing.
+     *
+     * So the class is now IN the corpus and building it is a named failure. Two
+     * assertions, because the pair is the finding: it is seen, and it is loud.
      */
-    public function testAToolWithAPrivateConstructorAndNoFactoryIsNotDispatchable(): void
+    public function testAToolWithAPrivateConstructorAndNoFactoryFailsLoudlyRatherThanVanishing(): void
     {
         $this->writeOneRealTool();
         $this->writeProbe('Tools/BuiltIn/Sealed.php', <<<'PHP'
@@ -511,15 +517,108 @@ final class BuiltInToolCorpusTest extends TestCase
             }
             PHP);
 
-        $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $this->scanProbe());
+        $this->assertSame(
+            ['CorpusProbe\\Tools\\BuiltIn\\Anchor', 'CorpusProbe\\Tools\\BuiltIn\\Sealed'],
+            $this->scanProbe(),
+            'an unbuildable Tool implementor must be SEEN, not filtered away',
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('CorpusProbe\\Tools\\BuiltIn\\Sealed implements Tool but cannot be built');
+
+        BuiltInToolCorpus::instances($this->probeDir, self::PROBE_PREFIX);
+    }
+
+    /**
+     * THE SECOND DROPPED SHAPE, and it is a one-keyword authoring slip rather than
+     * an exotic case: `public function new()` instead of `public static function
+     * new()`. {@see BuiltInToolCorpus::zeroArgumentFactory()} requires `isStatic()`
+     * — correctly, since `instances()` invokes it with no object — so the class
+     * used to be dropped for a reason nobody was told.
+     */
+    public function testANonStaticNewIsNotAFactoryAndFailsLoudly(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/Instanced.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class Instanced implements Tool
+            {
+                private function __construct() {}
+
+                public function new(): self
+                {
+                    return $this;
+                }
+
+                public function name(): string { return 'instanced'; }
+                public function description(): string { return 'instanced'; }
+                public function inputSchema(): array { return []; }
+                public function execute(array $args): ToolResult { return ToolResult::error('instanced'); }
+            }
+            PHP);
+
+        $this->assertContains('CorpusProbe\\Tools\\BuiltIn\\Instanced', $this->scanProbe());
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('CorpusProbe\\Tools\\BuiltIn\\Instanced implements Tool but cannot be built');
+
+        BuiltInToolCorpus::instances($this->probeDir, self::PROBE_PREFIX);
+    }
+
+    /**
+     * THE RESIDUAL THE MOVE LEFT, closed in the same change: reflection can see
+     * that `::new()` is public, static and zero-argument, and cannot see what it
+     * RETURNS. `instances()` used to append whatever came back.
+     *
+     * A factory returning a builder or `null` therefore entered a `list<Tool>` and
+     * failed inside whichever consumer first called a `Tool` method on it — a
+     * defect reported nowhere near its cause.
+     */
+    public function testAFactoryThatDoesNotReturnATheToolIsRefusedAtTheCorpus(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/WrongReturn.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class WrongReturn implements Tool
+            {
+                private function __construct() {}
+
+                public static function new(): ?self
+                {
+                    return null;
+                }
+
+                public function name(): string { return 'wrongreturn'; }
+                public function description(): string { return 'wrongreturn'; }
+                public function inputSchema(): array { return []; }
+                public function execute(array $args): ToolResult { return ToolResult::error('wrongreturn'); }
+            }
+            PHP);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('WrongReturn::new() returned null rather than a Tool');
+
+        BuiltInToolCorpus::instances($this->probeDir, self::PROBE_PREFIX);
     }
 
     /**
      * A `new()` that itself needs arguments is not a zero-argument factory, so
-     * the class is not constructible standalone either — the guard must not be
-     * satisfied by the METHOD NAME alone.
+     * the class is not constructible standalone — the guard must not be satisfied
+     * by the METHOD NAME alone.
+     *
+     * ASSERTED ON THE THROW rather than on the class's absence, for the reason the
+     * two tests above are: this shape is the ordinary consequence of a factory
+     * growing a dependency, and its old answer was to vanish from the corpus.
      */
-    public function testAFactoryThatNeedsArgumentsDoesNotMakeAClassConstructible(): void
+    public function testAFactoryThatNeedsArgumentsIsNotAFactoryAndFailsLoudly(): void
     {
         $this->writeOneRealTool();
         $this->writeProbe('Tools/BuiltIn/NeedsArgs.php', <<<'PHP'
@@ -544,7 +643,12 @@ final class BuiltInToolCorpusTest extends TestCase
             }
             PHP);
 
-        $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $this->scanProbe());
+        $this->assertContains('CorpusProbe\\Tools\\BuiltIn\\NeedsArgs', $this->scanProbe());
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('CorpusProbe\\Tools\\BuiltIn\\NeedsArgs implements Tool but cannot be built');
+
+        BuiltInToolCorpus::instances($this->probeDir, self::PROBE_PREFIX);
     }
 
     /**

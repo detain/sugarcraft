@@ -285,6 +285,22 @@ final class WorktreeManager
      * on the copy and stayed green with this gate deleted, which is how the
      * distinction was found rather than assumed.
      *
+     * AND FOR ONE ROUND THE INCLUDE-FILE GATE HAD A HOLE THE SIZE OF ITS OWN
+     * DEFAULT. It was written `if ($this->repoRoot !== '' && !within(...))`,
+     * skipped on the empty-root branch and justified by "the include file is a
+     * caller-supplied relative path against the process CWD" — false twice over:
+     * the value is `.sugar-crush/config.json`'s, and `$repoRoot = ''` is the
+     * constructor's own default. MEASURED with that pair and a
+     * `worktreeIncludeFile` of `../<a directory beside the CWD>/list`: the outside
+     * file was READ and its line reached `error_log()` through the pattern refusal
+     * below — pinned by
+     * `WorktreeIncludeContainmentTest::testAnIncludeFileEscapingTheCwdIsRefusedWhenThereIsNoRepoRoot`,
+     * which reddens with the old conjunct restored. The gate is now unconditional and
+     * the anchor is the tree the path resolves against, CWD included. What it
+     * costs: a caller with no repo root, standing outside the tree its include
+     * file lives in, no longer reads it — which is the same refusal a repo-rooted
+     * caller has always got.
+     *
      * A refused input is SKIPPED rather than thrown on, for the reason
      * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::list()} skips a refused
      * entry: one bad line in an optional convenience file must not fail worktree
@@ -313,16 +329,42 @@ final class WorktreeManager
             return;
         }
 
-        // The repo root is the boundary only when there IS one. With $repoRoot
-        // empty the include file is a caller-supplied relative path against the
-        // process CWD and there is no repository-chosen component to bound —
-        // the same construction {@see expandPath()} treats as "no repo".
-        if ($this->repoRoot !== '' && !ContainedPath::within($includeFile, $this->repoRoot)) {
+        // THE GATE USED TO BE SKIPPED ENTIRELY WHEN $repoRoot WAS EMPTY, on a
+        // justification that was false in both of its halves: "the include file
+        // is a CALLER-SUPPLIED relative path against the process CWD and there is
+        // no repository-chosen component to bound". It is not caller-supplied —
+        // `worktreeIncludeFile` comes out of `.sugar-crush/config.json` via
+        // {@see WorktreeConfig::new()}, which is the very input the class
+        // doc-block records as repository-chosen — and `$repoRoot = ''` is not an
+        // exotic state but this class's CONSTRUCTOR DEFAULT, reached by
+        // `WorktreeManager::new()` and by `new WorktreeManager($config)`.
+        // MEASURED on this host with `$repoRoot = ''` and
+        // `worktreeIncludeFile: '../outside/list'`: the outside file was READ and
+        // its lines reached `error_log()` through the pattern refusal below —
+        // verbatim the harm this gate's own doc-block says it closes.
+        //
+        // SO THE ANCHOR IS THE TREE THE PATH IS ACTUALLY RESOLVED AGAINST: the
+        // repo root when there is one, and otherwise the process CWD, which is
+        // what a relative path means. `getcwd()` can fail (deleted directory,
+        // permissions); an empty anchor makes {@see ContainedPath} answer false,
+        // so that failure REFUSES rather than skipping — the direction a gate has
+        // to fail in.
+        $anchor = $this->repoRoot !== '' ? $this->repoRoot : (getcwd() ?: '');
+
+        if (!ContainedPath::within($includeFile, $anchor)) {
             error_log(sprintf(
-                'WorktreeManager: refusing worktreeIncludeFile "%s" — it resolves outside the repository root '
-                . '(%s), and a file outside the checkout does not list what this checkout wants copied.',
+                'WorktreeManager: refusing worktreeIncludeFile "%s" — it resolves outside %s (%s), and a file '
+                . 'outside that tree does not list what this worktree wants copied.',
                 $this->config->worktreeIncludeFile,
-                $this->repoRoot,
+                $this->repoRoot !== '' ? 'the repository root' : 'the process working directory',
+                // NAMED, not left as the empty string. And this arm is REACHABLE,
+                // which is the question the round that wrote it forgot to ask about
+                // its own messages: `getcwd()` returns false inside a directory that
+                // has been removed under the process — measured on this host,
+                // `mkdir d; cd d; rmdir d` then `getcwd()` is `bool(false)` — and
+                // that is exactly the launch whose relative include path can no
+                // longer be anchored to anything.
+                $anchor === '' ? '<unresolvable>' : $anchor,
             ));
 
             return;
@@ -344,7 +386,16 @@ final class WorktreeManager
             $patterns = $this->resolveNegations($line, $includeFile);
 
             foreach ($patterns as $pattern) {
-                $this->copyGlob($this->repoRoot, $worktreePath, $pattern);
+                // THE SAME $anchor the include file was judged against, not
+                // `$this->repoRoot`. With an empty repo root the old expression
+                // made `$srcPath` = `'' . '/' . $pattern` — an ABSOLUTE path — and
+                // then refused it against an empty boundary, so every pattern
+                // failed with a message reading `it leaves the repository root ()`.
+                // Failing closed for a reason nobody can act on is still a defect:
+                // a relative pattern from a relative include file means "relative
+                // to the tree this process is standing in", and that is the tree
+                // the gate above already established.
+                $this->copyGlob($anchor, $worktreePath, $pattern);
             }
         }
     }
@@ -421,9 +472,23 @@ final class WorktreeManager
 
         if (!ContainedPath::within($srcPath, $srcRoot) || !self::patternStaysInside($pattern)) {
             error_log(sprintf(
-                'WorktreeManager: refusing .worktreeinclude pattern "%s" — it leaves the repository root (%s) '
-                . 'or the worktree (%s).',
+                'WorktreeManager: refusing .worktreeinclude pattern "%s" — it leaves the source root (%s) or '
+                . 'the worktree (%s).',
                 $pattern,
+                // "the repository root (%s)" is what this said, and with no repo
+                // root it printed `it leaves the repository root ()` — a refusal
+                // naming an operand that is the empty string. Two things were wrong
+                // and only one of them was the wording: the CALLER was passing
+                // `$this->repoRoot` rather than the tree it had actually resolved
+                // the include file against, so the empty case was reachable.
+                //
+                // NO `$srcRoot === ''` ARM HERE, deliberately. It would be a
+                // message branch that cannot fire: this method is private with one
+                // caller, and that caller has already refused the include file
+                // against this same anchor — `ContainedPath::within($file, '')` is
+                // false — so an empty root never reaches this line. An arm guarding
+                // an unreachable state is the twin of the figure that travels
+                // without its domain, and this round found three of those.
                 $srcRoot,
                 $destRoot,
             ));
@@ -465,10 +530,55 @@ final class WorktreeManager
      * An absolute pattern is refused too, though today it merely produces the
      * unreachable `<root>//abs/path`: the guard is about what the string may
      * NAME, not about which concatenation bug currently defuses it.
+     *
+     * ABSOLUTENESS IS TESTED IN EVERY SPELLING THIS METHOD CLAIMS TO JUDGE, and
+     * for one round it was not. The `str_replace('\\', '/')` above treats a
+     * BACKSLASH as a separator, which is the method claiming the Windows domain;
+     * the absoluteness test was `str_starts_with($pattern, '/')` alone, which is
+     * the POSIX half of it. MEASURED, five shapes ALLOWED and one control refused:
+     *
+     *     \etc\passwd                 ALLOWED      /etc/passwd   refused
+     *     \Windows\System32\x         ALLOWED
+     *     C:\Users\victim\.ssh\id_rsa ALLOWED
+     *     C:/Users/x                  ALLOWED
+     *     \                           ALLOWED
+     *
+     * That is worse than a POSIX-only guard would be, because the doc-block
+     * argument for this method's existence is that the LEXICAL guard is the
+     * durable one — {@see ContainedPath::within()} is a two-`realpath()` snapshot
+     * and the write happens later — so on Windows the durable guard was the
+     * defeated one and the racy guard was carrying it alone. The drive-letter
+     * predicate is the same one {@see \SugarCraft\Crush\Support\HomeDirectory::owned()}
+     * uses forty lines from here, deliberately spelled the same way.
+     *
+     * WHAT IT COSTS: a pattern whose first character is a backslash, or that
+     * begins `X:/` or `X:\`, is refused on any host including POSIX ones, where
+     * `\etc` is a legal (if perverse) relative filename. That is the trade a
+     * lexical guard makes — it judges the STRING, not the host — and refusing a
+     * filename nobody commits is cheaper than honouring an absolute path on the
+     * host where it is one.
+     *
+     * WHAT STILL PASSES, stated because the shapes above were found by asking this
+     * question of the previous revision: the DRIVE-RELATIVE spelling `C:x` (no
+     * separator after the colon), which on Windows means "x relative to the
+     * current directory ON DRIVE C" and so can denote a path outside the root.
+     * It is measured ALLOWED here. It is left allowed rather than swept up by
+     * widening the pattern to a bare `[A-Za-z]:` because the predicate is
+     * deliberately the same one
+     * {@see \SugarCraft\Crush\Support\HomeDirectory::owned()} uses, and two
+     * spellings of one absoluteness test is how the two drift. THE RESIDUAL IS
+     * UNVERIFIED, not argued away: this host is POSIX, so whether
+     * `<root>/C:x` reaches the drive-relative path or is rejected by the Windows
+     * filesystem as a colon inside a component could not be driven here. It is a
+     * negative result — an untested case — and not a claim of safety.
      */
     private static function patternStaysInside(string $pattern): bool
     {
-        if ($pattern === '' || str_starts_with($pattern, '/')) {
+        if ($pattern === ''
+            || str_starts_with($pattern, '/')
+            || str_starts_with($pattern, '\\')
+            || preg_match('#^[A-Za-z]:[\\\\/]#', $pattern) === 1
+        ) {
             return false;
         }
 

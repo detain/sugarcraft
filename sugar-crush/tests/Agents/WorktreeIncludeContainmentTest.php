@@ -226,6 +226,177 @@ final class WorktreeIncludeContainmentTest extends TestCase
     }
 
     /**
+     * THE BRANCH THE GATE USED TO SKIP: `$repoRoot === ''`, which is this class's
+     * CONSTRUCTOR DEFAULT and reached by `WorktreeManager::new()`.
+     *
+     * The skip was justified by "the include file is a caller-supplied relative
+     * path against the process CWD and there is no repository-chosen component to
+     * bound" — false in both halves. `worktreeIncludeFile` is
+     * `.sugar-crush/config.json`'s value ({@see WorktreeConfig::new()}), and the
+     * empty root is a default rather than an exotic state. MEASURED against the
+     * pre-fix build with this exact fixture: the outside file was READ and its
+     * line reached `error_log()` through the pattern refusal — verbatim the harm
+     * the gate's own doc-block says it closes.
+     *
+     * DRIVEN THROUGH THE CWD, because that is what the anchor now is when there is
+     * no repo root: the process is moved into a directory the include file's `../`
+     * escapes from.
+     */
+    public function testAnIncludeFileEscapingTheCwdIsRefusedWhenThereIsNoRepoRoot(): void
+    {
+        mkdir($this->tmpRoot . '/elsewhere', 0o700, true);
+        file_put_contents($this->tmpRoot . '/elsewhere/list', "../secret/id_rsa\n");
+
+        $log = $this->tmpRoot . '/error.log';
+        $previousLog = ini_set('error_log', $log);
+        $previousCwd = getcwd();
+        chdir($this->repoRoot);
+
+        try {
+            $manager = new WorktreeManager(
+                new WorktreeConfig(
+                    basePath: $this->tmpRoot . '/trees/',
+                    worktreeIncludeFile: '../elsewhere/list',
+                ),
+                // The default, spelled out: no repo root.
+                '',
+            );
+            $manager->resolveWorktreeInclude($this->worktree);
+        } finally {
+            chdir($previousCwd === false ? sys_get_temp_dir() : $previousCwd);
+            ini_set('error_log', $previousLog === false ? '' : $previousLog);
+        }
+
+        $logged = is_file($log) ? (string) file_get_contents($log) : '';
+
+        $this->assertStringContainsString('refusing worktreeIncludeFile', $logged);
+        $this->assertStringContainsString(
+            'the process working directory',
+            $logged,
+            'the refusal must name the anchor it actually used, not "the repository root"',
+        );
+        $this->assertStringNotContainsString(
+            '../secret/id_rsa',
+            $logged,
+            'the outside list was never read, so none of its lines can have reached the log',
+        );
+        $this->assertStringNotContainsString(
+            self::SECRET,
+            implode("\n", $this->filesUnder($this->tmpRoot . '/trees')),
+        );
+    }
+
+    /**
+     * THE CONTROL for the branch above, and the reason the fix is a gate rather
+     * than a refusal: with no repo root, an include file INSIDE the process
+     * working directory is still read and its pattern still copied.
+     *
+     * Before the fix this case did not work either — `copyGlob()` was handed
+     * `$this->repoRoot`, so `$srcPath` was `'' . '/' . $pattern`, an absolute
+     * path, refused against an empty boundary with a message reading `it leaves
+     * the repository root ()`. So the empty-root branch was ungated for READING
+     * and broken for COPYING; it is now bounded for one and working for the other.
+     */
+    public function testAnIncludeFileInsideTheCwdIsHonouredWhenThereIsNoRepoRoot(): void
+    {
+        file_put_contents($this->repoRoot . '/.env', "CWD-ENV\n");
+        file_put_contents($this->repoRoot . '/.worktreeinclude', ".env\n");
+
+        $previousCwd = getcwd();
+        chdir($this->repoRoot);
+
+        try {
+            (new WorktreeManager(
+                new WorktreeConfig(basePath: $this->tmpRoot . '/trees/'),
+                '',
+            ))->resolveWorktreeInclude($this->worktree);
+        } finally {
+            chdir($previousCwd === false ? sys_get_temp_dir() : $previousCwd);
+        }
+
+        $this->assertFileExists($this->worktree . '/.env');
+        $this->assertStringContainsString('CWD-ENV', (string) file_get_contents($this->worktree . '/.env'));
+    }
+
+    /**
+     * The pattern guard's WINDOWS domain, which it claimed by normalising `\` to
+     * `/` as a separator while testing absoluteness on `/` alone.
+     *
+     * MEASURED ALLOWED before the fix, every row below; `/etc/passwd` was refused,
+     * which is why the POSIX half read as correct. This matters more than a
+     * missing case because the doc-block's argument for keeping this guard is that
+     * the LEXICAL test is the durable one — `ContainedPath::within()` is a
+     * two-`realpath()` snapshot and the write happens after it — so on Windows the
+     * durable guard was the defeated one.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function windowsAbsolutePatterns(): array
+    {
+        return [
+            'a backslash-rooted path' => ['\\etc\\passwd'],
+            'a backslash-rooted system path' => ['\\Windows\\System32\\config'],
+            'a drive letter with a backslash' => ['C:\\Users\\victim\\.ssh\\id_rsa'],
+            'a drive letter with a forward slash' => ['C:/Users/victim/.ssh/id_rsa'],
+            'a bare backslash' => ['\\'],
+            'the POSIX control, which was already refused' => ['/etc/passwd'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('windowsAbsolutePatterns')]
+    public function testAnAbsolutePatternIsRefusedInEverySpellingTheGuardNormalises(string $pattern): void
+    {
+        $guard = new \ReflectionMethod(WorktreeManager::class, 'patternStaysInside');
+
+        $this->assertFalse($guard->invoke(null, $pattern));
+    }
+
+    /**
+     * The controls for the row above, so it cannot pass against a guard that
+     * refuses everything: a relative pattern, a name that merely starts with
+     * dots, and an inner `..` that does not escape.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function patternsThatMustStillBeAllowed(): array
+    {
+        return [
+            'an ordinary relative path' => ['config/app.php'],
+            'a leading double dot in a name' => ['..dotfile'],
+            'a double dot inside a name' => ['a..b/c'],
+            'an inner traversal that stays inside' => ['sub/../ok'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('patternsThatMustStillBeAllowed')]
+    public function testALegitimateRelativePatternIsStillAllowed(string $pattern): void
+    {
+        $guard = new \ReflectionMethod(WorktreeManager::class, 'patternStaysInside');
+
+        $this->assertTrue($guard->invoke(null, $pattern));
+    }
+
+    /**
+     * THE RESIDUAL, asserted as one rather than described: the drive-RELATIVE
+     * spelling `C:x` — no separator after the colon — is still ALLOWED, because
+     * the predicate is deliberately the same as
+     * {@see \SugarCraft\Crush\Support\HomeDirectory::owned()}'s and two spellings
+     * of one absoluteness test is how the two drift.
+     *
+     * A test that pins a known gap is how the gap stays known. Whether
+     * `<root>/C:x` can reach drive C's current directory on Windows, or is
+     * rejected there as a colon inside a path component, could NOT be measured on
+     * this POSIX host — so this asserts the guard's answer and makes no claim
+     * about the consequence.
+     */
+    public function testTheDriveRelativeSpellingIsAKnownGapAndIsAllowed(): void
+    {
+        $guard = new \ReflectionMethod(WorktreeManager::class, 'patternStaysInside');
+
+        $this->assertTrue($guard->invoke(null, 'C:x'), 'a known, documented gap — see patternStaysInside()');
+    }
+
+    /**
      * `..` is a traversal only as a whole SEGMENT — a substring guard would
      * refuse these two legitimate names.
      *

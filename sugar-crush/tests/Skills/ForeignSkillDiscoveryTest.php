@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Skills;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\ForeignSkillDiscovery;
 use SugarCraft\Crush\Skills\SkillSource;
+use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
@@ -303,5 +304,74 @@ SKILL
         $this->useHomeSandbox($home, create: false);
 
         $this->assertSame(['mine'], array_keys((new ForeignSkillDiscovery())->{$method}($this->tempDir . '/project')));
+    }
+
+    /**
+     * THE ANCHOR HAS TO BE AN ESTABLISHED HOME, and it was `HomeDirectory::path()`
+     * — whose fallback is `sys_get_temp_dir()`, mode 1777 — while the comment
+     * beside it claimed "`$HOME` is the anchor that makes 'the user's own tree'
+     * true rather than assumed". `path()` establishes nothing, so the tree and the
+     * boundary it was judged against were both derived from a home nobody had
+     * vouched for, and the containment check compared a directory to itself.
+     *
+     * The sibling changed in the same commit,
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::userDir()},
+     * correctly used {@see \SugarCraft\Crush\Support\HomeDirectory::owned()}: ONE
+     * SENTENCE, TRUE IN ONE FILE AND FALSE IN THE OTHER.
+     *
+     * MEASURED with `HOME` at a mode-0777 directory holding
+     * `.claude/skills/leak/SKILL.md`: off `path()` the skill was discovered and its
+     * body — `FOREIGN-USER-TIER-BODY sk-live-DEADBEEF` — was in the registry bound
+     * for the model's prompt; off `owned()` the tier is absent entirely.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignUserSkillTiers')]
+    public function testAWorldWritableHomeContributesNoUserSkills(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/loose-home';
+        mkdir($home . '/' . $relative, 0o777, true);
+        $this->createSkillFile($home . '/' . $relative, 'notmine', 'ANOTHER-LOCAL-USERS-SKILL');
+        chmod($home, 0o777);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertNull(
+            HomeDirectory::owned(),
+            'the fixture is only meaningful while this home is one owned() refuses',
+        );
+        $this->assertSame($home, HomeDirectory::path(), 'and while path() still hands it back');
+
+        $this->assertSame([], array_keys((new ForeignSkillDiscovery())->{$method}($this->tempDir . '/project')));
+    }
+
+    /**
+     * A home `owned()` refuses costs the USER tier and not the PROJECT one, which
+     * is the whole reason the tier is dropped rather than the discovery failing:
+     * a project's foreign skills are anchored to the checkout and do not depend on
+     * a home at all.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignProjectSkillTiers')]
+    public function testAProjectTierSurvivesAHomeThatCannotBeEstablished(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/loose-home-2';
+        mkdir($home, 0o777, true);
+        chmod($home, 0o777);
+
+        $project = $this->tempDir . '/project-survives';
+        mkdir($project . '/' . $relative, 0o755, true);
+        $this->createSkillFile($project . '/' . $relative, 'theirs', 'FROM-THE-CHECKOUT');
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertNull(HomeDirectory::owned());
+        $this->assertSame(['theirs'], array_keys((new ForeignSkillDiscovery())->{$method}($project)));
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function foreignProjectSkillTiers(): array
+    {
+        return [
+            'claude' => ['discoverClaude', '.claude/skills'],
+            'opencode' => ['discoverOpencode', '.opencode/skills'],
+        ];
     }
 }

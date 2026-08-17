@@ -49,9 +49,21 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
     }
 
     /**
-     * TEN callers, in ten files, one call each — the figure the doc-block's
+     * EIGHT callers, in eight files, one call each — the figure the doc-block's
      * paragraph rests on. Named per-file so a dropped or added call says which
      * file it was in.
+     *
+     * IT WAS TEN, and the two departures are a security change rather than a
+     * tidy-up. `Commands\CommandLoader` derived its USER tier's directory from
+     * `path()` and passed no anchor at all, so a
+     * `~/.sugar-crush/commands -> <outside>` link put outside file bodies into
+     * `CommandSpec::$template` — the prompt. `Skills\ForeignSkillDiscovery`
+     * derived its user tier's directory AND the anchor it was held inside from
+     * `path()`, i.e. it anchored a tree to a resolution that establishes nothing;
+     * its sibling `Agents\ForeignAgentPresetRegistry`, changed in the same
+     * earlier commit, had used `owned()` for the same tier. Both are now on
+     * {@see HomeDirectory::owned()} and both refuse the tier outright when it
+     * answers null.
      */
     public function testTheCallerInventory(): void
     {
@@ -62,14 +74,38 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
                 'src/Agents/Teammate.php' => 1,
                 'src/Agents/WorktreeManager.php' => 1,
                 'src/Cli/Bootstrap.php' => 1,
-                'src/Commands/CommandLoader.php' => 1,
-                'src/Skills/ForeignSkillDiscovery.php' => 1,
                 'src/Skills/SkillDiscovery.php' => 1,
                 'src/Skills/SkillLoader.php' => 1,
                 'src/Workflows/WorkflowRegistry.php' => 1,
             ],
             $this->callersPerFile(),
         );
+    }
+
+    /**
+     * THE TWO READERS THAT MOVED THIS ROUND, pinned by name for the reason
+     * {@see testTheForeignMemoryImporterIsOffTheStandInResolution()} pins the
+     * previous one: an inventory that only counts cannot say a migration happened
+     * for the right reason, and both of these were ANCHORING a containment check
+     * on the stand-in resolution.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function migratedReaders(): array
+    {
+        return [
+            'the user commands directory, whose bodies become prompts' => ['src/Commands/CommandLoader.php'],
+            'the foreign user skill trees, and their anchor' => ['src/Skills/ForeignSkillDiscovery.php'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('migratedReaders')]
+    public function testTheMigratedReadersAreOffTheStandInResolution(string $file): void
+    {
+        $source = (string) file_get_contents($this->root . '/' . $file);
+
+        $this->assertSame(0, $this->countCalls($source, 'HomeDirectory::path()'));
+        $this->assertGreaterThan(0, $this->countCalls($source, 'HomeDirectory::owned()'));
     }
 
     /**
@@ -202,6 +238,14 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
         $this->assertIsInt($start, 'the PROMPT-BEARING list heading');
         $this->assertIsInt($end, 'the paragraph that closes the lists');
         $this->assertStringContainsString('STORE LOCATION', $doc, 'the second list heading');
+
+        // THE THIRD HEADING IS ASSERTED FOR THE SAME REASON THE SECOND IS, and it
+        // is new: `WorkflowRegistry` was filed under STORE LOCATION with the note
+        // "the fallback is a convenience, not a trust decision", which is exactly
+        // false of the one directory in this package whose `.php` files are
+        // `require`d. A heading that silently disappeared would take its
+        // classification with it and leave the reader with the count.
+        $this->assertStringContainsString('EXECUTED CONTENT', $doc, 'the third list heading');
 
         $lists = substr($doc, (int) $start, (int) $end - (int) $start);
 

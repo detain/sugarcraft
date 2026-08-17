@@ -10,11 +10,52 @@ namespace SugarCraft\Crush\Support;
  * {@see HomeDirectory} is the one home-directory resolution: two
  * implementations of a security predicate is how the second one stays wrong.
  *
- * EIGHT TIERS, and this paragraph said FIVE, then SEVEN — which is the same
- * failure as the counts below, in the sentence that frames them. The three the
- * FIVE omitted were not oversights of wording: they were three read paths with
- * NO containment at all, in two DORMANT classes whose doc-blocks honestly said
- * they were unwired, and "unwired" was doing the work "gated" should have been.
+ * THERE IS NO TIER COUNT AT THE HEAD OF THIS PARAGRAPH ANY MORE, and its removal
+ * is the finding rather than a tidy-up. It said FIVE, then SEVEN, then EIGHT, and
+ * each revision was wrong within a round or two — because "tier" was never
+ * defined in a way that survived the next subsystem. The five it started with
+ * were `native workflows, native skills, native agent presets, native custom
+ * commands, instruction files`, which counts SUBSYSTEMS; the three that were
+ * missing ({@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}'s
+ * `{projectRoot}/.claude/agents` AND `{projectRoot}/.opencode/agents`, and
+ * {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}'s
+ * `{projectRoot}/.opencode/memory`) count DIRECTORIES in one place and subsystems
+ * in another; and the eighth ({@see \SugarCraft\Crush\Agents\WorktreeConfig}
+ * with {@see \SugarCraft\Crush\Agents\WorktreeManager}) counted two files as one.
+ * The TENTH and ELEVENTH escapes, below, were then USER tiers of subsystems
+ * already counted, so the number could not move at all while two live paths were
+ * open. A figure whose domain shifts to keep it true is worse than no figure. The
+ * counts that remain here are per-file and derived — asserted by
+ * {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest} — and the
+ * read/execute paths themselves are enumerated and each required to name its gate
+ * by {@see \SugarCraft\Crush\Tests\Support\ReadPathCensusTest}, which is the
+ * instrument that can see an absence.
+ *
+ * The three the FIVE omitted were not oversights of wording: they were three read
+ * paths with NO containment at all, in two DORMANT classes whose doc-blocks
+ * honestly said they were unwired, and "unwired" was doing the work "gated"
+ * should have been.
+ *
+ * THE TENTH WAS ARBITRARY CODE EXECUTION AND ITS INVENTORY ROW WAS GREEN.
+ * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry}'s USER tier — the directory
+ * whose `.php` files it `require`s — had no call to this class at all, while the
+ * file's derived row read `2` for its project tier's two. The premise written in
+ * its constructor was that the user's own directory needs no confinement because
+ * "a link inside it is the user pointing at their own file"; MEASURED on this
+ * host with `$HOME` mode 0700, owned, and no `.git` anywhere, two spellings each
+ * executed arbitrary PHP as the launching uid through `/workflow run`:
+ *
+ *     ~/.sugar-crush/workflows -> <outside>     load('pwned') EXECUTED uid=1000
+ *     workflows/entry.php -> <outside>/x.php    load('entry') EXECUTED uid=1000
+ *
+ * The ELEVENTH is the same premise in
+ * {@see \SugarCraft\Crush\Commands\CommandLoader::loadUserCommands()}, which
+ * called `loadFromDirectory()` with the anchor argument OMITTED while its project
+ * twin passed one: an outside file's body reached `CommandSpec::$template`, the
+ * prompt, with `refusals=[]`. Its per-entry compare — counted in the row below —
+ * could not help, because it resolves the boundary directory too and travels with
+ * a link on it. Both are closed by giving the user tier the anchor its project
+ * twin always had.
  *
  * THE EIGHTH IS {@see \SugarCraft\Crush\Agents\WorktreeConfig}'s, and it is the
  * one worth reading twice, because it was invisible to BOTH of the instruments
@@ -53,9 +94,14 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - TWENTY-THREE call sites in NINE files ask this class:
- *     {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (2 — entry, directory
- *     anchor), {@see \SugarCraft\Crush\Skills\SkillLoader} (3 — entry, directory
+ *   - TWENTY-SIX call sites in TEN files ask this class, the tenth being
+ *     {@see \SugarCraft\Crush\Providers\ProviderFactory} (2 — the config DIRECTORY
+ *     against the tree containing the package, and `config.dev.json` against that
+ *     directory), which held the SAME `__DIR__`-relative, containment-free
+ *     construction as `WorktreeConfig`'s and appeared on neither inventory:
+ *     {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (3 — entry, PROJECT
+ *     directory anchor, USER directory anchor; the third is the TENTH read path,
+ *     see below), {@see \SugarCraft\Crush\Skills\SkillLoader} (3 — entry, directory
  *     anchor, skill asset), {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}
  *     (3 — the same pair, plus `load()`'s single-file arm),
  *     {@see \SugarCraft\Crush\Commands\CommandLoader} (2),

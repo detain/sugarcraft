@@ -32,6 +32,8 @@ use SugarCraft\Crush\Commands\CommandLoader;
  */
 final class CommandLoaderContainmentTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $tempDir;
 
     protected function setUp(): void
@@ -44,6 +46,7 @@ final class CommandLoaderContainmentTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
         $this->removeDirectory($this->tempDir);
 
         parent::tearDown();
@@ -123,25 +126,116 @@ final class CommandLoaderContainmentTest extends TestCase
     }
 
     /**
-     * The USER tier is anchored to nothing, for the reason the agent-preset and
-     * skills tiers do not anchor theirs: nobody but the user chose where
-     * `~/.sugar-crush/commands` points, and linking it at another tool's command
-     * directory is a working layout rather than an escape.
+     * THE ELEVENTH PATH, inverted. This test used to assert the escape, under the
+     * name `testAnUnanchoredDirectoryMayBeALinkOutOfWhereverItSits` and the
+     * justification "nobody but the user chose where `~/.sugar-crush/commands`
+     * points, and linking it at another tool's command directory is a working
+     * layout rather than an escape" — the same premise
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()} had already
+     * measured false, still standing here because `loadUserCommands()` omitted the
+     * anchor argument its project twin passed.
      *
-     * Driven through {@see CommandLoader::loadFromDirectory()} with no anchor,
-     * which is exactly what `loadUserCommands()` does.
+     * MEASURED before the fix, `$HOME` mode 0700 and owned, with
+     * `~/.sugar-crush/commands -> <outside>`: `names=["leak"]` and
+     * `template="ELEVENTH-ESCAPE-BODY sk-live-CAFEBABE"` — an outside file's body
+     * as the PROMPT a slash command sends, with no refusal recorded anywhere.
      */
-    public function testAnUnanchoredDirectoryMayBeALinkOutOfWhereverItSits(): void
+    public function testAUserCommandsDirectoryLinkedOutOfHomeIsRefused(): void
     {
         $home = $this->tempDir . '/home';
-        mkdir($home . '/.sugar-crush', 0755, true);
-        mkdir($home . '/.claude/commands', 0755, true);
+        $outside = $this->tempDir . '/outside-commands';
+        mkdir($home . '/.sugar-crush', 0o700, true);
+        mkdir($outside, 0o700, true);
+        $this->writeCommand($outside . '/leak.md', 'leak', 'SENTINEL-PROMPT-BODY');
+        $this->assertTrue(symlink($outside, $home . '/.sugar-crush/commands'));
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertSame([], array_keys((new CommandLoader())->loadUserCommands()));
+    }
+
+    /**
+     * THE CONTROL: a real `~/.sugar-crush/commands` inside a home this process can
+     * establish as the user's is still read. Without it the test above passes
+     * against a build that simply stopped loading user commands.
+     */
+    public function testARealUserCommandsDirectoryInsideHomeIsStillRead(): void
+    {
+        $home = $this->tempDir . '/good-home';
+        mkdir($home . '/.sugar-crush/commands', 0o700, true);
+        $this->writeCommand($home . '/.sugar-crush/commands/mine.md', 'mine', 'MY BODY');
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertSame(['mine'], array_keys((new CommandLoader())->loadUserCommands()));
+    }
+
+    /**
+     * AND WHAT THE ANCHOR COSTS: the layout the refuted justification named —
+     * `~/.sugar-crush/commands -> ~/.claude/commands`, a link elsewhere INSIDE the
+     * home — still works, because the anchor is `$HOME` and not the directory's
+     * own parent.
+     *
+     * So the cost of closing the eleventh path is narrower than the sentence it
+     * replaced implied: what stops working is a link OUT of the home (a network
+     * share, `/opt/team-commands`), not a link between the user's own directories.
+     */
+    public function testAUserCommandsLinkElsewhereInsideHomeStillWorks(): void
+    {
+        $home = $this->tempDir . '/linked-home';
+        mkdir($home . '/.sugar-crush', 0o700, true);
+        mkdir($home . '/.claude/commands', 0o700, true);
         $this->writeCommand($home . '/.claude/commands/mine.md', 'mine', 'MY BODY');
         $this->assertTrue(symlink($home . '/.claude/commands', $home . '/.sugar-crush/commands'));
 
-        $commands = (new CommandLoader())->loadFromDirectory($home . '/.sugar-crush/commands');
+        $this->useHomeSandbox($home, create: false);
 
-        $this->assertArrayHasKey('mine', $commands);
+        $this->assertSame(['mine'], array_keys((new CommandLoader())->loadUserCommands()));
+    }
+
+    /**
+     * A home {@see \SugarCraft\Crush\Support\HomeDirectory::owned()} refuses gets
+     * NO user commands, rather than commands anchored to a stand-in.
+     *
+     * `path()` — what this loader used to build the directory from — falls back to
+     * `sys_get_temp_dir()`, mode 1777, and accepts a world-writable or
+     * foreign-owned `$HOME` as it stands. Both halves matter: the directory is
+     * built from the OWNED home, and there is no tier at all when there is none.
+     */
+    public function testAWorldWritableHomeYieldsNoUserCommands(): void
+    {
+        $home = $this->tempDir . '/loose-home';
+        mkdir($home . '/.sugar-crush/commands', 0o777, true);
+        $this->writeCommand($home . '/.sugar-crush/commands/mine.md', 'mine', 'NOT MINE');
+        chmod($home, 0o777);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertSame([], array_keys((new CommandLoader())->loadUserCommands()));
+    }
+
+    /**
+     * The unanchored arm of {@see CommandLoader::loadFromDirectory()} still
+     * exists, and this pins WHAT IT IS: a caller's explicit choice to take the
+     * per-entry boundary alone, not a policy this class holds about user
+     * directories. No caller in `src/` passes it any more.
+     *
+     * Kept as a test rather than deleted with the escape it used to justify,
+     * because the parameter is part of the public contract and a contract with no
+     * test is how the next caller learns the wrong lesson from the fix above.
+     */
+    public function testTheUnanchoredArmIsStillOfferedAndTakesTheEntryBoundaryOnly(): void
+    {
+        $dir = $this->tempDir . '/wherever';
+        $outside = $this->tempDir . '/outside-unanchored';
+        mkdir($this->tempDir . '/holder', 0o755, true);
+        mkdir($outside, 0o755, true);
+        $this->writeCommand($outside . '/mine.md', 'mine', 'MY BODY');
+        $this->assertTrue(symlink($outside, $dir));
+
+        $commands = (new CommandLoader())->loadFromDirectory($dir);
+
+        $this->assertArrayHasKey('mine', $commands, 'unanchored means the directory link is honoured');
     }
 
     /**

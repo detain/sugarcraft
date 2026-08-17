@@ -1133,12 +1133,22 @@ PHP);
     }
 
     /**
-     * The user's OWN tier is not confined. It is the directory whose `.php`
-     * files this class `require`s, so a link inside it is the user pointing at
-     * their own file rather than repository content reaching for a path the
-     * session happens to be able to read.
+     * THIS TEST USED TO PIN THE ESCAPE, and it is inverted rather than deleted
+     * because its old name and doc-block are the evidence. It read: "The user's
+     * OWN tier is not confined. It is the directory whose `.php` files this class
+     * `require`s, so a link inside it is the user pointing at their own file
+     * rather than repository content reaching for a path the session happens to
+     * be able to read" — and asserted that `kept.yaml -> <outside>` loaded.
+     *
+     * The premise was measured false (see the constructor: a tarball carries a
+     * symlink and carries no `.git`, and ownership cannot answer who chose where
+     * a link points), and the same directory's `.php` files reach `require`. So
+     * the entry is now confined in BOTH tiers, and this is the COST — a
+     * user-authored link out of their own workflows directory stops resolving.
+     * {@see \SugarCraft\Crush\Tests\Workflows\WorkflowUserTierContainmentTest}
+     * drives the code-execution half.
      */
-    public function testTheUsersOwnTierStillFollowsASymlinkOutOfItsDirectory(): void
+    public function testTheUsersOwnTierRefusesASymlinkOutOfItsDirectory(): void
     {
         [$userDir] = $this->twoTierDirs();
 
@@ -1149,17 +1159,40 @@ PHP);
 
         $registry = new WorkflowRegistry($userDir);
 
-        $this->assertSame(['kept'], $registry->list());
-        $this->assertSame('Mine, elsewhere', $registry->load('kept')->description);
+        $this->assertSame([], $registry->list(), 'an entry resolving outside its own directory is not listed');
+        $this->expectException(WorkflowNotFoundException::class);
+        $registry->load('kept');
+    }
+
+    /**
+     * The control for the test above, so it cannot pass against a build that
+     * refused every symlink in the user's tier: a link whose target is INSIDE the
+     * directory still resolves, exactly as it does for the project tier.
+     */
+    public function testAUserTierSymlinkThatStaysInsideTheDirectoryStillLoads(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+
+        file_put_contents($userDir . '/real.yaml', "name: aliased\ndescription: Mine, here\nstages: []\n");
+        $this->assertTrue(symlink($userDir . '/real.yaml', $userDir . '/aliased.yaml'));
+
+        $registry = new WorkflowRegistry($userDir);
+
+        $this->assertSame(['aliased', 'real'], $registry->list());
+        $this->assertSame('Mine, here', $registry->load('aliased')->description);
     }
 
     /**
      * When ONE directory is both tiers — a session rooted at the user's own
-     * home — the project tier's confinement is what applies. The strict answer,
-     * deliberately: "is this repository content?" cannot be told apart there,
-     * and the safe reading of an ambiguous case is the strict one. Documented on
-     * the constructor; pinned here so the dedupe in yamlDirectories() cannot be
-     * "tidied" into keeping the unconfined entry.
+     * home — the entry is confined to it.
+     *
+     * THIS USED TO BE THE TIE-BREAK TEST and is now a plain confinement one, which
+     * is worth saying rather than leaving the name to imply a distinction that has
+     * gone: both tiers confine their entries, so the dedupe in
+     * `yamlDirectories()` no longer decides a policy question here — only which
+     * ANCHOR the directory itself was judged against, which this fixture does not
+     * exercise. What it still pins is that a collided directory does not lose the
+     * per-entry check, which is the direction a "tidy" of the dedupe would break.
      */
     public function testWhenBothTiersNameOneDirectoryTheStricterTierWins(): void
     {
@@ -1674,9 +1707,15 @@ PHP);
      * BOTH tiers. That is invisible to every other test in this file, because no
      * other one puts a REFUSED directory in both tiers at once. Here `$shared`
      * is the user's own workflows directory AND the configured project one, and
-     * it resolves outside the anchor — so the project tier drops it and the
-     * dedupe in `yamlDirectories()` must add it back under the user tier's
-     * unconfined reading.
+     * it resolves outside the PROJECT anchor — so the project tier drops it and
+     * `yamlDirectories()` must offer it to `readableUserDir()`, which judges the
+     * same directory against the user's home instead of the checkout (here,
+     * with no `$userHome` passed, against its own parent).
+     *
+     * "UNDER THE USER TIER'S UNCONFINED READING" is what this doc-block used to
+     * say, and that tier is no longer unconfined: the entries of a directory added
+     * back this way are confined to it exactly as a project tier's are. What is
+     * still pinned is that the directory is added back AT ALL.
      */
     public function testACollidedDirectoryRefusedAsTheProjectTierIsStillReadAsTheUserTier(): void
     {

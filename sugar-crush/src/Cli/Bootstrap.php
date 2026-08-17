@@ -147,11 +147,13 @@ final class Bootstrap
     private static array $reportedSkillSkips = [];
 
     /**
-     * Every project-tier directory this launch refused to read, keyed by the
-     * path as configured — see {@see reportProjectTierRefusals()}.
+     * Every directory this launch refused to read, keyed by the path as
+     * configured — see {@see reportProjectTierRefusals()}.
      *
-     * THREE subsystems feed it — the count was two for one round after a third
-     * arrived: the workflow registry
+     * "PROJECT-TIER" IS NOW NARROWER THAN THE CONTENTS, and the name is kept
+     * while the claim is corrected rather than the reverse. THREE subsystems feed
+     * it — the count was two for one round after a third arrived: the workflow
+     * registry
      * ({@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()}),
      * the skill loader
      * ({@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()}) and
@@ -159,6 +161,20 @@ final class Bootstrap
      * ({@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()}),
      * merged in {@see agentPresets()} on both its return and its degradation
      * paths.
+     *
+     * FOUR SEAMS, THEREFORE, NOT THREE: the workflow registry exposes a SECOND
+     * one, {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::userTierRefusal()},
+     * drained in {@see workflowEngine()}. Its subject is `~/.sugar-crush/workflows`
+     * — the user's OWN directory, whose location no repository chose — so it is
+     * the one entry here that is not a project tier. It is drained into this map
+     * anyway, because the map's real subject is "directories this launch will not
+     * read, and why", the notice that prints it is worded `ignoring <path> —
+     * <reason>`, and the user tier is the tier whose files are `require`d: a
+     * refusal there costs the user workflows they wrote themselves and must be
+     * the LOUDEST entry, not an absent one. Renaming the collector would touch
+     * every reader of {@see projectTierRefusals()} and is not this change-set;
+     * the mismatch is recorded here instead of being left for the next reader to
+     * infer from the values.
      *
      * FOUR OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
      * is named rather than counted, because "three feeders" quietly becoming
@@ -403,8 +419,10 @@ final class Bootstrap
     {
         [$provider, $model] = self::selectedProviderLabel();
 
+        $userConfigDir = self::trustedConfigDirPath();
+
         $registry = new WorkflowRegistry(
-            self::trustedConfigDirPath() . '/workflows',
+            $userConfigDir . '/workflows',
             $root === null ? null : rtrim($root, '/') . '/.sugar-crush/workflows',
             // The root is passed, not merely used to build the path above,
             // because it is the boundary the project workflows DIRECTORY is
@@ -414,6 +432,18 @@ final class Bootstrap
             // `.sugar-crush -> /elsewhere` walks straight past. See
             // {@see WorkflowRegistry::readableProjectDir()}.
             projectRoot: $root,
+            // THE SAME ANCHOR, FOR THE TIER THAT IS `require`d, and the reason it
+            // is passed rather than left to the registry's parent-directory
+            // fallback is the reason $root above is: the fallback catches a link
+            // AT `workflows` and walks past one at `.sugar-crush`. Derived from
+            // the ONE trusted resolution the directory itself came from — the
+            // same construction {@see agentPresetTiers()} uses — so the workflows
+            // directory and the home it is held inside can never be two
+            // different homes. Measured before this existed: a tarball-delivered
+            // `~/.sugar-crush/workflows -> <outside>` had `/workflow run` execute
+            // arbitrary PHP as the launching uid; see
+            // {@see WorkflowRegistry::__construct()}.
+            userHome: \dirname($userConfigDir),
         );
 
         // Asked EAGERLY, here, rather than left for the first `/workflow list`
@@ -424,6 +454,17 @@ final class Bootstrap
         $refusal = $registry->projectTierRefusal();
         if ($refusal !== null && $registry->projectWorkflowsPath() !== null) {
             self::$projectTierRefusals[$registry->projectWorkflowsPath()] = $refusal;
+        }
+
+        // AND THE USER TIER'S, which is the one refusal in this collector that is
+        // not about a repository-chosen directory — see the collector's own
+        // doc-block for why it is drained here anyway. A user whose own
+        // `~/.sugar-crush/workflows` this launch will not `require` out of has
+        // otherwise nothing at all telling them so: `list()` is simply shorter and
+        // the not-found message names a directory the loader never opened.
+        $userRefusal = $registry->userTierRefusal();
+        if ($userRefusal !== null) {
+            self::$projectTierRefusals[$registry->workflowsPath()] = $userRefusal;
         }
 
         return new WorkflowEngine(
@@ -1047,8 +1088,15 @@ final class Bootstrap
             $providers[$type] = $factory->defaultConfig($type);
         }
 
-        $configPath = ProviderFactory::defaultConfigPath();
-        if (is_file($configPath)) {
+        // readableDefaultConfigPath(), NOT defaultConfigPath(): this reads the
+        // package's own `__DIR__`-relative `.sugar-crush/config.dev.json` AT LAUNCH,
+        // and under a composer install that file arrives with the dependency rather
+        // than being chosen by this session. See
+        // {@see ProviderFactory::readableDefaultConfigPath()} for the two boundaries
+        // and for why an ungated `__DIR__` climb is the same read path
+        // {@see \SugarCraft\Crush\Agents\WorktreeConfig} was closed for.
+        $configPath = ProviderFactory::readableDefaultConfigPath();
+        if ($configPath !== null && is_file($configPath)) {
             $contents = file_get_contents($configPath);
             $data = $contents !== false ? json_decode($contents, true) : null;
             if (is_array($data) && is_array($data['providers'] ?? null)) {

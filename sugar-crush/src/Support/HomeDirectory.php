@@ -62,7 +62,8 @@ final class HomeDirectory
      * WHICH READERS ARE STILL ON IT — the list below is ASSERTED against a
      * derivation over `src/`, not maintained by hand, and the previous hand list
      * is why. It claimed to be "every remaining reader named by grep" and was
-     * wrong in three directions at once: it named NINE where `grep` finds TEN;
+     * wrong in three directions at once: it named NINE where `grep` found TEN at
+     * that revision (EIGHT at this one, the two departures named below);
      * it named {@see \SugarCraft\Crush\Workflows\WorkflowEngine}, which does not
      * call this at all (its only mention is a `{@see}`, and the real caller is
      * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry}); and it omitted
@@ -77,24 +78,55 @@ final class HomeDirectory
      * fails in BOTH directions — a name here that does not call it, and a caller
      * in `src/` that is not named here.
      *
-     * PROMPT-BEARING (the resulting bodies go in front of the model), four:
+     * PROMPT-BEARING (the resulting bodies go in front of the model), two:
      * {@see \SugarCraft\Crush\Skills\SkillLoader},
-     * {@see \SugarCraft\Crush\Skills\SkillDiscovery},
-     * {@see \SugarCraft\Crush\Skills\ForeignSkillDiscovery},
-     * {@see \SugarCraft\Crush\Commands\CommandLoader}.
+     * {@see \SugarCraft\Crush\Skills\SkillDiscovery}.
      *
-     * STORE LOCATION (the fallback is a convenience, not a trust decision), six:
+     * STORE LOCATION (the fallback is a convenience, not a trust decision), five:
      * {@see \SugarCraft\Crush\Agents\Team},
      * {@see \SugarCraft\Crush\Agents\TeamManager},
      * {@see \SugarCraft\Crush\Agents\Teammate},
-     * {@see \SugarCraft\Crush\Agents\WorktreeManager},
-     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (its `~` expansion) and
+     * {@see \SugarCraft\Crush\Agents\WorktreeManager} and
      * {@see \SugarCraft\Crush\Cli\Bootstrap} (its `homePath()`, which
      * {@see \SugarCraft\Crush\Cli\Bootstrap::trustedConfigDirPath()} deliberately
      * does NOT go through).
      *
-     * The first group is the one that should migrate; it is four subsystems with
-     * their own suites and it is not this change-set.
+     * EXECUTED CONTENT, one, and it was filed under STORE LOCATION for a round —
+     * a figure travelling without its domain, which is the defect class this
+     * whole doc-block exists to remove:
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (its `~` expansion).
+     * That is not a store location. It locates the ONLY directory in this package
+     * whose contents are `require`d — {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::load()}
+     * runs a `.php` workflow's code — so "the fallback is a convenience, not a
+     * trust decision" is exactly false of it: under the `sys_get_temp_dir()`
+     * fallback a different local user can pre-create
+     * `/tmp/.sugar-crush/workflows/deploy.php` and own the session the moment its
+     * owner types `/workflow run deploy`.
+     *
+     * WHY IT IS STILL ON THIS RESOLUTION, since the classification is the
+     * argument and not an excuse. The registry's `~` expansion is not how
+     * production reaches that directory: {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()}
+     * passes an ABSOLUTE path derived from
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::trustedConfigDirPath()}, which is
+     * built on {@see owned()} and refuses the launch outright when this process
+     * cannot establish whose home it is in — so the `~` arm is reached only by a
+     * DEFAULT-constructed registry, which nothing in `src/` builds. Moving that
+     * one expansion to {@see owned()} would give the class two home resolutions
+     * with different failure modes, which is the half-migration this class's
+     * opening paragraph records as worse than either half. The residual is
+     * therefore: a caller outside `src/` that default-constructs the registry
+     * inherits the stand-in home. It is stated here and again on
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::__construct()}'s
+     * `$userHome`, where the containment anchor that bounds the rest of the
+     * escape is documented.
+     *
+     * The first group is the one that should migrate; two of its four
+     * left in the round that wrote this sentence
+     * ({@see \SugarCraft\Crush\Commands\CommandLoader} and
+     * {@see \SugarCraft\Crush\Skills\ForeignSkillDiscovery}, both now on
+     * {@see owned()} — the second because it was ANCHORING a user tier to a
+     * resolution that establishes nothing). The two that remain are two
+     * subsystems with their own suites and it is not this change-set.
      */
     public static function path(): string
     {

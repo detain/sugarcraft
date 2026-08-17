@@ -20,10 +20,15 @@ use SugarCraft\Crush\Support\HomeDirectory;
  *
  * Everything walked here is user-controlled: paths are resolved and
  * containment-checked before reading through {@see ContainedPath} — the entry
- * against the directory it was listed from, and the project directory itself
- * against the checkout that named it — and a file that fails to parse is
- * logged and skipped rather than aborting discovery, so one malformed
- * command cannot make every other command disappear.
+ * against the directory it was listed from, and EACH TIER'S DIRECTORY against
+ * the tree that named it (the checkout for a project's, `$HOME` for the user's)
+ * — and a file that fails to parse is logged and skipped rather than aborting
+ * discovery, so one malformed command cannot make every other command
+ * disappear.
+ *
+ * THE USER TIER'S DIRECTORY ANCHOR IS NEW and closes a measured escape rather
+ * than tidying a symmetry; {@see loadUserCommands()} carries what was measured
+ * and what the fix costs.
  *
  * NOT YET REACHABLE FROM bin/sugarcrush: nothing constructs a CommandLoader
  * in production yet. The consumer is `Chat`'s slash-command surface (the "/"
@@ -62,10 +67,17 @@ final class CommandLoader
      * because a containment rule added at wiring time is one written after the
      * consumer already trusts the loader.
      *
-     * @param string|null $anchoredIn the checkout $dir was derived from, which
-     *        $dir must resolve strictly inside; null for a directory whose
-     *        location no repository chose (the user's own tree)
+     * @param string|null $anchoredIn the tree $dir was derived from, which $dir
+     *        must resolve strictly inside — a checkout for the project tier, the
+     *        user's own `$HOME` for theirs. NULL IS UNANCHORED, and no caller in
+     *        this class passes it any more: the one that did was
+     *        {@see loadUserCommands()}, on the premise that "the user's own tree"
+     *        needs no anchor, and that premise is measured false there. It remains
+     *        accepted for a caller holding a directory with genuinely no
+     *        containing tree to name, and such a caller is choosing the per-entry
+     *        boundary alone — which the paragraph above measures as relocatable.
      *
+
      * @return array<string, CommandSpec>
      */
     public function loadFromDirectory(string $dir, ?string $anchoredIn = null): array
@@ -76,8 +88,13 @@ final class CommandLoader
         }
 
         if ($anchoredIn !== null && !ContainedPath::below($dir, $anchoredIn)) {
+            // "THE CHECKOUT IT WAS REACHED FROM" is what this said, and the
+            // anchor is no longer always a checkout: {@see loadUserCommands()}
+            // passes `$HOME`. A refusal naming an operand the caller did not pass
+            // is the failure this round found in three other messages, so the word
+            // is "tree" and the path is interpolated for the reader to judge.
             error_log(sprintf(
-                'Skipping commands directory %s: resolves to %s, %s the checkout it was reached from (%s)',
+                'Skipping commands directory %s: resolves to %s, %s the tree it was anchored to (%s)',
                 $dir,
                 $realDir,
                 realpath($anchoredIn) === $realDir ? 'which is exactly' : 'outside',
@@ -133,11 +150,46 @@ final class CommandLoader
     /**
      * Load user commands from ~/.sugar-crush/commands/.
      *
+     * ANCHORED TO `$HOME`, and it was anchored to NOTHING — the argument was
+     * omitted here while {@see loadProjectCommands()} passed its root, i.e. the
+     * "null for a directory whose location no repository chose" arm of
+     * {@see loadFromDirectory()} taken on the premise that a user's own tree
+     * cannot be pointed elsewhere. MEASURED on this host, `$HOME` mode 0700 and
+     * owned, with `~/.sugar-crush/commands -> <outside>` delivered the way a
+     * tarball delivers one: every `*.md` under the target became a command whose
+     * `CommandSpec::$template` — the PROMPT — is the outside file's body, with
+     * `refusals=[]`. The per-entry check in {@see loadFromDirectory()} cannot see
+     * it, because that check resolves `$realDir` too and therefore travels with
+     * the directory link. Same refutation as
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()}'s and
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::readableUserDir()}'s: a
+     * symlink arrives in a tarball, and ownership cannot answer who chose where a
+     * link points.
+     *
+     * NULL WHEN THE HOME CANNOT BE ESTABLISHED, which is why this returns early
+     * rather than passing a fallback: {@see HomeDirectory::owned()} answering null
+     * means this process cannot tell whose home it is in, and there is no anchor
+     * to hold the directory inside. The cost is stated rather than hidden — a
+     * launch with an unresolvable, world-writable or foreign-owned `$HOME` loses
+     * its user commands entirely, and that is the direction to fail in for a
+     * directory whose files become prompt text.
+     *
      * @return array<string, CommandSpec>
      */
     public function loadUserCommands(): array
     {
-        return $this->loadFromDirectory($this->userCommandsDir());
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            error_log(
+                'Skipping user commands: this process cannot establish that $HOME is this user\'s own '
+                . 'directory (see HomeDirectory::owned()), so there is no anchor to hold '
+                . '~/.sugar-crush/commands inside.',
+            );
+
+            return [];
+        }
+
+        return $this->loadFromDirectory($this->userCommandsDir($home), $home);
     }
 
     /**
@@ -181,11 +233,18 @@ final class CommandLoader
         );
     }
 
-    /** ~/.sugar-crush/commands */
-    private function userCommandsDir(): string
+    /**
+     * `~/.sugar-crush/commands`, under the home the CALLER established.
+     *
+     * The home is a parameter rather than resolved here, so the directory and the
+     * anchor {@see loadUserCommands()} holds it inside are the same string by
+     * construction. Resolving twice is how a directory comes to be checked
+     * against a different home than the one it was built from —
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()} derives both from
+     * one call for the same reason.
+     */
+    private function userCommandsDir(string $home): string
     {
-        $home = HomeDirectory::path();
-
         return $home . '/.sugar-crush/commands';
     }
 

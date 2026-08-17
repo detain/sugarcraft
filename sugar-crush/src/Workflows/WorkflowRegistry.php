@@ -46,9 +46,30 @@ final class WorkflowRegistry
     private ?string $projectDirRefusal = null;
 
     /**
+     * Why the USER tier's directory was refused the last time
+     * {@see readableUserDir()} judged it, or null when it was not refused.
+     *
+     * A second field rather than a shared one, because the two answer different
+     * questions about different anchors and a launch can refuse both. Read
+     * through {@see userTierRefusal()}.
+     *
+     * THE REFUSAL HAS TO BE LOUDER HERE than for the project tier, not quieter.
+     * A refused project tier costs the user workflows they can see in their
+     * checkout; a refused USER tier costs them workflows they wrote, and the
+     * only other signal is {@see loadYaml()}'s not-found message and a shorter
+     * {@see list()}. Drained by
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()} into the same
+     * launch-refusal collector, which prints `ignoring <path> — <reason>` before
+     * Program takes the terminal.
+     */
+    private ?string $userDirRefusal = null;
+
+    /**
      * @param string      $workflowsPath        The user's own workflow directory. Both
      *        forms load from here: a `.php` file is `require`d, which is running its
-     *        code, and this is the directory whose contents the user wrote.
+     *        code, and this is the directory whose contents the user is ASSUMED to
+     *        have written — an assumption $userHome below turns into a check, for
+     *        the reason measured further down.
      * @param string|null $projectWorkflowsPath A project's checked-in workflow
      *        directory, or null for none. `.yaml` ONLY, and that asymmetry is the
      *        whole point of the parameter: {@see load()} reaches a `.php` workflow
@@ -102,16 +123,70 @@ final class WorkflowRegistry
      *        or whose directory's own real path is outside the checkout it was
      *        reached from — is neither listed nor loaded.
      *
-     *        The user's own tier stays unconfined: it is the directory whose
-     *        `.php` files this class `require`s, so a link inside it is the
-     *        user pointing at their own file, not repository content reaching
-     *        for a path the session happens to be able to read. When one
-     *        directory is BOTH tiers (a session rooted at the user's home), the
-     *        project tier's confinement is what applies — the stricter answer,
-     *        deliberately, because "is this repository content?" cannot be told
-     *        apart there and the safe reading of an ambiguous case is the strict
-     *        one. {@see list()} and {@see load()} apply the identical predicate,
-     *        so the two never disagree about what exists.
+     *        THE USER'S OWN TIER IS CONFINED THE SAME TWO WAYS, and the
+     *        sentence that stood here until this revision is why it now is. It
+     *        read: *"the user's own tier stays unconfined: it is the directory
+     *        whose `.php` files this class `require`s, so a link inside it is
+     *        the user pointing at their own file, not repository content
+     *        reaching for a path the session happens to be able to read."* That
+     *        premise is false in the one tier where the consequence is
+     *        `require`. A symlink needs no repository to arrive — `tar`, `zip`,
+     *        `rsync -a`, `degit` and "download the release tarball" all carry
+     *        one and carry no `.git` — and
+     *        {@see \SugarCraft\Crush\Support\HomeDirectory::owned()} answers YES
+     *        for every such row, because the user extracted the tarball into
+     *        their own home. Ownership answers "whose directory is this"; it
+     *        cannot answer "who chose where this link points", and only
+     *        containment does — the same correction
+     *        {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()} made for
+     *        `~/.sugar-crush/agents`, which is a directory of DATA. This one is
+     *        the directory of CODE.
+     *
+     *        MEASURED on this host, `$HOME` mode 0700 and owned by the
+     *        launching uid, no `.git` anywhere in the tree, against the build
+     *        immediately before this change:
+     *
+     *            ~/.sugar-crush/workflows -> <outside>    load('pwned') EXECUTED uid=1000
+     *            workflows/entry.php -> <outside>/x.php   load('entry') EXECUTED uid=1000
+     *
+     *        — arbitrary code execution, twice, from `/workflow run <name>`, at
+     *        `WorkflowRegistry.php:` the `require` in {@see load()}. TWO
+     *        SPELLINGS AND TWO GATES, because neither gate sees the other's
+     *        shape: the DIRECTORY must resolve strictly inside $userHome
+     *        ({@see readableUserDir()}), which is the only thing that can see
+     *        the first row, and each ENTRY must resolve inside that directory
+     *        ({@see containedIn()}, now applied to `.php` in {@see load()} and
+     *        to `.yaml` through {@see yamlDirectories()}), which is the only
+     *        thing that can see the second. A directory anchor alone leaves row
+     *        two live; per-entry confinement alone leaves row one live, because
+     *        `realpath()` on both sides means the boundary travels with a linked
+     *        directory.
+     *
+     *        WHAT IT COSTS, stated because the previous round's version of this
+     *        sentence is what was refuted: a user's own
+     *        `~/.sugar-crush/workflows/deploy.php -> /opt/team-workflows/deploy.php`
+     *        stops loading, and so does the whole directory symlinked to a
+     *        network share. A link whose target is elsewhere INSIDE `$HOME`
+     *        — `-> ~/src/workflows/deploy.php`, the layout the refuted sentence
+     *        named as its justification — is refused too, and that is a REAL
+     *        loss rather than a hypothetical one: the entry check confines to
+     *        the workflows directory, not to the home. It is accepted here and
+     *        not softened to "anywhere in `$HOME`" because the entry predicate is
+     *        the project tier's, one implementation, and a second per-tier
+     *        boundary is how the skills copy came to be missing a half. A user
+     *        who wants a workflow file that lives elsewhere copies it, or points
+     *        the whole registry at that directory through
+     *        {@see \SugarCraft\Crush\Cli\Bootstrap}'s configured path — which is
+     *        then anchored to its own parent rather than to `$HOME`, i.e. the
+     *        user naming the directory is honoured and a link INSIDE the named
+     *        directory still is not.
+     *
+     *        When one directory is BOTH tiers (a session rooted at the user's
+     *        home) the two now differ only in their ANCHOR, not in whether they
+     *        confine: the dedupe in {@see yamlDirectories()} keeps the project
+     *        entry, so the anchor applied is $projectRoot. {@see list()} and
+     *        {@see load()} apply the identical predicate, so the two never
+     *        disagree about what exists.
      * @param string|null $projectRoot The checkout $projectWorkflowsPath was
      *        derived from, when the caller knows it. It is the boundary the
      *        project workflows DIRECTORY is itself held inside, which is a
@@ -133,11 +208,46 @@ final class WorkflowRegistry
      *        root, which is where a developer's `local-secrets.yaml` and
      *        `kubeconfig.yaml` actually sit, and which `-> ..` reached in one
      *        committed line.
+     * @param string|null $userHome The home $workflowsPath must resolve strictly
+     *        inside — what $projectRoot is for the project tier, for the tier
+     *        whose files are EXECUTED. {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()}
+     *        passes the parent of {@see \SugarCraft\Crush\Cli\Bootstrap::trustedConfigDirPath()},
+     *        so the directory and the home it is held inside can never be two
+     *        different homes.
+     *
+     *        NULL IS NOT "UNCONFINED", and that difference is this parameter's
+     *        whole point: null falls back to the directory's OWN PARENT, exactly
+     *        as $projectRoot's absence does. Be precise about what the fallback
+     *        catches, because the previous round's equivalent sentence was wrong
+     *        by one component: it refuses a link AT the workflows directory —
+     *        which is the measured escape, and the spelling a tarball needs one
+     *        line for — and it does NOT refuse one at a component above it (a
+     *        `~/.sugar-crush -> /elsewhere` leaves `<...>/workflows` resolving
+     *        inside its own parent). A caller that knows the home gets the
+     *        complete boundary; one that does not gets the partial one written
+     *        down here rather than a guarantee only somebody else holds.
+     *
+     *        IT IS NOT AN OWNERSHIP CHECK EITHER, and this class does not make
+     *        one. {@see expandPath()} resolves a leading `~` through
+     *        {@see \SugarCraft\Crush\Support\HomeDirectory::path()}, whose
+     *        fallback is `sys_get_temp_dir()` — so a DEFAULT-constructed
+     *        registry in a process with no resolvable `HOME` anchors
+     *        `/tmp/.sugar-crush/workflows` to `/tmp/.sugar-crush`, which
+     *        contains it, and a local user who pre-created that tree owns the
+     *        `require`. Nothing in `src/` constructs one that way — the
+     *        production caller passes an absolute path derived from
+     *        {@see \SugarCraft\Crush\Cli\Bootstrap::trustedConfigDirPath()},
+     *        which refuses that launch on {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}'s
+     *        first line — and the residual is recorded here rather than
+     *        half-migrated, because two home resolutions inside one class is the
+     *        failure {@see \SugarCraft\Crush\Support\HomeDirectory} exists to
+     *        have ended.
      */
     public function __construct(
         private readonly string $workflowsPath = '~/.sugar-crush/workflows/',
         private readonly ?string $projectWorkflowsPath = null,
         private readonly ?string $projectRoot = null,
+        private readonly ?string $userHome = null,
     ) {}
 
     /**
@@ -148,6 +258,19 @@ final class WorkflowRegistry
      * files: the engine anchors those to this registry's directory rather than
      * to `~` so that a registry pointed somewhere trusted does not pause into a
      * directory nobody vetted. See {@see WorkflowEngine::getPauseFilePath()}.
+     *
+     * THE CONFIGURED PATH, NOT THE ONE {@see readableUserDir()} VOUCHES FOR, and the
+     * difference is a stated residual rather than an oversight. Every read this
+     * class performs goes through the anchored answer; the pause files do not,
+     * because they are the engine's own writes and the accessor predates the
+     * anchor. So a `~/.sugar-crush/workflows -> <outside>` link that this registry
+     * refuses to list or `require` out of still relocates
+     * `<outside>/.running/*.json`, which the engine writes and reads back. What that
+     * yields an attacker is the engine's own JSON in a directory they already chose
+     * — not code, not a foreign file's contents — which is why it is recorded here
+     * and in {@see \SugarCraft\Crush\Tests\Support\ReadPathCensusTest} instead of
+     * being closed by handing the engine a second, stricter accessor whose two
+     * answers could then disagree about where a run was paused.
      */
     public function workflowsPath(): string
     {
@@ -235,9 +358,20 @@ final class WorkflowRegistry
         // list() has always filtered directories out (see baseNames()), so
         // file_exists() here made load() strictly MORE permissive than the
         // listing, which is the one direction that can hurt.
+        // NULL when the user tier's own directory is refused, which is a
+        // different answer from "no such file" and has to be one: this is the
+        // path that gets `require`d, so the directory-level question must be
+        // settled before the file-level one. See {@see readableUserDir()}.
         $phpPath = $this->resolvePhpPath($name);
 
-        if (is_file($phpPath)) {
+        // is_file() AND contained, the same pair the project fast path above
+        // needs and for a worse reason. is_file() stats THROUGH a symlink, so
+        // without the second test `workflows/entry.php -> <outside>/x.php` was
+        // `require`d — arbitrary code execution measured on this host, see the
+        // constructor. The listing filters the same entry with the same
+        // predicate ({@see baseNames()}), which is what keeps "listed" and
+        // "loadable" one set here too.
+        if ($phpPath !== null && is_file($phpPath) && $this->containedIn($phpPath, \dirname($phpPath))) {
             $workflow = require $phpPath;
 
             if (!$workflow instanceof Workflow) {
@@ -261,12 +395,13 @@ final class WorkflowRegistry
      * and directories.
      *
      * Deliberately the exact set of names {@see load()} will look a file up for,
-     * which is why three kinds of entry are absent: a project `.php` file (that
+     * which is why four kinds of entry are absent: a project `.php` file (that
      * tier does not honour PHP at all), a directory that merely ends in `.yaml`
-     * or `.php`, and a file whose stripped basename is not a name
-     * {@see validateName()} accepts — `lint.v2.yaml` among them. Listing a name
-     * whose `/workflow run` answers "not found" or "Invalid workflow name" is
-     * worse than not listing it.
+     * or `.php`, a file whose stripped basename is not a name
+     * {@see validateName()} accepts — `lint.v2.yaml` among them — and an entry
+     * whose real path is outside the directory it was listed from, in EITHER
+     * tier ({@see baseNames()}). Listing a name whose `/workflow run` answers
+     * "not found" or "Invalid workflow name" is worse than not listing it.
      *
      * The set of names, not the set of names that will SUCCEED: a listed
      * `deploy` whose YAML is malformed is still listed, and `load()` reports the
@@ -286,14 +421,21 @@ final class WorkflowRegistry
     {
         $names = [];
 
-        foreach ($this->yamlDirectories() as $dir => $confineSymlinks) {
-            foreach ($this->baseNames($dir, '.yaml', $confineSymlinks) as $name) {
+        foreach ($this->yamlDirectories() as $dir) {
+            foreach ($this->baseNames($dir, '.yaml') as $name) {
                 $names[$name] = true;
             }
         }
 
-        foreach ($this->baseNames($this->workflowsPath(), '.php') as $name) {
-            $names[$name] = true;
+        // readableUserDir(), NOT workflowsPath(): the `.php` listing has to make
+        // the same directory-level judgement load() makes, and reading the
+        // configured path here is what kept a linked workflows directory in the
+        // listing after the loader had stopped resolving out of it.
+        $userDir = $this->readableUserDir();
+        if ($userDir !== null) {
+            foreach ($this->baseNames($userDir, '.php') as $name) {
+                $names[$name] = true;
+            }
         }
 
         $names = array_keys($names);
@@ -315,17 +457,17 @@ final class WorkflowRegistry
      * made it reachable by committing a file, which is why it is filtered here
      * rather than left as a curiosity.
      *
-     * @param bool $confineSymlinks Skip an entry whose real path resolves
-     *        outside $dir. True for the project tier, where an entry is
-     *        repository content and a link out of the directory is a request to
-     *        read a path that has nothing to do with the checkout — see the
-     *        constructor for what one used to leak. {@see load()} applies the
-     *        identical predicate, so a name dropped here is also a name the
-     *        loader refuses to resolve, and the two answers stay one answer.
+     * AN ENTRY WHOSE REAL PATH IS OUTSIDE $dir IS SKIPPED, in BOTH tiers and for
+     * BOTH suffixes. This was a `bool $confineSymlinks = false` parameter, passed
+     * `true` only for the project tier; the user tier's `false` is the escape
+     * measured in the constructor's doc-block, and the `.php` listing never passed
+     * anything at all. {@see load()} applies the identical predicate to the entry
+     * it resolves, so a name dropped here is also a name the loader refuses, and
+     * the two answers stay one answer.
      *
      * @return list<string>
      */
-    private function baseNames(string $dir, string $suffix, bool $confineSymlinks = false): array
+    private function baseNames(string $dir, string $suffix): array
     {
         if (!is_dir($dir)) {
             return [];
@@ -347,7 +489,7 @@ final class WorkflowRegistry
                 continue;
             }
 
-            if ($confineSymlinks && !$this->containedIn($dir . '/' . $file, $dir)) {
+            if (!$this->containedIn($dir . '/' . $file, $dir)) {
                 continue;
             }
 
@@ -392,25 +534,33 @@ final class WorkflowRegistry
     }
 
     /**
-     * Every directory a `.yaml` workflow may be read from, project tier first,
-     * mapped to whether symlinks inside it are confined to it.
+     * Every directory a `.yaml` workflow may be read from, project tier first.
+     *
+     * THIS USED TO CARRY A PER-DIRECTORY `confine symlinks?` FLAG, and the flag
+     * was the escape. It was `true` for the project tier and `false` for the
+     * user's, which is the constructor's refuted premise expressed as data; with
+     * both tiers confined the flag has exactly one value, so it is gone rather
+     * than threaded through as a constant. A parameter that can only be wrong in
+     * one direction is worth less than an unconditional check: the next reader
+     * cannot pass `false` by accident because there is nothing to pass.
      *
      * Deduplicated because the two tiers genuinely can name one directory — a
      * session rooted at the user's own home resolves both to
      * `~/.sugar-crush/workflows` — and a repeated entry would put the same
      * directory twice into {@see loadYaml()}'s not-found message. The dedupe
-     * keeps the PROJECT entry when they collide, which now decides a policy
-     * question as well as a cosmetic one: the collided directory is read under
-     * the project tier's confinement, i.e. the stricter of the two. See the
-     * constructor for why the strict reading is the right answer for a
-     * directory whose tier cannot be told apart.
+     * keeps the PROJECT entry when they collide, which is now purely cosmetic
+     * again: both tiers confine their entries, so the only surviving difference
+     * is which ANCHOR the directory itself was judged against, and that judgement
+     * has already happened by the time a directory reaches this list.
      *
-     * With ONE exception, and it is the deliberate one stated on
-     * {@see readableProjectDir()}: a project entry whose own directory is
-     * refused is not added at all, so a collided directory falls through to the
-     * user tier's unconfined reading rather than vanishing from both.
+     * EITHER TIER CAN BE ABSENT HERE, and both absences are refusals rather than
+     * emptinesses: a project directory {@see readableProjectDir()} refuses is not
+     * added, and neither is a user directory {@see readableUserDir()} refuses.
+     * When BOTH are refused this returns `[]`, which is why {@see loadYaml()} has
+     * to name a directory of its own in that case rather than reporting "not
+     * found at " with nothing after it.
      *
-     * @return array<string, bool> directory => confine symlinks to it
+     * @return list<string> directories, project tier first
      */
     private function yamlDirectories(): array
     {
@@ -418,15 +568,12 @@ final class WorkflowRegistry
 
         $projectDir = $this->readableProjectDir();
         if ($projectDir !== null) {
-            $dirs[$projectDir] = true;
+            $dirs[] = $projectDir;
         }
 
-        // Not `[$dir] = false` unconditionally: that would downgrade a
-        // collided directory to the user tier's unconfined reading and undo
-        // the paragraph above.
-        $userDir = $this->expandPath($this->workflowsPath);
-        if (!array_key_exists($userDir, $dirs)) {
-            $dirs[$userDir] = false;
+        $userDir = $this->readableUserDir();
+        if ($userDir !== null && !\in_array($userDir, $dirs, true)) {
+            $dirs[] = $userDir;
         }
 
         return $dirs;
@@ -563,11 +710,17 @@ final class WorkflowRegistry
      * not as a live escape.
      *
      * The refusal drops the tier rather than emptying it, which matters for the
-     * one directory that is BOTH tiers: the dedupe in {@see yamlDirectories()}
-     * then adds it back under the user tier's unconfined reading. That is the
-     * right answer there and not a weakening — the user tier `require`s the
-     * `.php` files out of that same directory, so a stricter YAML reading of it
-     * would be guarding a door beside an open one. Pinned by
+     * one directory that is BOTH tiers: {@see yamlDirectories()} then offers it
+     * to {@see readableUserDir()}, which asks the same question against the
+     * user's home instead of the checkout. THE JUSTIFICATION FOR THAT USED TO BE
+     * A REFUTED ONE — "the user tier `require`s the `.php` files out of that same
+     * directory, so a stricter YAML reading of it would be guarding a door
+     * beside an open one" — and the door is now shut: the `require` is gated by
+     * a directory anchor and a per-entry check of its own. What survives is the
+     * narrower and true statement: a directory the CHECKOUT does not vouch for
+     * may still be one the USER's home does, and dropping it out of both tiers
+     * would refuse a user their own workflows because a project pointed at them.
+     * Pinned by
      * `testACollidedDirectoryRefusedAsTheProjectTierIsStillReadAsTheUserTier`,
      * because "drops rather than empties" was documented three times and
      * measured nowhere.
@@ -604,15 +757,121 @@ final class WorkflowRegistry
             return $dir;
         }
 
+        // THE ANCHOR IS NAMED, not merely described. This message said "which is
+        // outside the checkout root" and stopped there, while its three sibling
+        // feeders all interpolate the anchor PATH — so the one refusal a reader
+        // could do least about was the one that did not say WHICH root it was
+        // measured against. A launch can have a `--root` the user did not expect
+        // (see {@see \SugarCraft\Crush\Cli\ArgvParser}), and "outside the checkout
+        // root" is unfalsifiable without it.
         $this->projectDirRefusal = sprintf(
-            'resolves to %s, which is %s %s, so it is not this repository pointing at its own '
+            'resolves to %s, which is %s %s (%s), so it is not this repository pointing at its own '
             . 'workflows; the directory is skipped and no name in it is listed or loadable.',
             $real,
             realpath($anchor) === $real ? 'exactly' : 'outside',
             $this->projectRoot !== null ? 'the checkout root' : "this directory's own parent",
+            $anchor,
         );
 
         return null;
+    }
+
+    /**
+     * May the USER tier's own directory be read from — and `require`d out of —
+     * at all?
+     *
+     * {@see readableProjectDir()}'s question, asked about the tier that had no
+     * containment of any kind. Everything that method's doc-block says about WHY
+     * a directory needs its own boundary applies here verbatim and is not
+     * restated: per-entry confinement resolves the directory too, so a linked
+     * directory moves the boundary with it and nothing inside it can ever be
+     * outside it.
+     *
+     * WHAT IS DIFFERENT IS THE ANCHOR AND THE STAKE. The anchor is `$userHome`
+     * (see the constructor) rather than a checkout, and the stake is `require`:
+     * this is the only directory in the package whose contents are EXECUTED, so
+     * the escape this closes was arbitrary code execution rather than
+     * disclosure. Both are measured in the constructor's doc-block.
+     *
+     * BELOW(), NOT WITHIN(), for the reason {@see readableProjectDir()} takes
+     * the strict predicate: a `workflows -> ..` link resolving exactly onto
+     * `~/.sugar-crush` would make every `.php` file in the config directory a
+     * loadable workflow, and `~/.sugar-crush` is where `config.json`,
+     * `hooks.yaml` and the session store live rather than a curated directory of
+     * workflow files.
+     *
+     * A DIRECTORY THAT DOES NOT RESOLVE splits the same two ways it does for the
+     * project tier, and for the same measured reason — a fresh install simply has
+     * no `~/.sugar-crush/workflows` and must keep {@see loadYaml()}'s not-found
+     * message naming it, while a DANGLING link is a request to read whatever
+     * appears at that path later. `is_link()` tells those apart, and carries the
+     * same bound as it does there: a link one component HIGHER
+     * (`~/.sugar-crush -> <an existing directory holding no workflows/>`)
+     * resolves to false with `is_link($dir)` false, so it is granted. That bound
+     * is narrower here than there in one respect and wider in another: narrower
+     * because `$userHome` is passed in production so the resolving case is fully
+     * anchored, wider because what a won race yields here is a `require`.
+     */
+    private function readableUserDir(): ?string
+    {
+        // Reset first, for the reason readableProjectDir() resets first: this is
+        // re-evaluated on every list()/load(), and a stale refusal would outlive
+        // the condition that caused it.
+        $this->userDirRefusal = null;
+
+        $dir = $this->expandPath($this->workflowsPath);
+        $real = realpath($dir);
+
+        if ($real === false) {
+            if (is_link($dir)) {
+                $this->userDirRefusal = 'is a symlink that resolves to nothing this process can read, so it '
+                    . 'names no workflows — and a link to a path that does not exist yet is a request to '
+                    . 'require whatever appears there later.';
+
+                return null;
+            }
+
+            return $dir;
+        }
+
+        $anchor = $this->userHome !== null ? $this->expandPath($this->userHome) : \dirname($dir);
+
+        if (ContainedPath::below($dir, $anchor)) {
+            return $dir;
+        }
+
+        $this->userDirRefusal = sprintf(
+            'resolves to %s, which is %s %s (%s), so it is not a directory inside the home this launch '
+            . 'established as yours; it is skipped and no workflow in it is listed, loadable or `require`d.',
+            $real,
+            realpath($anchor) === $real ? 'exactly' : 'outside',
+            $this->userHome !== null ? 'your home directory' : "this directory's own parent",
+            $anchor,
+        );
+
+        return null;
+    }
+
+    /**
+     * Why this registry refuses to read its user tier's directory, or null when
+     * it does not refuse it.
+     *
+     * {@see projectTierRefusal()}'s seam for the other tier — same pull-based
+     * shape, same reason it is not a stderr write (a write from here lands
+     * mid-frame under the alt screen), same mid-clause string starting at
+     * "resolves to …" because the one notice that prints it composes
+     * `ignoring <path> — <reason>` and already holds the configured path.
+     *
+     * UNLIKE its project-tier twin this one interpolates the ANCHOR PATH as well
+     * as describing it in words, which is what the other three feeders do; see
+     * {@see projectTierRefusal()} for the corrected statement of how the four
+     * messages differ.
+     */
+    public function userTierRefusal(): ?string
+    {
+        $this->readableUserDir();
+
+        return $this->userDirRefusal;
     }
 
     /**
@@ -634,19 +893,25 @@ final class WorkflowRegistry
      * notice that prints it composes `ignoring <path> — <reason>`. It used to
      * repeat the path inside the reason, which put it in that line twice.
      *
-     * THE THREE FEEDERS ARE NOT IDENTICAL, and the sentence here used to claim
-     * they were. Measured against the three reason strings:
+     * THE FEEDERS ARE NOT IDENTICAL, and the sentence here used to claim they
+     * were, then claimed a difference that this revision removed. Measured
+     * against the reason strings as they now stand:
      *
-     *   - this one names the RESOLVED target and describes the anchor in words
-     *     ("the checkout root" / "this directory's own parent");
+     *   - this one and {@see userTierRefusal()} name the RESOLVED target,
+     *     describe the anchor in words ("the checkout root" / "your home
+     *     directory" / "this directory's own parent") AND interpolate the anchor
+     *     path;
      *   - {@see \SugarCraft\Crush\Skills\SkillLoader::recordRefusedDirectory()}
      *     and {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()}
-     *     name the resolved target AND interpolate the anchor PATH.
+     *     name the resolved target AND interpolate the anchor PATH, without the
+     *     words.
      *
-     * So all three omit the configured path — which is the property the collector
-     * needs, since the collector supplies it as the map key — and only this one
-     * also omits the anchor path. That is the accurate statement; "they say it the
-     * same way" was not. A FOURTH holder of a repository-chosen directory,
+     * So all of them omit the configured path — which is the property the
+     * collector needs, since the collector supplies it as the map key — and all
+     * of them now name the anchor. The previous statement, "only this one also
+     * omits the anchor path", was accurate and is what got fixed: a refusal that
+     * cannot say which root it measured against is unfalsifiable for the person
+     * reading it. A further holder of a repository-chosen directory,
      * {@see \SugarCraft\Crush\Commands\CommandLoader}, does not feed the collector
      * at all — it `error_log()`s, and its message carries `$dir`, `$realDir` and
      * `$anchoredIn` together.
@@ -686,18 +951,28 @@ final class WorkflowRegistry
         $this->validateName($name);
 
         $searched = [];
-        foreach ($this->yamlDirectories() as $dir => $confineSymlinks) {
+        foreach ($this->yamlDirectories() as $dir) {
             $yamlPath = $dir . "/{$name}.yaml";
 
-            // A confined tier's entry that resolves outside its directory is
-            // treated as absent — the same answer {@see list()} gives for it,
-            // and the reason the two cannot disagree. It stays in $searched so
-            // the not-found message still names where the loader looked.
-            if (is_file($yamlPath) && (!$confineSymlinks || $this->containedIn($yamlPath, $dir))) {
+            // An entry that resolves outside its directory is treated as absent —
+            // the same answer {@see list()} gives for it, and the reason the two
+            // cannot disagree. It stays in $searched so the not-found message
+            // still names where the loader looked.
+            if (is_file($yamlPath) && $this->containedIn($yamlPath, $dir)) {
                 return $this->buildFromYamlFile($yamlPath)->build();
             }
 
             $searched[] = $yamlPath;
+        }
+
+        // BOTH TIERS REFUSED leaves nothing to name, and "not found at " with
+        // nothing after it is a worse answer than naming the directory the user
+        // configured — which is what they are looking for and what
+        // {@see userTierRefusal()} explains separately. The configured spelling,
+        // deliberately, since a refused directory has no path this loader is
+        // willing to have resolved.
+        if ($searched === []) {
+            $searched[] = $this->workflowsPath() . "/{$name}.yaml";
         }
 
         throw new WorkflowNotFoundException(
@@ -1182,13 +1457,23 @@ final class WorkflowRegistry
     }
 
     /**
-     * Resolve workflow name to full PHP filesystem path.
+     * Resolve workflow name to the full PHP filesystem path, or null when the
+     * user tier's own directory is refused.
+     *
+     * NULL RATHER THAN A PATH THE CALLER THEN FILTERS, for the reason
+     * {@see projectYamlPath()} returns null: {@see load()} is the one place that
+     * reaches a `.php` file, and a directory {@see readableUserDir()} dropped
+     * from {@see yamlDirectories()} while still being reachable here would be
+     * "listed and loadable are the same set" breaking in the direction that ends
+     * in `require`.
      */
-    private function resolvePhpPath(string $name): string
+    private function resolvePhpPath(string $name): ?string
     {
         $this->validateName($name);
 
-        return $this->expandPath($this->workflowsPath) . "/{$name}.php";
+        $dir = $this->readableUserDir();
+
+        return $dir === null ? null : $dir . "/{$name}.php";
     }
 
     /**

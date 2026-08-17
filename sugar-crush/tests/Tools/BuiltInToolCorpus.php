@@ -221,11 +221,32 @@ final class BuiltInToolCorpus
      * — the last line verbatim the failure mode the enum clause was added to
      * remove.
      *
-     * So the question asked here is CONSTRUCTIBILITY, and the canonical shape is
-     * constructible: a non-public constructor is fine when the class offers a
-     * public static zero-argument `new()`, which {@see instances()} then uses. A
-     * class with neither cannot be dispatched by anything a real run does, which
-     * is exactly what this method's own name asks.
+     * AND THE FIX FOR THAT WAS ITSELF THE NEXT INSTANCE OF THE CLASS, which is why
+     * constructibility is NO LONGER ASKED HERE. The clause added was
+     * `&& self::isConstructible($reflection)`, and a `false` from it SILENTLY
+     * DROPPED the class: it left the corpus, so {@see instances()}'s throw — whose
+     * own message says "add it … rather than silently skipping it" — could never
+     * fire for the shape `CLAUDE.md` MANDATES. MEASURED on a synthetic tree, two
+     * shapes vanishing with no exception and no diagnostic of any kind:
+     *
+     *     final class + private __construct + public static new(\stdClass $dep)
+     *     final class + private __construct + public function new()   (not static)
+     *
+     * Both are real authoring mistakes — a factory that grew a dependency, a
+     * missing `static` — and both used to mean "this tool disappears from every
+     * built-in-tool test and BinSugarcrushWiringTest stays green". A filter that
+     * removes a would-be tool for a reason nobody is told is worse than an abort.
+     *
+     * So this method asks only what a class IS: concrete, not an enum, implements
+     * {@see Tool}. Whether it can be BUILT is asked by {@see instances()}, where
+     * the answer is a named `RuntimeException` naming the class — see
+     * {@see isConstructible()}, which still exists and is still the predicate, now
+     * consulted where a `false` is LOUD.
+     *
+     * The cost of moving it: a class that cannot be built now reaches the corpus,
+     * so any consumer that walks {@see classNames()} without building (the schema
+     * and naming tests) will include it, and the failure surfaces as this
+     * scanner's own throw rather than as a shorter list.
      */
     private static function isDispatchableTool(string $symbol): bool
     {
@@ -237,8 +258,7 @@ final class BuiltInToolCorpus
 
         return !$reflection->isAbstract()
             && !$reflection->isEnum()
-            && $reflection->implementsInterface(Tool::class)
-            && self::isConstructible($reflection);
+            && $reflection->implementsInterface(Tool::class);
     }
 
     /**
@@ -497,29 +517,62 @@ final class BuiltInToolCorpus
             $constructor = $reflection->getConstructor();
 
             try {
-                if ($constructor !== null && !$constructor->isPublic()) {
-                    // Constructible by {@see isConstructible()}'s own rule only
-                    // because this factory exists, so it is not `?->`-optional.
-                    $tools[] = $reflection->getMethod('new')->invoke(null);
-
-                    continue;
-                }
-
-                if ($constructor === null || $constructor->getNumberOfRequiredParameters() === 0) {
-                    $tools[] = new $class();
-
-                    continue;
-                }
-
-                $tools[] = match ($class) {
-                    SkillTool::class => new SkillTool(new SkillRegistry()),
-                    default => throw new \RuntimeException(sprintf(
-                        '%s needs constructor arguments; add it to %s::instances() so every built-in-tool test '
-                        . 'covers it rather than silently skipping it.',
+                // THE LOUD ARM, and it is the whole of finding F5. This question
+                // used to be asked in {@see isDispatchableTool()}, where a `false`
+                // removed the class from the corpus and therefore from this loop —
+                // so the throw below could not fire for the shape this repo
+                // mandates. A dispatchable `Tool` implementor nobody can build is
+                // a defect in the tool or a gap in this fixture, and either way it
+                // is something to say out loud.
+                if (!self::isConstructible($reflection)) {
+                    throw new \RuntimeException(sprintf(
+                        '%s implements Tool but cannot be built: its constructor is not public and it offers no '
+                        . 'public static zero-argument new(). Give it the `final` + `private __construct()` + '
+                        . '`::new()` shape CLAUDE.md mandates, or add it to %s::instances() with the wiring it '
+                        . 'needs — it must not be silently skipped.',
                         $class,
                         self::class,
-                    )),
-                };
+                    ));
+                }
+
+                if ($constructor !== null && !$constructor->isPublic()) {
+                    // Non-null by the guard above: isConstructible() reached its
+                    // factory arm for this class, which is what makes it
+                    // constructible at all.
+                    $built = self::zeroArgumentFactory($reflection)?->invoke(null);
+                } elseif ($constructor === null || $constructor->getNumberOfRequiredParameters() === 0) {
+                    $built = new $class();
+                } else {
+                    $built = match ($class) {
+                        SkillTool::class => new SkillTool(new SkillRegistry()),
+                        default => throw new \RuntimeException(sprintf(
+                            '%s needs constructor arguments; add it to %s::instances() so every built-in-tool test '
+                            . 'covers it rather than silently skipping it.',
+                            $class,
+                            self::class,
+                        )),
+                    };
+                }
+
+                // WHAT THE FACTORY ARM ACTUALLY RETURNED, checked rather than
+                // assumed. `new $class()` is guaranteed to be a `$class`; a
+                // `::new()` is an ordinary static method, and reflection can see
+                // that it is public, static and zero-argument without seeing its
+                // return type. A factory that returns a builder, `null`, or `self`
+                // of a different class used to enter this list unchallenged and
+                // fail later inside whichever consumer first called a `Tool`
+                // method on it — a defect reported far from its cause.
+                if (!$built instanceof Tool) {
+                    throw new \RuntimeException(sprintf(
+                        '%s::new() returned %s rather than a Tool; %s builds the corpus through that factory, so '
+                        . 'it must return the tool itself.',
+                        $class,
+                        get_debug_type($built),
+                        self::class,
+                    ));
+                }
+
+                $tools[] = $built;
             } catch (\Throwable $e) {
                 if ($e instanceof \RuntimeException && str_contains($e->getMessage(), self::class)) {
                     throw $e;

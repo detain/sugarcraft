@@ -600,6 +600,98 @@ final class ProviderFactoryTest extends TestCase
     }
 
     /**
+     * THE TENTH FILE ON THE CONTAINMENT INVENTORY, and it held the same
+     * `__DIR__`-relative construction as
+     * {@see \SugarCraft\Crush\Agents\WorktreeConfig}'s — closed one round earlier —
+     * with no containment of any kind: `__DIR__ . '/../../.sugar-crush/config.dev.json'`,
+     * read by `fromProjectConfig()`, `projectProviderConfig()` and, at launch,
+     * `Bootstrap::availableProviders()`. Its contents choose which provider a
+     * session talks to, `baseUrl` and `apiKey` included.
+     *
+     * Two boundaries, driven separately against a synthetic package root because
+     * they answer different questions and one cannot stand in for the other: a link
+     * ON `.sugar-crush` relocates the per-file check, and a link on `config.dev.json`
+     * is invisible to the directory check.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function refusedProviderConfigLayouts(): array
+    {
+        return [
+            'the config DIRECTORY is a link out of the package' => ['directory'],
+            'the config FILE is a link out of its directory' => ['file'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('refusedProviderConfigLayouts')]
+    public function testAnEscapingProviderConfigIsRefused(string $layout): void
+    {
+        $tmp = sys_get_temp_dir() . '/pf_containment_' . uniqid('', true);
+        $root = $tmp . '/package';
+        $outside = $tmp . '/outside';
+        mkdir($root, 0o700, true);
+        mkdir($outside, 0o700, true);
+        file_put_contents($outside . '/config.dev.json', json_encode([
+            'defaultProvider' => 'evil',
+            'providers' => ['evil' => ['type' => 'openai', 'apiKey' => 'sk-live-STOLEN']],
+        ]));
+
+        try {
+            if ($layout === 'directory') {
+                symlink($outside, $root . '/.sugar-crush');
+            } else {
+                mkdir($root . '/.sugar-crush', 0o700, true);
+                symlink($outside . '/config.dev.json', $root . '/.sugar-crush/config.dev.json');
+            }
+
+            $this->assertFileExists(
+                $root . '/.sugar-crush/config.dev.json',
+                'the fixture is only meaningful while the file is REACHABLE — is_file() stats through a symlink',
+            );
+            $this->assertNull(ProviderFactory::readableDefaultConfigPath($root));
+        } finally {
+            @unlink($root . '/.sugar-crush/config.dev.json');
+            @unlink($root . '/.sugar-crush');
+            @rmdir($root . '/.sugar-crush');
+            @unlink($outside . '/config.dev.json');
+            @rmdir($outside);
+            @rmdir($root);
+            @rmdir($tmp);
+        }
+    }
+
+    /**
+     * THE CONTROL, twice over: a real `.sugar-crush/config.dev.json` inside a
+     * synthetic package root is readable, and so is this library's own committed
+     * one — which is what every launch actually reads, so a gate that refused it
+     * would be a gate that broke the product.
+     */
+    public function testARealProviderConfigInsideThePackageIsReadable(): void
+    {
+        $tmp = sys_get_temp_dir() . '/pf_containment_ok_' . uniqid('', true);
+        mkdir($tmp . '/package/.sugar-crush', 0o700, true);
+        file_put_contents($tmp . '/package/.sugar-crush/config.dev.json', '{}');
+
+        try {
+            $this->assertSame(
+                $tmp . '/package/.sugar-crush/config.dev.json',
+                ProviderFactory::readableDefaultConfigPath($tmp . '/package'),
+            );
+        } finally {
+            @unlink($tmp . '/package/.sugar-crush/config.dev.json');
+            @rmdir($tmp . '/package/.sugar-crush');
+            @rmdir($tmp . '/package');
+            @rmdir($tmp);
+        }
+
+        $this->assertSame(
+            ProviderFactory::defaultConfigPath(),
+            ProviderFactory::readableDefaultConfigPath(),
+            "this library's own committed config must still be readable",
+        );
+    }
+
+    /**
      * Reproduces R24: loads the ACTUAL committed .sugar-crush/config.dev.json
      * (not a fixture stand-in) via defaultConfigPath(), with no explicit
      * $name, and asserts the 'defaultProvider' key ('dev-sglang') resolves

@@ -68,6 +68,35 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
+     * THE FOURTH SEAM, and the collector's own doc-block now says so: the workflow
+     * registry exposes TWO, because its user tier — `~/.sugar-crush/workflows`, the
+     * one directory in the package whose `.php` files are `require`d — can be refused
+     * as well as its project tier.
+     *
+     * Asserted rather than left in prose, since "three feeders quietly becoming four"
+     * is the exact drift this file exists to refuse. It is the one entry in the
+     * collector that is NOT a project tier; the collector's doc-block states that
+     * mismatch, and this test pins that the sentence and the drain both exist.
+     */
+    public function testTheWorkflowRegistryExposesAUserTierSeamAndBootstrapDrainsIt(): void
+    {
+        $this->assertTrue(method_exists(WorkflowRegistry::class, 'userTierRefusal'));
+
+        $bootstrap = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $this->assertStringContainsString('userTierRefusal()', $bootstrap, 'Bootstrap must drain it');
+
+        $collector = $this->docBlockAbove(
+            \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
+            'private static array $projectTierRefusals = [];',
+        );
+        $this->assertStringContainsString(
+            'userTierRefusal()',
+            $collector,
+            "the collector's own doc-block must name the seam that is not a project tier",
+        );
+    }
+
+    /**
      * The FOURTH holder of a repository-chosen directory, and the reason it is
      * named as a gap rather than counted as a feeder: it reports by `error_log()`
      * and is dormant. Pinned so "three feeders" cannot quietly become four (or

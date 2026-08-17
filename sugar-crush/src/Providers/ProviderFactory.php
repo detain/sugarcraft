@@ -8,6 +8,7 @@ use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
+use SugarCraft\Crush\Support\ContainedPath;
 
 /**
  * Factory for creating provider instances from configuration arrays.
@@ -27,6 +28,19 @@ final readonly class ProviderFactory
     public const TOOL_CALL_PARSER_OPENAI = 'openai';
 
     public const TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK = 'minimax-xml-fallback';
+
+    /**
+     * The dev/test-fixture config this factory reads, relative to
+     * {@see packageRoot()}.
+     *
+     * ONE LITERAL, split by `dirname()` where the directory half is needed, for the
+     * reason {@see \SugarCraft\Crush\Agents\WorktreeConfig::readConfig()} keeps one:
+     * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest} derives its
+     * dot-path census from string literals, and a path assembled from fragments is
+     * its stated blind spot — so spelling the two halves separately would hide this
+     * read path from the instrument that classifies it.
+     */
+    private const CONFIG_PATH = '.sugar-crush/config.dev.json';
 
     /** @var array<string, array{required: string[], optional: string[]}> */
     private const TYPE_SCHEMAS = [
@@ -102,20 +116,94 @@ final readonly class ProviderFactory
     }
 
     /**
+     * The library root this factory reads its dev config from: two directories
+     * above this file (`src/Providers` -> `src` -> root).
+     *
+     * TWO climbs, not three. A third overshoots into whatever happens to sit above
+     * this library on disk — fine by coincidence in the monorepo checkout, where a
+     * sibling `.sugar-crush/` exists one level up, but wrong in general and fatal
+     * once sugar-crush is split into its own repo, where nothing exists above it.
+     *
+     * A named seam rather than an inline expression, for the reason
+     * {@see \SugarCraft\Crush\Agents\WorktreeConfig::defaultConfigDir()} is one:
+     * the containment gates below need to name the tree they anchor to, and a
+     * boundary spelled twice is a boundary that drifts.
+     */
+    private static function packageRoot(): string
+    {
+        return \dirname(__DIR__, 2);
+    }
+
+    /**
      * Filesystem location of the dev/test-fixture provider config.
      *
-     * This file (src/Providers/ProviderFactory.php) sits two directories
-     * below the sugar-crush library root (src/Providers -> src -> root), so
-     * only TWO `../` climbs land back on the library's own
-     * .sugar-crush/config.dev.json. A third climb overshoots into whatever
-     * happens to sit above this library on disk - fine by coincidence in the
-     * monorepo checkout (where a sibling .sugar-crush/ dir happens to exist
-     * one level up), but wrong in general and fatal once sugar-crush is
-     * split into its own standalone repo, where nothing exists above it.
+     * WHERE IT WOULD BE, not a promise that it may be read — the same distinction
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectWorkflowsPath()}
+     * draws. {@see readableDefaultConfigPath()} is what answers the second
+     * question, and every reader in `src/` asks that one.
      */
     public static function defaultConfigPath(): string
     {
-        return __DIR__ . '/../../.sugar-crush/config.dev.json';
+        return self::packageRoot() . '/' . self::CONFIG_PATH;
+    }
+
+    /**
+     * {@see defaultConfigPath()} when it may actually be read, or null.
+     *
+     * THE SAME `__DIR__`-RELATIVE, CONTAINMENT-FREE CONSTRUCTION AS THE NINTH READ
+     * PATH, and it was on neither inventory. `WorktreeConfig::new()` read
+     * `__DIR__ . '/../../../.sugar-crush/config.json'` with no gate of any kind and
+     * was closed a round ago; this read `__DIR__ . '/../../.sugar-crush/config.dev.json'`
+     * the same way, and its contents decide which provider a launch talks to —
+     * `baseUrl` and `apiKey` included — through {@see fromProjectConfig()},
+     * {@see projectProviderConfig()} and, at launch,
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::availableProviders()}.
+     *
+     * TWO BOUNDARIES, the pair every repository-chosen read in this package
+     * carries:
+     *
+     *  - `<root>/.sugar-crush` must resolve STRICTLY inside `<root>`
+     *    ({@see ContainedPath::below()}), so a `.sugar-crush -> /elsewhere` inside
+     *    the shipped package relocates the check instead of tripping it;
+     *  - `config.dev.json` must resolve inside that directory
+     *    ({@see ContainedPath::within()}), so `config.dev.json -> /elsewhere/evil.json`
+     *    is refused on its own.
+     *
+     * WHOSE CHOICE IS THIS PATH, stated because the answer decides whether the gate
+     * is worth anything. Under a composer install the package sits in
+     * `vendor/sugarcraft/sugar-crush`, so its `.sugar-crush/` arrives with the
+     * DEPENDENCY — and a dependency's tarball carries symlinks exactly as a clone
+     * carries committed ones (the measurement on
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()}). In the monorepo
+     * it is this checkout's own file. Both cases are content whose location this
+     * process did not choose.
+     *
+     * ABSENCE IS NOT REFUSAL. A missing file returns null here as well, because
+     * {@see ContainedPath} refuses what it cannot resolve — so callers must keep
+     * reporting "not found" from the CONFIGURED path
+     * ({@see defaultConfigPath()}) rather than from this. The distinction the two
+     * methods draw is "where" versus "may I", and neither is "does it exist".
+     *
+     * @param string|null $packageRoot The tree holding `.sugar-crush/`; null means
+     *        {@see packageRoot()}. Injectable for the reason
+     *        {@see \SugarCraft\Crush\Agents\WorktreeConfig::new()}'s `$configDir` is:
+     *        both gates can only be DRIVEN against a synthetic tree, and the
+     *        alternative is committing a symlink into this repository's own
+     *        `.sugar-crush/` and restoring it in a `finally` — a git-tracked file
+     *        that an interrupted run leaves mutated. It is NOT a way around the
+     *        gates, which apply to an injected root exactly as to the default one.
+     */
+    public static function readableDefaultConfigPath(?string $packageRoot = null): ?string
+    {
+        $root = $packageRoot ?? self::packageRoot();
+        $path = $root . '/' . self::CONFIG_PATH;
+        $dir = \dirname($path);
+
+        if (!ContainedPath::below($dir, $root) || !ContainedPath::within($path, $dir)) {
+            return null;
+        }
+
+        return $path;
     }
 
     /**
@@ -134,7 +222,27 @@ final readonly class ProviderFactory
      */
     public function fromProjectConfig(?string $name = null, ?string $configPath = null): ProviderInterface
     {
-        $configPath ??= self::defaultConfigPath();
+        // THE GATE APPLIES TO THE DEFAULT PATH ONLY, and the asymmetry is a
+        // decision rather than an oversight: the default is the `__DIR__`-relative
+        // construction nobody in the session chose ({@see readableDefaultConfigPath()}),
+        // while an explicit $configPath is a path THIS CALLER named — a test
+        // fixture, or an operator pointing at their own file — and gating it would
+        // need a containing tree that only the caller can name. What the caller
+        // gets by passing one is the per-file boundary they chose to skip; that is
+        // stated here rather than left as an inference from the signature.
+        if ($configPath === null) {
+            $configPath = self::readableDefaultConfigPath();
+
+            if ($configPath === null) {
+                // The CONFIGURED path in the message, since the refused one has no
+                // path this factory is willing to have resolved. "not found" is the
+                // shared wording because absence and refusal are the same answer to
+                // this method's caller: there is no project config to read.
+                throw new \RuntimeException(
+                    'Provider config file not found: ' . self::defaultConfigPath(),
+                );
+            }
+        }
 
         if (!is_file($configPath)) {
             throw new \RuntimeException("Provider config file not found: {$configPath}");
@@ -311,9 +419,13 @@ final readonly class ProviderFactory
      */
     private function projectProviderConfig(string $name): ?array
     {
-        $configPath = self::defaultConfigPath();
+        // Null covers refusal as well as absence here, which is exactly this
+        // helper's documented tolerance: {@see defaultConfig()} must keep working
+        // with no project config present, and a config this package may not read is
+        // one that is not present as far as that fall-through is concerned.
+        $configPath = self::readableDefaultConfigPath();
 
-        if (!is_file($configPath)) {
+        if ($configPath === null || !is_file($configPath)) {
             return null;
         }
 

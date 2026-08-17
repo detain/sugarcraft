@@ -44,28 +44,56 @@ final class ForeignSkillDiscovery
     public function discoverClaude(string $projectRoot): array
     {
         return $this->discover(
-            [
-                // The project tree is confined to itself AND held inside the
-                // checkout; the user's own tree is held inside `$HOME`. See
-                // {@see SkillLoader::skillFilesIn()}'s $ownedBy and $anchoredIn
-                // — the same "who wrote this file" line this method's PRECEDENCE
-                // rule below is drawn on, applied to the directory as well as to
-                // the links inside it.
-                //
-                // THE USER TIER USED TO BE ANCHORED TO NOTHING, "because its
-                // location is not a repository's choice" — the same premise
-                // {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()}
-                // measured false: a `.claude/skills -> <outside>` symlink
-                // arrives in a tarball as readily as in a clone, and `$ownedBy`
-                // does not catch it because a tarball extracts as the extracting
-                // user. `$HOME` is the anchor that makes "the user's own tree"
-                // true rather than assumed; a link elsewhere INSIDE the home is
-                // unaffected, which is the layout the old sentence was defending.
-                $projectRoot . '/.claude/skills' => [null, $projectRoot],
-                self::homeDir() . '/.claude/skills' => [self::homeDir(), self::homeDir()],
-            ],
+            self::tiers($projectRoot, '/.claude/skills', '/.claude/skills'),
             SkillSource::Claude,
         );
+    }
+
+    /**
+     * The project and user trees for one foreign convention, with the containment
+     * each gets — and the user tree only when this process can establish that
+     * `$HOME` is this user's.
+     *
+     * THE SENTENCE THIS METHOD EXISTS TO MAKE TRUE was written into the two call
+     * sites' comments a round before it was: *"`$HOME` is the anchor that makes
+     * 'the user's own tree' true rather than assumed"*. The anchor was
+     * {@see HomeDirectory::path()}, which establishes NOTHING — its fallback is
+     * `sys_get_temp_dir()`, mode 1777 on every stock Linux — so the anchor and the
+     * anchored directory were both derived from a home nobody had vouched for, and
+     * a `$HOME` pointed at a world-writable directory had another local user's
+     * `.claude/skills/<name>/SKILL.md` body pass containment and reach the model's
+     * prompt. The sibling changed in the same commit,
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::userDir()},
+     * correctly used {@see HomeDirectory::owned()}: one sentence, true in one file
+     * and false in the other. MEASURED on this host with `HOME` at a mode-0777
+     * directory: `discoverClaude()` returned the skill off `path()` and returns
+     * nothing off `owned()`.
+     *
+     * NO USER TIER AT ALL when {@see HomeDirectory::owned()} is null, rather than
+     * a tier anchored to a stand-in. What that costs is a launch whose `$HOME` is
+     * unresolvable, world-writable or owned by somebody else losing its foreign
+     * user skills — while keeping its PROJECT ones, which are anchored to the
+     * checkout and do not depend on a home at all.
+     *
+     * @return array<string, array{0: string|null, 1: string|null}>
+     */
+    private static function tiers(string $projectRoot, string $projectSuffix, string $userSuffix): array
+    {
+        $tiers = [
+            // The project tree is confined to itself AND held inside the
+            // checkout. See {@see SkillLoader::skillFilesIn()}'s $ownedBy and
+            // $anchoredIn — the same "who wrote this file" line the PRECEDENCE
+            // rule on {@see discoverClaude()} is drawn on, applied to the
+            // directory as well as to the links inside it.
+            $projectRoot . $projectSuffix => [null, $projectRoot],
+        ];
+
+        $home = HomeDirectory::owned();
+        if ($home !== null) {
+            $tiers[$home . $userSuffix] = [$home, $home];
+        }
+
+        return $tiers;
     }
 
     /**
@@ -80,23 +108,12 @@ final class ForeignSkillDiscovery
     public function discoverOpencode(string $projectRoot): array
     {
         return $this->discover(
-            [
-                // See {@see discoverClaude()} for the per-tree containment.
-                $projectRoot . '/.opencode/skills' => [null, $projectRoot],
-                // Anchored to `$HOME` for the reason discoverClaude() states.
-                self::homeDir() . '/.config/opencode/skills' => [self::homeDir(), self::homeDir()],
-            ],
+            // The two suffixes differ (opencode keeps its user tree under
+            // `~/.config`), which is the whole reason {@see tiers()} takes them
+            // separately rather than one convention name.
+            self::tiers($projectRoot, '/.opencode/skills', '/.config/opencode/skills'),
             SkillSource::Opencode,
         );
-    }
-
-    /**
-     * This user's home directory — see {@see HomeDirectory}, the one
-     * resolution every `~`-rooted path in this package goes through.
-     */
-    private static function homeDir(): string
-    {
-        return HomeDirectory::path();
     }
 
     /**
