@@ -1786,3 +1786,261 @@ non-overlapping.
 **Work order from here:** land #37/#13/#38 → #63 `enforceTimeLimit` (hold until no
 lane is running the suite) → #12/#14/#17 rest of Phase 2 → #64 → the P3-P8 body →
 #58/#59/#60/#61, #49, #51, #55, and #74-#82.
+
+# Session 2026-08-17 (continued) — host fully provisioned, three review rounds landed
+
+Appended after the migration write-up above. Read that first for the environment
+history; this section supersedes its "State right now".
+
+## Host is now fully provisioned and the suite is GREEN
+
+Every extension gap is closed. Confirmed present: `dom` `xmlwriter` `simplexml`
+`xmlreader` (PHPUnit would not start without the first two), `sqlite3`
+`pdo_sqlite` (389 errors), `gd` (5 errors), plus `mbstring` `tokenizer` `pcntl`
+`posix` `ffi` `sockets` `curl`. **`ext-uv` is now installed as well**, so
+`Loop::get()` returns `ExtUvLoop` again and the loop pins committed in `76f34813`
+are live rather than inert — the stale-clock reasoning in those three
+`tests/bootstrap.php` files applies on this box after all. `swoole 6.2.1` is also
+enabled, though **nothing in the repo uses it**: no `composer.json` requires it
+and there is not one `Swoole\` reference under `sugar-crush/src` or
+`sugar-crush/tests`. This stack is ReactPHP; swoole is inert here.
+
+**Baseline on this host, measured twice independently (coordinator + lane E's
+reviewer, identical):**
+
+```
+Tests: 6246, Assertions: 38073, Skipped: 1.   OK   (~2 min)
+```
+
+The single skip is the legitimate
+`Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`.
+**Test count is identical to the dead host's 6246**, which confirms the migration
+cost nothing but environment. Lane-only figures: `tests/Workflows` +
+`tests/Permissions` = 347/823; the keybinding trio = 171/7749.
+
+Standing instruction that came out of this and should outlive it: **judge a
+sabotage by whether the targeted test file flips green→red, never by a diff of
+suite totals.** While extensions were missing, totals were swamped by 394
+environmental errors and a totals-diff would have read as "mutation survived" for
+every case.
+
+## Lane D — #13: review round 3 came back COMMIT-grade on the part that mattered
+
+The `refuses(ToolDeclaration)` / `evaluate(ToolCall)` split **holds**, and the
+review proved it rather than sampling it:
+
+- **Code-level proof, not a sample.** `SafetyClassifier::classify()` returns
+  non-null only when `name === 'Bash'` **and** `arguments['command']` is a set
+  string (`SafetyClassifier.php:252,263`). `ToolDeclaration::asNamedCallForGateOnly()`
+  builds `new ToolCall($name)` → `arguments === []`. So `classify()` is null for
+  *every possible* declaration, `evaluateAuto()` would always take its `Allow`
+  branch, and that is exactly what `autoDeclarationDecision()` returns. The two
+  arms **cannot** disagree on the decision; the only difference is the counter
+  write.
+- **Recursive property fingerprint** of the gate and its delegates across
+  780 `refuses()` probes (13 names × 5 rule-sets × 6 modes × classifier/none):
+  **no field ever changed.** `$mode`/`$rules`/`$classifier` are `readonly`, and
+  `SafetyClassifier` has **zero properties** — its patterns are a `const`. No
+  cache, no memo, no matcher state.
+- **The reason the type guard really holds, which nobody had tested:** a caller
+  file *without* `declare(strict_types=1)` still gets a `TypeError`, because PHP
+  never coerces between two distinct class types in either mode. The guard is
+  **engine-enforced, not convention-enforced**. Both classes are `final` with no
+  parent/interface/trait, so there is no shared supertype to widen a parameter to;
+  `PermissionGate` is `final` and `decide()` is `private`.
+- `asNamedCallForGateOnly()` has exactly **one** caller (`PermissionGate.php:145`)
+  and `refuses()` exactly one production caller (`WorkflowEngine.php:1235`), so
+  `@internal` is doing no load-bearing work — the reachability is what is narrow.
+- **26 mutations, 22/22 expect-RED went red, and the *named* test failed each
+  time.** Round 2's non-biting D3b fixture is independently confirmed repaired.
+- D2's "not fixable under `auto` without inventing policy" is **true, not merely
+  hard** — the same proof shows the classifier cannot judge a bare name.
+
+**The one real finding, and its framing is the point.** A repository can commit
+`.sugar-crush/workflows` as a **symlink to a victim directory**. `containedIn()`
+resolves *both* sides with `realpath()`, so when the workflows directory is itself
+the link the boundary moves with it and nothing is ever outside:
+
+```php
+symlink('/tmp/c4/victim', '/tmp/c4/repo/.sugar-crush-workflows');
+new WorkflowRegistry($userDir, '/tmp/c4/repo/.sugar-crush-workflows');
+// list() -> ["broken","creds"];  load('creds') -> LOADED, description='SENTINEL-VICTIM-CONTENT'
+```
+
+Exposure, honestly bounded: enumeration of `[a-zA-Z0-9_-]+\.yaml` basenames in any
+readable directory, plus `name`/`description`/prompts of any that parse as a
+workflow map (and those prompts become agent tasks). **The other half of the D3 fix
+still holds inside the hole** — a linked-in file's parse error reported `…is not
+valid YAML (line 2). The parser message is withheld…`, sentinel absent, so no raw
+content escapes even here. And **the identical property exists in the
+`SkillLoader::contained()` idiom this code cites as its own precedent**
+(`:337-351`, `@param list<string> $boundaries already-canonical`) and in
+`README.md:305` — so it is a **systemic property of the codebase's containment
+idiom, not a regression this round introduced.** The reportable defect is that
+round 3 wrote it up as absolute.
+
+Everything else in that surface held and must not regress: plain link out;
+relative chain `a.yaml → b.yaml → ../secret/id_rsa`; symlinked **sub**directory;
+**dangling** link (filtered by `is_file()` before `realpath()`); sibling-prefix
+`proj → ../projevil/x.yaml`; and a **TOCTOU** swap between `list()` and `load()`
+(refused because `load()` re-applies the predicate at read time). The user tier
+stays deliberately unconfined — it is the tier whose `.php` files get `require`d.
+
+Four nits, two of them the recurring class: the duplicate-stage-name message is
+**the only one of 13 load-error paths that echoes file content back**
+(`WorkflowRegistry.php:564`) and is the undocumented exception to the policy this
+round established; `autoDeclarationDecision()`'s null-classifier `Ask` → `Allow`
+survives both permission test files green; **the trailing-separator guard
+(`:317`) is load-bearing and untested** — dropping it leaves `WorkflowRegistryTest`
+fully green while `proj/sib.yaml -> ../projevil/x.yaml` becomes loadable; and the
+signal-stack **balance** is unpinned (`WorkflowEngine.php:1611` — a non-popping
+mutant passes all 47 engine tests by getting the end state right while leaking a
+frame per run and running outer stages under the wrong disposition).
+
+## Lane E — #38: review of the fix round found a HIGH in the *justification*
+
+**F-A1 (HIGH).** Decision A's criterion has a second half — that `Ctrl+K` in
+`Pane::Agents` gives a second door to the palette, so yielding chat-side `Ctrl+P`
+would remove "one of two doors to the same room". Measured at 100×30, **the second
+door opens onto nothing**:
+
+| pane | Ctrl+K palette state | painted in `App::view()` | `Down` |
+|---|---|---|---|
+| `Pane::Chat` | OPEN | **YES** | reaches Chat/palette |
+| `Pane::Agents` | OPEN | **NO** | **claimed by the shell** |
+
+That is precisely the condition (overlay those views cover ∧ `↑/↓/Enter` those
+views claim) the criterion's **first** half uses to disqualify `Ctrl+R`. So
+`Ctrl+P` from the agents pane — or an open skill picker, or an open F10 menu —
+opens an **invisible, undrivable** palette.
+
+Two things held together honestly: the `Ctrl+P` routing is **unchanged from
+`HEAD`** (`CHAT_CTRL_RUNES` already contained `p`), so this is not a regression the
+fix introduced; what the fix introduced is a justification that is false when
+measured. Applying its own criterion consistently would add `p`, which **collides
+with `testChatOwnedChordsSurviveTheAgentsPane`** (`KeyboardHandlerTest:987`),
+pinned as pre-existing and confirmed to pass for the right reason. That tension
+should have been *named*, not resolved with an unmeasured fact.
+
+**F-A2 (MEDIUM).** The `shellOwnsKeyboard($app)` conjunct in `chatOwns()`
+(`KeyboardHandler.php:234-235`) is a **provable no-op**: yielding `r`
+unconditionally survived mutation with `KeyboardHandlerTest` +
+`KeyBindingDriftTest` at OK (132 tests, 730 assertions), and a 14-state routing
+probe (7 panes × menu open/closed) produced **byte-identical** output. Cause:
+`testTheTwoClaimSetsAreDisjoint()` guarantees no yielded rune is in
+`shellCtrlRunes()`, so rule 6 can never claim `r`; and rule 2 already claims
+*every* key in exactly the three states the conjunct tests. So the conjunct, the
+new `$app` parameter, and the docblock's "Read twice" claim change nothing
+observable.
+
+**F-B1 (MEDIUM).** Decision B pins an **invisible, input-swallowing permission
+prompt with no cue**. With `keyHelp=0` and a prompt pending: reference paints,
+prompt does not, `y`/`n`/`a` all leave `perm=Y`, `Esc` recovers. The precedence
+itself is right and pinned. What is wrong is pinning *absence with no cue* — the
+same round added `KEY_HELP_TOO_SMALL` with the rationale "an open modal that is
+invisible AND silent is a stuck terminal as far as the user can tell", and a
+blocking prompt under the reference meets that definition exactly while forcing
+`inFlight` true. Enabling gap: **`Chat::requestPermission()` applies the message
+unconditionally and never checks `$msg->generation`** against `$this->generation`,
+though the message carries one and `Chat.php:603` shows the codebase knows
+superseded messages arrive late.
+
+Nits: the coexistence sentence at `Renderer.php:899` is false (mouse zones stay
+live under the overlay, so a status-bar click opens the palette with the reference
+up); `Renderer.php:2318`'s claim that the *description* is dropped is **backwards**
+and the line is untested; `KEY_HELP_CHROME_COLS`'s derivation is unverifiable as
+written; the memo accounting is incomplete; `testNoDescriptionNamesAKeyOutsideTheOrForm()`'s
+regex has holes no current row exploits; and **`CommandRegistry.php:108` registers
+`keys` but not `help`** while `Chat::submit():3288` accepts `/help` and
+`README.md:156` documents it — so `/help` works typed in full but never appears in
+the `/` popup or the palette, in the very registry this plan item exists to make
+authoritative.
+
+**Confirmed sound and not to be re-litigated:** the 2/3/3b → `shellOwnsKeyboard()`
+consolidation is *exactly* equivalent (four sequential `if`s over pure predicates
+→ one short-circuiting `||` in the same order; dropping each clause individually
+kills 11 / 3 / 7 tests); `chatOwns()` cannot see a null or stale `App`; the derived
+set `['r']` is right against the criterion's first half for every chord (only `p`
+also opens an overlay; `Ctrl+Tab`/`Ctrl+Shift+Tab` return above the yield check);
+`handleCtrl()` has no undocumented *reachable* chord; the `$keyHelpMaxOffset`
+ceiling is right in every ordering; F3/F4/F5/F6/F7/F9/F10/F11 all verified, with
+**140 derived** as 14 widths ≥5 × 10 heights ≥5 and the floor confirmed
+behaviourally exact at 648 sizes; each of the four `(or k / j)` rows now fails
+**individually** when reverted, closing the original defect. TUI invariants
+re-derived: 9,108 renders (plain/palette/perm × cols 1–130 × rows 1–45, top and
+clamped-to-end) → 0 violations; 1,296 exhaustive renders (cols 1–72 × rows 1–9) →
+0; floor provably exactly `cols≥5 ∧ rows≥5`; `cue ⟺ refuse ⟺ nobox` perfectly
+correlated; frame height always `== rows`.
+
+Memo timings re-measured on this host: **50.9 µs** cold vs **0.276 µs** memoised
+(old host 94.7–117.4 / 0.517–0.655). The docblock says "~90µs **on this machine**"
+— machine-scoped and therefore honest, but measured on the *dead* machine.
+
+## Reviewer-technique notes that earned their keep this session
+
+- **Predict your control file.** Lane D's reviewer chose
+  `src/Permissions/ToolDeclaration.php` — created by its own lane, in a directory
+  no other lane touches — and predicted it would not change. 22/22 hashes OK. Even
+  better, **16 of them matched the pre-crash baseline byte-for-byte**, which
+  independently confirmed by a second method that `src/Chat.php` carried no
+  leftover sabotage mutation from the agent killed mid-mutation. Predicting the
+  control is the strong part; a control you pick after the fact proves less.
+- **A `trap restore EXIT INT TERM HUP` harness** with md5 + `cmp` change-guards, a
+  unique-anchor assertion, in-memory originals, and a printed restore
+  confirmation. Both reviewers used it; zero anchor misses, zero no-ops, zero
+  restore mismatches across 26 + 8 mutations.
+- **Register the sandbox autoloader AFTER Composer's `register(prepend: true)`**
+  and assert `ReflectionClass::getFileName()` per class per mutation. Lane D's
+  reviewer proved 10 classes resolved inside the sandbox before every one of 26
+  rows.
+- **Inheriting a predecessor's probe is legitimate when the bytes match.** Lane
+  E's reviewer re-ran what it could and explicitly listed what it inherited on md5
+  proof (its baseline hashes were identical to the bytes those probes ran on, so
+  they transfer exactly) versus on trust (two mouse click-through observations).
+  That three-way split — re-verified / inherited-on-proof / inherited-on-trust —
+  is the honest form.
+
+## Tracker items
+
+Existing: **#78** `McpClientTest` `/bin/true` broken-pipe race. **#79**
+`/workflow run` freezes the TUI (synchronous `run()` on the ReactPHP loop, up to
+300s per stage). **#80** `ProcessExecutor::createInlineWorkerScript()` is still the
+P1.S5 simulation — no provider request, so no tool call exists on the pool path
+for a `PermissionGate` to evaluate, which is *why* threading the gate could not
+alone make #13's claim true. **#81** port the vhs lexical grammar into
+`candy-vcr/src/Tape/Lexer.php` (no JSON token, no regex token today). **#82**
+`MenuBar.php:362-368` orphaned docblock — second instance, wants a grep not a
+point fix.
+
+New this session:
+
+**#83** `README.md:42` advertises *"4,337 tests / 12,587 assertions"* against an
+actual **6,246 / 38,073**. Pre-existing, untouched by any lane.
+
+**#84** the containment-idiom hole is **systemic**: `SkillLoader::contained()`
+(`:337-351`) and `README.md:305` carry the same property lane D's review found in
+`WorkflowRegistry::containedIn()` — a boundary directory that is *itself* a
+symlink moves with the link, so nothing is ever outside it. Fixing only the
+workflow tier leaves the skills tier stating the same guarantee it cannot keep.
+
+## State right now
+
+**In flight (3 lanes, nothing committed beyond this worklog):**
+- **Lane D / #13** — fix round for the 1 finding + 4 nits above. Must decide
+  between closing the symlinked-directory hole here (and filing #84) or correcting
+  both claims precisely and filing the systemic fix.
+- **Lane E / #38** — fix round for F-A1/F-A2/F-B1/F-B2 + 5 nits. Must resolve
+  F-A1 deliberately: either add `p` to the yielded set and confront the pinned
+  test on its merits, or fix the premise and *name* the tension.
+- **Lane B / #37** — round-12 review still running. Priority is the differential
+  corpus's **domain**: what a 6×8×22×7×5 product cannot contain (nested
+  constructs, two constructs on one line, `\r\n`, non-ASCII, three-line
+  constructs, multiple sentinels, empty middles), since domain bugs are how this
+  chain's sweeps failed twice. Its oracle paths on this host: binary at
+  **`/tmp/vhsbin/vhs`**, Go source at
+  `/home/my/go/pkg/mod/github.com/charmbracelet/vhs@v0.11.0`. No `ttyd`/`ffmpeg`,
+  so `validate` and the parser only — no renders.
+
+**Work order unchanged:** land #37/#13/#38 → #63 `enforceTimeLimit` → #12/#14/#17
+rest of Phase 2 → #64 → the P3-P8 body → #58/#59/#60/#61, #49, #51, #55, and
+#74-#84.
