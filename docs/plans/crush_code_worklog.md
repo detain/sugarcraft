@@ -4768,3 +4768,141 @@ with the call shapes its own fixtures do not cover.
 3. Plan steps **#14** -> **#12** -> **#17**, one at a time (#14 and #12 both want
    `Bootstrap.php`, which lane D just edited). **#90 is now fixed, so #17 is
    unblocked** — its `LspTool` will be visible to the widened corpus.
+
+---
+
+## Round 2 of the review/fix cycle — and the instruments start parsing
+
+Commits: `dde2d293` (memory bound), `5f19c00d` (lane D round 8), `f8b37f63`
+(lane B round 19). Suite at `f8b37f63`: **6603 / 68722 / 1 skipped / 0 failures /
+exit 0**, 2:06. Lane E round 6 still running.
+
+### #89's real shape: five escapes, then three MORE read paths
+
+Round 7 closed five escapes in `InstructionFileLoader`. Its review then found the
+subsystem had **three further repository-chosen readers with no containment at
+all**: `ForeignAgentPresetRegistry` on `{projectRoot}/.claude/agents` and
+`.opencode/agents`, and `ForeignMemoryImporter` on `.opencode/memory`. Measured:
+
+```
+FOREIGN discoverClaude: presets=["leak"] initialPrompt='SIXTH-ESCAPE-BODY sk-live-CAFEBABE'
+                        permissionMode=bypass-permissions
+NATIVE  agentPresets(same repo): presets=[] refusals={"…/.sugar-crush/agents":"resolves to …/outside…"}
+```
+
+The native tier refuses the byte-identical shape **with a message describing
+exactly that harm**. All three are dormant, so they were GATED, not removed.
+`ContainedPath`'s "FIVE READ TIERS" is now seven, with the omissions named as what
+they were: read paths with no compare, in classes whose "unwired" was doing the
+work "gated" should have been.
+
+### The security rationale that did not exist
+
+Round 7 opened the `$root === $HOME` unanchored branch and justified it as *"still
+gated by `trustedConfigDirPath()`, which refuses a home this process cannot
+establish ownership of."* **There was no ownership check anywhere in the package.**
+Measured: `HOME=<mode 1777 dir>` → `trustedConfigDirPath()` returns it →
+user-tier presets read out of a world-writable directory. And with
+`posix_geteuid`/`posix_getpwuid` disabled and `HOME` unset — the documented
+fallback — `path()` returns `/tmp`, mode `41777`.
+
+Round 8 built the check instead of editing the sentence, with the domain AT the
+check: group-writable deliberately ACCEPTED (`umask 002` homes are 0775; refusing
+them breaks working installs), the sticky bit explicitly NOT a mitigation (sticky
+blocks delete, not create — which is why `/tmp` was readable), ownership degrading
+away where `fileowner()` is meaningless. The hole is closed by keeping the anchor
+when `$HOME` is itself a checkout, discriminated by `file_exists("$root/.git")` —
+`file_exists`, not `is_dir`, because a linked worktree spells `.git` as a FILE —
+with the uncaught case stated: a bare-repo dotfiles layout leaves no `$HOME/.git`.
+
+It deliberately did NOT migrate the four other subsystems off the unsafe fallback
+mid-round; it named every remaining reader by grep result and split
+prompt-bearing from write-side. A stated gap beats a quiet sweep.
+
+### The instruments were pattern-matchers; now they parse
+
+This is the round's real theme. FOUR "derived" instruments measured presence:
+
+- **`ContainedPathInventoryTest` counted a call whose RESULT WAS DISCARDED as a
+  live gate.** Neutering `loadRoot()`'s gate — call present, result thrown away,
+  escape restored — left it green at 5 tests / 14 assertions, and five real
+  containment spellings went uncounted. Now a token parser: ROUTED counts a call
+  only when its result is CONSUMED, and a discarded result is a hard failure with
+  file and line. Parsing also removed a false positive the line regex produced at
+  `BashEscapeDenyHook.php:107`. **Its blind spots are now asserted** — two known
+  misses are pinned, so teaching the scanner one of them fails the test and forces
+  the bound statement to be rewritten. First instrument in this chain that cannot
+  quietly outgrow its own documentation.
+- **`ProjectTierRefusalInventoryTest` asserted that a five-element literal has five
+  elements**, while both missing tier names were already `true` in its own
+  haystack. Replaced with a `token_get_all` derivation: 20 dot-paths, 10
+  repository-chosen. Classification stays a written-down judgement, because a
+  string literal cannot say who chose the location.
+- **`BuiltInToolCorpus` derived one class per FILENAME** while `src/` ships **286
+  top-level declarations in 267 files**. Now scans every declaration. Separately:
+  an **enum implementing `Tool`** passed both guard clauses and fatalled
+  `instances()` with an uncatchable `Error` — the exact failure the refactor
+  existed to remove.
+- **Lane B's census was fooled both ways** — `and` instead of `&&` added a real
+  conjunct invisibly; `&&` inside an assertion message counted as one. Replaced
+  with a `token_get_all` walk. **The figures did not move** (5/8/8/17, 2/3/3/4), so
+  it is an instrument fix, not a re-baseline.
+
+### The register that would have read "killed" forever
+
+Lane B's census test reds on EVERY conjunct-drop in the four model methods
+regardless of semantics — so the equivalent-mutant register's own rule ("a
+survivor outside this list IS a gap") could never be exercised again, and two of
+its five registered survivors were already false. The exclusion is now
+EXECUTABLE: `#[Group(SWEEP_EXCLUDE_GROUP)]` plus an assertion that every docblock
+spelling the sweep command out actually contains `--exclude-group <that group>`.
+The agent caught that its own first attempt — asserting the attribute matches the
+constant — is a TAUTOLOGY that stays green on a rename, which is why the
+docblock-citation half exists.
+
+### #63's follow-up: the timer bounds computing, not thrashing
+
+A review claimed the `tokenize()` for-header mutant hangs past 600s despite
+`defaultTimeLimit=60`. I probed three shapes under the real config and the stated
+mechanism did NOT reproduce: spin loop aborts at 60.09s, warning-per-iteration at
+61.4s having banked 2,640,658 warnings, 4KB-append at 65.6s. All three report.
+But the reviewer's own measurement stands, so the honest statement — now in
+`phpunit.xml` — is that the limit bounds TIME SPENT COMPUTING, not a process that
+has started thrashing.
+
+The fix for the shape the timer cannot help is a memory bound. CLI default here
+was `-1`. Same 4KB-append loop: **65.6s unlimited (38s of it in `sys`, i.e.
+paging) vs 0.626s at 1G**. Lane B then re-measured the real mutant across the
+change: **still running at 100s / exit 124 before, 10.7s memory fatal after**. The
+kill is recorded honestly as a process-level fatal with no test name and no
+summary, dependent on a `memory_limit` that file does not own.
+
+My original comment said "an infinite loop reports in a minute" with no domain —
+the same defect this chain has been fixing everywhere else, in the file that added
+the guard.
+
+### Operational: my own bad advice
+
+I told agents to use `pkill -f '[p]hpunit'`. **The bracket trick only stops the
+pattern matching your OWN shell — it still kills every other agent's phpunit.**
+Two such watchdogs were observed killing sibling runs mid-suite. Retracted; every
+brief now forbids global `pkill` and requires any watchdog to match the agent's
+own sandbox path. A run that dies mid-suite with no summary line looks exactly
+like a real defect, which is what makes this expensive.
+
+### TOCTOU, raced rather than reasoned
+
+45s, **3,107,929** `loadRoot()` iterations against a background symlink flipper:
+11,235 refused, **0 leaked**. Recorded as what it is — not proof the window is
+closed, since the read still follows whatever the resolved path names.
+
+### Queue
+
+1. Lane E round 6 (running) → commit.
+2. Re-reviews of `f8b37f63` (lane B r19) and `5f19c00d` (lane D r8), then lane E's.
+3. **#88** README whole-suite figure, standalone. Deferred a THIRD time — every
+   round moves it. True value at `f8b37f63` is **6603 / 68722**.
+4. Plan steps **#14** → **#12** → **#17**. #90 is fixed, so #17 is unblocked.
+5. Reported but not actioned: `src/ToolRegistry.php` declares its own
+   `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface —
+   left alone because that file was outside the round's ownership.
