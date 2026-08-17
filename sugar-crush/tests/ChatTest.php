@@ -45,6 +45,7 @@ use SugarCraft\Crush\Sessions\BackgroundSession;
 use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\PermissionReplyMsg;
+use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
@@ -3740,13 +3741,29 @@ final class ChatTest extends TestCase
      *
      * @dataProvider permissionKeyProvider
      */
-    public function testPermissionKeysDecideThePrompt(KeyMsg $key, PermissionReply $expected): void
+    public function testPermissionKeysDecideThePrompt(array $keys, PermissionReply $expected): void
     {
         $sentinel = $this->tempPath('sc_perm_');
         $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
 
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
-        [$answered, $cmd] = $suspended->update($key);
+
+        $answered = $suspended;
+        $cmd = null;
+        foreach ($keys as $index => $key) {
+            [$answered, $cmd] = $answered->update($key);
+
+            // Only the LAST key may decide. The `a` sequence is two keys
+            // precisely because the first one must NOT answer: it raises the
+            // confirm that the session grant now costs.
+            if ($index < count($keys) - 1) {
+                $this->assertNotNull(
+                    $answered->pendingPermission(),
+                    "'{$key->string()}' must not decide the prompt on its own",
+                );
+                $this->assertSame([], $answered->permissionGrants(), 'and must not grant anything on its own');
+            }
+        }
 
         $this->assertNull($answered->pendingPermission());
         $this->assertSame(
@@ -3767,20 +3784,40 @@ final class ChatTest extends TestCase
         }
     }
 
+    /**
+     * The key SEQUENCE each reply costs, which is the part that changed: three
+     * of the four replies are one keystroke, and the session-wide one is two.
+     *
+     * `Always` outlives the call it answers - `gateToolCall()` honours the
+     * grant for the rest of the session - so it is the only reply worth a
+     * confirm. `a` raises it; the `y` after commits it.
+     */
     public static function permissionKeyProvider(): array
     {
         return [
-            'y approves once' => [new KeyMsg(KeyType::Char, 'y'), PermissionReply::Once],
-            'a approves always' => [new KeyMsg(KeyType::Char, 'a'), PermissionReply::Always],
-            'n refuses' => [new KeyMsg(KeyType::Char, 'n'), PermissionReply::Reject],
-            'escape refuses' => [new KeyMsg(KeyType::Escape, ''), PermissionReply::Reject],
+            'y approves once' => [[new KeyMsg(KeyType::Char, 'y')], PermissionReply::Once],
+            'a then y approves always' => [
+                [new KeyMsg(KeyType::Char, 'a'), new KeyMsg(KeyType::Char, 'y')],
+                PermissionReply::Always,
+            ],
+            'n refuses' => [[new KeyMsg(KeyType::Char, 'n')], PermissionReply::Reject],
+            'escape refuses' => [[new KeyMsg(KeyType::Escape, '')], PermissionReply::Reject],
         ];
     }
 
     /**
      * This prompt gates tool execution, so "the user pressed something" must
-     * never read as consent: an unmapped key leaves the prompt exactly as it
-     * was.
+     * never read as consent: an unmapped key leaves the question, the batch and
+     * the turn exactly as they were.
+     *
+     * What it no longer leaves alone is the prompt's STAGE. An unmapped key is
+     * now evidence that the person at the keyboard is typing rather than
+     * answering, so it disarms the prompt and the answer letters stop working
+     * until Enter re-arms - which is what stops `/agents` from granting `bash`
+     * for the session on its second keystroke. So this test asserts the
+     * unchanged-ness it is actually about (the request, the grants, the turn,
+     * the absence of a Cmd) instead of object identity, which was only ever a
+     * proxy for it.
      */
     public function testUnmappedKeyLeavesThePermissionPromptUp(): void
     {
@@ -3790,9 +3827,20 @@ final class ChatTest extends TestCase
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
         [$unchanged, $cmd] = $suspended->update(new KeyMsg(KeyType::Char, 'q'));
 
-        $this->assertSame($suspended, $unchanged);
         $this->assertNull($cmd);
-        $this->assertNotNull($unchanged->pendingPermission());
+        $this->assertSame(
+            $suspended->pendingPermission(),
+            $unchanged->pendingPermission(),
+            'the same question is still being asked, about the same call',
+        );
+        $this->assertSame([], $unchanged->permissionGrants(), 'and nothing was consented to');
+        $this->assertTrue($unchanged->inFlight, 'and the turn is still suspended on the answer');
+        $this->assertSame(
+            PermissionPromptStage::Disarmed,
+            $unchanged->permissionStage(),
+            'the one thing it DOES change: an unmapped key disarms the prompt',
+        );
+        $this->assertFileDoesNotExist($sentinel, 'and above all the gated tool did not run');
     }
 
     /**

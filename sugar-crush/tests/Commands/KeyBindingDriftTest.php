@@ -22,6 +22,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\PermissionRequestMsg;
+use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Session\SessionStore;
@@ -247,8 +248,8 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 57 declared rows — and THAT is the domain
-     * of the zero. It says nothing about prose not yet written; it says those 57
+     * Zero false positives across all 58 declared rows — and THAT is the domain
+     * of the zero. It says nothing about prose not yet written; it says those 58
      * rows are clean under this pattern.
      *
      * Holes left open ON PURPOSE, because closing them costs more than it buys:
@@ -954,8 +955,74 @@ final class KeyBindingDriftTest extends TestCase
 
             // ── Permission prompt ────────────────────────────────────────
             'permission.once' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),
-            'permission.always' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),
+            // "Ask to allow", not "allow": the row's description changed
+            // because the key did, and this is the observation that holds the
+            // two together. `a` alone must leave the prompt up and the grant
+            // map empty; the grant is what the CONFIRM writes.
+            'permission.always' => function (array $k): void {
+                [$confirming] = $this->blockedOnPermission()->update($k[0]);
+
+                $this->assertNotNull(
+                    $confirming->pendingPermission(),
+                    "'a' must not answer the prompt on its own any more — it asks",
+                );
+                $this->assertSame(PermissionPromptStage::ConfirmingAlways, $confirming->permissionStage());
+                $this->assertSame(
+                    [],
+                    $confirming->permissionGrants(),
+                    'and nothing is granted until the confirm is answered',
+                );
+
+                [$granted] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+                $this->assertNull($granted->pendingPermission(), 'the confirm answers the prompt');
+                $this->assertSame(
+                    ['Bash' => true],
+                    $granted->permissionGrants(),
+                    'and THAT is what the row promises: the whole session, once confirmed',
+                );
+
+                // The prose half. Everything above proves `a` no longer grants
+                // on its own; nothing else in this suite reads a description's
+                // WORDS back, so a row left saying "Allow this tool for the
+                // whole session" would keep making the promise the key stopped
+                // keeping — measured, reverting that wording alone left this
+                // file, KeyBindingRegistryTest, KeyHelpTest and RendererTest
+                // all green.
+                $this->assertStringStartsWith(
+                    'Ask',
+                    KeyBindingRegistry::byId('permission.always')?->description ?? '',
+                    'the row must say it ASKS, because that is what the key does',
+                );
+            },
             'permission.deny' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),
+            // The recovery, and the reason Enter is a declared row rather than
+            // an undocumented key: a disarmed prompt ignores every answer
+            // letter, so without this one binding it could not be answered from
+            // the keyboard at all.
+            'permission.rearm' => function (array $k): void {
+                [$disarmed] = $this->blockedOnPermission()->update(new KeyMsg(KeyType::Char, '/'));
+                $this->assertSame(
+                    PermissionPromptStage::Disarmed,
+                    $disarmed->permissionStage(),
+                    'fixture: one non-answer keystroke disarms the prompt',
+                );
+
+                [$ignored] = $disarmed->update(new KeyMsg(KeyType::Char, 'y'));
+                $this->assertNotNull(
+                    $ignored->pendingPermission(),
+                    'fixture: and a disarmed prompt ignores "y", or there is nothing to recover from',
+                );
+
+                [$rearmed] = $disarmed->update($k[0]);
+                $this->assertSame(PermissionPromptStage::Armed, $rearmed->permissionStage());
+                $this->assertNotNull(
+                    $rearmed->pendingPermission(),
+                    'and the re-arm answers nothing itself — it only makes the answers live again',
+                );
+
+                [$answered] = $rearmed->update(new KeyMsg(KeyType::Char, 'y'));
+                $this->assertNull($answered->pendingPermission(), 'which the same "y" now proves');
+            },
 
             // ── Agent view ───────────────────────────────────────────────
             'agents.move' => function (array $k): void {
@@ -1411,15 +1478,26 @@ final class KeyBindingDriftTest extends TestCase
 
     private function assertPermissionAnsweredBy(KeyMsg $key): void
     {
+        [$answered] = $this->blockedOnPermission()->update($key);
+        $this->assertNull($answered->pendingPermission(), "'{$key->string()}' must answer the prompt");
+    }
+
+    /** A live, ARMED permission prompt on a `Bash` call. */
+    private function blockedOnPermission(): Chat
+    {
         [$blocked] = $this->chat([Message::user('clean up')])->update(new PermissionRequestMsg(
             Message::assistant(''),
             new ToolCall('Bash', ['description' => 'Delete build/'], 'call_1'),
             'Run rm -rf build/?',
         ));
         $this->assertNotNull($blocked->pendingPermission(), 'fixture: the prompt must be up');
+        $this->assertSame(
+            PermissionPromptStage::Armed,
+            $blocked->permissionStage(),
+            'fixture: a newly-raised prompt is armed, or none of these rows can be pressed at all',
+        );
 
-        [$answered] = $blocked->update($key);
-        $this->assertNull($answered->pendingPermission(), "'{$key->string()}' must answer the prompt");
+        return $blocked;
     }
 
     /**

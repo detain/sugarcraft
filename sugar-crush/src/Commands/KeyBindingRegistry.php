@@ -475,6 +475,17 @@ final class KeyBindingRegistry
     }
 
     /**
+     * The prompt's four keys, and why the two descriptions that changed had to.
+     *
+     * A permission prompt only answers to a letter while it is ARMED, and one
+     * keystroke that is not an answer disarms it
+     * ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage}). So `a` no
+     * longer grants — it asks — and `Enter` is a live binding of its own rather
+     * than an inert key, which is exactly the kind of promise this reference
+     * exists to keep honest. Leaving the old wording would have this screen
+     * telling a user that one keystroke buys a session-wide grant, which is the
+     * behaviour the fix removed.
+     *
      * @return list<KeyBinding>
      */
     private static function permission(): array
@@ -483,8 +494,9 @@ final class KeyBindingRegistry
 
         return [
             KeyBinding::new('permission.once', 'y', 'Allow this one call', $c),
-            KeyBinding::new('permission.always', 'a', 'Allow this tool for the whole session', $c),
+            KeyBinding::new('permission.always', 'a', 'Ask to allow this tool for the whole session', $c),
             KeyBinding::new('permission.deny', 'n', 'Refuse the call (or Esc)', $c),
+            KeyBinding::new('permission.rearm', 'Enter', 'Make the answer keys live again', $c),
         ];
     }
 

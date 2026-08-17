@@ -176,10 +176,15 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 16 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 267 files declare
-     * 286 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 268 files declare
+     * 287 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
+     *
+     * The 268th file (and the 26th enum) is `Permissions/PermissionPromptStage`,
+     * the armed/disarmed/confirming state a permission prompt is in — the thing
+     * that stops an ordinary slash command typed at a live prompt from
+     * answering it.
      */
     public function testTheSymbolKindCensusTheDocBlockQuotes(): void
     {
@@ -212,9 +217,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(267, $files, 'php files under src/');
+        $this->assertSame(268, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 220, 'enum' => 25, 'abstract' => 0, 'interface' => 16, 'trait' => 6, 'none' => 0],
+            ['concrete' => 220, 'enum' => 26, 'abstract' => 0, 'interface' => 16, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }

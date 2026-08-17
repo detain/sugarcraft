@@ -26,6 +26,9 @@ use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\PermissionPromptStage;
+use SugarCraft\Crush\Permissions\PermissionReply;
+use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Tui\SessionPicker;
 
@@ -945,19 +948,24 @@ final class KeyHelpTest extends TestCase
     public function testTheFooterSaysThatTheSecondQuestionMarkTypesOne(): void
     {
         // Two sizes, because the hint is a different string in each: 100x30
-        // overflows the box (53 live rows plus 9 headers and 8 separators = 70
+        // overflows the box (54 live rows plus 9 headers and 8 separators = 71
         // content lines, against a 25-line body) so the footer carries the
         // scroll clause as well, while 100x80 fits the whole list and drops it.
+        //
+        // The live-row count moved 53 -> 54 when `permission.rearm` was
+        // declared: a permission prompt disarmed by a stray keystroke can only
+        // be answered again after Enter re-arms it, and a live binding the
+        // reference does not list is exactly what this file exists to catch.
         //
         // The 25 derives from renderKeyHelp() rather than being counted off a
         // screenshot: at 100x30, keyHelpGeometry() gives boxRows = rows - 2 = 28,
         // the border takes two more so viewport = 26, and the footer itself
         // takes one, so body = 25. Which is why the measured
-        // Renderer::keyHelpMaxOffset() here is 70 - 25 = 45; an earlier version
+        // Renderer::keyHelpMaxOffset() here is 71 - 25 = 46; an earlier version
         // of this comment said 27, a body that would have made it 43. Both
         // overflow figures are asserted below rather than left in the prose,
         // since a body height stated and not read back is what went wrong.
-        foreach ([[100, 30, 45], [100, 80, 0]] as [$cols, $rows, $expectedOverflow]) {
+        foreach ([[100, 30, 46], [100, 80, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1451,7 +1459,13 @@ final class KeyHelpTest extends TestCase
      * `$tool` is the name the ASK is about, and therefore the key an
      * {@see \SugarCraft\Crush\Permissions\PermissionReply::Always} answer writes
      * into `permissionGrants` — which is the property
-     * {@see testTypingAtALivePromptAnswersItAndCanGrantForTheSession()} measures.
+     * {@see testTheSessionGrantTakesASecondDeliberateKeystroke()} measures, and
+     * which {@see testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt()} reads
+     * back for every row of its table.
+     *
+     * The prompt it hands back is ARMED, because that is what
+     * {@see Chat::requestPermission()} raises. Every test here that types a
+     * non-answer key first is deliberately leaving that state.
      */
     private function blockedOnPermission(string $tool = 'Bash', ?int $generation = null): Chat
     {
@@ -1616,16 +1630,18 @@ final class KeyHelpTest extends TestCase
      * does just as well. Measured: changing `'y' => PermissionReply::Once` to
      * `PermissionReply::Reject` in `Chat::handlePermissionKey()` left `KeyHelpTest`
      * OK at 47 tests / 25,426 assertions, while the surrounding prose (and the
-     * hazard {@see testTypingAtALivePromptAnswersItAndCanGrantForTheSession()}
-     * reports) rests entirely on `y` meaning APPROVE. `ChatTest` catches that flip
-     * repo-wide; this file did not, and an assertion is owed by the file it lives
-     * in.
+     * hazard {@see testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt()}
+     * measures) rests entirely on `y` meaning APPROVE. `ChatTest` catches that
+     * flip repo-wide; this file did not, and an assertion is owed by the file it
+     * lives in.
      *
      * The four properties below are what separate the three replies from each
      * other, measured on this fixture: Once leaves `inFlight` true, hands back a
      * Cmd, appends the running placeholder and grants nothing; Reject clears
      * `inFlight`, hands back no Cmd and writes a denial line; Always is Once plus
-     * `permissionGrants['bash']`.
+     * `permissionGrants['bash']` — and Always now takes two keystrokes to reach,
+     * which is {@see testTheSessionGrantTakesASecondDeliberateKeystroke()}'s
+     * subject rather than this one's.
      */
     public function testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(): void
     {
@@ -1720,51 +1736,78 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * THE PRODUCT HAZARD, pinned rather than fixed: while a prompt is up every
-     * `Char` key is a candidate ANSWER, so typing an ordinary slash command
-     * answers it, and one of them grants a PERMANENT session grant.
+     * THE ARM RULE, driven keystroke by keystroke — the same table that used to
+     * pin the defect, re-measured against the fix.
      *
-     * Routing this differently is a product decision — see
-     * {@see Chat::handlePermissionKey()}'s docblock for the measured table and the
-     * options. What this test does is make the current behaviour deliberate: any
-     * change to it reds a named row here instead of shifting silently.
+     * The defect: a prompt owns the keyboard, so every `Char` key reached
+     * `Chat::handlePermissionKey()` and nothing typed. `/agents` hit `a` on its
+     * SECOND keystroke and wrote `permissionGrants['bash'] = true`, which
+     * `gateToolCall()` honours for the rest of the session — every later `bash`
+     * call then ran unasked. `/init` denied on its third, `/keys` approved on
+     * its fourth.
      *
-     * The `a` rows are the material ones and are NOT the `y` hazard repeated:
-     * `PermissionReply::Always` writes `permissionGrants[<tool>] = true`, which
-     * `gateToolCall()` honours for the rest of the session, so `/agents` typed at
-     * a prompt makes every later `bash` call run unasked. Its second keystroke is
-     * the `a`.
+     * The fix: a prompt goes up ARMED and one keystroke that is not an answer
+     * DISARMS it ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage}),
+     * so none of the six slash commands reaches an answer at all — each one's
+     * first keystroke is the `/`, which is not an answer and takes the answer
+     * keys away. What remains is `y`/`n` in FIRST position, which is the
+     * residual `Chat::handlePermissionKey()`'s docblock states and defends
+     * rather than hides: those keys ARE the answers, and at keystroke one the
+     * prompt has no evidence to the contrary.
      *
-     * Two corrections to the previous round's report of this, both driven: the
-     * `/keys` case answers on the FOURTH keystroke (`/` `k` `e` `y`), not the
-     * third; and a bracketed PASTE does NOT qualify, because `Chat::update()`
-     * drops `PasteMsg` (asserted in
+     * Recovery is a row of this table rather than a separate story: `"\n"` in a
+     * typed string is an Enter, and the `/agents` + Enter + `y` row proves the
+     * disarm is a state a user can get out of. {@see testEnterIsTheWayBackFromADisarmedPrompt()}
+     * takes that row apart keystroke by keystroke.
+     *
+     * A bracketed PASTE does not qualify, then or now: `Chat::update()` drops
+     * `PasteMsg` (asserted in
      * {@see testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()}). Only an
-     * unbracketed paste, delivered by the terminal as raw `Char` keys, walks this
-     * table.
+     * unbracketed paste, delivered by the terminal as raw `Char` keys, walks
+     * this table.
      */
-    public function testTypingAtALivePromptAnswersItAndCanGrantForTheSession(): void
+    public function testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt(): void
     {
         foreach ([
-            '/keys' => [4, 'y', []],
-            '/agents' => [2, 'a', ['bash' => true]],
-            '/branch main' => [4, 'a', ['bash' => true]],
-            '/compact' => [6, 'a', ['bash' => true]],
-            '/init' => [3, 'n', []],
-            '/new' => [2, 'n', []],
-            'yes' => [1, 'y', []],
-            'Y' => [1, 'Y', []],
-            'no' => [1, 'n', []],
-            'nay' => [1, 'n', []],
-            '/help' => [null, null, []],
-            '/quit' => [null, null, []],
-            '/model' => [null, null, []],
-        ] as $typed => [$answersAt, $rune, $grants]) {
+            // The six that used to answer, and the three that never did. All
+            // nine are now fully swallowed, and all nine leave the prompt
+            // DISARMED — which is the state the modal has to disclose.
+            '/keys' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/agents' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/branch main' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/compact' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/init' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/new' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/help' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/quit' => [null, null, [], PermissionPromptStage::Disarmed],
+            '/model' => [null, null, [], PermissionPromptStage::Disarmed],
+
+            // The recovery: disarmed by the `/`, re-armed by the Enter, then
+            // answered ONCE by the `y` — and with no session grant behind it.
+            "/agents\ny" => [9, 'y', [], PermissionPromptStage::Armed],
+
+            // The residual, stated rather than hidden: a message that BEGINS
+            // with an answer letter still answers on keystroke one.
+            'yes' => [1, 'y', [], PermissionPromptStage::Armed],
+            'Y' => [1, 'Y', [], PermissionPromptStage::Armed],
+            'no' => [1, 'n', [], PermissionPromptStage::Armed],
+            'nay' => [1, 'n', [], PermissionPromptStage::Armed],
+
+            // A leading `a` opens the confirm instead of granting, so it takes
+            // a `y` in SECOND position to buy a session grant — and any other
+            // next key takes the confirm away again.
+            'a' => [null, null, [], PermissionPromptStage::ConfirmingAlways],
+            'and' => [null, null, [], PermissionPromptStage::Disarmed],
+            'an' => [null, null, [], PermissionPromptStage::Armed],
+            'aye' => [2, 'y', ['bash' => true], PermissionPromptStage::Armed],
+        ] as $typed => [$answersAt, $rune, $grants, $stage]) {
             $chat = $this->blockedOnPermission('bash');
             $at = null;
             $answering = null;
             foreach (str_split($typed) as $index => $char) {
-                [$chat] = $chat->update(new KeyMsg(KeyType::Char, $char));
+                [$chat] = $chat->update(
+                    $char === "\n" ? new KeyMsg(KeyType::Enter) : new KeyMsg(KeyType::Char, $char),
+                );
                 if ($chat->pendingPermission() === null) {
                     $at = $index + 1;
                     $answering = $char;
@@ -1772,19 +1815,268 @@ final class KeyHelpTest extends TestCase
                 }
             }
 
+            $label = str_replace("\n", '<Enter>', $typed);
             $this->assertSame(
                 $answersAt,
                 $at,
-                "typing {$typed} at a live permission prompt answers it at this keystroke (null = never)",
+                "typing {$label} at a live permission prompt answers it at this keystroke (null = never)",
             );
-            $this->assertSame($rune, $answering, "and the rune that answered it, typing {$typed}");
+            $this->assertSame($rune, $answering, "and the rune that answered it, typing {$label}");
             $this->assertSame(
                 $grants,
                 $chat->permissionGrants(),
-                "and the session grants left behind, typing {$typed} — a non-empty one means every later "
+                "and the session grants left behind, typing {$label} — a non-empty one means every later "
                 . 'call to that tool runs UNASKED for the rest of the session',
             );
+            $this->assertSame(
+                $stage,
+                $chat->permissionStage(),
+                "and the stage the prompt is left in, typing {$label}",
+            );
         }
+    }
+
+    /**
+     * The second half of the fix, which the table above can only see the shadow
+     * of: `a` does not grant, it ASKS, and the grant is what the confirm's `y`
+     * writes.
+     *
+     * `Always` is the only reply that outlives the call it answers, so it is
+     * the only one that costs a second keystroke. All four exits from the
+     * confirm are driven here because they are not the same exit: `y` commits;
+     * `n` and Escape are the confirm's own answers, so they cancel back to an
+     * ARMED prompt (a user pressing them is plainly deciding in this dialog and
+     * must not have their next `y` swallowed); anything else is the same
+     * evidence that opened the confirm by accident, so it cancels back to a
+     * DISARMED one.
+     */
+    public function testTheSessionGrantTakesASecondDeliberateKeystroke(): void
+    {
+        $blocked = $this->blockedOnPermission('bash');
+
+        [$confirming] = $blocked->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertNotNull($confirming->pendingPermission(), '"a" alone must not answer the prompt');
+        $this->assertSame(PermissionPromptStage::ConfirmingAlways, $confirming->permissionStage());
+        $this->assertSame(
+            [],
+            $confirming->permissionGrants(),
+            'and above all it must not grant: THAT is the keystroke that used to cost the session',
+        );
+
+        [$granted, $cmd] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($granted->pendingPermission(), '"y" at the confirm commits the grant and releases the call');
+        $this->assertSame(['bash' => true], $granted->permissionGrants());
+        $this->assertNotNull($cmd, 'and a released batch hands back the Cmd that runs it');
+
+        foreach ([
+            'n' => new KeyMsg(KeyType::Char, 'n'),
+            'Escape' => new KeyMsg(KeyType::Escape),
+        ] as $label => $key) {
+            [$cancelled] = $confirming->update($key);
+            $this->assertNotNull(
+                $cancelled->pendingPermission(),
+                "{$label} at the confirm cancels it — it must not fall through to the base prompt's own "
+                . 'meaning and refuse the call',
+            );
+            $this->assertSame([], $cancelled->permissionGrants(), "nothing is granted by {$label}");
+            $this->assertSame(
+                PermissionPromptStage::Armed,
+                $cancelled->permissionStage(),
+                "and {$label} leaves the prompt ARMED, so the next \"y\" still allows the call",
+            );
+
+            [$afterCancel] = $cancelled->update(new KeyMsg(KeyType::Char, 'y'));
+            $this->assertNull($afterCancel->pendingPermission(), "which is what {$label} owes the user");
+            $this->assertSame([], $afterCancel->permissionGrants(), 'once, not always');
+        }
+
+        [$stray] = $confirming->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($stray->pendingPermission());
+        $this->assertSame(
+            PermissionPromptStage::Disarmed,
+            $stray->permissionStage(),
+            'any OTHER key cancels the confirm AND disarms — it is the same evidence that the person at '
+            . 'the keyboard is typing rather than answering',
+        );
+        $this->assertSame([], $stray->permissionGrants());
+    }
+
+    /**
+     * The recovery, taken apart: a disarmed prompt that could never be answered
+     * again would be a worse defect than the one the disarm closes, so Enter
+     * puts the answer keys back — and answers nothing itself, because
+     * "press Enter to continue" muscle memory would otherwise put a session
+     * grant one keystroke away again.
+     */
+    public function testEnterIsTheWayBackFromADisarmedPrompt(): void
+    {
+        $chat = $this->blockedOnPermission('bash');
+        foreach (str_split('/agents') as $char) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $char));
+        }
+        $this->assertNotNull($chat->pendingPermission(), 'the whole command is swallowed');
+        $this->assertSame(PermissionPromptStage::Disarmed, $chat->permissionStage());
+
+        foreach (['y', 'n', 'a'] as $rune) {
+            [$inert] = $chat->update(new KeyMsg(KeyType::Char, $rune));
+            $this->assertNotNull(
+                $inert->pendingPermission(),
+                "\"{$rune}\" does nothing at a disarmed prompt — that is what disarmed MEANS",
+            );
+            $this->assertSame(PermissionPromptStage::Disarmed, $inert->permissionStage());
+            $this->assertSame([], $inert->permissionGrants());
+        }
+
+        [$rearmed] = $chat->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($rearmed->pendingPermission(), 'Enter answers nothing');
+        $this->assertSame(PermissionPromptStage::Armed, $rearmed->permissionStage(), 'it re-arms');
+
+        [$answered, $cmd] = $rearmed->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($answered->pendingPermission(), 'and now the same "y" answers');
+        $this->assertTrue($answered->inFlight, 'APPROVED: the batch is released and the turn stays in flight');
+        $this->assertNotNull($cmd, 'with the Cmd that runs it');
+        $this->assertSame([], $answered->permissionGrants(), 'once — recovery must not cost the session');
+    }
+
+    /**
+     * Escape is the one answer the disarm does NOT take away, and this is where
+     * that exception is pinned rather than only argued for in a comment.
+     *
+     * Nothing a user TYPES produces an Escape, so it is not the accident the
+     * arm rule exists to stop; and the answer it gives is the refusing one, so
+     * even a stray Escape costs the paused call and can never grant anything. A
+     * modal that could not be dismissed while disarmed would be the worse
+     * trade.
+     */
+    public function testEscapeStillRefusesEvenAtADisarmedPrompt(): void
+    {
+        [$disarmed] = $this->blockedOnPermission('bash')->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertSame(PermissionPromptStage::Disarmed, $disarmed->permissionStage());
+
+        [$refused] = $disarmed->update(new KeyMsg(KeyType::Escape));
+        $this->assertNull($refused->pendingPermission(), 'Escape answers a disarmed prompt');
+        $this->assertFalse($refused->inFlight, 'and it REFUSES, which ends the turn');
+        $denials = array_filter(
+            $refused->history,
+            static fn(Message $m): bool => str_contains((string) $m->content, 'Permission denied'),
+        );
+        $this->assertNotSame([], $denials, 'with the refusal written into the transcript');
+        $this->assertSame(
+            PermissionPromptStage::Armed,
+            $refused->permissionStage(),
+            'and the stage goes back to its ground state with the prompt: a Chat carrying "disarmed" with '
+            . 'nothing pending describes a state that does not exist',
+        );
+    }
+
+    /**
+     * A batch can carry several outstanding asks, and each one that is RAISED
+     * arms afresh — otherwise the stage the user left question ONE in would
+     * decide what question TWO answers to, which is the same defect one level
+     * deeper.
+     *
+     * The instrument has to answer question one from a stage that is NOT
+     * `Armed`, or the assertion is vacuous: an answer given at an armed prompt
+     * would leave `Armed` behind for `mutate()` to carry forward, and a
+     * `requestPermission()` that arms nothing would look identical. Both
+     * non-armed exits are driven, one per half:
+     *
+     *  1. through the CONFIRM — `a` then `y`, so the answering Chat is
+     *     `ConfirmingAlways`. Two DIFFERENT tools, because an `Always` on
+     *     `alpha` clears `alpha`'s other queued asks by design and would take
+     *     the second question with it;
+     *  2. through the `PermissionReplyMsg` path from a DISARMED prompt — the
+     *     palette/embedder route, which is an explicit decision rather than a
+     *     keystroke and so is deliberately not gated on the stage at all.
+     */
+    public function testEachQueuedAskArmsAfresh(): void
+    {
+        $chat = (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))
+            ->registerTool('alpha', static fn(array $args): string => 'alpha ok')
+            ->registerTool('beta', static fn(array $args): string => 'beta ok')
+            ->withHooks(self::askEveryToolHooks())
+            ->withSize(100, 30);
+
+        foreach (['h', 'i'] as $rune) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$chat] = $chat->update(new KeyMsg(KeyType::Enter));
+        [$first] = $chat->update(new \SugarCraft\Crush\AssistantMsg(
+            Message::assistant('running')->withToolCalls([
+                new \SugarCraft\Crush\ToolCall('alpha', [], 'call_a'),
+                new \SugarCraft\Crush\ToolCall('beta', [], 'call_b'),
+            ]),
+        ));
+        $this->assertNotNull($first->pendingPermission(), 'fixture: the first call is gated');
+        $this->assertSame('call_a', $first->pendingPermission()?->toolCall->id, 'fixture: alpha is asked first');
+
+        // 1. answered from ConfirmingAlways.
+        [$confirming] = $first->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame(
+            PermissionPromptStage::ConfirmingAlways,
+            $confirming->permissionStage(),
+            'fixture: the answer to question one has to be given from a stage that is not Armed, or this '
+            . 'test cannot tell arming afresh from inheriting',
+        );
+        [$second] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertSame(
+            'call_b',
+            $second->pendingPermission()?->toolCall->id,
+            'fixture: answering alpha raises beta rather than releasing the batch',
+        );
+        $this->assertSame(
+            PermissionPromptStage::Armed,
+            $second->permissionStage(),
+            'the newly-raised ask is armed afresh — it must not inherit the stage question one was '
+            . 'answered from',
+        );
+        [$answered] = $second->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($answered->pendingPermission(), 'which is what "armed afresh" has to MEAN');
+
+        // 2. answered from Disarmed, through the explicit-decision path.
+        [$disarmed] = $first->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertSame(PermissionPromptStage::Disarmed, $disarmed->permissionStage(), 'fixture');
+        [$viaMsg] = $disarmed->update(new PermissionReplyMsg(PermissionReply::Once));
+
+        $this->assertSame(
+            'call_b',
+            $viaMsg->pendingPermission()?->toolCall->id,
+            'fixture: the reply Msg answers a disarmed prompt too — it is a decision, not a keystroke',
+        );
+        $this->assertSame(
+            PermissionPromptStage::Armed,
+            $viaMsg->permissionStage(),
+            'and question two is armed even though question one was answered while disarmed',
+        );
+        [$answeredViaMsg] = $viaMsg->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($answeredViaMsg->pendingPermission());
+
+        // 3. the arm inside requestPermission() itself, isolated from the reset
+        // answerPermission() does when it clears a prompt. The two are
+        // redundant with each other on the resume path above — removing EITHER
+        // alone leaves that path armed — so the one that belongs to "a raised
+        // prompt is armed" is pinned here on its own. Reached through the
+        // public constructor, the same API surface `pendingPermission`'s own
+        // tests use: parameters are not visibility-scoped, so a Chat can be
+        // built carrying a stage with no prompt to go with it.
+        [$raised] = (new Chat(
+            history: [],
+            inputBuf: '',
+            permissionStage: PermissionPromptStage::Disarmed,
+        ))->update(new \SugarCraft\Crush\PermissionRequestMsg(
+            Message::assistant(''),
+            new \SugarCraft\Crush\ToolCall('bash', [], 'call_1'),
+            'Run it?',
+        ));
+
+        $this->assertNotNull($raised->pendingPermission(), 'fixture: the ask must put a prompt up');
+        $this->assertSame(
+            PermissionPromptStage::Armed,
+            $raised->permissionStage(),
+            'raising a prompt ARMS it, whatever the Chat was carrying before — that is what makes every '
+            . 'question answerable rather than only the first',
+        );
     }
 
     /**

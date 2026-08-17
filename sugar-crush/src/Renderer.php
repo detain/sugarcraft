@@ -24,6 +24,7 @@ use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
+use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
@@ -279,22 +280,64 @@ final class Renderer
     private const PERMISSION_PROMPT_MAX_ROWS = 8;
 
     /**
-     * The answer keys {@see renderPermissionPrompt()} advertises, as
-     * `[keys, label]` pairs.
+     * The answer keys {@see renderPermissionPrompt()} advertises while the
+     * prompt is ARMED, as `[keys, label]` pairs.
      *
      * Deliberately a table rather than a formatted string literal: it has to
-     * stay in lockstep with `Chat::handlePermissionKey()`'s match arms, and a
-     * list of the exact accepted keys is far easier to check against that
-     * match than prose is. Only the keys that map to a
-     * {@see \SugarCraft\Crush\Permissions\PermissionReply} are listed -
-     * every other key is ignored there, so advertising anything else would
-     * promise an answer that never arrives.
+     * stay in lockstep with `Chat::handlePermissionKey()`'s arms, and a list of
+     * the exact accepted keys is far easier to check against those arms than
+     * prose is. Only keys that DO something in this stage are listed - every
+     * other key disarms the prompt rather than answering it, so advertising it
+     * would promise an answer that never arrives.
+     *
+     * `a` is labelled as a request rather than as the grant it used to be:
+     * pressing it raises {@see PERMISSION_CONFIRM_OPTIONS}, and a label that
+     * still read "allow always" would make the confirm look like a bug.
      */
     private const PERMISSION_OPTIONS = [
         ['y', 'allow once'],
-        ['a', 'allow always (this session)'],
+        ['a', 'allow always (this session) — asks first'],
         ['n / Esc', 'reject'],
     ];
+
+    /**
+     * The confirm's own keys, shown instead of {@see PERMISSION_OPTIONS} while
+     * `a` is waiting on its second keystroke
+     * ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage::ConfirmingAlways}).
+     *
+     * A separate table because in this stage the same letters mean different
+     * things - `y` is not "allow once" here, it is the session grant - and one
+     * table with stage-dependent labels is exactly the drift this pair of
+     * constants exists to prevent.
+     */
+    private const PERMISSION_CONFIRM_OPTIONS = [
+        ['y', 'yes — every later call to this tool, this session'],
+        ['n / Esc', 'no — back to the question'],
+    ];
+
+    /**
+     * What a DISARMED prompt advertises: the two keys that still do something,
+     * and by omission the fact that the answer letters do not.
+     *
+     * A prompt that silently ate keys would be a worse defect than the one the
+     * arm rule closes, so the state is on screen rather than only in the model
+     * ({@see PERMISSION_DISARMED_NOTICE} carries the "why nothing is
+     * happening" half).
+     */
+    private const PERMISSION_DISARMED_OPTIONS = [
+        ['Enter', 'listen for an answer again'],
+        ['Esc', 'reject (always live)'],
+    ];
+
+    /**
+     * The line that tells a user their keystrokes are going nowhere, painted
+     * above {@see PERMISSION_DISARMED_OPTIONS}.
+     *
+     * Public so a test can assert the cue by the same string the renderer
+     * paints instead of by a hand-copied literal that can drift out from under
+     * it - the treatment {@see KEY_HELP_OVER_PROMPT} already gets.
+     */
+    public const PERMISSION_DISARMED_NOTICE = 'keys ignored — this prompt is no longer listening';
 
     /**
      * Rows/characters {@see collapseToolOutput()} keeps of a tool body before
@@ -2583,6 +2626,15 @@ final class Renderer
      * about the normal input line, and while a prompt is up none of those
      * keys do what it says.
      *
+     * And WHICH keys is a function of the prompt's stage
+     * ({@see \SugarCraft\Crush\Chat::permissionStage()}), because the same
+     * letters do different things in each. That is not decoration: a prompt
+     * disarmed by a stray keystroke looks identical to a live one, so without
+     * the {@see PERMISSION_DISARMED_NOTICE} half a user would press `y`, watch
+     * nothing happen, and have no way to find out that Enter is the way back.
+     * The confirm half is the same argument in the other direction - `a` no
+     * longer grants, so a modal that kept saying it did would read as a bug.
+     *
      * Everything shown here is untrusted: a hook's message and a tool call's
      * arguments are both model-authored text, so both go through
      * {@see Sanitize::untrusted()} before reaching the terminal - a prompt
@@ -2615,10 +2667,40 @@ final class Renderer
             $lines[] = Style::new()->foreground($theme->systemLabel)->render($prompt);
         }
 
+        $stage = $chat->permissionStage();
+
+        // The confirm REPLACES the question's own keys rather than being added
+        // under them: while it is up those keys do not work, and a modal
+        // showing two live meanings for `y` at once is the misreading that
+        // would turn a session grant into a slip again.
+        if ($stage === PermissionPromptStage::ConfirmingAlways) {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
+                self::wrapPermissionText(
+                    'Allow every later ' . $call->name . ' call this session?',
+                    $inner,
+                ),
+            );
+        }
+
+        if ($stage === PermissionPromptStage::Disarmed) {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->bold()->render(
+                self::wrapPermissionText(self::PERMISSION_DISARMED_NOTICE, $inner),
+            );
+        }
+
+        $options = match ($stage) {
+            PermissionPromptStage::ConfirmingAlways => self::PERMISSION_CONFIRM_OPTIONS,
+            PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
+            PermissionPromptStage::Armed => self::PERMISSION_OPTIONS,
+        };
+
         $lines[] = '';
-        foreach (self::PERMISSION_OPTIONS as [$keys, $label]) {
+        foreach ($options as [$keys, $label]) {
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
-                . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render($label);
+                . ' ' . Style::new()->foreground($theme->systemLabel)->faint()
+                    ->render(self::wrapPermissionText($label, max(1, $inner - Width::string($keys) - 1)));
         }
 
         return Style::new()

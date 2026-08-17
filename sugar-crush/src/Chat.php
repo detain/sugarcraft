@@ -32,6 +32,7 @@ use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Crush\Commands\AgentsCommand;
@@ -369,6 +370,18 @@ final class Chat implements Model
          * {@see Renderer} reads it through {@see pendingPermission()}.
          */
         private readonly ?PermissionRequestMsg $pendingPermission = null,
+        /**
+         * How far $pendingPermission is along at answering itself, and the
+         * reason an ordinary slash command typed at a live prompt no longer
+         * answers it — see {@see handlePermissionKey()} for the rule and the
+         * measured table, and {@see PermissionPromptStage} for the states.
+         *
+         * Meaningless while $pendingPermission is null; every raise sets it
+         * back to {@see PermissionPromptStage::Armed} ({@see requestPermission()}
+         * is the ONLY writer of a non-null $pendingPermission, so arming there
+         * covers a first ask and a queued one alike).
+         */
+        private readonly PermissionPromptStage $permissionStage = PermissionPromptStage::Armed,
         /**
          * The {@see Deferred} whose promise is the Cmd that keeps the turn
          * suspended while $pendingPermission is showing. Answering resolves
@@ -1346,6 +1359,12 @@ final class Chat implements Model
 
         $next = $this->mutate([
             'pendingPermission' => $msg,
+            // Armed AFRESH, and stated here because this method is the resume
+            // path too: answerPermission() re-enters it for the next queued
+            // ask, and mutate() would otherwise carry the stage the user left
+            // the PREVIOUS question in - so a `/` typed at question one would
+            // silently make question two unanswerable.
+            'permissionStage' => PermissionPromptStage::Armed,
             'permissionDeferred' => $deferred,
             'inFlight' => true,
         ]);
@@ -1383,6 +1402,12 @@ final class Chat implements Model
         $jobs = $this->pendingPermissionJobs;
         $cleared = [
             'pendingPermission' => null,
+            // Reset with the prompt rather than left behind: the stage is only
+            // meaningful while a prompt is up, and a Chat carrying
+            // ConfirmingAlways with nothing pending is a state nothing means.
+            // requestPermission() arms the next ask anyway, so this is hygiene
+            // on the accessor, not the arm rule.
+            'permissionStage' => PermissionPromptStage::Armed,
             'permissionDeferred' => null,
             'pendingPermissionJobs' => [],
         ];
@@ -1458,69 +1483,164 @@ final class Chat implements Model
     /**
      * Decide a permission prompt from a keystroke.
      *
-     * Kept to the three answers {@see PermissionReply} defines, translated to
-     * a {@see PermissionReplyMsg} so the decision path is identical whether
-     * it came from a key, a palette action or a test. Any key OTHER than
-     * y/n/a/Escape is ignored rather than guessed at.
+     * Answers are still the three {@see PermissionReply} defines and still go
+     * out as a {@see PermissionReplyMsg}, so the decision path is identical
+     * whether it came from a key, a palette action or a test. What a KEY has to
+     * get past first is the arm rule.
      *
-     * ── WHAT "ignored rather than guessed at" DOES NOT MEAN ──
+     * ── THE ARM RULE, and the defect it closes ──
      *
-     * It does not mean a user who is not answering cannot answer by accident.
      * This arm sits above the input box ({@see update()}, the
      * `$this->pendingPermission !== null` check), so while a prompt is up EVERY
-     * `Char` key is a candidate answer and nothing types. `strtolower()` on the
-     * rune means the capitals count too. Driven, one `KeyMsg(Char, c)` per
-     * character, against a prompt for a `bash` call:
+     * `Char` key reaches here and nothing types. That alone made an ordinary
+     * slash command an answer: `/agents` hit `a` on its second keystroke and
+     * wrote a session-long grant, `/init` hit `n` on its third and denied the
+     * call. So a prompt is now ARMED or DISARMED
+     * ({@see PermissionPromptStage}):
      *
-     *   | typed         | answered at keystroke | rune | outcome                |
-     *   |---------------|-----------------------|------|------------------------|
-     *   | `/keys`       | 4th                   | `y`  | approved ONCE          |
-     *   | `/agents`     | 2nd                   | `a`  | ALWAYS: a session grant|
-     *   | `/branch main`| 4th                   | `a`  | ALWAYS: a session grant|
-     *   | `/compact`    | 6th                   | `a`  | ALWAYS: a session grant|
-     *   | `/init`       | 3rd                   | `n`  | denied                 |
-     *   | `/new`        | 2nd                   | `n`  | denied                 |
-     *   | `yes` / `Y`   | 1st                   | `y`/`Y` | approved once       |
-     *   | `no` / `nay`  | 1st                   | `n`  | denied                 |
-     *   | `/help`, `/quit`, `/model` | never    | --   | fully swallowed        |
+     *   * it goes up ARMED, and every newly-raised queued ask arms afresh
+     *     ({@see requestPermission()} is the sole writer of a non-null
+     *     `$pendingPermission` and sets the stage in the same `mutate()`);
+     *   * one keystroke that is not an answer DISARMS it, because a person
+     *     typing prose or a command is not a person answering;
+     *   * while disarmed `y`/`n`/`a` do nothing at all;
+     *   * `Enter` RE-ARMS and answers nothing — the recovery, without which a
+     *     disarmed prompt could never be answered from the keyboard;
+     *   * `Escape` is live in every stage, and refuses. Nothing a user TYPES
+     *     produces it, and the answer it gives is the safe one.
      *
-     * The `a` rows are the material ones and are NOT the same hazard as `y`:
-     * {@see PermissionReply::Always} writes `permissionGrants[<tool>] = true`
-     * (measured, `{"bash":true}`), which {@see gateToolCall()} then honours for
-     * the REST OF THE SESSION, so every later `bash` call runs unasked. `y`
-     * costs one call; `a` costs the session.
+     * And `a` no longer grants on its own: it raises a confirm that one `y`
+     * commits, because {@see PermissionReply::Always} is the only reply that
+     * outlives the call it answers ({@see gateToolCall()} honours
+     * `permissionGrants[<tool>]` for the rest of the session). `n`/Escape at
+     * the confirm cancel back to an ARMED prompt (the user is plainly deciding
+     * in the dialog); any other key cancels back to a DISARMED one.
      *
-     * A pasted command does NOT qualify, contrary to a previous revision of
-     * this claim: bracketed paste decodes to a `PasteMsg` and {@see update()}
-     * drops it (the identical object comes back -- asserted in KeyHelpTest).
-     * Only an UNBRACKETED paste, which the terminal delivers as raw `Char`
-     * keys, walks this table.
+     * ── MEASURED, one `KeyMsg(Char, c)` per character, at a `bash` prompt ──
      *
-     * This is left as it is deliberately -- routing it differently is a product
-     * decision, not a bug fix, and the options have costs (a modal that eats
-     * unknown keys, a confirm-on-`a`, a `/`-prefix escape) that belong to
-     * whoever owns the UX. What is NOT left implicit is the behaviour: it is
-     * pinned keystroke-for-keystroke, including the persistent-grant case, by
-     * KeyHelpTest::testTypingAtALivePromptAnswersItAndCanGrantForTheSession(),
-     * so any change to it is deliberate and shows up as a red test rather than
-     * as a silent shift.
+     *   | typed          | answers at | rune | outcome                        |
+     *   |----------------|------------|------|--------------------------------|
+     *   | `/keys`        | never      | --   | swallowed, prompt disarmed     |
+     *   | `/agents`      | never      | --   | swallowed, prompt disarmed     |
+     *   | `/branch main` | never      | --   | swallowed, prompt disarmed     |
+     *   | `/compact`     | never      | --   | swallowed, prompt disarmed     |
+     *   | `/init`        | never      | --   | swallowed, prompt disarmed     |
+     *   | `/new`         | never      | --   | swallowed, prompt disarmed     |
+     *   | `/help`, `/quit`, `/model` | never | -- | swallowed, prompt disarmed |
+     *   | `/agents`, Enter, `y` | 9th | `y`  | approved ONCE (the recovery)   |
+     *   | `yes` / `Y`    | 1st        | `y`  | approved once                  |
+     *   | `no` / `nay`   | 1st        | `n`  | denied                         |
+     *   | `a`            | never      | --   | confirm raised, nothing granted|
+     *   | `an`           | never      | --   | confirm cancelled, still armed |
+     *   | `ay` / `aye`   | 2nd        | `y`  | ALWAYS: `{"bash":true}`        |
+     *
+     * Every session grant in that table now costs two deliberate keystrokes,
+     * and not one of the six slash commands reaches an answer at all.
+     *
+     * A pasted command does not walk this table: bracketed paste decodes to a
+     * `PasteMsg` and {@see update()} drops it (the identical object comes back
+     * -- asserted in KeyHelpTest). Only an UNBRACKETED paste, delivered as raw
+     * `Char` keys, does.
+     *
+     * ── THE RESIDUAL, stated rather than apologised for ──
+     *
+     * A message that BEGINS with `y` or `n` still answers on its first
+     * keystroke — `yes`, `no`, `nay` above. That is not a hole in the arm rule,
+     * it is the rule working: those keys ARE the answers, and the first
+     * keystroke is the only one at which the prompt has no evidence to the
+     * contrary. Closing it needs an Enter-to-commit modal (type the letter,
+     * press Enter), which was weighed and rejected: it taxes every single
+     * answer to the common question in order to catch a message that happens to
+     * open with one of two letters, and the outcomes it would catch are
+     * "allowed this one call" and "refused this one call" — both recoverable,
+     * neither persistent.
+     *
+     * A first-keystroke `a` (`aye`, `and`, `also`) opens the confirm rather
+     * than granting, which is why the confirm is where the second keystroke was
+     * spent: it costs a `y` in second position to matter, and any other next
+     * key cancels it. `ay`/`aye` in the table are that residual, driven.
+     *
+     * All of it is pinned keystroke-for-keystroke by
+     * KeyHelpTest::testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt() and
+     * its confirm/recovery siblings, so any change shows up as a red test
+     * rather than as a silent shift.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handlePermissionKey(KeyMsg $msg): array
     {
         $rune = strtolower($msg->rune ?? '');
+        $isChar = $msg->type === KeyType::Char;
+
+        // ── the confirm, which only `a` at an armed prompt can raise ──
+        //
+        // Checked first because in this stage the letters mean something else
+        // entirely: `y` is not "allow once", it is "yes, the whole session".
+        if ($this->permissionStage === PermissionPromptStage::ConfirmingAlways) {
+            if ($isChar && $rune === 'y') {
+                return $this->answerPermission(PermissionReply::Always);
+            }
+
+            // `n`/Escape are the confirm's OWN answers, so pressing one proves
+            // the user is reading this dialog and deciding in it - the base
+            // prompt stays armed and one `y` still allows the call. Anything
+            // else is the same evidence that raised the confirm by accident,
+            // so it cancels AND disarms.
+            $stage = ($msg->type === KeyType::Escape || ($isChar && $rune === 'n'))
+                ? PermissionPromptStage::Armed
+                : PermissionPromptStage::Disarmed;
+
+            return [$this->mutate(['permissionStage' => $stage]), null];
+        }
+
+        // Enter is the re-arm, and answers nothing. It is the recovery from a
+        // disarm: without it a user who typed one character at a prompt could
+        // never answer it from the keyboard at all, which is a worse failure
+        // than the one the disarm fixes. Answering nothing is deliberate -
+        // "press Enter to continue" habits would make a session grant one
+        // muscle-memory keystroke away again.
+        if ($msg->type === KeyType::Enter) {
+            return [$this->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
+        }
+
+        // Escape stays live in EVERY stage, and is the one answer key the
+        // disarm does not take away. Two reasons, both about what can produce
+        // it: no message, slash command or shortcut hunt types an Escape, so it
+        // is not the accident the arm rule exists to stop; and the answer it
+        // gives is the REFUSING one, so even a stray Escape (this app has a
+        // documented source - see update()'s Escape arm on the Alt+Backspace
+        // decoding bug) costs the paused call and can never grant anything. A
+        // modal that cannot be dismissed while disarmed would be the worse
+        // trade. {@see Renderer::PERMISSION_DISARMED_OPTIONS} says so on screen.
+        if ($msg->type === KeyType::Escape) {
+            return $this->answerPermission(PermissionReply::Reject);
+        }
+
+        if ($this->permissionStage === PermissionPromptStage::Disarmed) {
+            return [$this, null];
+        }
+
+        // `a` no longer grants; it ASKS. The reply it leads to is the only one
+        // that outlives the call being answered, so it is the only one worth a
+        // second keystroke - see PermissionPromptStage::ConfirmingAlways.
+        if ($isChar && $rune === 'a') {
+            return [$this->mutate(['permissionStage' => PermissionPromptStage::ConfirmingAlways]), null];
+        }
 
         $reply = match (true) {
-            $msg->type === KeyType::Escape => PermissionReply::Reject,
-            $msg->type === KeyType::Char && $rune === 'n' => PermissionReply::Reject,
-            $msg->type === KeyType::Char && $rune === 'y' => PermissionReply::Once,
-            $msg->type === KeyType::Char && $rune === 'a' => PermissionReply::Always,
+            $isChar && $rune === 'n' => PermissionReply::Reject,
+            $isChar && $rune === 'y' => PermissionReply::Once,
             default => null,
         };
 
         if ($reply === null) {
-            return [$this, null];
+            // THE ARM RULE. A key that is not an answer is evidence that the
+            // person at the keyboard is not answering - they are typing a
+            // message, or a slash command, or hunting for a shortcut - so the
+            // answer keys go inert until Enter says otherwise. This one line is
+            // what makes `/agents` at a live prompt harmless instead of a
+            // session-long grant; the docblock's table is measured against it.
+            return [$this->mutate(['permissionStage' => PermissionPromptStage::Disarmed]), null];
         }
 
         return $this->answerPermission($reply);
@@ -1534,7 +1654,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 53 live rows across 9 contexts — 57 in all, four of them
+     * declares 54 live rows across 9 contexts — 58 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -1653,6 +1773,21 @@ final class Chat implements Model
     public function pendingPermission(): ?PermissionRequestMsg
     {
         return $this->pendingPermission;
+    }
+
+    /**
+     * Whether the pending prompt is still listening for a letter, has been
+     * disarmed by a keystroke that was plainly not an answer, or is waiting on
+     * the confirm for a session-wide grant.
+     *
+     * {@see Renderer::renderPermissionPrompt()} reads this to draw the state
+     * the user is actually in — a disarmed prompt that silently ate keys and
+     * looked identical to an armed one would trade one invisible behaviour for
+     * another. Meaningless while {@see pendingPermission()} is null.
+     */
+    public function permissionStage(): PermissionPromptStage
+    {
+        return $this->permissionStage;
     }
 
     /**
@@ -3591,6 +3726,7 @@ final class Chat implements Model
             'currentSessionName' => $this->currentSessionName,
             'titleBackend' => $this->titleBackend,
             'pendingPermission' => $this->pendingPermission,
+            'permissionStage' => $this->permissionStage,
             'permissionDeferred' => $this->permissionDeferred,
             'pendingPermissionJobs' => $this->pendingPermissionJobs,
             'permissionGrants' => $this->permissionGrants,

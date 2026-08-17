@@ -216,15 +216,19 @@ final class KeyBindingRegistryTest extends TestCase
 
     /**
      * The shape of the table, stated as numbers because three docblocks state
-     * them in prose — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "53
+     * them in prose — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "54
      * live rows across 9 contexts", and the sweep counts in
      * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}. A prose number
      * nobody measures is how a reference goes stale; this is the measurement.
+     *
+     * 53 -> 54 live when `permission.rearm` was declared: a permission prompt
+     * disarmed by a stray keystroke only answers again after Enter re-arms it,
+     * so that Enter is a live binding and this reference has to say so.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(57, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(53, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(58, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(54, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

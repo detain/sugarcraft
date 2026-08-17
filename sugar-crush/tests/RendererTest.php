@@ -14,6 +14,7 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Session\SessionStore;
@@ -1170,15 +1171,74 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('Run rm -rf build/?', $out);
     }
 
-    /** Exactly the keys Chat::handlePermissionKey() accepts, and no others. */
+    /**
+     * Exactly the keys Chat::handlePermissionKey() accepts while the prompt is
+     * ARMED, and no others.
+     *
+     * The `a` label now says it ASKS rather than allows, because that is what
+     * the key does: it raises the confirm below. A modal still promising a
+     * one-keystroke session grant would read as a bug the first time someone
+     * pressed it.
+     */
     public function testPermissionPromptAdvertisesTheThreeAnswerKeys(): void
     {
         $out = Renderer::render($this->chatAwaitingPermission());
 
         $this->assertStringContainsString('allow once', $out);
         $this->assertStringContainsString('allow always', $out);
+        $this->assertStringContainsString('asks first', $out);
         $this->assertStringContainsString('reject', $out);
         $this->assertStringContainsString('n / Esc', $out);
+    }
+
+    /**
+     * A prompt disarmed by a stray keystroke looks identical to a live one, so
+     * without this the fix would trade a silent grant for a silently dead
+     * modal: the user presses `y`, nothing happens, and nothing on screen says
+     * why or what to do about it.
+     *
+     * Both halves are asserted — the cue, by the same constant the renderer
+     * paints rather than a hand-copied literal, and the way back.
+     */
+    public function testADisarmedPromptSaysSoAndSaysHowToGetBack(): void
+    {
+        [$disarmed] = $this->chatAwaitingPermission()->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertSame(PermissionPromptStage::Disarmed, $disarmed->permissionStage());
+
+        $out = Renderer::render($disarmed);
+
+        $this->assertStringContainsString('permission required', $out, 'the question is still on screen');
+        $this->assertStringContainsString(Renderer::PERMISSION_DISARMED_NOTICE, $out);
+        $this->assertStringContainsString('Enter', $out, 'and the key that makes the answers live again');
+        $this->assertStringContainsString('listen for an answer again', $out);
+        $this->assertStringNotContainsString(
+            'allow once',
+            $out,
+            'and it must NOT keep advertising keys that now do nothing — that is the promise this state '
+            . 'exists to stop making',
+        );
+    }
+
+    /**
+     * The confirm REPLACES the question's own keys rather than being added
+     * under them: while it is up, `y` means "the whole session", not "this one
+     * call", and a modal showing both meanings at once is how a session grant
+     * becomes a slip again.
+     */
+    public function testTheAlwaysConfirmIsRenderedWithItsOwnQuestionAndKeys(): void
+    {
+        [$confirming] = $this->chatAwaitingPermission()->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame(PermissionPromptStage::ConfirmingAlways, $confirming->permissionStage());
+
+        $out = Renderer::render($confirming);
+
+        $this->assertStringContainsString('Allow every later Bash call this session?', $out);
+        $this->assertStringContainsString('back to the question', $out);
+        $this->assertStringNotContainsString(
+            'allow once',
+            $out,
+            'the base prompt\'s keys are gone: "y" does not mean "once" in this stage',
+        );
     }
 
     /** Nothing is composited while no prompt is blocking the turn. */
