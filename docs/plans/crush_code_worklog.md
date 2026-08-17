@@ -5366,3 +5366,121 @@ executes code — and the refusal-message rewrite reached `AgentPresetRegistry`,
 4. Review `c075adcf` (the permission fix) — never reviewed.
 5. **#88** README figure. Deferred a fifth time; **6678 / 69306 / 1 skipped**.
 6. Plan steps **#14** → **#12** → **#17**.
+
+---
+
+## Review of `f0d95785` (lane B round 21) — the reconciliation was a tautology
+
+The review that never got to run. Nine findings; the sweep itself is vindicated but
+three of the round's new instruments do not work.
+
+**Independently re-derived, and lane B is right:** 38 leaves (14/16/4/4), swept one
+at a time, **17 survivors / 21 killed**, survivor set **1:1 with `SWEEP_SURVIVORS`**,
+classes summing 4/6/7. Both warning-only kills reproduce with the register's exact
+counts (`Warnings: 1` and `Warnings: 12`), and **nothing else in the 38 is
+warning-only**. The round-19/20 reviewer's "37 / 16 / 21 plus a 17th" does not
+reconcile — lane B's set is the correct one.
+
+Note the mechanism, which is a trap: both warning-only kills are red *purely* via
+`failOnWarning="true"` changing the exit code. The printed banner still reads
+`OK, but there were issues!`. Anyone sweeping by reading output rather than `$?`
+will record them as survivors.
+
+### F1 — HIGH. `sweepLeafCensus()`'s reconciliation cannot detect anything it claims to
+
+It is `guardCensus(...)['conjuncts'] + $ternaries`, and the test recomputes
+`$ternaries` with the byte-identical loop. The expression is `(G + T) − G − T`,
+identically 0 for any token stream. Measured GREEN under: adding `T_FOREACH` to the
+anchors; removing `T_BOOLEAN_AND` from the operators; adding `T_SL`; widening
+`isTernaryCondition()`; **breaking `isTernaryCondition()` to `return false`
+always**; adding a third census term that is 0 on these methods. Only a *non-zero*
+third term reds it.
+
+So "neither side can be widened or narrowed without the other's figure moving" is
+false, and "this subtraction is what makes a third round of it red instead of quiet"
+is false. 8 assertions, 0 detection power. What actually prevents drift is the shared
+constant — see F4.
+
+### F2 — HIGH. Four ternary shapes are invisible, and a real ternary leaf lands green
+
+`isTernaryCondition()` misses `?` preceded by a token outside its whitelist:
+`Foo::class ? :` (prev `T_CLASS`), `match($z){…} ? :` (prev `}`),
+`"x$b" ? :` (prev bare `"`), and heredoc/nowdoc (prev `T_END_HEREDOC`).
+
+Whole-file mutation: inserting `$z = self::class ? 1 : 2;` or `$z = "x$depth" ? 1 : 2;`
+into `callArgument()` leaves **OK (115 / 625)** with the register total still 38. The
+`$depth >= 0 ? 1 : 2` control reds. Same defect class as round 19's `??=` finding,
+one operator along — under-count, which the file itself calls "the direction that
+matters", and these four are not among the escapes its message enumerates.
+
+### F3 — MEDIUM-HIGH. One `fragment` row is satisfied by a different leaf's bytes
+
+16 of 17 survivor rows red on a meaning-preserving respelling. **Row 9 does not.**
+Its fragment `$depth === 1` occurs **twice** in `callArgument()` — the registered
+survivor (early-continue) and a KILL (`elseif ($token === ',' && $depth === 1)`).
+Rewriting the survivor as `if (1 === $depth)` leaves the file green. Worse:
+**deleting that leaf outright** and rebaselining 16→15 / 38→37 / 21→20 leaves the
+register test green — verbatim the failure mode the `fragment` half was added to
+prevent, reintroduced in the commit that added it. Nothing constrains a `fragment`
+to be unique within its method.
+
+### F4 — MEDIUM. 4 of the shared domain's 11 members can be deleted in silence
+
+Sharing is real (no second copy; removing an occurring member reds both censuses).
+But `T_COALESCE_EQUAL`, `T_LOGICAL_AND`, `T_LOGICAL_OR`, `T_LOGICAL_XOR` are all
+**SILENT** on removal — exactly the four the docblocks argue hardest for ("every one
+of them was invisible to the regex these censuses replaced"). Adding `T_FOREACH` is
+silent too. They are load-bearing only against a *future* leaf, and nothing pins the
+constant's content the way `KEYWORDS` is pinned. Narrowing is the leaf-hiding
+direction, so "widen or narrow the domain here and BOTH figures move together" is
+false for 4 of 11.
+
+### F5 — MEDIUM. The twin defect, reintroduced by this round's own new assertion
+
+`assertLessThanOrEqual`'s message cites, as the measurement proving it bites,
+dropping `splitNamedArgument()`'s `\is_array($argument[0])` and correcting
+4→3 / 38→37 / 21→20. Driven: the **fragment check — added in the same commit, earlier
+in the same `foreach` — fires first**, so the `assertLessThanOrEqual` is never
+reached in its own cited scenario. It *is* reachable, but only by a route the message
+does not describe: `methodSourceWithoutComments()` strips comments and **keeps string
+literals**, so a nowdoc containing the fragment satisfies the row while the leaf is
+gone.
+
+### F6 — MEDIUM. The register's sweep instruction contradicts itself and is false
+
+`:4328-4329` says "a survivor is green either way". Measured across five survivors,
+each run twice: green **only** with `--exclude-group syntax-census`; without it,
+every one exits 1. A sweeper who follows that sentence records 38 kills / 0
+survivors and concludes the register is stale.
+
+### F7 — LOW-MEDIUM. `isTernaryCondition()` false-positives on `#[Attr] ?type`
+
+The docblock enumerates a nullable type's `?` as following `(`, `,` or `:`. It does
+not list `]`, and `]` is on the ternary side. Adding
+`#[\SensitiveParameter] ?string $z = null` to `callArgument()` reds the register with
+a figure moved and no leaf added; the bare `?string $z = null` control is silent. Not
+hypothetical — `callArgument()`'s own docblock probes `#[\SensitiveParameter]`.
+
+### F8 — LOW. Claim refuted as worded
+
+`:3325` says the killed total "exists nowhere as a literal"; `:3449` is
+`assertSame(21, $total - \count(self::SWEEP_SURVIVORS), …)`. Both `21` and `38` are
+literals. Functionally fine — each is an expected value against a derived actual, and
+both are falsifiable — but the file states a property of itself that is untrue of
+itself, two screens from the code.
+
+### F9 — LOW. The comment-strip admission is honest
+
+0 comment-token occurrences of all 17 fragments inside their own methods — no hidden
+gap. But the strip justifies itself by citing `tokenize()`/`scanRegex()`, which are
+outside its only call site's domain, and it does not mention that **strings are not
+stripped**, which is F5's live half.
+
+### Queue delta
+
+- **Lane B round 22** owes F1–F9. It CANNOT start while a full-suite run is in
+  flight elsewhere — editing this file mid-run shifts `file(__FILE__)` ranges. F1 is
+  the one to fix first: an 8-assertion tautology is worse than no check, because it
+  reads as coverage.
+- Still open: review of `c075adcf` (the permission fix, never reviewed); **#88**
+  README figure; plan steps **#14** → **#12** → **#17**.
