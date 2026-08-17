@@ -3047,3 +3047,151 @@ just fixed.
 One collision to watch: if the lane E review demands a Chat.php fix, that fix
 and lane D's `>= 3780` hunks touch the same file. Serialise those two rather
 than running them together.
+
+## Lane B (#37) round 15 landed as `48e0690c` — and the brief was stale in four places
+
+Verified independently before committing: **106 tests / 470 assertions** green, and
+all five tapes `vhs validate` **exit 0** against the real v0.11.0 binary at
+`/tmp/vhsbin/vhs`. No residue.
+
+The fix agent re-measured before touching anything, and found:
+
+- **F1 and F2 were already done** by the predecessor that the session limit killed
+  — further along than the recovery note guessed. Both sabotages round 14 reported
+  as surviving are now KILLED.
+- The predecessor had also found a **fifth** `directiveValues()` divergence class
+  that round 14 only knew four of (`Set` whose value is a KEYWORD).
+- **Round 14's N2b/N2c survivors do not reproduce as described.** The dot-lookahead
+  widening and the json-closer-text mutation are both KILLED; only the
+  *unterminated*-JSON variant survives, so that is likely what N2b actually was.
+- All quoted line numbers had shifted.
+
+Two survivors **no round had reported**, both in `skipSpeedSuffix()` — the code
+round 14 had dismissed as merely speculative:
+
+- Its unit list `['ms','s','m']` — dropping `m` **survived**. `m` is real
+  (MINUTES, `token.go:116`, `parser.go:278`); `Type@1m "abc"` is exit 0 upstream.
+  Two-of-three units is a figure without its domain.
+- Its `kind === 'single'` gate — dropping it **survived**. `Type "@" "abc"` types
+  `@ abc`, because a quoted `@` is content. This is F3's defect one construct
+  along: both gates are on token KIND, not text, and a text-matching test passes
+  either way.
+
+Mutation sweep 18 → **17 killed, 1 survived, 0 hangs**. The survivor is N2a's
+`!$terminated` conjunct, which is genuinely equivalent and already documented as
+unkillable — not a defect, no action.
+
+`testTheByteClassesAreUpstreamsOwn()` is now documented for what it is: a **drift
+detector, not a derivation**. It cannot read `lexer.go` at test time and never will
+without vendoring Go source, so it says so.
+
+### GIF policy, corrected
+
+I flagged the four new tapes' missing GIFs as a gap. **It is not a gap.** GIFs are
+rendered and committed **by CI**; never render or commit one by hand (user
+instruction, 2026-08-17). `vhs.yml`'s render step globs `for tape in .vhs/*.tape`
+and the push trigger watches `*/.vhs/*.tape`, so a new tape needs **no** workflow
+edit — the hand-maintained `all=(...)` array is per-LIB, and `sugar-crush` is
+already in it (`:148`) and in the matrix (`:225`). The commit job ends
+`git add */.vhs/*.gif` → `git commit -m "vhs: regenerate demo GIFs"` → push.
+`AGENTS.md`'s "don't commit GIFs" and `CLAUDE.md`'s "GIFs are committed" are not in
+conflict: the first addresses us, the second describes CI. Caveat: CI fires on
+**push**, and master is currently 11 commits ahead of `origin/master`, so nothing
+has rendered yet.
+
+## Lane E review of `98bee793` — 7 findings, 3 of them real defects
+
+The reviewer's own baseline note matters: the tree is being edited **live** by
+sibling lanes, so a single suite number from it is a snapshot. It measured
+6387/45481/**1 failure**, the failure being lane D's in-flight
+`Integration/BinSugarcrushWiringTest` (passes in isolation, both it and
+`Cli/Bootstrap.php` modified by that lane). Not lane E's.
+
+### The three that are behaviour, not prose
+
+**F-1 (HIGH)** — `menu.switch`'s `←` and its `h` alternate are advertised by the
+new reference and pinned by **nothing in the lib**. `KeyBindingDriftTest:738-743`
+presses only `$k[1]` and asserts `!= 1 && > 0`; the menu bar **wraps**, so both
+directions satisfy that from menu 1. Deleting `MenuBar::handleKey()`'s entire
+`'left', 'h' => [self::cycleMenu($currentMenu, -1), null]` arm
+(`src/Tui/Components/MenuBar.php:191`) leaves `tests/{Tui,App,Commands,Renderer}`
+at **OK (891 tests)** and the full suite with zero MenuBar reds. Swapping the arms
+so `←`/`h` move *right* is also green. This is the one row where the drift test's
+headline promise — the screen cannot describe a keyboard the app does not have —
+is false.
+
+**F-3 (MEDIUM)** — `?` makes a message **starting** with `?` untypeable, and three
+places name a mitigation that does not exist. Chat's input has no cursor movement
+(`grep KeyType::Left|KeyType::Right|cursorPos src/Chat.php` → empty) and no paste
+path, so position 0 is reachable only by typing first. Measured: `?why` on an empty
+line → `inputBuf ''`, `keyHelp 0`; `x` then `?` → `'x?'`; backspacing to empty
+never yields `'?'`. `/keys` opens the same reference — it does nothing for
+*composing*. So the cost is real, unmitigated, a **regression** (`?` typed a
+literal `?` before this commit), and the named escape hatch addresses a different
+problem.
+
+**F-4 (MEDIUM)** — this round's user-facing documentation **is not in the commit**.
+`git show 98bee793:sugar-crush/README.md | grep -E '/keys|/help'` → nothing. The
+README row exists only in the working tree (`README.md:157`, uncommitted). This is
+my own lane-assignment error: I gave `README.md` to lane D, so lane E's doc row is
+stranded in a file another lane owns — and the commit's own new comment in
+`CommandRegistry.php` justifies the second `help` row with "README.md documents
+both", which is false as shipped.
+
+### The claim defects — including one in the fix that was meant to fix claim defects
+
+**F-2 (HIGH)** — the generation guard's stated bound is false. The comment says no
+other test can reach a stamped ASK because the only other route is a real turn;
+instrumenting the guard to throw on `generation !== null` turns **14 `ChatTest`
+tests into errors** — they reach stamped ASKs through exactly those two producers
+(`Chat.php:1001`, `:1172`). And of the three mutations it reported as "exactly one
+test red each", the third (dropping every stamped ASK) gives **11 failures + 1
+error of 215**. The 252 figure is exact and the *conclusion* holds; the bound
+offered as proof does not. Honest wording: tests that can observe the guard
+**firing**, not tests that can reach a stamped ASK.
+
+**F-5** — `KEY_HELP_TOO_SMALL`'s "33 columns against the 73–94 the bar comes to".
+The 33 is right; 73–94 matches **none** of five instruments on the obvious fixture
+(`Width::of` 77–98; stripped, which is what `KeyHelpTest::statusBar()` uses, 54–75;
+`strlen` stripped 57–78; with a permission pending 36–57). No fixture, no
+instrument named — unlike sibling `KEY_HELP_OVER_PROMPT`, which names `Width::of`
+and reproduces to the column.
+
+**F-6** — the 3420-sweep docblock's dismissal of sub-states is false. In
+`Pane::Skills`, opening the picker flips `shellOwnsKeyboard()`, which is precisely
+the switch selecting *which* sets derive: `ctrl+r` goes `{Chat}` → `{Chat,
+YIELDED}`, `ctrl+x` goes `{Chat, Panes}` → `{Chat}`. Max-of-2 and the ceiling
+argument survive; the justifying sentence does not.
+
+**F-7** — eight drift rows observe less than the file's stated promise (three are
+covered elsewhere: `permission.*` at `ChatTest:3773`, `chat.quit` at `:419`,
+`agents.move` ↑ at `KeyboardHandlerTest:472`). Not covered anywhere:
+`palette.run`, `mouse.palette-row`, `picker.preview`, `picker.branch`,
+`palette.move`, `chat.slash-menu`. Plus "four `*.move` rows" is **five**, and
+`resetSharedState()`'s docblock names two statics while resetting three.
+
+Two latent parser hazards, no current row affected: `token()`'s fallback turns any
+single non-ASCII glyph into `KeyType::Char` of that glyph, so a relabel to `⏎`
+presses a printable rune while the "not `[]`" guard still passes; and `/` is
+discarded, so `'Esc / Esc'` and `'Esc Esc'` parse identically.
+
+### Held — do not re-litigate
+
+The static-discovery helper is a **real** discovery (exactly 7, reproduced, no
+fallback, no `$GLOBALS`/`putenv`/`session_` anywhere in the swept dirs), and the
+previous round's surviving sabotage now dies. F3's arithmetic is exact and 3 really
+is structurally impossible (18 combos, 10 shell-owning; `890+48=938`, `60+712=772`,
+`2×9×95=1710`). F5's six pairs are all pinned (palette↔picker → 1 red, keyHelp↔
+prompt → 3, `renderKeyHelp()` last → 5). `shellOwnsKeyboard()`'s unobservable
+conjunct claim is true — zero routing reds. `KEY_HELP_OVER_PROMPT` **is** asserted
+against the rendered bar, floor exactly 36, +1 passes and +2 reds. All registry
+figures reproduce (`all=57 live=53 dormant=4 contexts=9`, widest row 58 under
+`KEY_HELP_COLS = 64`), `keyishSpellings()` exactly 44, `nonKeyishProse()` exactly
+20. Render invariants hold at 180 standalone sizes and 7×3 hosted. And its own best
+attack failed: `?` does not open an invisible modal, and the sub-50-column clipping
+it found is a lib-wide property of hosting Chat overlays (palette and permission
+prompt clip identically at 40×10), not this round's.
+
+An eighth process-global static exists that the round did not catch:
+`Renderer::$keyHelpMaxOffset`, read by `Chat::withKeyHelp()`, with no test-side
+reset. Benign today, same shape as the three fixed.
