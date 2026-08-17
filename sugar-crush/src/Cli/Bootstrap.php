@@ -150,10 +150,21 @@ final class Bootstrap
      * Every project-tier directory this launch refused to read, keyed by the
      * path as configured — see {@see reportProjectTierRefusals()}.
      *
-     * Both subsystems that hold a repository-chosen directory feed it: the
-     * workflow registry ({@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()})
-     * and the skill loader ({@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()}).
-     * One collector rather than two because the user does not care which class
+     * THREE subsystems feed it — the count was two for one round after a third
+     * arrived: the workflow registry
+     * ({@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()}),
+     * the skill loader
+     * ({@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()}) and
+     * the agent-preset registry
+     * ({@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()}),
+     * merged in {@see agentPresets()} on both its return and its degradation
+     * paths. A FOURTH holder of a repository-chosen directory,
+     * {@see \SugarCraft\Crush\Commands\CommandLoader}, does NOT feed this: it
+     * `error_log()`s its refusal instead, and it is dormant (nothing in `src/` or
+     * `bin/` constructs it with an anchor yet), so it is listed here as the known
+     * gap rather than counted as a contributor.
+     *
+     * One collector rather than three because the user does not care which class
      * noticed that their repository's directory was rejected.
      *
      * @var array<string, string>
@@ -412,8 +423,10 @@ final class Bootstrap
      *
      * The pull-based seam {@see skillSkips()} is, for the other half of the same
      * question: a repository can choose where its `.sugar-crush/workflows`,
-     * `.sugar-crush/skills`, `.claude/skills` and `.opencode/skills` point, and
-     * a directory that resolves out of the checkout is refused wholesale. Kept
+     * `.sugar-crush/skills`, `.claude/skills`, `.opencode/skills` and
+     * `.sugar-crush/agents` point — FIVE, and this list said four for a round
+     * after the agents tier was added ({@see agentPresets()}) — and a directory
+     * that resolves out of the checkout is refused wholesale. Kept
      * where a doctor report or a debug pane can ask for it, with
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
@@ -630,16 +643,53 @@ final class Bootstrap
         // not a degradable condition: it is the launch refusal
         // {@see trustedConfigDirPath()} exists to raise.
         $projectAgents = rtrim($root, '/') . '/.sugar-crush/agents';
+        $userAgents = self::trustedConfigDirPath() . '/agents';
+
+        // THE TWO TIERS CAN BE ONE DIRECTORY, and the anchor must not then apply.
+        // `chat()` defaults $root to `getcwd()`, so `cd ~ && sugarcrush` makes
+        // $root the home directory and both expressions above the SAME path.
+        // Anchoring it would judge the user's own roster as "a repository chose
+        // this": measured before this branch, with `~/.sugar-crush/agents`
+        // symlinked to a directory outside $HOME, `agentPresets(<any project>)`
+        // returned the roster while `agentPresets($HOME)` returned NO presets and
+        // a refusal reading "a repository chooses where this directory is" — for
+        // a layout the user, not a repository, chose. A link to `~/.claude/agents`
+        // survived only because it happens to be inside $HOME.
+        //
+        // The union of the two tiers' permissions is the right answer when one
+        // directory IS both, and the user tier is deliberately unanchored (see
+        // {@see AgentPresetRegistry::__construct()}). The narrow cost is stated
+        // rather than hidden: a $HOME that is itself a cloned checkout — a
+        // dotfiles repo — has its `.sugar-crush/agents` read unanchored. That
+        // directory is still gated by {@see trustedConfigDirPath()}, which
+        // refuses a home this process cannot establish ownership of, and a user
+        // who cloned a repository onto their own home directory has adopted its
+        // config as theirs.
+        //
+        // WHICH HALF IS THE FIX, measured rather than implied: the ANCHOR branch
+        // is. Collapsing the two search paths to one changes no verdict — with
+        // duplicates the same directory is simply scanned twice and the roster is
+        // keyed by preset name — so it is here to stop one launch recording the
+        // same directory twice, not to permit anything. Dropping it leaves every
+        // assertion in {@see \SugarCraft\Crush\Tests\Agents\AgentPresetHomeRootTest}
+        // green; dropping the anchor branch does not.
+        //
+        // Resolved identity as well as spelled identity: $root reached through a
+        // symlink to $HOME is the same directory and must take the same branch.
+        // Its effect is narrower than the spelled case — the unanchored user tier
+        // is in the search list either way, so the roster survives regardless —
+        // and what it prevents is a REFUSAL recorded against the user's own
+        // directory for being "outside the checkout it was reached from".
+        $sameDirectory = $projectAgents === $userAgents
+            || (realpath($projectAgents) !== false && realpath($projectAgents) === realpath($userAgents));
 
         $registry = new AgentPresetRegistry(
-            [
-                $projectAgents,
-                self::trustedConfigDirPath() . '/agents',
-            ],
+            $sameDirectory ? [$userAgents] : [$projectAgents, $userAgents],
             // Keyed by the path AS SPELLED above, which is why the string is a
-            // variable rather than repeated: an anchor keyed by a path that
-            // differs by one separator would silently anchor nothing.
-            anchors: [$projectAgents => $root],
+            // variable rather than repeated. A key that names no search path is
+            // now refused at construction rather than silently anchoring nothing
+            // — see {@see AgentPresetRegistry::__construct()}.
+            anchors: $sameDirectory ? [] : [$projectAgents => $root],
         );
 
         try {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Context;
 
+use SugarCraft\Crush\Support\ContainedPath;
+
 /**
  * Loads instruction files (CLAUDE.md, AGENTS.md) from the repo root and
  * resolves forced-instruction glob patterns from config.
@@ -17,6 +19,21 @@ namespace SugarCraft\Crush\Context;
  * `loadRoot()`/`loadForPath()` also expand `@path` import references via
  * ImportResolver, mirroring Claude Code's CLAUDE.md/AGENTS.md import syntax
  * (this repo's own root CLAUDE.md already uses `@./AGENTS.md`).
+ *
+ * EVERY read here is bounded by repoRoot through {@see ContainedPath}, and the
+ * count is deliberate rather than incidental: FIVE call sites, one per read
+ * decision this class makes — `loadRoot()`'s root entry, `loadForced()`'s glob
+ * match, `loadForPath()`'s starting directory and its per-level candidate, and
+ * `expandImports()`'s gate closure. There is no local prefix compare left, and
+ * that is the point. Two of the five (`loadForced()`, `expandImports()`) existed
+ * as hand-spelled compares for six review rounds, and they are WHY the other
+ * three were missing: a sweep instrumented on `grep -rn str_starts_with src/`
+ * found this file's two present compares, listed it as audited, and was
+ * structurally incapable of noticing that `loadRoot()` and `loadForPath()` — the
+ * primary path into the system prompt — compared nothing at all. Both escapes
+ * were reproduced on this host before being closed; see
+ * {@see \SugarCraft\Crush\Tests\Context\InstructionFileLoaderContainmentTest},
+ * which drives them and holds the measured bytes.
  */
 final class InstructionFileLoader
 {
@@ -87,9 +104,15 @@ final class InstructionFileLoader
      * of that import and NOT repeated afterwards as a second document.
      * Precedence is unchanged — the earlier file still wins the slot.
      *
-     * @return string[] Contents of whichever root files exist (missing files,
-     *                  and files already inlined by an earlier file's import,
-     *                  are skipped)
+     * A root file that RESOLVES outside repoRoot is skipped, silently, for the
+     * reason {@see loadForced()} gives for its own matches: a repository can
+     * commit `CLAUDE.md` as a symlink, and this class has no channel to the
+     * user, so the honest behaviour is to read nothing rather than to read it.
+     *
+     * @return string[] Contents of whichever root files exist and resolve inside
+     *                  repoRoot (missing files, files resolving outside it, and
+     *                  files already inlined by an earlier file's import, are
+     *                  skipped)
      */
     public function loadRoot(): array
     {
@@ -105,6 +128,24 @@ final class InstructionFileLoader
         $contents = [];
         foreach ($rootFiles as $path) {
             if (!is_file($path)) {
+                continue;
+            }
+
+            // `<root>/CLAUDE.md` is a path whose TARGET a cloned repository
+            // chooses, and `is_file()` follows symlinks, so nothing above this
+            // line bounded the read. MEASURED on this host before this gate,
+            // with repoRoot=<sb>/repo and `<sb>/repo/CLAUDE.md -> <sb>/outside/
+            // secret.txt`: `loadRoot()` returned `["TOP-SECRET-AAA\n"]`, that
+            // outside file's body, as a system-prompt document — see
+            // {@see \SugarCraft\Crush\Tests\Context\InstructionFileLoaderContainmentTest}.
+            // The `realpath()` on the next line was computed but spent only as
+            // a cache key.
+            //
+            // within(), not below(): the question is "may this ENTRY be read",
+            // and the entry is a file, so it cannot resolve ONTO the boundary
+            // for below()'s strictness to matter. below() would also be the
+            // wrong QUESTION to record here even where the two agree.
+            if (!ContainedPath::within($path, $this->repoRoot)) {
                 continue;
             }
 
@@ -162,11 +203,6 @@ final class InstructionFileLoader
             return $this->forcedCache = [];
         }
 
-        // Trailing slash stripped so the two-branch check below stays correct
-        // for a degenerate root: realpath('/') is '/', and comparing against
-        // '//' would reject every path in the filesystem.
-        $repoRoot = rtrim(realpath($this->repoRoot) ?: $this->repoRoot, '/');
-
         $contents = [];
         foreach ($this->forcedInstructions as $pattern) {
             // Reject absolute paths — they bypass repoRoot and are a security risk.
@@ -188,9 +224,18 @@ final class InstructionFileLoader
 
                 // A relative pattern can still traverse out via "..", so the
                 // resolved match — not the pattern — is what must be contained.
-                $realPath = realpath($path);
-                if ($realPath === false || ($realPath !== $repoRoot && !str_starts_with($realPath, $repoRoot . '/'))) {
+                // Routed through {@see ContainedPath} rather than spelled here:
+                // this file's two hand-spelled compares are precisely why six
+                // rounds read it as audited while its other two read paths had
+                // NO compare to find. One extra `realpath()` per glob match (a
+                // cached stat) buys the file zero local containment idiom.
+                if (!ContainedPath::within($path, $this->repoRoot)) {
                     continue;
+                }
+
+                $realPath = realpath($path);
+                if ($realPath === false) {
+                    continue; // unreachable: within() just resolved it
                 }
 
                 if (isset($this->emittedPaths[$realPath])) {
@@ -218,26 +263,77 @@ final class InstructionFileLoader
      * injected, and a file the root documents already carried (directly or via
      * an `@import`) counts as injected too.
      *
+     * CONTAINED, and it was not: both the walk's starting directory and every
+     * candidate file are checked against repoRoot through
+     * {@see ContainedPath::within()}. A refused candidate is SKIPPED silently
+     * and the walk continues, matching {@see loadForced()} — this class has no
+     * channel to the user (its callers are tool results), so a nested
+     * instruction file that inexplicably never appears is most likely a link
+     * out of the checkout.
+     *
      * @param string $touchedPath Absolute path to the file that was touched
-     * @return string|null The nested instruction file content, or null if none found
+     * @return string|null The nested instruction file content, or null if none
+     *                     found, if the touched path is outside repoRoot, or if
+     *                     the only candidate resolves outside it
      */
     public function loadForPath(string $touchedPath): ?string
     {
-        // Get the directory containing the touched file
-        $dir = dirname($touchedPath);
+        $repoRoot = realpath($this->repoRoot);
+        if ($repoRoot === false) {
+            // A boundary that will not resolve is not a boundary. The old code
+            // fell back to the configured string and walked anyway.
+            return null;
+        }
 
-        // Normalize repoRoot to avoid infinite loops on edge cases
-        $repoRoot = realpath($this->repoRoot) ?: $this->repoRoot;
-        if ($repoRoot === '') {
+        // TWO gates, because gating only the candidate FILES would be enough
+        // for containment but would leave a walk with no business running.
+        //
+        // GATE 1 — the walk must not START outside the checkout. The loop below
+        // climbs by `dirname()` and used to terminate on the STRING equality
+        // `$dir !== $repoRoot`, which a directory outside the checkout never
+        // satisfies, so it climbed to `/` reading every `CLAUDE.md`/`AGENTS.md`
+        // it passed. MEASURED before this gate, repoRoot=<sb>/repo and
+        // touchedPath=<sb>/outside/anything.php returned `"ANCESTOR-BBB\n"` —
+        // the body of <sb>/CLAUDE.md, an ANCESTOR of the checkout, no symlink
+        // involved. The same string compare also missed when the checkout was
+        // merely SPELLED through a symlink ($repoRoot is resolved, $dir was
+        // not), which climbed above the root with nothing committed at all.
+        //
+        // within(), not below(): a file sitting in the checkout ROOT is inside
+        // the checkout. The loop then stops before its first iteration, which
+        // is exactly what the old string compare did for that case, so the
+        // "root instruction files belong to loadRoot()" split is unchanged.
+        //
+        // $dir is RESOLVED here so that the loop's remaining `$dir !==
+        // $repoRoot` is a compare between two canonical paths, which is what
+        // makes it a real bound: every `dirname()` step of a resolved path
+        // inside a resolved boundary lands on that boundary exactly. Every live
+        // caller hands a path whose directory exists — Read/Edit/Glob read the
+        // file first, and Write `mkdir -p`s the parent BEFORE calling here
+        // ({@see \SugarCraft\Crush\Tools\BuiltIn\Write}) — so resolving costs
+        // no reachable case. A path in a directory that does not exist yet
+        // returns null rather than walking, which is what it already did for
+        // the fully-nonexistent path this class is tested on.
+        $dir = realpath(dirname($touchedPath));
+        if ($dir === false || !ContainedPath::within($dir, $repoRoot)) {
             return null;
         }
 
         // Walk up the directory tree toward repoRoot
-        while ($dir !== $repoRoot && $dir !== '.' && $dir !== false) {
+        while ($dir !== $repoRoot) {
             // Check for CLAUDE.md first (preferred), then AGENTS.md
             foreach (['CLAUDE.md', 'AGENTS.md'] as $filename) {
                 $fullPath = $dir . '/' . $filename;
                 if (!is_file($fullPath)) {
+                    continue;
+                }
+
+                // GATE 2 — $dir is contained, but the ENTRY inside it need not
+                // be: `<root>/src/CLAUDE.md -> <outside>/secret.md` is one
+                // committed line and `is_file()` follows it. within() for the
+                // same reason as loadRoot()'s: this asks whether an entry may
+                // be read.
+                if (!ContainedPath::within($fullPath, $repoRoot)) {
                     continue;
                 }
 
@@ -342,10 +438,12 @@ final class InstructionFileLoader
      */
     private function expandImports(string $content, string $baseDir): string
     {
-        $repoRoot = realpath($this->repoRoot) ?: rtrim($this->repoRoot, '/');
-
-        $gate = function (string $realPath, string $pathFragment) use ($repoRoot): ?string {
-            if ($realPath !== $repoRoot && !str_starts_with($realPath, $repoRoot . '/')) {
+        $gate = function (string $realPath, string $pathFragment): ?string {
+            // ImportResolver `is_file()`-checks and `realpath()`s before calling
+            // this, so $realPath is always a resolvable existing path and
+            // within()'s re-resolution of it cannot change the verdict — it
+            // costs one cached stat to keep this file free of a local idiom.
+            if (!ContainedPath::within($realPath, $this->repoRoot)) {
                 return "<import-blocked reason=\"outside-repo-root\">Import '{$pathFragment}' resolves to"
                     . " '{$realPath}', outside the repository root, and was not followed.</import-blocked>";
             }

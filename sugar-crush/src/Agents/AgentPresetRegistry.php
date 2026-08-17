@@ -49,23 +49,86 @@ final class AgentPresetRegistry
      */
     private array $refusedDirectories = [];
 
+    /** @var list<string> */
+    private readonly array $searchPaths;
+
+    /** @var array<string, string> */
+    private readonly array $anchors;
+
     /**
      * @param list<string> $searchPaths directories to look for `<name>.md` in,
      *        in precedence order
      * @param array<string, string> $anchors trust anchors for the search paths a
-     *        REPOSITORY chose, keyed by the search path exactly as spelled in
-     *        $searchPaths: that path must resolve strictly inside its anchor
-     *        ({@see ContainedPath::below()}) or the whole directory is refused.
-     *        A path with no entry here is unanchored, which is the right answer
-     *        for the user's own `~/.sugar-crush/agents` — nobody but the user
-     *        chose where it points, and users really do link it at
-     *        `~/.claude/agents`, so anchoring it to the checkout would break a
-     *        working layout to defend against its owner.
+     *        REPOSITORY chose, keyed by the search path: that path must resolve
+     *        strictly inside its anchor ({@see ContainedPath::below()}) or the
+     *        whole directory is refused. A path with no entry here is unanchored,
+     *        which is the right answer for the user's own
+     *        `~/.sugar-crush/agents` — nobody but the user chose where it points,
+     *        and users really do link it at `~/.claude/agents`, so anchoring it to
+     *        the checkout would break a working layout to defend against its
+     *        owner.
+     *
+     * TWO THINGS HAPPEN TO THOSE ARGUMENTS HERE, and both exist because the
+     * lookup that consumes them ({@see readableSearchPaths()}) is
+     * `$this->anchors[$path] ?? null` — a MISS is an unanchored read, so a key
+     * that does not match its search path exactly does not weaken the check, it
+     * REMOVES it. Measured before this constructor did anything: a search path
+     * spelled `<root>/.sugar-crush/agents/` with its anchor keyed without the
+     * trailing slash listed a preset out of a directory symlinked clean out of
+     * the checkout, with zero refusals recorded — the full escape, from one byte.
+     *
+     *  1. Both sides are NORMALISED (one trailing separator stripped, `/`
+     *     preserved), so the one-byte difference cannot arise.
+     *  2. An anchor key naming NO search path THROWS. The mismatch that survives
+     *     normalisation is a programming error at the call site, and there is no
+     *     safe default for it: silently anchoring nothing is the escape above,
+     *     and silently anchoring everything would refuse the user's own tier. So
+     *     it fails closed, loudly, at construction — before any read.
+     *
+     * `Bootstrap` passes one variable for both the path and the key and cannot
+     * reach case 2 today; this class is public `final` API in a published
+     * library, and nothing else pinned the mismatch.
+     *
+     * @throws \InvalidArgumentException when an anchor names no search path
      */
-    public function __construct(
-        private readonly array $searchPaths,
-        private readonly array $anchors = [],
-    ) {}
+    public function __construct(array $searchPaths, array $anchors = [])
+    {
+        $this->searchPaths = array_values(array_map(self::normalisePath(...), $searchPaths));
+
+        $normalised = [];
+        foreach ($anchors as $path => $anchor) {
+            $normalised[self::normalisePath((string) $path)] = $anchor;
+        }
+
+        $orphans = array_diff(array_keys($normalised), $this->searchPaths);
+        if ($orphans !== []) {
+            throw new \InvalidArgumentException(sprintf(
+                'agent-preset trust anchor(s) named for %s, which is not among the search paths (%s); an anchor '
+                . 'that matches no search path silently anchors nothing, so it is refused rather than ignored',
+                implode(', ', $orphans),
+                $this->searchPaths === [] ? 'none' : implode(', ', $this->searchPaths),
+            ));
+        }
+
+        $this->anchors = $normalised;
+    }
+
+    /**
+     * One trailing separator's worth of spelling difference removed from both
+     * sides of the anchor lookup.
+     *
+     * `rtrim($path, '/')` on its own turns a root of `/` into the empty string,
+     * which {@see ContainedPath} then refuses outright — so `/` is returned as
+     * itself. Nothing further is normalised: `realpath()` inside
+     * {@see ContainedPath} is what resolves `.`, `..` and symlinks, and doing it
+     * twice in two places is how the two answers drift apart.
+     */
+    private static function normalisePath(string $path): string
+    {
+        $trimmed = rtrim($path, '/');
+
+        return $trimmed === '' ? $path : $trimmed;
+    }
 
     /**
      * Load a preset by name from the search paths.

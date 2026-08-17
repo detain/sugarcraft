@@ -628,15 +628,28 @@ final class WorkflowRegistry
      * repository's workflows directory was rejected, and here is why".
      *
      * A REASON, NOT A SENTENCE: the string starts mid-clause ("resolves to …")
-     * and does not name the path, because the path is what the caller already has
-     * — {@see projectWorkflowsPath()} here, the map key in
+     * and does not name the CONFIGURED path, because that path is what the caller
+     * already has — {@see projectWorkflowsPath()} here, the map key in
      * {@see \SugarCraft\Crush\Cli\Bootstrap::projectTierRefusals()} — and the one
      * notice that prints it composes `ignoring <path> — <reason>`. It used to
-     * repeat the path inside the reason, which put it in that line twice while
-     * the skills tier's equivalent
-     * ({@see \SugarCraft\Crush\Skills\SkillLoader::recordRefusedDirectory()})
-     * printed it once. Three subsystems feed one collector; they say it the same
-     * way.
+     * repeat the path inside the reason, which put it in that line twice.
+     *
+     * THE THREE FEEDERS ARE NOT IDENTICAL, and the sentence here used to claim
+     * they were. Measured against the three reason strings:
+     *
+     *   - this one names the RESOLVED target and describes the anchor in words
+     *     ("the checkout root" / "this directory's own parent");
+     *   - {@see \SugarCraft\Crush\Skills\SkillLoader::recordRefusedDirectory()}
+     *     and {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()}
+     *     name the resolved target AND interpolate the anchor PATH.
+     *
+     * So all three omit the configured path — which is the property the collector
+     * needs, since the collector supplies it as the map key — and only this one
+     * also omits the anchor path. That is the accurate statement; "they say it the
+     * same way" was not. A FOURTH holder of a repository-chosen directory,
+     * {@see \SugarCraft\Crush\Commands\CommandLoader}, does not feed the collector
+     * at all — it `error_log()`s, and its message carries `$dir`, `$realDir` and
+     * `$anchoredIn` together.
      *
      * Public and pull-based rather than a stderr write, for the reason
      * {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()} is: a write from
