@@ -4,7 +4,42 @@
          bootstrap="tests/bootstrap.php"
          colors="true"
          failOnWarning="true"
+         failOnRisky="true"
+         enforceTimeLimit="true"
+         defaultTimeLimit="60"
          cacheDirectory=".phpunit.cache">
+    <!--
+        defaultTimeLimit is a hang-catcher, not a performance budget. It exists
+        because a one-conjunct mutation in Vhs tape tokenize() can spin FOREVER on
+        input already present in this suite: without a limit that run never ends
+        and never reports, so the whole suite reads as "still going" rather than
+        "broken" (measured: such a run had to be killed externally at 180s).
+        60s was picked off measurement, not taste. A JUnit-logged run of
+        all 6465 tests on this host (PHP 8.3.6) peaks at 9.321s
+        (Tools\WebSearchToolTest::testHandlesRedirectResponse), with 4 tests over
+        5s and none over 10s. So the bound sits ~6x above the slowest real test:
+        loose enough that host load or a slow network redirect cannot trip it,
+        tight enough that an infinite loop reports in a minute. Re-measure with
+        phpunit's JUnit log flag if that peak ever moves.
+
+        failOnRisky is what makes the limit bite. PHPUnit records a timed-out test
+        as RISKY, and risky alone still exits 0 — measured: the abort printed
+        "This test was aborted after 60 seconds" under a green "OK, but there were
+        issues!" banner. So without failOnRisky the hang-catcher is a notice CI
+        scrolls past. Safe to turn on here because the suite reports 0 risky
+        tests today (6465 tests, 1 skipped, 0 risky).
+
+        No test declares #[Small]/#[Medium]/#[Large], so defaultTimeLimit is the
+        limit every test actually gets. Add a size attribute anywhere and that
+        test silently switches to PHPUnit's own 1s/10s/60s instead.
+
+        Known gap, deliberately accepted: php-invoker enforces this with
+        pcntl_alarm(), and tests/Agents/AgentWorkerPoolTest.php arms and cancels
+        pcntl_alarm() itself. Its pcntl_alarm(0) calls clear the enforcing alarm,
+        so the limit does not apply inside those tests. They are bounded by their
+        own alarms instead, which is why they are also the tests least in need of
+        this one.
+    -->
     <testsuites>
         <testsuite name="SugarCrush">
             <directory>tests</directory>
