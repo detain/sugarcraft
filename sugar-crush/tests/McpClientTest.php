@@ -149,25 +149,45 @@ final class McpClientTest extends TestCase
         }
     }
 
+    /**
+     * A stdio MCP server must outlive the handshake. `cat` is the smallest
+     * command that does: it holds its stdin open until EOF, so disconnect()'s
+     * fclose() is what ends it — no timeout, no orphan, no scheduling race.
+     *
+     * The obvious choices are `true` and `echo`, and both are wrong here.
+     * They exit immediately, so connect()'s handshake fwrite() races the
+     * kernel closing the pipe's read end. Lose that race and the write gets
+     * EPIPE — "fwrite(): Write of 52 bytes failed with errno=32 Broken pipe" —
+     * which phpunit.xml's failOnWarning="true" turns into a failure, and
+     * sendMessage() then throws so the isConnected() assertions never run.
+     * Win it and everything passes. That is the whole flake.
+     */
+    private const LIVE_SERVER = 'cat';
+
     public function testConnectReturnsEarlyWhenAlreadyConnected(): void
     {
-        // We can't easily test the "already connected" early return without
-        // actually connecting. The connected flag is private.
-        // This test verifies that multiple connect() calls don't double-connect.
-        // Since we can't directly test the early return with current design,
-        // we verify the client transitions to connected state after connect.
-        $client = new McpClient('true'); // /bin/true always exists and succeeds
-        $result = $client->connect();
+        $client = new McpClient(self::LIVE_SERVER);
+        $client->connect();
         $this->assertTrue($client->isConnected());
-        // The result should be whatever readMessages() returns (init response)
-        $this->assertIsArray($result);
+
+        // The early return is observable two ways: it answers [] rather than
+        // readMessages(), and it leaves the child alone. Assert the second —
+        // a respawn would replace the process handle even if both calls
+        // happened to return an empty array.
+        $handle = new \ReflectionProperty(McpClient::class, 'process');
+        $before = $handle->getValue($client);
+
+        $this->assertSame([], $client->connect());
+        $this->assertSame($before, $handle->getValue($client));
+
+        $client->disconnect();
     }
 
     public function testDestructorDisconnects(): void
     {
-        // When the client goes out of scope, __destruct should call disconnect()
-        // This tests that disconnect cleans up without error when process is running
-        $client = new McpClient('true');
+        // __destruct() delegates to disconnect(); this pins that disconnect()
+        // cleans up without error while the child is still running.
+        $client = new McpClient(self::LIVE_SERVER);
         $client->connect();
         $this->assertTrue($client->isConnected());
         // Explicitly disconnect to avoid relying on GC timing
@@ -177,8 +197,7 @@ final class McpClientTest extends TestCase
 
     public function testConnectSucceedsWithExistingExecutable(): void
     {
-        // /bin/true exists and is executable - connect should succeed
-        $client = new McpClient('true');
+        $client = new McpClient(self::LIVE_SERVER);
         $result = $client->connect();
         $this->assertTrue($client->isConnected());
         $this->assertIsArray($result);
@@ -187,11 +206,11 @@ final class McpClientTest extends TestCase
 
     public function testResolveExecutableFindsCommandInPath(): void
     {
-        // When command has no path separator, it searches PATH
-        // Using 'echo' which should exist on all Unix systems
-        $client = new McpClient('echo', ['--version']);
-        // Should not throw - echo is in PATH
-        $result = $client->connect();
+        // A command with no path separator is resolved against PATH.
+        $this->assertStringNotContainsString(DIRECTORY_SEPARATOR, self::LIVE_SERVER);
+
+        $client = new McpClient(self::LIVE_SERVER, ['-u']);
+        $client->connect();
         $this->assertTrue($client->isConnected());
         $client->disconnect();
     }
