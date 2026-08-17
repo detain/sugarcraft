@@ -1486,7 +1486,11 @@ final class KeyboardHandlerTest extends TestCase
      *
      * `shellOwnsKeyboard()` being true is NOT "the shell claims every key":
      * `claims()` consults `chatOwns()` FIRST, so Chat's own chords still escape.
-     * A first draft of the renderer comment said three did; swept, it is six.
+     * A first draft of the renderer comment said three did; swept, it is six. And
+     * `KeyboardHandler::shellOwnsKeyboard()`'s own docblock said "every key" for a
+     * round after this test contradicted it — the same claim in two places, only
+     * one of them corrected — which is why the last loop below asserts the LINK
+     * that docblock's argument needs rather than leaving it to prose.
      *
      * Domain: 95 printable runes x Ctrl on/off, plus the nine named keys this
      * app binds x Ctrl on/off. What the six do — dispatch `/agents`, quit,
@@ -1539,6 +1543,24 @@ final class KeyboardHandlerTest extends TestCase
             $this->assertTrue(
                 $claims->invoke($this->handler, $blocked, $agents),
                 'the shell must claim both routes to the keybinding reference in Pane::Agents',
+            );
+        }
+
+        // The link `KeyboardHandler::shellOwnsKeyboard()`'s argument rests on: every
+        // rune the registry YIELDS to the shell is claimed here, so rule 2 — not the
+        // `chatOwns()` conjunct — is what decides those, and the conjunct really
+        // cannot change the outcome inside this state. If rule 2 ever narrowed to
+        // only its own keys, a yielded rune would escape to a Chat that no longer
+        // wants it and `Ctrl+R` would go dead in every ordinary pane.
+        //
+        // Named as a restatement, not as extra coverage: the exact-list assertion
+        // above already reds under that mutation (measured — narrowing rule 2 puts
+        // `Ctrl+r` in `$escaped`). What this adds is the REASON attached to the
+        // failure, in the file the source docblock points at.
+        foreach (KeyBindingRegistry::chatCtrlRunesYieldedToShell() as $rune) {
+            $this->assertTrue(
+                $claims->invoke($this->handler, new KeyMsg(KeyType::Char, $rune, ctrl: true), $agents),
+                "ctrl+{$rune} is yielded to the shell, so rule 2 must be the rule that claims it here",
             );
         }
     }

@@ -866,27 +866,54 @@ final class Chat implements Model
             // input buffer instead.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
                 => $this->withInputBuf('/agents')->submit(),
-            // "?" opens the keybinding reference, but ONLY on an empty input
+            // "?" opens the keybinding reference, but ONLY on a BLANK input
             // line. It is a plain printable character with no modifier, so an
             // unconditional bind would make a question impossible to type -
-            // the input box has no other way to receive it. The empty-buffer
-            // condition is the same affordance the Up arm above already uses
-            // for history recall.
+            // the input box has no other way to receive it.
             //
-            // The empty-buffer guard alone still costs one message: the one
-            // that STARTS with "?". Measured, that cost is total rather than
-            // awkward - this input box has no cursor movement at all (no
-            // KeyType::Left or KeyType::Right arm anywhere in this file) and no
-            // paste path, so column 0 is only ever reached by typing the first
-            // character, and "?why" typed on an empty line used to leave
-            // inputBuf empty and the reference open. /keys is NOT
-            // the escape hatch for that: it opens the same reference, which is
-            // not what a user COMPOSING a "?" question wants. The escape hatch
-            // is the second "?" - see handleKeyHelpKey(), where "?" both closes
-            // the reference and lands the literal character, so "??why" types
-            // "?why" and the footer hint on screen says so.
+            // trim(), not === '', and that is a deliberate correction rather
+            // than tidying. submit() below tests trim($this->inputBuf) before
+            // matching "/keys", so while this arm tested the RAW buffer the two
+            // routes to the same reference disagreed on exactly one class of
+            // draft: trimmed-empty but not empty. Driven one keystroke at a
+            // time on the raw form, a single Space press (either KeyType::Space
+            // or KeyType::Char " ") put the box in a state where "/keys"+Enter
+            // opened the reference and "?" typed " ?" instead - so "/keys" WAS
+            // an escape hatch there, which is the one thing the docs for it say
+            // it is not. Four whitespace drafts (" ", "  ", "\t", " \t ")
+            // disagreed; thirteen other typed drafts agreed, as did all six of the
+            // non-draft states in KeyHelpTest::openRouteStates(). That is the whole
+            // corpus the claim rests on -- it does not range over states nobody has
+            // built.
+            // Pinned in both directions by
+            // KeyHelpTest::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft().
+            //
+            // The cost is one press, not one character: this arm does NOT clear
+            // the buffer, so on a " " draft the space survives behind the
+            // overlay, and typing a literal "?" after leading whitespace now
+            // needs "??" exactly as it already did on an empty line - measured,
+            // " ??" leaves " ?". Widening the guard therefore removes the
+            // disagreement without taking anything from the draft.
+            //
+            // The Up arm above keeps === '' and must: it OVERWRITES the buffer
+            // with the recalled message, so a trim() there would silently eat a
+            // whitespace draft. Same-looking guard, opposite conclusion, because
+            // one arm destroys the buffer and this one does not.
+            //
+            // The blank-line guard still costs one message: the one that STARTS
+            // with "?". Measured, that cost is total rather than awkward - this
+            // input box has no cursor movement at all (no KeyType::Left or
+            // KeyType::Right arm anywhere in this file) and no paste path, so
+            // column 0 is only ever reached by typing the first character, and
+            // "?why" typed on an empty line used to leave inputBuf empty and the
+            // reference open. /keys is NOT the escape hatch for that: it opens
+            // the same reference, which is not what a user COMPOSING a "?"
+            // question wants. The escape hatch is the second "?" - see
+            // handleKeyHelpKey(), where "?" both closes the reference and lands
+            // the literal character, so "??why" types "?why" and the footer hint
+            // on screen says so.
             $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
-                && $msg->rune === '?' && $this->inputBuf === ''
+                && $msg->rune === '?' && trim($this->inputBuf) === ''
                 => [$this->withKeyHelp(0), null],
             // Word-delete: Ctrl+W (the usual terminal-wide convention) or a
             // correctly alt-flagged Backspace (see candy-core's
@@ -1059,48 +1086,82 @@ final class Chat implements Model
         // this comment claimed the second: measured, 14 ChatTest tests reach
         // one, through exactly the two producers above. They cannot make the
         // comparison true, which is the property -- not that they never get
-        // here. Mutations of the two lines below, each judged by the targeted
-        // files going red:
+        // here.
         //
-        //   | mutation                        | trio (265) | ChatTest (215)  |
-        //   |---------------------------------|------------|-----------------|
-        //   | guard deleted                   | 1 failure  | green           |
-        //   | throw when the guard FIRES      | 1 error    | green           |
-        //   | throw on ANY stamped ask        | 1 error    | 14 errors       |
-        //   | 2nd conjunct dropped, so every  | green      | 6 failures      |
-        //   | stamped ask is discarded        |            |                 |
+        // READ THE LINE NUMBER BEFORE MUTATING. This exact predicate --
+        // `$msg->generation !== null && $msg->generation !== $this->generation`
+        // -- appears FOUR times in this file, in four byte-identical three-line
+        // blocks that differ only in indentation: update()'s AssistantMsg arm,
+        // this method, finishToolCalls() and applyBackendToolEvent(). A
+        // replace-first sed lands on the AssistantMsg arm, not here, and the
+        // previous revision of this table did exactly that and then recorded the
+        // wrong site's numbers as a refutation of the right ones. So the table
+        // below is anchored by SITE, and the mis-site's figures are kept beside
+        // it as the tell. Reproduce with
+        // `grep -nF 'generation !== null && $msg->generation !== $this->generation' src/Chat.php`.
+        //
+        // The four sites, and which method owns each, are asserted rather than
+        // narrated, by
+        // KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods().
+        //
+        // Mutations of the guard belonging to THIS method -- the block
+        // immediately below this comment, inside requestPermission() -- line 1175
+        // as this was written, and re-check with the grep above rather than trusting
+        // that number, since editing this comment moves it -- each judged by the targeted
+        // files going red. The trio column counts BEHAVIOURAL reds only; see the
+        // note under the table for the one test every row also trips:
+        //
+        //   | mutation                        | trio (268) | ChatTest (215)     |
+        //   |---------------------------------|------------|--------------------|
+        //   | guard deleted                   | 1 failure  | green              |
+        //   | throw when the guard FIRES      | 1 error    | green              |
+        //   | throw on ANY stamped ask        | 1 error    | 14 errors          |
+        //   | 2nd conjunct dropped, so every  | 1 failure  | 1 error,           |
+        //   | stamped ask is discarded        |            | 11 failures,       |
+        //   |                                 |            | 6 warnings         |
         //
         // Row 2 is the honest bound: exactly ONE test anywhere can observe this
         // branch being taken, KeyHelpTest::testASupersededAskNeverPutsUpAPrompt(),
-        // which hand-builds the Msg -- and rows 1 and 3 put that same single
-        // test, and only it, red in the trio. Row 3 is what refutes the old
-        // wording. Row 4 changes BEHAVIOUR rather than observability, so its
-        // reds say the stamped-and-current path is covered by ChatTest; they are
-        // not evidence about this guard's reach, and reporting it as "exactly
-        // one test red" was simply wrong.
+        // which hand-builds the Msg -- and rows 1, 3 AND 4 put that same single
+        // test, and only it, red in the trio (verified by NAME, not by count, which
+        // is the only way to tell "the right test" from "a test").
+        // Row 3 is what refutes the wording that claimed no other test can even
+        // REACH a stamped ask. Row 4 changes BEHAVIOUR as well as observability,
+        // which is why its ChatTest column is the loud one: the
+        // stamped-and-current path is what ChatTest exercises.
+        //
+        // Every row ALSO reds
+        // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(), because
+        // each of these mutations edits the guard's TEXT and that test reads the four
+        // blocks back. By design, and the reason it is excluded from the column
+        // above rather than folded into it: it is a "you changed the guard, re-read
+        // this table" alarm, not evidence about the guard's reach. Raw trio totals
+        // including it are 2 / 2 / 2 / 2 for the four rows.
+        //
+        // The variant that made the previous revision's error visible: discarding
+        // EVERY ask rather than only stamped ones (`if (true)`) gives trio 14
+        // behavioural failures (16 raw) / ChatTest 1 error, 11 failures, 6
+        // warnings -- so the trio is NOT silent about it, and the row above is not
+        // covering it either.
+        //
+        // At the WRONG site (update()'s AssistantMsg arm, line 607) the same two
+        // mutations give: 2nd-conjunct-dropped -> trio 0 behavioural reds /
+        // ChatTest 6 failures, and `if (true)` -> trio 0 behavioural reds /
+        // ChatTest 1 error, 36 failures, 6 warnings. Those are the figures the
+        // previous revision published as this method's, together with a causal
+        // story about mixed-up rounds that was invented to explain a mis-site.
+        // **If a re-measurement of this table shows zero behavioural trio reds, the
+        // mutation went in the wrong place.** The four-site test fires at the wrong
+        // site too, which is the cheapest available tell.
         //
         // Domains: "trio" is tests/RendererTest.php +
         // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
         // the three files that construct a PermissionRequestMsg at all --
         // `grep -rl PermissionRequestMsg tests/` finds exactly those three. Both
-        // counts are the files as they stand with this comment: trio 265 tests /
-        // 21846 assertions, ChatTest 215 / 770, PHP 8.3.6. ChatTest is measured
+        // counts are the files as they stand with this comment: trio 268 tests /
+        // 38174 assertions, ChatTest 215 / 770, PHP 8.3.6. ChatTest is measured
         // separately BECAUSE rows 3 and 4 show the trio's silence does not cover
         // it.
-        //
-        // All four rows were re-run from scratch for this revision rather than
-        // carried forward, and TWO of row 4's figures did not reproduce: it was
-        // recorded as "1 failure / 11 failures and 1 error" and measures green /
-        // 6 failures, stably over three runs, on a tree where neither ChatTest
-        // nor this method's behaviour has changed since. The likeliest reading is
-        // that the row paired one round's ChatTest number with another round's
-        // trio number. Its conclusion is unaffected and in fact sharpened -- the
-        // trio does not merely under-cover this behaviour, it says nothing about
-        // it at all -- which is exactly why the numbers, not the conclusion, are
-        // what needed re-measuring. A nearby variant is recorded so the row
-        // cannot be misread as covering it: discarding EVERY ask rather than only
-        // stamped ones (`if (true)`) gives trio green / ChatTest 36 failures, 1
-        // error, 6 warnings.
         //
         // So this is not what makes the reference-over-prompt state
         // unreachable, and the sentence claiming it was "the one way that state
@@ -3437,22 +3498,41 @@ final class Chat implements Model
         // KeyHelpTest::testTheSlashPopupListsKeys() and
         // ::testTheSlashPopupListsHelpToo().
         //
-        // It is NOT an escape hatch for a half-typed draft, and two earlier
-        // versions of this comment claimed some form of that. $text is the WHOLE
-        // trimmed buffer and the match below is exact, so the two routes stand or
-        // fall together. Driven as real keystrokes (Chat::update() with KeyMsg,
-        // two-message history over EchoBackend, 100x30): "why" then "/keys"
-        // leaves inputBuf 'why/keys' with the "/" popup empty, and Enter SENDS
-        // "why/keys" to the model as a prompt; "why" then "/" is 'why/' with no
-        // popup either; and clearing the draft first -- "why" then three
-        // Backspaces -- makes BOTH work again.
+        // It is NOT an escape hatch for a half-typed draft, and three earlier
+        // versions of this comment were wrong about that -- twice by promising a
+        // hatch that does not exist, once by denying an asymmetry that did.
+        // $text is the WHOLE trimmed buffer and the match below is exact.
+        // Driven as real keystrokes (Chat::update() with KeyMsg, two-message
+        // history over EchoBackend, 100x30): "why" then "/keys" leaves inputBuf
+        // 'why/keys' with the "/" popup empty, and Enter SENDS "why/keys" to the
+        // model as a prompt; "why" then "/" is 'why/' with no popup either; and
+        // clearing the draft first -- "why" then three Backspaces -- makes BOTH
+        // work again. Pinned by
+        // KeyHelpTest::testSlashKeysInAHalfTypedDraftIsSentAsAPromptNotAsACommand().
         //
-        // Swept across six states, each asserted to paint a distinct frame
-        // (empty+idle, a half-typed draft, a turn in flight, the palette open, a
-        // permission prompt pending, a long transcript scrolled back): in every
-        // one, "?" opens the reference exactly when "/keys"+Enter does. Note the
-        // in-flight state, where NEITHER does. Pinned rather than left as prose,
-        // by KeyHelpTest::testSlashKeysInAHalfTypedDraftIsSentAsAPromptNotAsACommand().
+        // The two routes agree about WHETHER the reference opens, and that is
+        // now a property of the code rather than of the corpus that tested it.
+        // It was false until this round: the "?" arm tested the raw buffer while
+        // this one trims, so a whitespace-only draft opened via "/keys"+Enter and
+        // typed " ?" via "?" -- see the "?" arm in update() for the widened
+        // guard and its cost. What earns the claim today is a corpus chosen
+        // against the PREDICATE (18 typed drafts either side of the blank/non-blank
+        // boundary, including " ", "  ", "\t", " \t " and " x ") rather than
+        // against frame distinctness, which is what the six-state corpus below
+        // was chosen for and is why it could not see the hole. Both live in
+        // KeyHelpTest: ::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()
+        // for the draft boundary, and
+        // ::testTheCommandAndTheShortcutOpenTheReferenceInExactlyTheSameStates()
+        // for the six non-draft states (empty+idle, a half-typed draft, a turn in
+        // flight, the palette open, a permission prompt pending, a long
+        // transcript scrolled back), each asserted to paint a distinct frame.
+        // Note the in-flight state, where NEITHER route opens it.
+        //
+        // One residual asymmetry, deliberately kept: this route CLEARS the input
+        // buffer and the "?" arm does not, so on a " " draft "/keys"+Enter
+        // discards the space and "?" leaves it. That is the ordinary behaviour of
+        // a submitted command, and the reference is modal either way.
+        //
         // The way to type a message that STARTS with "?" is the second "?",
         // which closes the reference and lands the literal character (see
         // handleKeyHelpKey()).

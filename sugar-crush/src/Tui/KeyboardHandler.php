@@ -201,12 +201,23 @@ final class KeyboardHandler
      * The second read is DEFENCE IN DEPTH, not a behaviour, and saying so is
      * the honest form: measured, dropping the conjunct from `chatOwns()` — so
      * that a yielded rune is yielded unconditionally — changes no routing at
-     * all. Two guarantees overlap to make it unobservable. Inside these three
-     * states claim rule 2 already claims every key, so the conjunct cannot
-     * change the outcome; outside them
+     * all. Two guarantees overlap to make it unobservable.
+     *
+     * Inside these three states claim rule 2 claims every key `chatOwns()` has
+     * not already taken — NOT every key, and the difference is measured: six
+     * chords escape rule 2 in `Pane::Agents`, pinned by name in
+     * `KeyboardHandlerTest::testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()`.
+     * The conclusion does not depend on the imprecision, because the conjunct
+     * only ever governs the runes in
+     * {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}, which is the
+     * single rune `r`, and `Ctrl+R` is not one of the six — so rule 2 does claim
+     * it inside these states, and the conjunct still cannot change the outcome
+     * there. Outside them
      * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
      * yielded rune out of {@see shellCtrlRunes()}, so claim rule 6 cannot pick
-     * it up either and it still falls through to Chat. The guard is what keeps
+     * it up either and it still falls through to Chat. (The corrected phrasing
+     * lived thirty lines from the wrong one, in the test docblock, for a round:
+     * two copies of one claim, one fixed and one not.) The guard is what keeps
      * that true if rule 2 ever narrows — a rule-2 that claimed only its own
      * keys would otherwise let the yield leak into every ordinary pane and
      * silently kill `Ctrl+R`. It is therefore pinned at the predicate rather

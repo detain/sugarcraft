@@ -153,16 +153,26 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The stronger half of the same claim, and the one that makes "`/keys` is a
-     * name, not an escape hatch" a property rather than an anecdote: the two
-     * routes stand or fall TOGETHER. If a state existed where the command worked
-     * and `?` did not, the command would be an escape hatch after all and the
-     * README row above would be wrong again.
+     * Half of the claim that makes "`/keys` is a name, not an escape hatch" a
+     * property rather than an anecdote: in each of these states, `?` opens the
+     * reference exactly when `/keys` + `Enter` does. If a state existed where the
+     * command worked and `?` did not, the command would be an escape hatch after
+     * all and the README row above would be wrong again.
      *
      * Domain: the six states in {@see openRouteStates()}, each driven and each
      * asserted to paint a distinct frame. Note the in-flight one, where NEITHER
      * route opens the reference — the point is the agreement, not that both
      * always succeed.
+     *
+     * **This corpus is not the whole claim, and reading it as one is how a false
+     * universal shipped.** Its six members were chosen to be FRAME-DISTINCT, a
+     * criterion orthogonal to the predicate the agreement actually turns on —
+     * `trim($inputBuf) === ''` versus `$inputBuf === ''`. A one-space draft is
+     * frame-distinct from idle (measured: 7 bytes longer, so the distinctness rule
+     * would have ADMITTED it) and it was the counterexample; it was simply never
+     * tried. The predicate-shaped corpus is
+     * {@see testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()}, and the two
+     * together are what earns the sentence in `Chat::submit()`.
      */
     public function testTheCommandAndTheShortcutOpenTheReferenceInExactlyTheSameStates(): void
     {
@@ -182,6 +192,127 @@ final class KeyHelpTest extends TestCase
                 . 'only the command worked would make it the escape hatch the docs must not claim',
             );
         }
+    }
+
+    /**
+     * The other half, and the corpus that actually earns the universal: drafts
+     * chosen either side of the PREDICATE the two routes disagreed on, rather than
+     * states chosen to render differently.
+     *
+     * `Chat::submit()` matches against `trim($inputBuf)`; the `?` arm in
+     * `update()` used to test the raw `$inputBuf`. Everything trimmed-empty but
+     * not empty fell between them, and there `/keys` + `Enter` opened the reference
+     * while `?` typed a literal `?` into the whitespace — i.e. `/keys` WAS the
+     * escape hatch the docs say it is not, reachable by one Space press. The `?`
+     * arm now trims too.
+     *
+     * Pinned in BOTH directions, because either half alone is satisfiable by a
+     * mistake:
+     *
+     * 1. the five blank drafts (`''`, `' '`, `'  '`, `"\t"`, `" \t "`) open the
+     *    reference by both routes, and `?` leaves the draft ALONE — reverting the
+     *    arm to `=== ''` reds this;
+     * 2. the non-blank drafts (`' x '`, `'why'`, `'why '`, `' why'`, `'  x  '`, and
+     *    the `/`-shaped ones a lazy widening might swallow) open it by NEITHER, and
+     *    `?` is typed as a character — widening the arm to unconditional, or to
+     *    `str_contains`-style sloppiness, reds this;
+     * 3. and the two routes agree on every one of the 18, which is the sentence
+     *    `Chat::submit()` states.
+     *
+     * Space is driven both as `KeyType::Space` and as `KeyType::Char ' '`, since
+     * the terminal decoder can produce either and only one of them was ever tried.
+     */
+    public function testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft(): void
+    {
+        $blank = ['', ' ', '  ', "\t", " \t "];
+        // No `?`-leading drafts here, and that is a fixture constraint rather than
+        // an omission: a draft is TYPED, and `?` on a blank line opens the
+        // reference instead of landing, so `'?'` cannot be reached as a draft at
+        // all. That boundary has its own pins —
+        // testAMessageStartingWithAQuestionMarkIsTypeable() and
+        // testALoneQuestionMarkIsATypeableMessage().
+        $nonBlank = [' x ', 'why', 'why ', ' why', '  x  ', 'x', '/', '/k', '/keys', '/KEYS', ' /keys', '/keys ', '/help'];
+
+        foreach ([...$blank, ...$nonBlank] as $draft) {
+            $shouldOpen = in_array($draft, $blank, true);
+            $show = var_export($draft, true);
+
+            foreach ([false, true] as $spaceAsSpaceKey) {
+                $chat = $this->typeDraft($draft, $spaceAsSpaceKey);
+                $this->assertSame($draft, $chat->inputBuf, "fixture: {$show} must reach the box verbatim");
+
+                [$viaShortcut] = $chat->update(new KeyMsg(KeyType::Char, '?'));
+                [$viaCommand] = $this->typeAndEnter($chat, '/keys');
+
+                $this->assertSame(
+                    $shouldOpen,
+                    $viaShortcut->keyHelp() !== null,
+                    "'?' must open the reference on a BLANK line and type a character otherwise ({$show})",
+                );
+                $this->assertSame(
+                    $shouldOpen,
+                    $viaCommand->keyHelp() !== null,
+                    "'/keys' + Enter must open the reference exactly on a blank line too ({$show})",
+                );
+                $this->assertSame(
+                    $viaShortcut->keyHelp() !== null,
+                    $viaCommand->keyHelp() !== null,
+                    "'?' and '/keys' must agree about whether the reference opens ({$show}) — a draft where "
+                    . 'only the command worked would make it the escape hatch the docs must not claim',
+                );
+
+                // The cost of the widened guard, stated as an assertion: on a blank
+                // draft "?" opens the reference and KEEPS the draft, so nothing the
+                // user typed is discarded; on a non-blank one it is typed.
+                $this->assertSame(
+                    $shouldOpen ? $draft : $draft . '?',
+                    $viaShortcut->inputBuf,
+                    "'?' must leave a blank draft untouched and append to a non-blank one ({$show})",
+                );
+            }
+        }
+
+        // The documented escape hatch has to survive the widening: after leading
+        // whitespace, "??" must still land one literal "?" — same rule as on an
+        // empty line, which is the whole point of widening rather than special-casing.
+        foreach (['', ' ', '  ', "\t"] as $draft) {
+            $chat = $this->typeDraft($draft);
+            [$open] = $chat->update(new KeyMsg(KeyType::Char, '?'));
+            [$typed] = $open->update(new KeyMsg(KeyType::Char, '?'));
+
+            $this->assertNull($typed->keyHelp(), 'the second "?" closes the reference');
+            $this->assertSame($draft . '?', $typed->inputBuf, 'and lands exactly one literal "?"');
+        }
+    }
+
+    /**
+     * A draft typed one keystroke at a time rather than handed to the constructor,
+     * because the whole class of bug this file now guards was invisible to
+     * constructor-built fixtures.
+     */
+    private function typeDraft(string $draft, bool $spaceAsSpaceKey = false): Chat
+    {
+        $chat = $this->chat();
+        foreach (preg_split('//u', $draft, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $rune) {
+            $msg = $spaceAsSpaceKey && $rune === ' '
+                ? new KeyMsg(KeyType::Space)
+                : new KeyMsg(KeyType::Char, $rune);
+            [$chat] = $chat->update($msg);
+        }
+
+        return $chat;
+    }
+
+    /**
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function typeAndEnter(Chat $chat, string $text): array
+    {
+        foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $rune) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
+        }
+
+        return $chat->update(new KeyMsg(KeyType::Enter));
     }
 
     /**
@@ -1008,11 +1139,18 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The same bound as a SWEEP rather than four samples, and the reason
-     * {@see Renderer::renderStatusBar()}'s comment no longer quotes a width
-     * table: the range in that comment was wrong in two consecutive rounds,
+     * The same bound as a SWEEP over terminal SIZES rather than four samples, and
+     * the reason {@see Renderer::renderStatusBar()}'s comment no longer quotes a
+     * width table: the range in that comment was wrong in two consecutive rounds,
      * because prose has nothing reading it back. These are the figures the
      * comment used to state.
+     *
+     * **This sweep does not bound the cue, and a previous round read it as if it
+     * did.** Its fixture is idle, and the idle bar is the WIDE one. The bar the
+     * cue actually replaces where a user meets it is 18 columns narrower —
+     * {@see testTheCuesFitTheNarrowestBarAnyAppStateCanProduce()} is the sweep
+     * that covers that, over app states rather than sizes. What this one is for is
+     * the column/row structure of the idle bar, which is a different fact.
      *
      * Instrument: {@see statusBar()}, i.e. `Width::of` after
      * `stripZoneMarkers()`.
@@ -1032,8 +1170,10 @@ final class KeyHelpTest extends TestCase
      *
      * 1. wherever the cue IS emitted, it is a CONSTANT 33 columns — it carries
      *    no readout, so nothing in it varies with the terminal;
-     * 2. the bar takes exactly the four values 54/62/65/75 over the whole sweep,
-     *    so its FLOOR is 54 and 33 <= 54 everywhere;
+     * 2. the IDLE bar takes exactly the four values 54/62/65/75 over this sweep,
+     *    so 54 is the floor **of the idle bar on this fixture** — not of the bar
+     *    generally, which is the domain the word "everywhere" used to smuggle in
+     *    here;
      * 3. the bar responds to COLUMNS ONLY. That is the half the old comment got
      *    backwards when it said the bar "is still 54 columns" wherever this cue
      *    fires: `rows <= 4` fires it too, and at 100x4 the bar is 75.
@@ -1074,12 +1214,12 @@ final class KeyHelpTest extends TestCase
         $bars = array_keys($barWidths);
         sort($bars);
         $this->assertSame([54, 62, 65, 75], $bars, 'the bar widens in four steps as the readouts fit');
-        $this->assertLessThanOrEqual(
-            min($bars),
-            33,
-            'the cue must fit inside the NARROWEST bar it can replace — the bar is the one line this '
-            . 'renderer never truncates, so a wider cue would overflow by more than the bar already does',
-        );
+        // Deliberately NOT an `assertLessThanOrEqual(min($bars), 33)` here: with
+        // the four values hard-coded on the line above, such an assertion can
+        // never be the one that fires, so counting it as coverage of the cue's
+        // margin was double-counting. The margin is asserted where it can bite, in
+        // testTheCuesFitTheNarrowestBarAnyAppStateCanProduce(), against the bar
+        // this fixture cannot produce.
 
         // Rows do not enter it: one width per column across every row tried.
         // Without this, "the bar does not shrink with the terminal" is the
@@ -1087,6 +1227,192 @@ final class KeyHelpTest extends TestCase
         foreach ($barByCol as $cols => $seen) {
             $this->assertCount(1, $seen, "the bar's width must not depend on rows (cols={$cols})");
         }
+    }
+
+    /**
+     * The bound that actually protects the frame, swept over APP STATES because
+     * that — not the terminal size — is what the status bar's width depends on.
+     *
+     * The sibling sweep above ranges over 9,600 terminal sizes and never sees a bar
+     * narrower than 54, because its fixture is idle and cannot become anything
+     * else. Both cues, however, are substituted for the bar in states the idle
+     * fixture cannot reach:
+     *
+     * - a turn in flight and a pending permission prompt both render
+     *   `0% · ⠴ thinking… · Esc Esc to cancel` — **36** columns at its narrowest —
+     *   because `requestPermission()` sets `inFlight` true;
+     * - `KEY_HELP_TOO_SMALL` (33) replaces it whenever `cols <= 4 || rows <= 4`,
+     *   which a small terminal reaches in those states as readily as when idle:
+     *   **3 columns of margin, not 21**;
+     * - `KEY_HELP_OVER_PROMPT` (35) fires *only* while a prompt pends, i.e. only
+     *   ever against that same 36-column bar: **1 column of margin.** It is the
+     *   tighter of the two and the sweep that quoted 54 could not see it at all.
+     *
+     * So this asserts the substitution PER (state, size) — cue width against the
+     * width the very same state and size renders with the reference closed — rather
+     * than against an aggregate floor, and separately records the aggregate floor
+     * and which state produces it.
+     *
+     * Instrument: {@see statusBar()}, i.e. `Width::of` after `stripZoneMarkers()`.
+     * Domain: the nine states in {@see barStates()} against cols 1-400 × rows
+     * {1,4,5,30} — 14,400 (state, size) pairs, chosen so both cue branches and both
+     * geometry branches are crossed with every state. What the corpus still cannot
+     * produce is a translated bar: every figure here is measured against the
+     * hardcoded English literals, which is the caveat
+     * {@see Renderer::KEY_HELP_OVER_PROMPT}'s docblock already carries.
+     *
+     * ~8 seconds, which is why the two big-history fixtures are hoisted rather than
+     * rebuilt per render — see {@see barStates()}.
+     */
+    public function testTheCuesFitTheNarrowestBarAnyAppStateCanProduce(): void
+    {
+        $rowsSet = [1, 4, 5, 30];
+        $cueWidths = [];
+        $barWidths = [];
+        $narrowest = PHP_INT_MAX;
+        $narrowestWhere = '';
+        $tooSmallSubstitutions = 0;
+        $overPromptSubstitutions = 0;
+        $tightestTooSmall = PHP_INT_MAX;
+        $tightestOverPrompt = PHP_INT_MAX;
+
+        foreach ($this->barStates() as $label => $make) {
+            foreach ($rowsSet as $rows) {
+                for ($cols = 1; $cols <= 400; $cols++) {
+                    $state = $make($cols, $rows);
+                    $closed = Width::of($this->statusBar($state));
+                    $barWidths[$closed] = true;
+
+                    if ($closed < $narrowest) {
+                        $narrowest = $closed;
+                        $narrowestWhere = "{$label} @ {$cols}x{$rows}";
+                    }
+
+                    $shown = $this->statusBar($state->withKeyHelp(0));
+                    $width = Width::of($shown);
+                    $isCue = str_contains($shown, 'window too small') || str_contains($shown, 'permission waiting');
+                    if (!$isCue) {
+                        continue;
+                    }
+
+                    $cueWidths[$width] = true;
+                    if (str_contains($shown, 'window too small')) {
+                        ++$tooSmallSubstitutions;
+                        $tightestTooSmall = min($tightestTooSmall, $closed - $width);
+                    } else {
+                        ++$overPromptSubstitutions;
+                        $tightestOverPrompt = min($tightestOverPrompt, $closed - $width);
+                    }
+
+                    $this->assertLessThanOrEqual(
+                        $closed,
+                        $width,
+                        "the cue may not be wider than the bar it replaces in this very state "
+                        . "({$label} @ {$cols}x{$rows}: bar {$closed}, cue {$width}) — the bar is the one "
+                        . 'line this renderer never truncates, so a wider cue would overflow by more than '
+                        . 'the bar already does',
+                    );
+                }
+            }
+        }
+
+        // The floor, and the state that owns it. Hard-coded so that a bar which
+        // grows narrower — or a state that stops being reachable — has to be
+        // re-argued rather than silently absorbed.
+        $this->assertSame(36, $narrowest, "the narrowest bar over the corpus, produced by {$narrowestWhere}");
+        $this->assertSame(
+            'turn in flight @ 1x1',
+            $narrowestWhere,
+            'and it is the in-flight bar, in the state the idle fixture cannot reach',
+        );
+
+        $cues = array_keys($cueWidths);
+        sort($cues);
+        $this->assertSame([33, 35], $cues, 'the two cues carry no readout, so neither can vary with the terminal');
+
+        // Both cues really are substituted, over the band each one owns:
+        //   TOO_SMALL: 9 states x (2 rows in {1,4} x 400 cols + 2 rows in {5,30} x
+        //   4 cols) = 9 x 808;
+        //   OVER_PROMPT: the one prompt-pending state, on the complement of that
+        //   band within its own 1600 pairs = 4 x 400 - 808.
+        $this->assertSame(9 * 808, $tooSmallSubstitutions, 'fixture: TOO_SMALL fires over the band claimed');
+        $this->assertSame(4 * 400 - 808, $overPromptSubstitutions, 'fixture: OVER_PROMPT fires over its complement');
+
+        // The two margins, named so a shrinking one is visible rather than merely
+        // still-positive.
+        $this->assertSame(3, $tightestTooSmall, 'KEY_HELP_TOO_SMALL keeps 3 columns against the in-flight bar');
+        $this->assertSame(1, $tightestOverPrompt, 'KEY_HELP_OVER_PROMPT keeps exactly 1 — it is the load-bearing one');
+    }
+
+    /**
+     * App states the status bar is measured over, each built fresh per size so a
+     * state cannot leak into the next render.
+     *
+     * Nine, and the two that matter are the last two: the idle bar carries the
+     * context readout and is wide, while an in-flight turn replaces the whole bar
+     * with the cancel hint and is narrow. `prompt pending` is in-flight too —
+     * `requestPermission()` sets `inFlight` — which is why it is the state
+     * `KEY_HELP_OVER_PROMPT` is measured against. `context over 100%` is here to
+     * push the readout the OTHER way — measured, 1,200 exchanges render
+     * `~122.4K / 100K context (122%) · …` at 81 columns — so the corpus brackets the
+     * bar rather than sampling one end of it.
+     *
+     * @return array<string, callable(int, int): Chat>
+     */
+    private function barStates(): array
+    {
+        // Built ONCE and closed over, not per (state, size): the corpus renders each
+        // state 1,600 times, and rebuilding a 2,400-message history that often cost
+        // 30 seconds of the sweep's runtime on its own.
+        $history = static function (int $pairs): array {
+            $out = [];
+            for ($i = 0; $i < $pairs; $i++) {
+                $out[] = Message::user(str_repeat('question ', 20) . $i);
+                $out[] = Message::assistant(str_repeat('answer ', 20) . $i);
+            }
+
+            return $out;
+        };
+        $long = $history(40);
+        $huge = $history(1200);
+
+        return [
+            'empty history' => static fn(int $cols, int $rows): Chat
+                => (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))->withSize($cols, $rows),
+            'two-message idle' => fn(int $cols, int $rows): Chat => $this->chat('', $cols, $rows),
+            'half-typed draft' => fn(int $cols, int $rows): Chat => $this->chat('why', $cols, $rows),
+            'palette open' => function (int $cols, int $rows): Chat {
+                [$palette] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+                return $palette;
+            },
+            'long history' => static fn(int $cols, int $rows): Chat
+                => (new Chat(history: $long, inputBuf: '', backend: new EchoBackend()))->withSize($cols, $rows),
+            'context over 100%' => static fn(int $cols, int $rows): Chat
+                => (new Chat(history: $huge, inputBuf: '', backend: new EchoBackend()))->withSize($cols, $rows),
+            'turn in flight' => function (int $cols, int $rows): Chat {
+                [$flight] = $this->chat('hello', $cols, $rows)->update(new KeyMsg(KeyType::Enter));
+
+                return $flight;
+            },
+            'turn in flight, big context' => static function (int $cols, int $rows) use ($huge): Chat {
+                $chat = (new Chat(history: $huge, inputBuf: 'hello', backend: new EchoBackend()))
+                    ->withSize($cols, $rows);
+                [$flight] = $chat->update(new KeyMsg(KeyType::Enter));
+
+                return $flight;
+            },
+            'prompt pending' => function (int $cols, int $rows): Chat {
+                [$blocked] = $this->chat('', $cols, $rows)->update(new \SugarCraft\Crush\PermissionRequestMsg(
+                    Message::assistant(''),
+                    new \SugarCraft\Crush\ToolCall('Bash', ['description' => 'rm'], 'call_1'),
+                    'Run rm -rf build/?',
+                    null,
+                ));
+
+                return $blocked;
+            },
+        ];
     }
 
     /**
@@ -1186,6 +1512,73 @@ final class KeyHelpTest extends TestCase
 
         [$unstamped] = $sent->update($ask(null));
         $this->assertNotNull($unstamped->pendingPermission(), 'an unstamped ASK still applies');
+    }
+
+    /**
+     * The reason `Chat::requestPermission()`'s mutation table names a SITE and not
+     * just a predicate, asserted instead of narrated.
+     *
+     * That predicate —
+     * `$msg->generation !== null && $msg->generation !== $this->generation` —
+     * appears four times in `Chat.php`, in four blocks that are byte-identical
+     * apart from indentation. A replace-first `sed` therefore lands in
+     * `update()`'s `AssistantMsg` arm, not in `requestPermission()`, and one
+     * review round published the wrong site's mutation figures as a refutation of
+     * the right site's: at the `AssistantMsg` arm the "drop the second conjunct"
+     * mutation leaves the trio GREEN, which reads as "the trio does not cover
+     * this" when it means "you mutated the wrong line".
+     *
+     * So this pins the hazard itself: how many copies there are, and which method
+     * owns each. A fifth copy, or a copy moving to another method, changes what
+     * "the guard" means in that table and must force it to be re-read.
+     */
+    public function testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(): void
+    {
+        $file = \dirname(__DIR__, 2) . '/src/Chat.php';
+        $lines = explode("\n", (string) file_get_contents($file));
+        // The whole statement, and comment lines skipped: the method's own comment
+        // quotes the predicate twice (once as the warning, once as a reproducing
+        // grep), so a substring match over every line counts prose as code.
+        $needle = 'if ($msg->generation !== null && $msg->generation !== $this->generation) {';
+
+        /** @var array<string, list<int>> $byMethod */
+        $byMethod = [];
+        foreach ($lines as $i => $line) {
+            $trimmed = ltrim($line);
+            if (!str_starts_with($trimmed, $needle) || str_starts_with($trimmed, '//')) {
+                continue;
+            }
+            $method = null;
+            for ($j = $i; $j >= 0 && $method === null; $j--) {
+                if (preg_match('/function\s+(\w+)\s*\(/', $lines[$j], $m) === 1) {
+                    $method = $m[1];
+                }
+            }
+            $byMethod[(string) $method][] = $i + 1;
+        }
+
+        $this->assertSame(
+            ['update', 'requestPermission', 'finishToolCalls', 'applyBackendToolEvent'],
+            array_keys($byMethod),
+            'the generation guard is spelled out per-site; if the set of sites changed, '
+            . "Chat::requestPermission()'s mutation table names one of them and must be re-measured",
+        );
+        foreach ($byMethod as $method => $at) {
+            $this->assertCount(1, $at, "one copy per method ({$method} has " . \count($at) . ')');
+        }
+
+        // And the copies really are indistinguishable by text, which is the whole
+        // hazard: a table that named only the predicate would be ambiguous.
+        $bodies = [];
+        foreach ($byMethod as $at) {
+            $bodies[] = implode('|', array_map('trim', array_slice($lines, $at[0] - 1, 3)));
+        }
+        $this->assertCount(1, array_unique($bodies), 'the four blocks differ only in indentation');
+        $this->assertSame(
+            $needle . '|return [$this, null];|}',
+            $bodies[0],
+            'and each is the same three lines, which is why a mutation must be anchored by line number',
+        );
     }
 
     /**

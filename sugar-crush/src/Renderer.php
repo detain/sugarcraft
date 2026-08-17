@@ -547,6 +547,10 @@ final class Renderer
      * and `contextIndicator()`'s last resort `"{$percent}%"` can never be empty,
      * so 2 really is its floor), against this cue's 35. The bar is the one line
      * this renderer never truncates, so that 1-column margin is load-bearing.
+     * Swept and asserted, over app states rather than terminal sizes alone, by
+     * `KeyHelpTest::testTheCuesFitTheNarrowestBarAnyAppStateCanProduce()` — which
+     * exists because {@see renderStatusBar()}'s comment carried 54 here, the
+     * IDLE floor, for a round while this docblock had 36 right.
      *
      * Both figures are COLUMN counts, not byte counts: `strlen` reads this cue
      * as 36 and would sit exactly on the boundary, reporting a margin that is
@@ -1065,26 +1069,46 @@ final class Renderer
         // Program resolves into a paint and never puts on screen), and strlen
         // reads the multi-byte glyphs as bytes; the same instrument
         // KEY_HELP_OVER_PROMPT's floor is measured with, for the same reason.
-        // Fixture: a two-message chat (one user, one assistant) over
-        // EchoBackend, idle, no prompt pending — KeyHelpTest::chat() and its
-        // statusBar() helper.
-        // The bound is two numbers: this cue is a CONSTANT 33 columns, and the
-        // bar's NARROWEST form on that fixture is 54. 33 <= 54, so replacing the
-        // bar with the cue can never widen the frame.
         //
-        // Both numbers are swept and ASSERTED rather than restated here, by
-        // testTheBarIsNeverNarrowerThanTheTooSmallCueAtAnySize() (which also
-        // pins that the bar tracks COLUMNS only and takes exactly four values)
-        // and testTheTooSmallCueIsNeverWiderThanTheBarItReplaces() (the
-        // per-size comparison). Deliberately NO width table in this comment: it
-        // has now carried a wrong bar figure twice in consecutive rounds, because
-        // a range written in prose has nothing reading it back. First it said
-        // "73-94", which matches no instrument at all on this fixture; then "54
-        // at every width below 79 and 75 at 79 and above", which is wrong in both
-        // halves — the bar is 62 for cols 62-64 and 65 for 65-74, and the step to
-        // 75 is at 75. The sentence that followed it, that the bar "is still 54"
-        // wherever this cue fires, is wrong too: `rows <= 4` fires the cue as
-        // well, and at 100x4 the bar is 75.
+        // The bound is two numbers, and the second one is only meaningful with
+        // its DOMAIN attached, because the bar's width depends on the app state
+        // and not just on the terminal. This cue is a CONSTANT 33 columns. The
+        // narrowest bar it can replace is 36 — the in-flight bar,
+        // `0% · ⠴ thinking… · Esc Esc to cancel`, measured at cols 1. So the
+        // margin is 3 columns, and replacing the bar with the cue can never
+        // widen the frame.
+        //
+        // 36, not 54. 54 is the floor of the IDLE bar, which is the only bar
+        // KeyHelpTest::chat()'s two-message fixture can produce, and the previous
+        // revision quoted it under a conclusion that ranged over every app state.
+        // A fixture that cannot enter the narrow state cannot bound it: an
+        // in-flight turn and a pending permission prompt both render the 36-column
+        // bar, and BOTH have this cue substituted for it (`rows <= 4` or
+        // `cols <= 4`, which a small terminal reaches in either state). The sister
+        // cue {@see KEY_HELP_OVER_PROMPT} is tighter still — 35 columns against
+        // the same 36-column bar, because it fires precisely when a prompt is
+        // pending, i.e. only ever against the narrow bar. One column of margin.
+        //
+        // Worth noting how the wrong figure survived: 36 was ALREADY in this file,
+        // correct, in {@see KEY_HELP_OVER_PROMPT}'s own docblock, which had to
+        // measure the narrow bar because its cue only ever meets that one. Two
+        // copies of one measurement, 500 lines apart, and only the copy whose cue
+        // could also meet the WIDE bar went stale — because its fixture reached
+        // the wide bar first and stopped there.
+        //
+        // Every figure here is swept and ASSERTED rather than restated, over app
+        // STATES as well as terminal sizes, by
+        // testTheCuesFitTheNarrowestBarAnyAppStateCanProduce(). The
+        // size-only sweep stays beside it as
+        // testTheBarIsNeverNarrowerThanTheTooSmallCueAtAnySize() (which pins that
+        // on the idle fixture the bar tracks COLUMNS only and takes exactly four
+        // values), and testTheTooSmallCueIsNeverWiderThanTheBarItReplaces() does
+        // the four-sample per-size comparison. Deliberately NO width table in
+        // this comment: it has now carried a wrong bar figure in three consecutive
+        // rounds, because a range written in prose has nothing reading it back.
+        // First it said "73-94", which matches no instrument at all; then "54 at
+        // every width below 79 and 75 at 79 and above", wrong in both halves; then
+        // 54 as a floor over a domain the fixture could not cover.
         if ($chat->keyHelp() !== null && self::keyHelpGeometry($chat) === null) {
             return self::KEY_HELP_TOO_SMALL;
         }

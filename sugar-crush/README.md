@@ -154,9 +154,9 @@ all one candy-core `Model` tree — not two parallel UIs.
 
 | Key | Does |
 |-----|------|
-| `?` (empty input) | Show the in-app keyboard reference. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
-| `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on an empty line would otherwise make one impossible |
-| `/keys`, `/help` | The same reference, by **name**: typing `/k` or `/h` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Clear the line and either route works |
+| `?` (blank input) | Show the in-app keyboard reference. Blank means empty *or* whitespace-only — the draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
+| `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on a blank line would otherwise make one impossible. Works after leading whitespace too: `␣??` leaves `␣?` |
+| `/keys`, `/help` | The same reference, by **name**: typing `/k` or `/h` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. The two routes agree about *whether* the reference opens, on every draft and in every state tested; they differ in one detail, which is that submitting `/keys` clears the input line and `?` does not. Clear the line and either route works |
 | `Enter` | Send |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker |
@@ -382,12 +382,18 @@ skip is `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFa
 which `markTestSkipped`s itself with "would require mocking built-in functions"
 — reaching `loadConfig()`'s `file_get_contents` failure branch needs a
 `.mcp.json` that `file_exists()` but cannot be read. It is the only skip, and
-`failOnWarning="true"` means the run is also warning-free. (Counts move with
-every commit, so this one is re-measured whenever a change adds tests rather than
-left to age — the figure is what the suite measured, not a target. The one that
-first stood here, 4,337/12,587, understated it by over 2,000 tests, and the one
-before this by 22 tests and 6,215 assertions, which is why the run command is
-quoted beside the number: the number is only useful if you can reproduce it.)
+`failOnWarning="true"` means the run is also warning-free.
+
+**That figure is a point-in-time measurement, and it is stale by
+construction** — any commit that adds a test invalidates it, and review found
+this one already behind the very commit that wrote it. It is
+recorded because reproducing a number is how you check it, not because it is
+maintained: **the command above is the authority, the figure is not.** An earlier
+revision of this paragraph promised the opposite — that the count "is re-measured
+whenever a change adds tests rather than left to age" — which is a guarantee no
+README can keep and which read as freshness for three rounds while the number
+drifted. For scale rather than for accuracy: the first figure to stand here,
+4,337/12,587, understated the suite by over 2,000 tests.
 
 Coverage spans every subsystem: typed messages + attachments, all 10 built-in
 tools (the whole of `src/Tools/BuiltIn/`, which is exactly the array
