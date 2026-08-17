@@ -3350,3 +3350,127 @@ briefed to read their round's findings out of this worklog — 3102-onward for E
 Five rounds running, the dominant defect class has been **a number or a claim that
 travelled without its domain**, and it has appeared inside the fix rounds meant to
 remove it every single time. Both briefs make that an explicit attack line.
+
+## RESUMPTION STATE — 2026-08-17, safe `/compact` point
+
+### Where the tree is
+
+`master` == `origin/master` at **`76ca9e9a`** (this worklog commit). Everything
+below it is pushed. Working tree is CLEAN except two untracked paths that are the
+user's own work and must never be touched: `docs/plans/plans_cleaning.md` and
+`sugar-crush/python_port/`.
+
+Suite: **6418 tests / 49631 assertions / 0 failures / 1 skipped**, ~2m20s. The one
+skip is the legitimate
+`MCP/McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`.
+`SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves` is a known
+pre-existing timing flake — never skip it, never weaken it.
+
+Today's commits, oldest first: `63d3007e` `2c763011` `e1c7f890` `f37591b9`
+`edc0ef51` `00d2d73e` `70e8be3e` `b7fcd857` `98bee793` (lane E round 1)
+`48e0690c` (lane B round 15) `8d197f6f` `c2ab3e31` (lane D round 5) `76c506fc`
+(CI fix) `de15ee6d` (vhs.yml fix) `1800152e` (CI's 211-GIF re-render)
+`165f5874` (lane E round 2) `76ca9e9a` (worklog).
+
+Git identity: this machine had never set one, and the repo-LOCAL config carried
+`Test User <test@example.com>`, which shadowed a global fix. Both are now
+`Joe Huss <detain@interserver.net>`, and the 9 commits made before the fix were
+rebuilt with `git commit-tree` + `git update-ref` — NOT `filter-branch`, which
+refuses to run with a dirty tree, and the tree held two lanes' uncommitted work.
+
+### In flight at compact time
+
+Two ADVERSARIAL REVIEWERS, both read-only, both told to report and stop:
+
+- **lane E round-2 review** against `165f5874`. Briefed to attack the `?` decision
+  by driving it, the footer's 1-column width margin (63 vs `KEY_HELP_COLS = 64`),
+  F-1's negative claim that seven other direction rows "were already asymmetric",
+  the 1520-press sweep's 760/712/48, the six newly-covered rows' mutations,
+  `picker.branch`'s `git init` + `chdir` hygiene, `token()`'s narrowed parser, and
+  every figure for a missing domain.
+- **lane B round-15 review** against `48e0690c` plus `de15ee6d`'s edit to that
+  test's header. Briefed to recompute the 192-byte glue set, re-verify BOTH oracles
+  independently, hunt a third kind-vs-text gate after the two `skipSpeedSuffix()`
+  survivors, look for a fourth time unit and a sixth divergence class, check the N1
+  honesty claim by mutating each byte class, actually RUN the four new examples, and
+  verify the header's claim that the collected glob is unchanged by the vhs.yml fix.
+
+If either notification is lost, both rounds are re-runnable from the worklog
+sections named in their briefs.
+
+### Next steps, in order
+
+1. **#14 / P2.4** — wire `CommandLoader` + build the template-substitution engine.
+   This is the next plan item after #13.
+2. **#12 / P2.1+2** — pick one `McpClient`, rename the other, add
+   `Bootstrap::mcpClient()`.
+3. **#17 / P2.7** — `LspTool implements Tool` over the already-built `LspClient`.
+4. Then #64, then the P3–P8 body.
+
+**Sequencing constraint: #14 and #12 both want `src/Cli/Bootstrap.php`** — #14 to
+wire the loader, #12 to add `mcpClient()`. Run them ONE AT A TIME. Two files needed
+hunk-level splitting today for exactly this reason (`Chat.php` for lane D vs E,
+`README.md` likewise), and splitting is avoidable by serialising.
+
+**#63** (`enforceTimeLimit` in `phpunit.xml`) should be slotted into the next gap
+where no agent is running the suite — it has been waiting only for that.
+
+### Tracker inventory
+
+Closed today:
+
+- **#78** — `McpClientTest` racing its own MCP server (`c56602f0`, now `f37591b9`).
+- **#83** — `README.md`'s stale `4,337/12,587` → measured `6,402/45,552` with its
+  run command beside it (lane D).
+- **#84** — `SkillLoader::contained()`; closed by `Support\ContainedPath` (lane D).
+- **#44 / P8.12** — the `Write` tool: it existed, was tested, was named in the
+  README, and `Bootstrap::tools()` never listed it. Now wired.
+- The GIF pipeline (`de15ee6d`) and the CI `--version` assertion (`76c506fc`).
+
+Still open:
+
+- **#79** — `/workflow run` freezes the TUI. Now DOCUMENTED in `Chat.php` with the
+  fix named (`EngineBackend::completeAsync()`'s fork-plus-socket pattern); the fix
+  itself is its own change-set.
+- **#80** — `ProcessExecutor::createInlineWorkerScript()` is still the P1.S5
+  simulation, so no workflow stage reaches a live model.
+- **#81** — port the vhs grammar into `candy-vcr/src/Tape/Lexer.php`. Round 15 adds
+  four portable facts: tab is whitespace, there are THREE time units not two, the
+  JSON closer is synthesized, and both the keyword gate and the suffix gate are on
+  token KIND not text.
+- **#82** — `MenuBar.php:362-368` orphaned docblock.
+- **#85** — `Ctrl+P`/`Ctrl+K` opens a hosted-Chat palette the shell's agent
+  dashboard never paints and never drives.
+- **NEW #86** — `Doctor::name()` returns lowercase `'doctor'` where the other nine
+  tools are TitleCase. Flagged, deliberately not renamed by a review round: the
+  model already knows the name. Belongs to whoever owns the tool schema.
+- **NEW #87** — the Finding-2 containment residual: a repo can still commit
+  `.sugar-crush/workflows -> <another directory inside the checkout>` and disclose
+  that directory's `*.yaml` basenames. Closing it would refuse the ordinary
+  `-> tools/workflows` layout. Documented as a reduction, not an elimination.
+
+### Method notes worth carrying forward
+
+- **The dominant defect class, five rounds running, is a number or a claim that
+  travelled without its domain** — and it has appeared inside the fix round meant
+  to remove it EVERY time. Every figure written into code must state what it was
+  measured over, in the code.
+- **Partial static reset** is now a named shape, four instances: lane D's
+  `PermissionGate` strike counter, `MenuBar::$activeMenu`/`$activeItem`,
+  `resetMenuBarState()` resetting one of two, and `KeyBindingRegistry`'s two memos.
+  A fifth exists benignly: `Renderer::$keyHelpMaxOffset`.
+- **Domain-bounded probes read as green.** A sweep whose corpus cannot produce the
+  bug proves nothing. Lane E's own sub-state sweep leaked this way when a swept `q`
+  closed the menu it was sweeping in.
+- **Seams that look usable and are not**: `InstalledVersions::reload()` (the vendor
+  dir is re-read ahead of it), and artifact NAMES as the only record of which lib a
+  file belongs to (`download-artifact` drops the name for a single match).
+- **Mutation protocol**: copy the tree, prove the copy is loaded with
+  `ReflectionClass::getFileName()`, judge by the TARGETED file flipping green→red,
+  restore from in-memory bytes under `trap … EXIT INT TERM HUP`. Do NOT run the
+  whole suite inside a `cp -a` copy — the copy has no `.git`, and something
+  resolving a repo root walked out of the tree and destroyed the copy's cwd.
+- **GIFs are rendered and committed by CI, never by hand.** Any `vhs.yml` change
+  sets `force_all=true` and re-renders ~49 libs, recommitting essentially all ~300
+  tracked GIFs. `AGENTS.md`'s "don't commit GIFs" addresses us; `CLAUDE.md`'s
+  "GIFs are committed" describes CI. Both are correct.
