@@ -2044,3 +2044,138 @@ workflow tier leaves the skills tier stating the same guarantee it cannot keep.
 **Work order unchanged:** land #37/#13/#38 → #63 `enforceTimeLimit` → #12/#14/#17
 rest of Phase 2 → #64 → the P3-P8 body → #58/#59/#60/#61, #49, #51, #55, and
 #74-#84.
+
+## Lane B — #37: round 12's finding, and the root cause of the whole twelve-round chain
+
+Round 12 produced the twelfth consecutive finding, and its primary one is the
+**third occurrence of a single failure mode**: the probe was correct and the
+probe's *domain* was the bug.
+
+**Findings 1 + 2 share one root cause.** `tokenize()`'s bare-token run (line 1465)
+uses a **nine-byte negative break set**:
+
+```php
+$breaks = " \t" . $newlines . '#' . "\"'`" . '{';
+```
+
+Upstream uses two **positive byte classes**, read straight from `lexer/lexer.go`:
+
+```go
+func (l *Lexer) readIdentifier() string {   // 67 bytes
+  for isLetter || isDot || isDash || isUnderscore || isSlash || isPercent || isDigit
+func (l *Lexer) readNumber() string {       // 11 bytes: [0-9.]
+  for isDigit || isDot
+```
+
+Everything outside those classes is either one of the nine single-byte tokens
+(`@ = + - % ^ \ [ ]`) or `ILLEGAL` — **one token each**. Measured over all 255
+bytes: the model is over-greedy on **179** for identifiers and **235** for
+numbers, under-greedy on none.
+
+**The damage is not value length — it is a lost occurrence.** The next directive's
+*head* gets glued into the bare token, so `headMatches()`/`startsDirective()` never
+see it. Nine end-to-end tapes, `validate` exit 0, suite GREEN:
+
+| appended to `cli.tape` | upstream sees | model sees |
+|---|---|---|
+| `Set Padding }Set Shell "sh"` | `SET Padding }` + **`SET Shell sh`** | one token `}Set` |
+| `Set Padding 0Set Shell "sh"` | + **`SET Shell sh`** | `0Set` |
+| `Set Padding -Output evil.gif` | + **`OUTPUT evil.gif`** | `-Output` |
+| `Set LoopOffset 50%Set Shell "sh"` | + **`SET Shell sh`** | `50%Set` |
+| `Set Padding }Source real.tape` | + **`SOURCE`** | `}Source` |
+| control `Set Padding } Set Shell "sh"` | same | sees it → RED ✓ |
+
+Exploitable glue set: **64 bytes**, identical for both sentinels —
+`\x01-\x08 \x0b \x0c \x0e-\x1f ! $ % & ( ) * + , - 0-9 : ; < = > ? @ [ \ ] ^ _ | } ~ \x7f`.
+
+Finding 2 is the same bug wearing a different hat: `panicsUpstreamsLexer()` has
+**220 false negatives / 0 false positives** over a 1,944-case sweep, because the
+model glues `/` into a bare word (`Set Padding 50/a\` and `Type "x"\na\/b\` are one
+token each) so no regex opens and `$regexPanic` never sets — while upstream's
+`readNumber` stops at `/`, `readIdentifier` never starts on `\`, and `readRegex`
+walks off the end (`slice bounds out of range`, exit 2).
+`testTheRegexPanicDetectorMatchesTheMeasuredShapes()` cannot catch it: all three of
+its shapes are `Set WaitPattern /…`, i.e. `/` already at a token start after
+whitespace. Same domain narrowness.
+
+**The fix is structural — model tokens POSITIVELY, mirroring upstream's byte
+classes, instead of negatively with a break set.** A negative set can never be
+shown complete; a positive class transcribed from `lexer.go` can. Round 12
+confirmed a corrected model drives adjacency misses to **0** and the panic detector
+to **FN=0, FP=0**. That is round 13's job, now in flight.
+
+**Finding 3 — round 11's own mutation claim does not hold for the list in the
+tree.** Round 12's 112-mutation sweep: **101 RED, 7 SURVIVED, 3 HANG, 1 NO-OP**.
+Six survivors re-verified individually (bytes changed, suite still `OK (69/261)`),
+and **four appear verbatim in round 11's list** that reported "80 RED / 1 NO-OP / 0
+survived": JSON `'quoted' => true→false` (breaks "a JSON token can never be a
+directive head"), dropping the string's `$close < $lineEnd` bound (breaks
+newline-bounding), `++$i` before `$values[]` (breaks the file's own *"stepping over
+it would lose that occurrence"*), and `head()` → `return $text` (breaks
+`Type@100ms` ending a value). Plus `GRID_COLUMNS` and one grid row asserted
+nowhere. The 3 HANGs are infinite loops from mutations that desynchronise
+`$breaks` from the delimiter branches — a mutation artifact, and possibly removed
+outright by the positive-class rewrite.
+
+**Finding 4 — fifth instance of the unmeasured-comment class.** Lines 103–105 cite
+`Home` as *"a token TYPE and a `parseCommand` case"*. The load-bearing half is
+true (token type at `token.go:52`, no `Keywords` key, `Type Home zzqq` really types
+`Home zzqq`), but `HOME` lives in **`token.IsCommand()`** (`token.go:193`) and the
+string does not occur in the parser at all — `parseCommand()` (`parser.go:138`) has
+no `token.HOME` case.
+
+**Three claims corrected as a result**, all of them *measured* claims: line 1242's
+"0 miss-direction divergences" (really 150 in an adjacency sweep, +6 with two
+sentinels on a line — the corpus was not wrong *for its domain*, because a
+6×8×22×7×5 product always separates sentinel from value by whitespace or by a
+delimiter *closer*, and a closer is either in `$breaks` or handled by
+`scanRegex()`); lines 1169–1180's claim that the model only ever gives a value
+*more* tokens (it also yields *fewer occurrences*, which line 1232 itself names as
+"a false green of exactly the kind this file exists to prevent"); and the class
+docblock's "look first at the `#`-hiding set", which is complete by construction
+and therefore would send round 13 to the wrong place.
+
+Round 12's nine-family domain sweep, worth keeping because it shows what *did*
+hold: nested constructs 0 miss, two-constructs-per-line 0, CRLF 0, non-ASCII 0,
+three-line constructs 0, empty middles 0, closer-then-glued-sentinel 0 — only
+**adjacency (150)** and **multiple sentinels (6)** miss.
+
+**Claims that survived round 12 intact:** JSON asymmetry (`a{#}b` → three tokens;
+`{abc\nSet Shell "sh"` runs to EOF as one JSON token with 0 errors; `{ab\n` gets
+its closer appended); `scanRegex()` as a faithful `readRegex` port line-by-line;
+comment-valued `Set` genuinely loud for every family (`Type #php …` is green but
+`parseType` *gates* on `token.STRING`, so upstream rejects it — not a clean-parse
+tape, so not a false green); **KEYWORDS by construction** — `token.Keywords` 60/60
+unique, PHP const 60/60, **set-equal**, and `LookupIdentifier`'s body is the whole
+mechanism; claim 6's durable half; claim 7's probe-shape soundness.
+
+**The "24" adjudication, settled:** no candidate equals 24. Across the five tapes
+with `errors=0` — **13** distinct directive kinds, **52** (tape, directive) pairs,
+**74** total occurrences, **25** `Set`-occurrences, **9** kinds counting bare `Set`
+once, **16** distinct KEYWORDS in the token streams. Round 11 was right to report
+what it measured.
+
+**Every candy-vcr statement verified accurate in source, nothing weakened:**
+`Tape/Compiler.php:296` records the shell name; `Encode/TapeToGif.php:364`
+`resolveShell()` prefers `$options['shell']` then `$this->compiler->shell()`;
+`Render/FrameStream.php` runs exec mode under a real PTY (`PtySystemFactory`) with
+`shellCommand()` doing `locateShell($shell) ?? self::FALLBACK_SHELL` (`/bin/sh`);
+**no shell whitelist anywhere in `candy-vcr/src/`**, so `Set Shell "sh"` is legal
+there; `Tape/Lexer.php` is `explode("\n", …)` + per-line regex with no JSON and no
+REGEX token. Both `UPSTREAM-ONLY` labels are additive prose above live assertions.
+
+### The durable lesson, now three times over
+
+**A negative set cannot be shown complete; a positive class transcribed from the
+source can.** Every one of this chain's twelve findings was the model describing
+what *stops* a token instead of what *continues* one, and each round closed one
+more stopping-byte while the next stayed open. The same asymmetry explains the two
+earlier domain failures: round 9's `#`-protection sweep used one character as both
+opener and closer (so `{a#b{` had no `}` and `{` scored as "does not protect"), and
+its keyword sweep generated only CamelCase words (a domain that structurally
+cannot contain `em`/`px`/`ms`). In all three the probe was right.
+
+Corollary that is now a standing rule for this file: **when you restate a measured
+figure, restate the domain it was measured over.** Round 12's finding exists
+because "0 miss-direction divergences" travelled without its corpus.
+
