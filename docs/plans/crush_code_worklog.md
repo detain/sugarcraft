@@ -2519,3 +2519,127 @@ routing change that returns a new-but-equivalent `App`; whether the deliberate
 `renderStatusBar()` directly rather than the composed frame — documented as a trap for
 the next reviewer, but the consequence is that it does not prove the cue reaches the
 user-visible frame at all.
+
+---
+
+## Lane D (#13) — round-4 review: 3 findings + 6 nits, no surviving escape
+
+The containment fix **holds**. What round 4 broke was the *claims*, in three places where
+the text now says something measurably untrue — plus one residual that is real, larger
+than documented, and untested in either direction.
+
+### Finding 1 — the README refutes itself, three lines apart
+
+`README.md:305` (pre-existing): *"a link in a cloned repository's `.claude/skills` may not
+leave that skills directory, **so a repo cannot ship a link that reads your files into the
+model's prompt context**"*. `README.md:308` (**added by the round-3 fix**): the same idiom
+is used by `SkillLoader`, *"where the symlinked-**directory** case is **not** yet closed"*.
+
+Before round 3, `:305` was merely wrong. Now the document contradicts itself, and a reader
+who stops at the Skills bullet — the natural place to look for a skills claim — gets the
+absolute denial. The fix agent filed the `SkillLoader` half as out-of-lane, which it was;
+the *contradiction*, however, is a sentence that change introduced.
+
+**Round 5 resolves this by closing the other half rather than softening the sentence.**
+`SkillLoader::contained()` carries the identical escape with a strictly larger payload —
+`SKILL.md` bodies enter the model's prompt — and the reviewer's own recommendation was one
+shared predicate. Lane D's scope is therefore expanded by `src/Skills/` for this round.
+Nothing else owns that tree.
+
+### Finding 2 — the residual is documented as zero and is measurably not
+
+`readableProjectDir()` and `README.md:308` both equate *resolves inside `$projectRoot`* with
+*"repository content pointing at repository content, the same trust as a committed
+`.yaml`"*. A checkout is not the same set as repository content: it also holds untracked,
+gitignored, developer-local files.
+
+A repository committing exactly one line — `.sugar-crush/workflows -> ..` — gets:
+
+```
+checkout/kubeconfig.yaml        (developer-local, gitignored)
+checkout/local-secrets.yaml     (name: + description: TOKEN=sk-live-DEADBEEF)
+checkout/.sugar-crush/workflows -> ..
+
+list():  ["kubeconfig","local-secrets"]
+load(local-secrets).description:  TOKEN=sk-live-DEADBEEF
+```
+
+`realpath` puts the link **equal** to the anchor, which `containedIn()` accepts via its
+`$realPath === $realDir` arm. So `/workflow list` enumerates the basenames of every
+`[a-zA-Z0-9_-]+\.yaml` in the developer's checkout regardless of provenance, and any that
+parses as a workflow map has its `description` pulled into the listing and the transcript.
+
+Not a regression — pre-fix that directory could point anywhere on the filesystem — but a
+modest exfiltration primitive documented as no residual at all. The `$realPath ===
+$realDir` arm has no test of its own in either direction. Round 5 is briefed to **reduce**
+it (a link resolving to the checkout root is not a repo pointing at its own workflows)
+without breaking the in-checkout `-> tools/workflows` layout the round-3 control protects,
+and then to document what genuinely remains.
+
+### Finding 3 — the docblock's own rationale for the round-3 edit is false
+
+The duplicate-stage message's new comment claims *"this was the one load-error path that
+interpolated a value read out of the file."* Measured over **all 20**
+`throw new WorkflowLoadException` sites in `WorkflowRegistry.php` — the complete domain —
+**9 still interpolate file content**: `:613` echoes the document's own `name` verbatim,
+`:819` a `config:` value, and seven more interpolate `{$where}`, which is built as
+`"Workflow file {$yamlPath} stage '{$stageName}'"` — the stage name, verbatim.
+
+So the edit is a local inconsistency, not the policy closure the comment asserts. It is
+**not** a security regression: post-fix the project tier is confined to checkout content,
+so echoing it leaks nothing the repo does not already know — which is also the honest way
+to write the comment. Round 5 must either defend the echo everywhere (and keep or revert
+the change on its own merits) or strip all nine, and say which.
+
+The `#0`/`#2` indices themselves are correct: 0-based matches `stage #{$index}` and
+`agent #{$agentIndex}`, and nothing in `README.md`, `examples/workflows/` or `workflows/`
+numbers stages 1-based (0 grep hits).
+
+### The six nits
+
+1. **The tier-drop is silent and two user-facing messages disagree.** With the directory
+   resolving outside the checkout, `loadYaml()`'s `$searched` omits it — while a *dangling*
+   link **is** named. `Chat.php:3924` meanwhile hard-codes a message claiming
+   `.sugar-crush/workflows/*.yaml` was searched, and `projectWorkflowsPath()` still reports
+   it. Nothing tells the user their repo's workflows directory was rejected. The codebase
+   already has the pattern: `SkillLoader::recordSkip()` → `Bootstrap::skillSkips()` → one
+   line at launch.
+2. **"Drops the tier rather than emptying it" is documented three times, pinned zero
+   times.** Sabotage making a refused directory vanish from *both* tiers leaves 815 tests
+   green. The behaviour is real; it is unmeasured.
+3. **The dangling-link allowance is a two-syscall check**, so "nothing is behind it" holds
+   per-instant, not across the call — proven structurally (grant, then create the target,
+   then `baseNames(confine: true)` returns the entry). The reviewer **could not win the
+   race**: 0 disclosures in 40,000 `list()` calls against a child flipping the target.
+   Narrow, but the docblock should stop implying snapshot consistency.
+4. **`expandPath('/')` returns `''`, and `realpath('')` returns the process CWD** — so
+   `--root /` anchors containment at `getcwd()`, not `/`. Fails safe, but the anchor is
+   silently the wrong path. Cause is `expandPath()`'s `rtrim($home, '/')`.
+5. **A repo's `deploy.yaml` shadows the user's own `deploy.php`**, and only the reverse is
+   tested. The project fast path runs before `resolvePhpPath()`. The docblock's "bounded to
+   data" is true about the payload and silent about the substitution.
+6. **`README.md:377`** counts corroborated stale: 4,337/12,587 against a measured
+   6,294/38,324/1 skip.
+
+### What round 4 confirmed, and will not be re-litigated
+
+The anchor is un-forgeable (a repo can move `$projectWorkflowsPath`, never
+`$projectRoot`); symlinked checkout roots still work; the tier-drop creates no new
+exposure, because the drop is whole-tier and a repo cannot selectively suppress one name;
+`list()`/`load()` gates are consistent — **0 divergences over a 19-layout differential
+sweep**, both gates sabotage-pinned; `containedIn($projectYaml, dirname($projectYaml))` is
+**not** tautological, since `dirname()` is a string op and `realpath()` is not;
+`$confineSymlinks === false` is deliberate, user-tier-only and pinned; the signal-stack
+drain has **no fifth leak** across every `return`/`throw` in `runFromWorkflow()` plus the
+handler closure; the new wiring test bites (exactly 1 failure of 33); all **81**
+`new WorkflowRegistry(` call sites are sound, 2 of them in `src/`.
+
+**The `removeDirectory()` teardown fix turned out to be load-bearing, not hygiene** —
+reverting it produces 12 warnings across 3 tests and leaves three fixture trees in `/tmp`,
+and `failOnWarning="true"` makes that a CI failure.
+
+**The `decide()` reflection test is the right call and the fail-closed branch is an
+intentional dormant guard.** `refuses()` collapses everything ≠ `Deny` to `false`, and the
+only public route reaches `commitAutoStrikes: true`, so the `Ask`-vs-`Allow` distinction is
+unobservable through every public path. Sabotage → exactly 1 failure, that test. It is the
+only pin available; the branch stays.
