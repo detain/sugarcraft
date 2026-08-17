@@ -553,6 +553,21 @@ final class Chat implements Model
          * item 6).
          */
         private readonly ?string $projectRoot = null,
+        /**
+         * Scroll position of the in-app keybinding reference, in lines from
+         * its first row; null while the reference is closed (crush_code.md
+         * Phase 8 item 2). One nullable int rather than a bool plus an int
+         * for the same reason {@see $palette} is one nullable object: "is it
+         * open" and "where in it am I" are never independently meaningful,
+         * and a pair would let them disagree.
+         *
+         * Only the lower bound is clamped on the way in
+         * ({@see withKeyHelp()}); the upper bound belongs to the frame that
+         * is about to be drawn, so {@see Renderer::renderKeyHelp()} re-clamps
+         * against its own content the way the transcript's scroll offset is
+         * re-clamped in {@see Renderer::renderView()}.
+         */
+        private readonly ?int $keyHelp = null,
     ) {
         $this->liveToolEvents = $liveToolEvents ?? new \ArrayObject();
         $this->backend = $backend ?? new Backend\EchoBackend();
@@ -681,6 +696,33 @@ final class Chat implements Model
             return [$this, Cmd::quit()];
         }
 
+        // The keybinding reference owns the keyboard while it is up, and is
+        // checked this high for the same reason the permission prompt is: it
+        // is a full modal the user cannot see past, so a key that reached the
+        // transcript scroll or the input box below would act on something
+        // hidden. Ctrl+C stays above it — quitting must never need the modal
+        // dismissed first.
+        //
+        // It outranks the permission prompt, a pair NO producer that exists
+        // today can put up: the reference only opens from an idle turn (the "?"
+        // arm and submit()'s /keys branch both sit below the inFlight swallow
+        // above) and a prompt only exists mid-turn, so reaching the pair takes
+        // an ASK that lands while the turn is idle — and measured, both
+        // internal producers stamp the generation that is current on the object
+        // they call, so neither can be that late ASK. requestPermission()'s
+        // generation guard is dormant defence for the unwired engine path, not
+        // the thing that closed a live door; its docblock carries the
+        // measurement. An UNSTAMPED ask still applies, by design, since that is
+        // what every internal caller and any future pipeline
+        // (PermissionRequestMsg's own docblock names the engine path) may
+        // legitimately send. So the pair is ordered rather than assumed away,
+        // and Renderer::renderStatusBar() announces the buried prompt instead
+        // of leaving it invisible and silent — that cue is the half of this
+        // which is reachable, driven, and does bite.
+        if ($this->keyHelp !== null) {
+            return $this->handleKeyHelpKey($msg);
+        }
+
         // Page Up/Down scroll the transcript a screenful at a time -- the
         // keyboard equivalent of the wheel, which was the only way to move
         // through history. A page is the visible rows less two so a couple of
@@ -805,10 +847,14 @@ final class Chat implements Model
             // Ctrl+R opens the live session picker (crush_feat.md section 5
             // E8). NOT the Ctrl+O that section suggests: §1 E5 already bound
             // Ctrl+O to tool-output expansion above, and that is the only
-            // way to read a hidden tool body. `r` is claimed by neither
-            // KeyboardHandler::CHAT_CTRL_RUNES nor its SHELL_CTRL_RUNES, so
-            // the pane shell falls it straight through to here, and it
-            // mirrors Claude Code's `--resume` picker mnemonic.
+            // way to read a hidden tool body. `r` is a chord
+            // Commands\KeyBindingRegistry gives to Chat (chatCtrlRunes()) and
+            // to no shell row, so the pane shell falls it straight through to
+            // here from any ordinary pane -- the exception being the three
+            // states KeyboardHandler::shellOwnsKeyboard() covers, where the
+            // registry yields the chord back rather than let this arm open a
+            // picker underneath a view that claims up/down/enter. It mirrors
+            // Claude Code's `--resume` picker mnemonic.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'r'
                 => [$this->mutate(['sessionPicker' => $this->buildSessionPicker()]), null],
             // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
@@ -820,6 +866,16 @@ final class Chat implements Model
             // input buffer instead.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
                 => $this->withInputBuf('/agents')->submit(),
+            // "?" opens the keybinding reference, but ONLY on an empty input
+            // line. It is a plain printable character with no modifier, so an
+            // unconditional bind would make a question impossible to type -
+            // the input box has no other way to receive it. The empty-buffer
+            // condition is the same affordance the Up arm above already uses
+            // for history recall, and /keys is the escape hatch for the one
+            // case it costs (a message that starts with "?").
+            $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
+                && $msg->rune === '?' && $this->inputBuf === ''
+                => [$this->withKeyHelp(0), null],
             // Word-delete: Ctrl+W (the usual terminal-wide convention) or a
             // correctly alt-flagged Backspace (see candy-core's
             // Alt-prefixed-key fix - before it, Alt+Backspace mis-decoded
@@ -965,6 +1021,49 @@ final class Chat implements Model
      */
     private function requestPermission(PermissionRequestMsg $msg): array
     {
+        // An ASK for a turn that was abandoned (double-Escape) or otherwise
+        // superseded can still land: the PreToolUse chain that raised it ran
+        // against the generation that was current when the batch was gated.
+        // Putting its prompt up would suspend a turn nobody is waiting on, and
+        // would force inFlight true behind an overlay that OUTRANKS the prompt
+        // (see Renderer::renderView()'s chain). The message carries a
+        // generation for exactly this comparison; the AssistantMsg arm in
+        // update() is the pattern, and $generation being null still means
+        // "unstamped, apply it" there and here alike.
+        //
+        // DORMANT DEFENCE, stated as such rather than as a live path closed --
+        // the same honest form shellOwnsKeyboard()'s unobservable conjunct is
+        // documented in. Measured: both callers build the ASK with
+        // $this->generation on the very object they then call (beginToolCalls()
+        // and answerPermission(), and mutate() touches no 'generation' at
+        // either site), so the comparison below is tautologically FALSE at
+        // every internal call site. `grep 'new PermissionRequestMsg' src/`
+        // finds exactly those two lines; nothing else constructs one, and the
+        // engine path that would -- PermissionRequestMsg's own docblock names
+        // it -- is not wired. Measured three ways (guard deleted, guard body
+        // throwing, every stamped ASK dropped): each turns exactly ONE test
+        // red, KeyHelpTest::testASupersededAskNeverPutsUpAPrompt(), which
+        // hand-builds the Msg. Domain of that "one": the 252 tests in the three
+        // files that construct a PermissionRequestMsg at all
+        // (KeyHelpTest, RendererTest, KeyBindingDriftTest). That bound is what
+        // makes the count complete rather than a sample -- no other test can
+        // reach a stamped ASK, because the only other route in is a real turn
+        // through beginToolCalls()/answerPermission(), where the comparison
+        // below is false by construction and so cannot change any outcome.
+        //
+        // So this is not what makes the reference-over-prompt state
+        // unreachable, and the sentence claiming it was "the one way that state
+        // is reachable through the front door" was wrong: there is no producer
+        // for that door today. What actually protects the user there is the cue
+        // -- Renderer::KEY_HELP_OVER_PROMPT -- which is driven and does bite.
+        // The guard stays because the engine path is coming and an unstamped
+        // ASK is the legitimate case it must keep letting through; deleting a
+        // correct guard because today's producers cannot trip it is how the
+        // path arrives unprotected.
+        if ($msg->generation !== null && $msg->generation !== $this->generation) {
+            return [$this, null];
+        }
+
         $deferred = new Deferred();
 
         $next = $this->mutate([
@@ -1106,6 +1205,87 @@ final class Chat implements Model
         }
 
         return $this->answerPermission($reply);
+    }
+
+    /**
+     * Route one keystroke into the open keybinding reference.
+     *
+     * Escape/Enter/q/? close it — the four spellings of "done reading" a
+     * dismissable overlay conventionally answers, and "?" closes for the same
+     * reason a second Ctrl+P closes the palette rather than reopening it on
+     * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
+     * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
+     * declares 53 live rows across 9 contexts — 57 in all, four of them
+     * dormant and therefore unlisted) and clipping it with no way to reach the
+     * rest would hide exactly the bindings this screen exists to disclose.
+     *
+     * Everything else is swallowed rather than falling through, for the reason
+     * {@see handleSessionPickerKey()} gives: a stray letter must not type into
+     * an input box the user cannot see behind the modal.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleKeyHelpKey(KeyMsg $msg): array
+    {
+        $offset = $this->keyHelp ?? 0;
+        // The overlay's body is rows() - 5 lines tall (rows() - 2 for the box,
+        // less its two border rows and its footer hint — see
+        // Renderer::renderKeyHelp()). One less than that, so a page leaves a
+        // row of context rather than jumping to wholly unfamiliar text.
+        $page = max(1, $this->rows() - 6);
+        $rune = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt ? $msg->rune : null;
+
+        return match (true) {
+            $msg->type === KeyType::Escape,
+            $msg->type === KeyType::Enter,
+            $rune === 'q',
+            $rune === '?' => [$this->withKeyHelp(null), null],
+            $msg->type === KeyType::Up => [$this->withKeyHelp($offset - 1), null],
+            $msg->type === KeyType::Down => [$this->withKeyHelp($offset + 1), null],
+            $msg->type === KeyType::PageUp => [$this->withKeyHelp($offset - $page), null],
+            $msg->type === KeyType::PageDown => [$this->withKeyHelp($offset + $page), null],
+            default => [$this, null],
+        };
+    }
+
+    /**
+     * How far the keybinding reference is scrolled, or null when it is
+     * closed. {@see Renderer::renderKeyHelp()} reads this to decide whether
+     * to draw the overlay at all.
+     */
+    public function keyHelp(): ?int
+    {
+        return $this->keyHelp;
+    }
+
+    /**
+     * Open the keybinding reference at $offset lines down, or close it with
+     * null.
+     *
+     * Clamped against {@see Renderer::keyHelpMaxOffset()} — the height the
+     * LAST rendered reference overflowed by — exactly as {@see scrollBy()}
+     * clamps the transcript against {@see Renderer::maxScrollOffset()}, and
+     * for the same reason: an offset that grew past the content would make
+     * the next press feel dead while the number silently ran away. Before the
+     * overlay has ever been drawn that ceiling is 0, so a caller opening at a
+     * non-zero offset lands at the top.
+     *
+     * "Exactly as" includes {@see scrollBy()}'s short-circuit: a clamped offset
+     * equal to the one already held hands back `$this` rather than a fresh
+     * Chat, so holding Down at the end of the reference does not allocate a
+     * model and diff a frame for every dead notch.
+     */
+    public function withKeyHelp(?int $offset): self
+    {
+        $clamped = $offset === null
+            ? null
+            : max(0, min($offset, Renderer::keyHelpMaxOffset()));
+
+        if ($clamped === $this->keyHelp) {
+            return $this;
+        }
+
+        return $this->mutate(['keyHelp' => $clamped]);
     }
 
     /**
@@ -2345,11 +2525,23 @@ final class Chat implements Model
      */
     private function scrollTranscript(MouseButton $button): array
     {
-        return $this->scrollBy(match ($button) {
+        $notch = match ($button) {
             MouseButton::WheelUp   => self::SCROLL_WHEEL_LINES,
             MouseButton::WheelDown => -self::SCROLL_WHEEL_LINES,
             default                => 0,
-        });
+        };
+
+        // With the keybinding reference up, the wheel drives IT: the transcript
+        // is behind a full-screen modal, and scrolling something the user
+        // cannot see is the same defect handleKeyHelpKey() swallows stray keys
+        // to avoid. The reference counts DOWN from its first row (see
+        // $keyHelp), the transcript counts BACK from its newest line, so the
+        // notch is negated to keep "wheel up" meaning "towards the start".
+        if ($this->keyHelp !== null) {
+            return [$this->withKeyHelp($this->keyHelp - $notch), null];
+        }
+
+        return $this->scrollBy($notch);
     }
 
     /**
@@ -3058,6 +3250,7 @@ final class Chat implements Model
             // screen when the pump next runs.
             'liveToolEvents' => $this->liveToolEvents,
             'streamingText' => $this->streamingText,
+            'keyHelp' => $this->keyHelp,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -3142,6 +3335,16 @@ final class Chat implements Model
         // action, just reachable without a modifier key.
         if ($text === '/exit' || $text === '/quit') {
             return [$this, Cmd::quit()];
+        }
+
+        // Handle /keys - the same in-app keybinding reference "?" opens, for
+        // the times "?" cannot be used (a draft is half-typed, or the message
+        // itself starts with "?"). /help is accepted as the spelling most
+        // other CLIs use. Matched EXACTLY rather than by prefix, unlike the
+        // argument-taking commands below: "/help me name this variable" is a
+        // prompt, not a request for the shortcut list.
+        if ($text === '/keys' || $text === '/help') {
+            return [$this->withInputBuf('')->withKeyHelp(0), null];
         }
 
         // Handle /compact command to manually compact chat history

@@ -23,6 +23,7 @@ use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
@@ -491,6 +492,129 @@ final class Renderer
     }
 
     /**
+     * Content width the keybinding reference aims for, before its own border
+     * and padding — see {@see renderKeyHelp()}. Chosen to hold the widest
+     * declared row ({@see KeyBindingRegistry}'s key column plus its longest
+     * description) without truncation on any terminal wide enough for it:
+     * measured at 58 columns (a 14-column key field for `Ctrl+Shift+Tab`, one
+     * space, and `Send, or accept the highlighted "/" command`).
+     * `KeyHelpTest::testScrollingThroughItShowsEveryLiveBinding()` is what
+     * keeps that headroom honest — it asserts every description is painted in
+     * FULL, so a row grown past this width fails rather than being clipped.
+     */
+    private const KEY_HELP_COLS = 64;
+
+    /**
+     * The keybinding reference box's own chrome, in columns: 2 border columns
+     * plus the 2 of `padding(0, 1)`. Taken off the terminal width before
+     * {@see Style::width()} is given a content width, which the box then grows
+     * past by exactly this much.
+     *
+     * NOT {@see SHELL_CHROME_COLS}, whose 6 is the same arithmetic for a box
+     * with `padding(1, 2)` ({@see renderPermissionPrompt()}). Two boxes, two
+     * paddings, two numbers — sharing one would make the reference 2 columns
+     * narrower than it can afford, and would break the moment either box's
+     * padding changed.
+     */
+    private const KEY_HELP_CHROME_COLS = 4;
+
+    /**
+     * What the status bar says when the keybinding reference is open but the
+     * window is too small to paint it ({@see keyHelpGeometry()} returns null).
+     *
+     * The whole bar, not an addition to it: the readouts it replaces are about
+     * a chat the reference is currently swallowing every keystroke for, and the
+     * bar is the one line that may not wrap — so this must be SHORTER than the
+     * text it stands in for, not appended to it.
+     */
+    private const KEY_HELP_TOO_SMALL = 'keys: window too small · ? closes';
+
+    /**
+     * What the status bar says when the keybinding reference is open OVER a
+     * blocking permission prompt — the one overlay it outranks that is itself
+     * waiting on the user.
+     *
+     * Same reasoning as {@see KEY_HELP_TOO_SMALL}, applied to the same hazard:
+     * the reference wins both the slot and the keyboard (see
+     * {@see renderView()}'s chain), so the prompt is invisible AND its `y`/`n`/
+     * `a` do nothing while the turn stays `inFlight`. A modal that is invisible
+     * and silent is a stuck terminal as far as the user can tell, so the bar
+     * says the prompt is there and `?` is what gets to it.
+     *
+     * The whole bar, and SHORTER than what it replaces: measured with
+     * `Width::of`, the bar this stands in for is never narrower than 36 columns
+     * while a prompt pends (`0% · ⠴ thinking… · Esc Esc to cancel` — 2 + 3 + 31,
+     * and `contextIndicator()`'s last resort `"{$percent}%"` can never be empty,
+     * so 2 really is its floor), against this cue's 35. The bar is the one line
+     * this renderer never truncates, so that 1-column margin is load-bearing.
+     *
+     * Both figures are COLUMN counts, not byte counts: `strlen` reads this cue
+     * as 36 and would sit exactly on the boundary, reporting a margin that is
+     * not there.
+     *
+     * NOT run through `Lang::t()`, and deliberately noted rather than fixed:
+     * `grep -rl 'Lang::t' src/` finds no PHP file in this lib, so hardcoded
+     * English is a lib-wide deviation from the project rule rather than one
+     * introduced here, and starting an i18n migration from one status-bar string
+     * is not the shape of that fix. But the 1-column margin above is measured
+     * against THIS literal. The day sugar-crush adopts `Lang::t()`, a translated
+     * cue can exceed the bar it replaces at translation time, where no PHP test
+     * sees it — so the bound must then be asserted against the RENDERED string
+     * rather than reasoned about here.
+     */
+    private const KEY_HELP_OVER_PROMPT = 'keys: ? closes · permission waiting';
+
+    /**
+     * How far the LAST rendered keybinding reference overflowed its box,
+     * in lines. Static for the same reason {@see $maxScrollOffset} is: the
+     * keystroke that scrolls arrives between frames, so the only content
+     * height it can be clamped against is the one already painted.
+     */
+    private static int $keyHelpMaxOffset = 0;
+
+    /**
+     * Upper clamp for {@see Chat::keyHelp()}, measured on the last rendered
+     * reference. 0 when the whole list fits, or when it has never been drawn.
+     */
+    public static function keyHelpMaxOffset(): int
+    {
+        return self::$keyHelpMaxOffset;
+    }
+
+    /**
+     * The reference box's `[contentWidth, boxRows]` for this terminal, or null
+     * when it does not fit and must not be drawn at all.
+     *
+     * Neither bound has a floor, and that is deliberate in both directions:
+     *
+     * - width: {@see Style::width()} sets the CONTENT width and the box grows
+     *   past it by {@see KEY_HELP_CHROME_COLS}. A floor would produce a
+     *   five-column box on a four-column terminal, and one column over is
+     *   still an over-wide frame line — the absolute-cursorTo row collision
+     *   {@see renderView()}'s tail clip exists to prevent.
+     * - height: the box may never be taller than `rows - 2`. Veil composites
+     *   the overlay without truncating the row underneath, and the status bar
+     *   on the last row is deliberately not width-truncated
+     *   ({@see renderStatusBar()}) — so a box that reached that row would cover
+     *   its first `$width` columns and leave the rest of the bar hanging past
+     *   the box's right edge. A floor that let the box grow into those rows on
+     *   a very short terminal is exactly what once made that happen.
+     *
+     * So a terminal under 5 columns or under 5 rows gets no box. Read by
+     * {@see renderKeyHelp()} to size it and by {@see renderStatusBar()} to
+     * decide whether the reference needs announcing in words instead.
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    private static function keyHelpGeometry(Chat $chat): ?array
+    {
+        $width = min(self::KEY_HELP_COLS, $chat->cols() - self::KEY_HELP_CHROME_COLS);
+        $boxRows = $chat->rows() - 2;
+
+        return $width < 1 || $boxRows < 3 ? null : [$width, $boxRows];
+    }
+
+    /**
      * The zone-scan pass, run exactly ONCE per frame and only at the root.
      *
      * candy-mouse (like bubblezone) records absolute bounding boxes as it
@@ -797,20 +921,64 @@ final class Renderer
 
         $frame = implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
 
-        // A blocking permission prompt takes the overlay slot away from the
-        // palette while it is up, because Chat::update() routes every
-        // keystroke to the prompt first: showing a palette the keyboard no
-        // longer drives would misrepresent what the next key does.
-        $overlay = self::renderPermissionPrompt($chat, $theme);
+        // ONE rule orders this chain: the overlay on screen must be the one
+        // Chat::update() routes the next keystroke to, because an overlay the
+        // keyboard is not driving misrepresents what the next key does. So the
+        // order here is that routing order, read off Chat::update() rather than
+        // asserted: keyHelp (checked immediately after Ctrl+C) → permission
+        // prompt → palette → session picker.
+        //
+        // Four links make SIX pairs, and they are not all the same kind of
+        // pair. "Every pair here is genuinely reachable" was the earlier
+        // sentence and it was false — only the two involving the reference were
+        // ever substantiated. What each pair actually is, measured:
+        //
+        // - reference + palette — REACHABLE, and the route is the mouse: with
+        //   the reference up its box never reaches the status bar, so the bar's
+        //   `pane:` click zone stays live underneath it, and clicking
+        //   "Ctrl+P menu" at 100x30 opens the palette with keyHelp still 0. The
+        //   reference keeps both the slot and the keyboard, which is the honest
+        //   outcome; before this ordering the palette painted while the
+        //   reference ate the keys.
+        // - reference + permission prompt — reachable only from the ENGINE path:
+        //   the reference opens from an idle turn (Chat::update()'s "?" arm,
+        //   submit()'s /keys branch) and a prompt only exists mid-turn. No
+        //   producer that exists today can put the pair up (see
+        //   Chat::requestPermission(), which documents why its generation guard
+        //   is dormant defence rather than the thing that closed a live path);
+        //   an unstamped ASK from a future pipeline still can. So the pair is
+        //   ordered by the rule rather than assumed away, and the status bar
+        //   says the prompt is there rather than leaving it invisible AND
+        //   silent (see KEY_HELP_OVER_PROMPT).
+        // - the other four pairs — reference + picker, prompt + palette,
+        //   prompt + picker, palette + picker — are FIXED PRECEDENCE FOR
+        //   DETERMINISM, not reachable states. Chat.php says so of the last of
+        //   them at its own routing site: the palette and the picker "cannot
+        //   both be open". A documented fixed order between two modals that
+        //   cannot coexist is worth having anyway — it is what stops the frame
+        //   from depending on `if` order nobody chose, the day a fifth overlay
+        //   or a new producer makes one of these pairs reachable after all.
+        //
+        // Being dormant is not being unpinned: KeyHelpTest::
+        // testTheOverlayChainPaintsInRoutingOrderRightDownTheChain() drives all
+        // four overlays up at once — a state the front door cannot reach, built
+        // deliberately — and walks the whole chain, so every one of the six
+        // pairs fails if this order changes.
+        //
+        // renderKeyHelp() being first also means it runs on EVERY frame, which
+        // is what keeps its $keyHelpMaxOffset ceiling from going stale: were it
+        // last, an earlier overlay winning the slot would leave the ceiling at
+        // whatever the last painted reference measured, and Chat::withKeyHelp()
+        // clamps against it.
+        $overlay = self::renderKeyHelp($chat, $theme);
         if ($overlay === '') {
-            // The session picker sits between the prompt and the palette for
-            // the same reason: Chat::update() routes keys permission →
-            // picker → palette, and the overlay on screen has to be the one
-            // the keyboard is actually driving.
-            $overlay = self::renderSessionPicker($chat);
+            $overlay = self::renderPermissionPrompt($chat, $theme);
         }
         if ($overlay === '') {
             $overlay = self::renderPalette($chat, $theme);
+        }
+        if ($overlay === '') {
+            $overlay = self::renderSessionPicker($chat);
         }
         if ($overlay !== '') {
             // A fresh Veil per render call (rather than one persisted on
@@ -831,8 +999,8 @@ final class Renderer
                 self::overlayLeftShift($backdrop, $overlay, $chat->cols()),
             );
             // No-op unless the overlay was the palette: only renderPalette()
-            // records item zones, and a blocking permission prompt takes the
-            // slot before it is ever called.
+            // records item zones, and an overlay earlier in the chain above
+            // takes the slot before it is ever called.
             $frame = self::markPaletteItems($frame);
         }
 
@@ -844,9 +1012,34 @@ final class Renderer
      * plus a context-usage readout ({@see contextIndicator()}) so a user can
      * see how full the context window is without running /compact
      * speculatively.
+     *
+     * It is also where the two states in which the keybinding reference hides
+     * something announce themselves — {@see KEY_HELP_TOO_SMALL} when the box
+     * does not fit and {@see KEY_HELP_OVER_PROMPT} when it covers a blocking
+     * permission prompt. Both swallow every keystroke
+     * ({@see Chat::handleKeyHelpKey()}) while leaving the rest of the frame
+     * saying nothing about it, and a terminal that silently eats input reads as
+     * a hung app rather than as an open modal.
      */
     private static function renderStatusBar(Chat $chat): string
     {
+        // Shorter than the bar it replaces (measured: 33 columns against the
+        // 73–94 the assembled bar comes to), so a narrow terminal cannot be
+        // made to overflow by MORE than it already does — the bar is the one
+        // line this renderer does not truncate, a pre-existing property the
+        // reference must not worsen.
+        if ($chat->keyHelp() !== null && self::keyHelpGeometry($chat) === null) {
+            return self::KEY_HELP_TOO_SMALL;
+        }
+
+        // Ordered after the too-small cue rather than combined with it: that
+        // one already says the reference is swallowing every keystroke, which
+        // is the more urgent half when nothing is painted at all, and two
+        // messages on one un-wrappable line would not fit anyway.
+        if ($chat->keyHelp() !== null && $chat->pendingPermission() !== null) {
+            return self::KEY_HELP_OVER_PROMPT;
+        }
+
         // The "Ctrl+P menu" hint is the live path's only affordance for
         // Pane::Menu (the palette is what the disconnected App system's
         // MenuBar pane would have been), so it is the region that carries
@@ -2142,6 +2335,130 @@ final class Renderer
         return str_ends_with($rendered, $reset)
             ? substr($rendered, 0, -strlen($reset))
             : $rendered;
+    }
+
+    /**
+     * The in-app keybinding reference, composited over the whole frame by
+     * {@see renderView()} via {@see Veil} (crush_code.md Phase 8 item 2).
+     * Returns '' (nothing composited) when it is closed — see
+     * {@see Chat::keyHelp()}.
+     *
+     * Rows come from {@see KeyBindingRegistry}, the same list
+     * {@see \SugarCraft\Crush\Tui\KeyboardHandler} derives its claimed-chord
+     * sets from, so this screen cannot describe a keyboard the app does not
+     * have — the drift that made a hand-written cheat sheet not worth
+     * shipping. Only {@see KeyBindingRegistry::live()} rows are painted;
+     * a row marked dormant is a chord some handler claims but nothing acts
+     * on, and promising it here would be worse than omitting it.
+     *
+     * Sizing follows {@see renderPermissionPrompt()}'s rule — the box's OWN
+     * chrome comes off the width first — and lives in
+     * {@see keyHelpGeometry()}, which is also what says when the box does not
+     * fit at all and why neither of its two bounds has a floor.
+     */
+    private static function renderKeyHelp(Chat $chat, Theme $theme): string
+    {
+        $offset = $chat->keyHelp();
+        if ($offset === null) {
+            self::$keyHelpMaxOffset = 0;
+
+            return '';
+        }
+
+        $geometry = self::keyHelpGeometry($chat);
+        if ($geometry === null) {
+            // No room for a border plus one cell of content. Nothing is drawn,
+            // but Chat keeps the reference OPEN, so it appears the moment the
+            // terminal (or the hosting pane) grows — the state is the user's,
+            // only the space to paint it in is missing. That the reference is
+            // still eating keystrokes is said on the status bar instead, by
+            // renderStatusBar(), which asks this same method whether the box
+            // fits: an open modal that is invisible AND silent is a stuck
+            // terminal as far as the user can tell.
+            self::$keyHelpMaxOffset = 0;
+
+            return '';
+        }
+
+        [$width, $boxRows] = $geometry;
+
+        // Content rows inside the border. The footer hint is the first thing to
+        // go when there is only one row to spend, since a binding is what the
+        // screen is for and the hint merely restates how to leave it.
+        $viewport = $boxRows - 2;
+        $showHint = $viewport > 1;
+
+        $keyCol = 0;
+        foreach (KeyBindingRegistry::live() as $binding) {
+            $keyCol = max($keyCol, Width::of($binding->keys));
+        }
+        // A pathologically narrow box truncates the KEY so that a column is
+        // always left for the description and the space before it: `$room`
+        // below is `$width - $keyCol - 1`, and this cap is what keeps it
+        // positive. Measured, the Enter row renders `E` at cols=5, `E S` at 7
+        // and `En S` at 8 — the key losing characters, not the description
+        // losing its column. (Under width 3 there is nothing to split and the
+        // description does go.)
+        //
+        // Deliberately the reverse of what happens without it: Style::width()
+        // TRUNCATES the assembled line rather than wrapping it (measured: a
+        // 16-column row at width 4 renders `Ente`), so dropping the cap would
+        // spend the whole box on the key and lose the description entirely.
+        // Both fields staying present and aligned at every width is worth more
+        // than four characters of key, since neither is legible down here.
+        $keyCol = min($keyCol, max(1, $width - 2));
+
+        $keyStyle = Style::new()->foreground($theme->userLabel)->bold();
+        $headerStyle = Style::new()->foreground($theme->assistantLabel)->bold();
+        $descStyle = Style::new()->foreground($theme->systemLabel);
+        $hintStyle = Style::new()->foreground($theme->systemLabel)->faint();
+
+        /** @var list<string> $lines already-styled content rows */
+        $lines = [];
+        foreach (KeyBindingRegistry::grouped() as $context => $bindings) {
+            if ($lines !== []) {
+                $lines[] = '';
+            }
+            $lines[] = $headerStyle->render(Width::truncate($context, $width));
+            foreach ($bindings as $binding) {
+                $key = Width::truncate($binding->keys, $keyCol);
+                $pad = str_repeat(' ', max(0, $keyCol - Width::of($key)));
+                $room = $width - $keyCol - 1;
+                $desc = $room > 0 ? Width::truncate($binding->description, $room) : '';
+                $lines[] = $keyStyle->render($key) . $pad . ' ' . $descStyle->render($desc);
+            }
+        }
+
+        // Clamped here rather than trusted from Chat for the reason
+        // renderView() re-clamps the transcript's offset: the stored value was
+        // clamped against whatever frame was on screen when the key was
+        // pressed, and this frame's geometry can differ (a resize, a narrower
+        // hosted pane).
+        $body = $viewport - ($showHint ? 1 : 0);
+        self::$keyHelpMaxOffset = max(0, count($lines) - $body);
+        $start = max(0, min($offset, self::$keyHelpMaxOffset));
+        $visible = array_slice($lines, $start, $body);
+
+        if ($showHint) {
+            $visible[] = $hintStyle->render(Width::truncate(
+                // The footer is where the MODAL's own keys are stated — the
+                // rows above describe the app's ordinary keyboard, which is
+                // not what those keys do while this screen is up. The wheel
+                // belongs here for the same reason: with the reference open it
+                // scrolls the reference (see Chat::scrollTranscript()).
+                self::$keyHelpMaxOffset > 0
+                    ? 'Esc closes · scroll: ↑↓ PgUp/PgDn wheel'
+                    : 'Esc closes',
+                $width,
+            ));
+        }
+
+        return Style::new()
+            ->border(Border::rounded()->withTitle(' keyboard shortcuts '))
+            ->borderForeground($theme->border)
+            ->padding(0, 1)
+            ->width($width)
+            ->render(implode("\n", $visible));
     }
 
     /**

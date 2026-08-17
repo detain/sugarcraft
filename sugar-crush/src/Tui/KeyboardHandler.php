@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\App\SelectSkillMsg;
+use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Tui\Commands\CancelAgentCmd;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
@@ -33,31 +34,69 @@ final class KeyboardHandler
      * Ctrl+<rune> chords the SHELL answers. Deliberately excludes every chord
      * the live {@see \SugarCraft\Crush\Chat} already binds — see
      * {@see chatOwns()}.
+     *
+     * Read off {@see KeyBindingRegistry}'s `Panes & windows` rows rather than
+     * spelled out here, so this routing table and the in-app keybinding
+     * reference cannot describe two different keyboards (crush_code.md Phase
+     * 8 item 2). The registry keeps its dormant rows in this set on purpose:
+     * an unclaimed chord is not inert, it falls through to Chat's generic
+     * `KeyType::Char` arm and types its own letter into the input box.
+     *
+     * @return list<string>
      */
-    private const SHELL_CTRL_RUNES = ['n', 'g', 'k', 's', ','];
+    private static function shellCtrlRunes(): array
+    {
+        return KeyBindingRegistry::shellCtrlRunes();
+    }
 
     /**
      * Ctrl+<rune> chords the CONTENT model owns outright. The shell never
      * claims these, in any pane, so merging the two layers cannot silently
      * steal a binding a `bin/sugarcrush` user already has:
      *
-     * - `p` — Chat's command palette. KeyboardHandler's own Ctrl+P
-     *   (`ProviderSelectCmd`) loses: the palette is the live, user-facing,
-     *   tested binding and `ProviderSelectCmd` is inert (see
-     *   {@see handleKeyMsg()}), so claiming it would trade a working feature
-     *   for a no-op.
+     * - `p` — Chat's command palette. KeyboardHandler's own `'p'` arm loses,
+     *   and is therefore shadowed in every state (which is why the keybinding
+     *   table documents no shell `Ctrl+P`). It does NOT lose for being inert:
+     *   measured by driving {@see handle()} with `'ctrl+p'` and feeding the
+     *   result to {@see App::consumeShellCmd()}, the arm returns
+     *   `ProviderSelectCmd` and the shell runs it as `/model`, opening the
+     *   palette in `providers` mode. It loses because the palette is the live,
+     *   user-facing, tested binding for this chord, while the model switcher it
+     *   would displace it with keeps two other doors — typing `/model`, and the
+     *   palette's own "Switch model" row. The shell reaches the palette itself
+     *   through `Ctrl+K`, which `consumeShellCmd()` translates into a `Ctrl+P`
+     *   fed to the hosted Chat.
      * - `o` — Chat's collapse/expand of the latest tool output (§1 E5); the
      *   only way to read a hidden tool body. The shell binds nothing to it.
-     * - `a` — Chat's `/agents` dispatch. KeyboardHandler's Ctrl+A (focus
-     *   `Pane::Agents`) loses for the same reason as Ctrl+P: the Chat arm
-     *   was built (R20) precisely as the reachable equivalent of this
-     *   shortcut, and the Agents pane is still one plain Tab away.
+     * - `a` — Chat's `/agents` dispatch, over a shell arm (focus
+     *   `Pane::Agents`) that is shadowed the same way: the Chat arm was built
+     *   (R20) precisely as the reachable equivalent of this shortcut, and the
+     *   Agents pane is still one plain Tab away.
+     * - `r` — Chat's session picker. Newly named here: the hand-written list
+     *   this replaced omitted it, and the shell binds nothing to it, so from
+     *   every ordinary pane the chord already fell through to Chat. Deriving
+     *   the set from the table changed exactly the three states where
+     *   {@see shellOwnsKeyboard()} holds — `Pane::Agents`, an open skill
+     *   picker, and any pane with the F10 menu open — in all of which the
+     *   shell used to swallow it (via `handleCtrl('r')`'s `default` no-op) and
+     *   would otherwise now let Chat open a picker underneath a view that
+     *   claims `↑`/`↓`/`Enter`. It is therefore the one chat row that yields
+     *   the chord back in those states: see
+     *   {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}, which is
+     *   where that exception is declared — both of its conditions, why `p`
+     *   meets the first and fails the second, and the gap that leaves open.
+     *   Outside those three states the picker is Chat's, exactly as before.
      * - `w` — Chat's word-delete while typing.
      * - `c` — Chat quits on it. Note most terminals deliver Ctrl+C as the
      *   raw `\x03` rune with no ctrl flag, which {@see chatOwns()} also
      *   covers explicitly.
+     *
+     * @return list<string>
      */
-    private const CHAT_CTRL_RUNES = ['p', 'o', 'a', 'w', 'c'];
+    private static function chatCtrlRunes(): array
+    {
+        return KeyBindingRegistry::chatCtrlRunes();
+    }
 
     /**
      * Decide whether the pane SHELL claims this keypress, and if so apply it.
@@ -72,17 +111,19 @@ final class KeyboardHandler
      * Ctrl+O, history recall and every other live binding.
      *
      * Claim rules, in order:
-     * 1. Never claim a {@see chatOwns()} binding — content wins outright.
-     * 2. An open menu owns the keyboard.
-     * 3. `Pane::Agents` owns the keyboard: it is a full-pane agent view where
-     *    c/r/s/q are commands, not text, and `q` is how the user leaves.
-     * 3b. An OPEN skill picker owns the keyboard for the same reason.
+     * 1. Never claim a {@see chatOwns()} binding — content wins outright,
+     *    except for the one chord {@see KeyBindingRegistry} declares as
+     *    yielded while rule 2 holds.
+     * 2. {@see shellOwnsKeyboard()}: an open menu, `Pane::Agents`' full-pane
+     *    agent view (where c/r/s/q are commands, not text, and `q` is how the
+     *    user leaves), or an OPEN skill picker.
+     * 3. F10 opens the menu, from any pane.
      * 4. Unmodified Tab cycles panes. Ctrl+Tab is excluded by rule 1 — that
      *    is Chat's session cycling (§5 E2).
      * 5. Escape returns to the chat pane, but only when the shell has
      *    somewhere to return FROM. In `Pane::Chat` it belongs to Chat, whose
      *    Escape cancels an in-flight turn and closes the palette.
-     * 6. The {@see SHELL_CTRL_RUNES} chords.
+     * 6. The {@see shellCtrlRunes()} chords.
      *
      * Element 1 is consumed by {@see App::consumeShellCmd()}, which translates
      * it into shell state or into keystrokes the hosted Chat already answers.
@@ -114,23 +155,11 @@ final class KeyboardHandler
      */
     private function claims(KeyMsg $msg, App $app): bool
     {
-        if (self::chatOwns($msg)) {
+        if (self::chatOwns($msg, $app)) {
             return false;
         }
 
-        if (MenuBar::getActiveMenu() > 0) {
-            return true;
-        }
-
-        if ($app->pane === Pane::Agents) {
-            return true;
-        }
-
-        // An OPEN skill picker owns the keyboard for the same reason the
-        // agent view does: up/down/enter are the picker's commands, and
-        // letting them fall through would scroll the chat behind the modal
-        // instead of moving the highlighted skill.
-        if ($app->pane === Pane::Skills && $app->skillPickerOptions !== []) {
+        if (self::shellOwnsKeyboard($app)) {
             return true;
         }
 
@@ -152,15 +181,55 @@ final class KeyboardHandler
 
         return $msg->type === KeyType::Char
             && $msg->ctrl
-            && in_array($msg->rune, self::SHELL_CTRL_RUNES, true);
+            && in_array($msg->rune, self::shellCtrlRunes(), true);
     }
 
     /**
-     * Bindings the live {@see \SugarCraft\Crush\Chat} owns in every pane.
+     * Whether one of the shell's OWN views is driving the keyboard, so that a
+     * key belongs to it rather than to whatever is behind it.
      *
-     * @see CHAT_CTRL_RUNES for the per-chord rationale.
+     * All three cover the hosted chat and bind `↑`/`↓`/`Enter` themselves:
+     * the F10 menu, `Pane::Agents`' full-pane dashboard, and an open skill
+     * picker (letting its keys fall through would scroll the chat behind the
+     * modal instead of moving the highlighted skill — which is exactly why the
+     * Skills pane could be OPENED but never selected from).
+     *
+     * Read twice: once as claim rule 2, and once by {@see chatOwns()} for the
+     * one chord {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}
+     * declares as the shell's while this holds.
+     *
+     * The second read is DEFENCE IN DEPTH, not a behaviour, and saying so is
+     * the honest form: measured, dropping the conjunct from `chatOwns()` — so
+     * that a yielded rune is yielded unconditionally — changes no routing at
+     * all. Two guarantees overlap to make it unobservable. Inside these three
+     * states claim rule 2 already claims every key, so the conjunct cannot
+     * change the outcome; outside them
+     * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
+     * yielded rune out of {@see shellCtrlRunes()}, so claim rule 6 cannot pick
+     * it up either and it still falls through to Chat. The guard is what keeps
+     * that true if rule 2 ever narrows — a rule-2 that claimed only its own
+     * keys would otherwise let the yield leak into every ordinary pane and
+     * silently kill `Ctrl+R`. It is therefore pinned at the predicate rather
+     * than through routing, by
+     * `KeyboardHandlerTest::testChatOwnsYieldsTheChordOnlyWhileTheShellOwnsTheKeyboard()`,
+     * which reads `chatOwns()` directly: end-to-end routing tests cannot see
+     * this and a mutation of it survives them.
      */
-    private static function chatOwns(KeyMsg $msg): bool
+    private static function shellOwnsKeyboard(App $app): bool
+    {
+        return MenuBar::getActiveMenu() > 0
+            || $app->pane === Pane::Agents
+            || ($app->pane === Pane::Skills && $app->skillPickerOptions !== []);
+    }
+
+    /**
+     * Bindings the live {@see \SugarCraft\Crush\Chat} owns.
+     *
+     * In every pane, with the single documented exception below.
+     *
+     * @see chatCtrlRunes() for the per-chord rationale.
+     */
+    private static function chatOwns(KeyMsg $msg, App $app): bool
     {
         // Session cycling (crush_feat.md §5 E2). Shift only picks the
         // direction, so both Ctrl+Tab and Ctrl+Shift+Tab belong to Chat.
@@ -176,7 +245,20 @@ final class KeyboardHandler
             return true;
         }
 
-        return $msg->ctrl && in_array($msg->rune, self::CHAT_CTRL_RUNES, true);
+        if (!$msg->ctrl || !in_array($msg->rune, self::chatCtrlRunes(), true)) {
+            return false;
+        }
+
+        // The declared exception: a chord whose only effect is a Chat overlay
+        // that one of the shell's own keyboard-owning views would bury AND
+        // render undrivable goes back to the shell while such a view is up,
+        // PROVIDED the shell answers it with a no-op there. The registry is
+        // what says WHICH chord and why — both conditions, and the gap the
+        // second one deliberately leaves open, live in its docblock and may not
+        // be spelled out a second time here. The $app conjunct is deliberately
+        // unobservable today: see shellOwnsKeyboard().
+        return !(self::shellOwnsKeyboard($app)
+            && in_array($msg->rune, KeyBindingRegistry::chatCtrlRunesYieldedToShell(), true));
     }
 
     /**

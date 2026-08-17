@@ -7,8 +7,15 @@ namespace SugarCraft\Crush\Tests\Tui;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Backend\EchoBackend;
+use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Commands\KeyBindingRegistry;
+use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Tests\Commands\ResetsDerivedRuneSets;
 use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Commands\CancelAgentCmd;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
@@ -43,6 +50,8 @@ use ReflectionClass;
  */
 final class KeyboardHandlerTest extends TestCase
 {
+    use ResetsDerivedRuneSets;
+
     private ProviderInterface $provider;
     private KeyboardHandler $handler;
 
@@ -52,25 +61,35 @@ final class KeyboardHandlerTest extends TestCase
         $this->handler = new KeyboardHandler();
         // Reset MenuBar static state
         $this->resetMenuBarState();
+        // …and the registry's derived-set memos, for the same reason: they are
+        // process-global statics with no production reset, so without this the
+        // first keypress of the run warms them for every later test and no test
+        // can observe a cold derivation. See ResetsDerivedRuneSets.
+        $this->resetDerivedRuneSets();
     }
 
     /**
-     * MenuBar::$activeMenu is process-global static state, so a test that
-     * opens a menu would otherwise leak an "a menu is open" world into every
-     * later test class (and make the shell claim keys that belong to Chat).
+     * MenuBar's menu state is process-global static, so a test that opens a
+     * menu would otherwise leak an "a menu is open" world into every later test
+     * class (and make the shell claim keys that belong to Chat).
      */
     protected function tearDown(): void
     {
         $this->resetMenuBarState();
     }
 
+    /**
+     * BOTH of MenuBar's statics, not just the menu index: `$activeItem` is the
+     * row cursor inside the open dropdown, and a test that moved it used to
+     * leak that row into every later test — the same leak this method exists to
+     * stop, one property over.
+     */
     private function resetMenuBarState(): void
     {
-        // Use reflection to reset the static $activeMenu property
         $reflection = new ReflectionClass(MenuBar::class);
-        $property = $reflection->getProperty('activeMenu');
-        $property->setAccessible(true);
-        $property->setValue(null, 0);
+        foreach (['activeMenu', 'activeItem'] as $name) {
+            $reflection->getProperty($name)->setValue(null, 0);
+        }
     }
 
     private function createApp(Pane $pane = Pane::Chat): App
@@ -958,9 +977,10 @@ final class KeyboardHandlerTest extends TestCase
     {
         $app = $this->createApp(Pane::Chat);
 
-        // p = palette, o = expand tool output, a = /agents, w = word delete,
-        // c = quit. See KeyboardHandler::CHAT_CTRL_RUNES.
-        foreach (['p', 'o', 'a', 'w', 'c'] as $rune) {
+        // p = palette, o = expand tool output, a = /agents, r = session picker,
+        // w = word delete, c = quit. The set is derived —
+        // see KeyBindingRegistry::chatCtrlRunes().
+        foreach (['p', 'o', 'a', 'r', 'w', 'c'] as $rune) {
             $this->assertNull(
                 $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: true), $app),
                 "ctrl+{$rune} belongs to Chat",
@@ -983,6 +1003,514 @@ final class KeyboardHandlerTest extends TestCase
 
         $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'p', ctrl: true), $app));
         $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Tab, ctrl: true), $app));
+    }
+
+    /**
+     * The one declared exception to "content wins outright"
+     * ({@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}): Ctrl+R opens
+     * a picker Chat paints and drives with up/down/enter, all of which the
+     * shell's own keyboard-owning views take — so from those three states the
+     * shell keeps the chord and answers it with a no-op instead of letting a
+     * modal open where it can be neither seen nor moved.
+     *
+     * @see KeyboardHandler::shellOwnsKeyboard()
+     */
+    public function testTheSessionPickerChordIsKeptByTheShellsOwnKeyboardOwningViews(): void
+    {
+        $skill = $this->skill('alpha');
+        $states = [
+            'the agent view' => $this->createApp(Pane::Agents),
+            'an open skill picker' => $this->createApp(Pane::Skills)->withSkillPickerOptions([$skill, $skill]),
+        ];
+
+        foreach ($states as $where => $app) {
+            $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'r', ctrl: true), $app);
+            $this->assertNotNull($handled, "Ctrl+R must not reach Chat from {$where}");
+            $this->assertNull($handled[1], "and must stay a no-op in {$where}");
+            $this->assertSame($app->pane, $handled[0]->pane, "and must not move the pane in {$where}");
+        }
+
+        // Same again with the F10 menu open, from the chat pane: the menu bar
+        // claims every key while it is up and has no ctrl+r arm of its own.
+        MenuBar::openMenu(1);
+        $withMenu = $this->handler->handleKeyMsg(
+            new KeyMsg(KeyType::Char, 'r', ctrl: true),
+            $this->createApp(Pane::Chat),
+        );
+        $this->assertNotNull($withMenu, 'Ctrl+R must not reach Chat with the menu open');
+        $this->assertNull($withMenu[1]);
+    }
+
+    /**
+     * And nowhere else. An ordinary pane — including Skills with no picker
+     * open — still hands Ctrl+R to Chat, which is where the session picker
+     * lives.
+     */
+    public function testTheSessionPickerChordReachesChatFromEveryOrdinaryPane(): void
+    {
+        foreach ([Pane::Chat, Pane::Files, Pane::Tools, Pane::Skills, Pane::Settings] as $pane) {
+            $this->assertNull(
+                $this->handler->handleKeyMsg(
+                    new KeyMsg(KeyType::Char, 'r', ctrl: true),
+                    $this->createApp($pane),
+                ),
+                "Ctrl+R must fall through to Chat in {$pane->name}",
+            );
+        }
+    }
+
+    /**
+     * The three states {@see KeyboardHandler::shellOwnsKeyboard()} names, built
+     * fresh so a caller cannot leak one state's static menu into another.
+     *
+     * @return array<string, App>
+     */
+    private function keyboardOwningStates(): array
+    {
+        $skill = $this->skill('alpha');
+
+        return [
+            'the agent view' => $this->createApp(Pane::Agents),
+            'an open skill picker' => $this->createApp(Pane::Skills)
+                ->withSkillPickerOptions([$skill, $skill]),
+        ];
+    }
+
+    /**
+     * The same three states, swept across the sub-states a user actually
+     * reaches inside them rather than at one fixture value each.
+     *
+     * Three fixture Apps is not "all three states". `createApp(Pane::Agents)`
+     * leaves `selectedAgentIndex = -1` and `agentViewMode = List`, and a
+     * selected dashboard row is the NORMAL state after one `Down` — measured, a
+     * `ctrl+r` arm guarded on `selectedAgentIndex >= 0` is invisible to a sweep
+     * that only ever visits the unselected List state. Same for the skill
+     * picker's highlight and the menu's row cursor: each is process-global or
+     * per-App sub-state a real session moves before pressing anything else.
+     *
+     * Every sub-state is reached by DRIVING the real handler (one `Down`)
+     * rather than by assembling an App, so it is a state the shell can actually
+     * be in. Each entry is a closure because two of them also have to set up
+     * `MenuBar`'s process-global menu state, which must not leak between
+     * entries.
+     *
+     * Domain, stated so the next reader knows what the sweep does and does not
+     * cover: 8 states — the agent view in List (with and without a selection),
+     * Peek and Attach mode; the skill picker on its first row and with the
+     * highlight moved; the F10 menu on its first row and with the row cursor
+     * moved. `AgentViewMode` is covered exhaustively (3 of 3 cases); the
+     * selection index is covered at -1 and 0, not at every index.
+     *
+     * @return array<string, \Closure(): App>
+     */
+    private function keyboardOwningSubStates(): array
+    {
+        $skill = $this->skill('alpha');
+        $agents = fn(): App => $this->createApp(Pane::Agents);
+        $picker = fn(): App => $this->createApp(Pane::Skills)->withSkillPickerOptions([$skill, $skill]);
+
+        return [
+            'the agent view with nothing selected' => $agents,
+            'the agent view with a selected row' => function () use ($agents): App {
+                [$moved] = $this->handler->handle('down', $agents());
+                $this->assertSame(0, $moved->selectedAgentIndex, 'fixture: one Down selects the first row');
+
+                return $moved;
+            },
+            'the agent view peeking at a selection' => function () use ($agents): App {
+                [$moved] = $this->handler->handle('down', $agents());
+                [$peeking] = $this->handler->handle('enter', $moved);
+                $this->assertSame(AgentViewMode::Peek, $peeking->agentViewMode, 'fixture: Enter peeks');
+
+                return $peeking;
+            },
+            'the agent view attached to an agent' => function () use ($agents): App {
+                [$moved] = $this->handler->handle('down', $agents());
+                [$peeking] = $this->handler->handle('enter', $moved);
+                [$attached] = $this->handler->handle('enter', $peeking);
+                $this->assertSame(AgentViewMode::Attach, $attached->agentViewMode, 'fixture: Enter attaches');
+
+                return $attached;
+            },
+            'an open skill picker on its first row' => $picker,
+            'an open skill picker with the highlight moved' => function () use ($picker): App {
+                [$moved] = $this->handler->handle('down', $picker());
+                $this->assertSame(1, $moved->skillPickerIndex, 'fixture: one Down moves the highlight');
+
+                return $moved;
+            },
+            'an open F10 menu on its first row' => function (): App {
+                MenuBar::openMenu(1);
+
+                return $this->createApp(Pane::Chat);
+            },
+            'an open F10 menu with the row cursor moved' => function (): App {
+                MenuBar::openMenu(1);
+                $app = $this->createApp(Pane::Chat);
+                [$app] = $this->handler->handle('down', $app);
+                $this->assertGreaterThan(0, MenuBar::getActiveItem(), 'fixture: one Down moves the row cursor');
+
+                return $app;
+            },
+        ];
+    }
+
+    /**
+     * Every process-global static in the pane-shell subsystem (`src/Tui/` and
+     * `src/Commands/`), as a value comparable with `assertSame`.
+     *
+     * DISCOVERED rather than listed, so a static added to any class in the
+     * subsystem is swept the day it is added instead of the day someone
+     * remembers to extend a list. Objects compare by identity, which is what a
+     * "was anything reassigned?" check wants.
+     *
+     * What it finds today, and the sweep behind that number: 7 statics —
+     * `MenuBar::$activeMenu`/`$activeItem`, `Tui\Renderer::$chromeScanner`/
+     * `$terminalSize`, `TerminalBackground::$observed`, and
+     * `KeyBindingRegistry::$ctrlRuneMemo`/`$yieldedRuneMemo`. Cross-checked
+     * against what the handler can actually write: its only mutating static
+     * collaborators are `MenuBar::openMenu()`/`activateMenu()`/`closeMenu()`/
+     * `handleKey()`, all four of which write only MenuBar's two — and
+     * `KeyboardHandler` holds no instance state, touches no superglobal, and
+     * writes no file or env var (`grep` for `$GLOBALS`, `static $`,
+     * `file_put_contents`, `putenv`, `session_`: none). So for this subsystem
+     * the three channels really are all of them.
+     *
+     * This is the third channel through which a keypress can have an effect. A
+     * returned `[$app identical, null cmd]` covers the other two and misses this
+     * one entirely: `handleKeyMsg()` itself returns `[$app, null]` immediately
+     * AFTER calling `MenuBar::openMenu()` on the F10 path, so "unchanged App
+     * plus null command" is demonstrably compatible with a visible effect inside
+     * this very class.
+     *
+     * @return array<string, mixed>
+     */
+    private static function shellSubsystemStatics(): array
+    {
+        $src = \dirname(__DIR__, 2) . '/src/';
+        $snapshot = [];
+
+        foreach (['Tui', 'Commands'] as $dir) {
+            /** @var iterable<\SplFileInfo> $files */
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($src . $dir, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($files as $file) {
+                if ($file->getExtension() !== 'php') {
+                    continue;
+                }
+                $class = 'SugarCraft\\Crush\\' . str_replace(
+                    '/',
+                    '\\',
+                    substr($file->getPathname(), \strlen($src), -4),
+                );
+                if (!class_exists($class)) {
+                    continue;
+                }
+                foreach ((new ReflectionClass($class))->getProperties(\ReflectionProperty::IS_STATIC) as $property) {
+                    // Inherited statics would otherwise be snapshotted once per
+                    // subclass under a different key.
+                    if ($property->getDeclaringClass()->getName() !== $class) {
+                        continue;
+                    }
+                    $snapshot[$class . '::$' . $property->getName()] = $property->getValue();
+                }
+            }
+        }
+
+        ksort($snapshot);
+
+        return $snapshot;
+    }
+
+    /**
+     * Condition 2 of the yield criterion
+     * ({@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}), as a property
+     * of the derived set rather than a sentence about `Ctrl+R`: a chord the
+     * shell takes back must be one the shell answers with NOTHING.
+     *
+     * This is the test that makes the criterion enforceable. Add `p` to the
+     * yielded set and it fails, because the shell answers `ctrl+p` with
+     * `ProviderSelectCmd` — measured, {@see App::consumeShellCmd()} runs that
+     * as `/model` — so yielding it would REBIND the chord in exactly the states
+     * where an overlay cannot be seen, rather than swallow it.
+     *
+     * "Nothing happens" is checked across all THREE channels this subsystem has,
+     * not the two a returned tuple shows:
+     *
+     * 1. the returned `App` is the SAME instance (identity, so a new-but-equal
+     *    App fails too);
+     * 2. the returned command is null;
+     * 3. no process-global static in `src/Tui/`/`src/Commands/` moved —
+     *    {@see shellSubsystemStatics()}.
+     *
+     * Channel 3 is not hypothetical and not a second copy of channel 1.
+     * `handleKeyMsg()` returns `[$app, null]` immediately after calling
+     * `MenuBar::openMenu()` on its F10 path, so this class already contains a
+     * key with an unchanged App, a null command, and a menu bar that visibly
+     * pops open. `MenuBar::$activeMenu` and `$activeItem` are the two statics
+     * the shell routes real effects through today; the sweep is by discovery
+     * rather than by name so the next one is covered before it is written.
+     *
+     * The derived-set memos are warmed BEFORE the snapshot on purpose: filling
+     * a pure-function cache is a legitimate effect of a process's first press
+     * and is not what "nothing happens" is about — see
+     * {@see KeyBindingRegistry::$ctrlRuneMemo}.
+     *
+     * Domain: every rune in the derived yielded set × the 8 sub-states of
+     * {@see keyboardOwningSubStates()}.
+     */
+    public function testEveryYieldedChordIsAnsweredByANoOp(): void
+    {
+        $yielded = KeyBindingRegistry::chatCtrlRunesYieldedToShell();
+        $this->assertNotSame([], $yielded, 'fixture: the criterion has at least one row to check');
+
+        foreach ($yielded as $rune) {
+            foreach ($this->keyboardOwningSubStates() as $where => $build) {
+                $this->resetMenuBarState();
+                $app = $build();
+
+                KeyBindingRegistry::chatCtrlRunes();
+                KeyBindingRegistry::shellCtrlRunes();
+                KeyBindingRegistry::chatCtrlRunesYieldedToShell();
+                $before = self::shellSubsystemStatics();
+                $this->assertArrayHasKey(
+                    MenuBar::class . '::$activeMenu',
+                    $before,
+                    'fixture: the static sweep must find the statics the shell routes effects through',
+                );
+                $this->assertArrayHasKey(MenuBar::class . '::$activeItem', $before, 'fixture');
+
+                $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: true), $app);
+
+                $this->assertNotNull($handled, "ctrl+{$rune} must not reach Chat from {$where}");
+                $this->assertNull(
+                    $handled[1],
+                    "the shell answers ctrl+{$rune} with a command in {$where}, so yielding the chord "
+                    . 'rebinds it instead of swallowing it — that fails condition 2 of the yield criterion',
+                );
+                $this->assertSame($app, $handled[0], "and must leave the shell untouched in {$where}");
+                $this->assertSame(
+                    $before,
+                    self::shellSubsystemStatics(),
+                    "ctrl+{$rune} moved process-global shell state in {$where}, so taking the chord back "
+                    . 'there means "something else happens" rather than "nothing happens" — that fails '
+                    . 'condition 2 of the yield criterion just as surely as returning a command would',
+                );
+            }
+        }
+
+        $this->resetMenuBarState();
+    }
+
+    /**
+     * The derivation accounting in {@see KeyBindingRegistry::$ctrlRuneMemo}'s
+     * docblock, re-measured — because the version this replaced was counted off
+     * the call sites and was wrong in both directions.
+     *
+     * Instrument: both memos cleared, ONE `handleKeyMsg()` call, the filled memo
+     * slots counted ({@see ResetsDerivedRuneSets::derivedRuneSetCount()}). A
+     * slot is filled exactly once per derivation and nothing else fills one.
+     *
+     * Domain: the 5 table rows below at one cold press each, then an exhaustive
+     * sweep of 2 menu states × 9 panes × 95 printable runes × Ctrl on/off =
+     * 3420 cold presses. Non-`Char` key types are covered only by the `Enter`
+     * row, and the panes are swept without their sub-states (no skill-picker
+     * options, no agent selection) — neither affects which rune SETS are read,
+     * only which branch reads them.
+     */
+    public function testTheHotPathNeverDerivesMoreThanTwoRuneSets(): void
+    {
+        $ordinary = $this->createApp(Pane::Chat);
+        $agents = $this->createApp(Pane::Agents);
+
+        $rows = [
+            ['an ordinary letter', new KeyMsg(KeyType::Char, 'a'), $ordinary, 0],
+            ['Enter', new KeyMsg(KeyType::Enter), $ordinary, 0],
+            ['ctrl+r in an ordinary pane', new KeyMsg(KeyType::Char, 'r', ctrl: true), $ordinary, 1],
+            ['ctrl+n in the agent view', new KeyMsg(KeyType::Char, 'n', ctrl: true), $agents, 1],
+            ['ctrl+n in an ordinary pane', new KeyMsg(KeyType::Char, 'n', ctrl: true), $ordinary, 2],
+            ['ctrl+z in an ordinary pane', new KeyMsg(KeyType::Char, 'z', ctrl: true), $ordinary, 2],
+            ['ctrl+r in the agent view', new KeyMsg(KeyType::Char, 'r', ctrl: true), $agents, 2],
+            ['ctrl+w in the agent view', new KeyMsg(KeyType::Char, 'w', ctrl: true), $agents, 2],
+        ];
+
+        foreach ($rows as [$what, $msg, $app, $expected]) {
+            $this->resetDerivedRuneSets();
+            $this->handler->handleKeyMsg($msg, $app);
+            $this->assertSame(
+                $expected,
+                $this->derivedRuneSetCount(),
+                "{$what} must derive exactly {$expected} rune set(s) — update the table in "
+                . 'KeyBindingRegistry::$ctrlRuneMemo if this changes',
+            );
+        }
+
+        // Ordinary typing costs nothing, which the call-site count overstated.
+        $this->resetDerivedRuneSets();
+        foreach (['h', 'e', 'l', 'l', 'o'] as $rune) {
+            $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune), $ordinary);
+        }
+        $this->assertSame(0, $this->derivedRuneSetCount(), 'typing a word must derive nothing at all');
+
+        // And two is a ceiling, not a high-water mark: the shell set is read
+        // only when shellOwnsKeyboard() is false and the yielded set only when
+        // it is true, so the third derivation is unreachable by construction.
+        $printable = [];
+        for ($c = 32; $c < 127; $c++) {
+            $printable[] = chr($c);
+        }
+        $this->assertCount(95, $printable, 'fixture: the sweep width the docblock states');
+        $this->assertCount(9, Pane::cases(), 'fixture: the pane count the docblock states');
+
+        $presses = 0;
+        $histogram = [0 => 0, 1 => 0, 2 => 0];
+        foreach ([0, 1] as $menu) {
+            foreach (Pane::cases() as $pane) {
+                $app = $this->createApp($pane);
+                foreach ($printable as $rune) {
+                    foreach ([false, true] as $ctrl) {
+                        $this->resetMenuBarState();
+                        if ($menu > 0) {
+                            MenuBar::openMenu($menu);
+                        }
+                        $this->resetDerivedRuneSets();
+                        $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: $ctrl), $app);
+                        $derived = $this->derivedRuneSetCount();
+                        $this->assertLessThanOrEqual(
+                            2,
+                            $derived,
+                            "ctrl={$ctrl} rune '{$rune}' in {$pane->name} (menu {$menu}) derived {$derived} "
+                            . 'rune sets — the ceiling of two is what the memo docblock rests on',
+                        );
+                        $histogram[$derived]++;
+                        $presses++;
+                    }
+                }
+            }
+        }
+
+        $this->resetMenuBarState();
+        $this->assertSame(3420, $presses, '2 menu states x 9 panes x 95 runes x ctrl on/off');
+        $this->assertSame(
+            [0 => 1710, 1 => 938, 2 => 772],
+            $histogram,
+            'the distribution the memo docblock states, over the sweep it names',
+        );
+    }
+
+    /**
+     * The `shellOwnsKeyboard($app)` conjunct inside `chatOwns()`, pinned at the
+     * predicate because routing cannot see it: claim rule 2 already claims
+     * every key in exactly these three states, and
+     * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
+     * yielded rune out of the shell's own set, so a mutation that yields the
+     * chord unconditionally produces byte-identical routing everywhere.
+     *
+     * It is defence in depth against rule 2 narrowing — see
+     * {@see KeyboardHandler::shellOwnsKeyboard()} — and a guard nothing can
+     * detect is a guard that gets "simplified" away, so this reads it directly.
+     */
+    public function testChatOwnsYieldsTheChordOnlyWhileTheShellOwnsTheKeyboard(): void
+    {
+        $chatOwns = new \ReflectionMethod(KeyboardHandler::class, 'chatOwns');
+
+        foreach (KeyBindingRegistry::chatCtrlRunesYieldedToShell() as $rune) {
+            $msg = new KeyMsg(KeyType::Char, $rune, ctrl: true);
+
+            foreach ([Pane::Chat, Pane::Files, Pane::Tools, Pane::Skills, Pane::Settings] as $pane) {
+                $this->assertTrue(
+                    $chatOwns->invoke(null, $msg, $this->createApp($pane)),
+                    "chatOwns() must keep ctrl+{$rune} for Chat in {$pane->name}: the yield is "
+                    . 'conditional on the shell owning the keyboard, not unconditional',
+                );
+            }
+
+            foreach ($this->keyboardOwningStates() as $where => $app) {
+                $this->assertFalse(
+                    $chatOwns->invoke(null, $msg, $app),
+                    "chatOwns() must give ctrl+{$rune} back to the shell in {$where}",
+                );
+            }
+
+            MenuBar::openMenu(1);
+            $this->assertFalse($chatOwns->invoke(null, $msg, $this->createApp(Pane::Chat)));
+            $this->resetMenuBarState();
+        }
+    }
+
+    /**
+     * The gap condition 2 deliberately leaves open, pinned as the CURRENT
+     * behaviour rather than as the desired one — tracker #85.
+     *
+     * `Ctrl+P` meets condition 1 of the yield criterion and fails condition 2,
+     * so it keeps reaching Chat from `Pane::Agents`, where the dashboard
+     * replaces the whole content band: the palette opens, nothing paints it,
+     * and `↑`/`↓`/`Enter` drive the dashboard. Leaving the pane reveals it.
+     * Routing here is unchanged from before the claim sets were derived from
+     * {@see KeyBindingRegistry} — this is not a regression, it is the state the
+     * criterion's own first half condemns and which yielding the chord would
+     * make worse (`ProviderSelectCmd`, i.e. `/model`, instead of a no-op).
+     *
+     * When the shell learns to composite or stand down for a hosted overlay,
+     * THIS is the test that says the gap is closed.
+     */
+    public function testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives(): void
+    {
+        $chat = new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            backend: new EchoBackend(),
+        );
+        [$app] = App::new($this->provider, 'gpt-4')
+            ->withChat($chat)
+            ->withPane(Pane::Agents)
+            ->update(new WindowSizeMsg(100, 30));
+
+        [$open] = $app->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($open->chat?->palette(), 'Ctrl+P still reaches the hosted Chat here');
+        // renderPalette()'s query line is the palette's own signature; the
+        // dashboard frame carries no part of the hosted chat's frame at all.
+        $this->assertStringNotContainsString('🔍', self::body($open), 'and nothing paints it');
+
+        [$down] = $open->update(new KeyMsg(KeyType::Down));
+        $this->assertSame(
+            0,
+            $down->chat?->palette()?->selectedIndex,
+            'Down cannot move a palette the dashboard is driving',
+        );
+        $this->assertSame(0, $down->selectedAgentIndex, 'it moves the dashboard selection instead');
+
+        // The one way out: leaving the pane reveals the palette that was open
+        // all along. Escape first drops the dashboard selection, then leaves.
+        [$escaped] = $down->update(new KeyMsg(KeyType::Escape));
+        [$escaped] = $escaped->update(new KeyMsg(KeyType::Escape));
+        $this->assertSame(Pane::Chat, $escaped->pane);
+        $this->assertStringContainsString('🔍', self::body($escaped));
+    }
+
+    private static function body(App $app): string
+    {
+        $view = $app->view();
+
+        return is_string($view) ? $view : $view->body;
+    }
+
+    private function skill(string $name): Skill
+    {
+        return new Skill(
+            name: $name,
+            description: 'A skill',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'inline',
+            paths: [],
+            content: 'Do the thing.',
+            sourcePath: sys_get_temp_dir() . '/' . $name . '.md',
+        );
     }
 
     /**
