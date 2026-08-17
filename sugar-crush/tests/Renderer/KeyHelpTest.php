@@ -229,8 +229,9 @@ final class KeyHelpTest extends TestCase
      *    `/help`. This route CAN disagree with route 1, and does: the blank
      *    drafts, where `?` opens and `Enter` sends nothing, and the ones that ARE
      *    the command modulo whitespace (`'/keys'`, `' /keys'`, `'/keys '`,
-     *    `"\t/keys"`, `'/help'`, `'  /help  '`), where `Enter` opens the reference
-     *    and `?` types a character.
+     *    `"\t/keys"`, `"\n/keys"`, `"\0/keys"`, `"/keys\n"`, `'/help'`,
+     *    `'  /help  '`, `"\n/help"`), where `Enter` opens the reference and `?`
+     *    types a character.
      *
      * Routes 1 and 3 are COMPLEMENTARY, not equivalent — and that is FORCED by the
      * two guards rather than measured here, which is the correction this revision
@@ -249,9 +250,9 @@ final class KeyHelpTest extends TestCase
      * Pinned in BOTH directions, because either half alone is satisfiable by a
      * mistake:
      *
-     * 1. the seven blank drafts (`''`, `' '`, `'  '`, `"\0"`, `"\n"`, `"\t"`,
-     *    `" \t "`) open the reference by routes 1 and 2, and `?` leaves the draft
-     *    ALONE — reverting the arm to `=== ''` reds this;
+     * 1. the ten blank drafts (`''`, `' '`, `'  '`, `"\0"`, `"\0\0"`, `" \0 "`,
+     *    `"\n"`, `"\n\n"`, `"\t"`, `" \t "`) open the reference by routes 1 and 2,
+     *    and `?` leaves the draft ALONE — reverting the arm to `=== ''` reds this;
      * 2. the non-blank drafts (`' x '`, `'why'`, `'why '`, `' why'`, `'  x  '`, the
      *    `/`-shaped ones a lazy widening might swallow, and the two `?`-leading
      *    ones) open it by neither of those routes, and `?` is typed as a
@@ -273,13 +274,21 @@ final class KeyHelpTest extends TestCase
      *   directions — it over-claimed for those three and under-claimed by omitting
      *   two reachable blank drafts entirely. What holds is the narrower verb:
      *   nothing can TYPE them.
-     *   * TYPED — the `Char` arm. `''`, `' '`, `'  '` and `"\0"`: measured,
-     *     `parse("\x00")` yields `KeyType::Char "\0"` (Ctrl+Space / Ctrl+@ on most
-     *     terminals), so `NUL` — the byte the README's "blank without being
-     *     whitespace" sentence rests on — is typed like any other rune.
-     *   * COMPOSED — an arm that is not the `Char` arm. `"\n"`: measured,
-     *     `parse("\x1b\r")` yields `KeyType::Enter` with `alt`, and `update()`'s
-     *     Alt/Shift/Ctrl+Enter arm appends `"\n"` to the buffer.
+     *   * TYPED — the `Char` arm. `''`, `' '`, `'  '`, `"\0"`, `"\0\0"` and
+     *     `" \0 "`: measured, `parse("\x00")` yields `KeyType::Char "\0"`
+     *     (Ctrl+Space / Ctrl+@ on most terminals), so `NUL` — the byte the
+     *     README's "blank without being whitespace" sentence rests on — is typed
+     *     like any other rune, and repeats and mixes with spaces like one.
+     *   * COMPOSED — an arm that is not the `Char` arm. `"\n"` and `"\n\n"`:
+     *     measured, `parse("\x1b\r")` yields `KeyType::Enter` with `alt`, and
+     *     `update()`'s Alt/Shift/Ctrl+Enter arm appends `"\n"` to the buffer.
+     *   * TYPED AFTER COMPOSED, or composed after typed — no new route, just the
+     *     two above in sequence, and the reason the COMMAND-SHAPED half of the
+     *     disagreement class is no longer one recalled-only member. `"\n/keys"`,
+     *     `"\0/keys"`, `"/keys\n"` and `"\n/help"` are pure keystrokes; the
+     *     growth rule this docblock states ("the corpus grows into it whenever a
+     *     further member of that class is found reachable") was applied to the
+     *     blank half in the previous round and not to this one.
      *   * RECALLED — `update()`'s Up arm, which copies
      *     `lastUserMessageContent()` in verbatim and types no rune at all. This is
      *     the route that reaches `"\t"`, `" \t "`, `"\t/keys"` and `"\u{000C}"`,
@@ -416,13 +425,21 @@ final class KeyHelpTest extends TestCase
         // The three routes a draft reaches the box by. Kept apart, and named, so
         // that "no keystroke can produce them" cannot be written again over drafts
         // a user can really hold; the reachability bullet above measures each.
-        $typedBlank = ['', ' ', '  ', "\0"];
-        $composedBlank = ["\n"];
+        $typedBlank = ['', ' ', '  ', "\0", "\0\0", " \0 "];
+        $composedBlank = ["\n", "\n\n"];
         $recalledBlank = ["\t", " \t "];
         $blank = [...$typedBlank, ...$composedBlank, ...$recalledBlank];
         $nonBlank = [
             ' x ', 'why', 'why ', ' why', '  x  ', 'x', '/', '/k',
             '/keys', '/KEYS', ' /keys', '/keys ', "\t/keys", '/help', '  /help  ',
+            // The COMMAND-SHAPED half of the disagreement class, grown by the
+            // same rule that grew the blank half — see the reachability bullet.
+            // Before this round it held exactly one non-space member ("\t/keys")
+            // and that one is RECALLED-only, while these four are pure
+            // keystrokes: Alt+Enter or Ctrl+Space, then the command (or the
+            // command, then Alt+Enter). "\n/keys" is strictly more reachable
+            // than the member the corpus already carried.
+            "\n/keys", "\0/keys", "/keys\n", "\n/help",
             // Reachable only through the two-press hatch, which typeDraft() types.
             '?', '?why',
             // Visually blank and NOT blank, which is the README's wording made
@@ -500,9 +517,22 @@ final class KeyHelpTest extends TestCase
         // is (`sort($atFloor)`): keyed by insertion, the ONLY mutation that reddened
         // this line was reordering the literals above it, with every behavioural
         // assertion still green — an order artifact wearing an exhaustiveness label.
+        //
+        // GROWTH RULE, applied to BOTH halves this round. This set is not a
+        // boundary, so it grows whenever a further member of the disagreement
+        // class turns out to be reachable. The previous round found two ("\0" and
+        // "\n") and grew only the BLANK half with them, leaving the
+        // command-shaped half holding exactly one non-space member ("\t/keys")
+        // that is RECALLED-only. Driven this round, keystrokes only: "\n/keys",
+        // "\0/keys", "/keys\n" and "\n/help" are command-shaped and typeable, and
+        // "\n\n", "\0\0" and " \0 " are blank and typeable. A rule stated on one
+        // half is a rule that has not been applied.
         ksort($disagreesOnSubmit, SORT_STRING);
         $this->assertSame(
-            ['', "\0", "\t", "\t/keys", "\n", ' ', " \t ", '  ', '  /help  ', ' /keys', '/help', '/keys', '/keys '],
+            [
+                '', "\0", "\0\0", "\0/keys", "\t", "\t/keys", "\n", "\n\n", "\n/help", "\n/keys",
+                ' ', " \0 ", " \t ", '  ', '  /help  ', ' /keys', '/help', '/keys', "/keys\n", '/keys ',
+            ],
             array_keys($disagreesOnSubmit),
             'the drafts on which "?" and a submitted draft differ: every blank one (only "?" opens) and '
             . 'every one that is the command modulo whitespace (only Enter opens). Byte-sorted, so '
@@ -564,18 +594,47 @@ final class KeyHelpTest extends TestCase
             );
         }
 
-        // The COMPOSED route, likewise: Alt+Enter is the only producer of a "\n"
-        // draft, and it is a blank one — "?" opens and Enter sends nothing.
-        [$newline] = $this->chat()->update(new KeyMsg(KeyType::Enter, alt: true));
-        $this->assertSame("\n", $newline->inputBuf, 'fixture: Alt+Enter composes the newline draft');
-        [$newlineShortcut] = $newline->update(new KeyMsg(KeyType::Char, '?'));
-        $this->assertNotNull($newlineShortcut->keyHelp(), 'a composed newline draft is blank, so "?" opens');
-        [$newlineSubmitted] = $newline->update(new KeyMsg(KeyType::Enter));
+        // The COMPOSED route, likewise. THREE producers of a "\n" draft, not one:
+        // Chat's arm accepts `Enter` with any of alt/shift/ctrl, and candy-core's
+        // decoder emits all three — `\x1b\r` is Alt+Enter, `\x1b[13;2u` is
+        // Shift+Enter and `\x1b[13;5u` is Ctrl+Enter (asserted below). A previous
+        // revision said "Alt+Enter is the only producer" beside an assertion that
+        // drove only the alt variant, so the over-claim was invisible: the
+        // docblock bullet naming all three was right and this line was not. Each
+        // is driven to the same blank draft, on which "?" opens and Enter sends
+        // nothing.
+        foreach ([
+            'alt' => new KeyMsg(KeyType::Enter, alt: true),
+            'shift' => new KeyMsg(KeyType::Enter, shift: true),
+            'ctrl' => new KeyMsg(KeyType::Enter, ctrl: true),
+        ] as $mod => $key) {
+            [$newline] = $this->chat()->update($key);
+            $this->assertSame(
+                "\n",
+                $newline->inputBuf,
+                "fixture: {$mod}+Enter composes the newline draft — Chat's arm accepts all three modifiers",
+            );
+            [$newlineShortcut] = $newline->update(new KeyMsg(KeyType::Char, '?'));
+            $this->assertNotNull($newlineShortcut->keyHelp(), 'a composed newline draft is blank, so "?" opens');
+            [$newlineSubmitted] = $newline->update(new KeyMsg(KeyType::Enter));
+            $this->assertSame(
+                $newline->history,
+                $newlineSubmitted->history,
+                'and submitting it sends nothing, which is the disagreement the set above records for it',
+            );
+        }
         $this->assertSame(
-            $newline->history,
-            $newlineSubmitted->history,
-            'and submitting it sends nothing, which is the disagreement the set above records for it',
+            [[KeyType::Enter->name, '']],
+            self::decode("\x1b[13;2u"),
+            'fixture: the decoder really does deliver Shift+Enter…',
         );
+        $this->assertSame(['shift'], self::decodeMods("\x1b[13;2u"), '…with shift and nothing else');
+        $this->assertSame(
+            [[KeyType::Enter->name, '']],
+            self::decode("\x1b[13;5u"),
+            'fixture: …and Ctrl+Enter…',
+        );
+        $this->assertSame(['ctrl'], self::decodeMods("\x1b[13;5u"), '…with ctrl, so all three producers are real');
     }
 
     /**
@@ -633,6 +692,14 @@ final class KeyHelpTest extends TestCase
      * `?`-leading draft is typed the way a user types one — twice, the second
      * press closing the reference and landing the character (the hatch pinned at
      * the foot of {@see testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()}).
+     *
+     * A `"\n"` is COMPOSED with `Alt`+`Enter` rather than typed as
+     * `KeyMsg(Char, "\n")`. Both reach the box (measured — the `Char` arm accepts
+     * the byte), but only one of them is a route a user has, and the corpus's
+     * reachability bullet claims the composed one. Driving the byte directly
+     * would have made every `"\n"`-bearing member of that corpus a fixture
+     * asserting about a keystroke nobody can press.
+     *
      * Every caller asserts the draft reached the box verbatim, so this helper
      * cannot quietly build something else.
      */
@@ -646,9 +713,11 @@ final class KeyHelpTest extends TestCase
                 continue;
             }
 
-            $msg = $spaceAsSpaceKey && $rune === ' '
-                ? new KeyMsg(KeyType::Space)
-                : new KeyMsg(KeyType::Char, $rune);
+            $msg = match (true) {
+                $rune === "\n" => new KeyMsg(KeyType::Enter, alt: true),
+                $spaceAsSpaceKey && $rune === ' ' => new KeyMsg(KeyType::Space),
+                default => new KeyMsg(KeyType::Char, $rune),
+            };
             [$chat] = $chat->update($msg);
         }
 
@@ -1378,12 +1447,17 @@ final class KeyHelpTest extends TestCase
      * Stamped with no generation on purpose: an unstamped ASK is applied
      * whatever the current turn is, which is what every internal caller relies
      * on. {@see testASupersededAskNeverPutsUpAPrompt()} covers the stamped one.
+     *
+     * `$tool` is the name the ASK is about, and therefore the key an
+     * {@see \SugarCraft\Crush\Permissions\PermissionReply::Always} answer writes
+     * into `permissionGrants` — which is the property
+     * {@see testTypingAtALivePromptAnswersItAndCanGrantForTheSession()} measures.
      */
-    private function blockedOnPermission(?int $generation = null): Chat
+    private function blockedOnPermission(string $tool = 'Bash', ?int $generation = null): Chat
     {
         [$blocked] = $this->chat()->update(new \SugarCraft\Crush\PermissionRequestMsg(
             Message::assistant(''),
-            new \SugarCraft\Crush\ToolCall('Bash', ['description' => 'rm'], 'call_1'),
+            new \SugarCraft\Crush\ToolCall($tool, ['description' => 'rm'], 'call_1'),
             'Run rm -rf build/?',
             $generation,
         ));
@@ -1411,56 +1485,65 @@ final class KeyHelpTest extends TestCase
      *    `Ctrl+P` reaches its arm, and that frame marks NO click zones, so the
      *    mouse route that DOES reach reference+palette has nothing to click.
      *
-     * ── WHICH lock refuses (2), because the previous revision named the wrong one ──
+     * ── WHICH lock refuses (2), because TWO revisions have now named the wrong one ──
      *
-     * `Chat::update()` checks `pendingPermission` (`Chat.php:742`) above the
-     * blanket `inFlight` swallow (`:787`), and a prompt exists ONLY while
-     * `inFlight` — `requestPermission()` is the sole writer that sets
-     * `pendingPermission` non-null and it sets `inFlight` true in the same
-     * `mutate()`, while every writer that clears it either ends the turn or
-     * dispatches. So the two locks are stacked, never alternatives, and for a key
-     * the prompt IGNORES they are indistinguishable: `handlePermissionKey()`'s
+     * `Chat::update()` checks `pendingPermission` (the `handlePermissionKey()`
+     * dispatch) above the blanket `inFlight` swallow. Round 6 wrote that a prompt
+     * exists ONLY while `inFlight`, on the strength of `requestPermission()` being
+     * the sole non-null writer and setting `inFlight` in the same `mutate()`. That
+     * is refuted, and it is refuted BY `update()` itself:
+     *
+     * - `update()`'s `AssistantMsg` arm writes `'inFlight' => false` and does NOT
+     *   clear `pendingPermission`, and `mutate()` carries the field forward. ONE
+     *   further `update()` on the fixture built below — an unstamped
+     *   `AssistantMsg`, the shape the generation guard deliberately admits for the
+     *   unwired engine path — leaves `pending=SET inFlight=false`;
+     * - and a second non-null writer exists at the language level: constructor
+     *   parameters are not visibility-scoped, so
+     *   `new Chat(history: [], inputBuf: '', pendingPermission: $ask)` builds that
+     *   state with no exception.
+     *
+     * The whole-suite probe round 6 offered as proof ("a probe throwing on
+     * `pendingPermission !== null && !inFlight` at the top of `update()` ran 6,603
+     * tests without firing") proves nothing about it: a probe at the TOP of
+     * `update()` only fires on a state fed BACK into `update()`, and no test built
+     * this one. Round 6's own text says a whole-suite probe is not a proof over
+     * unwritten code.
+     *
+     * And the consequence INVERTS the conclusion, which is why it matters here.
+     * Driven in that separated state, with `inFlight` already false: `?` still
+     * leaves `keyHelp` null and `Ctrl+P` still leaves `palette` null. So where the
+     * locks come apart, **the `pendingPermission` arm alone does the refusing** —
+     * `inFlight` is not "the live half for these two keys". That state has its own
+     * test ({@see testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused()}) and
+     * that is where the permission arm is pinned for these two keys.
+     *
+     * In the state THIS test builds the two locks are genuinely stacked, and for a
+     * key the prompt IGNORES they are indistinguishable: `handlePermissionKey()`'s
      * `default` arm and the swallow both `return [$this, null]` — measured, the
-     * very same object comes back either way.
+     * very same object comes back either way. Measured too: letting BOTH `?` and
+     * `Ctrl+P` walk past the `pendingPermission` arm ALONE leaves `KeyHelpTest` +
+     * `ChatTest` + `RendererTest` + `Commands/KeyBindingDriftTest` green here. So
+     * the assertions in the split-off order-2 test say only what they can fail on
+     * in that state: something above those two arms refuses them, and it takes
+     * bypassing both to red them.
      *
-     * Measured, therefore: letting BOTH `?` and `Ctrl+P` walk past the
-     * `pendingPermission` arm leaves `KeyHelpTest` + `ChatTest` + `RendererTest` +
-     * `Commands/KeyBindingDriftTest` entirely green. An assertion here whose
-     * message named the permission lock could not fail on it, and the previous
-     * revision shipped two. They now say what they can fail on — the stacked pair,
-     * of which `inFlight` is the live half for these two keys — and the permission
-     * arm is pinned separately, by the one thing only it can do: keys it ACTS on
-     * reach it. Bypassing the arm (`if (false && …)`) reds that assertion and
-     * nothing else here.
+     * ── WHY order 2 IS A SEPARATE TEST ──
      *
-     * A state with the prompt up and the turn NOT in flight would separate them
-     * head-on, and there is none: the construction above forbids it, and a probe
-     * throwing on `pendingPermission !== null && !inFlight` at the top of
-     * `update()` ran the whole 6,603-test suite without firing once.
-     *
-     * The zone sweep is the load-bearing half of (2): the reference+palette pair is
-     * reachable precisely because the status bar keeps its `pane:menu` zone under
-     * the overlay ({@see testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()}),
-     * so "no zones at all" is what distinguishes this pair from that one rather
-     * than a detail.
+     * It was in this method, below order 1, and could not be the reported failure
+     * of anything. Measured, whole suite, with the `?` arm hoisted above both
+     * locks: two reds, `testTheCommandAndTheShortcutOpenTheReferenceInExactlyTheSameStates`
+     * and this test's ORDER-1 assertion — which aborts the method before order 2
+     * is ever evaluated. Any mutation able to red the order-2 `?` line must first
+     * let `?` past the plain `inFlight` swallow, which reds order 1. Split, each
+     * line is reachable as a reported failure. (The sibling `Ctrl+P` line was
+     * always alive: hoisting only `Ctrl+P` reds it and nothing else.)
      */
     public function testThePromptAndTheReferenceCannotBothBeRaisedByRealInput(): void
     {
-        $asks = new class implements HookInterface {
-            public function name(): string { return 'ask-every-tool'; }
-
-            public function event(): HookEvent { return HookEvent::PreToolUse; }
-
-            public function matcher(): string { return '.*'; }
-
-            public function execute(HookContext $context): HookResult { return HookResult::ask('Run rm -rf build/?'); }
-        };
-        $hooks = new HookManager(new HookRegistry());
-        $hooks->register($asks);
-
         $chat = (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))
             ->registerTool('bash', static fn(array $args): string => 'total 0')
-            ->withHooks($hooks)
+            ->withHooks(self::askEveryToolHooks())
             ->withSize(100, 30);
 
         $typed = $chat;
@@ -1475,49 +1558,35 @@ final class KeyHelpTest extends TestCase
         [$duringFlight] = $inFlight->update(new KeyMsg(KeyType::Char, '?'));
         $this->assertNull(
             $duringFlight->keyHelp(),
-            '"?" must not open the reference while a turn is in flight, which is the only window in which a '
-            . 'prompt can appear',
+            '"?" must not open the reference while a turn is in flight, which is the window in which a '
+            . 'prompt appears',
         );
+    }
 
-        [$blocked] = $inFlight->update(new \SugarCraft\Crush\AssistantMsg(
-            Message::assistant('running')->withToolCalls([
-                new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf build/'], 'call_1'),
-            ]),
-        ));
-        $this->assertNotNull(
-            $blocked->pendingPermission(),
-            'fixture: the ask hook must suspend the turn on a prompt, or there is no pair to attempt',
-        );
-        $this->assertTrue($blocked->inFlight, 'fixture: and the prompt holds the turn in flight');
+    /**
+     * Order 2 of {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()},
+     * split out so its assertions can be the REPORTED failure of a mutation — see
+     * that method's docblock for the measurement that forced the split.
+     *
+     * The zone sweep is the load-bearing half here: the reference+palette pair is
+     * reachable precisely because the status bar keeps its `pane:menu` zone under
+     * the overlay ({@see testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()}),
+     * so "no zones at all" is what distinguishes this pair from that one rather
+     * than a detail.
+     */
+    public function testWithAPromptUpNeitherKeyReachesItsOverlay(): void
+    {
+        $blocked = $this->promptRaisedByTheRealGate();
 
-        // Order 2: with the prompt up, no key and no click reaches the reference.
-        // The two locks are stacked (see the docblock), so these two say only what
-        // they can fail on: something above the "?" and Ctrl+P arms refuses them.
-        // Naming the permission lock here is what the previous revision did, and
-        // that assertion could not fail on it — letting both keys past the
-        // pendingPermission arm keeps all four files green, because the inFlight
-        // swallow below catches them anyway.
         [$viaShortcut] = $blocked->update(new KeyMsg(KeyType::Char, '?'));
         $this->assertNull(
             $viaShortcut->keyHelp(),
-            '"?" cannot open the reference at a live prompt — the prompt arm and the inFlight swallow are '
-            . 'both above that arm, and a prompt only ever exists while inFlight',
+            '"?" cannot open the reference at a live prompt. Both the prompt arm and the inFlight swallow '
+            . 'sit above the "?" arm here, and in THIS state either one alone suffices — which is exactly '
+            . 'what this line can fail on, and no more',
         );
         [$viaPalette] = $blocked->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         $this->assertNull($viaPalette->palette(), 'and neither does Ctrl+P reach the palette');
-
-        // The permission lock, pinned where it CAN fail. The swallow below returns
-        // [$this, null] for every key alike; the prompt arm is the only thing that
-        // can turn a keystroke into an ANSWER, so a key it acts on is the sole
-        // observable difference between the two. Bypassing that arm reds this line
-        // and none of the three above it.
-        [$answered] = $blocked->update(new KeyMsg(KeyType::Char, 'y'));
-        $this->assertNull(
-            $answered->pendingPermission(),
-            'the prompt owns the keyboard in the one sense a mutation can see: "y" ANSWERS it. Bypass the '
-            . 'pendingPermission arm and this key falls into the inFlight swallow, which drops it, so the '
-            . 'prompt would still be pending',
-        );
 
         $blocked->view();
         $zones = [];
@@ -1535,6 +1604,242 @@ final class KeyHelpTest extends TestCase
             'and the prompt frame marks no click zones at all, so the mouse route that reaches '
             . 'reference+palette has nothing to click here',
         );
+    }
+
+    /**
+     * The permission arm pinned by the one thing ONLY it can do: turn a keystroke
+     * into an ANSWER. The `inFlight` swallow returns `[$this, null]` for every key
+     * alike, so a key the prompt ACTS on is the sole observable difference.
+     *
+     * And pinned on WHICH answer, which round 6's version was not. That version
+     * asserted only that `pendingPermission()` became null — something a DENIAL
+     * does just as well. Measured: changing `'y' => PermissionReply::Once` to
+     * `PermissionReply::Reject` in `Chat::handlePermissionKey()` left `KeyHelpTest`
+     * OK at 47 tests / 25,426 assertions, while the surrounding prose (and the
+     * hazard {@see testTypingAtALivePromptAnswersItAndCanGrantForTheSession()}
+     * reports) rests entirely on `y` meaning APPROVE. `ChatTest` catches that flip
+     * repo-wide; this file did not, and an assertion is owed by the file it lives
+     * in.
+     *
+     * The four properties below are what separate the three replies from each
+     * other, measured on this fixture: Once leaves `inFlight` true, hands back a
+     * Cmd, appends the running placeholder and grants nothing; Reject clears
+     * `inFlight`, hands back no Cmd and writes a denial line; Always is Once plus
+     * `permissionGrants['bash']`.
+     */
+    public function testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(): void
+    {
+        $blocked = $this->promptRaisedByTheRealGate();
+
+        [$answered, $cmd] = $blocked->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertNull(
+            $answered->pendingPermission(),
+            'the prompt owns the keyboard in the one sense a mutation can see: "y" ANSWERS it. Bypass the '
+            . 'pendingPermission arm and this key falls into the inFlight swallow, which drops it, so the '
+            . 'prompt would still be pending',
+        );
+        $this->assertTrue(
+            $answered->inFlight,
+            '"y" APPROVES: the batch is released and the turn stays in flight. A refusal ends the turn, so '
+            . 'this is the assertion that would red if "y" were remapped to Reject',
+        );
+        $this->assertNotNull($cmd, 'and a released batch hands back the Cmd that runs it — a refusal does not');
+        $this->assertSame(
+            [],
+            $answered->permissionGrants(),
+            'ONCE, not always: approving one call must not write a session grant',
+        );
+        $denials = array_filter(
+            $answered->history,
+            static fn(Message $m): bool => str_contains((string) $m->content, 'Permission denied'),
+        );
+        $this->assertSame([], $denials, 'and nothing in the transcript says the call was refused');
+    }
+
+    /**
+     * THE STATE ROUND 6 CALLED IMPOSSIBLE: a prompt up with the turn NOT in flight.
+     *
+     * Reached in one `update()` from the same real-gate fixture — an unstamped
+     * `AssistantMsg`, which `update()`'s generation guard admits by design
+     * (`generation === null` is the shape `PermissionRequestMsg`'s own docblock
+     * names for the unwired engine path). That arm writes `'inFlight' => false`
+     * and leaves `pendingPermission` alone; `mutate()` carries it forward.
+     *
+     * WHAT THIS IS AND IS NOT. No WIRED producer sends a second `AssistantMsg`
+     * while a prompt is up: `beginToolCalls()` parks the WHOLE gated batch on the
+     * first ask and dispatches nothing, so across a live prompt the only
+     * outstanding Cmd is the permission `Deferred`, which is not a Msg source.
+     * So this is an API-SURFACE hole today — anyone holding a `Chat` (the Program,
+     * an embedder, a test, the engine path when it lands) can produce it — rather
+     * than a live correctness bug reachable from the keyboard. It is pinned so
+     * that the day the engine path IS wired, the behaviour is already nailed down
+     * instead of discovered.
+     *
+     * And it is what makes the "which lock" question answerable at all: with
+     * `inFlight` already false, `?` and `Ctrl+P` are still refused, so here the
+     * `pendingPermission` arm is refusing them ALONE. Bypassing that arm
+     * (`if (false && $this->pendingPermission !== null)`) reds this test and not
+     * {@see testWithAPromptUpNeitherKeyReachesItsOverlay()}, which is the pair of
+     * mutations round 6's single merged test could not distinguish.
+     */
+    public function testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused(): void
+    {
+        $blocked = $this->promptRaisedByTheRealGate();
+
+        [$separated] = $blocked->update(new \SugarCraft\Crush\AssistantMsg(Message::assistant('late reply')));
+
+        $this->assertNotNull(
+            $separated->pendingPermission(),
+            'the AssistantMsg arm does not clear the prompt, and mutate() carries it forward',
+        );
+        $this->assertFalse(
+            $separated->inFlight,
+            'and it DOES clear inFlight — so "a prompt only ever exists while inFlight" is false, in one '
+            . 'update() call, on the fixture the claim was written beside',
+        );
+
+        [$viaShortcut] = $separated->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertNull(
+            $viaShortcut->keyHelp(),
+            'with inFlight already false the swallow cannot be what refuses "?": the pendingPermission arm '
+            . 'is doing it alone',
+        );
+        [$viaPalette] = $separated->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($viaPalette->palette(), 'and alone for Ctrl+P too');
+
+        // The prompt is still the thing on screen and still answerable, which is
+        // what makes this a state rather than a corrupted object.
+        $this->assertStringContainsString(
+            'permission required',
+            $this->body($separated),
+            'the frame still carries the prompt',
+        );
+        [$answered] = $separated->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($answered->pendingPermission(), 'and "y" still answers it');
+    }
+
+    /**
+     * THE PRODUCT HAZARD, pinned rather than fixed: while a prompt is up every
+     * `Char` key is a candidate ANSWER, so typing an ordinary slash command
+     * answers it, and one of them grants a PERMANENT session grant.
+     *
+     * Routing this differently is a product decision — see
+     * {@see Chat::handlePermissionKey()}'s docblock for the measured table and the
+     * options. What this test does is make the current behaviour deliberate: any
+     * change to it reds a named row here instead of shifting silently.
+     *
+     * The `a` rows are the material ones and are NOT the `y` hazard repeated:
+     * `PermissionReply::Always` writes `permissionGrants[<tool>] = true`, which
+     * `gateToolCall()` honours for the rest of the session, so `/agents` typed at
+     * a prompt makes every later `bash` call run unasked. Its second keystroke is
+     * the `a`.
+     *
+     * Two corrections to the previous round's report of this, both driven: the
+     * `/keys` case answers on the FOURTH keystroke (`/` `k` `e` `y`), not the
+     * third; and a bracketed PASTE does NOT qualify, because `Chat::update()`
+     * drops `PasteMsg` (asserted in
+     * {@see testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()}). Only an
+     * unbracketed paste, delivered by the terminal as raw `Char` keys, walks this
+     * table.
+     */
+    public function testTypingAtALivePromptAnswersItAndCanGrantForTheSession(): void
+    {
+        foreach ([
+            '/keys' => [4, 'y', []],
+            '/agents' => [2, 'a', ['bash' => true]],
+            '/branch main' => [4, 'a', ['bash' => true]],
+            '/compact' => [6, 'a', ['bash' => true]],
+            '/init' => [3, 'n', []],
+            '/new' => [2, 'n', []],
+            'yes' => [1, 'y', []],
+            'Y' => [1, 'Y', []],
+            'no' => [1, 'n', []],
+            'nay' => [1, 'n', []],
+            '/help' => [null, null, []],
+            '/quit' => [null, null, []],
+            '/model' => [null, null, []],
+        ] as $typed => [$answersAt, $rune, $grants]) {
+            $chat = $this->blockedOnPermission('bash');
+            $at = null;
+            $answering = null;
+            foreach (str_split($typed) as $index => $char) {
+                [$chat] = $chat->update(new KeyMsg(KeyType::Char, $char));
+                if ($chat->pendingPermission() === null) {
+                    $at = $index + 1;
+                    $answering = $char;
+                    break;
+                }
+            }
+
+            $this->assertSame(
+                $answersAt,
+                $at,
+                "typing {$typed} at a live permission prompt answers it at this keystroke (null = never)",
+            );
+            $this->assertSame($rune, $answering, "and the rune that answered it, typing {$typed}");
+            $this->assertSame(
+                $grants,
+                $chat->permissionGrants(),
+                "and the session grants left behind, typing {$typed} — a non-empty one means every later "
+                . 'call to that tool runs UNASKED for the rest of the session',
+            );
+        }
+    }
+
+    /**
+     * A `PreToolUse` chain that asks about every tool, so a prompt in this file can
+     * be raised by the production path instead of by a hand-dispatched Msg.
+     */
+    private static function askEveryToolHooks(): HookManager
+    {
+        $asks = new class implements HookInterface {
+            public function name(): string { return 'ask-every-tool'; }
+
+            public function event(): HookEvent { return HookEvent::PreToolUse; }
+
+            public function matcher(): string { return '.*'; }
+
+            public function execute(HookContext $context): HookResult { return HookResult::ask('Run rm -rf build/?'); }
+        };
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->register($asks);
+
+        return $hooks;
+    }
+
+    /**
+     * A live prompt produced end to end by the real gate — a `PreToolUse` hook
+     * returning `HookResult::ask()`, a real `Enter`, a real `AssistantMsg` carrying
+     * a tool call. Not {@see blockedOnPermission()}, which hand-dispatches the Msg:
+     * the whole point of the tests that use this one is that the prompt is
+     * production-made.
+     */
+    private function promptRaisedByTheRealGate(): Chat
+    {
+        $chat = (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))
+            ->registerTool('bash', static fn(array $args): string => 'total 0')
+            ->withHooks(self::askEveryToolHooks())
+            ->withSize(100, 30);
+
+        $typed = $chat;
+        foreach (['h', 'i'] as $rune) {
+            [$typed] = $typed->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$inFlight] = $typed->update(new KeyMsg(KeyType::Enter));
+
+        [$blocked] = $inFlight->update(new \SugarCraft\Crush\AssistantMsg(
+            Message::assistant('running')->withToolCalls([
+                new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf build/'], 'call_1'),
+            ]),
+        ));
+        $this->assertNotNull(
+            $blocked->pendingPermission(),
+            'fixture: the ask hook must suspend the turn on a prompt, or there is nothing to attempt',
+        );
+        $this->assertTrue($blocked->inFlight, 'fixture: and the prompt holds the turn in flight');
+
+        return $blocked;
     }
 
     /**
@@ -2123,10 +2428,18 @@ final class KeyHelpTest extends TestCase
      *   token scan ignores it, along with docblock `{@see}`s and string literals —
      *   which matters because this very file mentions the class a dozen times in
      *   prose;
-     * - false negative, measured and NOT fixed: a file constructing one through a
-     *   computed class name (`$cls = 'SugarCraft\\Permission' . 'RequestMsg'; new
-     *   $cls(…)`) drives a real prompt and is invisible to any static instrument,
-     *   this one included. No parse can close that; it is stated instead.
+     * - false negative, measured and now FIXED: a fourth file that imported the
+     *   class under an alias (`use …\PermissionRequestMsg as Ask; new Ask(…)`)
+     *   drove a real prompt while this scan reported three files. That is the
+     *   more idiomatic shape of the two, and the revision that documented only
+     *   the computed-name miss called the plain form "the only form that
+     *   constructs one by name" while this one existed;
+     * - false negative, measured and NOT fixed: `new $cls(…)`, a parenthesised
+     *   class expression, and an anonymous subclass. Each drives a real prompt
+     *   and is invisible to any static instrument. No parse can close them; they
+     *   are stated instead, and asserted AS misses by
+     *   {@see testTheConstructionScanSeesAnAliasedImportAndSaysWhatItCannotSee()}
+     *   so this paragraph cannot drift.
      *
      * And the residual worth naming, because it is the one a future round will trip
      * over: the table's REAL domain is "tests that need a prompt to appear", which
@@ -2176,15 +2489,87 @@ final class KeyHelpTest extends TestCase
      * Token-based rather than textual because the difference is exactly what
      * {@see testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg()}
      * exists to measure: comments, docblocks and string literals name the class
-     * without putting a prompt anywhere. `T_NEW` followed (past whitespace,
-     * comments and attributes) by `T_STRING` / `T_NAME_QUALIFIED` /
-     * `T_NAME_FULLY_QUALIFIED` is the only form that constructs one by name;
-     * `new $variable(…)` is deliberately out of reach and documented as such.
+     * without putting a prompt anywhere.
+     *
+     * ── WHAT IT SEES, and what it does NOT ──
+     *
+     * `T_NEW` followed (past whitespace, comments and a whole attribute group) by
+     * `T_STRING` / `T_NAME_QUALIFIED` / `T_NAME_FULLY_QUALIFIED` whose last
+     * segment is `$short`, OR by a name this file IMPORTED as an alias of
+     * `$short`. A previous revision called the first of those "the only form that
+     * constructs one by name", and that was false in the most idiomatic direction
+     * available: with `use SugarCraft\Crush\PermissionRequestMsg as Ask;` at the
+     * top, `new Ask(…)` really is a `T_NEW` followed by a `T_STRING` and really
+     * does build one — measured against a real fourth test file that drove a real
+     * prompt while this scan reported three. That gap is CLOSED here (the `use …
+     * as …` sweep below), and pinned by
+     * {@see testTheConstructionScanSeesAnAliasedImportAndSaysWhatItCannotSee()}.
+     *
+     * Three forms remain invisible, each measured rather than assumed, and each
+     * left open because closing it needs evaluation rather than parsing:
+     *
+     * - `new $variable(…)`, including the computed-name case
+     *   (`$cls = 'SugarCraft\\Permission' . 'RequestMsg'`) the previous revision
+     *   already documented;
+     * - `new (PermissionRequestMsg::class)(…)` — a parenthesised class
+     *   expression, where the token after `T_NEW` is `(`;
+     * - `new class(…) extends PermissionRequestMsg {}` — an anonymous subclass,
+     *   where the token after `T_NEW` is `T_CLASS`. This one would put a prompt
+     *   up through a subtype rather than the type itself.
+     *
+     * The attribute skip is a real skip now and was not before: `T_ATTRIBUTE` is
+     * only the opening `#[`, so skipping that single token used to land on the
+     * attribute's own name and then hit the closing `]` (a non-array token) and
+     * `break` — measured, an inert entry in the skip list. It balances brackets
+     * to the matching `]` here ({@see skipAttributeGroup()}). It is still
+     * DORMANT and is labelled so: the one position PHP allows an attribute in
+     * after `new` is an anonymous class, which is a blind spot above for an
+     * unrelated reason, so no source this makes reachable can return `true`. It
+     * is fixed rather than dropped because the skip list is a claim about what
+     * the scan steps over, and a claim that does not hold is worse than a
+     * dormant one that does.
      */
     private static function constructs(string $src, string $short): bool
     {
         $tokens = token_get_all($src);
         $count = \count($tokens);
+        $names = [$short => true];
+
+        // `use A\B\PermissionRequestMsg as Ask;` makes `Ask` a name that
+        // constructs one. Swept first so the scan below can match on it.
+        for ($i = 0; $i < $count; $i++) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_USE) {
+                continue;
+            }
+
+            $imported = null;
+            for ($j = $i + 1; $j < $count; $j++) {
+                $token = $tokens[$j];
+                if (!\is_array($token)) {
+                    break;
+                }
+                if ($token[0] === T_WHITESPACE || $token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                    continue;
+                }
+                if (\in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                    $parts = explode('\\', $token[1]);
+                    if ($imported === null) {
+                        $imported = end($parts);
+
+                        continue;
+                    }
+                    // The token after `as`.
+                    if ($imported === $short) {
+                        $names[end($parts)] = true;
+                    }
+
+                    break;
+                }
+                if ($token[0] !== T_AS) {
+                    break;
+                }
+            }
+        }
 
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
@@ -2194,10 +2579,15 @@ final class KeyHelpTest extends TestCase
 
             for ($j = $i + 1; $j < $count; $j++) {
                 $next = $tokens[$j];
+                if (\is_array($next) && $next[0] === T_ATTRIBUTE) {
+                    $j = self::skipAttributeGroup($tokens, $j);
+
+                    continue;
+                }
                 if (!\is_array($next)) {
                     break;
                 }
-                if (\in_array($next[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT, T_ATTRIBUTE], true)) {
+                if (\in_array($next[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
                     continue;
                 }
                 if (!\in_array($next[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
@@ -2205,7 +2595,7 @@ final class KeyHelpTest extends TestCase
                 }
 
                 $parts = explode('\\', $next[1]);
-                if (end($parts) === $short) {
+                if (isset($names[end($parts)])) {
                     return true;
                 }
 
@@ -2214,6 +2604,133 @@ final class KeyHelpTest extends TestCase
         }
 
         return false;
+    }
+
+    /**
+     * The index of the `]` closing the attribute group whose `#[` is at `$at`.
+     *
+     * `token_get_all()` emits `#[` as one `T_ATTRIBUTE` and then the group's
+     * contents as ordinary tokens, so the group has to be walked by balancing
+     * brackets — a nested `#[Foo(Bar::class)]` inside an attribute argument
+     * would otherwise close the outer group early.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function skipAttributeGroup(array $tokens, int $at): int
+    {
+        $depth = 1;
+        $count = \count($tokens);
+        for ($i = $at + 1; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (\is_array($token) && $token[0] === T_ATTRIBUTE) {
+                $depth++;
+
+                continue;
+            }
+            if ($token === '[') {
+                $depth++;
+
+                continue;
+            }
+            if ($token === ']' && --$depth === 0) {
+                return $i;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * The instrument behind the domain test, measured on sources rather than
+     * described — because its docblock made a uniqueness claim
+     * (`T_NEW` + name is "the only form that constructs one by name") that a real
+     * fourth test file refuted while every test in this file stayed green.
+     *
+     * The refutation, verbatim, was three lines:
+     *
+     *     use SugarCraft\Crush\PermissionRequestMsg as Ask;
+     *     $m = new Ask(Message::assistant('x'), new ToolCall('bash', [], '1'), 'p?', null);
+     *
+     * That file drove a real prompt. `constructs()` reported three files, so the
+     * table's domain silently excluded it. The alias sweep closes it; the three
+     * rows below it are the misses that REMAIN, asserted as misses so the
+     * docblock cannot drift back into claiming completeness.
+     */
+    public function testTheConstructionScanSeesAnAliasedImportAndSaysWhatItCannotSee(): void
+    {
+        $seen = [
+            'plain new' => '<?php $m = new PermissionRequestMsg($a, $b, "p", null);',
+            'fully qualified' => '<?php $m = new \SugarCraft\Crush\PermissionRequestMsg($a, $b, "p", null);',
+            'aliased import' => '<?php use SugarCraft\Crush\PermissionRequestMsg as Ask; $m = new Ask($a, $b, "p", null);',
+        ];
+        $blind = [
+            'variable class name' => '<?php $c = PermissionRequestMsg::class; $m = new $c($a, $b, "p", null);',
+            'parenthesised class expression' => '<?php $m = new (PermissionRequestMsg::class)($a, $b, "p", null);',
+            'anonymous subclass' => '<?php $m = new class($a, $b, "p", null) extends PermissionRequestMsg {};',
+            'attributed anonymous subclass'
+                => '<?php $m = new #[Foo(PermissionRequestMsg::class)] class extends PermissionRequestMsg {};',
+        ];
+        $inert = [
+            'line comment' => '<?php // PermissionRequestMsg is only mentioned here',
+            'docblock' => '<?php /** {@see PermissionRequestMsg} */ $x = 1;',
+            'string literal' => '<?php $s = "PermissionRequestMsg";',
+            'unrelated alias' => '<?php use A\B\SomethingElse as PermissionRequestMsg2; $m = new PermissionRequestMsg2();',
+        ];
+
+        foreach ($seen as $label => $src) {
+            $this->assertTrue(
+                self::constructs($src, 'PermissionRequestMsg'),
+                "the scan must see this construction ({$label}) — an unseen one puts a fourth file's tests "
+                . "inside the mutation table's domain without the table knowing",
+            );
+        }
+        foreach ($blind as $label => $src) {
+            $this->assertFalse(
+                self::constructs($src, 'PermissionRequestMsg'),
+                "this construction is a KNOWN blind spot ({$label}) and is asserted as one: if it starts "
+                . "being seen, constructs()'s docblock is overstating what it misses in the other direction",
+            );
+        }
+        foreach ($inert as $label => $src) {
+            $this->assertFalse(
+                self::constructs($src, 'PermissionRequestMsg'),
+                "mentioning the class is not constructing one ({$label}) — this is the half the grep this "
+                . 'instrument replaced got wrong',
+            );
+        }
+
+        // The attribute skip, pinned on the thing it can actually do rather than
+        // through constructs(), and labelled DORMANT rather than left in the skip
+        // list looking active. `#[` is a single `T_ATTRIBUTE` token, so the
+        // previous one-token skip landed on the attribute's own NAME and then
+        // broke on the closing `]` — inert, measured. Balancing brackets makes it
+        // a real skip; it still cannot turn any source TRUE, because the one
+        // position PHP allows an attribute in after `new` is an anonymous class,
+        // which is the blind spot asserted directly above. It is fixed rather
+        // than deleted because the skip list is a claim about what the scan steps
+        // over, and a claim that does not hold is worse than a dormant one that
+        // does.
+        $group = token_get_all('<?php new #[A(["x" => [1]])] class {};');
+        $at = null;
+        foreach ($group as $i => $token) {
+            if (\is_array($token) && $token[0] === T_ATTRIBUTE) {
+                $at = $i;
+                break;
+            }
+        }
+        $this->assertNotNull($at, 'fixture: token_get_all emits "#[" as one T_ATTRIBUTE');
+        $closed = self::skipAttributeGroup($group, $at);
+        $this->assertSame(
+            ']',
+            $group[$closed],
+            'skipAttributeGroup() must land on the "]" that closes the group…',
+        );
+        $this->assertSame(
+            'T_CLASS',
+            token_name($group[$closed + 2][0]),
+            '…so the very next significant token is the anonymous class, not a bracket left over from the '
+            . "attribute's own array argument",
+        );
     }
 
     /**
@@ -2259,11 +2776,26 @@ final class KeyHelpTest extends TestCase
             $byMethod[(string) $method][] = $i + 1;
         }
 
+        // SORTED, for the same reason `ksort($disagreesOnSubmit)` one method away
+        // is: `$byMethod` is keyed by file-scan order, so asserting the raw
+        // array_keys() asserted an ORDERED list while the message called it a
+        // SET. Measured on the unsorted version: swapping the whole texts of
+        // finishToolCalls() and applyBackendToolEvent() in Chat.php — a pure
+        // relocation, zero behaviour change, the guard's own text untouched —
+        // reddened this line while RendererTest + ChatTest + Commands/KeyBindingDriftTest
+        // stayed green. That is the third order artifact found in this file, and it
+        // mattered more than tidiness: the mutation table in
+        // Chat::requestPermission() rests on "raw = the behavioural column plus
+        // exactly one, and that one is THIS test, because you edited the guard's
+        // text". A test that also fires when you edited nothing about the guard
+        // breaks that rule.
+        ksort($byMethod, SORT_STRING);
         $this->assertSame(
-            ['update', 'requestPermission', 'finishToolCalls', 'applyBackendToolEvent'],
+            ['applyBackendToolEvent', 'finishToolCalls', 'requestPermission', 'update'],
             array_keys($byMethod),
-            'the generation guard is spelled out per-site; if the set of sites changed, '
-            . "Chat::requestPermission()'s mutation table names one of them and must be re-measured",
+            'the generation guard is spelled out per-site; if the SET of sites changed, '
+            . "Chat::requestPermission()'s mutation table names one of them and must be re-measured. "
+            . 'Byte-sorted, so MOVING a method cannot flip it',
         );
         foreach ($byMethod as $method => $at) {
             $this->assertCount(1, $at, "one copy per method ({$method} has " . \count($at) . ')');

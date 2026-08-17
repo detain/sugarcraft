@@ -704,21 +704,47 @@ final class Chat implements Model
         // dismissed first.
         //
         // It outranks the permission prompt, a pair NO producer that exists
-        // today can put up: the reference only opens from an idle turn (the "?"
-        // arm and submit()'s /keys branch both sit below the inFlight swallow
-        // above) and a prompt only exists mid-turn, so reaching the pair takes
-        // an ASK that lands while the turn is idle — and measured, both
-        // internal producers stamp the generation that is current on the object
-        // they call, so neither can be that late ASK. requestPermission()'s
-        // generation guard is dormant defence for the unwired engine path, not
-        // the thing that closed a live door; its docblock carries the
-        // measurement. An UNSTAMPED ask still applies, by design, since that is
-        // what every internal caller and any future pipeline
-        // (PermissionRequestMsg's own docblock names the engine path) may
-        // legitimately send. So the pair is ordered rather than assumed away,
-        // and Renderer::renderStatusBar() announces the buried prompt instead
-        // of leaving it invisible and silent — that cue is the half of this
-        // which is reachable, driven, and does bite.
+        // today can put up. WHICH lock forbids it is the part two revisions of
+        // this comment got wrong, so it is stated as measured rather than as
+        // reasoned:
+        //
+        //   * the reference only opens from an idle turn — the "?" arm and
+        //     submit()'s /keys branch both sit below the inFlight swallow at
+        //     the foot of this method;
+        //   * a prompt does NOT "only exist mid-turn". That sentence was here,
+        //     and it is refuted by one update() call: this method's AssistantMsg
+        //     arm writes 'inFlight' => false and does not clear
+        //     $pendingPermission, and mutate() carries it forward, so
+        //     prompt-up-and-idle is a state update() itself produces. The
+        //     public constructor reaches it too — parameters are not
+        //     visibility-scoped, so `new Chat(pendingPermission: $ask)` builds
+        //     it with no exception. No WIRED producer sends a second
+        //     AssistantMsg while a prompt is up (beginToolCalls() parks the
+        //     WHOLE gated batch on the first ask and dispatches nothing, so the
+        //     only Cmd outstanding across a live prompt is the permission
+        //     Deferred, which is not a Msg source) — measured by walking every
+        //     'inFlight' => false site in this file. So this is an API-surface
+        //     hole today and a live one the moment the engine path lands;
+        //   * and in that separated state the pair is STILL refused, by the
+        //     $pendingPermission arm ALONE — driven: "?" leaves keyHelp null and
+        //     Ctrl+P leaves palette null with inFlight already false. The arm
+        //     above, not the swallow below, is what closes this door;
+        //   * requestPermission()'s generation guard closes no door here at
+        //     all: measured, both internal producers stamp the generation that
+        //     is current on the object they call. It is dormant defence for the
+        //     unwired engine path; its docblock carries the measurement. An
+        //     UNSTAMPED ask still applies, by design, since that is what every
+        //     internal caller and any future pipeline (PermissionRequestMsg's
+        //     own docblock names the engine path) may legitimately send.
+        //
+        // So the pair is ordered rather than assumed away, and
+        // Renderer::renderStatusBar() announces the buried prompt instead of
+        // leaving it invisible and silent — that cue is the half of this which
+        // is reachable, driven, and does bite. Both halves are pinned in
+        // KeyHelpTest: testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()
+        // for the live-turn state and
+        // testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused() for the
+        // separated one.
         if ($this->keyHelp !== null) {
             return $this->handleKeyHelpKey($msg);
         }
@@ -1152,22 +1178,56 @@ final class Chat implements Model
         // exactly. A figure that cannot survive its own paragraph does not belong
         // in the paragraph.
         //
-        // The rows carry NAMES, not counts, for the same reason. The previous
-        // revision recorded "1 failure / 1 error / 1 error / 1 failure" and "raw
-        // trio totals 2 / 2 / 2 / 2"; rows 3 and 4 were 3 raw / 2 behavioural even
-        // as it was written, because the test added in that very commit
-        // (testThePromptAndTheReferenceCannotBothBeRaisedByRealInput) reaches a
-        // stamped-and-current ask and so trips them. A count here is fed by the
-        // files being measured; a name is not.
+        // The TRIO column carries NAMES, not counts, for the same reason. The
+        // revision before last recorded "1 failure / 1 error / 1 error / 1
+        // failure" and "raw trio totals 2 / 2 / 2 / 2"; rows 3 and 4 were 3 raw /
+        // 2 behavioural even as it was written, because the test added in that
+        // very commit (testThePromptAndTheReferenceCannotBothBeRaisedByRealInput)
+        // reaches a stamped-and-current ask and so trips them. A trio count is
+        // fed by the files being measured; a class name (STALE / CURRENT) is not.
         //
-        //   | mutation                     | trio (behavioural)   | ChatTest       |
-        //   |------------------------------|----------------------|----------------|
-        //   | guard deleted                | STALE only           | green          |
-        //   | throw when the guard FIRES   | STALE only           | green          |
-        //   | throw on ANY stamped ask     | STALE + CURRENT      | the permission |
-        //   |                              |                      | suite, erroring|
-        //   | 2nd conjunct dropped, so     | STALE + CURRENT      | the permission |
-        //   | every stamped ask is dropped |                      | suite, failing |
+        // The CHATTEST column carries counts, and the round that replaced them
+        // with a name made the column worse rather than better -- see below the
+        // table. A name is only an improvement when it identifies the population;
+        // "the permission suite" identified neither of the two it was applied to.
+        //
+        //   | mutation                     | trio (behavioural)   | ChatTest        |
+        //   |------------------------------|----------------------|-----------------|
+        //   | guard deleted                | STALE only           | green           |
+        //   | throw when the guard FIRES   | STALE only           | green           |
+        //   | throw on ANY stamped ask     | STALE + CURRENT      | 14 errors       |
+        //   | 2nd conjunct dropped, so     | STALE + CURRENT      | 1 error,        |
+        //   | every stamped ask is dropped |                      | 11 failures,    |
+        //   |                              |                      | 6 warnings      |
+        //
+        // The ChatTest figures are counts again, with their domain, because the
+        // revision that replaced them with the NAME "the permission suite" named
+        // a population that does not exist: the two rows report 14 and 12
+        // problems, and ChatTest has no 14-test and no 12-test suite to be. What
+        // the two rows share is the population, and THAT is the durable label:
+        // both reds land on the SAME ELEVEN ChatTest methods, measured by name --
+        // testApprovingAnAskDispatchesTheRewrittenCallTheUserWasShown,
+        // testASessionGrantCannotSilentlyDispatchAnAsksOwnRewrite,
+        // testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall,
+        // testTheSuspendingCmdStaysPendingUntilTheUserAnswers,
+        // testOnceReplyRunsTheToolAndGatesItExactlyOnce,
+        // testAlwaysReplyGrantsTheToolForTheRestOfTheSession,
+        // testRejectReplyRefusesTheCallAndEndsTheTurn,
+        // testPermissionKeysDecideThePrompt, testUnmappedKeyLeavesThePermissionPromptUp,
+        // testAnsweringOneAskDoesNotReleaseTheOtherCallsInTheBatch and
+        // testAlwaysForOneToolDoesNotReleaseAnAskForAnother. The counts differ
+        // only because testPermissionKeysDecideThePrompt is a data-provider test:
+        // row 3 reds all four of its data sets (y / a / n / escape), row 4 only
+        // the two approving ones -- and the reason is worth recording, because it
+        // is this round's own rule seen from the other side. Under row 4 the ask
+        // is dropped, so the turn is left NOT in flight; the refusing sets assert
+        // exactly `!inFlight`, so they pass VACUOUSLY on a prompt that never
+        // appeared. Measured: the "y" set fails at ChatTest.php:3756 on
+        // `assertSame(false, !$answered->inFlight)`. Domain of both
+        // figures: tests/ChatTest.php alone at 215 tests, mutated at
+        // requestPermission()'s guard (the site this comment sits above) in a
+        // sandbox copy of this lib, PHP 8.3.6. Counts go stale; the eleven names
+        // and the data-provider explanation are what survive a test being added.
         //
         // where the two trio classes are, and this is the RULE that keeps the table
         // true as tests are added:
@@ -1177,11 +1237,17 @@ final class Chat implements Model
         //              way of building one:
         //              KeyHelpTest::testASupersededAskNeverPutsUpAPrompt().
         //   CURRENT -- every test that reaches a stamped ask AT ALL, whoever built
-        //              it. Open-ended by construction, and it grew by one this
-        //              round; today it adds
-        //              KeyHelpTest::testThePromptAndTheReferenceCannotBothBeRaisedByRealInput(),
-        //              whose prompt comes from a PreToolUse hook rather than by
-        //              hand.
+        //              it. Open-ended by construction, and it grew by three this
+        //              round; today it is the three KeyHelpTest tests that build
+        //              their prompt through a PreToolUse hook rather than by hand
+        //              (KeyHelpTest::promptRaisedByTheRealGate()):
+        //              testWithAPromptUpNeitherKeyReachesItsOverlay(),
+        //              testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses()
+        //              and testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused().
+        //              The single member the previous round listed,
+        //              testThePromptAndTheReferenceCannotBothBeRaisedByRealInput(),
+        //              was SPLIT into the first two of those and no longer reaches
+        //              a stamped ask itself -- it now stops at the in-flight half.
         //
         // Rows 1 and 2 are bounded, rows 3 and 4 are not, and that difference is the
         // whole content of the table. Row 2 is the honest bound on OBSERVABILITY:
@@ -1212,10 +1278,13 @@ final class Chat implements Model
         // 6 warnings -- so the trio is NOT silent about it, and the rows above are
         // not covering it either. It is the ONE figure in this comment kept as a
         // count, because it is the mis-site tell described below and a tell needs a
-        // magnitude. Re-measured with this comment: 17 raw / 16 behavioural,
-        // composed of 5 in RendererTest (the permission-modal render tests), 9 in
+        // magnitude. Re-measured with this comment: 20 raw / 19 behavioural,
+        // composed of 5 in RendererTest (the permission-modal render tests), 12 in
         // KeyHelpTest (including the pin), and 3 KeyBindingDriftTest data sets
-        // (permission.once / .always / .deny). The EXCLUSION RULE that produces the
+        // (permission.once / .always / .deny). It was 17 / 16 with 9 in KeyHelpTest
+        // one round ago; the three tests split out of / added to KeyHelpTest's
+        // real-gate group are the difference, which is the growth this figure's own
+        // caveat below predicts. The EXCLUSION RULE that produces the
         // second number, stated because the revision before last recorded a total no
         // rule produced ("14 behavioural (16 raw)"): raw MINUS exactly one, the
         // text-reading pin, testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods.
@@ -1227,18 +1296,20 @@ final class Chat implements Model
         //
         // At the WRONG site (update()'s AssistantMsg arm) the same two mutations
         // give: 2nd-conjunct-dropped -> trio 0 behavioural reds / ChatTest 6
-        // failures, and `if (true)` -> trio 1 behavioural red / ChatTest 1 error, 36
+        // failures, and `if (true)` -> trio 3 behavioural reds / ChatTest 1 error, 36
         // failures, 6 warnings. Those are close to the figures a previous revision
         // published as this method's, together with a causal story about mixed-up
         // rounds that was invented to explain a mis-site.
         //
         // The old tell -- "zero behavioural trio reds means you mutated the wrong
         // place" -- is now HALF TRUE and is corrected rather than repeated: it holds
-        // for 2nd-conjunct-dropped and no longer for `if (true)`, because
-        // testThePromptAndTheReferenceCannotBothBeRaisedByRealInput() drives a real
-        // AssistantMsg through update() and so reacts at BOTH sites. The tell that
-        // does not decay is the magnitude: at the right site `if (true)` reds the
-        // whole prompt-dependent population of the trio, at the wrong site one test.
+        // for 2nd-conjunct-dropped and no longer for `if (true)`, because the three
+        // KeyHelpTest tests built on promptRaisedByTheRealGate() drive a real
+        // AssistantMsg through update() and so react at BOTH sites (that is why the
+        // wrong-site figure moved from 1 to 3 this round -- it tracks the same
+        // group, not a change in the guard). The tell that does not decay is the
+        // magnitude: at the right site `if (true)` reds the whole prompt-dependent
+        // population of the trio (19), at the wrong site only that group (3).
         // And the four-site text pin fires at either site, which is the cheapest
         // signal that you edited SOMETHING and must re-read this table.
         //
@@ -1389,9 +1460,50 @@ final class Chat implements Model
      *
      * Kept to the three answers {@see PermissionReply} defines, translated to
      * a {@see PermissionReplyMsg} so the decision path is identical whether
-     * it came from a key, a palette action or a test. Any other key is
-     * ignored rather than guessed at - this prompt gates tool execution, so
-     * "the user pressed something" must never read as consent.
+     * it came from a key, a palette action or a test. Any key OTHER than
+     * y/n/a/Escape is ignored rather than guessed at.
+     *
+     * ── WHAT "ignored rather than guessed at" DOES NOT MEAN ──
+     *
+     * It does not mean a user who is not answering cannot answer by accident.
+     * This arm sits above the input box ({@see update()}, the
+     * `$this->pendingPermission !== null` check), so while a prompt is up EVERY
+     * `Char` key is a candidate answer and nothing types. `strtolower()` on the
+     * rune means the capitals count too. Driven, one `KeyMsg(Char, c)` per
+     * character, against a prompt for a `bash` call:
+     *
+     *   | typed         | answered at keystroke | rune | outcome                |
+     *   |---------------|-----------------------|------|------------------------|
+     *   | `/keys`       | 4th                   | `y`  | approved ONCE          |
+     *   | `/agents`     | 2nd                   | `a`  | ALWAYS: a session grant|
+     *   | `/branch main`| 4th                   | `a`  | ALWAYS: a session grant|
+     *   | `/compact`    | 6th                   | `a`  | ALWAYS: a session grant|
+     *   | `/init`       | 3rd                   | `n`  | denied                 |
+     *   | `/new`        | 2nd                   | `n`  | denied                 |
+     *   | `yes` / `Y`   | 1st                   | `y`/`Y` | approved once       |
+     *   | `no` / `nay`  | 1st                   | `n`  | denied                 |
+     *   | `/help`, `/quit`, `/model` | never    | --   | fully swallowed        |
+     *
+     * The `a` rows are the material ones and are NOT the same hazard as `y`:
+     * {@see PermissionReply::Always} writes `permissionGrants[<tool>] = true`
+     * (measured, `{"bash":true}`), which {@see gateToolCall()} then honours for
+     * the REST OF THE SESSION, so every later `bash` call runs unasked. `y`
+     * costs one call; `a` costs the session.
+     *
+     * A pasted command does NOT qualify, contrary to a previous revision of
+     * this claim: bracketed paste decodes to a `PasteMsg` and {@see update()}
+     * drops it (the identical object comes back -- asserted in KeyHelpTest).
+     * Only an UNBRACKETED paste, which the terminal delivers as raw `Char`
+     * keys, walks this table.
+     *
+     * This is left as it is deliberately -- routing it differently is a product
+     * decision, not a bug fix, and the options have costs (a modal that eats
+     * unknown keys, a confirm-on-`a`, a `/`-prefix escape) that belong to
+     * whoever owns the UX. What is NOT left implicit is the behaviour: it is
+     * pinned keystroke-for-keystroke, including the persistent-grant case, by
+     * KeyHelpTest::testTypingAtALivePromptAnswersItAndCanGrantForTheSession(),
+     * so any change to it is deliberate and shows up as a red test rather than
+     * as a silent shift.
      *
      * @return array{0:Chat,1:?\Closure}
      */
