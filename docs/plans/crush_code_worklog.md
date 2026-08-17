@@ -5095,3 +5095,101 @@ was lane D round 9 mid-flight, not a real defect.
    **#17 must wait for lane D round 9's corpus fix** (private-constructor shape).
 5. Reported, unowned: `src/ToolRegistry.php` declares its own
    `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface.
+
+---
+
+## Session close — three commits, and the permission fix in flight
+
+Commits this stretch, all on master:
+
+| commit | content |
+|---|---|
+| `2c12bd9f` | lane D round 9 — user tier anchored to `$HOME`; the `.worktreeinclude` escape |
+| `97977abb` | lane E round 7 — the lock that does the refusing; the F7 table pinned |
+| `f0d95785` | lane B round 21 — the figure that counted anchors and called itself a leaf count |
+
+### The F7 decision was made, not deferred
+
+The user said "fix the permission routing". So it is being fixed, and the round-7
+agent's own recommendation (confirm-on-`a` alone) was **not** taken: it kills the
+session grant but leaves `/keys` still approving a bash call on the fourth
+keystroke. That is severity reduction, not a fix.
+
+**The design, decided and in flight as lane E round 8:**
+
+1. **Only the first keystroke after a prompt appears can answer it.** A prompt goes
+   up ARMED; any non-answer key DISARMS it; `Enter` RE-ARMS. Every queued ask arms
+   afresh. Consequence: `/agents`, `/keys`, `/compact`, `/init`, `/branch main`,
+   `/new` all become fully swallowed, because none has an answer key in first
+   position.
+2. **`a` no longer grants** — it raises a confirm; `y` commits the session grant,
+   `n`/Escape cancels back to a still-ARMED prompt, any other key cancels and
+   DISARMS.
+3. **The disarmed state must be visible.** A prompt that silently eats keys is
+   worse than the defect, so `Renderer::renderPermissionPrompt()`, the
+   `PERMISSION_OPTIONS` table and `KeyBindingRegistry::permission()` are all in
+   scope.
+4. **The residual is stated in the code, at the check**: a message beginning with
+   `y` or `n` still answers on the first keystroke. Unavoidable short of an
+   Enter-to-commit modal, which was weighed and rejected as slower for the common
+   case — and those letters genuinely ARE the answers.
+
+Suggested shape: one readonly field holding
+`PermissionPromptStage { Armed, Disarmed, ConfirmingAlways }`. The arm rule lives
+in `handlePermissionKey()` only — `answerPermission()` and the `PermissionReplyMsg`
+path (palette actions, tests) are explicit decisions, not keystrokes, and must keep
+working unchanged.
+
+### Two reviews stopped mid-flight, deliberately
+
+The user asked for one agent at a time near the session limit. Both were read-only
+and had produced nothing; **their briefs are the deliverable and are worth
+re-issuing verbatim**:
+
+- **Re-review of `f0d95785`** (lane B round 21). Attack list: is `sweepLeafCensus()`'s
+  subtraction falsifiable or does it pass because both sides come from the same
+  walk; is `38` still a literal anywhere; does the verbatim-`fragment` check bite
+  when a leaf is respelled meaning-preservingly; which shape does
+  `isTernaryCondition()` get wrong (nullable hints, `?->`, `??=`, match arms,
+  default argument values); spot-check four of the 38 leaf classifications
+  independently.
+- **Re-review of `2c12bd9f`** (lane D round 9). Primary brief: **hunt a tenth
+  ungated read path, trusting no inventory in the diff to enumerate them.** That
+  blindness — an inventory counts checks that are WRITTEN, so it catches a deletion
+  but never a path that never had one — is exactly how the previous eight escapes
+  survived while listed as audited. Then: attack the `$HOME` anchor itself (unset,
+  empty, trailing slash, symlink, relative, under `/tmp`, inside the checkout, repo
+  checked out AT `$HOME`); attack `patternStaysInside()` (`..` mid-path, doubled
+  separators, `*/../..`, symlinked segment, empty pattern); verify the stated cost
+  is the ACTUAL cost.
+
+### Lane B round 21 — what it actually found
+
+All five round-19 findings were **already closed by round 20**, verified by
+mutation rather than by reading. The register's `38 leaves / 22 killed / one
+warning-only` was three wrong numbers: the true sweep is **38 / 21 killed / 17
+survivors / TWO warning-only**, re-derived by sweeping all 38 leaves one at a time.
+
+Round 20 reintroduced the standing class twice — **twelve consecutive rounds** now:
+`guardCensus()`'s figure called itself a leaf count and was an anchor-plus-operator
+count, under-counting `tokenize()`'s own
+`$terminated = $close !== false && $close < $lineEnd;`; and the census and the
+register contradicted each other **by name** about ternaries, in two docblocks in
+the same file.
+
+### Queue
+
+1. **Lane E round 8 (the permission fix) is IN FLIGHT and UNCOMMITTED** when this
+   was written. Files: `src/Chat.php`, `src/Renderer.php`, `src/Permissions/*`,
+   `src/Commands/KeyBindingRegistry.php`, `tests/Renderer/KeyHelpTest.php`,
+   possibly `README.md`. If it died, re-issue from the design above — it is
+   complete enough to re-brief from.
+2. Re-issue the two stopped reviews (briefs summarised above).
+3. **#88** README whole-suite figure, standalone. Deferred a FIFTH time. At
+   `f0d95785` the true value is **6678 / 69298 / 1 skipped** — re-measure after
+   round 8 lands, since it moves the count.
+4. Plan steps **#14** → **#12** → **#17** (#14 and #12 both want `Bootstrap.php`,
+   which lane D round 9 just rewrote — re-read it first). #17 is unblocked now that
+   the corpus handles the private-constructor shape.
+5. Reported, unowned: `src/ToolRegistry.php` declares its own
+   `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface.
