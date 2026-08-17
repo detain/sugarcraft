@@ -82,10 +82,20 @@ use PHPUnit\Framework\TestCase;
  *
  * What IS checkable is the LABEL those 64 were given, and it was wrong at four
  * sites: `48e0690c` called them the printable-ASCII slice here, in
- * {@see SINGLE_BYTE_TOKENS}, in {@see gluedHeadProvider()} and in
- * {@see tokenize()} (`git show 48e0690c:<this file> | grep -n printable`, four
- * hits plus the one CORRECT use of the term, the 94-printable sweep in
- * {@see tokenize()}). Only 35 of the 64 are printable; the other 29 are
+ * {@see SINGLE_BYTE_TOKENS}, in {@see testAGluedDirectiveHeadIsStillAHead()}
+ * and in {@see tokenize()}. DOMAIN OF THAT ATTRIBUTION, written out so it is
+ * re-derived rather than recalled: `git show 48e0690c:<this file> | grep -n
+ * printable` answers FIVE lines — 70, 208, 1681 and 2646 wrong, plus 2582, the
+ * one CORRECT use of the term (the 94-printable sweep in {@see tokenize()}) —
+ * and forward-scanning each hit to the first member declaration at or after it
+ * gives, in order, the class docblock, {@see SINGLE_BYTE_TOKENS},
+ * {@see testAGluedDirectiveHeadIsStillAHead()}, and {@see tokenize()} for both
+ * 2582 and 2646. A previous revision of this sentence named
+ * {@see gluedHeadProvider()} for line 1681 — the member AFTER the one that
+ * docblock belongs to, and a docblock attributed by scanning BACKWARDS instead
+ * of forwards. The COUNT was right and the attribution was not, which is the
+ * same defect as a figure without its domain wearing different clothes. Only
+ * 35 of the 64 are printable; the other 29 are
  * `\x01`-`\x08` `\x0b` `\x0c` `\x0e`-`\x1f` and `\x7f`. `2bd2263f` fixed three
  * of the four and asserted in its own text that there were three, which is the
  * fourth site's whole reason for surviving — the sweep behind that number was a
@@ -1169,10 +1179,16 @@ final class VhsTapeContractTest extends TestCase
 
         self::assertSame(
             ["a\\\r"],
-            self::directiveValues($escaped, 'Set WaitPattern'),
+            self::valuesWithNoPhpDiagnostic($escaped, 'Set WaitPattern'),
             'and the one place a CR does NOT bound a regex is the same place a LF does not: '
             . 'the byte after a backslash run is consumed untested, so upstream keeps the CR '
-            . 'INSIDE the pattern (measured literal `a\\` + CR) and does not panic',
+            . 'INSIDE the pattern (measured literal `a\\` + CR) and does not panic. Routed '
+            . 'through valuesWithNoPhpDiagnostic() because THIS tape is the one that reaches '
+            . 'scanRegex()\'s loop-header bound first in declaration order: it is the only tape '
+            . 'in this file where a regex runs to EOF with neither a delimiter nor a newline to '
+            . 'close it, so unrouted it turned that guard\'s mutant into a HANG here rather than '
+            . 'an error in the routed panic-detector test further down. See the SCOPE section of '
+            . 'valuesWithNoPhpDiagnostic()',
         );
     }
 
@@ -1252,10 +1268,30 @@ final class VhsTapeContractTest extends TestCase
      * AND THE LIST ITSELF is a conjunct, separately from its three entries.
      * Deleting the whole `in_array` while keeping `kind === 'ident'` makes the
      * walk step over ANY bare word after the number, and that survived every one
-     * of this test's other eight rows: each of them puts a quoted STRING in that
-     * position, which the kind gate turns away on its own without the list ever
-     * being consulted. `Type@100 abc` is the row that reaches it — a BARE typed
-     * word after a speed suffix. Upstream is TYPE Options `100s`, Args `abc`,
+     * of this test's other eight rows — MEASURED that way round: with the list
+     * deleted AND the killing row below ALSO removed, this test comes out GREEN
+     * with every remaining row executed, so all eight really do survive rather
+     * than merely running before the failure stops the method. (A row count is
+     * quoted here and an assertion count deliberately is not: the first is what
+     * the claim is about, the second cannot survive an edit to this file.) What
+     * the retired sentence got wrong was the REASON: it said "each of them puts a
+     * quoted STRING in that position", which is true of TWO of the eight. The
+     * eight split three ways, and only the middle group is about a string:
+     *
+     *   * THREE put a genuine unit there — `Type@100ms`, `Type@1m`, `Type@1s`.
+     *     The mutant steps over `ms`/`m`/`s` because they are `ident` tokens, and
+     *     stepping over them is the CORRECT answer, so the list's absence cannot
+     *     show.
+     *   * TWO put a quoted STRING there — `Type@100 "hello"` and
+     *     `Type@1"ms" "abc"`. `kind === 'ident'` turns a STRING away on its own,
+     *     without the list ever being consulted. This is the group the retired
+     *     sentence described, and it described it correctly.
+     *   * THREE never reach that position at all. `Type "@" "abc"` is turned away
+     *     at the ENTRY gate by `kind !== 'single'`, and `Set Padding -` and
+     *     `Type abc Ctrl+O` contain no `@` for the walk to start on.
+     *
+     * `Type@100 abc` is the row that reaches it — a BARE typed word after a speed
+     * suffix. Upstream is TYPE Options `100s`, Args `abc`,
      * ZERO errors, both binaries `vhs validate` exit 0; the mutant answers ``.
      * That is the silent direction on a tape vhs renders, and the realistic
      * spelling is `Type@100 ./bin/sugarcrush`, where the value that disappears is
@@ -1449,7 +1485,10 @@ final class VhsTapeContractTest extends TestCase
      *     count is divergence class 6, and it is unavoidable here: every head that
      *     accepts `@<number>` at EOF supplies a default of its own (`Wait@1` is
      *     Args `Line`, measured), so no accepted tape reaches this guard without
-     *     one.
+     *     one. THIS ROW IS ALSO WHAT MAKES CLASS 6 LIVE rather than inert — it is
+     *     the only keypress-head query in the file, and the class's own entry in
+     *     {@see directiveValues()} spent a commit calling itself inert three lines
+     *     from the row that had just falsified it.
      *
      * Being reachable on accepted tapes is what separates these three from the
      * existence guard pinned in
@@ -1508,6 +1547,7 @@ final class VhsTapeContractTest extends TestCase
             . 'directive this suite actually reads',
         );
     }
+
     /**
      * The one divergence {@see skipSpeedSuffix()} costs, pinned in BOTH
      * directions: the value goes empty, and the directive behind it stays live.
@@ -2036,7 +2076,11 @@ final class VhsTapeContractTest extends TestCase
      * fourth of the four sites the class docblock records; `2bd2263f` fixed three
      * and said there were three.) Beyond the seven-bit slice, 128 of the
      * 192 glue bytes are `\x80`-`\xff`, each an ILLEGAL one-byte token
-     * lexically identical to the `}` two rows up. Measured the same way as the
+     * lexically identical to the `}` of the `ILLEGAL } glues Source` row — named
+     * rather than counted, because this sentence said "two rows up" and that row
+     * is THREE up from the `\x80` one in {@see gluedHeadProvider()}'s order
+     * (positions 6 and 9 of ten), which is one more off-by-one in a docblock
+     * about off-by-ones. Measured the same way as the
      * rest (upstream's own parser, zero errors, `vhs validate` exit 0), and note
      * what the row asserts: the two OUTPUT OCCURRENCES, not the glue byte's own
      * value. Upstream's literal for a high byte is the UTF-8 re-encoding
@@ -2181,12 +2225,21 @@ final class VhsTapeContractTest extends TestCase
      *
      * Every row was read off upstream's own lexer, run directly.
      *
+     * The call goes through {@see tokensWithNoPhpDiagnostic()} rather than
+     * straight into {@see tokenize()} for a reason that has nothing to do with
+     * token kinds: this test's `a trailing dot at EOF is an ident` row is the ONLY
+     * row in this file that walks onto {@see tokenize()}'s `$i + 1 < $length` peek
+     * bound, so it is the only place that guard can be killed — and unrouted it
+     * was killed as one PHP warning in an otherwise-green run. See the SCOPE
+     * section of {@see valuesWithNoPhpDiagnostic()} for the full per-guard
+     * routing.
+     *
      * @param list<array{string, string}> $expected [kind, text] per token
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('tokenKindProvider')]
     public function testTheTokenizerAssignsUpstreamsTokenKinds(string $source, array $expected): void
     {
-        $tokens = self::tokenize($source);
+        $tokens = self::tokensWithNoPhpDiagnostic($source);
 
         $actual = array_map(
             static fn (array $t): array => [$t['kind'], $t['text']],
@@ -2492,7 +2545,7 @@ final class VhsTapeContractTest extends TestCase
 
     /**
      * `Set Shell` really is the most-queried two-word head in this file, and the
-     * figure is ASSERTED here rather than narrated anywhere.
+     * WHOLE head tally is ASSERTED here rather than narrated anywhere.
      *
      * This test exists because the sentence that used to carry the figure —
      * in {@see testATwoWordHeadNeedsBothWordsAndBothAsIdents()} — quoted a tally
@@ -2501,41 +2554,51 @@ final class VhsTapeContractTest extends TestCase
      * of this file's own call sites cannot survive an edit to this file, so it is
      * a count no comment should hold.
      *
-     * DOMAIN, and it is narrow on purpose: the LITERAL two-word head arguments at
-     * this file's model call sites, both entry points. Reproduced by
+     * DOMAIN: every LITERAL head argument at every call site of the two model
+     * entry points ({@see directiveValues()} and
+     * {@see valuesWithNoPhpDiagnostic()}) in this file, found by walking PHP's
+     * OWN token stream over `__FILE__` — see {@see literalHeadArguments()}.
      *
-     *   grep -oE "self::(directiveValues|valuesWithNoPhpDiagnostic)[(][^,]+, '[A-Za-z]+ [A-Za-z]+'[)]" \
-     *     tests/VhsTapeContractTest.php | grep -oE "'[A-Za-z]+ [A-Za-z]+'" | sort | uniq -c | sort -rn
+     * WHY A TOKEN WALK AND NOT A `grep`. The retired body used a single regex,
      *
-     * which is the same expression the body below uses, so the two cannot
-     * disagree. BOTH entry points are in the domain because they are the same
-     * query: routing one existing row through {@see valuesWithNoPhpDiagnostic()}
-     * moved this tally, and so did every row added while writing the round that
-     * introduced this test — twice, in two different keys. That is exactly the
-     * domain-sensitivity this test exists to make loud instead of silent, and it
-     * is why the tally lives in an assertion and not in prose. The
-     * domain does NOT include heads a provider passes as data (the `$directive`
+     *   self::(directiveValues|valuesWithNoPhpDiagnostic)\([^,]+, '([A-Za-z]+ [A-Za-z]+)'\)
+     *
+     * and stated its domain as "the literal two-word head arguments at this
+     * file's model call sites, both entry points". It could not see either half
+     * of that. `[^,]+` cannot cross a newline, so a call WRAPPED over several
+     * lines was invisible: a genuine fifth `Set Padding` query written with its
+     * head argument on a line of its own left the whole file GREEN, while the
+     * identical call on ONE line turned it red — measured both ways. And `[A-Za-z]+ [A-Za-z]+` restricted
+     * the tally to TWO-WORD heads, so `Output`, `Type`, `Source`, `Hide` and
+     * `Enter` were outside the domain the sentence claimed. The scan below has
+     * neither blind spot, which is what lets {@see directiveValues()}'s
+     * divergence classes 4 and 6 CITE this tally instead of re-enumerating the
+     * call sites in prose — the enumeration they used to carry went stale in the
+     * same commit that widened it.
+     *
+     * NOT in the domain: heads a provider passes as DATA (the `$directive`
      * parameter of {@see testTheJsonTokenIsModelledIncludingItsAsymmetry()} and
-     * {@see testAGluedDirectiveHeadIsStillAHead()}), so the number of two-word
-     * queries this suite actually runs is HIGHER than the tally below. What is
-     * pinned is the RANKING, which is all the retired sentence used its figure for.
+     * {@see testAGluedDirectiveHeadIsStillAHead()}, and the inner call inside
+     * {@see valuesWithNoPhpDiagnostic()} itself). Those are counted separately by
+     * {@see literalHeadArguments()} and asserted below as a non-zero floor, so
+     * "the scan found no dynamic sites" can never be mistaken for "there are
+     * none". The number of queries this suite actually RUNS is therefore higher
+     * than the tally; what is pinned is which heads are asked for literally, how
+     * often, and the RANKING — which is all the retired sentence used its figure
+     * for.
      */
     public function testSetShellIsTheMostQueriedTwoWordHead(): void
     {
         $source = file_get_contents(__FILE__);
         self::assertIsString($source, 'could not read this file');
 
-        preg_match_all(
-            '/self::(?:directiveValues|valuesWithNoPhpDiagnostic)\([^,]+, \'([A-Za-z]+ [A-Za-z]+)\'\)/',
-            $source,
-            $m,
-        );
-
-        $tally = array_count_values($m[1]);
-        ksort($tally);
+        $scan = self::literalHeadArguments($source);
 
         self::assertSame(
             [
+                'Enter' => 1,
+                'Hide' => 1,
+                'Output' => 8,
                 'Set FontSize' => 1,
                 'Set Height' => 2,
                 'Set Padding' => 4,
@@ -2543,26 +2606,268 @@ final class VhsTapeContractTest extends TestCase
                 'Set Theme' => 5,
                 'Set WaitPattern' => 2,
                 'Set Width' => 1,
+                'Source' => 4,
+                'Type' => 15,
             ],
-            $tally,
-            'the literal two-word heads at this file\'s model call sites, both entry points '
-            . '(`directiveValues()` and `valuesWithNoPhpDiagnostic()`). This assertion is '
-            . 'MEANT to fail when a call is added or removed — that is the whole point, because '
-            . 'the figure it replaces was written into a commit that changed it. Update the '
-            . 'numbers here and nowhere else: no comment in this file quotes them',
+            $scan['tally'],
+            'every literal head argument at this file\'s model call sites, both entry points '
+            . '(`directiveValues()` and `valuesWithNoPhpDiagnostic()`), one-word heads included. '
+            . 'This assertion is MEANT to fail when a call is added or removed — that is the '
+            . 'whole point, because the figure it replaces was written into a commit that '
+            . 'changed it. Update the numbers here and nowhere else: no comment in this file '
+            . 'quotes them, and the two divergence classes in directiveValues() that used to '
+            . 'enumerate these call sites now point here instead',
         );
 
-        $others = $tally;
+        $twoWord = array_filter(
+            $scan['tally'],
+            static fn (string $head): bool => str_contains($head, ' '),
+            \ARRAY_FILTER_USE_KEY,
+        );
+        $others = $twoWord;
         unset($others['Set Shell']);
 
         self::assertGreaterThan(
             max($others),
-            $tally['Set Shell'],
+            $twoWord['Set Shell'],
             'and the CLAIM rather than the tally: `Set Shell` is queried more often than any '
             . 'other two-word head, which is why its head-matching run is worth a test of its '
             . 'own even where the mutant is loud. This half stays true across edits that move '
             . 'the numbers above',
         );
+
+        self::assertGreaterThan(
+            0,
+            $scan['dynamic'],
+            'and the control on the scan itself: at least one call site passes its head as a '
+            . 'VARIABLE rather than a literal, so a scan that silently matched nothing would '
+            . 'have to fail here rather than reporting an empty tally as agreement',
+        );
+    }
+
+    /**
+     * The token-walk scanner behind {@see testSetShellIsTheMostQueriedTwoWordHead()},
+     * against the one shape the `grep` it replaced could not see.
+     *
+     * THIS is what makes the tally's stated domain honest rather than aspirational.
+     * A wrapped call is not hypothetical — this file's own house style wraps any
+     * `assertSame()` whose arguments do not fit a line, and the assertion messages
+     * here are long enough that most of them are wrapped already. The fifth
+     * `Set Padding` query below is the exact shape that shipped GREEN past the
+     * one-line regex, reduced to a fixture so the blind spot cannot reopen
+     * silently: reverting the scanner to any line-oriented match fails this test
+     * while leaving the tally above green, because no call site in this file is
+     * wrapped TODAY.
+     *
+     * The second fixture is the other half — a head passed as a VARIABLE is a
+     * call site the scan must find and must NOT tally, which is how the
+     * provider-driven tests stay out of the tally without being invisible to it.
+     */
+    public function testTheHeadScanSeesACallWrappedAcrossLines(): void
+    {
+        $wrapped = <<<'PHP'
+            <?php
+            self::assertSame(
+                [''],
+                self::valuesWithNoPhpDiagnostic(
+                    $atAtEof,
+                    'Set Padding',
+                ),
+                'why',
+            );
+            self::assertSame([], self::directiveValues($t, 'Output'), 'why');
+            PHP;
+
+        self::assertSame(
+            ['Output' => 1, 'Set Padding' => 1],
+            self::literalHeadArguments($wrapped)['tally'],
+            'a call wrapped over several lines and a call on one line are the SAME call site. '
+            . 'The regex this scanner replaced matched only the second, which is how a genuine '
+            . 'fifth `Set Padding` query shipped green past a tally whose stated domain was '
+            . '"this file\'s model call sites"',
+        );
+
+        $dynamic = <<<'PHP'
+            <?php
+            self::assertSame($expected, self::directiveValues($tape, $directive), $why);
+            PHP;
+
+        $scanned = self::literalHeadArguments($dynamic);
+
+        self::assertSame(
+            [],
+            $scanned['tally'],
+            'a head passed as a variable is not a literal head, so it contributes nothing to the '
+            . 'tally — which is why the provider-driven tests are outside its domain',
+        );
+        self::assertSame(
+            1,
+            $scanned['dynamic'],
+            'but it is still a call site, and it is COUNTED as one. Without this the scan could '
+            . 'not tell "no dynamic sites" from "found nothing at all"',
+        );
+
+        $interpolated = <<<'PHP'
+            <?php
+            self::assertSame([], self::directiveValues("{$dir}/x.tape", 'Set Shell'), 'why');
+            PHP;
+
+        self::assertSame(
+            ['Set Shell' => 1],
+            self::literalHeadArguments($interpolated)['tally'],
+            'and the token stream\'s one asymmetry: the `{` opening an interpolation is an ARRAY '
+            . 'token while the `}` closing it is a bare string, so a depth count that matched '
+            . 'only bare braces would go one closer over and truncate the argument list before '
+            . 'reaching the head. No call site in this file passes an interpolated string today, '
+            . 'which is precisely why the blind spot needs a fixture rather than a reader',
+        );
+
+        $nested = <<<'PHP'
+            <?php
+            self::assertSame([], self::directiveValues(implode(',', $parts), 'Set Theme'), 'why');
+            PHP;
+
+        self::assertSame(
+            ['Set Theme' => 1],
+            self::literalHeadArguments($nested)['tally'],
+            'and the last way a textual split goes wrong: a comma INSIDE an earlier argument. '
+            . 'Every real call site here nests `$this->scratchTape(...)` in argument zero, so the '
+            . 'nesting is the norm and only the comma is missing — which is why the depth guard '
+            . 'on the split needs a row of its own rather than a note saying it looks necessary',
+        );
+
+        $bracketed = <<<'PHP'
+            <?php
+            self::assertSame([], self::directiveValues([$a, $b][0], 'Set Height'), 'why');
+            PHP;
+
+        self::assertSame(
+            ['Set Height' => 1],
+            self::literalHeadArguments($bracketed)['tally'],
+            'the same depth argument for SQUARE brackets, which the round-brackets row above '
+            . 'cannot reach: an array literal in argument zero puts a comma at depth two, and a '
+            . 'scan that counted only parentheses would split on it',
+        );
+
+        $declaration = <<<'PHP'
+            <?php
+            private static function directiveValues(string $tape, string $directive): array
+            {
+            }
+            PHP;
+
+        self::assertSame(
+            ['tally' => [], 'dynamic' => 0],
+            self::literalHeadArguments($declaration),
+            'and a DECLARATION is not a call site. This file declares both entry points, so '
+            . 'without the `self` `::` gate each declaration would be scanned as a call whose '
+            . 'second parameter is not a literal — inflating the dynamic count with the very '
+            . 'methods being counted',
+        );
+    }
+
+    /**
+     * The two structural figures this file quotes about its own model are
+     * MEASURED from its own source rather than narrated.
+     *
+     * Both are here for one reason: for eight consecutive rounds this file's
+     * dominant defect has been a number that travelled without its domain, and
+     * both of these numbers were being carried in prose — one of them inside the
+     * very docblock whose subject is that defect.
+     *
+     *   BOUNDS COMPARISONS PER MODEL METHOD. Cited by the SCOPE section of
+     *     {@see valuesWithNoPhpDiagnostic()}, which classifies every one of them
+     *     as routed through a diagnostic promotion, loud without help, or not a
+     *     bound at all. Its retired version said "every bounds guard" and "these
+     *     four guards" over twelve of them.
+     *     DOMAIN: comparisons against `$count` or `$length` in the method's own
+     *     source WITH COMMENTS STRIPPED — the stripping matters, because
+     *     {@see tokenize()} discusses three of its own guards in an inline
+     *     comment and an unstripped count says ten where the code has four.
+     *   CONJUNCTS PER MODEL METHOD. Cited by {@see skipSpeedSuffix()}'s pin list,
+     *     whose retired heading said FOUR over eight.
+     *     DOMAIN: `if (` sites plus `&&`/`||` operators, comments stripped. That
+     *     is the number of leaves a conjunct-drop mutation sweep has to visit,
+     *     which is what the pin list is an inventory of.
+     *
+     * Neither figure is a claim about correctness. Each is a claim that the prose
+     * elsewhere in this file is describing THIS code, and each turns red the
+     * moment a guard or a conjunct is added or removed — which is exactly when
+     * that prose needs re-reading. The numbers below are therefore MEANT to be
+     * edited, in this one place, by whoever moves the code.
+     */
+    public function testTheModelsBoundsAndConjunctsAreCountedNotNarrated(): void
+    {
+        $measured = [];
+
+        foreach (['directiveValues', 'scanRegex', 'skipSpeedSuffix', 'tokenize'] as $method) {
+            $source = self::modelMethodSource($method);
+
+            $measured[$method] = [
+                'bounds' => preg_match_all(
+                    '/(?:<|<=|>|>=|===|!==)\s*\$(?:count|length)\b'
+                    . '|\$(?:count|length)\s*(?:<|<=|>|>=|===|!==)/',
+                    $source,
+                ),
+                'conjuncts' => preg_match_all('/\bif \(|&&|\|\|/', $source),
+            ];
+        }
+
+        self::assertSame(
+            [
+                'directiveValues' => ['bounds' => 2, 'conjuncts' => 5],
+                'scanRegex' => ['bounds' => 3, 'conjuncts' => 8],
+                'skipSpeedSuffix' => ['bounds' => 3, 'conjuncts' => 8],
+                'tokenize' => ['bounds' => 4, 'conjuncts' => 17],
+            ],
+            $measured,
+            'the model\'s bounds comparisons and conjuncts, per method, from this file\'s own '
+            . 'source with comments stripped. TWELVE bounds comparisons in total, which is the '
+            . 'domain the SCOPE section of valuesWithNoPhpDiagnostic() classifies one by one, and '
+            . 'EIGHT conjuncts in skipSpeedSuffix(), which is what its pin list called four. '
+            . 'A figure that moves here is a docblock that has gone stale two screens away',
+        );
+    }
+
+    /**
+     * One model method's own source, comments stripped.
+     *
+     * Located by reflection rather than by line numbers so it cannot drift, and
+     * stripped through PHP's tokenizer rather than by regex because the thing
+     * being counted — a guard, a conjunct — is spelled the same in code and in the
+     * comment that discusses it. {@see tokenize()} discusses three of
+     * {@see scanRegex()}'s guards in an inline comment, which is enough to more
+     * than double its own count.
+     */
+    private static function modelMethodSource(string $method): string
+    {
+        $reflection = new \ReflectionMethod(self::class, $method);
+        $lines = file(__FILE__);
+        self::assertIsArray($lines, 'could not read this file');
+
+        $body = implode('', array_slice(
+            $lines,
+            $reflection->getStartLine() - 1,
+            $reflection->getEndLine() - $reflection->getStartLine() + 1,
+        ));
+
+        $stripped = '';
+
+        foreach (token_get_all('<?php ' . $body) as $token) {
+            if (!\is_array($token)) {
+                $stripped .= $token;
+
+                continue;
+            }
+
+            if ($token[0] === \T_COMMENT || $token[0] === \T_DOC_COMMENT) {
+                continue;
+            }
+
+            $stripped .= $token[1];
+        }
+
+        return $stripped;
     }
 
     /**
@@ -2696,38 +3001,327 @@ final class VhsTapeContractTest extends TestCase
      * {@see directiveValues()} with PHP's own diagnostics promoted to a THROWN
      * error rather than left as warnings.
      *
-     * Every bounds guard in this model is invisible in the ANSWER — see
-     * {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()} for why — so the
-     * only thing a test can assert about one is that PHP said nothing. That is
-     * already a non-zero exit, because `phpunit.xml` sets `failOnWarning="true"`,
-     * and it was verified to be one. The problem is what a reader SEES: PHPUnit
-     * prints `OK, but there were issues!` and lists the warning in a block most
-     * eyes skip, so a bounds guard killed only that way reads as a passing test
-     * with a lint nit attached — and these four guards are exactly the lines a
-     * reader then tidies up, because each looks redundant against the loop header
-     * two lines above it.
+     * A bounds guard whose mutant changes no ANSWER — see
+     * {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()} for why — can only
+     * be tested by asserting that PHP said nothing. That is already a non-zero
+     * exit, because `phpunit.xml` sets `failOnWarning="true"`, and it was
+     * verified to be one. The problem is what a reader SEES: PHPUnit prints
+     * `OK, but there were issues!` and lists the warning in a block most eyes
+     * skip, so such a guard reads as a passing test with a lint nit attached —
+     * and these are exactly the lines a reader then tidies up, because each looks
+     * redundant against the loop header two lines above it.
      *
      * Promoting the diagnostic to an `\ErrorException` puts the row in the ERRORS
      * block with the guard's own message on it, which is a thing that gets acted
      * on. It also makes the kill independent of `phpunit.xml`, which is not this
      * file's to guarantee.
      *
-     * The handler is installed for the duration of ONE query and restored in a
+     * SCOPE, ONE ENTRY PER GUARD, because the retired version of this paragraph
+     * opened on "Every bounds guard in this model is invisible in the ANSWER" and
+     * closed on "these four guards", and NEITHER half held.
+     *
+     * DOMAIN: the TWELVE comparisons against a stream bound (`$count` or
+     * `$length`) in the four model methods — three in {@see skipSpeedSuffix()},
+     * two in {@see directiveValues()}, four in {@see tokenize()}, three in
+     * {@see scanRegex()}. Those four per-method figures are ASSERTED from this
+     * file's own source by
+     * {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()} rather than
+     * narrated here, so a thirteenth cannot appear unremarked. Of the twelve,
+     * dropping one is answer-invisible at EIGHT, loud at two, and two are not
+     * bounds at all. All eight of the invisible ones are now routed; the retired
+     * "four" was the number routed at the time, written as though it were the
+     * number that exists.
+     *
+     * One mutation per comparison, whole-file run, judged on this test file
+     * alone. Each entry names the KILLING TEST and the KIND of kill — error,
+     * failure, warning-only, hang — and deliberately not an assertion total,
+     * because a count of this file's own assertions cannot survive an edit to
+     * this file (the same trap {@see testSetShellIsTheMostQueriedTwoWordHead()}
+     * exists to close):
+     *
+     *   {@see skipSpeedSuffix()}'s `$i >= $count`, and both its `$i < $count` —
+     *     THIS helper, from
+     *     {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()}. ERROR.
+     *   {@see directiveValues()}'s `$i + $arity <= $count` — THIS helper, from
+     *     {@see testATwoWordHeadNeedsBothWordsAndBothAsIdents()}. ERROR.
+     *   {@see scanRegex()}'s `$j < $length` before the `/` test, and the one in
+     *     its backslash run — {@see panicsUpstreamsLexer()}, from
+     *     {@see testTheRegexPanicDetectorMatchesTheMeasuredShapes()}. ERROR.
+     *     BEFORE that route existed each was WARNING-ONLY: measured, `Warnings:
+     *     5` with zero failures and zero errors on a run PHPUnit summarises as
+     *     `OK, but there were issues!`. That is the presentation defect this
+     *     helper was written for, and it was sitting three lines from the helper
+     *     while a round declared warning-only kills gone.
+     *   {@see scanRegex()}'s `$j < $length` loop header — needed TWO routes and
+     *     now has both. {@see panicsUpstreamsLexer()} kills it, but the tape that
+     *     reaches an unbounded {@see scanRegex()} FIRST in declaration order is
+     *     `Set WaitPattern /a\` + CR in
+     *     {@see testACarriageReturnBoundsEveryTokenAnLfBounds()} — the only tape
+     *     in this file where a regex runs to EOF with neither a delimiter nor a
+     *     newline to close it — so while that row still went through
+     *     {@see directiveValues()} the whole-file run HUNG there rather than
+     *     reaching the error further down. That row is routed too; the mutant is
+     *     now an ERROR in both tests. Unrouted it did not finish at all: hard
+     *     killed at 90 s in a sandbox with no time limit.
+     *   {@see tokenize()}'s `$i + 1 < $length` peek bound —
+     *     {@see tokensWithNoPhpDiagnostic()}, from the `a trailing dot at EOF is
+     *     an ident` row of {@see testTheTokenizerAssignsUpstreamsTokenKinds()}.
+     *     ERROR. Unrouted it was ONE warning in the whole file, from that one
+     *     row, which asserts token kinds and so calls the tokenizer directly —
+     *     reaching neither of the routes above.
+     *
+     * AND THE FOUR THAT ARE NOT ROUTED, with the reason each is not:
+     *
+     *   LOUD WITHOUT ANY HELP — {@see directiveValues()}'s
+     *     `while ($i < $count && …)`, where dropping the bound is dozens of
+     *     ERRORS across the file because the value walk then runs off the end and
+     *     reports values no tape wrote; and {@see tokenize()}'s own `for` header,
+     *     where dropping it hangs, and a hang is red on its own now
+     *     (`failOnRisky` plus `defaultTimeLimit="60"`).
+     *   NOT A BOUND AT ALL — {@see tokenize()}'s `$length > 0` is
+     *     unreachable-dead and its `$end === $length` is a conjunct of the PANIC
+     *     rule. Both are argued at the condition itself and both belong to the
+     *     EQUIVALENT-MUTANT REGISTER's conjunct-drop section, not here.
+     *
+     * The handler is installed for the duration of ONE probe and restored in a
      * `finally`, so nothing else in the suite runs under it.
      *
      * @return list<string>
      */
     private static function valuesWithNoPhpDiagnostic(string $tape, string $directive): array
     {
+        return self::withPhpDiagnosticsPromoted(
+            static fn (): array => self::directiveValues($tape, $directive),
+        );
+    }
+
+    /**
+     * {@see tokenize()} under the same promotion as
+     * {@see valuesWithNoPhpDiagnostic()}, for the one bounds guard that only a
+     * DIRECT tokenizer call reaches.
+     *
+     * {@see tokenize()}'s `$i + 1 < $length` peek bound is read at every bare
+     * token start, so a tape whose last token is bare walks onto it — and the
+     * only such row in this file goes through
+     * {@see testTheTokenizerAssignsUpstreamsTokenKinds()}, which asserts token
+     * kinds and therefore calls the tokenizer rather than
+     * {@see directiveValues()}. Without this route that guard's mutant was a
+     * single warning in an otherwise-green run.
+     *
+     * @return list<array{text: string, kind: string}>
+     */
+    private static function tokensWithNoPhpDiagnostic(string $source): array
+    {
+        return self::withPhpDiagnosticsPromoted(
+            static fn (): array => self::tokenize($source),
+        );
+    }
+
+    /**
+     * Run $probe with every PHP diagnostic promoted to a thrown
+     * `\ErrorException`, restoring the previous handler whatever happens.
+     *
+     * Factored out because there are now THREE routes into the promotion
+     * ({@see valuesWithNoPhpDiagnostic()}, {@see tokensWithNoPhpDiagnostic()},
+     * {@see panicsUpstreamsLexer()}) and a second copy of a `set_error_handler`
+     * / `finally` pair is a second copy to drift out of step with. The scope
+     * claim that says which of the model's bounds guards each route covers is on
+     * {@see valuesWithNoPhpDiagnostic()}.
+     */
+    private static function withPhpDiagnosticsPromoted(callable $probe): mixed
+    {
         set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
             throw new \ErrorException($message, 0, $severity, $file, $line);
         });
 
         try {
-            return self::directiveValues($tape, $directive);
+            return $probe();
         } finally {
             restore_error_handler();
         }
+    }
+
+    /**
+     * Every head argument passed to a model entry point in $php: the literal ones
+     * tallied, the ones passed as an expression counted.
+     *
+     * WHY PHP'S OWN TOKENIZER rather than a regex, in three parts, because each is
+     * a way the `grep` this replaced got its own stated domain wrong:
+     *
+     *   * A CALL MAY BE WRAPPED. `[^,]+` between the `(` and the head cannot cross
+     *     a newline, so a call split over lines was outside the match while being
+     *     inside the domain the docblock claimed. Measured: a wrapped fifth
+     *     `Set Padding` query left the file green; the same call on one line turned
+     *     it red. {@see testTheHeadScanSeesACallWrappedAcrossLines()} pins it.
+     *   * A HEAD MAY BE ONE WORD. `[A-Za-z]+ [A-Za-z]+` silently restricted the
+     *     tally to `Set X` heads, so `Output`, `Type`, `Source`, `Hide` and `Enter`
+     *     were never in it. They are now, which is what lets
+     *     {@see directiveValues()}'s divergence classes 4 and 6 cite the tally
+     *     instead of listing call sites in prose.
+     *   * TEXT THAT LOOKS LIKE A CALL IS NOT A CALL. The fixtures in
+     *     {@see testTheHeadScanSeesACallWrappedAcrossLines()} spell whole call
+     *     sites out inside a nowdoc; a `grep` counts those and inflates its own
+     *     tally, whereas the tokenizer hands the whole nowdoc back as one string
+     *     token. Same for a `{@see directiveValues()}` in a docblock, of which this
+     *     file has dozens.
+     *
+     * The `self` `::` gate is what keeps the two METHOD DECLARATIONS out: they
+     * carry the same names but are preceded by `function`, not by `::`.
+     *
+     * ITS OWN CONJUNCT SWEEP, recorded here rather than folded into
+     * {@see tokenize()}'s EQUIVALENT-MUTANT REGISTER, because that register's
+     * subject is the parsing model and a survivor here costs a MEASUREMENT of this
+     * file rather than a missed defect in a tape.
+     *
+     * OPERATOR: drop one conjunct. DOMAIN: TWENTY-SEVEN mutations over this method
+     * and {@see callArgument()} — every `&&`/`||` arm of both, plus each loop bound
+     * and each ternary condition, since those are what an off-by-one here would
+     * live in. FOURTEEN killed, THIRTEEN survivors, and the survivors fall in three
+     * classes with no fourth inside that domain:
+     *
+     *   * TYPE GUARDS PHP MAKES REDUNDANT — four: the `!\is_array(...)` half of
+     *     each of the three `!\is_array($x) || $x[0] !== <token id>` pairs, and the
+     *     `\is_array($token) &&` in {@see callArgument()}'s `T_CURLY_OPEN` arm. For
+     *     a one-character string token `$x[0]` is that character, which is never
+     *     `===` an integer token id, so the array test decides nothing. All four
+     *     stay: comparing a string's first byte against a token id is nonsense a
+     *     reader should not have to work out is harmless.
+     *   * REDUNDANT AGAINST A COMPANION CONJUNCT — two: the
+     *     `$tokens[$k + 1] !== '('` test, which the `::` test plus the entry-point
+     *     name test already imply on this file's content (every such `T_STRING` is
+     *     either `self::name(` or a declaration), and {@see callArgument()}'s
+     *     `$at > $index` early exit, which shortens the walk without changing what
+     *     it returns.
+     *   * UNREACHABLE FROM THIS FILE'S CONTENT — seven: `\count($head) === 1`,
+     *     `\is_array($head[0])`, the `$k + 1 < $count` bound and the `$k > 0`
+     *     guard here; and in {@see callArgument()} the bare `{` opener, the
+     *     `$depth === 1` early-continue, and its own loop bound. No call site here
+     *     puts an entry-point name at the very start or the very end of the token
+     *     stream, passes an empty head argument, passes a brace-delimited
+     *     expression, asks for argument ZERO, or leaves its parentheses unbalanced
+     *     — so nothing in this file can reach any of the seven. Same standing as
+     *     {@see tokenize()}'s `$length > 0`: kept so the indexing beside them is
+     *     obviously in range.
+     *
+     * The fourteen that ARE killed are pinned between the tally in
+     * {@see testSetShellIsTheMostQueriedTwoWordHead()} and the five fixtures of
+     * {@see testTheHeadScanSeesACallWrappedAcrossLines()}. THREE of the fourteen —
+     * the `::` gate and both square-bracket depth arms — were survivors until the
+     * bracketed and declaration-only fixtures went in, which is the whole reason
+     * those two fixtures exist.
+     *
+     * @return array{tally: array<string, int>, dynamic: int}
+     */
+    private static function literalHeadArguments(string $php): array
+    {
+        $entryPoints = ['directiveValues', 'valuesWithNoPhpDiagnostic'];
+        $tokens = array_values(array_filter(
+            token_get_all($php),
+            static fn (array|string $t): bool => !\is_array($t)
+                || !\in_array($t[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true),
+        ));
+
+        $tally = [];
+        $dynamic = 0;
+        $count = \count($tokens);
+
+        for ($k = 0; $k + 1 < $count; ++$k) {
+            $token = $tokens[$k];
+
+            if (!\is_array($token) || $token[0] !== \T_STRING
+                || !\in_array($token[1], $entryPoints, true)) {
+                continue;
+            }
+
+            $previous = $k > 0 ? $tokens[$k - 1] : '';
+
+            if (!\is_array($previous) || $previous[0] !== \T_DOUBLE_COLON
+                || $tokens[$k + 1] !== '(') {
+                continue;
+            }
+
+            $head = self::callArgument($tokens, $k + 1, 1);
+
+            if (\count($head) === 1 && \is_array($head[0])
+                && $head[0][0] === \T_CONSTANT_ENCAPSED_STRING) {
+                $literal = substr($head[0][1], 1, -1);
+                $tally[$literal] = ($tally[$literal] ?? 0) + 1;
+
+                continue;
+            }
+
+            ++$dynamic;
+        }
+
+        ksort($tally);
+
+        return ['tally' => $tally, 'dynamic' => $dynamic];
+    }
+
+    /**
+     * The tokens of argument $index of the call whose opening `(` is at $open.
+     *
+     * Depth-counted over all three bracket pairs, so a nested call, array literal
+     * or short closure in an earlier argument cannot be mistaken for the end of
+     * the argument list — which is the whole reason
+     * {@see literalHeadArguments()} cannot split on `,` textually. An argument
+     * list with a trailing comma yields an empty final argument; asking for an
+     * index past the end yields an empty list, which
+     * {@see literalHeadArguments()} treats as "not a literal".
+     *
+     * THE ONE ASYMMETRY IN PHP'S OWN TOKEN STREAM has to be handled here rather
+     * than discovered later: the `{` that OPENS an interpolation in
+     * `"...{$x}..."` comes back as the array token `T_CURLY_OPEN`, while the `}`
+     * that closes it comes back as the bare string `}`. Matching only bare braces
+     * would therefore see one more closer than opener, drop the depth to zero
+     * early and truncate the argument list at the first interpolated string. No
+     * call site in this file passes one today, which is exactly why it is worth
+     * handling now and pinning in
+     * {@see testTheHeadScanSeesACallWrappedAcrossLines()} — the deprecated `${x}`
+     * spelling is not handled and not used.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     *
+     * @return list<array{int, string, int}|string>
+     */
+    private static function callArgument(array $tokens, int $open, int $index): array
+    {
+        $depth = 0;
+        $at = 0;
+        $argument = [];
+
+        for ($k = $open; $k < \count($tokens); ++$k) {
+            $token = $tokens[$k];
+
+            if ($token === '(' || $token === '[' || $token === '{'
+                || (\is_array($token) && $token[0] === \T_CURLY_OPEN)) {
+                ++$depth;
+
+                if ($depth === 1) {
+                    continue;
+                }
+            } elseif ($token === ')' || $token === ']' || $token === '}') {
+                --$depth;
+
+                if ($depth === 0) {
+                    break;
+                }
+            } elseif ($token === ',' && $depth === 1) {
+                ++$at;
+
+                if ($at > $index) {
+                    break;
+                }
+
+                continue;
+            }
+
+            if ($at === $index) {
+                $argument[] = $token;
+            }
+        }
+
+        return $argument;
     }
 
     /**
@@ -2893,10 +3487,27 @@ final class VhsTapeContractTest extends TestCase
      *      `Set LoopOffset 50%` → `50%` upstream, `50 %` here;
      *      `Set TypingSpeed 60ms` → `60ms` upstream, `60` here;
      *      `Sleep 1s` → `1s` upstream, `1` here.
-     *      DOMAIN, and this is the one that ships: no assertion in this file
-     *      queries a unit-bearing directive — the call sites are `Output`,
-     *      `Type`, `Source`, `Set Shell/Theme/Height/Width/FontSize` and, from
-     *      the two providers, `Set WaitPattern` — so the class is inert TODAY.
+     *      DOMAIN, and it is CITED rather than restated, because restating it is
+     *      how it went stale: the heads this file queries LITERALLY are exactly
+     *      the keys of the tally asserted by
+     *      {@see testSetShellIsTheMostQueriedTwoWordHead()}, plus the two heads
+     *      the providers pass as data. The prose enumeration this bullet used to
+     *      carry named NINE heads. It omitted `Set Padding`, which was already a
+     *      literal call site — twice — at the commit the enumeration was written
+     *      on; and then `Hide` and `Enter`, both added by the very commit the
+     *      enumeration shipped in. Nine named, twelve today, and the fix is to
+     *      point at the assertion rather than to renumber the prose.
+     *      THE INERTNESS CLAIM ITSELF STANDS, and now with a reason per head that
+     *      could carry a unit at all. `Set Padding` reaches `parseSet`'s ungated
+     *      `default:` arm (`parser.go:527-528`), which appends nothing, and no
+     *      unit token can follow it cleanly: `Set Padding 5px` is ONE error,
+     *      `Invalid command: px`, `vhs validate` exit 1 on BOTH binaries — so
+     *      Padding never re-joins a unit. `Enter` takes a speed, but
+     *      `parseKeypress` is `cmd.Options = p.parseSpeed(); cmd.Args =
+     *      p.parseRepeat()` (`parser.go:406-411`), so `parseTime`'s appended `s`
+     *      lands in OPTIONS, outside the value this model reads — its divergence
+     *      at that call site is class 6 below, not this one. Every other queried
+     *      head takes no unit. So the class is inert TODAY.
      *      It is not hypothetical: all five tapes carry exactly one
      *      `Set TypingSpeed 60ms` (chat:29, permission:33, diff:39, agents:57,
      *      cli:85) and 22 `Sleep <n>s|ms` between them, so the moment
@@ -2916,9 +3527,23 @@ final class VhsTapeContractTest extends TestCase
      *      ENTER Args `1` upstream against `` here. DOMAIN: a probe, not the
      *      corpus differential — its generator emits no keypress head, which is
      *      why the class went unlisted while the differential reported five.
-     *      Inert today (nothing here queries a keypress head) and the reason
-     *      {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()} pins its guard
-     *      on `Hide`, whose `parseHide` synthesizes nothing at all.
+     *      LIVE, NOT INERT, and it went live in the same commit that wrote "inert
+     *      today (nothing here queries a keypress head)" about it. The call site
+     *      is the `Enter` query in
+     *      {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()} — a keypress
+     *      head, and one of the keys of
+     *      {@see testSetShellIsTheMostQueriedTwoWordHead()}'s tally — where
+     *      upstream answers ENTER Options `100s` / Args `1` on a tape it parses
+     *      with zero errors (`vhs validate` exit 0 on both binaries) and this
+     *      model answers ``. That assertion's own message already names the class,
+     *      which is what made the inertness claim checkable and false in the same
+     *      commit.
+     *      IT STAYS IN THE LOUD DIRECTION: the `1` is a value UPSTREAM invents,
+     *      so an empty answer here can only under-report — it cannot approve a
+     *      tape. And the `Hide` row beside it is the control that keeps the class
+     *      visible: `parseHide` builds a Command and synthesizes nothing
+     *      (`parser.go:548-551`), so that is the one row in this file where the
+     *      model and upstream agree on the VALUE as well as on the occurrence.
      *
      * All six stay in the loud direction — an empty or over-long value fails
      * every assertion in this file rather than hiding one — but they are
@@ -3405,14 +4030,49 @@ final class VhsTapeContractTest extends TestCase
      * without the mutation.
      *
      * THE EQUIVALENT-MUTANT REGISTER, so a sweep can tell a known no-op from a
-     * finding. Five conjuncts in this file are unkillable, each for a reason
-     * written down beside it: the panic condition's `!$terminated` and
-     * `$length > 0` (both in this method, both argued at the condition itself),
-     * {@see scanRegex()}'s newline branch returning `false` rather than `true`,
-     * and the strict flag on each of the two `in_array` calls
-     * ({@see startsDirective()}, {@see skipSpeedSuffix()}). Anything else that
-     * survives is a gap, and the last three sweeps each found one after a round
-     * had declared the method closed.
+     * finding. IT IS INDEXED BY MUTATION OPERATOR, because the retired version
+     * of it listed five entries and then said "anything else that survives is a
+     * gap" — an absolute over a register whose entries all came from ONE
+     * operator, and two survivors from a second operator were sitting in the
+     * file when it was written. A register is only complete for the operator
+     * that filled it, and this one now says which.
+     *
+     * ITS SUBJECT IS THE PARSING MODEL, which is the other bound the absolute was
+     * missing: {@see tokenize()}, {@see scanRegex()}, {@see skipSpeedSuffix()},
+     * {@see directiveValues()}, {@see startsDirective()}, {@see headMatches()}.
+     * The file's SELF-INSPECTION helpers ({@see literalHeadArguments()},
+     * {@see callArgument()}, {@see modelMethodSource()}) read this file rather
+     * than a tape, and their own conjunct sweep is recorded on
+     * {@see literalHeadArguments()} — separately, because a survivor there means
+     * something different: it costs a measurement of this file, not a missed
+     * defect in a tape.
+     *
+     *   OPERATOR: DROP ONE CONJUNCT of a boolean condition. FIVE survivors, each
+     *   for a reason written down beside it: the panic condition's `!$terminated`
+     *   and `$length > 0` (both in this method, both argued at the condition
+     *   itself), {@see scanRegex()}'s newline branch returning `false` rather
+     *   than `true`, and the strict flag on each of the two `in_array` calls
+     *   ({@see startsDirective()}, {@see skipSpeedSuffix()}). A conjunct-drop
+     *   survivor IN THE PARSING MODEL outside this list IS a gap, and the last
+     *   three sweeps each found one after a round had declared the method closed.
+     *
+     *   OPERATOR: COLLAPSE A TERNARY to one arm. TWO survivors, both the SAME
+     *   line in two arms of this method — `$i = $terminated ? $end + 1 : $end`
+     *   rewritten to `$i = $end + 1`, once in the regex arm and once in the
+     *   string arm. Measured: whole file GREEN with every test executed, on each
+     *   (no total quoted, for the reason
+     *   {@see testSetShellIsTheMostQueriedTwoWordHead()} gives). They are genuine
+     *   no-ops for the reason {@see scanRegex()}'s own
+     *   docblock already gives about the flag: on the `false` side `$end` is the
+     *   index of a `\r`, of a `\n`, or `$length` itself, so consuming one more
+     *   byte either skips whitespace the very next iteration would have skipped
+     *   or steps past the end of a loop already finished. NOT reachable by the
+     *   conjunct-drop operator above — a ternary arm is not a conjunct — which
+     *   is exactly why the register's old absolute did not cover them and why the
+     *   operator is named here instead of assumed.
+     *
+     * SO: a survivor from ANY OTHER operator is neither registered nor a gap
+     * until someone sweeps that operator and writes down what it found.
      *
      * $regexPanic is set when the walk finds the one input shape that crashes
      * upstream's lexer outright rather than mis-lexing it — see
@@ -3670,6 +4330,15 @@ final class VhsTapeContractTest extends TestCase
      *
      * Only the token walk can tell, because it depends on which `/` is a token
      * start; the last byte of the file is not enough to decide it.
+     *
+     * THE WALK RUNS UNDER {@see withPhpDiagnosticsPromoted()} because this is the
+     * only route by which any test reaches {@see scanRegex()} at EOF, and all
+     * three of that method's bounds guards are answer-invisible: unrouted, each
+     * of the two inside the backslash logic measured five PHP warnings and ZERO
+     * failures, and the loop-header one hung. The promotion is what makes them
+     * die in the ERRORS block instead. The read itself stays outside the
+     * promotion — a failed `file_get_contents` is already asserted on, and
+     * turning an I/O warning into this method's exception would misattribute it.
      */
     private static function panicsUpstreamsLexer(string $tape): bool
     {
@@ -3677,7 +4346,9 @@ final class VhsTapeContractTest extends TestCase
         self::assertIsString($source, "could not read {$tape}");
 
         $panics = false;
-        self::tokenize($source, $panics);
+        self::withPhpDiagnosticsPromoted(static function () use ($source, &$panics): void {
+            self::tokenize($source, $panics);
+        });
 
         return $panics;
     }
@@ -3776,10 +4447,29 @@ final class VhsTapeContractTest extends TestCase
      * that could be an `@`. If it is ever narrowed, that test's expectation
      * becomes `['@']` and the change is deliberate.
      *
-     * WHAT PINS THE FOUR CONJUNCTS BELOW, because this method has now supplied a
+     * WHAT PINS THE CLAUSES BELOW, because this method has now supplied a
      * survivor to four consecutive mutation sweeps and the reason is always the
      * same: its guards are invisible in the answer, or they only bite on a token
      * kind or text no row happened to use.
+     *
+     * THREE COUNTS, EACH WITH ITS DOMAIN, because the retired heading was "WHAT
+     * PINS THE FOUR CONJUNCTS BELOW" over a list whose four bullets enumerated
+     * ELEVEN separately-killed clauses across the method's EIGHT syntactic
+     * conjuncts — one number standing in for three, none of them labelled, in a
+     * docblock whose whole subject is numbers without domains.
+     *
+     *   EIGHT SYNTACTIC CONJUNCTS. Domain: this method's own source, counted as
+     *       `if (` sites plus `&&`/`||` operators (3 + 5). ASSERTED, not
+     *       narrated, by
+     *       {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()}.
+     *   ELEVEN CLAUSES. Domain: the bullet text below, where a clause is a unit
+     *       of PROSE and not of syntax — the `in_array` list is one clause as a
+     *       whole and one more per entry, which is four clauses over one
+     *       conjunct. Deliberately NOT asserted: it counts sentences, and a
+     *       count of sentences is what a comment may not hold.
+     *   FIVE BULLETS. Domain: the list immediately below. It is five and not
+     *       four because `kind === 'number'` is pinned somewhere else entirely,
+     *       which is what the retired heading's fourth bullet got wrong.
      *
      *   `$i >= $count`, and both `$i < $count`
      *       {@see testTheSpeedSuffixWalkStopsAtTheEndOfTheStream()}. Bounds, so
@@ -3791,12 +4481,29 @@ final class VhsTapeContractTest extends TestCase
      *   `text !== '@'`
      *       the `Set Padding -` row of the same test, which is the TEXT twin of
      *       the row above it and stayed unpinned for a round after it went in.
-     *   `kind === 'number'`, `kind === 'ident'`, each of `ms`/`s`/`m`, and the
-     *   `in_array` AS A WHOLE
-     *       six rows of the same test, one per conjunct. The last of the six is
-     *       `Type@100 abc`: with the list gone but the kind gate kept, any bare
-     *       word after the number is eaten, and every other row puts a quoted
-     *       STRING there so the kind gate answered for them.
+     *   `kind === 'ident'`, each of `ms`/`s`/`m`, and the `in_array` AS A WHOLE
+     *       FIVE rows of the same test, one per clause; each verified to fail
+     *       that test ALONE, under `--filter`, one mutation at a time. The last
+     *       of the five is `Type@100 abc`: with the list gone but the kind gate
+     *       kept, any bare word after the number is eaten. Why the other eight
+     *       rows do NOT notice that is a three-way split, not the one-liner it
+     *       used to be — the breakdown is in that test's own docblock.
+     *   `kind === 'number'`
+     *       NOT that test, and the provenance is CORRECTED here rather than
+     *       backdated by adding a row. Dropping this conjunct alone leaves
+     *       {@see testASpeedSuffixBelongsToTheHeadNotTheValue()} GREEN under
+     *       `--filter`, with all nine of its rows executed, because in every one
+     *       of them the token after an `@` that the walk actually reaches is a
+     *       NUMBER — or the walk never starts. Run over the whole file the same
+     *       mutant gives exactly ONE
+     *       killer, {@see testTheSetPlusAtDivergenceLosesTheValueNotTheHead()},
+     *       whose `Set Padding @Output x.gif` is the only tape in this file with
+     *       a non-NUMBER token after an `@`. And it is a PRE-EXISTING pin, not
+     *       one of this round's: replayed against `2bd2263f` (green there at
+     *       108 tests / 492 assertions) the same mutant fails the same single
+     *       test. The retired bullet claimed "six rows of the same test, one per
+     *       conjunct" — five rows pin five clauses, and the sixth clause was
+     *       pinned a commit earlier by a different test.
      *
      * @param list<array{text: string, kind: string}> $tokens
      */
