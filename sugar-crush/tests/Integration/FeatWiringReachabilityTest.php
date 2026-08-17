@@ -73,10 +73,13 @@ final class FeatWiringReachabilityTest extends TestCase
         $this->originalHome = getenv('HOME') ?: '';
         putenv('HOME=' . $this->tempDir . '/home');
 
-        // BOTH: Bootstrap reads getenv('HOME'), ForeignSkillDiscovery — now
-        // reached from SkillManager::loadAll() — reads $_SERVER['HOME'], so
-        // redirecting one leaves the other scanning the developer's own
-        // ~/.claude/skills.
+        // BOTH SPELLINGS. This said "Bootstrap reads getenv('HOME'),
+        // ForeignSkillDiscovery reads $_SERVER['HOME'], so redirecting one leaves
+        // the other scanning the developer's own ~/.claude/skills" — the two-way
+        // split it describes is gone (every `~` reader in src/ resolves through
+        // HomeDirectory, which prefers getenv()), but setting the superglobal too
+        // is still right for the reason {@see \SugarCraft\Crush\Tests\Support\HomeSandboxTrait}
+        // gives: half a sandbox is not a sandbox.
         $this->originalServerHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = $this->tempDir . '/home';
     }

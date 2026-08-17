@@ -38,10 +38,20 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * `config.json`, `hooks.yaml`, `~/.sugar-crush/agents` and
  * `~/.sugar-crush/workflows`, i.e. every read routed through
  * `trustedConfigDirPath()`. The user tiers still resolved through
- * {@see \SugarCraft\Crush\Support\HomeDirectory::path()} —
- * `SkillLoader`, `SkillDiscovery`, `ForeignSkillDiscovery`, `CommandLoader` —
- * are NOT covered by this and are named as a standing gap in that method's own
- * doc-block.
+ * {@see \SugarCraft\Crush\Support\HomeDirectory::path()} are NOT covered by this
+ * and are named as a standing gap in that method's own doc-block.
+ *
+ * TWO OF THE FOUR NAMES THAT SENTENCE LISTED HAVE LEFT IT, and the list is
+ * therefore no longer written here. It read "`SkillLoader`, `SkillDiscovery`,
+ * `ForeignSkillDiscovery`, `CommandLoader`"; `ForeignSkillDiscovery` and
+ * `CommandLoader` both moved to
+ * {@see \SugarCraft\Crush\Support\HomeDirectory::owned()} — the first because it
+ * was ANCHORING a user tier to a resolution that establishes nothing — so this
+ * doc-block was naming as ungated two readers that had been gated for rounds.
+ * `path()`'s own doc-block is the enumeration, and it is asserted against a
+ * derivation over `src/` by
+ * {@see \SugarCraft\Crush\Tests\Support\HomeDirectoryPathReaderInventoryTest};
+ * a hand-copied second list here could only drift from it, as it just did.
  */
 final class BootstrapTrustedHomeOwnershipTest extends TestCase
 {

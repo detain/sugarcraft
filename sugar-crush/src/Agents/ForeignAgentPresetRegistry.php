@@ -29,15 +29,36 @@ use Symfony\Component\Yaml\Yaml;
  * loss is reported through {@see warnings()} and error_log rather than being
  * discarded silently.
  *
- * NOT YET WIRED INTO THE RUNTIME. Nothing in `src/` or `bin/` constructs this
- * class, so {@see AgentPreset::$source} still has no reader and importing a
- * foreign agent has no runtime effect. The NATIVE {@see AgentPresetRegistry}
- * is no longer in that position: crush_code.md Phase 1 item 1 made
- * `Bootstrap::agentPresets()` construct it and merge its presets into the
- * launch roster. The remaining step for this class is crush_code.md Phase 1
- * item 3 — call {@see discover()} alongside it from the same place (mirroring
- * how `Bootstrap::skillRegistry()` consumes ForeignSkillDiscovery) and badge
- * the imported presets in the palette.
+ * WIRED INTO THE RUNTIME as of crush_code.md Phase 1 item 3:
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::foreignAgentPresets()} constructs this
+ * class and {@see \SugarCraft\Crush\Cli\Bootstrap::agentRoster()} inserts the
+ * result BENEATH the six built-in definitions and the native presets, so an
+ * import can add a name but never re-point one — the same direction
+ * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} merges foreign skills
+ * in. Before that, nothing in `src/` or `bin/` constructed this class at all: an
+ * agent authored for either tool was read by the tests below and by nothing else.
+ *
+ * {@see AgentPreset::$source} STILL HAS NO READER, and that half is worth
+ * separating from the wiring rather than being carried along by it.
+ * {@see \SugarCraft\Crush\Agents\Agent} has no source field, so the tag stops at
+ * {@see \SugarCraft\Crush\Agents\Agent::fromPreset()} and the palette cannot yet
+ * badge an imported row. That is the remaining half of Phase 1 item 3 and it needs
+ * a field on `Agent`, not another call site.
+ *
+ * WHAT REACHES THE ROSTER IS NARROWER THAN WHAT THIS CLASS PARSES, which bounds
+ * how much the wiring above can cost: `Agent::fromPreset()` reads name,
+ * description, `initialPrompt`, model, `tools` and `skills`, so the
+ * `permissionMode:` this class maps — including the `bypass-permissions` in the
+ * measurement below — does not travel that path. It is dropped for native presets
+ * too. The fields are still mapped here because the preset is the durable value
+ * object and `Agent` is the lossy consumer, not the reverse.
+ *
+ * THE DOMAIN OF THAT SENTENCE is the roster path only, and it is asserted on
+ * `Agent`'s field list by
+ * {@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeHasNowhereToLandOnTheRoster()}
+ * rather than being read off the mapper. It says nothing about a future consumer
+ * that reads an {@see AgentPreset} directly — which is why the containment gates
+ * below are the load-bearing protection here and that narrowing is merely a bound.
  *
  * DORMANT IS NOT UNGATED, and for one round it was. This class reads TWO
  * repository-chosen directories — `{projectRoot}/.claude/agents` and
@@ -58,7 +79,9 @@ use Symfony\Component\Yaml\Yaml;
  * written after the consumer already trusts the loader. The refusals are pulled
  * through {@see refusedDirectories()}, the same pull-based seam
  * {@see AgentPresetRegistry::refusedDirectories()} exposes, so the wiring step
- * has a collector to drain instead of a reason to add one.
+ * had a collector to drain instead of a reason to add one — and it drained it, in
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::foreignAgentPresets()}. Gating a round
+ * before the consumer landed is what made that a one-line addition.
  */
 final class ForeignAgentPresetRegistry
 {
@@ -108,9 +131,32 @@ final class ForeignAgentPresetRegistry
     /**
      * Discover every foreign agent preset reachable from $projectRoot.
      *
-     * Claude Code presets win a filename collision with an opencode preset --
-     * the same tool precedence {@see \SugarCraft\Crush\Skills\SkillLoader::loadAll()}
-     * applies to foreign skills.
+     * Claude Code presets win a filename collision with an opencode preset.
+     *
+     * THAT IS NOT THE PRECEDENCE FOREIGN SKILLS USE, and this doc-block claimed it
+     * was — "the same tool precedence {@see \SugarCraft\Crush\Skills\SkillLoader::loadAll()}
+     * applies to foreign skills", citing a method that ranks the NATIVE tiers and
+     * says nothing about tools. The cross-tool rule for skills lives in
+     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()}, which registers
+     * Claude and then opencode into a last-write-wins registry — so OPENCODE wins
+     * there and CLAUDE wins here. Neither pair has a principled winner (that
+     * method says so of its own), so what each guarantees is determinism rather
+     * than a rule; the divergence is written down instead of being asserted away,
+     * because a sentence claiming two subsystems agree is worse than two
+     * subsystems that visibly do not.
+     *
+     * THE PROJECT/USER AXIS ALSO DIVERGES FROM SKILLS, and this one is not merely
+     * cosmetic. {@see scan()} is ordered user-then-project, so a CLONED
+     * REPOSITORY's `.claude/agents/reviewer.md` outranks the user's own
+     * `~/.claude/agents/reviewer.md`, while
+     * {@see \SugarCraft\Crush\Skills\ForeignSkillDiscovery::discoverClaude()}
+     * deliberately does the opposite and states the argument: foreign content
+     * arrives with any repository you clone, and letting it displace a name the
+     * user relies on is the "cloned content silently redefines the user's setup"
+     * shape. The same argument applies here with a stronger conclusion, since an
+     * imported preset carries a sub-agent's whole prompt. It is recorded rather
+     * than changed because reversing it is a behaviour change with its own
+     * pinned tests, not part of wiring the discovery up.
      *
      * The union operator (left wins) rather than a spread or array_merge:
      * PHP casts a numeric-string key to int, and both of those renumber int
@@ -175,8 +221,14 @@ final class ForeignAgentPresetRegistry
      * each expose for their own tier, provided here for the same reason: a
      * dropped directory is otherwise indistinguishable from an empty one, and
      * "your repository's `.claude/agents` was rejected" is not something a
-     * shorter roster can say. Nothing drains it yet — see the class doc-block
-     * — which is exactly why it exists before the wiring rather than after.
+     * shorter roster can say.
+     *
+     * DRAINED BY {@see \SugarCraft\Crush\Cli\Bootstrap::foreignAgentPresets()}
+     * into that class's one launch-wide collector, where
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierRefusals()} puts it
+     * on stderr at construction time, before the TUI owns the screen. For the
+     * round between the gates landing and the wiring landing nothing drained it,
+     * which is exactly why it existed before its consumer rather than after.
      *
      * Recomputed by every discover* call rather than accumulated, so a refusal
      * never outlives the condition that caused it.

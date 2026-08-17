@@ -35,13 +35,19 @@ final class SkillManager
      * SKILL.md body off disk regardless of whether it was ever used that
      * session. Fixes crush_feat.md section 7.E3.
      *
-     * The body is *designed* to backfill lazily, on-demand, via
-     * Tools\BuiltIn\SkillTool::execute() (which already calls
-     * loadSkillBody() correctly) -- but as of this step that tool is not
-     * yet registered into Bootstrap::tools()/EngineBackend, so that half of
-     * the backfill path is implemented and tested, not yet production
-     * reachable from bin/sugarcrush. Wiring it in is tracked separately
-     * (crush_feat.md section 7, item 2 / W3.S8 in crush_feat_plan.md).
+     * The body backfills lazily, on-demand, via
+     * Tools\BuiltIn\SkillTool::execute(), which calls loadSkillBody() -- and
+     * that tool IS registered now, in Bootstrap::tools(), on the same
+     * SkillRegistry instance this manager fills. The sentence here used to end
+     * "not yet registered into Bootstrap::tools()/EngineBackend, so that half of
+     * the backfill path is implemented and tested, not yet production reachable
+     * from bin/sugarcrush", and it outlived the wiring it described by several
+     * rounds: crush_feat.md section 7 item 2 / W3.S8 landed, and
+     * BinSugarcrushWiringTest::testBootstrapToolsIncludesTheModelFacingSkillTool
+     * plus testSkillToolInvocationReturnsTheOnDiskSkillBody have been asserting
+     * both halves since. A doc-block claiming a subsystem is unreachable while it
+     * is reachable is the same defect as one claiming the reverse -- which is the
+     * defect the paragraph below records.
      *
      * FOREIGN DISCOVERY IS CALLED HERE, and this is crush_code.md Phase 2
      * item 6: {@see ForeignSkillDiscovery}, its SkillSource tagging and its

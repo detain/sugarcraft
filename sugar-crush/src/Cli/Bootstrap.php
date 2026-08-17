@@ -8,6 +8,7 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentDefinition;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentPresetRegistry;
+use SugarCraft\Crush\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CommandBackend;
@@ -151,20 +152,24 @@ final class Bootstrap
      * configured — see {@see reportProjectTierRefusals()}.
      *
      * "PROJECT-TIER" IS NOW NARROWER THAN THE CONTENTS, and the name is kept
-     * while the claim is corrected rather than the reverse. THREE subsystems feed
-     * it — the count was two for one round after a third arrived: the workflow
-     * registry
+     * while the claim is corrected rather than the reverse. FOUR subsystems feed
+     * it — the count was two for one round after a third arrived, and three until
+     * crush_code.md Phase 1 item 3 wired the fourth: the workflow registry
      * ({@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()}),
      * the skill loader
-     * ({@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()}) and
-     * the agent-preset registry
+     * ({@see \SugarCraft\Crush\Skills\SkillManager::refusedDirectories()}), the
+     * native agent-preset registry
      * ({@see \SugarCraft\Crush\Agents\AgentPresetRegistry::refusedDirectories()}),
      * merged in {@see agentPresets()} on both its return and its degradation
-     * paths.
+     * paths, and the FOREIGN one
+     * ({@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::refusedDirectories()}),
+     * merged in {@see foreignAgentPresets()} on both of its paths for the same
+     * reason.
      *
-     * FOUR SEAMS, THEREFORE, NOT THREE: the workflow registry exposes a SECOND
+     * FIVE SEAMS, THEREFORE, NOT FOUR: the workflow registry exposes a SECOND
      * one, {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::userTierRefusal()},
-     * drained in {@see workflowEngine()}. Its subject is `~/.sugar-crush/workflows`
+     * drained in {@see workflowEngine()} — so four feeders expose five seams. Its
+     * subject is `~/.sugar-crush/workflows`
      * — the user's OWN directory, whose location no repository chose — so it is
      * the one entry here that is not a project tier. It is drained into this map
      * anyway, because the map's real subject is "directories this launch will not
@@ -176,19 +181,19 @@ final class Bootstrap
      * the mismatch is recorded here instead of being left for the next reader to
      * infer from the values.
      *
-     * FOUR OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
+     * THREE OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
      * is named rather than counted, because "three feeders" quietly becoming
      * "three feeders and four things nobody drains" is the drift this collector
-     * keeps producing. All four are DORMANT — nothing in `src/` or `bin/`
-     * constructs them — and all four are GATED, which dormant does not imply and
-     * for one round did not mean:
+     * keeps producing. It was FOUR until crush_code.md Phase 1 item 3 wired
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} — which is what a
+     * named gap is for. The three that remain are DORMANT — nothing in `src/` or
+     * `bin/` constructs them — and all three are GATED, which dormant does not
+     * imply and for one round did not mean:
      *
      *  - {@see \SugarCraft\Crush\Commands\CommandLoader} (`.sugar-crush/commands`)
      *    `error_log()`s its refusal instead of exposing a seam;
-     *  - {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}
-     *    (`.claude/agents`, `.opencode/agents`) and
-     *    {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
-     *    (`.opencode/memory`) each expose `refusedDirectories()` with nothing
+     *  - {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
+     *    (`.opencode/memory`) exposes `refusedDirectories()` with nothing
      *    reading it yet;
      *  - `.sugar-crush/hooks.yaml` has its own trust gate
      *    ({@see projectHooksAreTrusted()}) and refuses the LAUNCH rather than
@@ -197,7 +202,7 @@ final class Bootstrap
      * The full enumeration and its derivation live in
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}.
      *
-     * One collector rather than three because the user does not care which class
+     * One collector rather than four because the user does not care which class
      * noticed that their repository's directory was rejected.
      *
      * @var array<string, string>
@@ -489,15 +494,19 @@ final class Bootstrap
      * TEN repository-chosen paths exist in `src/`. This list said FOUR, then
      * FIVE, and both figures were hand-written; it is now DERIVED from `src/` by
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
-     * reds when an eleventh appears. The five whose refusals reach THIS map:
+     * reds when an eleventh appears. The SEVEN whose refusals reach THIS map:
      *
      *   `.sugar-crush/workflows`  `.sugar-crush/skills`  `.claude/skills`
-     *   `.opencode/skills`        `.sugar-crush/agents`
+     *   `.opencode/skills`        `.sugar-crush/agents`  `.claude/agents`
+     *   `.opencode/agents`
      *
-     * and the five that are gated elsewhere and named as gaps rather than
-     * counted here — `.sugar-crush/commands`, `.claude/agents`,
-     * `.opencode/agents`, `.opencode/memory`, `.sugar-crush/hooks.yaml` — are
-     * itemised on {@see $projectTierRefusals}.
+     * The last two joined in crush_code.md Phase 1 item 3, which wired
+     * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
+     * reader; the split was five and five before it.
+     *
+     * The THREE that are gated elsewhere and named as gaps rather than counted
+     * here — `.sugar-crush/commands`, `.opencode/memory`,
+     * `.sugar-crush/hooks.yaml` — are itemised on {@see $projectTierRefusals}.
      *
      * @return array<string, string> configured path => why it was refused
      */
@@ -639,16 +648,67 @@ final class Bootstrap
      * running sub-agents instead.
      *
      * Foreign presets (`.claude/agents`, `.opencode/agents`, via
-     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}) are
-     * deliberately NOT merged here — that is crush_code.md Phase 1 item 3, and
-     * it lands as its own change alongside the palette badging that makes an
-     * imported preset distinguishable from a native one.
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}) ARE merged
+     * here as of crush_code.md Phase 1 item 3 — see
+     * {@see foreignAgentPresets()}. They go in FIRST, which makes the roster's
+     * precedence three layers deep, lowest first:
+     *
+     *     foreign imports  <  the six built-in definitions  <  native presets
+     *
+     * NATIVE WINS AT EVERY TIER, built-ins included, and that is the merge
+     * direction {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} already
+     * established for skills rather than a second convention: it registers the
+     * foreign trees first and lays the native manifests — built-in, user AND
+     * project — over the top. Applied to agents the argument is the same one and
+     * slightly sharper, because `reviewer`, `coder`, `tester`, `architect`,
+     * `debugger` and `devops` are the names `/agents`, Ctrl+A and the agent strip
+     * are documented against: cloning a repository that ships
+     * `.claude/agents/reviewer.md` must not silently re-point `reviewer` at
+     * somebody else's prompt. Additive is the only safe direction for a new
+     * discovery source.
+     *
+     * WHAT THE IMPORT CARRIES INTO THE ROSTER IS NARROWER THAN THE PRESET, and
+     * the difference is worth stating where the merge happens rather than leaving
+     * it to be inferred: {@see Agent::fromPreset()} reads name, description,
+     * `initialPrompt`, model, `tools` and `skills` and NOTHING ELSE, so an
+     * imported preset's `permissionMode:` — the field the foreign registry's own
+     * measurement showed reaching `bypass-permissions` — does not travel this
+     * path at all. It is dropped on the floor for native presets too; this wiring
+     * neither widens nor narrows that. ASSERTED on the type, not read off the
+     * mapper, by
+     * {@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeHasNowhereToLandOnTheRoster()}
+     * — the bound is only as good as `Agent`'s field list, which a refactor can
+     * change without touching this method. It bounds THIS path and nothing else:
+     * {@see \SugarCraft\Crush\Agents\AgentPreset} still carries every field, so a
+     * future consumer reading presets directly inherits them.
+     *
+     * {@see \SugarCraft\Crush\Agents\AgentPreset::$source} STILL HAS NO READER
+     * after this change. {@see Agent} carries no source field, so the palette
+     * badge that would make an imported row distinguishable from a native one is
+     * the remaining half of Phase 1 item 3 and needs a field on `Agent`, not more
+     * wiring here.
      *
      * @return list<Agent>
      */
     public static function agentRoster(string $root, string $provider, string $model): array
     {
+        // RESOLVED FIRST, THOUGH IT IS CONSUMED LAST. agentPresets() is the call
+        // that routes the user tier through {@see trustedConfigDirPath()}, which
+        // THROWS when this process cannot establish whose home it is in — so
+        // asking for it before any foreign directory is read keeps "refuse the
+        // launch rather than read policy a stranger may have written" true of
+        // this method on its own, not only of {@see chat()}, which happens to
+        // resolve the same gate on its first line. The precedence documented
+        // above is decided by the ORDER THESE ARE INSERTED into $agents below,
+        // which is independent of the order they are fetched in.
+        $native = self::agentPresets($root);
+
         $agents = [];
+
+        // LOWEST PRIORITY: everything after this overwrites a shared key.
+        foreach (self::foreignAgentPresets($root) as $name => $preset) {
+            $agents[$name] = Agent::fromPreset($preset, $provider, $model);
+        }
 
         foreach ([
             AgentDefinition::TYPE_CODER,
@@ -664,7 +724,7 @@ final class Bootstrap
             }
         }
 
-        foreach (self::agentPresets($root) as $name => $preset) {
+        foreach ($native as $name => $preset) {
             $agents[$name] = Agent::fromPreset($preset, $provider, $model);
         }
 
@@ -672,8 +732,93 @@ final class Bootstrap
     }
 
     /**
+     * The agent presets other coding CLIs left on disk — Claude Code's
+     * `.claude/agents` and opencode's `.opencode/agents`, project tier and user
+     * tier — mapped onto {@see \SugarCraft\Crush\Agents\AgentPreset} and keyed by
+     * filename stem, the same key space {@see agentPresets()} uses.
+     *
+     * crush_code.md Phase 1 item 3. Until this method existed nothing in `src/`
+     * or `bin/` constructed
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}: an agent
+     * authored for either tool was read by that class's own unit tests and by
+     * nothing else, so dropping a `reviewer.md` under `~/.claude/agents` had zero
+     * observable effect on a real run. The class's doc-block said so plainly,
+     * which is the only reason this gap was cheap to find.
+     *
+     * SEPARATE FROM {@see agentPresets()} RATHER THAN MERGED INTO IT, and the
+     * split is the precedence decision rather than tidiness. That method's
+     * contract is "the NATIVE presets", and its result is applied over the six
+     * built-in definitions in {@see agentRoster()} — so folding the imports into
+     * its return value would have ranked a cloned repository's
+     * `.claude/agents/reviewer.md` ABOVE the built-in `reviewer`, which is the
+     * opposite of the native-wins rule stated on `agentRoster()` and of the merge
+     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} performs for skills.
+     * Two return values let the caller insert three layers in one order.
+     *
+     * DEGRADES, NEVER THROWS. Every per-file failure is already contained inside
+     * the registry (one malformed foreign `.md` is `error_log`ged and skipped), so
+     * the only escape left is something unforeseen from the walk itself; a
+     * `Throwable` there costs the launch its imported agents and nothing more.
+     * The native sibling degrades for the same reason and says so at more length.
+     *
+     * REFUSALS ARE DRAINED INTO THE LAUNCH COLLECTOR, on both paths. A repository
+     * that committed `.claude/agents` or `.opencode/agents` as a link out of the
+     * checkout gets the tree dropped, and until this drain existed the seam
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::refusedDirectories()}
+     * exposes had no reader at all — a refused directory was indistinguishable
+     * from an empty one, which is the silence crush_code.md Phase 1 item 3 and
+     * Phase 2 item 6 both exist to end. See {@see $projectTierRefusals} for the
+     * other four seams and {@see reportProjectTierRefusals()} for the notice.
+     *
+     * WHAT IS NOT DRAINED, stated rather than left as an absence:
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::warnings()} —
+     * opencode's per-command `permission:` rules collapsing to one allow/ask/deny.
+     * That is a lossy MAPPING, not a refused directory, and the collector's notice
+     * is worded `ignoring <path> — <reason>`, which would misdescribe it. Those
+     * notices reach `error_log` from inside the registry and nothing else; giving
+     * them a surface of their own is a separate change.
+     *
+     * THE USER TIER'S OWN REFUSAL HAS NO ENTRY HERE, and cannot: when
+     * {@see \SugarCraft\Crush\Support\HomeDirectory::owned()} returns null the
+     * registry omits that tier and records nothing
+     * ({@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::userDir()}).
+     * On every path that reaches this method the condition is already unreachable
+     * — {@see trustedConfigDirPath()} throws on exactly `owned() === null`, and
+     * {@see agentRoster()} resolves it before calling here — so the user does not
+     * get a quieter roster, they get a refused launch naming the home and the
+     * reason. That is a louder surface than a collector line, not a missing one.
+     *
+     * @return array<string, \SugarCraft\Crush\Agents\AgentPreset> keyed by preset filename stem
+     */
+    public static function foreignAgentPresets(string $root): array
+    {
+        $registry = new ForeignAgentPresetRegistry();
+
+        try {
+            $presets = $registry->discover($root);
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "sugarcrush: foreign agent presets unavailable ({$e->getMessage()}); continuing without them.\n");
+            $presets = [];
+        }
+
+        // Collected whether the walk finished or not: refusedDirectories() is
+        // filled as each tier is rejected, before any file is parsed, so a walk
+        // that recorded a refusal and then tripped over something else must not
+        // lose the refusal to the degradation. Same argument, same shape, as the
+        // native sibling's throwing path.
+        self::$projectTierRefusals = [...self::$projectTierRefusals, ...$registry->refusedDirectories()];
+
+        return $presets;
+    }
+
+    /**
      * The native agent presets on disk, project directory first so a checked-in
      * preset overrides a same-named one in the user's home.
+     *
+     * NATIVE ONLY, deliberately: the imports from other tools' conventions are
+     * {@see foreignAgentPresets()}, a separate call whose result
+     * {@see agentRoster()} inserts BENEATH both these presets and the built-in
+     * definitions. See that method for why the two are not one.
      *
      * Resolved off {@see configDirPath()}, never {@see configDir()}: listing
      * agents is a read, and a read must not be what creates ~/.sugar-crush.

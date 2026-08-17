@@ -695,11 +695,13 @@ final class SkillLoader
      * skills were invoked that session, defeating the point of the
      * already-designed three-stage progressive disclosure. The body is
      * designed to backfill just-in-time via loadSkillBody(), called from
-     * Tools\BuiltIn\SkillTool::execute() -- but that tool is not yet
-     * registered into Bootstrap::tools()/EngineBackend, so the backfill
-     * half is implemented and tested, not yet reachable from
+     * Tools\BuiltIn\SkillTool::execute() -- and that tool IS registered into
+     * Bootstrap::tools() now, so the backfill half is production reachable.
+     * This paragraph said "not yet registered ... not yet reachable from
      * bin/sugarcrush (tracked separately: crush_feat.md section 7 item 2 /
-     * W3.S8).
+     * W3.S8)" for several rounds after W3.S8 shipped; see
+     * {@see SkillManager::loadAll()} for the same correction and for the tests
+     * that hold it.
      *
      * Foreign-imported skills (.claude/skills, .opencode/skills) are NATIVE
      * SOURCES' business only in the sense that they are merged one layer up:

@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\AgentPresetRegistry;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Workflows\WorkflowRegistry;
@@ -33,8 +34,11 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  *
  * WHAT THIS PINS AND WHAT IT DOES NOT: it pins the number of subsystems that
  * EXPOSE a refusal seam, every dot-path literal in `src/` and its
- * classification, and the presence of both containment gates in each dormant
- * holder. It cannot tell whether a gate that is present is CORRECT — that is
+ * classification, and the presence of both containment gates in every holder of a
+ * repository-chosen directory — dormant ({@see dormantHolders()}) or wired
+ * ({@see wiredHolders()}), because acquiring a production caller must not be how a
+ * holder loses its gate requirement.
+ * It cannot tell whether a gate that is present is CORRECT — that is
  * what each tier's own containment test is for
  * ({@see \SugarCraft\Crush\Tests\Agents\AgentPresetDirContainmentTest},
  * {@see \SugarCraft\Crush\Tests\Agents\ForeignAgentPresetDirContainmentTest} and
@@ -44,14 +48,21 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
 final class ProjectTierRefusalInventoryTest extends TestCase
 {
     /**
-     * THREE feeders, named. Each exposes a pull-based refusal seam that
+     * FOUR feeders, named. Each exposes a pull-based refusal seam that
      * {@see Bootstrap::agentPresets()} and its siblings merge into one collector.
+     *
+     * The fourth is {@see ForeignAgentPresetRegistry}, which arrived when
+     * crush_code.md Phase 1 item 3 gave its seam a reader in
+     * {@see Bootstrap::foreignAgentPresets()}. It had been listed as a named GAP
+     * on the collector for the round its gates existed without a consumer, which
+     * is the transition this file exists to keep visible in both directions.
      */
-    public function testTheThreeSubsystemsThatFeedTheCollectorAllExposeTheirSeam(): void
+    public function testTheFourSubsystemsThatFeedTheCollectorAllExposeTheirSeam(): void
     {
         $this->assertTrue(method_exists(WorkflowRegistry::class, 'projectTierRefusal'));
         $this->assertTrue(method_exists(SkillManager::class, 'refusedDirectories'));
         $this->assertTrue(method_exists(AgentPresetRegistry::class, 'refusedDirectories'));
+        $this->assertTrue(method_exists(ForeignAgentPresetRegistry::class, 'refusedDirectories'));
 
         $bootstrap = (string) file_get_contents(
             \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
@@ -61,6 +72,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             [
                 'projectTierRefusal()',
                 'refusedDirectories()',
+                // The CONSTRUCTION, not only the drain: `refusedDirectories()`
+                // above is satisfied by the native registry's call alone, so a
+                // deleted foreign call site would leave this test green on the
+                // seam it is meant to be checking.
+                'new ForeignAgentPresetRegistry()',
             ] as $seam
         ) {
             $this->assertStringContainsString($seam, $bootstrap, "Bootstrap must drain {$seam}");
@@ -302,16 +318,23 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the ten reach the collector, and which are gated elsewhere. FIVE
-     * and FIVE — stated here so "three feeders" cannot quietly stand in for "and
-     * five paths nobody drains".
+     * Which of the ten reach the collector, and which are gated elsewhere. SEVEN
+     * and THREE — stated here so "four feeders" cannot quietly stand in for "and
+     * three paths nobody drains".
+     *
+     * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
+     * {@see Bootstrap::foreignAgentPresets()}: `.claude/agents` and
+     * `.opencode/agents` moved from the gap column to the feeder column, which is
+     * a named gap being closed rather than a count drifting. The two halves are
+     * asserted against the derivation, so the move cannot be recorded in one
+     * column only.
      */
-    public function testTheFiveThatFeedTheCollectorAndTheFiveThatAreNamedGaps(): void
+    public function testTheSevenThatFeedTheCollectorAndTheThreeThatAreNamedGaps(): void
     {
-        $feeders = ['.claude/skills', '.opencode/skills', '.sugar-crush/agents',
-            '.sugar-crush/skills', '.sugar-crush/workflows'];
-        $gaps = ['.claude/agents', '.opencode/agents', '.opencode/memory',
-            '.sugar-crush/commands', '.sugar-crush/hooks.yaml'];
+        $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
+            '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/skills',
+            '.sugar-crush/workflows'];
+        $gaps = ['.opencode/memory', '.sugar-crush/commands', '.sugar-crush/hooks.yaml'];
 
         $union = array_merge($feeders, $gaps);
         sort($union);
@@ -351,6 +374,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * {@see \SugarCraft\Crush\Support\ContainedPath}, so "nothing constructs it
      * yet" is never again the whole answer to "is it contained".
      *
+     * THIS PROVIDER NO LONGER CARRIES THE GATE REQUIREMENT ON ITS OWN. The
+     * requirement is keyed to holding a repository-chosen directory, not to being
+     * dormant, so it is driven from {@see holdersOfARepositoryChosenDirectory()};
+     * a holder that acquires a production caller moves to
+     * {@see wiredHolders()} and keeps every gate. What this list still states, and
+     * the only thing it states, is which holders nothing in `src/` or `bin/`
+     * constructs.
+     *
      * THE DOC-BLOCK HERE SAID "FOUR" WHILE THE PROVIDER RETURNED THREE, and a
      * fourth genuinely existed: {@see \SugarCraft\Crush\Agents\WorktreeConfig}
      * read `.sugar-crush/config.json` from `__DIR__` with no containment at all,
@@ -375,11 +406,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     public static function dormantHolders(): array
     {
         return [
-            'foreign agent presets' => [
-                'src/Agents/ForeignAgentPresetRegistry.php',
-                \SugarCraft\Crush\Tests\Agents\ForeignAgentPresetDirContainmentTest::class,
-                ['below', 'within'],
-            ],
             'foreign memory import' => [
                 'src/Memory/ForeignMemoryImporter.php',
                 \SugarCraft\Crush\Tests\Memory\ForeignMemoryImporterContainmentTest::class,
@@ -404,6 +430,42 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
+     * The holders that are NO LONGER DORMANT and must keep every gate they were
+     * given while they were.
+     *
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} left
+     * {@see dormantHolders()} when crush_code.md Phase 1 item 3 wired it into
+     * {@see Bootstrap::foreignAgentPresets()}. Moving it out of that provider
+     * without moving it into this one would have DELETED the gate requirement at
+     * the exact moment the class acquired a production caller — the inverse of the
+     * defect this file was written for, and the reason the requirement is keyed to
+     * "holds a repository-chosen directory" rather than to "is dormant".
+     *
+     * @return array<string, array{0: string, 1: class-string, 2: list<string>}>
+     */
+    public static function wiredHolders(): array
+    {
+        return [
+            'foreign agent presets' => [
+                'src/Agents/ForeignAgentPresetRegistry.php',
+                \SugarCraft\Crush\Tests\Agents\ForeignAgentPresetDirContainmentTest::class,
+                ['below', 'within'],
+            ],
+        ];
+    }
+
+    /**
+     * Every holder of a repository-chosen directory, dormant or wired — the union
+     * the gate requirement is actually keyed to.
+     *
+     * @return array<string, array{0: string, 1: class-string, 2: list<string>}>
+     */
+    public static function holdersOfARepositoryChosenDirectory(): array
+    {
+        return [...self::dormantHolders(), ...self::wiredHolders()];
+    }
+
+    /**
      * PRESENCE IS NOT ENFORCEMENT, which is the category this class's own
      * doc-block opens by condemning — and this test was an instance of it. It
      * was `assertStringContainsString('ContainedPath::below(', $source)`, which a
@@ -419,8 +481,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * checked; the inventory can see that a compare is written and enforcing,
      * and only a behavioural test can see that it is correct.
      */
-    #[\PHPUnit\Framework\Attributes\DataProvider('dormantHolders')]
-    public function testEveryDormantHolderOfARepositoryChosenDirectoryIsGated(
+    #[\PHPUnit\Framework\Attributes\DataProvider('holdersOfARepositoryChosenDirectory')]
+    public function testEveryHolderOfARepositoryChosenDirectoryIsGated(
         string $relative,
         string $driver,
         array $requiredGates,

@@ -48,11 +48,16 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->originalHome = getenv('HOME') ?: '';
         putenv('HOME=' . $this->tempDir . '/home');
 
-        // BOTH, because the code under test does not agree with itself about
-        // where HOME lives: Bootstrap reads getenv('HOME'), while
-        // ForeignSkillDiscovery — reached from SkillManager::loadAll() since
-        // crush_code.md Phase 2 item 6 — reads $_SERVER['HOME']. Redirecting
-        // only the env var left this scanning the DEVELOPER's ~/.claude/skills.
+        // BOTH SPELLINGS, and the REASON has changed since this comment was
+        // written even though the action has not. It said "the code under test
+        // does not agree with itself about where HOME lives: Bootstrap reads
+        // getenv('HOME'), while ForeignSkillDiscovery reads $_SERVER['HOME']" —
+        // that disagreement is gone, every `~` reader in src/ now resolves
+        // through HomeDirectory, which prefers getenv(). The superglobal is set
+        // anyway for the reason {@see HomeSandboxTrait} states: half a sandbox is
+        // not a sandbox, and it costs nothing to keep it honest for anything that
+        // reads $_SERVER directly. Redirecting only one of them once left this
+        // scanning the DEVELOPER's ~/.claude/skills.
         $this->originalServerHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = $this->tempDir . '/home';
     }
