@@ -4906,3 +4906,192 @@ closed, since the read still follows whatever the resolved path names.
 5. Reported but not actioned: `src/ToolRegistry.php` declares its own
    `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface —
    left alone because that file was outside the round's ownership.
+
+---
+
+## Round 3 of the review/fix cycle — and the first PRODUCT defect the chain has found
+
+Commits since the last entry: `54a07e95` (lane E round 6), `d4906998` (lane B
+round 20). Lanes stand at **B round 20, D round 8 (round 9 in flight), E round 6
+(round 7 in flight)**.
+
+### ⚠️ NEEDS A USER DECISION — the permission prompt answers on typed text
+
+This is the first defect in this chain that is a **product** bug rather than a
+test or documentation one, and it is the item to act on first next session.
+
+Driven one `KeyMsg(Char, c)` at a time against a live prompt (`rm -rf build/`
+pending), `Chat::handlePermissionKey()` (`src/Chat.php:1398-1415`):
+
+| typed | answers at keystroke | rune | outcome |
+|---|---|---|---|
+| `/agents` | **2** | `a` | `permissionGrants = {"bash":true}` — **Always, rest of session** |
+| `/branch main` | 4 | `a` | **Always** grant |
+| `/keys` | 4 | `y` | approved once |
+| `yes` / `Y` | 1 | `y` | approved (`strtolower`) |
+| `no` / `nay` | 1 | `n` | denied |
+| `/new` | 2 | `n` | denied |
+| `/help`, `/quit` | never | — | — |
+
+`PermissionReply::Always` writes a **persistent** grant, so every subsequent
+`bash` call in the session runs unasked. `/agents` is a documented one-word
+command that reaches it in **two keystrokes**.
+
+Lane E round 7 was told explicitly NOT to change the routing — where `y`/`n`/`a`
+should be accepted from is a design decision — but to correct every in-code claim
+to what is measured, pin current behaviour (including the `a` → persistent-grant
+case), and return **fix options with measured costs**. Pick one next session.
+
+Two corrections to earlier records: it answers on the **fourth** keystroke of
+`/keys`, not the third; and "a pasted path qualifies" is FALSE — the same commit
+proves `Chat::update()` DROPS `PasteMsg`, so only an unbracketed paste delivered
+as raw `Char` keys qualifies. The earlier claim was right by accident.
+
+### Lane D round 8's review: a LIVE escape needing no repository at all
+
+Round 8 closed the `$root === $HOME` hole with `file_exists("$root/.git")`,
+reasoning that *"the escape needs a COMMITTED symlink and nothing can be
+committed without a repository."* **The premise is false.** tar, zip, `rsync -a`,
+`degit` and every "download the release tarball" instruction carry symlinks and
+carry no `.git`. Measured, no git anywhere, payload delivered by `tar czf`/`tar
+xzf` into an owned mode-0700 `$HOME`:
+
+```
+$HOME/.sugar-crush/agents -> /…/outside      (symlink inside the tarball)
+presets=["pwned"] mode=bypass-permissions prompt=EXFIL-PRESET-BODY  refusals=[]
+```
+
+A **dangling `.git` symlink** escapes too — `file_exists()` follows links and
+answers false. The clean statement: the discriminator asks *"is a `.git` present
+right now"*, which is not the question *"did a repository choose this content"*.
+
+Also from that review, and all being fixed in round 9:
+- **The ownership clause the commit is TITLED for has ZERO coverage.** Deleting it
+  leaves the full suite byte-identical (6603/68775 both ways). `HOME=/usr` goes
+  from refused to accepted in one line. The tests drive world-writable, sticky,
+  group-writable, nonexistent, is-a-file — never "owned by another uid".
+- **The neutered-gate defect is REINTRODUCED in the commit that condemns it.**
+  `$unusedGateResult = ContainedPath::within(...)` with no `continue` leaves
+  `ContainedPathInventoryTest` green at 26 tests while `loadRoot()` returns
+  `TOP-SECRET-AAA`. Seven discarded-result shapes report `used: true`. The
+  method's own docblock lists `:` in the statement-start set; the code has
+  `['{', '}', ';']`.
+- **A NINTH read path.** `WorktreeConfig::new()` reads
+  `__DIR__/../../../.sugar-crush/config.json` — **git-tracked** — with no
+  containment, feeding `copyGlob()` patterns into every agent worktree. Invisible
+  to BOTH new instruments, because the dot-path derivation keys on the STRING and
+  one classification covers two different tiers.
+- **The corpus still fatals on this repo's OWN canonical class shape.** A `final`
+  class with a `private __construct()` and a `::new()` factory — mandated by
+  `CLAUDE.md` and `.claude/rules/model-pattern.md` — enters the corpus and aborts
+  suite construction, verbatim the failure the enum clause was added to remove.
+- Plus: `ForeignMemoryImporter`'s user tier still on `path()` not `owned()`; a
+  relative `$HOME` passing `owned()`; the "named by grep" reader list wrong in
+  three directions (11 sites, 9 named, one named that does not call it); four more
+  uncounted compare spellings, `strncasecmp` mattering most.
+- **My own finding:** `tests/Agents/WorktreeConfigTest.php:98-120` does
+  `file_put_contents` on the **git-tracked** `.sugar-crush/config.json` at test
+  runtime. An interrupted run leaves a tracked repo file mutated, and it is why
+  that test fails in every sandbox — **three separate agents burned time
+  diagnosing it**, and one reviewer refused to run the suite in-repo because of it.
+
+### Lane E round 6's review: the headline claim REFUTED
+
+Round 6 concluded the two locks are "stacked, never alternatives" because
+`requestPermission()` is the sole non-null writer of `pendingPermission`.
+`update()`'s `AssistantMsg` arm (`Chat.php:626-631`) writes `'inFlight' => false`
+without clearing it, and `mutate()` carries it forward — so ONE `update()` call
+separates them. And in that state the **permission arm alone** does the refusing,
+so round 6 replaced a message that named the right lock but could not fail with
+one that names the **wrong** lock.
+
+The methodological lesson, worth carrying: round 6's evidence was a whole-suite
+probe at the TOP of `update()`, which only fires on states fed BACK into
+`update()`. No test builds that state, so 6603 green tests were entirely
+consistent with it being reachable. Round 6's own text says a whole-suite probe is
+not a proof over unwritten code — and then treated one as exactly that.
+
+Also: a **fourteenth** disagreement member reachable by pure keystrokes
+(`Alt+Enter` then `/keys`) — round 6 applied its own reachability discoveries to
+the BLANK half of the set and not the COMMAND-SHAPED half; the `y` pin cannot fail
+on the property the prose rests on (`'y' => Reject` survives in `KeyHelpTest`);
+the `?` assertion at `:1494` still has no mutation naming it; the order artifact
+`ksort` fixed survives 1750 lines below at `:2262`; and the token instrument is
+blind to `use X as Ask; new Ask(...)`.
+
+Verified correctly, and worth crediting: round 6's "comment-only diff" claim holds
+under `token_get_all` on both revisions with comments and whitespace stripped —
+**byte-identical 19,246-token streams**.
+
+### Lane B rounds 19-20: the gate documented only where it helps
+
+The head scanner was blind for a THIRD round: wrapped calls (18), named arguments
+(19), `$this->` (20) — and this file already uses `$this->` for its own helpers at
+30+ sites. Round 20 fixed the reason rather than the spelling: the gate now takes
+`::`, `->` and `?->`, and **the tally's domain sentence states the restriction in
+the same sentence as the domain**, naming all three shrinkages in order. Each time,
+the gate had been written up where it HELPS and never where the domain is CLAIMED.
+
+Round 20 also **moved three census figures deliberately and said so**:
+`directiveValues` 5→8, `scanRegex` 8→10, `tokenize` 17→18, after finding the
+census counted `??` but not `??=` and `if` but not loop conditions — while this
+same file's register counts "each loop bound" as a leaf of the same operator and
+sweeps four of them. Round 19's "the figures did not move" sentence is now scoped
+to that round's domain rather than left standing.
+
+And it **disputed its reviewer with its own measurement**: the reviewer reported
+37 leaves / 16 survivors / 21 kills and separately named a 17th survivor, which
+does not add up; lane B's own full sweep on the final file gives **38 / 17 / 21**,
+and it reported only what it measured. Resolving the ambiguity in the safe
+direction (keeping `??` in the domain, because the census counts `T_COALESCE` and
+"the two instruments may not disagree about what a leaf is") surfaced a **second**
+unrecorded warning-only kill.
+
+### IN FLIGHT at the time of writing — resume these
+
+Two agents were running and their work is UNCOMMITTED in the tree:
+
+1. **Lane D round 9** — 12 findings. Modified so far:
+   `src/Agents/{AgentPresetRegistry,ForeignAgentPresetRegistry,WorktreeConfig,WorktreeManager}.php`,
+   `src/Cli/Bootstrap.php`, `src/Context/InstructionFileLoader.php`,
+   `src/Memory/ForeignMemoryImporter.php`, `src/Support/{ContainedPath,HomeDirectory}.php`,
+   and tests under `tests/{Agents,Cli,Context,Memory,Support}/` plus a new
+   `tests/Support/HomeSandboxTrait.php`.
+2. **Lane E round 7** — 10 findings. Modified: `src/Chat.php`,
+   `tests/Renderer/KeyHelpTest.php`, `README.md`.
+
+If either did not finish, its brief is reconstructible from the findings above.
+**Check for residue and stray processes before trusting the tree**, and remember
+the suite failure in `ContainedPathInventoryTest` over `src/{Commands,Context,Memory}`
+was lane D round 9 mid-flight, not a real defect.
+
+### Standing operational rules, all learned the hard way
+
+1. **NEVER a global `pkill`, including `pkill -f '[p]hpunit'`** — the bracket trick
+   only stops it matching your OWN shell; it still kills every other agent's
+   phpunit. My own brief told agents to do this and two watchdogs killed sibling
+   runs. A run that dies mid-suite with no summary line looks exactly like a real
+   defect.
+2. **Never write into the live tree at test runtime** — not `src/` (round 7's
+   `CorpusProbe`), not a tracked file (`WorktreeConfigTest`). Make the path
+   injectable instead.
+3. **Concurrent agents must use PRIVATE scratch dirs** — one `rm -rf`'d the shared
+   scratchpad mid-run and destroyed another agent's harness.
+4. **Never edit a file while a run of it is in flight** — it shifts
+   `file(__FILE__)` line ranges against already-loaded reflection and fakes a
+   census failure.
+5. `cp -al vendor` preserves RELATIVE `vendor/sugarcraft/*` symlinks, which dangle
+   and give phantom `Interface "SugarCraft\Core\Model" not found`.
+6. Judge every mutation by the **targeted test file** flipping green→red. Suite
+   totals move constantly with three lanes live.
+
+### Queue
+
+1. **The F7 permission-routing decision** — lane E round 7 returns options; pick one.
+2. Commit lanes D round 9 and E round 7, then re-review both.
+3. **#88** README whole-suite figure, standalone, once the chain stops. Deferred a
+   FOURTH time. True value at `d4906998` is ~**6638 / 68850** — re-measure.
+4. Plan steps **#14** → **#12** → **#17**. #90 is fixed so #17 is unblocked, but
+   **#17 must wait for lane D round 9's corpus fix** (private-constructor shape).
+5. Reported, unowned: `src/ToolRegistry.php` declares its own
+   `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface.
