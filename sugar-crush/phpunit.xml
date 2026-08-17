@@ -22,6 +22,26 @@
         tight enough that an infinite loop reports in a minute. Re-measure with
         phpunit's JUnit log flag if that peak ever moves.
 
+        WHAT THE TIME LIMIT DOES AND DOES NOT BOUND, measured on this host rather
+        than assumed. Three runaway shapes were probed under this config: a pure
+        spin loop aborted at 60.09s; a loop raising a PHP warning every iteration
+        aborted at 61.4s having banked 2,640,658 warnings; a loop appending 4KB
+        strings forever aborted at 65.6s. So the alarm reports for all three. But
+        a reviewer measured a real tokenize() mutant that ran past 600s with RSS
+        over 4GB and produced ONE progress character in ten minutes — under enough
+        memory pressure the abort's own teardown does not complete promptly, and
+        the practical failure mode becomes "the CI job hangs until the CI timeout".
+        The limit is therefore a bound on TIME SPENT COMPUTING, not a bound on a
+        process that has started thrashing.
+
+        Which is why memory_limit is set below. PHP's CLI default here is -1, so
+        an allocating runaway grows until the machine swaps. Measured on the same
+        4KB-append loop: unlimited took 65.6s (38s of it in sys, i.e. paging);
+        at 1G it dies in 0.626s with "Allowed memory size of 1073741824 bytes
+        exhausted". Same defect, same red, two orders of magnitude less damage.
+        1G is ~4x the whole suite's measured peak of 253.25MB, so it has room to
+        spare for legitimate work; raise it if that peak ever approaches it.
+
         failOnRisky is what makes the limit bite. PHPUnit records a timed-out test
         as RISKY, and risky alone still exits 0 — measured: the abort printed
         "This test was aborted after 60 seconds" under a green "OK, but there were
@@ -40,6 +60,9 @@
         own alarms instead, which is why they are also the tests least in need of
         this one.
     -->
+    <php>
+        <ini name="memory_limit" value="1G"/>
+    </php>
     <testsuites>
         <testsuite name="SugarCrush">
             <directory>tests</directory>
