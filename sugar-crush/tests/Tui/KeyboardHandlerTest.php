@@ -1476,9 +1476,79 @@ final class KeyboardHandlerTest extends TestCase
     }
 
     /**
+     * Exactly which keys escape the shell in `Pane::Agents`, swept rather than
+     * reasoned about — the figure `Renderer::$keyHelpMaxOffset`'s docblock rests
+     * on when it argues that its process-global ceiling cannot go stale there.
+     * That pane paints a bespoke frame (`Tui\Renderer::renderAgentDashboard()`)
+     * which never enters `Crush\Renderer::renderView()`'s overlay chain, so the
+     * ceiling is not cleared; what makes it harmless is that nothing reachable
+     * in the pane calls `Chat::withKeyHelp()`.
+     *
+     * `shellOwnsKeyboard()` being true is NOT "the shell claims every key":
+     * `claims()` consults `chatOwns()` FIRST, so Chat's own chords still escape.
+     * A first draft of the renderer comment said three did; swept, it is six.
+     *
+     * Domain: 95 printable runes x Ctrl on/off, plus the nine named keys this
+     * app binds x Ctrl on/off. What the six do — dispatch `/agents`, quit,
+     * toggle a tool's output, open the palette, delete a word, cycle sessions —
+     * is why none of them can consume a stale ceiling; the two routes that COULD
+     * (`?`, and `Enter` reaching `submit()`'s `/keys` arm) are both claimed here.
+     */
+    public function testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane(): void
+    {
+        $claims = new \ReflectionMethod(KeyboardHandler::class, 'claims');
+        $agents = $this->createApp(Pane::Agents);
+
+        $printable = [];
+        for ($c = 32; $c < 127; $c++) {
+            $printable[] = chr($c);
+        }
+        $this->assertCount(95, $printable, 'fixture: the sweep width the docblock states');
+
+        $named = [
+            KeyType::Tab, KeyType::Up, KeyType::Down, KeyType::Enter, KeyType::Escape,
+            KeyType::Backspace, KeyType::PageUp, KeyType::PageDown, KeyType::F10,
+        ];
+
+        $escaped = [];
+        foreach ($printable as $rune) {
+            foreach ([false, true] as $ctrl) {
+                if (!$claims->invoke($this->handler, new KeyMsg(KeyType::Char, $rune, ctrl: $ctrl), $agents)) {
+                    $escaped[] = ($ctrl ? 'Ctrl+' : '') . $rune;
+                }
+            }
+        }
+        foreach ($named as $type) {
+            foreach ([false, true] as $ctrl) {
+                if (!$claims->invoke($this->handler, new KeyMsg($type, '', ctrl: $ctrl), $agents)) {
+                    $escaped[] = ($ctrl ? 'Ctrl+' : '') . $type->name;
+                }
+            }
+        }
+
+        $this->assertSame(
+            ['Ctrl+a', 'Ctrl+c', 'Ctrl+o', 'Ctrl+p', 'Ctrl+w', 'Ctrl+Tab'],
+            $escaped,
+            'these six reach Chat in Pane::Agents and no others — none of them calls withKeyHelp(), '
+            . 'which is what keeps that pane from consuming a stale overflow ceiling',
+        );
+
+        // And the two routes that WOULD reach withKeyHelp() are both claimed, so
+        // the reference cannot be opened from this pane at all.
+        foreach ([new KeyMsg(KeyType::Char, '?'), new KeyMsg(KeyType::Enter)] as $blocked) {
+            $this->assertTrue(
+                $claims->invoke($this->handler, $blocked, $agents),
+                'the shell must claim both routes to the keybinding reference in Pane::Agents',
+            );
+        }
+    }
+
+    /**
      * The `shellOwnsKeyboard($app)` conjunct inside `chatOwns()`, pinned at the
-     * predicate because routing cannot see it: claim rule 2 already claims
-     * every key in exactly these three states, and
+     * predicate because routing cannot see it: inside those three states rule 2
+     * claims every key `chatOwns()` has not already taken — see
+     * {@see testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()} for the six
+     * that it has — and
      * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
      * yielded rune out of the shell's own set, so a mutation that yields the
      * chord unconditionally produces byte-identical routing everywhere.

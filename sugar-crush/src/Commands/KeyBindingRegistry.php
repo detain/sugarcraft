@@ -295,9 +295,14 @@ final class KeyBindingRegistry
      * not neutral here: opening the skill picker in `Pane::Skills` flips
      * `KeyboardHandler::shellOwnsKeyboard()`, which is the very predicate
      * choosing which set derives (`ctrl+r` there goes `{Chat}` → `{Chat,
-     * YIELDED}`). So the same rune × Ctrl sweep is run again over the 8
+     * YIELDED}`). So the same rune × Ctrl sweep is run again over a CORPUS of 8
      * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 712
-     * derive one, 48 derive two, none derive three. Both distributions are
+     * derive one, 48 derive two, none derive three. A corpus, not an
+     * enumeration: it covers `AgentViewMode` exhaustively but the agent view's
+     * selection index only at -1 and 0, two skill options, and the menu strip's
+     * first menu — `KeyboardHandlerTest::keyboardOwningSubStates()` states that
+     * boundary, and its `assertCount(8, …)` pins the corpus SIZE, not that 8 is
+     * how many such sub-states exist. Both distributions are
      * properties of THIS row set — add a `Ctrl+<rune>` row and they move. The
      * ceiling of two is the part that belongs to the routing rule.
      *

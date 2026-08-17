@@ -107,6 +107,135 @@ final class KeyHelpTest extends TestCase
         $this->assertNull($next->keyHelp());
     }
 
+    /**
+     * `/keys` is a discoverable NAME for the reference, never a way to reach it
+     * past a half-typed draft — and both the README and `Chat::submit()`'s own
+     * comment claimed the second until this test existed.
+     *
+     * `submit()` trims the WHOLE buffer and compares it exactly, so with a draft
+     * in the box the command is just more prose. Driven one keystroke per
+     * character, exactly as a user types them, because that is the difference
+     * between this and reasoning about `submit()`: the earlier false claim was
+     * written by reading the method rather than typing into it.
+     *
+     * The consequence is the one worth pinning — following the old README
+     * silently SENT `why/keys` to the backend as a prompt.
+     */
+    public function testSlashKeysInAHalfTypedDraftIsSentAsAPromptNotAsACommand(): void
+    {
+        foreach (['/keys', '/help'] as $command) {
+            $chat = $this->chat();
+            foreach (preg_split('//u', 'why' . $command, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $rune) {
+                [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
+            }
+
+            $this->assertSame('why' . $command, $chat->inputBuf);
+            $this->assertSame([], $chat->slashMenuMatches(), 'the popup needs a leading "/", not an inner one');
+
+            [$sent] = $chat->update(new KeyMsg(KeyType::Enter));
+            $this->assertNull($sent->keyHelp(), "'why{$command}' must not open the reference");
+            $this->assertContains(
+                'why' . $command,
+                self::contents($sent),
+                'it goes to the model as a prompt, which is exactly why this is not an escape hatch',
+            );
+        }
+
+        // And the route that DOES work from a draft: clear it, then "?".
+        $chat = $this->chat('why');
+        for ($i = 0; $i < 3; $i++) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Backspace));
+        }
+        $this->assertSame('', $chat->inputBuf, 'fixture: the draft is cleared by backspacing');
+
+        [$open] = $chat->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertSame(0, $open->keyHelp());
+    }
+
+    /**
+     * The stronger half of the same claim, and the one that makes "`/keys` is a
+     * name, not an escape hatch" a property rather than an anecdote: the two
+     * routes stand or fall TOGETHER. If a state existed where the command worked
+     * and `?` did not, the command would be an escape hatch after all and the
+     * README row above would be wrong again.
+     *
+     * Domain: the six states in {@see openRouteStates()}, each driven and each
+     * asserted to paint a distinct frame. Note the in-flight one, where NEITHER
+     * route opens the reference — the point is the agreement, not that both
+     * always succeed.
+     */
+    public function testTheCommandAndTheShortcutOpenTheReferenceInExactlyTheSameStates(): void
+    {
+        foreach ($this->openRouteStates() as $label => $chat) {
+            [$viaShortcut] = $chat->update(new KeyMsg(KeyType::Char, '?'));
+
+            $typed = $chat;
+            foreach (['/', 'k', 'e', 'y', 's'] as $rune) {
+                [$typed] = $typed->update(new KeyMsg(KeyType::Char, $rune));
+            }
+            [$viaCommand] = $typed->update(new KeyMsg(KeyType::Enter));
+
+            $this->assertSame(
+                $viaShortcut->keyHelp() !== null,
+                $viaCommand->keyHelp() !== null,
+                "'?' and '/keys' must agree about whether the reference opens ({$label}) — a state where "
+                . 'only the command worked would make it the escape hatch the docs must not claim',
+            );
+        }
+    }
+
+    /**
+     * States a user reaches from which either route to the reference might be
+     * tried, each driven rather than assembled so it is a state `Chat` can really
+     * be in, and each verified DISTINCT rather than assumed to be. `Ctrl+R` was
+     * a seventh entry and was dropped: it finds no sessions on this fixture and
+     * the resulting frame is byte-identical to the idle one, so it was a second
+     * copy of the first row wearing a different label.
+     *
+     * @return array<string, Chat>
+     */
+    private function openRouteStates(): array
+    {
+        [$inFlight] = $this->chat('hello')->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($inFlight->inFlight, 'fixture: a turn must be in flight');
+        $this->assertSame('', $inFlight->inputBuf, 'fixture: sending clears the draft');
+
+        [$palette] = $this->chat()->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($palette->palette(), 'fixture: Ctrl+P must open the palette');
+
+        // A long transcript, because PageUp on the two-message fixture scrolls
+        // nowhere — measured, offset stays 0 and the frame is byte-identical to
+        // the idle one, so it would have been another duplicate row. The extra
+        // history is the price of the state being real.
+        $history = [];
+        for ($i = 0; $i < 40; $i++) {
+            $history[] = Message::user('question ' . $i);
+            $history[] = Message::assistant('answer ' . $i);
+        }
+        $long = (new Chat(history: $history, inputBuf: '', backend: new EchoBackend()))->withSize(100, 30);
+        $long->view();
+        [$scrolled] = $long->update(new KeyMsg(KeyType::PageUp));
+        $this->assertGreaterThan(0, $scrolled->scrollOffset(), 'fixture: PageUp must scroll back');
+
+        $states = [
+            'empty and idle' => $this->chat(),
+            'a half-typed draft' => $this->chat('why'),
+            'a turn in flight' => $inFlight,
+            'the palette open' => $palette,
+            'a permission prompt pending' => $this->blockedOnPermission(),
+            'the transcript scrolled back' => $scrolled,
+        ];
+
+        $frames = array_map(fn(Chat $c): string => $this->body($c), $states);
+        $this->assertCount(
+            count($states),
+            array_unique($frames),
+            'fixture: every state must paint a DIFFERENT frame — two rows that render alike are one row',
+        );
+
+        return $states;
+    }
+
     public function testTheSlashPopupListsKeys(): void
     {
         $this->assertSame(['keys'], self::popup('keys'));
@@ -244,9 +373,18 @@ final class KeyHelpTest extends TestCase
     {
         // Two sizes, because the hint is a different string in each: 100x30
         // overflows the box (53 live rows plus 9 headers and 8 separators = 70
-        // content lines, against a 27-line body) so the footer carries the
+        // content lines, against a 25-line body) so the footer carries the
         // scroll clause as well, while 100x80 fits the whole list and drops it.
-        foreach ([[100, 30], [100, 80]] as [$cols, $rows]) {
+        //
+        // The 25 derives from renderKeyHelp() rather than being counted off a
+        // screenshot: at 100x30, keyHelpGeometry() gives boxRows = rows - 2 = 28,
+        // the border takes two more so viewport = 26, and the footer itself
+        // takes one, so body = 25. Which is why the measured
+        // Renderer::keyHelpMaxOffset() here is 70 - 25 = 45; an earlier version
+        // of this comment said 27, a body that would have made it 43. Both
+        // overflow figures are asserted below rather than left in the prose,
+        // since a body height stated and not read back is what went wrong.
+        foreach ([[100, 30, 45], [100, 80, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -254,7 +392,93 @@ final class KeyHelpTest extends TestCase
                 $this->body($open),
                 "the footer must disclose the literal-? insert at {$cols}x{$rows}",
             );
+            $this->assertSame(
+                $expectedOverflow,
+                Renderer::keyHelpMaxOffset(),
+                "the box overflows by {$expectedOverflow} lines at {$cols}x{$rows}, which is what selects "
+                . 'which of the two footer strings is painted',
+            );
         }
+    }
+
+    /**
+     * The footer's own width margin, asserted — the symmetric treatment to
+     * {@see testTheTooSmallCueIsNeverWiderThanTheBarItReplaces()}. The footer
+     * grew from 39 to 63 columns when the `?` clause was added, against
+     * `Renderer::KEY_HELP_COLS = 64`, and one column of headroom stated in a
+     * comment and read back by nothing is exactly the shape of figure this
+     * feature keeps getting wrong.
+     *
+     * Instrument: `Width::of` on the footer row of the box
+     * ({@see overlay()}'s output, second-to-last line) with its SGR runs and
+     * border/padding stripped — the columns the row actually spends. `strlen`
+     * reads 69 for the same string because of the multi-byte `·` and `↑↓`, and
+     * that number is not the one the renderer sizes against: `Width::truncate()`
+     * is column-correct, so those bytes never make the row over-wide.
+     *
+     * Domain: cols 68 and up, which is where the box reaches its full
+     * `KEY_HELP_COLS` content width (`cols - KEY_HELP_CHROME_COLS >= 64`) and
+     * therefore where the footer is under the least pressure — if it fits
+     * nowhere, it fits here.
+     *
+     * The second half is the truncation COST, which the renderer's comment used
+     * to understate as "may be truncated without losing a binding": no row of
+     * the reference is lost, but the footer loses its own content, and by cols
+     * 14 it is down to `Esc closes` with the `?` clause gone entirely. That is
+     * the ordering working as intended (Esc first, scroll clause last), not a
+     * free truncation — so it is measured rather than described.
+     */
+    public function testTheFooterFitsTheBoxWithARealMarginAndLosesItsTailFirst(): void
+    {
+        $chrome = (new \ReflectionClass(Renderer::class))->getConstant('KEY_HELP_CHROME_COLS');
+        $limit = (new \ReflectionClass(Renderer::class))->getConstant('KEY_HELP_COLS');
+        self::assertIsInt($chrome);
+        self::assertIsInt($limit);
+
+        foreach ([68, 80, 120, 200] as $cols) {
+            $this->assertGreaterThanOrEqual(
+                $limit,
+                $cols - $chrome,
+                "fixture: the box must be at its full content width at cols={$cols}",
+            );
+
+            $this->assertSame(
+                63,
+                Width::of($this->footer($this->chat('', $cols, 30))),
+                "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
+                . 'column of margin, and it is this test that keeps it real',
+            );
+            $this->assertSame(
+                35,
+                Width::of($this->footer($this->chat('', $cols, 80))),
+                'and the non-scrolling form, which is what a box tall enough for the whole list paints',
+            );
+        }
+
+        // The tail goes first, all the way down: Esc — named first precisely so
+        // it survives — is the last thing standing.
+        $this->assertSame('Esc closes', $this->footer($this->chat('', 14, 30)));
+        $this->assertStringStartsWith('Esc closes', $this->footer($this->chat('', 40, 30)));
+        $this->assertStringNotContainsString(
+            'scroll',
+            $this->footer($this->chat('', 40, 30)),
+            'the scroll clause is last, so it is the first clause a narrow box loses',
+        );
+    }
+
+    /**
+     * The reference box's footer row — its last content line — with SGR runs,
+     * border glyphs and right-hand padding stripped, so a width measurement
+     * counts the columns the hint itself spends.
+     */
+    private function footer(Chat $chat): string
+    {
+        $box = $this->overlay($chat->withKeyHelp(0));
+        $this->assertNotSame([], $box, 'fixture: the box must be painted for it to have a footer');
+
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', $box[count($box) - 2]) ?? '';
+
+        return rtrim(trim($plain, '│ '), ' ');
     }
 
     public function testAStrayLetterCannotTypeIntoTheInputBoxBehindIt(): void
@@ -784,6 +1008,88 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
+     * The same bound as a SWEEP rather than four samples, and the reason
+     * {@see Renderer::renderStatusBar()}'s comment no longer quotes a width
+     * table: the range in that comment was wrong in two consecutive rounds,
+     * because prose has nothing reading it back. These are the figures the
+     * comment used to state.
+     *
+     * Instrument: {@see statusBar()}, i.e. `Width::of` after
+     * `stripZoneMarkers()`.
+     * Domain: cols 1-400 against rows {1,2,3,4,5,6,10,20,30,50,80,200} on
+     * {@see chat()}'s fixture — a two-message chat over `EchoBackend`, idle, no
+     * prompt pending. 9,600 renders, well under a second.
+     *
+     * Note the split inside that domain, which is itself a correction: the cue
+     * is emitted only where `keyHelpGeometry()` returns null, i.e. `cols <= 4`
+     * or `rows <= 4`. Everywhere else the box fits and the bar with the
+     * reference OPEN is just the ordinary bar. Writing this test as "the cue is
+     * always 33 across the sweep" failed on the first run for exactly that
+     * reason, which is the same domain slip in miniature that put a wrong width
+     * range in the renderer's comment twice.
+     *
+     * What it pins, each over the part of the domain named:
+     *
+     * 1. wherever the cue IS emitted, it is a CONSTANT 33 columns — it carries
+     *    no readout, so nothing in it varies with the terminal;
+     * 2. the bar takes exactly the four values 54/62/65/75 over the whole sweep,
+     *    so its FLOOR is 54 and 33 <= 54 everywhere;
+     * 3. the bar responds to COLUMNS ONLY. That is the half the old comment got
+     *    backwards when it said the bar "is still 54 columns" wherever this cue
+     *    fires: `rows <= 4` fires it too, and at 100x4 the bar is 75.
+     */
+    public function testTheBarIsNeverNarrowerThanTheTooSmallCueAtAnySize(): void
+    {
+        $cueWidths = [];
+        $barWidths = [];
+        $cueSizes = 0;
+        /** @var array<int, array<int, true>> $barByCol */
+        $barByCol = [];
+
+        foreach ([1, 2, 3, 4, 5, 6, 10, 20, 30, 50, 80, 200] as $rows) {
+            for ($cols = 1; $cols <= 400; $cols++) {
+                $sized = $this->chat('', $cols, $rows);
+
+                $withReference = $this->statusBar($sized->withKeyHelp(0));
+                if (str_contains($withReference, 'window too small')) {
+                    ++$cueSizes;
+                    $cueWidths[Width::of($withReference)] = true;
+                    $this->assertTrue(
+                        $cols <= 4 || $rows <= 4,
+                        "the cue may only fire under keyHelpGeometry()'s 5x5 floor ({$cols}x{$rows})",
+                    );
+                }
+
+                $bar = Width::of($this->statusBar($sized));
+                $barWidths[$bar] = true;
+                $barByCol[$cols][$bar] = true;
+            }
+        }
+
+        // 4 rows x 400 cols, plus 400 cols' worth of the cols<=4 band at the
+        // other 8 row values: 1600 + 32.
+        $this->assertSame(1632, $cueSizes, 'fixture: the cue really is emitted over the band claimed');
+        $this->assertSame([33], array_keys($cueWidths), 'the cue carries no readout, so it cannot vary');
+
+        $bars = array_keys($barWidths);
+        sort($bars);
+        $this->assertSame([54, 62, 65, 75], $bars, 'the bar widens in four steps as the readouts fit');
+        $this->assertLessThanOrEqual(
+            min($bars),
+            33,
+            'the cue must fit inside the NARROWEST bar it can replace — the bar is the one line this '
+            . 'renderer never truncates, so a wider cue would overflow by more than the bar already does',
+        );
+
+        // Rows do not enter it: one width per column across every row tried.
+        // Without this, "the bar does not shrink with the terminal" is the
+        // unverified sentence that produced the wrong claim.
+        foreach ($barByCol as $cols => $seen) {
+            $this->assertCount(1, $seen, "the bar's width must not depend on rows (cols={$cols})");
+        }
+    }
+
+    /**
      * `Renderer::$keyHelpMaxOffset` is process-global and read by production
      * code ({@see Chat::withKeyHelp()} clamps against it), so it is the same
      * shape as the three statics this feature's review round had to add resets
@@ -838,9 +1144,13 @@ final class KeyHelpTest extends TestCase
      * finds only those two.
      *
      * Deleting the guard outright turns exactly this one test red, and so does
-     * making its body throw when it fires — measured over the 252 tests in the
+     * making its body throw when it fires — measured over the 265 tests in the
      * three files that build a `PermissionRequestMsg` at all AND, separately,
-     * over `ChatTest`'s 215, which stay green under both. That second domain is
+     * over `ChatTest`'s 215, which stay green under both. (That 265 is a count
+     * this file's OWN size feeds, so it is re-measured whenever tests are added
+     * here, not carried forward; it stood at 252 for one round after the round
+     * that added eight tests to those very files, and it moved twice inside the
+     * round that fixed it.) That second domain is
      * why the earlier wording here was wrong: it said no other test can even
      * REACH a stamped ASK, and 14 `ChatTest` tests do, through the two producers
      * above. What they cannot do is make the comparison true. See

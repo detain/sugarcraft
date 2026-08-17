@@ -545,6 +545,75 @@ final class KeyBindingDriftTest extends TestCase
         );
     }
 
+    /**
+     * {@see token()}'s ASCII-printable narrowing, pinned — the sibling of
+     * {@see testTheOnlySequenceLabelIsStillWrittenAsASequence()}, which pins the
+     * other latent parser hazard in the same method. This one shipped with no
+     * pin at all: reverting the guard to its loose pre-fix form
+     * (`mb_strlen($token) === 1 ? new KeyMsg(KeyType::Char, $token) : null`)
+     * left this whole file green.
+     *
+     * What the loose form did: relabelling a row from `Enter` to `⏎` produced a
+     * `KeyMsg(Char, '⏎')` — a rune no terminal sends and no arm in the app
+     * answers — while
+     * {@see testEveryLabelIsALiteralChordOrADeclaredException()}'s "not []"
+     * guard still passed, because a KeyMsg HAD been produced. The observation
+     * would then press a key nobody can type and assert whatever that no-op
+     * left behind. Rejecting the glyph sends such a relabel to that test
+     * instead, which is where a label this suite cannot press belongs.
+     *
+     * Both directions are asserted, because a narrowing aimed at glyphs could
+     * easily take the real single-character tokens with it. Measured over
+     * {@see KeyBindingRegistry::all()} and the `(or …)` spellings inside every
+     * description, those are exactly `? a c h j k l n o q r s y` plus the four
+     * arrows — 13 printable-ASCII runes and 4 glyphs — so the positive half
+     * below covers the two extremes of that set and the range's own boundaries.
+     */
+    public function testAGlyphLabelIsUnreadableRatherThanPressedAsARune(): void
+    {
+        // Rejected: outside printable ASCII and not in token()'s named map.
+        // '⏎' is the concrete relabel the guard exists for; the control bytes
+        // are the other half of "printable", which "single glyph" also let in.
+        $rejected = [
+            '⏎' => 'return glyph',
+            '⇧' => 'shift glyph',
+            '␛' => 'escape glyph',
+            "\x01" => 'Ctrl-A byte',
+            "\x7f" => 'DEL byte',
+        ];
+        foreach ($rejected as $token => $why) {
+            $this->assertNull(
+                self::token($token),
+                "token() must not read the {$why} back as a printable rune press — nothing in the app "
+                . 'answers it, so the label would look driven and be inert',
+            );
+            $this->assertSame(
+                [],
+                self::chord($token),
+                "and one unreadable token makes the whole label unreadable ({$why})",
+            );
+        }
+
+        // Accepted: runes actually in use (`?` labels `chat.keys`, `j`/`k` are
+        // `*.move`'s alternates, `y`/`n` are the permission answers) plus the
+        // printable range's own two boundaries, ' ' and '~'.
+        foreach (['?', 'j', 'k', 'y', 'n', ' ', '~'] as $rune) {
+            $key = self::token($rune);
+            $this->assertNotNull($key, "token() must still read '{$rune}' as a rune press");
+            $this->assertSame(KeyType::Char, $key->type);
+            $this->assertSame($rune, $key->rune);
+        }
+
+        // And the named glyphs still resolve through the map ABOVE the guard, so
+        // narrowing it cannot have cost the eight arrow-labelled rows.
+        $arrows = ['↑' => KeyType::Up, '↓' => KeyType::Down, '←' => KeyType::Left, '→' => KeyType::Right];
+        foreach ($arrows as $glyph => $type) {
+            $key = self::token($glyph);
+            $this->assertNotNull($key, "the named map must still resolve '{$glyph}'");
+            $this->assertSame($type, $key->type);
+        }
+    }
+
     public function testNoObservationDescribesABindingThatIsNoLongerDeclared(): void
     {
         foreach (array_keys($this->observations()) as $id) {
@@ -1515,6 +1584,10 @@ final class KeyBindingDriftTest extends TestCase
         // label this suite cannot press is supposed to surface. Every glyph
         // label in use (↑ ↓ ← →) is in the named map above; the day another one
         // is added it goes there, or the row goes in HAND_DRIVEN.
+        //
+        // Pinned by testAGlyphLabelIsUnreadableRatherThanPressedAsARune(): with
+        // this narrowing reverted to `mb_strlen($token) === 1`, the whole file
+        // stayed green, so the tightening could be undone without a single red.
         return strlen($token) === 1 && $token >= ' ' && $token <= '~'
             ? new KeyMsg(KeyType::Char, $token)
             : null;
@@ -1532,14 +1605,34 @@ final class KeyBindingDriftTest extends TestCase
         (new \ReflectionProperty(Chat::class, 'clickTracker'))->setValue(null, null);
     }
 
+    /**
+     * `scandir()` rather than a `glob()` of `$dir` plus slash-star, which does
+     * not match DOT entries:
+     * {@see inGitRepoOnBranch()}'s fixture repo contains nothing BUT
+     * `.git` (measured with `find` on the fixture: `repo-drift-branch/.git` and
+     * nothing else), so the glob form unlinked nothing, both `rmdir()` calls
+     * failed as non-empty, and every run left a 128K repo plus its sandbox root
+     * in `sys_get_temp_dir()` forever. Measured before and after: with the glob
+     * form, one leaked `crush_keybind_drift_*` tree per run; with this one, a run
+     * from an empty `/tmp` leaves zero.
+     *
+     * `is_link()` before `is_dir()` because a symlink to a directory answers
+     * `is_dir()` true, and recursing through one would delete OUTSIDE the
+     * sandbox. Nothing here creates one today; `git init` templates are the kind
+     * of thing that could.
+     */
     private function removeTree(string $dir): void
     {
-        if ($dir === '' || !is_dir($dir)) {
+        if ($dir === '' || !is_dir($dir) || is_link($dir)) {
             return;
         }
 
-        foreach (glob($dir . '/*') ?: [] as $path) {
-            is_dir($path) ? $this->removeTree($path) : @unlink($path);
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) && !is_link($path) ? $this->removeTree($path) : @unlink($path);
         }
         @rmdir($dir);
     }

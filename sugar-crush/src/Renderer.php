@@ -574,13 +574,30 @@ final class Renderer
      * clamps against it), which is the shape of the three statics this feature's
      * review round had to add resets for — and it needs no reset seam, for a
      * reason that is a property rather than a habit: {@see renderKeyHelp()} runs
-     * FIRST in {@see renderView()}'s overlay chain, so it runs on every frame,
-     * and its two early returns (reference closed, or box does not fit) both
-     * zero this before returning ''. One frame without the reference therefore
-     * clears it. A stale value can only survive between a frame that painted the
-     * reference and a `withKeyHelp()` call with no frame in between — which is
-     * why the self-reset is asserted rather than assumed, by
+     * FIRST in {@see renderView()}'s overlay chain, so it runs on every frame
+     * THIS renderer paints, and its two early returns (reference closed, or box
+     * does not fit) both zero this before returning ''. One such frame therefore
+     * clears it, which is asserted rather than assumed, by
      * `KeyHelpTest::testTheOverflowCeilingResetsItselfOnAFrameWithoutTheReference()`.
+     *
+     * "Every frame this renderer paints" is the honest bound, not "every frame":
+     * under the pane shell, `Pane::Agents` builds a bespoke frame that never
+     * enters this chain (`Tui\Renderer::renderAgentDashboard()`), so painted
+     * frames exist that leave the ceiling alone. The conclusion survives on a
+     * second guarantee rather than on this one — nothing in that pane can reach a
+     * `withKeyHelp()` call at all. Swept, rather than argued: over the 95
+     * printable runes x Ctrl on/off plus the nine named keys x Ctrl on/off,
+     * `KeyboardHandler::claims()` in `Pane::Agents` lets exactly SIX chords
+     * through to `Chat` — `Ctrl+A`, `Ctrl+C`, `Ctrl+O`, `Ctrl+P`, `Ctrl+W`,
+     * `Ctrl+Tab` — and none of the six is a `withKeyHelp()` caller: they dispatch
+     * `/agents`, quit, toggle a tool's output, open the palette, delete a word
+     * and cycle sessions. Both routes to the reference are claimed by the shell
+     * there: `?` (unmodified, so rule 2 takes it) and `Enter`, without which
+     * `submit()`'s `/keys` arm is unreachable too. And {@see renderKeyHelp()}
+     * re-clamps `$start` against a freshly measured ceiling regardless.
+     *
+     * A stale value can therefore only be READ between a frame that painted the
+     * reference and a `withKeyHelp()` call with no frame in between.
      */
     private static int $keyHelpMaxOffset = 0;
 
@@ -977,11 +994,13 @@ final class Renderer
         // deliberately — and walks the whole chain, so every one of the six
         // pairs fails if this order changes.
         //
-        // renderKeyHelp() being first also means it runs on EVERY frame, which
-        // is what keeps its $keyHelpMaxOffset ceiling from going stale: were it
-        // last, an earlier overlay winning the slot would leave the ceiling at
-        // whatever the last painted reference measured, and Chat::withKeyHelp()
-        // clamps against it.
+        // renderKeyHelp() being first also means it runs on every frame THIS
+        // method paints, which is what keeps its $keyHelpMaxOffset ceiling from
+        // going stale: were it last, an earlier overlay winning the slot would
+        // leave the ceiling at whatever the last painted reference measured, and
+        // Chat::withKeyHelp() clamps against it. Not every frame the app paints
+        // goes through here — $keyHelpMaxOffset's own docblock names the hosted
+        // Pane::Agents exception and why it is harmless.
         $overlay = self::renderKeyHelp($chat, $theme);
         if ($overlay === '') {
             $overlay = self::renderPermissionPrompt($chat, $theme);
@@ -1047,15 +1066,25 @@ final class Renderer
         // reads the multi-byte glyphs as bytes; the same instrument
         // KEY_HELP_OVER_PROMPT's floor is measured with, for the same reason.
         // Fixture: a two-message chat (one user, one assistant) over
-        // EchoBackend, idle, no prompt pending.
-        // Measured on that fixture: this cue 33 columns, against 54 for the
-        // bar at every width below 79 and 75 at 79 and above — the context
-        // readout gains its token count once there is room to print it. Note
-        // the bar does NOT shrink with the terminal, which is the whole point:
-        // at the sizes that bring this cue out (cols < 5 or rows < 5, see
-        // keyHelpGeometry()) the bar it stands in for is still 54 columns.
-        // testTheTooSmallCueIsNeverWiderThanTheBarItReplaces() asserts the
-        // comparison against the rendered bar rather than restating it here.
+        // EchoBackend, idle, no prompt pending — KeyHelpTest::chat() and its
+        // statusBar() helper.
+        // The bound is two numbers: this cue is a CONSTANT 33 columns, and the
+        // bar's NARROWEST form on that fixture is 54. 33 <= 54, so replacing the
+        // bar with the cue can never widen the frame.
+        //
+        // Both numbers are swept and ASSERTED rather than restated here, by
+        // testTheBarIsNeverNarrowerThanTheTooSmallCueAtAnySize() (which also
+        // pins that the bar tracks COLUMNS only and takes exactly four values)
+        // and testTheTooSmallCueIsNeverWiderThanTheBarItReplaces() (the
+        // per-size comparison). Deliberately NO width table in this comment: it
+        // has now carried a wrong bar figure twice in consecutive rounds, because
+        // a range written in prose has nothing reading it back. First it said
+        // "73-94", which matches no instrument at all on this fixture; then "54
+        // at every width below 79 and 75 at 79 and above", which is wrong in both
+        // halves — the bar is 62 for cols 62-64 and 65 for 65-74, and the step to
+        // 75 is at 75. The sentence that followed it, that the bar "is still 54"
+        // wherever this cue fires, is wrong too: `rows <= 4` fires the cue as
+        // well, and at 100x4 the bar is 75.
         if ($chat->keyHelp() !== null && self::keyHelpGeometry($chat) === null) {
             return self::KEY_HELP_TOO_SMALL;
         }
@@ -2485,11 +2514,18 @@ final class Renderer
                 //
                 // Widths, measured with Width::of against KEY_HELP_COLS = 64,
                 // the box's widest content: 63 columns for the scrolling form
-                // and 35 for the other. One column of headroom is thin, but the
-                // footer is the ONE line here that may be truncated without
-                // losing a binding — Width::truncate() below does that, and the
-                // scroll clause is deliberately last so a narrow box loses it
-                // before it loses either close key.
+                // and 35 for the other, so one column of headroom. Thin, and
+                // asserted rather than trusted —
+                // KeyHelpTest::testTheFooterFitsTheBoxWithARealMarginAndLosesItsTailFirst().
+                //
+                // Truncating this line is the cheapest truncation in the box
+                // because it loses no ROW of the reference, but it is not free
+                // and an earlier version of this comment implied it was: the
+                // footer loses its own clauses, and measured, by cols 14 it
+                // reads just `Esc closes` with the `?` clause gone. Clause
+                // ORDER is what makes that acceptable — Esc first so it is the
+                // last thing standing, the scroll clause last so a narrow box
+                // spends it first.
                 self::$keyHelpMaxOffset > 0
                     ? 'Esc closes · ? closes and types "?" · ↑↓ PgUp/PgDn wheel scroll'
                     : 'Esc closes · ? closes and types "?"',

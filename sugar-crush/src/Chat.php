@@ -1059,31 +1059,48 @@ final class Chat implements Model
         // this comment claimed the second: measured, 14 ChatTest tests reach
         // one, through exactly the two producers above. They cannot make the
         // comparison true, which is the property -- not that they never get
-        // here. Re-measured on PHP 8.3.6, four mutations of the two lines
-        // below, each judged by the targeted files going red:
+        // here. Mutations of the two lines below, each judged by the targeted
+        // files going red:
         //
-        //   | mutation                        | trio (252) | ChatTest (215)  |
+        //   | mutation                        | trio (265) | ChatTest (215)  |
         //   |---------------------------------|------------|-----------------|
         //   | guard deleted                   | 1 failure  | green           |
         //   | throw when the guard FIRES      | 1 error    | green           |
         //   | throw on ANY stamped ask        | 1 error    | 14 errors       |
-        //   | 2nd conjunct dropped, so every  | 1 failure  | 11 failures     |
-        //   | stamped ask is discarded        |            | and 1 error     |
+        //   | 2nd conjunct dropped, so every  | green      | 6 failures      |
+        //   | stamped ask is discarded        |            |                 |
         //
         // Row 2 is the honest bound: exactly ONE test anywhere can observe this
         // branch being taken, KeyHelpTest::testASupersededAskNeverPutsUpAPrompt(),
-        // which hand-builds the Msg -- and row 1 shows deleting the guard costs
-        // that same single test. Row 3 is what refutes the old wording. Row 4
-        // changes BEHAVIOUR rather than observability, so its 12 reds say the
-        // stamped-and-current path is well covered; they are not evidence about
-        // this guard's reach, and reporting it as "exactly one test red" was
-        // simply wrong.
+        // which hand-builds the Msg -- and rows 1 and 3 put that same single
+        // test, and only it, red in the trio. Row 3 is what refutes the old
+        // wording. Row 4 changes BEHAVIOUR rather than observability, so its
+        // reds say the stamped-and-current path is covered by ChatTest; they are
+        // not evidence about this guard's reach, and reporting it as "exactly
+        // one test red" was simply wrong.
         //
         // Domains: "trio" is tests/RendererTest.php +
         // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
-        // the three files that construct a PermissionRequestMsg at all (252
-        // tests / 19639 assertions). ChatTest is measured separately BECAUSE
-        // rows 3 and 4 show the trio's silence does not cover it.
+        // the three files that construct a PermissionRequestMsg at all --
+        // `grep -rl PermissionRequestMsg tests/` finds exactly those three. Both
+        // counts are the files as they stand with this comment: trio 265 tests /
+        // 21846 assertions, ChatTest 215 / 770, PHP 8.3.6. ChatTest is measured
+        // separately BECAUSE rows 3 and 4 show the trio's silence does not cover
+        // it.
+        //
+        // All four rows were re-run from scratch for this revision rather than
+        // carried forward, and TWO of row 4's figures did not reproduce: it was
+        // recorded as "1 failure / 11 failures and 1 error" and measures green /
+        // 6 failures, stably over three runs, on a tree where neither ChatTest
+        // nor this method's behaviour has changed since. The likeliest reading is
+        // that the row paired one round's ChatTest number with another round's
+        // trio number. Its conclusion is unaffected and in fact sharpened -- the
+        // trio does not merely under-cover this behaviour, it says nothing about
+        // it at all -- which is exactly why the numbers, not the conclusion, are
+        // what needed re-measuring. A nearby variant is recorded so the row
+        // cannot be misread as covering it: discarding EVERY ask rather than only
+        // stamped ones (`if (true)`) gives trio green / ChatTest 36 failures, 1
+        // error, 6 warnings.
         //
         // So this is not what makes the reference-over-prompt state
         // unreachable, and the sentence claiming it was "the one way that state
@@ -3408,16 +3425,42 @@ final class Chat implements Model
             return [$this, Cmd::quit()];
         }
 
-        // Handle /keys - the same in-app keybinding reference "?" opens, for
-        // the one time "?" cannot be used: a draft is half-typed, and the "?"
-        // arm in update() only binds the character on an EMPTY line. It is not
-        // the way to type a message that starts with "?" — that is the second
-        // "?", which closes the reference and lands the literal character (see
-        // handleKeyHelpKey()); this command opens the very screen such a user
-        // is trying to get past. /help is accepted as the spelling most
-        // other CLIs use. Matched EXACTLY rather than by prefix, unlike the
-        // argument-taking commands below: "/help me name this variable" is a
-        // prompt, not a request for the shortcut list.
+        // Handle /keys - the same in-app keybinding reference "?" opens, under a
+        // NAME rather than a shortcut. That is the whole justification, and it
+        // is about DISCOVERY, not about reach: the row is in CommandRegistry, so
+        // typing "/k" lists it in the "/" popup. Nothing on screen names "?"
+        // before the reference is open -- the idle status bar is
+        // "~0K / 100K context (0%) · Enter to send · Ctrl+P menu · /exit or ^C to
+        // quit", measured -- and the one place it IS named is this row's own
+        // popup description, "(or press ?)", which is precisely the work the row
+        // does. Both spellings' popup rows are asserted, not assumed:
+        // KeyHelpTest::testTheSlashPopupListsKeys() and
+        // ::testTheSlashPopupListsHelpToo().
+        //
+        // It is NOT an escape hatch for a half-typed draft, and two earlier
+        // versions of this comment claimed some form of that. $text is the WHOLE
+        // trimmed buffer and the match below is exact, so the two routes stand or
+        // fall together. Driven as real keystrokes (Chat::update() with KeyMsg,
+        // two-message history over EchoBackend, 100x30): "why" then "/keys"
+        // leaves inputBuf 'why/keys' with the "/" popup empty, and Enter SENDS
+        // "why/keys" to the model as a prompt; "why" then "/" is 'why/' with no
+        // popup either; and clearing the draft first -- "why" then three
+        // Backspaces -- makes BOTH work again.
+        //
+        // Swept across six states, each asserted to paint a distinct frame
+        // (empty+idle, a half-typed draft, a turn in flight, the palette open, a
+        // permission prompt pending, a long transcript scrolled back): in every
+        // one, "?" opens the reference exactly when "/keys"+Enter does. Note the
+        // in-flight state, where NEITHER does. Pinned rather than left as prose,
+        // by KeyHelpTest::testSlashKeysInAHalfTypedDraftIsSentAsAPromptNotAsACommand().
+        // The way to type a message that STARTS with "?" is the second "?",
+        // which closes the reference and lands the literal character (see
+        // handleKeyHelpKey()).
+        //
+        // /help is accepted as the spelling most other CLIs use. Matched
+        // EXACTLY rather than by prefix, unlike the argument-taking commands
+        // below: "/help me name this variable" is a prompt, not a request for
+        // the shortcut list.
         if ($text === '/keys' || $text === '/help') {
             return [$this->withInputBuf('')->withKeyHelp(0), null];
         }

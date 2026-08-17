@@ -154,8 +154,9 @@ all one candy-core `Model` tree — not two parallel UIs.
 
 | Key | Does |
 |-----|------|
-| `?` (empty input) | Show the in-app keyboard reference — also `/keys` (or `/help`) when a draft is half-typed. `Esc`/`Enter`/`q` close it; `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
-| `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on an empty line would otherwise make one impossible. `/keys` is no help there: it opens the same screen |
+| `?` (empty input) | Show the in-app keyboard reference. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
+| `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on an empty line would otherwise make one impossible |
+| `/keys`, `/help` | The same reference, by **name**: typing `/k` or `/h` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Clear the line and either route works |
 | `Enter` | Send |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker |
@@ -375,17 +376,18 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**6,402 tests / 45,552 assertions, 0 failures, 1 skipped** — the whole of
-`sugar-crush/tests/` in one `vendor/bin/phpunit` run on PHP 8.3.6, ~1m50s. The
+**6,424 tests / 51,767 assertions, 0 failures, 1 skipped** — the whole of
+`sugar-crush/tests/` in one `vendor/bin/phpunit` run on PHP 8.3.6, 1m52s. The
 skip is `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`,
 which `markTestSkipped`s itself with "would require mocking built-in functions"
 — reaching `loadConfig()`'s `file_get_contents` failure branch needs a
 `.mcp.json` that `file_exists()` but cannot be read. It is the only skip, and
 `failOnWarning="true"` means the run is also warning-free. (Counts move with
-every commit — the figure is what the suite measured, not a target. The one that
-stood here before, 4,337/12,587, understated it by 2,065 tests and 32,965
-assertions, which is why the run command is quoted beside the number: the number
-is only useful if you can reproduce it.)
+every commit, so this one is re-measured whenever a change adds tests rather than
+left to age — the figure is what the suite measured, not a target. The one that
+first stood here, 4,337/12,587, understated it by over 2,000 tests, and the one
+before this by 22 tests and 6,215 assertions, which is why the run command is
+quoted beside the number: the number is only useful if you can reproduce it.)
 
 Coverage spans every subsystem: typed messages + attachments, all 10 built-in
 tools (the whole of `src/Tools/BuiltIn/`, which is exactly the array
