@@ -992,3 +992,286 @@ The drivers used across P1.2 rounds 3-7 lived in `/tmp` (`sabotage.py`,
 `sugar-crush/.r3-sabotage/` (deleted after #54 landed). **None survive a
 reboot.** If a P1.2 regression is ever suspected, re-derive labels from the
 findings recorded in this worklog rather than trusting those paths.
+
+---
+
+# Session 2026-08-14 → 2026-08-17 — 3 change-sets landed, lane B still open
+
+Ran 3 concurrent lanes through plan items using the standing loop (implement →
+separate reviewer → fix → **back to review** → clean → full suite → commit to
+`master`). The user reduced concurrency to 1 mid-session over API budget, then
+restored it to 3. **The dominant finding of the session: the same class of
+defect — a comment stating a fact nobody had measured — was caught in every
+single review round across all three lanes, nine times in total.**
+
+## Landed
+
+| commit | what |
+|---|---|
+| `c0ae2fdc` | sugar-crush: OSC 11 terminal background query; precedence is override → OSC 11 → `COLORFGBG` → dark |
+| `d1e0f2b1` | sugar-crush: wire the hooks + skills subsystems into the live runtime (63 files, +6084/−263) — closes **#15/#16** |
+| `76f34813` | candy-pty/candy-mosaic/candy-async: pin the loop in the test bootstraps (16 files) — closes **#62** |
+
+## Lane C (#15/#16, hooks + skills wiring) — 6 rounds, landed as `d1e0f2b1`
+
+Rounds 1-3 are recorded above. Rounds 4-6 this session:
+
+**Round 3 closed four HIGHs, all independently re-exploited and confirmed by
+round 4's reviewer**: C1 `/tmp/.sugar-crush/hooks.yaml` loaded ungated (`/tmp`
+is 1777 → any local user plants arbitrary command execution); C2 a symlink in a
+project skill tree (`{repo}/.claude/skills/escape -> $HOME`) putting home files
+into model-reachable prompt context; C3 `trustedProjectHooks: ["."]` trusting
+every repo; C4 Ctrl+P dropping the project hook chain mid-session.
+
+**Round 4 found the real hole, one layer up — B1, the trust gate was
+self-grantable by the agent it gates.** `trustedProjectHooks` lives in
+`~/.sugar-crush/config.json`; default mode is `bypass-permissions`; `Bash` is
+deliberately not path-jailed; and `ProtectFilesHook` covered `.env` /
+`composer.json` / `.git/config` but **not** `.sugar-crush/hooks.yaml` or
+`config.json`. One prompt-injected `Bash` call appends the repo's own path to
+the allowlist, and because C4's fix (correctly) made Ctrl+P re-read both files,
+the repo's shell runs mid-session with no relaunch and no prompt. Created by
+this change-set: before #15/#16 nothing read those files, so writing them was
+inert.
+
+**Round 5's fix used two independent defences**, because a substring match on a
+Bash command is not a boundary:
+- *Write side* — policy files and the agents dir join the protected patterns,
+  matched against both the given spelling and the canonical path (resolving the
+  file, or parent+basename when it does not exist yet), so a symlink at either
+  the file or its directory is caught.
+- *Read side*, which is the actual fix — `trustedRootsForThisProcess()` resolves
+  trust **once per process**; `hookFileEntries()` reads each hook file **once
+  per launch** and replays parsed entries into every manager. A grant written
+  during a session cannot take effect in it. Plus `requirePrivatePolicyFile()`
+  refusing world-writable or foreign-owned policy files (group-writable
+  deliberately allowed — Debian/Ubuntu ship umask 002 with user-private groups).
+
+**Admitted residual, stated not buried**: a write that survives the deny takes
+effect on the *next* launch, and that cannot be closed from here — a session
+that runs shell as the user can leave anything in the user's home. The narrower
+claim the gate now makes is *the trust decision is the user's, made before the
+untrusted content runs, not by it and not while it runs*. A per-directory trust
+**prompt** is what closes the relaunch case; the seam is sketched in
+`hookFiles()`'s docblock.
+
+**Round 5 review: no blocking findings, recommend commit.** Could not re-exploit
+B1 — 18 write-side spellings all deny (including the parent+basename branch: a
+not-yet-existing file under a symlinked config *directory*); forcing the grant
+through with direct `file_put_contents` still kept the hook out of the next
+in-process manager. Three should-fixes survived:
+- **S-1 `HookDispatcher::matcherMatches()` was an un-fixed second copy.** Same
+  registry, same hook, `matcher: 'Read|Write/Edit'` on tool `Write/Edit` →
+  registry DENY, dispatcher **allow**. It missed both round-5 changes. Two
+  comments asserted the opposite, including one claiming "ONE definition" while
+  a second implementation sat one class over. Fixed by routing it through the
+  same `HookConfig::pattern()` helper — which made the comments true rather than
+  needing rewording.
+- **S-3 the new `Read` deny was collateral.** Denying *write* on policy files is
+  the point; denying *read* buys nothing (reading a policy file grants no
+  capability) and blocked inspection of three tracked presets in this repo. Read
+  is now allowed; write still denied.
+- **S-2 `config.dev.json`** → filed as **#76**, pre-existing.
+
+**Round 6 verification: COMMIT.** Re-derived all four comment claims from source
+rather than from report — including compiling both regex strings to prove the
+`DELIMITERS` correction right — re-ran five sabotage mutations (all RED), and
+confirmed the `Read` carve-out is exactly `=== 'Read'` on the normalised name so
+it leaks to nothing like `ReadFile` or `mcp__fs__Read`. Caught that the fix
+agent's own summary table had one cell backwards (the backtrack case was `allow`
+before, not `BLOCK`) — prose error, not code.
+
+**Kept `HookDispatcher::matcherFailures()`** (added beyond brief): the new
+fail-closed arm creates a failure with nowhere else to go, since the registry's
+log is private and only written from a path a dispatch never calls.
+
+**Real workflow consequence**: this repo's three tracked `.sugar-crush/agents/*.md`
+presets are now un-editable by the agent through Edit/Write, same as
+`composer.json` already was. Intended — presets carry `permissionMode` — but it
+will be felt by anyone developing presets through the CLI.
+
+## Lane A (#62, loop pinning) — 5 rounds, landed as `76f34813`
+
+The mechanism was settled early and confirmed repeatedly; **every round's finding
+was about the accuracy of the prose, not the code.** Six consecutive wrong
+explanations before this session, then:
+
+- **Round 3's failure mode was the subtlest**: correct numbers attached to the
+  **wrong tests**. Both endpoint tests named in the comment were wrong — one
+  settles synchronously behind an `if (!$settled)` guard and arms nothing, the
+  other is a five-statement `assertNotSame` that never enters the loop.
+- **Round 4 blocked on a 4-sample snapshot presented as a range**: committed
+  `0.96-1.02s / 19-20%`, reviewer's 10 runs gave `0.79-1.16s / 15.8-23.1%`, only
+  2 of 10 inside. Notably the *previous* text (`0.70-1.01s`) bracketed reality
+  better — the round-3 revision moved **away** from the truth.
+- **Round 5's fix ran 21 runs: 0 of 21 inside the committed band**, one
+  collapsing to 0.26s headroom (5% of a 5s cap) with no code change. All
+  single-run timestamps deleted; the comment now commits the *shape* plus a
+  re-derivation recipe.
+- **Round 5 review found the last blocker myself-fixable**: the brand-new
+  `candy-pty/tests/bootstrap.php` claimed *both* its named tests survive only by
+  run-order luck. `SignalForwarderReactLoopTest` measured **green at 30s** of
+  injected staleness in both shapes — its assertion is already satisfied by
+  synchronous pcntl dispatch before `run()` is entered. And the cited mechanism
+  did not exist: there is no preceding shared-loop toucher, because
+  `PtyPoolReactLoopTest` is the **first** toucher in all 606 tests. What actually
+  protects it is that it *constructs* the loop (fresh clock).
+
+**The mechanism, as finally stated correctly** (worth keeping — six rounds got
+this wrong):
+- Uniform staleness makes every armed timer overdue at once, but libuv fires the
+  overdue batch **in deadline order**, so a test whose under-test timer was armed
+  pre-run alongside its own bound still does its work first. Debounce and
+  throttle pass against a **ten-second** stale clock.
+- The real exposure is *a test whose remaining work depends on a timer armed
+  **after** the loop starts running*. Sweeping all 22 `AsyncOpsTest` tests at 3s
+  stale, **exactly two fail** — the two needing a second retry attempt, because
+  retry's backoff #2 is armed from inside a callback after the first poll
+  refreshed the clock, while the bound is still on the stale reckoning.
+- candy-pty's exposed case is `PtyPoolReactLoopTest::testRapidCycleInsideLoop-
+  DoesNotLeakSignals` alone: its 5s cap is armed *after* the 0.01s periodic, so
+  it flips between **4.5s (pass) and 4.8s (fail)** of staleness — the cap less
+  the ~0.2s the 20 iterations need. Failure mode is `iterations == 1`, not zero.
+- The retry flip boundary is **0.48s** — the 0.5s bound less the delay of the
+  backoff armed after `run()` enters — not 0.5s. Injected idle ≠ staleness;
+  ~0.04s of PHPUnit start-up sits between them.
+
+**Method note worth copying**: the mosaic comment now carries **two independent
+21-run samples** (`0.26-1.06s` and `0.86-1.15s`) that disagree at both ends. Two
+samples on one quiet machine disagreeing is the actual proof that only the shape
+is durable — it makes the argument stronger, not weaker.
+
+## Lane B (#37, VHS tapes + examples) — 8 rounds, STILL OPEN
+
+**The premise inverted early.** I had reported the tapes as "inert in CI" —
+false. `.github/workflows/vhs.yml`'s `render` job carries a ~49-lib matrix
+**including `sugar-crush`**, runs upstream `vhs` from the lib's own directory,
+and its output is what the commit job stages (`git add */.vhs/*.gif`). The
+`vhs-candy-vcr` job is `lib: [candy-core]` **only**, a non-blocking soak whose
+output is never committed. So: locally render with candy-vcr (user's standing
+instruction), but **every tape is executed by upstream vhs in CI**, and a bad
+directive reddens the whole job.
+
+**Three CI-breaking defects were found and fixed** (all confirmed against the
+real binary): `Set Shell "sh"` — a candy-vcr concept upstream validates against
+nine fixed keys and hard-errors on; repo-root-relative typed paths (CI runs from
+the lib directory); and a bare `Output x.gif` landing outside the artifact glob.
+`vhs validate` exits **0** on all three, so it is not a backstop.
+
+**The parser was wrong in FOUR consecutive rounds** — each round closed the
+spelling the previous reviewer named and left a new one open, each time with the
+suite green while vhs aborts the job:
+1. column-0-plus-one-space anchoring → missed `  Set Shell "sh"` (indented) and
+   `Set  Shell "sh"` (double space)
+2. line-anchored regex → missed `Sleep 500ms Set Shell "sh"` (**multi-directive
+   lines, which this repo's own tape convention uses**: `Down Sleep 200ms`)
+3. first-argument-only → missed `Type "php " "examples/x.php"` (vhs **joins**
+   consecutive quoted arguments)
+4. **line-by-line iteration → missed values on the next line.** vhs has **no
+   newline token**; its stream flows across lines, so `Set Shell`⏎`"sh"` is a
+   valid render-killing directive. Same for `Source`⏎`file.tape`, which
+   bypasses the whole suite.
+
+Round 8 finally replaced it with a **whole-file token stream** with a keyword
+terminator set and space-joined values.
+
+**The keyword set was measured, not recalled** — this is the good work of the
+session. Probe: `Type <word> zzqq` under `vhs validate`; `Type` swallows
+non-keywords silently but a keyword leaves it with no string argument
+(`Type expects string`). **Both lists vhs itself ships were rejected**: `vhs man`
+omits `End`, `Env` and seven settings; the header `vhs new` writes omits twelve
+more including `Wait`, `Source`, `Screenshot`, `Copy`, `Paste`, `Alt`, `Shift`.
+Completeness was measured by running **773,501 candidates** (every CamelCase word
+and every 2- and 3-segment combination appearing anywhere in the binary) through
+the probe: exactly **53** hits, no 54th spelled in the binary.
+
+**Self-reported sixth divergence, flagged not buried** — the prescribed model
+("every following token until the next keyword, joined by spaces, across
+newlines") is right for `Type` but **not uniform**:
+1. `Set <setting>` takes exactly ONE token, keyword or not: `Set Shell zzz
+   notakeyword` sets shell to `zzz` then errors on `notakeyword`.
+2. vhs ends a value at the first **non-STRING** token, not only at a keyword — a
+   bare number qualifies: `Type abc 123 def` types `abc` then errors on `123`.
+
+Implemented the prescribed model anyway, arguing both over-approximate in the
+**safe** direction (false alarm, never a miss) and both describe tapes vhs
+already refuses to render. **Round 8's review is testing exactly that safety
+argument** — the risk is a greedy value swallowing a token that was a directive
+head the test needed to see (e.g. does `Output evil.gif` still assert if a
+greedy `Set Shell` value swallows it?).
+
+Also established this lane: `+` binds like `@`, so `Ctrl+O` and `Wait+Screen@5s`
+are keyword heads that terminate a value. vhs has **no** multi-line strings
+(`Type "echo abc`⏎`def"` types `echo abc def `, three strings joined). vhs's
+lexer is **case-sensitive**. `#` ends a value anywhere outside a string with no
+preceding space needed. No backslash escapes — a delimiter always ends a string.
+
+Other lane-B substance, confirmed by two independent reviewers: the 117-column
+height→grid table (six rows); `rowsNeeded` per tape (`cli`=22, `agents`=11,
+`chat`=15, `permission`=15, `diff`=**20** — corrected from 19, where frames are
+byte-identical through row 19); the `FixedAge` design (PHP `DateTimeImmutable`
+**clones** on `modify()`/`add()`/`sub()`, so the docblock had it backwards and
+the override silently ERASED arithmetic); the safety probes (no network, no files
+created, the seeded `rm -rf build/` provably cannot execute because the batch is
+empty); ~35 source citations; every factual assertion in all five tape headers.
+
+The heartbeat fuse in `examples/agent-dashboard.php` was **defused, not
+documented** — `ReflectionProperty` sets `lastHeartbeat` to `PHP_INT_MAX`
+(verified no overflow: `time() - PHP_INT_MAX` stays a valid int; zero consumers
+of the field).
+
+## New tracker items filed this session
+
+**#74** `AsyncOpsTest` leaks uncancelled 0.5s bound timers across tests — will
+confound anyone re-measuring the stale-clock threshold the obvious way (a
+per-test `PreparedSubscriber` produces failures **under the pin too**).
+**#75** candy-mosaic hangs when stdout is a **pipe** (pre-existing, reproduces
+under the old bootstrap) — and that is exactly how GitHub Actions runs it.
+**#76** `config.dev.json` is provider policy sitting **inside** the Edit jail
+(`vendor/sugarcraft/sugar-crush/`), reachable with no Bash at all — the
+shortest-reach of the four policy files.
+**#77** policy-file guards are case-sensitive (APFS/Windows); `sudo -E` now
+hard-fails (right direction, bad message).
+
+## Method notes that paid this session
+
+- **Give the reviewer the fixer's claims verbatim and tell it to falsify each.**
+  Every round that did this found something; the one round that asked for a
+  general review found less.
+- **"No blocking findings, recommend commit" is not the same as "no findings."**
+  Lane C's round 5 said commit, but two of its should-fixes were the diff's own
+  defects (a false comment and a collateral deny). Fixing them cost one cheap
+  round and removed a shipped falsehood.
+- **When a fix agent reports a divergence from its own brief, that is signal, not
+  noise.** Lane B's round-8 agent found a sixth divergence and argued for
+  implementing the brief anyway; that judgement is reviewable precisely because
+  it was surfaced.
+- **Do the cheap closing fixes in-context rather than spawning an agent.** Lane
+  A's blocker was a fully-specified comment rewrite; doing it directly saved a
+  round-trip and the reviewer had already supplied the measured replacement.
+- Derive a fact from the **binary/source**, never from the project's own docs —
+  both of vhs's shipped keyword lists were incomplete, and the repo's README and
+  help screen have each been found stale.
+
+## State at this point
+
+**In flight (3 lanes):** B = round-8 review of the tokenizer (the only gate left
+on #37); D = **#13** P2.3 constructing `WorkflowEngine`/`WorkflowRegistry` in
+`Bootstrap::chat()`; E = **#38** P8.2 in-app keybinding reference.
+
+Lane scopes chosen file-disjoint: B owns `.vhs/`+`examples/`+
+`tests/VhsTapeContractTest.php`; D owns `Bootstrap.php`+`Workflows/`; E owns
+`Chat.php`+`Tui/`+`Cli/Help.php`. E was told to report if it shifts line numbers
+in `AgentDashboardPane.php` or `BackgroundSession.php`, since lane B's verified
+citations point into both.
+
+**Uncommitted in the tree:** lane B's four untracked tapes
+(`agents/cli/diff/permission`), four untracked examples, untracked
+`tests/VhsTapeContractTest.php`, and a modified `.vhs/chat.tape`. Plus lanes D
+and E's in-progress work. Baseline on master: **5957 tests, 30024 assertions, 1
+skipped, exit 0**.
+
+**Open work order from here:** finish #37 (lane B) → #13/#38 (lanes D/E) → #63
+`enforceTimeLimit` (small, protects every future lane; hold until no lane is
+running the sugar-crush suite) → #12/#14/#17 rest of Phase 2 → #64 → the P3-P8
+body → #58/#59/#60/#61, #49, #51, #55, and the new #74-#77.
