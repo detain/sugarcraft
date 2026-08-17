@@ -2892,3 +2892,68 @@ Lane B's F4 (a printable-ASCII figure presented as the whole byte space), lane D
 invented call-site count and a guard with no producer) are the same defect: **a number or a
 claim that travelled without its domain.** All three lanes are now briefed to state the
 domain beside every figure in the code itself, not only in the report.
+
+---
+
+## Session-limit interruption — recovery state (all three lanes mid-fix)
+
+All three fix rounds were terminated by an API session limit within minutes of each other.
+Nothing was lost: every restore completed before the agents died, so the tree is clean and
+usable. Recovery is now **one agent at a time** until the usage window resets.
+
+### Measured tree state at recovery
+
+- **No stray `.bak`/`.orig`/`.sabbak`/`.snap` anywhere** under `sugar-crush/` (excluding
+  `vendor/`), and all eleven lane source/test files lint clean. Every sabotage had been
+  restored before termination.
+- `.vhs/` holds the five tapes + `chat.gif`.
+- Full suite: **6321 tests / 45385 assertions / 1 failure / 1 skipped**. The skip is the
+  legitimate `MCP/McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`.
+- Working tree: **20 modified files, 6133 insertions**, plus 12 untracked new files.
+
+### How far each lane got, from the artifacts on disk
+
+**Lane D (round 5)** — the largest scope, and substantially landed. `src/Support/ContainedPath.php`
+exists, which means the shared containment predicate was **factored once** rather than copied,
+as the round-4 reviewer asked. All four `src/Skills/` files are modified
+(`SkillLoader`, `SkillDiscovery`, `ForeignSkillDiscovery`, `SkillManager`) and
+`tests/Skills/ProjectSkillsDirContainmentTest.php` is new — so the `SkillLoader` half of
+Finding 1 was genuinely closed rather than documented around. `WorkflowRegistry.php` has grown
+to +1032 and `WorkflowRegistryTest.php` to +1404. No completion record was written, so what
+remains of Findings 2/3 and the six nits is unknown until it reports.
+
+**Lane E** — died immediately after writing *"Now the chain test that pins all six pairs"*, i.e.
+inside F5. `tests/Commands/ResetsDerivedRuneSets.php` is new (the F4 static-reset trait, which
+is the correct shape for that fix) and `tests/Tui/KeyboardHandlerTest.php` is +536 lines, so
+F1/F2/F4 are at least partly done.
+
+**Lane B (round 15)** — died at *"Now the `directiveValues()` divergence enumeration (F1's
+second half and N3)"*, so F2/F3/F4 (the `\r` gap, the unpinned `startsDirective()` gate, the
+192-byte count) were plausibly reached first. `tests/VhsTapeContractTest.php` is untracked so
+its progress does not appear in `git diff --stat`.
+
+### The one red test, and why lane E is being resumed first
+
+`tests/Renderer/KeyHelpTest.php:748` fails:
+`'…' [UTF-8](length: 5305) does not contain "session picker" [ASCII](length: 14)`.
+
+It is lane E's own file, from lane E's own unfinished round — no other lane touches it. The
+rendered reference box in the failure output *visibly* contains `Ctrl+R  Open the session
+picker`, so the needle is likely being split by SGR sequences, or the assertion is running
+against a different render than intended. Suggestive detail passed to the agent: the last bar
+line in the same output is `keys: ? closes · permission waiting`, so the F-B1 cue branch is
+active in that fixture — the reference may be rendering over a pending prompt, which would be
+the real cause rather than a string-matching artifact.
+
+Because it owns the only failure, lane E is resumed first; a red suite blocks committing
+anything from any lane.
+
+### Two conditions that change while lanes run alone
+
+1. **Concurrent-edit races are gone**, so the reason totals kept moving is gone with them —
+   but file ownership still holds exactly as briefed, and each resumed agent is told that the
+   other lanes' work is **uncommitted in the tree** and must not be touched, reverted or
+   tidied.
+2. **Suite totals are usable again.** For the first time this session a full run at 0 failures
+   is a real check rather than a moving target. Per-sabotage judgement is still by the targeted
+   test file flipping green→red — that rule does not relax.
