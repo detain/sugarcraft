@@ -2287,3 +2287,96 @@ Round-4 review is in flight, briefed to attack the anchor's forgeability (includ
 the common case of a checkout reached *through* a symlink, where over-refusal would
 be its own regression), the new tier-drop as a possible name-shadowing vector, and
 `list()`/`load()` gate consistency.
+
+---
+
+## Lane B (#37) — round-13 rewrite landed; round-14 review in flight
+
+The structural fix. `tokenize()` no longer has a `$breaks` set at all; it transcribes
+upstream's `NextToken` switch arm for arm, in upstream's order, with two **positive**
+run classes and explicit entry tests:
+
+- `SINGLE_BYTE_TOKENS = '@=][-%^\+'` — the nine `case` arms, tried **before** either
+  reader. This is what makes `-` and `%` single tokens at a token *start* while
+  remaining identifier bytes mid-run.
+- `NUMBER_BYTES = DIGIT_BYTES . '.'` (11) — `isDigit || isDot`.
+- `IDENT_BYTES = LETTER_BYTES . DIGIT_BYTES . '.-_/%'` (67) — the seven `is*` predicates.
+- Entry: digit, or `.` whose next byte is a digit → number; letter or any other `.` →
+  identifier; everything else → one-byte ILLEGAL.
+
+Tokens now carry `'kind' => ident|number|string|json|regex|single|illegal` instead of
+`'quoted' => bool`, and `startsDirective()`/`headMatches()` gate **positively** on
+`ident`. That is upstream's own rule — `readIdentifier` is the only reader whose
+result reaches `LookupIdentifier` — rather than a list of exceptions, which is what
+every prior round had been extending.
+
+`head()`'s `@`/`+` text-stripping became dead by construction (both bytes are
+single-byte tokens, so runs already end there) and was replaced by
+`skipSpeedSuffix()`, porting `parseSpeed`/`parseTime` onto the token walk: the same
+knowledge, moved to where upstream keeps it.
+
+### The six re-run checks, before → after
+
+| check | before | after |
+|---|---|---|
+| 255-byte identifier differential | over-greedy **179**, under 0 | **0 / 0** |
+| 255-byte number differential | over-greedy **235**, under 0 | **0 / 0** |
+| nine glue tapes on `cli.tape` | 8 GREEN + control RED | **all 9 RED**, `validate` exit 0 on all 9 |
+| 1,944-case panic sweep | 352 panics, flagged 294, **FN=58** FP=0 | **FN=0 FP=0** (352/352) |
+| nine-family sweep (998 clean) | **627 MISS** / 0 EXTRA (adjacency 604 + multi-sentinel 23) | **0 MISS / 0 EXTRA**, all nine families |
+| five-tape parser differential | 0 errors; 13/52/74/25/9/16; 0 miss | **identical**, still 0 miss |
+
+Tests 69 → **99**, assertions 261 → **402**. 16 mutations run: **16 RED, 0 survived,
+0 hangs.** The three HANG mutations are now *impossible*, not merely fixed: the hang
+was `strcspn($source, $breaks, $i)` returning 0 when `$source[$i]` was itself a break
+byte, reachable by disabling any delimiter arm while its opener stayed in the set.
+With no break set and a one-byte ILLEGAL fall-through, no arm can emit a zero-width
+token — re-measured by disabling five separate arms, all fail in seconds.
+
+### Claims corrected in the file itself
+
+The class docblock no longer points the next reader at the `#`-hiding set as "the one
+place to look first" — it names **both** halves of the miss surface and says outright
+that the first half's completeness-by-construction was repeatedly misread as covering
+the second. The "coarseness is free" sentence is gone, with a note on why a
+true-but-reassuring framing kept twelve rounds of readers on the wrong half. A new
+paragraph bounds the "more tokens, never fewer" argument: it is about which *token*
+ends a value and it holds, but it says nothing about where each token *ends*, which is
+where the miss actually lived. The `Home`/`KEYWORDS` citation is fixed — `HOME` is a
+token type (`token.go:52`) appearing in `token.IsCommand()` (`token.go:193`); the
+string does not occur in `parser.go` and `parseCommand` has no `token.HOME` case,
+while `record.go:30` maps `\x1b[1~` → `token.HOME` in the opposite direction.
+
+### Divergences the fix agent surfaced against its own brief
+
+1. **One glue tape in the brief was not a clean-parse tape.** `Set Padding %Output
+   /etc/x.gif` puts `/etc/` at a token start, which opens a REGEX — upstream reports
+   3 errors and `validate` exits 1, so it cannot be a false green. Replaced with
+   `Set Padding %Output etc/x.gif` (0 errors), which makes the same `%`-glue point.
+2. **`Set Padding }Source real.tape`** is zero-error only with a `real.tape` beside it,
+   since `parseSource` stats the path. Noted in the row.
+3. **The sweep generators were reconstructed, and are weaker than round 12's.** Round
+   12's exact case lists were not in the tree. Rebuilt to the stated dimensions they
+   give 352 panics / **FN=58** (round 12: 360 / FN=220) and 998 clean / 627 misses
+   (round 12: 299+22 / 150+6). Same shape, same two failing families — but a corpus
+   that exposed the old bug several times *less* strongly proves correspondingly less
+   about the fix. Round 14 is briefed to build an independent third corpus rather than
+   accept either.
+4. **`Set TypingSpeed 40ms` now yields value `40`, not `40ms`** (upstream re-joins the
+   unit in `parseSet`; this model stops at the `ms` keyword). Same for
+   `Set LoopOffset 50%` → `50 %`. Value-text-only and in the loud direction, and the
+   agent reports no assertion queries it — flagged for round 14 to confirm, since a
+   silent lossy divergence is exactly the sort of thing a later round rediscovers.
+5. **A residual counted separately rather than swept under "0":** 128+128 cases where
+   upstream's literal differs by text only, because `newToken` does `string(ch)` on a
+   **byte** — an integer→string conversion, so an ILLEGAL byte ≥ 0x80 comes back
+   UTF-8 re-encoded. Claimed boundary-neutral; round 14 will test that claim.
+
+### Why round 14 exists
+
+`skipSpeedSuffix()` is **new speculative code with zero review rounds**, and the
+"0 FN / 0 MISS" figures rest on a reconstructed corpus measurably weaker than the one
+that found the bug. Both are briefed as primary targets, alongside an exhaustive
+256-byte enumeration of the glue class (the nine tapes are a sample; the byte space is
+small enough to enumerate) and a check that `SINGLE_BYTE_TOKENS` is never interpolated
+into a regex character class, where `[-%` would form a reversed range.
