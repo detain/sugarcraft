@@ -876,17 +876,35 @@ final class Chat implements Model
             // matching "/keys", so while this arm tested the RAW buffer the two
             // routes to the same reference disagreed on exactly one class of
             // draft: trimmed-empty but not empty. Driven one keystroke at a
-            // time on the raw form, a single Space press (either KeyType::Space
-            // or KeyType::Char " ") put the box in a state where "/keys"+Enter
-            // opened the reference and "?" typed " ?" instead - so "/keys" WAS
-            // an escape hatch there, which is the one thing the docs for it say
-            // it is not. Four whitespace drafts (" ", "  ", "\t", " \t ")
-            // disagreed; thirteen other typed drafts agreed, as did all six of the
+            // time on the raw form, a single Space press put the box in a state
+            // where typing "/keys" onto the draft and pressing Enter opened the
+            // reference while "?" typed " ?" instead - so "/keys" WAS an escape
+            // hatch there, which is the one thing the docs for it say it is not.
+            // Four blank drafts (" ", "  ", "\t", " \t ") disagreed and the
+            // remaining members of that corpus agreed, as did all six of the
             // non-draft states in KeyHelpTest::openRouteStates(). That is the whole
             // corpus the claim rests on -- it does not range over states nobody has
             // built.
             // Pinned in both directions by
             // KeyHelpTest::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft().
+            //
+            // Two of those four are SYNTHETIC drafts and are labelled as such
+            // there: no keystroke produces them. Measured at candy-core's decoder,
+            // InputReader::parse("\t") yields KeyType::Tab, not
+            // KeyType::Char "\t", and the Tab arm below leaves the buffer alone, so
+            // "\t" and " \t " can only be built by handing the Char arm a rune the
+            // decoder never emits. Nor is there a paste route in: the decoder DOES
+            // emit PasteMsg for bracketed paste (measured), but `grep -rn PasteMsg
+            // src/` is empty, so this model drops it -- which is the same fact the
+            // "no paste path" sentence below states, from the decoder's side. So the
+            // conclusion rests on " " and "  ". Both decoding facts are asserted in
+            // that test rather than reasoned about here.
+            //
+            // Space is driven twice in that corpus, as KeyType::Space and as
+            // KeyType::Char " ". Measured, InputReader::parse(" ") yields only the
+            // former, so the second form is the corpus being stricter than the
+            // decoder rather than a second thing the decoder does - which is a
+            // narrower claim than the "either" an earlier revision made here.
             //
             // The cost is one press, not one character: this arm does NOT clear
             // the buffer, so on a " " draft the space survives behind the
@@ -1105,13 +1123,13 @@ final class Chat implements Model
         // KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods().
         //
         // Mutations of the guard belonging to THIS method -- the block
-        // immediately below this comment, inside requestPermission() -- line 1175
+        // immediately below this comment, inside requestPermission() -- line 1220
         // as this was written, and re-check with the grep above rather than trusting
         // that number, since editing this comment moves it -- each judged by the targeted
         // files going red. The trio column counts BEHAVIOURAL reds only; see the
         // note under the table for the one test every row also trips:
         //
-        //   | mutation                        | trio (268) | ChatTest (215)     |
+        //   | mutation                        | trio       | ChatTest           |
         //   |---------------------------------|------------|--------------------|
         //   | guard deleted                   | 1 failure  | green              |
         //   | throw when the guard FIRES      | 1 error    | green              |
@@ -1119,6 +1137,16 @@ final class Chat implements Model
         //   | 2nd conjunct dropped, so every  | 1 failure  | 1 error,           |
         //   | stamped ask is discarded        |            | 11 failures,       |
         //   |                                 |            | 6 warnings         |
+        //
+        // Neither column carries a test COUNT, and that is deliberate: a population
+        // figure here is fed by the very files the table is measured over, so it
+        // goes stale the moment one of them grows. The previous revision carried
+        // "trio (268)" and "ChatTest (215)" in these headings AND a third copy of
+        // the trio figure in KeyHelpTest, where it was already stale at 265 in the
+        // same commit that updated the two here. The reproducible figures are the
+        // per-row failure counts, and the DOMAIN is a file set rather than a number
+        // -- asserted by
+        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg().
         //
         // Row 2 is the honest bound: exactly ONE test anywhere can observe this
         // branch being taken, KeyHelpTest::testASupersededAskNeverPutsUpAPrompt(),
@@ -1139,10 +1167,27 @@ final class Chat implements Model
         // including it are 2 / 2 / 2 / 2 for the four rows.
         //
         // The variant that made the previous revision's error visible: discarding
-        // EVERY ask rather than only stamped ones (`if (true)`) gives trio 14
-        // behavioural failures (16 raw) / ChatTest 1 error, 11 failures, 6
-        // warnings -- so the trio is NOT silent about it, and the row above is not
+        // EVERY ask rather than only stamped ones (`if (true)`) reds every trio test
+        // that needs a prompt to appear at all, plus ChatTest 1 error, 11 failures,
+        // 6 warnings -- so the trio is NOT silent about it, and the row above is not
         // covering it either.
+        //
+        // The EXCLUSION RULE, stated rather than left to be inferred, because the
+        // previous revision recorded a total that no rule produced: raw failures
+        // MINUS exactly one, the text-reading pin excluded from every row above,
+        // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods. Nothing
+        // else is excluded. Measured with this comment: 17 raw / 16 behavioural,
+        // composed of 5 in RendererTest (the permission-modal render tests), 9 in
+        // KeyHelpTest (including the pin), and 3 KeyBindingDriftTest data sets
+        // (permission.once / .always / .deny). The previous revision recorded "14
+        // behavioural (16 raw)", which is wrong under this rule and under any other:
+        // 16 raw minus the one pin was 15 at the time it was written.
+        //
+        // That total is not the load-bearing part and MUST NOT be read as fixed --
+        // it grows by one for every prompt-dependent test added to those three
+        // files, and did so within this round. What is load-bearing is the rule
+        // above and the fact that the figure is not zero, which is the tell for a
+        // mis-sited mutation (see the wrong-site paragraph below).
         //
         // At the WRONG site (update()'s AssistantMsg arm, line 607) the same two
         // mutations give: 2nd-conjunct-dropped -> trio 0 behavioural reds /
@@ -1157,16 +1202,19 @@ final class Chat implements Model
         // Domains: "trio" is tests/RendererTest.php +
         // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
         // the three files that construct a PermissionRequestMsg at all --
-        // `grep -rl PermissionRequestMsg tests/` finds exactly those three. Both
-        // counts are the files as they stand with this comment: trio 268 tests /
-        // 38174 assertions, ChatTest 215 / 770, PHP 8.3.6. ChatTest is measured
-        // separately BECAUSE rows 3 and 4 show the trio's silence does not cover
-        // it.
+        // `grep -rl PermissionRequestMsg tests/` finds exactly those three, and
+        // that set is asserted, not narrated, by
+        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg().
+        // PHP 8.3.6. ChatTest is measured separately BECAUSE rows 3 and 4 show the
+        // trio's silence does not cover it.
         //
         // So this is not what makes the reference-over-prompt state
         // unreachable, and the sentence claiming it was "the one way that state
         // is reachable through the front door" was wrong: there is no producer
-        // for that door today. What actually protects the user there is the cue
+        // for that door today. That unreachability is now asserted rather than
+        // stated -- driven from both ends through a real PreToolUse ask hook by
+        // KeyHelpTest::testThePromptAndTheReferenceCannotBothBeRaisedByRealInput().
+        // What actually protects the user there is the cue
         // -- Renderer::KEY_HELP_OVER_PROMPT -- which is driven and does bite.
         // The guard stays because the engine path is coming and an unstamped
         // ASK is the legitimate case it must keep letting through; deleting a
@@ -3510,18 +3558,42 @@ final class Chat implements Model
         // work again. Pinned by
         // KeyHelpTest::testSlashKeysInAHalfTypedDraftIsSentAsAPromptNotAsACommand().
         //
-        // The two routes agree about WHETHER the reference opens, and that is
-        // now a property of the code rather than of the corpus that tested it.
-        // It was false until this round: the "?" arm tested the raw buffer while
-        // this one trims, so a whitespace-only draft opened via "/keys"+Enter and
-        // typed " ?" via "?" -- see the "?" arm in update() for the widened
-        // guard and its cost. What earns the claim today is a corpus chosen
-        // against the PREDICATE (18 typed drafts either side of the blank/non-blank
-        // boundary, including " ", "  ", "\t", " \t " and " x ") rather than
-        // against frame distinctness, which is what the six-state corpus below
-        // was chosen for and is why it could not see the hole. Both live in
-        // KeyHelpTest: ::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()
-        // for the draft boundary, and
+        // Say WHICH two routes, because the sentence that used to stand here --
+        // "the two routes agree about WHETHER the reference opens" -- is true of one
+        // pairing and false of another, and a reader takes the false one.
+        //
+        // TRUE, and the escape-hatch property this is all for: with a draft D in
+        // the box, TYPING "/keys" onto it and pressing Enter opens the reference
+        // exactly when "?" on D does. Both reduce to trim(D) === '' -- this route
+        // matches trim(D . "/keys") against "/keys", the "?" arm in update() tests
+        // trim(D) -- so it is a property of the two guards rather than of any
+        // corpus, and the corpus below demonstrates it rather than establishing it.
+        // Saying so is the point: a previous revision counted the corpus as
+        // evidence for a claim its own predicates already forced.
+        //
+        // FALSE: that "?" and this route agree in general. SUBMITTING a draft that
+        // IS the command modulo whitespace opens the reference where "?" types a
+        // character -- measured, " /keys", "/keys ", "\t/keys" and "  /help  " all
+        // open by Enter and none of them by "?" -- and on every blank draft "?"
+        // opens while Enter sends nothing at all. The two are COMPLEMENTARY, never
+        // both open, and the exact disagreement set is asserted rather than
+        // described.
+        //
+        // That is not an escape hatch: reaching it means the draft was the command
+        // and nothing else, which is the command working as named. The hatch the
+        // docs deny is the FIRST pairing, and it stays denied.
+        //
+        // And it was denied wrongly until round 4: the "?" arm tested the raw buffer
+        // while this one trims, so a whitespace-only draft opened via
+        // typing "/keys" onto it and typed " ?" via "?" -- see the "?" arm in
+        // update() for the widened guard and its cost. What earns the claim today is
+        // a corpus chosen against the PREDICATE (drafts either side of the
+        // blank/non-blank boundary, including " ", "  ", "\t", " \t ", " x " and the
+        // command-modulo-whitespace ones) rather than against frame distinctness,
+        // which is what the six-state corpus below was chosen for and is why it
+        // could not see the hole. Both live in KeyHelpTest:
+        // ::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft() for the draft
+        // boundary and all three routes, and
         // ::testTheCommandAndTheShortcutOpenTheReferenceInExactlyTheSameStates()
         // for the six non-draft states (empty+idle, a half-typed draft, a turn in
         // flight, the palette open, a permission prompt pending, a long

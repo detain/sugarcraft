@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
@@ -17,6 +18,12 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookEvent;
+use SugarCraft\Crush\Hooks\HookInterface;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Tui\SessionPicker;
@@ -206,35 +213,120 @@ final class KeyHelpTest extends TestCase
      * escape hatch the docs say it is not, reachable by one Space press. The `?`
      * arm now trims too.
      *
+     * THREE routes are driven per draft `D`, and the third is here because the
+     * first two cannot disagree:
+     *
+     * 1. `?` pressed on `D` — opens iff `trim(D) === ''`;
+     * 2. `/keys` TYPED ONTO `D`, then `Enter` — opens iff
+     *    `trim(D . '/keys') === '/keys'`, i.e. iff `trim(D) === ''`. That is the
+     *    escape-hatch question ("can the command get me past a half-typed
+     *    draft?"), and the answer is no on every draft below. It is also the
+     *    SAME predicate as route 1, so asserting that routes 1 and 2 agree is a
+     *    restatement of the two guards and not evidence the corpus supplies —
+     *    said plainly because a previous round counted it as the latter;
+     * 3. `D` SUBMITTED as it stands — opens iff `trim(D)` is exactly `/keys` or
+     *    `/help`. This route CAN disagree with route 1, and does. Driven, the
+     *    disagreement set is the 11 drafts asserted at the foot of this method:
+     *    the five blank ones, where `?` opens and `Enter` sends nothing, and the
+     *    six that ARE the command modulo whitespace (`'/keys'`, `' /keys'`,
+     *    `'/keys '`, `"\t/keys"`, `'/help'`, `'  /help  '`), where `Enter` opens
+     *    the reference and `?` types a character. Routes 1 and 3 never both
+     *    open: they are COMPLEMENTARY, not equivalent. "The two routes agree"
+     *    is true of routes 1 and 2 and false of 1 and 3, which is why the set
+     *    is asserted here instead of the universal being restated in prose.
+     *
      * Pinned in BOTH directions, because either half alone is satisfiable by a
      * mistake:
      *
      * 1. the five blank drafts (`''`, `' '`, `'  '`, `"\t"`, `" \t "`) open the
-     *    reference by both routes, and `?` leaves the draft ALONE — reverting the
-     *    arm to `=== ''` reds this;
-     * 2. the non-blank drafts (`' x '`, `'why'`, `'why '`, `' why'`, `'  x  '`, and
-     *    the `/`-shaped ones a lazy widening might swallow) open it by NEITHER, and
-     *    `?` is typed as a character — widening the arm to unconditional, or to
-     *    `str_contains`-style sloppiness, reds this;
-     * 3. and the two routes agree on every one of the 18, which is the sentence
-     *    `Chat::submit()` states.
+     *    reference by routes 1 and 2, and `?` leaves the draft ALONE — reverting
+     *    the arm to `=== ''` reds this;
+     * 2. the non-blank drafts (`' x '`, `'why'`, `'why '`, `' why'`, `'  x  '`, the
+     *    `/`-shaped ones a lazy widening might swallow, and the two `?`-leading
+     *    ones) open it by neither of those routes, and `?` is typed as a
+     *    character — widening the arm to unconditional, or to `str_contains`-style
+     *    sloppiness, reds this;
+     * 3. and route 3's opening set is exactly `trim(D) ∈ {/keys, /help}`, with
+     *    the disagreement against route 1 spelled out rather than denied.
      *
-     * Space is driven both as `KeyType::Space` and as `KeyType::Char ' '`, since
-     * the terminal decoder can produce either and only one of them was ever tried.
+     * Four things about the corpus itself, every one of which used to be asserted
+     * by nothing:
+     *
+     * - Space is driven twice, as `KeyType::Space` and as `KeyType::Char ' '`.
+     *   Measured, `InputReader::parse(' ')` yields only the first (asserted
+     *   below); the second is driven because the `Char` arm accepts it, i.e. the
+     *   corpus is stricter than the decoder rather than matching it.
+     * - `"\t"`, `" \t "` and `"\t/keys"` are SYNTHETIC drafts: no keystroke can
+     *   produce them. `InputReader::parse("\t")` yields `KeyType::Tab`, not
+     *   `KeyType::Char "\t"`, and Chat's Tab arm leaves the buffer alone — both
+     *   asserted below, so this is a measurement and not the reachability
+     *   reasoning that got `'?'` wrong one revision ago. There is no paste path
+     *   either (`grep -rn PasteMsg src/` is empty, so the decoder's
+     *   `PasteMsg` is dropped). They are still driven because `trim()`'s
+     *   charlist contains `\t`, so they are the only members of the corpus that
+     *   exercise a non-space blank, and because a paste path landing later would
+     *   make them reachable without touching this arm. The conclusions above
+     *   survive on `''`/`' '`/`'  '` alone.
+     * - `'?'` and `'?why'` ARE reachable, contrary to an earlier revision of this
+     *   comment which excluded them as impossible: `?` on a blank line opens the
+     *   reference and a second `?` closes it and lands the character, which is
+     *   the documented hatch — so {@see typeDraft()} performs it, and the last
+     *   loop of this method is the hatch's own pin. Measured from that draft, a
+     *   third `?` gives `'??'` and typing `/keys` onto it does not open the
+     *   reference, i.e. `'?'` behaves as the ordinary non-blank draft it is
+     *   listed as.
+     * - `"\u{00A0}"`, `"\u{3000}"` and `"\u{000C}"` are in the NON-blank set, which
+     *   is what makes "blank" mean `trim()`-empty rather than "whitespace-only" in
+     *   the README row this file backs: `trim()`'s charlist is the ASCII
+     *   `" \t\n\r\0\x0B"`, so a line of non-breaking spaces looks empty and `?`
+     *   types into it. The first two decode as ordinary `Char` runes (measured), so
+     *   a compose key reaches them.
      */
     public function testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft(): void
     {
-        $blank = ['', ' ', '  ', "\t", " \t "];
-        // No `?`-leading drafts here, and that is a fixture constraint rather than
-        // an omission: a draft is TYPED, and `?` on a blank line opens the
-        // reference instead of landing, so `'?'` cannot be reached as a draft at
-        // all. That boundary has its own pins —
-        // testAMessageStartingWithAQuestionMarkIsTypeable() and
-        // testALoneQuestionMarkIsATypeableMessage().
-        $nonBlank = [' x ', 'why', 'why ', ' why', '  x  ', 'x', '/', '/k', '/keys', '/KEYS', ' /keys', '/keys ', '/help'];
+        // The decoding facts the "synthetic draft" label above rests on, driven
+        // rather than reasoned about — candy-core's decoder and Chat's Tab arm.
+        $this->assertSame(
+            [[KeyType::Tab->name, '']],
+            self::decode("\t"),
+            'fixture: a tab byte decodes as KeyType::Tab, so no keystroke carries "\t" as a Char rune',
+        );
+        $this->assertSame(
+            [[KeyType::Space->name, ' ']],
+            self::decode(' '),
+            'fixture: and a space byte decodes only as KeyType::Space, so driving Char " " too is strictness',
+        );
+        foreach (['', 'why'] as $before) {
+            [$tabbed] = $this->chat($before)->update(new KeyMsg(KeyType::Tab));
+            $this->assertSame(
+                $before,
+                $tabbed->inputBuf,
+                'fixture: KeyType::Tab puts nothing in the box, which is what makes a tab draft synthetic',
+            );
+        }
+
+        $typedBlank = ['', ' ', '  '];
+        $syntheticBlank = ["\t", " \t "];
+        $blank = [...$typedBlank, ...$syntheticBlank];
+        $nonBlank = [
+            ' x ', 'why', 'why ', ' why', '  x  ', 'x', '/', '/k',
+            '/keys', '/KEYS', ' /keys', '/keys ', "\t/keys", '/help', '  /help  ',
+            // Reachable only through the two-press hatch, which typeDraft() types.
+            '?', '?why',
+            // Visually blank and NOT blank, which is the README's wording made
+            // checkable: trim()'s charlist is ASCII " \t\n\r\0\x0B", so a
+            // non-breaking space, an ideographic space and a form feed are drafts
+            // "?" types into. Both of the first two decode as ordinary Char runes
+            // (measured), so a compose key really reaches them.
+            "\u{00A0}", "\u{3000}", "\u{000C}",
+        ];
+
+        /** @var array<string, true> $disagreesOnSubmit */
+        $disagreesOnSubmit = [];
 
         foreach ([...$blank, ...$nonBlank] as $draft) {
             $shouldOpen = in_array($draft, $blank, true);
+            $isCommand = in_array(trim($draft), ['/keys', '/help'], true);
             $show = var_export($draft, true);
 
             foreach ([false, true] as $spaceAsSpaceKey) {
@@ -242,7 +334,8 @@ final class KeyHelpTest extends TestCase
                 $this->assertSame($draft, $chat->inputBuf, "fixture: {$show} must reach the box verbatim");
 
                 [$viaShortcut] = $chat->update(new KeyMsg(KeyType::Char, '?'));
-                [$viaCommand] = $this->typeAndEnter($chat, '/keys');
+                [$viaAppendedCommand] = $this->typeAndEnter($chat, '/keys');
+                [$viaSubmittedDraft] = $chat->update(new KeyMsg(KeyType::Enter));
 
                 $this->assertSame(
                     $shouldOpen,
@@ -251,15 +344,28 @@ final class KeyHelpTest extends TestCase
                 );
                 $this->assertSame(
                     $shouldOpen,
-                    $viaCommand->keyHelp() !== null,
-                    "'/keys' + Enter must open the reference exactly on a blank line too ({$show})",
+                    $viaAppendedCommand->keyHelp() !== null,
+                    "typing '/keys' onto this draft and pressing Enter must open the reference exactly on a "
+                    . "blank line too ({$show}) — this is the escape-hatch question",
                 );
                 $this->assertSame(
                     $viaShortcut->keyHelp() !== null,
-                    $viaCommand->keyHelp() !== null,
-                    "'?' and '/keys' must agree about whether the reference opens ({$show}) — a draft where "
-                    . 'only the command worked would make it the escape hatch the docs must not claim',
+                    $viaAppendedCommand->keyHelp() !== null,
+                    "'?' and an APPENDED '/keys' must agree ({$show}) — a draft where only the command worked "
+                    . 'would make it the escape hatch the docs must not claim. Both guards reduce to '
+                    . "trim(draft) === '', so this restates them rather than measuring something further",
                 );
+
+                // Route 3, the one that can and does disagree.
+                $this->assertSame(
+                    $isCommand,
+                    $viaSubmittedDraft->keyHelp() !== null,
+                    "submitting this draft as it stands must open the reference exactly when it IS the "
+                    . "command modulo whitespace ({$show})",
+                );
+                if (($viaShortcut->keyHelp() !== null) !== ($viaSubmittedDraft->keyHelp() !== null)) {
+                    $disagreesOnSubmit[$draft] = true;
+                }
 
                 // The cost of the widened guard, stated as an assertion: on a blank
                 // draft "?" opens the reference and KEEPS the draft, so nothing the
@@ -272,9 +378,21 @@ final class KeyHelpTest extends TestCase
             }
         }
 
+        // The disagreement between "?" and a SUBMITTED draft, measured rather than
+        // denied — and exhaustive over this corpus, so a change that made the two
+        // routes overlap (or widened either predicate) has to re-argue this list.
+        $this->assertSame(
+            ['', ' ', '  ', "\t", " \t ", '/keys', ' /keys', '/keys ', "\t/keys", '/help', '  /help  '],
+            array_keys($disagreesOnSubmit),
+            'the drafts on which "?" and a submitted draft differ: every blank one (only "?" opens) and '
+            . 'every one that is the command modulo whitespace (only Enter opens). They never both open',
+        );
+
         // The documented escape hatch has to survive the widening: after leading
         // whitespace, "??" must still land one literal "?" — same rule as on an
         // empty line, which is the whole point of widening rather than special-casing.
+        // typeDraft() relies on this to build the "?"-leading members above, so a
+        // break here reds those fixtures as well as this loop.
         foreach (['', ' ', '  ', "\t"] as $draft) {
             $chat = $this->typeDraft($draft);
             [$open] = $chat->update(new KeyMsg(KeyType::Char, '?'));
@@ -286,14 +404,46 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
+     * What candy-core's terminal decoder makes of a byte string, as
+     * `[[KeyType name, rune], …]` — the instrument behind the "no keystroke can
+     * produce this draft" claims above, so they are measured at the decoder
+     * rather than argued from reading it.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function decode(string $bytes): array
+    {
+        return array_map(
+            static fn(object $msg): array => [$msg->type->name, (string) $msg->rune],
+            array_values(array_filter(
+                (new InputReader())->parse($bytes),
+                static fn(object $msg): bool => $msg instanceof KeyMsg,
+            )),
+        );
+    }
+
+    /**
      * A draft typed one keystroke at a time rather than handed to the constructor,
      * because the whole class of bug this file now guards was invisible to
      * constructor-built fixtures.
+     *
+     * A `?` on a blank line opens the reference instead of landing, so a
+     * `?`-leading draft is typed the way a user types one — twice, the second
+     * press closing the reference and landing the character (the hatch pinned at
+     * the foot of {@see testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()}).
+     * Every caller asserts the draft reached the box verbatim, so this helper
+     * cannot quietly build something else.
      */
     private function typeDraft(string $draft, bool $spaceAsSpaceKey = false): Chat
     {
         $chat = $this->chat();
         foreach (preg_split('//u', $draft, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $rune) {
+            if ($rune === '?' && trim($chat->inputBuf) === '') {
+                [$chat] = $chat->update(new KeyMsg(KeyType::Char, '?'));
+                [$chat] = $chat->update(new KeyMsg(KeyType::Char, '?'));
+                continue;
+            }
+
             $msg = $spaceAsSpaceKey && $rune === ' '
                 ? new KeyMsg(KeyType::Space)
                 : new KeyMsg(KeyType::Char, $rune);
@@ -316,12 +466,24 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * States a user reaches from which either route to the reference might be
-     * tried, each driven rather than assembled so it is a state `Chat` can really
-     * be in, and each verified DISTINCT rather than assumed to be. `Ctrl+R` was
-     * a seventh entry and was dropped: it finds no sessions on this fixture and
-     * the resulting frame is byte-identical to the idle one, so it was a second
-     * copy of the first row wearing a different label.
+     * States from which either route to the reference might be tried, each
+     * verified DISTINCT rather than assumed to be. `Ctrl+R` was a seventh entry and
+     * was dropped: it finds no sessions on this fixture and the resulting frame is
+     * byte-identical to the idle one, so it was a second copy of the first row
+     * wearing a different label.
+     *
+     * Five of the six are driven as keystrokes. The sixth, `'a permission prompt
+     * pending'`, is NOT — {@see blockedOnPermission()} hand-dispatches a
+     * `PermissionRequestMsg`, so an earlier "each driven rather than assembled so
+     * it is a state `Chat` can really be in" covered it falsely. The state it
+     * produces is nevertheless real: driven with a `PreToolUse` hook returning
+     * `HookResult::ask()` over a real turn, the same shape appears
+     * (`pendingPermission()` set, `inFlight` true) and both routes behave the same
+     * way there as here — measured, `?` leaves `keyHelp` NULL and `/keys` + `Enter`
+     * leaves it NULL too, in the hook-produced state and in this one alike. What
+     * is NOT reachable is that prompt with the reference ALSO open, which is
+     * asserted by
+     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}.
      *
      * @return array<string, Chat>
      */
@@ -971,6 +1133,19 @@ final class KeyHelpTest extends TestCase
      * blocking modal that holds the turn `inFlight` and whose own `y`/`n`/`a`
      * are swallowed while the reference is up, so the status bar has to say it
      * is there — {@see testTheBarAnnouncesAPromptTheReferenceIsCovering()}.
+     *
+     * A DORMANT guarantee, and that label is the correction: this state is not
+     * front-door reachable, and a previous revision listed it as one of the two
+     * pairs that are. `withKeyHelp(0)` is applied to a
+     * {@see blockedOnPermission()} fixture, so both the prompt and the reference
+     * are set from outside the routing that refuses to raise them together. Driven
+     * with a real `PreToolUse` ask hook over a real turn, neither order works —
+     * asserted by
+     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}, not left
+     * as a sentence here. Kept anyway, because the ordering it pins is what the engine
+     * path will land into and because the cue this owes the user
+     * ({@see Renderer::KEY_HELP_OVER_PROMPT}) exists only on the strength of this
+     * precedence being fixed.
      */
     public function testTheReferenceOutranksAPermissionPromptBecauseItOwnsTheKeyboard(): void
     {
@@ -1004,6 +1179,102 @@ final class KeyHelpTest extends TestCase
         $this->assertNotNull($blocked->pendingPermission(), 'fixture: the prompt must be up');
 
         return $blocked;
+    }
+
+    /**
+     * Why {@see blockedOnPermission()} exists at all, asserted rather than asserted
+     * about: the reference and a permission prompt cannot BOTH be raised by real
+     * input, so the tests that put them up together are dormant guarantees and have
+     * to say so. A previous revision counted that pair among the front-door
+     * reachable ones on the strength of a fixture that hand-dispatches the Msg.
+     *
+     * Driven end to end through the real gate — a `PreToolUse` hook returning
+     * `HookResult::ask()`, a real `Enter`, a real `AssistantMsg` carrying a tool
+     * call — so the prompt here is produced by the production path and not by this
+     * file. Both orders are then attempted and both are refused, which is the
+     * whole claim:
+     *
+     * 1. reference first is impossible, because `?` needs a blank line AND no turn
+     *    in flight, while a prompt only exists while `inFlight`;
+     * 2. prompt first is impossible, because with the prompt up `Chat::update()`
+     *    routes every key to the prompt — `?` and `Ctrl+P` alike — and that frame
+     *    marks NO click zones, so the mouse route that DOES reach
+     *    reference+palette has nothing to click.
+     *
+     * The zone sweep is the load-bearing half of (2): the reference+palette pair is
+     * reachable precisely because the status bar keeps its `pane:menu` zone under
+     * the overlay ({@see testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()}),
+     * so "no zones at all" is what distinguishes this pair from that one rather
+     * than a detail.
+     */
+    public function testThePromptAndTheReferenceCannotBothBeRaisedByRealInput(): void
+    {
+        $asks = new class implements HookInterface {
+            public function name(): string { return 'ask-every-tool'; }
+
+            public function event(): HookEvent { return HookEvent::PreToolUse; }
+
+            public function matcher(): string { return '.*'; }
+
+            public function execute(HookContext $context): HookResult { return HookResult::ask('Run rm -rf build/?'); }
+        };
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->register($asks);
+
+        $chat = (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))
+            ->registerTool('bash', static fn(array $args): string => 'total 0')
+            ->withHooks($hooks)
+            ->withSize(100, 30);
+
+        $typed = $chat;
+        foreach (['h', 'i'] as $rune) {
+            [$typed] = $typed->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$inFlight] = $typed->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($inFlight->inFlight, 'fixture: Enter must put a turn in flight');
+
+        // Order 1: the reference cannot be opened while the turn that could raise a
+        // prompt is running.
+        [$duringFlight] = $inFlight->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertNull(
+            $duringFlight->keyHelp(),
+            '"?" must not open the reference while a turn is in flight, which is the only window in which a '
+            . 'prompt can appear',
+        );
+
+        [$blocked] = $inFlight->update(new \SugarCraft\Crush\AssistantMsg(
+            Message::assistant('running')->withToolCalls([
+                new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf build/'], 'call_1'),
+            ]),
+        ));
+        $this->assertNotNull(
+            $blocked->pendingPermission(),
+            'fixture: the ask hook must suspend the turn on a prompt, or there is no pair to attempt',
+        );
+        $this->assertTrue($blocked->inFlight, 'fixture: and the prompt holds the turn in flight');
+
+        // Order 2: with the prompt up, no key and no click reaches the reference.
+        [$viaShortcut] = $blocked->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertNull($viaShortcut->keyHelp(), 'the prompt owns the keyboard, so "?" cannot open the reference');
+        [$viaPalette] = $blocked->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($viaPalette->palette(), 'and it owns Ctrl+P too');
+
+        $blocked->view();
+        $zones = [];
+        for ($row = 1; $row <= 30; $row++) {
+            for ($col = 1; $col <= 100; $col++) {
+                $id = Chat::zoneAt($col, $row)?->id;
+                if ($id !== null) {
+                    $zones[$id] = true;
+                }
+            }
+        }
+        $this->assertSame(
+            [],
+            array_keys($zones),
+            'and the prompt frame marks no click zones at all, so the mouse route that reaches '
+            . 'reference+palette has nothing to click here',
+        );
     }
 
     /**
@@ -1251,7 +1522,23 @@ final class KeyHelpTest extends TestCase
      * So this asserts the substitution PER (state, size) — cue width against the
      * width the very same state and size renders with the reference closed — rather
      * than against an aggregate floor, and separately records the aggregate floor
-     * and which state produces it.
+     * and the SET of states that attain it (a set, not one state: two do, and the
+     * old single-state pin was reading `barStates()`'s ordering back as a fact).
+     *
+     * NOT the only test that reads `requestPermission()`'s `'inFlight' => true`,
+     * and the commit that added this one claimed it was "caught by the new test
+     * alone". Measured over the WHOLE suite, flipping that flag to `false` reds
+     * three tests: this one,
+     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}, and
+     * `ChatTest::testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall()`,
+     * which asserts it directly and reaches the prompt through a real `PreToolUse`
+     * hook. `ChatTest` was already one of the two domains that commit measured, so
+     * the counter-example was inside the measured universe and the exclusivity
+     * claim was avoidable. What this test adds over `ChatTest`'s is not that the
+     * flag is set but what it COSTS: the bar the flag selects is the narrow one the
+     * cue has to fit inside — and the margin assertion is what reports it here
+     * (measured, `19 is not identical to 1`, because with the flag off the prompt
+     * state renders the wide idle bar).
      *
      * Instrument: {@see statusBar()}, i.e. `Width::of` after `stripZoneMarkers()`.
      * Domain: the nine states in {@see barStates()} against cols 1-400 × rows
@@ -1269,8 +1556,8 @@ final class KeyHelpTest extends TestCase
         $rowsSet = [1, 4, 5, 30];
         $cueWidths = [];
         $barWidths = [];
-        $narrowest = PHP_INT_MAX;
-        $narrowestWhere = '';
+        /** @var array<string, int> $narrowestPerState */
+        $narrowestPerState = [];
         $tooSmallSubstitutions = 0;
         $overPromptSubstitutions = 0;
         $tightestTooSmall = PHP_INT_MAX;
@@ -1283,10 +1570,7 @@ final class KeyHelpTest extends TestCase
                     $closed = Width::of($this->statusBar($state));
                     $barWidths[$closed] = true;
 
-                    if ($closed < $narrowest) {
-                        $narrowest = $closed;
-                        $narrowestWhere = "{$label} @ {$cols}x{$rows}";
-                    }
+                    $narrowestPerState[$label] = min($narrowestPerState[$label] ?? PHP_INT_MAX, $closed);
 
                     $shown = $this->statusBar($state->withKeyHelp(0));
                     $width = Width::of($shown);
@@ -1316,14 +1600,43 @@ final class KeyHelpTest extends TestCase
             }
         }
 
-        // The floor, and the state that owns it. Hard-coded so that a bar which
-        // grows narrower — or a state that stops being reachable — has to be
-        // re-argued rather than silently absorbed.
-        $this->assertSame(36, $narrowest, "the narrowest bar over the corpus, produced by {$narrowestWhere}");
+        // ORDER MATTERS HERE, and it is the reason the margins come first. A cue
+        // that WIDENS by one column drops its margin to 0 and changes $cues, and
+        // whichever of the two assertions runs first is the one a reader sees. The
+        // $cues pin used to be first: measured, widening KEY_HELP_OVER_PROMPT by one
+        // column reported "two arrays are identical, 35 vs 36" and the margin
+        // assertion never ran — the same double-counting that got
+        // assertLessThanOrEqual(min($bars), 33) deleted from the sibling sweep one
+        // method up. So the assertion advertised as catching a shrinking margin is
+        // now the one that catches it, and $cues is left as the corroborating detail
+        // it always was.
+        $this->assertSame(3, $tightestTooSmall, 'KEY_HELP_TOO_SMALL keeps 3 columns against the in-flight bar');
+        $this->assertSame(1, $tightestOverPrompt, 'KEY_HELP_OVER_PROMPT keeps exactly 1 — it is the load-bearing one');
+
+        // The floor, and the states that attain it — a SET, because $narrowest was
+        // computed with a strict `<` and therefore named whichever state
+        // barStates() happens to list first among the ties. Measured, two states
+        // reach 36 at 1x1 with the byte-identical bar
+        // `0% · ⠴ thinking… · Esc Esc to cancel` — `turn in flight` and
+        // `prompt pending` — so "and it is the in-flight bar" was a tie-break
+        // artifact stated as an identification: with a strict `<` over a tie, the
+        // winner is whichever barStates() lists first, and reordering the array
+        // would have flipped the assertion with the fact unchanged. Verified the
+        // other way round instead — iterating barStates() in REVERSE leaves the two
+        // assertions below green, which the old pin could not have been. The fact is
+        // that the floor is 36 and that exactly these two states own it, both of
+        // them unreachable by the idle fixture the sibling sweep uses.
+        $floor = min($narrowestPerState);
+        $this->assertSame(36, $floor, 'the narrowest bar any state in this corpus can produce');
+        $atFloor = array_keys(array_filter($narrowestPerState, static fn(int $w): bool => $w === $floor));
+        // Sorted, so that reordering barStates() cannot flip this the way it could
+        // flip the single-state pin this replaces.
+        sort($atFloor);
         $this->assertSame(
-            'turn in flight @ 1x1',
-            $narrowestWhere,
-            'and it is the in-flight bar, in the state the idle fixture cannot reach',
+            ['prompt pending', 'turn in flight'],
+            $atFloor,
+            'and these are the states that attain it — both in flight, because requestPermission() sets '
+            . 'inFlight, which is what makes the cue meet this bar and not the wide idle one',
         );
 
         $cues = array_keys($cueWidths);
@@ -1337,11 +1650,6 @@ final class KeyHelpTest extends TestCase
         //   band within its own 1600 pairs = 4 x 400 - 808.
         $this->assertSame(9 * 808, $tooSmallSubstitutions, 'fixture: TOO_SMALL fires over the band claimed');
         $this->assertSame(4 * 400 - 808, $overPromptSubstitutions, 'fixture: OVER_PROMPT fires over its complement');
-
-        // The two margins, named so a shrinking one is visible rather than merely
-        // still-positive.
-        $this->assertSame(3, $tightestTooSmall, 'KEY_HELP_TOO_SMALL keeps 3 columns against the in-flight bar');
-        $this->assertSame(1, $tightestOverPrompt, 'KEY_HELP_OVER_PROMPT keeps exactly 1 — it is the load-bearing one');
     }
 
     /**
@@ -1470,18 +1778,28 @@ final class KeyHelpTest extends TestCase
      * finds only those two.
      *
      * Deleting the guard outright turns exactly this one test red, and so does
-     * making its body throw when it fires — measured over the 265 tests in the
-     * three files that build a `PermissionRequestMsg` at all AND, separately,
-     * over `ChatTest`'s 215, which stay green under both. (That 265 is a count
-     * this file's OWN size feeds, so it is re-measured whenever tests are added
-     * here, not carried forward; it stood at 252 for one round after the round
-     * that added eight tests to those very files, and it moved twice inside the
-     * round that fixed it.) That second domain is
-     * why the earlier wording here was wrong: it said no other test can even
-     * REACH a stamped ASK, and 14 `ChatTest` tests do, through the two producers
-     * above. What they cannot do is make the comparison true. See
-     * `Chat::requestPermission()`'s own comment for the four-mutation table.
-     * So what this pins is the guard's LOGIC, not a live path.
+     * making its body throw when it fires — measured over the three files that
+     * build a `PermissionRequestMsg` at all AND, separately, over `ChatTest`,
+     * which stays green under both.
+     *
+     * Those two domains are named by FILE and not by test count, deliberately. A
+     * count here is a figure this file's own size feeds, so it goes stale the
+     * moment a test is added below it: the previous revision promised it would be
+     * "re-measured whenever tests are added here" and then went stale inside the
+     * very commit that added three, having already stood at 252 for a round. (Those
+     * are historical trio counts as of round 4, kept as the story and not as a
+     * current measurement: 265 was written where the trio then held 268.) The
+     * file SET is a claim that can assert itself, and does —
+     * {@see testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg()}.
+     * The load-bearing figures in the table are the failure counts per mutation,
+     * which a reader reproduces by mutating rather than by counting tests.
+     *
+     * `ChatTest` is why the earlier wording here was wrong in a second way: it
+     * said no other test can even REACH a stamped ASK, and 14 `ChatTest` tests
+     * do, through the two producers above. What they cannot do is make the
+     * comparison true. See `Chat::requestPermission()`'s own comment for the
+     * four-mutation table. So what this pins is the guard's LOGIC, not a live
+     * path.
      *
      * That makes it a dormant-defence test, and worth keeping as one: the engine
      * path `PermissionRequestMsg`'s docblock names is the producer it is for,
@@ -1512,6 +1830,54 @@ final class KeyHelpTest extends TestCase
 
         [$unstamped] = $sent->update($ask(null));
         $this->assertNotNull($unstamped->pendingPermission(), 'an unstamped ASK still applies');
+    }
+
+    /**
+     * The DOMAIN `Chat::requestPermission()`'s mutation table is measured over,
+     * asserted instead of narrated — the third thing in that table's neighbourhood
+     * to be moved out of prose, after the site count and the owning methods.
+     *
+     * The table's first column is "the three files that construct a
+     * `PermissionRequestMsg` at all", reproduced by
+     * `grep -rl PermissionRequestMsg tests/`. That set is what makes the column
+     * meaningful: a fourth file building one puts a fourth file's tests inside the
+     * measured universe, so every row of the table becomes a figure taken over the
+     * wrong domain. Stated in prose it had already gone stale once as a test COUNT
+     * — 265 written where the trio then held 268, in the same commit that added
+     * three tests to it (both figures historical, round 4's trio) — and the file set
+     * is the part of that claim a test can hold, so here it is held.
+     *
+     * `ChatTest` is asserted to be OUTSIDE the set, because the table measures it
+     * as a separate column precisely on the grounds that it never builds the Msg
+     * by hand and only ever reaches the guard through the two real producers.
+     */
+    public function testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(): void
+    {
+        $root = \dirname(__DIR__);
+        $found = [];
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $file) {
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+            if (str_contains((string) file_get_contents($file->getPathname()), 'PermissionRequestMsg')) {
+                $found[] = str_replace($root . '/', '', $file->getPathname());
+            }
+        }
+        sort($found);
+
+        $this->assertSame(
+            ['Commands/KeyBindingDriftTest.php', 'Renderer/KeyHelpTest.php', 'RendererTest.php'],
+            $found,
+            "the trio column in Chat::requestPermission()'s mutation table is exactly these files; a fourth "
+            . 'one naming PermissionRequestMsg widens the universe every row of that table was measured over',
+        );
+        $this->assertNotContains(
+            'ChatTest.php',
+            $found,
+            'and ChatTest is measured as a SEPARATE column because it reaches the guard only through the two '
+            . 'real producers, never by hand-building the Msg',
+        );
     }
 
     /**
@@ -1625,22 +1991,33 @@ final class KeyHelpTest extends TestCase
      * The whole overlay chain in {@see Renderer::renderView()}, walked end to
      * end: reference → permission prompt → palette → session picker.
      *
-     * Four links make SIX pairs. Two of them are reachable and have tests of
-     * their own above; the other four — reference+picker, prompt+palette,
-     * prompt+picker, palette+picker — are fixed precedence between modals that
-     * cannot coexist, which `Chat::update()` states outright of the last pair
-     * ("even though they cannot both be open"). Dormant is not the same as
-     * unpinned: a documented order nothing reads back is an order that gets
-     * reshuffled by the next person to touch the `if` chain, and swapping the
+     * Four links make SIX pairs. Exactly ONE of them is reachable through the
+     * front door — reference+palette, by the mouse route
+     * ({@see testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()}) — and
+     * the other five are fixed precedence between modals that no sequence of real
+     * input puts up together, which `Chat::update()` states outright of
+     * palette+picker ("even though they cannot both be open"). Dormant is not the
+     * same as unpinned: a documented order nothing reads back is an order that
+     * gets reshuffled by the next person to touch the `if` chain, and swapping the
      * palette and the picker used to change nothing anywhere in this suite.
+     *
+     * reference+prompt is one of the five, and a previous revision counted it
+     * among the reachable ones on the strength of
+     * {@see testTheReferenceOutranksAPermissionPromptBecauseItOwnsTheKeyboard()} —
+     * which reaches that state through {@see blockedOnPermission()}, i.e. by
+     * hand-dispatching a `PermissionRequestMsg`, the same non-front-door
+     * construction this file correctly labels as such around
+     * {@see testASupersededAskNeverPutsUpAPrompt()}. The unreachability is not
+     * narrated here either: it is driven with a real `PreToolUse` hook returning
+     * `HookResult::ask()` over a real turn, from both ends, by
+     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}.
+     * `Chat::update()`'s ordering makes the reference outrank the prompt anyway,
+     * and the sibling test is a deliberate determinism guarantee over a state
+     * today's producers cannot build — kept as one, labelled as one.
      *
      * Domain, stated because it is not a user-reachable state: ONE
      * hand-assembled Chat with all four overlays set at 100x30, walked by
-     * removing the winner four times. It pins the ordering, not the
-     * reachability — the two reachable pairs are what
-     * {@see testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()} and
-     * {@see testTheReferenceOutranksAPermissionPromptBecauseItOwnsTheKeyboard()}
-     * cover through the front door.
+     * removing the winner four times. It pins the ordering, not the reachability.
      */
     public function testTheOverlayChainPaintsInRoutingOrderRightDownTheChain(): void
     {
