@@ -295,10 +295,17 @@ final class SkillLoader
         }
 
         if ($anchoredIn !== null && !ContainedPath::below($dir, $anchoredIn)) {
+            // NAMES THE ANCHOR, not "the checkout". Every refusal from here said
+            // "a repository chooses where this directory is", which stopped being
+            // true when {@see \SugarCraft\Crush\Skills\ForeignSkillDiscovery}
+            // started anchoring the USER tier to `$HOME`: there the directory is
+            // one the user chose and the objection is that it leaves their home.
+            // A notice that misidentifies who chose the path sends its reader to
+            // the wrong file — the same correction the two agent-preset
+            // registries needed.
             $this->recordRefusedDirectory($dir, sprintf(
-                'resolves to %s, %s the checkout it was reached from (%s) — a repository chooses where this '
-                . 'directory is, and a link out of the checkout would put unrelated files\' SKILL.md bodies '
-                . "in the model's prompt context",
+                'resolves to %s, %s the directory it is anchored to (%s) — a link out of that directory '
+                . "would put unrelated files' SKILL.md bodies in the model's prompt context",
                 $root,
                 realpath($anchoredIn) === $root ? 'which is exactly' : 'outside',
                 $anchoredIn,

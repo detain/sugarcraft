@@ -220,4 +220,83 @@ final class ForeignMemoryImporterContainmentTest extends TestCase
 
         $this->assertSame([], $this->importer->refusedDirectories());
     }
+
+    // ─── the CLAUDE tier's home ─────────────────────────────────────
+
+    /**
+     * THE USER TIER, which stayed on {@see \SugarCraft\Crush\Support\HomeDirectory::path()}
+     * through the very commit that gated its sibling
+     * ({@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::userDir()}).
+     *
+     * The per-ENTRY gate above does not help here and that is the whole point:
+     * when the entire home is attacker-writable, every entry the attacker plants
+     * resolves neatly INSIDE the directory it was listed from. MEASURED against
+     * the build that read `path()`, with `HOME` at a mode-1777 directory:
+     * `imported=1`, `refusedDirectories()=[]`, and the body entering the store
+     * tagged `source:claude` — while `HomeDirectory::owned()` returned NULL for
+     * that same home.
+     */
+    public function testAWorldWritableHomeImportsNothingFromTheClaudeTier(): void
+    {
+        $home = $this->sandbox . '/home';
+        chmod($home, 0o1777);
+
+        $slug = '-' . ltrim(str_replace('/', '-', $this->project), '-');
+        $dir = $home . '/.claude/projects/' . $slug . '/memory';
+        mkdir($dir, 0o777, true);
+        file_put_contents($dir . '/planted.md', "---\ndescription: planted\n---\n" . self::SECRET . "\n");
+
+        try {
+            $this->assertSame(0, $this->importer->importClaudeCode($this->project));
+            $this->assertStringNotContainsString(self::SECRET, $this->storedText());
+
+            // Refused, not merely empty — the distinction refusedDirectories()
+            // exists to make.
+            $this->assertNotSame([], $this->importer->refusedDirectories());
+        } finally {
+            chmod($home, 0o700);
+        }
+    }
+
+    /**
+     * THE CONTROL. Without it the assertion above is satisfied by a Claude tier
+     * that simply stopped working: the same tree under an OWNED home still
+     * imports.
+     */
+    public function testAnOwnedHomeStillImportsTheClaudeTier(): void
+    {
+        $home = $this->sandbox . '/home';
+        $slug = '-' . ltrim(str_replace('/', '-', $this->project), '-');
+        $dir = $home . '/.claude/projects/' . $slug . '/memory';
+        mkdir($dir, 0o777, true);
+        file_put_contents($dir . '/note.md', "---\ndescription: mine\n---\nOWNED-HOME-NOTE\n");
+
+        $this->assertSame(1, $this->importer->importClaudeCode($this->project));
+        $this->assertStringContainsString('OWNED-HOME-NOTE', $this->storedText());
+        $this->assertSame([], $this->importer->refusedDirectories());
+    }
+
+    /**
+     * An EXPLICIT `$claudeHome` is the caller naming a directory rather than
+     * this class deriving one, so it is not gated — pinned so the gate above
+     * cannot silently grow into the parameter and break every test and
+     * non-default install that passes one.
+     */
+    public function testAnExplicitClaudeHomeIsNotGatedByTheOwnershipCheck(): void
+    {
+        $home = $this->sandbox . '/home';
+        chmod($home, 0o1777);
+
+        $slug = '-' . ltrim(str_replace('/', '-', $this->project), '-');
+        $dir = $this->sandbox . '/claude/projects/' . $slug . '/memory';
+        mkdir($dir, 0o777, true);
+        file_put_contents($dir . '/note.md', "---\ndescription: explicit\n---\nEXPLICIT-HOME-NOTE\n");
+
+        try {
+            $this->assertSame(1, $this->importer->importClaudeCode($this->project, $this->sandbox . '/claude'));
+            $this->assertStringContainsString('EXPLICIT-HOME-NOTE', $this->storedText());
+        } finally {
+            chmod($home, 0o700);
+        }
+    }
 }

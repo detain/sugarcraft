@@ -10,11 +10,26 @@ namespace SugarCraft\Crush\Support;
  * {@see HomeDirectory} is the one home-directory resolution: two
  * implementations of a security predicate is how the second one stays wrong.
  *
- * SEVEN TIERS, and this paragraph said FIVE for a round — which is the same
- * failure as the counts below, in the sentence that frames them. The three it
- * omitted were not oversights of wording: they were three read paths with NO
- * containment at all, in two DORMANT classes whose doc-blocks honestly said
+ * EIGHT TIERS, and this paragraph said FIVE, then SEVEN — which is the same
+ * failure as the counts below, in the sentence that frames them. The three the
+ * FIVE omitted were not oversights of wording: they were three read paths with
+ * NO containment at all, in two DORMANT classes whose doc-blocks honestly said
  * they were unwired, and "unwired" was doing the work "gated" should have been.
+ *
+ * THE EIGHTH IS {@see \SugarCraft\Crush\Agents\WorktreeConfig}'s, and it is the
+ * one worth reading twice, because it was invisible to BOTH of the instruments
+ * written to stop exactly this. `WorktreeConfig::new()` read
+ * `__DIR__ . '/../../../.sugar-crush/config.json'` with no containment of any
+ * kind and set `worktreeIncludeFile` from it;
+ * {@see \SugarCraft\Crush\Agents\WorktreeManager} then read THAT file and turned
+ * every line into a copy pattern. MEASURED on this host against the ungated
+ * build, one line, `../secret/id_rsa`: read `<repoRoot>/../secret/id_rsa` and
+ * wrote `<worktreePath>/../secret/id_rsa` — outside the checkout in one
+ * direction and outside the worktree in the other. The inventory test could not
+ * see it because it counts compares that are WRITTEN and this had none, and the
+ * project-tier inventory could not see it because it classified
+ * `.sugar-crush/config.json` from the STRING as user-tier, which is true of
+ * {@see \SugarCraft\Crush\Cli\Bootstrap}'s call site and false of this one.
  * Native workflows, native skills, native agent presets, native custom commands
  * and instruction files were the five; {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}'s
  * `{projectRoot}/.claude/agents` and `{projectRoot}/.opencode/agents`, and
@@ -38,7 +53,7 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - NINETEEN call sites in SEVEN files ask this class:
+ *   - TWENTY-THREE call sites in NINE files ask this class:
  *     {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (2 — entry, directory
  *     anchor), {@see \SugarCraft\Crush\Skills\SkillLoader} (3 — entry, directory
  *     anchor, skill asset), {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}
@@ -47,8 +62,12 @@ namespace SugarCraft\Crush\Support;
  *     {@see \SugarCraft\Crush\Context\InstructionFileLoader} (5 — one per read
  *     decision it makes),
  *     {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} (2 — entry,
- *     directory anchor) and {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
- *     (2 — the same pair).
+ *     directory anchor), {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
+ *     (2 — the same pair), {@see \SugarCraft\Crush\Agents\WorktreeConfig} (2 —
+ *     the config DIRECTORY against the tree containing the package, and
+ *     `config.json` against that directory) and
+ *     {@see \SugarCraft\Crush\Agents\WorktreeManager} (2 — the include FILE
+ *     against the repo root, and each copy pattern's source against it too).
  *   - EIGHT spellings remain by hand, in FOUR files, and they are a DIFFERENT
  *     CONTRACT rather than copies waiting to be swept up:
  *
@@ -94,6 +113,10 @@ namespace SugarCraft\Crush\Support;
  *     NOT in this count and not omitted by oversight: they match relative paths
  *     against a glob directory, not a path against a boundary. The inventory
  *     test names them explicitly so the exclusion is a decision rather than a gap.
+ *     Its THIRD guard, `patternStaysInside()`, is not a prefix compare at all —
+ *     it walks a pattern's segments — and the reason it does not route here is
+ *     the reason `BashEscapeDenyHook` does not: it judges a destination path
+ *     that does not exist yet, which this class refuses outright.
  *
  * WHAT THIS INVENTORY STILL CANNOT SEE, stated because assuming otherwise is how
  * finding #89 survived six review rounds: it counts the compares that are

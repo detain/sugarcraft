@@ -372,6 +372,18 @@ final class InstructionFileLoader
         // no reachable case. A path in a directory that does not exist yet
         // returns null rather than walking, which is what it already did for
         // the fully-nonexistent path this class is tested on.
+        // THE PREVIOUS ANSWER FOR THIS PATH IS DROPPED BEFORE A NEW ONE IS
+        // COMPUTED. The map ACCUMULATES across calls (see {@see refusedPaths()}
+        // for why), and an accumulated entry that is never revisited can outlive
+        // the condition that caused it: `loadForPath('<repo>/notyet/x.php')`
+        // recorded "the directory holding it does not resolve", the session then
+        // created `notyet/CLAUDE.md`, and the very next identical call returned
+        // that file's contents while the refusal still said it had been refused.
+        // Re-deciding a path is what makes the map's entry for THAT path
+        // current; entries for paths this session never touches again are the
+        // residue {@see refusedPaths()} states.
+        unset($this->refusedPaths[$touchedPath]);
+
         $dir = realpath(dirname($touchedPath));
         if ($dir === false || !ContainedPath::within($dir, $repoRoot)) {
             $this->refusedPaths[$touchedPath] = $dir === false
@@ -404,6 +416,11 @@ final class InstructionFileLoader
 
                 $realPath = realpath($fullPath) ?: $fullPath;
                 if (!isset($this->emittedPaths[$realPath])) {
+                    // A file that was refused earlier and passes both gates now
+                    // is no longer refused — same reason as the `unset()` above,
+                    // for the entry rather than the touched path.
+                    unset($this->refusedPaths[$fullPath]);
+
                     $this->emittedPaths[$realPath] = true;
                     // Resolved, for the reason loadRoot() reads resolved; the
                     // import base stays spelled, for the reason it stays spelled.
@@ -458,6 +475,24 @@ final class InstructionFileLoader
      * refusals and forget the root file's. One loader is one session here
      * (`Runtime` builds it once), so the accumulation has the same lifetime the
      * siblings' per-call maps have.
+     *
+     * WHAT ACCUMULATION COSTS, stated because the paragraph above argues only
+     * for it and a future consumer will get this wrong: AN ENTRY CAN OUTLIVE ITS
+     * CONDITION. Measured — `loadForPath('<repo>/notyet/x.php')` returned null
+     * and recorded "the directory holding it does not resolve"; the session then
+     * created `notyet/CLAUDE.md`; the same call returned `"LEGIT\n"` while the
+     * map still reported the refusal.
+     *
+     * {@see loadForPath()} now drops the previous verdict for a path before
+     * re-deciding it, and drops an entry's refusal when that entry passes both
+     * gates, so any path this session TOUCHES AGAIN is current. What remains —
+     * and is the residue rather than a bug — is a path refused once and never
+     * touched again, whose entry is a statement about the moment it was made.
+     * Consumers must read this as "was refused at some point during this
+     * session", not as "is refused now".
+     *
+     * Growth is bounded by the number of DISTINCT paths a session touches:
+     * duplicate keys overwrite, so a hot loop over one path adds one entry.
      *
      * NOT drained by anything yet. {@see \SugarCraft\Crush\Cli\Bootstrap}'s
      * collector is fed by the three tiers whose refusals are DIRECTORY-shaped

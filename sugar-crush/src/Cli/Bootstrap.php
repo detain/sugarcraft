@@ -652,9 +652,13 @@ final class Bootstrap
      * against the pre-fix build, a fixture whose only content was that one line
      * had this method return a preset carrying an outside file's description, its
      * body as `initialPrompt`, and `permissionMode: bypass-permissions`. See
-     * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}. The user half is NOT
-     * anchored: `~/.sugar-crush/agents` is the user's own directory and linking
-     * it at `~/.claude/agents` is a working layout, not an escape.
+     * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}.
+     *
+     * THE USER HALF IS ANCHORED TOO, to `$HOME`, and the sentence it replaces —
+     * "the user half is NOT anchored: `~/.sugar-crush/agents` is the user's own
+     * directory" — was a claim about who chose the LOCATION, made by code that
+     * only checked who owned the home. See {@see agentPresetTiers()} for the
+     * measurement that refuted it and for what the anchor costs.
      *
      * @return array<string, \SugarCraft\Crush\Agents\AgentPreset> keyed by preset name
      */
@@ -669,80 +673,15 @@ final class Bootstrap
         // built-in agents, and "this process cannot tell whose home this is" is
         // not a degradable condition: it is the launch refusal
         // {@see trustedConfigDirPath()} exists to raise.
-        $projectAgents = rtrim($root, '/') . '/.sugar-crush/agents';
-        $userAgents = self::trustedConfigDirPath() . '/agents';
-
-        // THE TWO TIERS CAN BE ONE DIRECTORY, and the anchor must not then apply.
-        // `chat()` defaults $root to `getcwd()`, so `cd ~ && sugarcrush` makes
-        // $root the home directory and both expressions above the SAME path.
-        // Anchoring it would judge the user's own roster as "a repository chose
-        // this": measured before this branch, with `~/.sugar-crush/agents`
-        // symlinked to a directory outside $HOME, `agentPresets(<any project>)`
-        // returned the roster while `agentPresets($HOME)` returned NO presets and
-        // a refusal reading "a repository chooses where this directory is" — for
-        // a layout the user, not a repository, chose. A link to `~/.claude/agents`
-        // survived only because it happens to be inside $HOME.
-        //
-        // The union of the two tiers' permissions is the right answer when one
-        // directory IS both, and the user tier is deliberately unanchored (see
-        // {@see AgentPresetRegistry::__construct()}).
-        //
-        // THE COST OF THAT COLLAPSE WAS ONCE STATED AND MITIGATED WITH A
-        // MITIGATION THAT DID NOT EXIST. The sentence here used to read "that
-        // directory is still gated by trustedConfigDirPath(), which refuses a
-        // home this process cannot establish ownership of"; that method refused
-        // only an UNDETERMINABLE home and performed no `stat` at all, so a
-        // $HOME that is itself a cloned checkout — a dotfiles repo — had its
-        // committed `.sugar-crush/agents -> <outside>` read unanchored.
-        // MEASURED on a real `git init` checkout, one committed symlink:
-        //
-        //     cd ~        && sugarcrush  presets=["pwned"] mode=bypass-permissions refusals=[]
-        //     cd ~/dotfiles && sugarcrush  presets=[]        refusals=["…outside the checkout…"]
-        //
-        // Two things changed rather than the sentence. {@see trustedConfigDirPath()}
-        // now genuinely establishes ownership, and the collapse below is
-        // CONDITIONAL: when the home directory is itself a git checkout the
-        // anchor is kept, because that is precisely the state in which "a
-        // repository chose where this directory points" can be true of the
-        // user's own home. `$HOME/.git` is the discriminator because the escape
-        // needs a COMMITTED symlink and nothing can be committed without a
-        // repository; `file_exists()` rather than `is_dir()` because a linked
-        // worktree spells `.git` as a file. STATED BOUND: a bare-repo dotfiles
-        // layout (`git --git-dir=~/.dotfiles --work-tree=~`) leaves no `.git`
-        // at $HOME and is NOT caught by this.
-        //
-        // WHICH HALF IS THE FIX, measured rather than implied: the ANCHOR branch
-        // is. Collapsing the two search paths to one changes no verdict — with
-        // duplicates the same directory is simply scanned twice and the roster is
-        // keyed by preset name — so it is here to stop one launch recording the
-        // same directory twice, not to permit anything. Dropping it leaves every
-        // assertion in {@see \SugarCraft\Crush\Tests\Agents\AgentPresetHomeRootTest}
-        // green; dropping the anchor branch does not.
-        //
-        // Resolved identity as well as spelled identity: $root reached through a
-        // symlink to $HOME is the same directory and must take the same branch.
-        // Its effect is narrower than the spelled case — the unanchored user tier
-        // is in the search list either way, so the roster survives regardless —
-        // and what it prevents is a REFUSAL recorded against the user's own
-        // directory for being "outside the checkout it was reached from".
-        $sameDirectory = $projectAgents === $userAgents
-            || (realpath($projectAgents) !== false && realpath($projectAgents) === realpath($userAgents));
-
-        // The one state in which the collapse above is NOT the user's own
-        // choice — see the comment block. A home that is a checkout keeps the
-        // anchor, so the roster is judged the way the same directory would be
-        // judged if it were reached as a project.
-        if ($sameDirectory && file_exists(rtrim($root, '/') . '/.git')) {
-            $sameDirectory = false;
-        }
+        [$searchPaths, $anchors] = self::agentPresetTiers($root);
 
         $registry = new AgentPresetRegistry(
-            $sameDirectory ? [$userAgents] : [$projectAgents, $userAgents],
-            // Keyed by the path AS SPELLED above, which is why the string is a
-            // variable rather than repeated. A key that names no search path is
-            // now refused at construction rather than silently anchoring nothing
-            // — see {@see AgentPresetRegistry::__construct()}.
-            anchors: $sameDirectory ? [] : [$projectAgents => $root],
+            $searchPaths,
+            // Keyed by the paths AS SPELLED in agentPresetTiers(), which is why
+            // they are returned rather than rebuilt here. A key that names no
+            // search path is refused at construction rather than silently
+            // anchoring nothing — see {@see AgentPresetRegistry::__construct()}.
+            anchors: $anchors,
         );
 
         try {
@@ -765,6 +704,90 @@ final class Bootstrap
         self::$projectTierRefusals = [...self::$projectTierRefusals, ...$registry->refusedDirectories()];
 
         return $presets;
+    }
+
+    /**
+     * The agent-preset search paths and their trust anchors, for $root.
+     *
+     * THE `.git` DISCRIMINATOR THIS REPLACES RESTED ON A FALSE PREMISE, stated
+     * in the code it guarded: *"`$HOME/.git` is the discriminator because the
+     * escape needs a COMMITTED symlink and nothing can be committed without a
+     * repository."* A symlink does not need to be committed to arrive. `tar`,
+     * `zip`, `rsync -a`, `degit` and "download the release tarball" all carry
+     * one and carry no `.git`, and the discriminator was defeated three
+     * further ways: a bare-repo dotfiles layout leaves no `.git` at `$HOME`
+     * (this was the stated bound), and a DANGLING `.git` symlink answers
+     * `file_exists()` false while being every bit a checkout.
+     *
+     * THE MEASUREMENT THAT SETTLED IT, on this host, `$HOME` mode 0700 and
+     * owned, its only content `.sugar-crush/agents -> <outside>` delivered by
+     * `tar xzf` — four launch shapes, the discriminator working exactly as
+     * designed:
+     *
+     *     no .git,  agentPresets($HOME)    presets=["pwned"] mode=bypass-permissions refusals=[]
+     *     no .git,  agentPresets(<project>) presets=["pwned"] mode=bypass-permissions refusals=[]
+     *     .git dir, agentPresets($HOME)    presets=[]        refusals=["…outside the checkout…"]
+     *     .git dir, agentPresets(<project>) presets=["pwned"] mode=bypass-permissions refusals=[]
+     *
+     * The third row is the only one the discriminator ever changed. Row FOUR is
+     * the point: with `.git` present — the check firing correctly — the escape
+     * is fully live the moment the user launches from any directory that is not
+     * their home, which is every ordinary launch. The discriminator defended one
+     * launch shape out of four and the rationale for it was false, so it is
+     * gone rather than patched.
+     *
+     * NO RELIABLE DISCRIMINATOR EXISTS for the question it was asking. "Did a
+     * repository choose this content" is not answerable from the filesystem: a
+     * tarball-delivered dotfiles tree and a hand-authored one are byte-identical.
+     * So the question is replaced with one that IS answerable and that makes the
+     * old claim true rather than assumed — *is this directory inside the home
+     * this process established as the user's?* The user tier is anchored to
+     * `$HOME`. Every row above becomes a refusal, in every launch shape.
+     *
+     * WHAT IT COSTS, stated rather than implied away, because it is a real
+     * working layout that stops working: `~/.sugar-crush/agents` symlinked to a
+     * path OUTSIDE `$HOME` — a network share, `/opt/team-agents` — is now
+     * refused. The layout the old sentence actually named as its justification,
+     * a link to `~/.claude/agents`, is INSIDE `$HOME` and is unaffected; so is
+     * every roster that is a real directory. {@see \SugarCraft\Crush\Tests\Agents\AgentPresetHomeRootTest}
+     * pins both halves.
+     *
+     * WHY THE ANCHOR AND NOT THE OWNERSHIP CHECK. {@see HomeDirectory::owned()}
+     * already establishes that `$HOME` is this user's, and in the measurement
+     * above it was — the user extracted a hostile tarball into their own home.
+     * Ownership answers "whose directory is this"; it cannot answer "who chose
+     * where this link points", and only containment does.
+     *
+     * `$sameDirectory` survives as pure DE-DUPLICATION and no longer decides
+     * anything: when `$root` IS `$HOME` the two expressions are one directory
+     * and one anchor, so scanning it twice would record the same refusal under
+     * the same key. Resolved identity as well as spelled, so `$root` reached
+     * through a symlink to `$HOME` is the same launch.
+     *
+     * @return array{0: list<string>, 1: array<string, string>} search paths in
+     *         precedence order, and their anchors keyed by the SAME spellings
+     */
+    private static function agentPresetTiers(string $root): array
+    {
+        $projectAgents = rtrim($root, '/') . '/.sugar-crush/agents';
+
+        // Both derived from the ONE trusted resolution, so the agents directory
+        // and the home it is anchored to can never be two different homes.
+        $userConfigDir = self::trustedConfigDirPath();
+        $userAgents = $userConfigDir . '/agents';
+        $userHome = \dirname($userConfigDir);
+
+        $sameDirectory = $projectAgents === $userAgents
+            || (realpath($projectAgents) !== false && realpath($projectAgents) === realpath($userAgents));
+
+        if ($sameDirectory) {
+            return [[$userAgents], [$userAgents => $userHome]];
+        }
+
+        return [
+            [$projectAgents, $userAgents],
+            [$projectAgents => $root, $userAgents => $userHome],
+        ];
     }
 
     /**

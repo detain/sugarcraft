@@ -203,6 +203,29 @@ final class BuiltInToolCorpus
      *
      * `isEnum()` rather than `enum_exists()` because the reflection object is
      * already in hand and the two answer the same question here.
+     *
+     * THE ENUM CLAUSE WAS ONE INSTANCE OF A CLASS OF DEFECT, not the class, and
+     * the sibling it left behind is THIS REPO'S OWN MANDATED SHAPE. The filter
+     * asked what a class IS and never whether it can be BUILT, while
+     * {@see instances()}'s `getNumberOfRequiredParameters() === 0` arm is true of
+     * a zero-argument PRIVATE constructor — so the `match` fallback never fired
+     * and `new $class()` ran anyway. `CLAUDE.md` and `.claude/rules/model-pattern.md`
+     * both MANDATE `final` + `private function __construct()` + a `::new()`
+     * factory, so a tool written the way this codebase says to write one entered
+     * the corpus and produced:
+     *
+     *     Error: Call to private CorpusProbe\…\ProbePrivateCtor::__construct()
+     *     tests/Tools/BuiltInToolTest.php            -> Tests: 80, Errors: 33
+     *     tests/Providers/ToolSchemaEncodingTest.php -> abort inside TestSuiteBuilder->build()
+     *
+     * — the last line verbatim the failure mode the enum clause was added to
+     * remove.
+     *
+     * So the question asked here is CONSTRUCTIBILITY, and the canonical shape is
+     * constructible: a non-public constructor is fine when the class offers a
+     * public static zero-argument `new()`, which {@see instances()} then uses. A
+     * class with neither cannot be dispatched by anything a real run does, which
+     * is exactly what this method's own name asks.
      */
     private static function isDispatchableTool(string $symbol): bool
     {
@@ -214,7 +237,49 @@ final class BuiltInToolCorpus
 
         return !$reflection->isAbstract()
             && !$reflection->isEnum()
-            && $reflection->implementsInterface(Tool::class);
+            && $reflection->implementsInterface(Tool::class)
+            && self::isConstructible($reflection);
+    }
+
+    /**
+     * Can this class be built at all, by `new` or by the project's `::new()`
+     * factory convention?
+     *
+     * Reflection can answer VISIBILITY and it cannot answer whether a
+     * constructor THROWS — that residual is handled where it surfaces, in
+     * {@see instances()}, which turns it into a named failure rather than an
+     * opaque abort during suite construction.
+     *
+     * @param \ReflectionClass<object> $reflection
+     */
+    private static function isConstructible(\ReflectionClass $reflection): bool
+    {
+        $constructor = $reflection->getConstructor();
+
+        if ($constructor === null || $constructor->isPublic()) {
+            return true;
+        }
+
+        return self::zeroArgumentFactory($reflection) !== null;
+    }
+
+    /**
+     * The class's public static zero-argument `new()`, or null.
+     *
+     * @param  \ReflectionClass<object> $reflection
+     * @return \ReflectionMethod|null
+     */
+    private static function zeroArgumentFactory(\ReflectionClass $reflection): ?\ReflectionMethod
+    {
+        if (!$reflection->hasMethod('new')) {
+            return null;
+        }
+
+        $factory = $reflection->getMethod('new');
+
+        return $factory->isPublic() && $factory->isStatic() && $factory->getNumberOfRequiredParameters() === 0
+            ? $factory
+            : null;
     }
 
     /**
@@ -403,29 +468,73 @@ final class BuiltInToolCorpus
      * is a new tool nobody has said how to test, and a silent skip would hand
      * back the empty-corpus problem this class exists to remove.
      *
+     * THE CANONICAL SHAPE IS BUILT THROUGH ITS FACTORY. `final` + `private
+     * function __construct()` + `::new()` is what `CLAUDE.md` and
+     * `.claude/rules/model-pattern.md` mandate, and `new $class()` on one of
+     * those is a fatal `Error` that no `catch` in a data provider can reach —
+     * see {@see isDispatchableTool()} for the measurement.
+     *
+     * AND A CONSTRUCTOR THAT THROWS is caught, because reflection cannot see it
+     * coming. It produced the same uncatchable abort inside
+     * `TestSuiteBuilder->build()`; rethrown here it is a named `RuntimeException`
+     * that says which class and what to do about it. It is still a HARD failure —
+     * a tool that cannot be built standalone is one nobody has said how to test —
+     * but a legible one.
+     *
+     * $srcDir/$namespacePrefix are injectable for the reason
+     * {@see classNames()}'s are, and only this scanner's own tests pass them:
+     * driving the private-constructor and throwing-constructor shapes needs a
+     * synthetic tree, and writing probe files into the real `src/` is what left
+     * residue for concurrently-running suites to read.
+     *
      * @return list<Tool>
      */
-    public static function instances(): array
+    public static function instances(?string $srcDir = null, string $namespacePrefix = self::NAMESPACE_PREFIX): array
     {
         $tools = [];
-        foreach (self::classNames() as $class) {
-            $constructor = (new \ReflectionClass($class))->getConstructor();
+        foreach (self::classNames($srcDir, $namespacePrefix) as $class) {
+            $reflection = new \ReflectionClass($class);
+            $constructor = $reflection->getConstructor();
 
-            if ($constructor === null || $constructor->getNumberOfRequiredParameters() === 0) {
-                $tools[] = new $class();
+            try {
+                if ($constructor !== null && !$constructor->isPublic()) {
+                    // Constructible by {@see isConstructible()}'s own rule only
+                    // because this factory exists, so it is not `?->`-optional.
+                    $tools[] = $reflection->getMethod('new')->invoke(null);
 
-                continue;
-            }
+                    continue;
+                }
 
-            $tools[] = match ($class) {
-                SkillTool::class => new SkillTool(new SkillRegistry()),
-                default => throw new \RuntimeException(sprintf(
-                    '%s needs constructor arguments; add it to %s::instances() so every built-in-tool test '
-                    . 'covers it rather than silently skipping it.',
+                if ($constructor === null || $constructor->getNumberOfRequiredParameters() === 0) {
+                    $tools[] = new $class();
+
+                    continue;
+                }
+
+                $tools[] = match ($class) {
+                    SkillTool::class => new SkillTool(new SkillRegistry()),
+                    default => throw new \RuntimeException(sprintf(
+                        '%s needs constructor arguments; add it to %s::instances() so every built-in-tool test '
+                        . 'covers it rather than silently skipping it.',
+                        $class,
+                        self::class,
+                    )),
+                };
+            } catch (\Throwable $e) {
+                if ($e instanceof \RuntimeException && str_contains($e->getMessage(), self::class)) {
+                    throw $e;
+                }
+
+                throw new \RuntimeException(sprintf(
+                    '%s could not be constructed standalone (%s: %s); add it to %s::instances() with the '
+                    . 'wiring it needs, so every built-in-tool test covers it rather than aborting suite '
+                    . 'construction.',
                     $class,
+                    $e::class,
+                    $e->getMessage(),
                     self::class,
-                )),
-            };
+                ), 0, $e);
+            }
         }
 
         return $tools;

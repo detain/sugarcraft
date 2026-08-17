@@ -58,15 +58,22 @@ final class AgentPresetRegistry
     /**
      * @param list<string> $searchPaths directories to look for `<name>.md` in,
      *        in precedence order
-     * @param array<string, string> $anchors trust anchors for the search paths a
-     *        REPOSITORY chose, keyed by the search path: that path must resolve
-     *        strictly inside its anchor ({@see ContainedPath::below()}) or the
-     *        whole directory is refused. A path with no entry here is unanchored,
-     *        which is the right answer for the user's own
-     *        `~/.sugar-crush/agents` — nobody but the user chose where it points,
-     *        and users really do link it at `~/.claude/agents`, so anchoring it to
-     *        the checkout would break a working layout to defend against its
-     *        owner.
+     * @param array<string, string> $anchors trust anchors keyed by the search
+     *        path: that path must resolve strictly inside its anchor
+     *        ({@see ContainedPath::below()}) or the whole directory is refused.
+     *        A path with no entry here is UNANCHORED, which this parameter used
+     *        to describe as "the right answer for the user's own
+     *        `~/.sugar-crush/agents` — nobody but the user chose where it
+     *        points". That premise is not established by anything, and
+     *        {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()} carries
+     *        the four-row measurement that refuted it: a symlink out of `$HOME`
+     *        arrives in a tarball as readily as in a clone. Both tiers are
+     *        anchored now — the project tier to the checkout, the user tier to
+     *        `$HOME`, which is the boundary that keeps the working layout
+     *        (`~/.sugar-crush/agents -> ~/.claude/agents`, inside the home) while
+     *        refusing a link out of it. This parameter still ALLOWS an
+     *        unanchored path, because that is a decision for the caller naming
+     *        the tiers and not for the registry reading them.
      *
      * TWO THINGS HAPPEN TO THOSE ARGUMENTS HERE, and both exist because the
      * lookup that consumes them ({@see readableSearchPaths()}) is
@@ -263,11 +270,19 @@ final class AgentPresetRegistry
 
             $anchor = $this->anchors[$path] ?? null;
             if ($anchor !== null && !ContainedPath::below($path, $anchor)) {
+                // NAMES THE ANCHOR, not "the checkout". This message said "a
+                // repository chooses where this directory is" for every refusal,
+                // which stopped being true the moment
+                // {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()}
+                // started anchoring the USER tier to `$HOME` — there the
+                // directory is one the user chose and the objection is that it
+                // points out of their home, not that a repository picked it. A
+                // refusal notice that misidentifies who chose the path sends the
+                // reader to the wrong file.
                 $this->refusedDirectories[$path] = sprintf(
-                    'resolves to %s, %s the checkout it was reached from (%s) — a repository chooses where this '
-                    . "directory is, and a link out of the checkout would put unrelated files' descriptions in "
-                    . "the agent roster and their bodies in a sub-agent's prompt, under whatever "
-                    . 'permissionMode they declare',
+                    'resolves to %s, %s the directory it is anchored to (%s) — a link out of that directory '
+                    . "would put unrelated files' descriptions in the agent roster and their bodies in a "
+                    . "sub-agent's prompt, under whatever permissionMode they declare",
                     $real,
                     realpath($anchor) === $real ? 'which is exactly' : 'outside',
                     $anchor,

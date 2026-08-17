@@ -46,24 +46,69 @@ use SugarCraft\Crush\Support\ContainedPath;
  *    `substr_compare` call's ARGUMENT LIST and asks whether any argument is
  *    boundary-suffixed, in any of the five spellings above.
  *
- * THE BOUND THAT REMAINS, stated so it is true of both (a) and (b) and of the
- * cases below rather than being a comfortable summary. This instrument sees a
- * containment compare when it is written as a call to one of four named
- * functions with a literal separator suffix in an argument, or as a
- * `::within()`/`::below()` whose result is consumed. It does NOT see:
- * a compare whose separator was concatenated onto a variable earlier
- * (`$prefix = $b . '/';` then `str_starts_with($p, $prefix)`); a compare built
- * out of `preg_match()`, `substr()` or `strpos()`; a compare living in a
- * dependency; or a read path with no compare at all — which is what
- * `InstructionFileLoader::loadRoot()` and `loadForPath()` were while this file's
- * ancestor listed the file as audited. The first two are asserted as misses in
+ * WHAT CHANGED AGAIN, because the previous revision's own two headline claims
+ * were both false in the commit that made them:
+ *
+ *  (c) "ROUTED counts a call only when its result is consumed, and a discarded
+ *      result is a hard failure." It was decided by the ONE token two places
+ *      before the call, against the set `['{', '}', ';']` — while the doc-block
+ *      claimed `:` was in it too. Probed directly, SEVEN discarded shapes
+ *      reported `used: true`; mutating `InstructionFileLoader::loadRoot()`'s gate
+ *      to `$unusedGateResult = ContainedPath::within(…);` left this file at
+ *      `OK (26 tests, 39 assertions)` while `loadRoot()` returned
+ *      `TOP-SECRET-AAA sk-live-DEADBEEF` out of a file symlinked out of the
+ *      checkout. All seven are now data rows on
+ *      {@see testTheInstrumentTellsAGateFromADiscardedCall()} and the rule is
+ *      the STATEMENT rather than a token — see {@see routedCallsIn()}.
+ *
+ *  (d) "its blind spots are now MEASURED." Four more were measured that fell in
+ *      none of the stated categories:
+ *      `strncasecmp($p, $b . '/', …)` (the case-insensitive-filesystem
+ *      spelling — the FUNCTION LIST was closed at three names),
+ *      `sprintf('%s/', $b)`, a heredoc boundary, and `$b . '/' . ''` (only the
+ *      LAST concat operand was examined). All four are now data rows on
+ *      {@see testTheInstrumentRecognisesEverySpellingItClaimsTo()}.
+ *
+ * THE BOUND THAT REMAINS, re-measured after that widening rather than restated.
+ * This instrument sees a containment compare when it is a call to one of the
+ * four functions in {@see COMPARE_FUNCTIONS} carrying a separator-suffixed
+ * argument in one of three token shapes, or a `::within()`/`::below()` whose
+ * result the enclosing statement consumes. It does NOT see:
+ *
+ *  - a compare whose separator was concatenated onto a variable in an EARLIER
+ *    statement (`$prefix = $b . '/';` then `str_starts_with($p, $prefix)`);
+ *  - a compare built out of `preg_match()`, `substr()`, `strpos()` or
+ *    `str_contains()`;
+ *  - a compare whose boundary is a bare LITERAL (`str_starts_with($p, '/srv/')`),
+ *    excluded on purpose — see {@see isBoundarySuffixed()} clause 3 for why the
+ *    argument must also mention a variable, and for the six files that
+ *    condition keeps out;
+ *  - a compare living in a dependency;
+ *  - a result assigned to a PROPERTY rather than a variable and then never read
+ *    ({@see resultIsUsed()} handles the `$var = …` shape only);
+ *  - a read path with no compare at all — which is what
+ *    `InstructionFileLoader::loadRoot()` and `loadForPath()` were while this
+ *    file's ancestor listed the file as audited, and what
+ *    `WorktreeConfig::new()` was one round later.
+ *
+ * The first three are asserted as misses in
  * {@see testTheInstrumentsOwnBlindSpotsAreMeasuredNotAssumed()}, so the bound is
- * a measurement rather than a claim.
+ * a measurement rather than a claim. THE LAST ONE IS THE ONE THAT KEEPS
+ * BITING: it has now produced the sixth, seventh, eighth and ninth read paths,
+ * and no widening of this instrument will ever catch it. Only a reviewer reading
+ * the read paths does.
  */
 final class ContainedPathInventoryTest extends TestCase
 {
-    /** The functions a path-against-boundary prefix compare can be written with. */
-    private const COMPARE_FUNCTIONS = ['str_starts_with', 'strncmp', 'substr_compare'];
+    /**
+     * The functions a path-against-boundary prefix compare can be written with.
+     *
+     * `strncasecmp` is the fourth and it was the one that mattered: it is how a
+     * containment compare is written for a CASE-INSENSITIVE filesystem, and with
+     * the list closed at three it was invisible to the instrument and to every
+     * category of the instrument's own stated bound.
+     */
+    private const COMPARE_FUNCTIONS = ['str_starts_with', 'strncmp', 'strncasecmp', 'substr_compare'];
 
     private string $srcDir;
 
@@ -73,15 +118,26 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "NINETEEN call sites in SEVEN files", per file. Each count is one read
+     * "TWENTY-THREE call sites in NINE files", per file. Each count is one read
      * decision, so a dropped gate shows up as the file's number falling — which
      * is the half of #89 an instrument like this genuinely covers.
      *
-     * The two foreign readers are new to this list and were not omissions of
-     * wording: {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} and
-     * {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter} each held
+     * The two foreign readers were the previous round's additions and were not
+     * omissions of wording: {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}
+     * and {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter} each held
      * repository-chosen read paths with NO compare at all, in classes whose
      * doc-blocks honestly said they were unwired.
+     *
+     * {@see \SugarCraft\Crush\Agents\WorktreeConfig} and
+     * {@see \SugarCraft\Crush\Agents\WorktreeManager} are this round's, and they
+     * were the NINTH read path — invisible to this instrument for the reason
+     * stated in its own bound (no compare was written, so there was nothing to
+     * count) and invisible to
+     * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest} for a
+     * different one: it classified `.sugar-crush/config.json` as user-tier from
+     * the STRING, which is true of `Bootstrap`'s call site and false of
+     * `WorktreeConfig::new()`'s. One string covering two tiers is a defect that
+     * test now refuses by construction.
      */
     public function testTheRoutedCallSiteInventory(): void
     {
@@ -89,6 +145,8 @@ final class ContainedPathInventoryTest extends TestCase
             [
                 'Agents/AgentPresetRegistry.php' => 3,
                 'Agents/ForeignAgentPresetRegistry.php' => 2,
+                'Agents/WorktreeConfig.php' => 2,
+                'Agents/WorktreeManager.php' => 2,
                 'Commands/CommandLoader.php' => 2,
                 'Context/InstructionFileLoader.php' => 5,
                 'Memory/ForeignMemoryImporter.php' => 2,
@@ -185,6 +243,16 @@ final class ContainedPathInventoryTest extends TestCase
                 "str_starts_with(\$realPath . '/', rtrim(\$realBoundary, '/') . '/');",
                 1,
             ],
+            // The four measured misses of the previous revision — three of them
+            // spellings this tail-only scanner could not reach, one a function
+            // name the list did not hold.
+            'strncasecmp, the case-insensitive filesystem spelling' => [
+                "strncasecmp(\$p, \$b . '/', strlen(\$b) + 1) === 0;",
+                1,
+            ],
+            'a separator that is not the last concat operand' => ["str_starts_with(\$p, \$b . '/' . '');", 1],
+            'built with sprintf' => ["str_starts_with(\$p, sprintf('%s/', \$b));", 1],
+            'built with a heredoc' => ["str_starts_with(\$p, <<<T\n\$b/\nT);", 1],
             // The controls. An absolute-path test is not a containment test, and
             // there are many of those.
             'an absolute-path test' => ["str_starts_with(\$path, '/');", 0],
@@ -213,13 +281,31 @@ final class ContainedPathInventoryTest extends TestCase
         return [
             'negated in a condition' => ['if (!ContainedPath::within($a, $b)) { return null; }', true],
             'returned' => ['return ContainedPath::below($dir, $anchor);', true],
-            'assigned' => ['$ok = ContainedPath::within($a, $b);', true],
             'in a boolean chain' => ['$ok = $x !== null && ContainedPath::below($a, $b);', true],
             'fully qualified' => ['if (\\SugarCraft\\Crush\\Support\\ContainedPath::within($a, $b)) { }', true],
             'through a variable class name' => ['if ($c::within($a, $b)) { }', true],
-            // The neutered gate — finding (a).
+            'a ternary arm, whose `:` is NOT a statement start' => [
+                '$x = $cond ? false : ContainedPath::within($a, $b);',
+                true,
+            ],
+            'assigned and then read' => [
+                'function f() { $ok = ContainedPath::within($a, $b); if (!$ok) { return; } }',
+                true,
+            ],
+            // The neutered gate — finding (a) — and the SEVEN further shapes the
+            // one-token-wide rule reported as `used: true`.
             'result discarded' => ['ContainedPath::within($a, $b);', false],
             'result discarded through a variable' => ['$c::below($a, $b);', false],
+            'in a switch case' => ['switch ($x) { case 1: ContainedPath::within($a, $b); }', false],
+            'in an alternative-syntax if' => ['if ($x): ContainedPath::within($a, $b); endif;', false],
+            'as a braceless else body' => ['if ($x) foo(); else ContainedPath::within($a, $b);', false],
+            'as a braceless if body' => ['if ($x) ContainedPath::within($a, $b);', false],
+            'assigned and never read' => [
+                'function f() { $unusedGateResult = ContainedPath::within($a, $b); return 1; }',
+                false,
+            ],
+            'cast and discarded' => ['(bool) ContainedPath::within($a, $b);', false],
+            'double-negated and discarded' => ['!!ContainedPath::within($a, $b);', false],
         ];
     }
 
@@ -247,6 +333,18 @@ final class ContainedPathInventoryTest extends TestCase
 
         $viaRegex = "<?php\nif (!preg_match('#^' . preg_quote(\$b, '#') . '/#', \$p)) { return; }\n";
         $this->assertCount(0, $this->handSpelledComparesIn($viaRegex), 'a compare built out of preg_match()');
+
+        $viaLiteral = "<?php\nif (!str_starts_with(\$p, '/srv/jail/')) { return; }\n";
+        $this->assertCount(0, $this->handSpelledComparesIn($viaLiteral), 'a boundary held in a bare literal');
+
+        // The ROUTED half's residue, in the same place, so both halves' bounds
+        // are one measurement: a result parked on a PROPERTY and never read is
+        // a discarded gate this reports as used.
+        $viaProperty = "<?php\nclass C { function f() { \$this->ok = ContainedPath::within(\$a, \$b); } }\n";
+        $this->assertTrue(
+            $this->routedCallsIn($viaProperty)[0]['used'],
+            'a result assigned to a property is reported as used whether or not it is ever read',
+        );
     }
 
     /**
@@ -333,10 +431,42 @@ final class ContainedPathInventoryTest extends TestCase
      * Every `ContainedPath::within()`/`::below()` call in $code, with whether its
      * RESULT IS USED.
      *
-     * "Used" is decided by the token immediately preceding the class expression:
-     * a call that starts a statement (previous significant token is `;`, `{`,
-     * `}`, `:` or the open tag) has nowhere to put its answer. Everything else —
-     * `!`, `return`, `=`, `&&`, `(` — consumes it.
+     * THE PREVIOUS RULE WAS ONE TOKEN WIDE AND REINTRODUCED THE DEFECT IT WAS
+     * WRITTEN TO CLOSE. It read "used is decided by the token immediately
+     * preceding the class expression: a call that starts a statement (previous
+     * significant token is `;`, `{`, `}`, `:` or the open tag) has nowhere to put
+     * its answer" — and `:` was in the prose and NOT in the code, which was
+     * `[';', '{', '}']`. Probed directly, SEVEN discarded-result shapes reported
+     * `used: true`:
+     *
+     *     case 1: ContainedPath::within($a, $b);          before = ':'
+     *     if ($x): ContainedPath::within($a, $b); endif;  before = ':'
+     *     if ($x) foo(); else ContainedPath::within(…);   before = T_ELSE
+     *     if ($x) ContainedPath::within($a, $b);          before = ')'
+     *     $ok = ContainedPath::within($a, $b);            $ok never read
+     *     (bool) ContainedPath::within($a, $b);           before = T_BOOL_CAST
+     *     !!ContainedPath::within($a, $b);                before = '!'
+     *
+     * Mutating `InstructionFileLoader::loadRoot()`'s gate to the fifth shape left
+     * this whole file at `OK (26 tests, 39 assertions)` while `loadRoot()`
+     * returned `TOP-SECRET-AAA sk-live-DEADBEEF` out of a file symlinked clean
+     * out of the checkout and `refusedPaths()` was `[]`.
+     *
+     * SO THE RULE IS NOW THE STATEMENT, not the token. The enclosing statement's
+     * first token is found ({@see statementStartIn()}), and everything between it
+     * and the call is examined: a prefix made only of VALUE-NEUTRAL operators —
+     * `!`, `@`, `+`, `-`, `~`, a cast, a grouping paren — is an expression
+     * statement, and an expression statement throws its value away. An empty
+     * prefix is the bare call.
+     *
+     * THE ASSIGNMENT SHAPE IS DIFFERENT and is handled separately: `$ok =
+     * ContainedPath::within(…);` is a legitimate gate when `$ok` is later read
+     * and a discarded result when it is not, which is a question about the rest
+     * of the function rather than about the statement. The variable's other
+     * occurrences are counted inside the ENCLOSING FUNCTION
+     * ({@see variableIsReadElsewhere()}) — file-wide would let an unrelated
+     * function's identically-named variable vouch for this one, which is the
+     * false-green direction.
      *
      * A VARIABLE class expression counts, because `$c = ContainedPath::class;
      * $c::within(…)` is a real call this class's own inventory used to miss.
@@ -371,18 +501,204 @@ final class ContainedPathInventoryTest extends TestCase
                 continue;
             }
 
-            $before = $tokens[$i - 2] ?? null;
-            $startsAStatement = $before === null
-                || \in_array($before, [';', '{', '}'], true)
-                || $this->isToken($before, \T_OPEN_TAG);
-
             $calls[] = [
                 'line' => \is_array($subject) ? (int) $subject[2] : 0,
-                'used' => !$startsAStatement,
+                'used' => $this->resultIsUsed($tokens, $i - 1),
             ];
         }
 
         return $calls;
+    }
+
+    /**
+     * Does the call whose class expression sits at $subject put its answer
+     * anywhere? See {@see routedCallsIn()} for the rule and the seven shapes
+     * that motivated it.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function resultIsUsed(array $tokens, int $subject): bool
+    {
+        $start = $this->statementStartIn($tokens, $subject);
+
+        /** @var list<array{0: int, 1: string, 2: int}|string> $prefix */
+        $prefix = \array_slice($tokens, $start, $subject - $start);
+
+        // `$ok = <call>;` — a gate exactly when `$ok` is read again.
+        if (\count($prefix) === 2 && $this->isToken($prefix[0], \T_VARIABLE) && ($prefix[1] ?? null) === '=') {
+            return $this->variableIsReadElsewhere($tokens, $start, (string) $prefix[0][1]);
+        }
+
+        foreach ($prefix as $token) {
+            if (\in_array($token, ['!', '@', '+', '-', '~', '('], true)) {
+                continue;
+            }
+
+            if ($this->isToken($token, \T_BOOL_CAST, \T_INT_CAST, \T_STRING_CAST, \T_DOUBLE_CAST)) {
+                continue;
+            }
+
+            return true;
+        }
+
+        // Nothing but value-neutral operators stands between the statement's
+        // first token and the call, so the statement IS the call.
+        return false;
+    }
+
+    /**
+     * The index of the first token of the statement containing $from.
+     *
+     * `:` IS A BOUNDARY (`case 1:`, `default:`, `if (…):`, a goto label) EXCEPT
+     * in a ternary, where the value is consumed by the surrounding expression —
+     * so a `:` is only accepted as a boundary when no `?` precedes it inside the
+     * same statement. Getting that backwards in either direction is a
+     * false-green: a ternary arm read as a statement start would report every
+     * `$x ? … : ContainedPath::within(…)` as discarded.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function statementStartIn(array $tokens, int $from): int
+    {
+        for ($i = $from - 1; $i >= 0; --$i) {
+            $token = $tokens[$i];
+
+            if ($token === ':') {
+                // The scan runs BACKWARDS, so the `?` of a ternary is reached
+                // AFTER its `:` — the question has to be asked here rather than
+                // remembered from earlier, which is the direction an earlier
+                // draft of this method got wrong.
+                if ($this->hasTernaryQuestionMarkBefore($tokens, $i)) {
+                    continue;
+                }
+
+                return $i + 1;
+            }
+
+            // `)` immediately reachable back from a call's class expression can
+            // only be a control-structure header — `if (…) X::within();` — since
+            // no PHP expression yields a class name from a call.
+            if (\in_array($token, [';', '{', '}', ')'], true)) {
+                return $i + 1;
+            }
+
+            if ($this->isToken($token, \T_OPEN_TAG, \T_ELSE, \T_DO)) {
+                return $i + 1;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Is the `:` at $colon a ternary's, rather than a `case`/`default`/
+     * alternative-syntax/label one?
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function hasTernaryQuestionMarkBefore(array $tokens, int $colon): bool
+    {
+        for ($i = $colon - 1; $i >= 0; --$i) {
+            $token = $tokens[$i];
+
+            if ($token === '?') {
+                return true;
+            }
+
+            if (\in_array($token, [';', '{', '}', ':'], true)
+                || $this->isToken($token, \T_OPEN_TAG, \T_CASE, \T_DEFAULT)
+            ) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Is $name read anywhere in the function enclosing $statementStart, other
+     * than at the assignment itself?
+     *
+     * Scoped to the enclosing function by brace depth, falling back to the whole
+     * token list for a snippet with no function in it (which is what the data
+     * providers feed). File-wide would be the false-green direction: another
+     * function's `$ok` would vouch for this one's.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function variableIsReadElsewhere(array $tokens, int $statementStart, string $name): bool
+    {
+        [$from, $to] = $this->enclosingFunctionRange($tokens, $statementStart);
+
+        for ($i = $from; $i <= $to; ++$i) {
+            if ($i === $statementStart) {
+                continue;
+            }
+
+            if ($this->isToken($tokens[$i] ?? null, \T_VARIABLE) && (string) $tokens[$i][1] === $name) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The token range of the function body containing $index, or the whole list.
+     *
+     * @param  list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @return array{0: int, 1: int}
+     */
+    private function enclosingFunctionRange(array $tokens, int $index): array
+    {
+        $depth = 0;
+        for ($i = $index; $i >= 0; --$i) {
+            $token = $tokens[$i];
+
+            if ($token === '}') {
+                ++$depth;
+            } elseif ($token === '{') {
+                if ($depth === 0) {
+                    // The opening brace of the block containing $index. Walk
+                    // back over the signature looking for `function`.
+                    for ($j = $i - 1; $j >= 0 && $j > $i - 200; --$j) {
+                        if ($this->isToken($tokens[$j], \T_FUNCTION)) {
+                            return [$i, $this->matchingBraceIn($tokens, $i)];
+                        }
+
+                        if (\in_array($tokens[$j], [';', '}', '{'], true)) {
+                            break;
+                        }
+                    }
+
+                    // A nested block (if/foreach) — keep climbing.
+                    $index = $i;
+                } else {
+                    --$depth;
+                }
+            }
+        }
+
+        return [0, \count($tokens) - 1];
+    }
+
+    /**
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function matchingBraceIn(array $tokens, int $open): int
+    {
+        $depth = 0;
+        for ($i = $open, $n = \count($tokens); $i < $n; ++$i) {
+            if ($tokens[$i] === '{' || $this->isToken($tokens[$i], \T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES)) {
+                ++$depth;
+            } elseif ($tokens[$i] === '}') {
+                if (--$depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        return \count($tokens) - 1;
     }
 
     /** @return list<array{line: int, function: string}> */
@@ -488,43 +804,90 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * Does this argument end in a path separator glued onto something else?
+     * Does this argument carry a path separator glued onto something else?
      *
-     * The five spellings measured slipping past the line regex, plus the two the
-     * regex already caught:
+     * THE WHOLE ARGUMENT IS SCANNED, not its last two tokens, and that is the
+     * fix for four measured misses. The previous version examined only the
+     * TAIL, so:
      *
-     *     $b . '/'        $b . "/"        $b . DIRECTORY_SEPARATOR
-     *     "$b/"           "{$b}/"
+     *     str_starts_with($p, $b . '/' . '')      0 — only the last operand seen
+     *     str_starts_with($p, sprintf('%s/', $b)) 0 — the tail is `)`
+     *     str_starts_with($p, <<<T\n$b/\nT)       0 — heredoc, tail is T_END_HEREDOC
+     *
+     * and a fourth miss was in the FUNCTION list rather than here:
+     * `strncasecmp($p, $b . '/', strlen($b) + 1) === 0`, a case-insensitive
+     * containment compare of exactly the kind a case-insensitive filesystem
+     * calls for, was invisible because {@see COMPARE_FUNCTIONS} closed at three
+     * names.
+     *
+     * The three shapes recognised anywhere in the argument:
+     *
+     *  1. `… . '/'`, `… . "/"`, `… . DIRECTORY_SEPARATOR` — a separator
+     *     CONCATENATED onto something;
+     *  2. a `"…/"`-style interpolated part (`"$b/"`, `"{$b}/"`, and the heredoc
+     *     body, which tokenises the same way) whose literal text ends in `/`
+     *     once trailing whitespace is removed — the heredoc's closing newline is
+     *     part of that token;
+     *  3. a plain string literal LONGER THAN ONE CHARACTER ending in `/`, which
+     *     is what makes `sprintf('%s/', …)` visible.
      *
      * A bare `'/'` is NOT one of them — `str_starts_with($path, '/')` is an
-     * absolute-path test, and there are many of those in `src/`.
+     * absolute-path test and there are many of those in `src/`, which is why
+     * clause 3 carries the length condition rather than matching any literal
+     * ending in a separator.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $argument
      */
     private function isBoundarySuffixed(array $argument): bool
     {
-        $last = $argument[\count($argument) - 1] ?? null;
-        $previous = $argument[\count($argument) - 2] ?? null;
+        foreach ($argument as $i => $token) {
+            // 1. a separator concatenated on.
+            if (($argument[$i - 1] ?? null) === '.') {
+                if ($this->isToken($token, \T_CONSTANT_ENCAPSED_STRING)
+                    && \in_array((string) $token[1], ["'/'", '"/"'], true)
+                ) {
+                    return true;
+                }
 
-        // `… . '/'` / `… . "/"` / `… . DIRECTORY_SEPARATOR`
-        if ($previous === '.') {
-            if ($this->isToken($last, \T_CONSTANT_ENCAPSED_STRING)
-                && \in_array((string) $last[1], ["'/'", '"/"'], true)
+                if ($this->isToken($token, \T_STRING) && (string) $token[1] === 'DIRECTORY_SEPARATOR') {
+                    return true;
+                }
+            }
+
+            // 2. an interpolated or heredoc part ending in a separator.
+            if ($this->isToken($token, \T_ENCAPSED_AND_WHITESPACE)
+                && str_ends_with(rtrim((string) $token[1]), '/')
             ) {
                 return true;
             }
 
-            if ($this->isToken($last, \T_STRING) && (string) $last[1] === 'DIRECTORY_SEPARATOR') {
-                return true;
+            // 3. a multi-character literal ending in a separator, in an argument
+            //    that also mentions a VARIABLE. The variable is what separates
+            //    `sprintf('%s/', $b)` from `str_starts_with($url, 'https://')`
+            //    — measured, this condition is the difference between the five
+            //    files the inventory names and eleven, the six extra being URL
+            //    and prefix literals in WebFetch, WebSearch, ImportResolver,
+            //    LspClient, TeamManager and Bootstrap. A containment compare
+            //    tests a path against a BOUNDARY, and a boundary held in a
+            //    literal is not one a repository can move.
+            if ($this->isToken($token, \T_CONSTANT_ENCAPSED_STRING) && $this->mentionsAVariable($argument)) {
+                $literal = trim((string) $token[1], '\'"');
+                if (\strlen($literal) > 1 && str_ends_with($literal, '/')) {
+                    return true;
+                }
             }
         }
 
-        // `"$b/"` and `"{$b}/"` — a double-quoted string whose final literal
-        // part ends in a separator. The closing `"` is the last token.
-        if ($last === '"' && $this->isToken($previous, \T_ENCAPSED_AND_WHITESPACE)
-            && str_ends_with((string) $previous[1], '/')
-        ) {
-            return true;
+        return false;
+    }
+
+    /** @param list<array{0: int, 1: string, 2: int}|string> $argument */
+    private function mentionsAVariable(array $argument): bool
+    {
+        foreach ($argument as $token) {
+            if ($this->isToken($token, \T_VARIABLE)) {
+                return true;
+            }
         }
 
         return false;

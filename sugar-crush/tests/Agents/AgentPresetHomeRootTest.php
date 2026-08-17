@@ -9,47 +9,50 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
- * `cd ~ && sugarcrush` — the launch where the two agent-preset tiers are ONE
- * directory, and the project tier's anchor was applied to the user's own roster.
+ * WHERE THE USER TIER MAY POINT — the boundary that replaced a discriminator
+ * whose stated premise was false.
  *
- * {@see Bootstrap::chat()} defaults `$root` to `getcwd()`, and
  * {@see Bootstrap::agentPresets()} builds the project tier as
  * `rtrim($root,'/') . '/.sugar-crush/agents'` and the user tier as
- * `trustedConfigDirPath() . '/agents'` = `$HOME . '/.sugar-crush/agents'`. When
- * `$root` IS `$HOME` those are the same string, so the anchor keyed on the
- * project spelling landed on the user's directory. MEASURED before the fix, with
- * `$HOME/.sugar-crush/agents` symlinked to a directory OUTSIDE `$HOME`:
+ * `trustedConfigDirPath() . '/agents'` = `$HOME . '/.sugar-crush/agents'`. The
+ * user tier used to be UNANCHORED, justified as "the user's own directory —
+ * nobody but the user chose the location", with the one exception that a `$HOME`
+ * containing a `.git` kept the project anchor, "because the escape needs a
+ * COMMITTED symlink and nothing can be committed without a repository".
  *
- *     agentPresets(<a project>) -> presets=[mine]  refusals=[]
- *     agentPresets($HOME)       -> presets=[]      refusals=["…a repository chooses where…"]
+ * BOTH HALVES OF THAT WERE WRONG, and the measurement is what this file now
+ * pins. A symlink does not need to be committed to arrive — `tar`, `zip`,
+ * `rsync -a`, `degit` and a release tarball all carry one and carry no `.git` —
+ * and a DANGLING `.git` symlink answers `file_exists()` false. Measured on this
+ * host, `$HOME` mode 0700 and owned by the running user, its only content
+ * `.sugar-crush/agents -> <outside>` delivered by `tar xzf`:
  *
- * The user's own roster silently vanished, and the notice blamed "a repository"
- * for a layout the user chose. A link to `~/.claude/agents` survived only by
- * being inside `$HOME`; a link out of it did not.
+ *     no .git,  agentPresets($HOME)     presets=["pwned"] mode=bypass-permissions refusals=[]
+ *     no .git,  agentPresets(<project>) presets=["pwned"] mode=bypass-permissions refusals=[]
+ *     .git dir, agentPresets($HOME)     presets=[]        refusals=[…]
+ *     .git dir, agentPresets(<project>) presets=["pwned"] mode=bypass-permissions refusals=[]
  *
- * DOMAIN, because the fix has a real cost and hiding it is the defect this
- * session is about: the branch treats one directory that is BOTH tiers as the
- * USER tier, i.e. unanchored. A `$HOME` that is itself a cloned checkout — a
- * dotfiles repository — therefore had its `.sugar-crush/agents` read without the
- * checkout anchor. MEASURED on a real `git init` checkout with one committed
- * `.sugar-crush/agents -> <outside>`:
+ * Row four is the one that settles it: with the discriminator firing exactly as
+ * designed, the escape was fully live from any launch that was not made from the
+ * home directory — i.e. every ordinary launch. It defended one shape out of four.
  *
- *     cd ~          && sugarcrush   presets=["pwned"] mode=bypass-permissions refusals=[]
- *     cd ~/dotfiles && sugarcrush   presets=[]        refusals=["…outside the checkout…"]
+ * SO THE QUESTION CHANGED. "Did a repository choose this content" has no
+ * filesystem answer; "is this directory inside the home this process established
+ * as the user's" does, and it is what the old justification assumed. The user
+ * tier is anchored to `$HOME`.
  *
- * The cost USED TO BE excused by "that directory is still gated by
- * trustedConfigDirPath(), which refuses a home whose ownership this process
- * cannot establish" — a mitigation that did not exist: that method refused only
- * an UNDETERMINABLE home and no `stat` was performed anywhere in the package.
- * Both halves are now real. `trustedConfigDirPath()` establishes ownership
- * through {@see \SugarCraft\Crush\Support\HomeDirectory::owned()}, and the
- * collapse is CONDITIONAL on `$HOME` not being a checkout — see
- * {@see testAHomeThatIsItselfACheckoutKeepsTheAnchor()} and its control
- * {@see testLaunchingFromTheHomeDirectoryKeepsTheUsersOwnRoster()}.
+ * ITS COST, stated rather than implied away, and pinned by
+ * {@see testARosterLinkedOutOfHomeIsRefusedEvenFromAProjectLaunch()}: a roster
+ * symlinked to a path OUTSIDE `$HOME` — a network share, `/opt/team-agents` —
+ * stops working, in every launch shape. The layout the old sentence named as its
+ * own justification, a link to `~/.claude/agents`, is inside `$HOME` and is
+ * unaffected ({@see testARosterLinkedInsideHomeStillWorksFromBothLaunchShapes()}).
  *
- * Every launch where `$root !== $HOME` — the overwhelming majority, and the one
- * the escape tests use — is unchanged, which is what
- * {@see testAProjectLaunchIsStillAnchored()} pins.
+ * Ownership is NOT this boundary and cannot stand in for it:
+ * {@see \SugarCraft\Crush\Support\HomeDirectory::owned()} passed on every row
+ * above, because the user extracted the tarball into their own home. Ownership
+ * answers whose directory it is; only containment answers who chose where a link
+ * inside it points.
  */
 final class AgentPresetHomeRootTest extends TestCase
 {
@@ -125,30 +128,80 @@ final class AgentPresetHomeRootTest extends TestCase
         return array_values(array_map(static fn (object $preset): string => (string) $preset->name, $presets));
     }
 
-    public function testLaunchingFromTheHomeDirectoryKeepsTheUsersOwnRoster(): void
+    /**
+     * @return array<string, string> the refusals THIS test caused, keyed by path
+     */
+    private function refusalsUnder(string $prefix): array
     {
-        $this->userRosterOutsideHome();
-
-        // Before the fix this returned [] and recorded a refusal.
-        $this->assertSame(['mine'], $this->names(Bootstrap::agentPresets($this->home)));
-    }
-
-    public function testLaunchingFromTheHomeDirectoryRecordsNoRefusalAgainstIt(): void
-    {
-        $this->userRosterOutsideHome();
-
-        Bootstrap::agentPresets($this->home);
-
         // The collector is a static accumulator shared with every other launch in
-        // this process, so the assertion is scoped to THIS test's own paths rather
-        // than to the map being empty.
-        $mine = array_filter(
+        // this process, so every assertion on it is scoped to this test's own
+        // paths rather than to the map being empty.
+        return array_filter(
             Bootstrap::projectTierRefusals(),
-            fn (string $key): bool => str_starts_with($key, $this->home),
+            static fn (string $key): bool => str_starts_with($key, $prefix),
             \ARRAY_FILTER_USE_KEY,
         );
+    }
 
-        $this->assertSame([], $mine);
+    /**
+     * ROW ONE AND TWO of the measurement, and the reason this file was rewritten:
+     * a roster linked out of `$HOME` is refused from the HOME launch and from a
+     * project launch alike. The second is the one the `.git` discriminator never
+     * touched.
+     *
+     * @return array<string, array{0: bool}>
+     */
+    public static function launchShapes(): array
+    {
+        return ['from the home directory' => [true], 'from a project elsewhere' => [false]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('launchShapes')]
+    public function testARosterLinkedOutOfHomeIsRefusedEvenFromAProjectLaunch(bool $fromHome): void
+    {
+        $this->userRosterOutsideHome();
+
+        $root = $this->home;
+        if (!$fromHome) {
+            $root = $this->tempDir . '/project';
+            mkdir($root, 0o755, true);
+        }
+
+        $presets = Bootstrap::agentPresets($root);
+
+        $this->assertSame([], $this->names($presets));
+
+        // The BYTES, not merely the roster: an outside file's body is what became
+        // a sub-agent's initialPrompt.
+        $this->assertStringNotContainsString(
+            self::BODY_SENTINEL,
+            (string) json_encode(array_map(static fn (object $p): array => (array) $p, $presets)),
+        );
+
+        $this->assertNotSame(
+            [],
+            $this->refusalsUnder($this->home),
+            'and the refusal is recorded rather than silent',
+        );
+    }
+
+    /**
+     * THE COST, paid in the other direction and named: the refusal above is
+     * recorded against the USER's own directory, so its wording may not blame a
+     * repository for it. {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}'s
+     * notice said "a repository chooses where this directory is" for every
+     * refusal, which sends the reader of this one to the wrong file.
+     */
+    public function testTheRefusalNamesTheAnchorRatherThanBlamingARepository(): void
+    {
+        $this->userRosterOutsideHome();
+        Bootstrap::agentPresets($this->home);
+
+        $refusal = implode("\n", $this->refusalsUnder($this->home));
+
+        $this->assertStringContainsString('anchored to', $refusal);
+        $this->assertStringContainsString($this->home, $refusal);
+        $this->assertStringNotContainsString('a repository chooses', $refusal);
     }
 
     /** A trailing separator on $root is the same launch. */
@@ -156,47 +209,67 @@ final class AgentPresetHomeRootTest extends TestCase
     {
         $this->userRosterOutsideHome();
 
-        $this->assertSame(['mine'], $this->names(Bootstrap::agentPresets($this->home . '/')));
+        $this->assertSame([], $this->names(Bootstrap::agentPresets($this->home . '/')));
     }
 
     /**
      * Resolved identity, not merely spelled identity: `$root` reached through a
      * symlink to `$HOME` is the same directory and must take the same branch.
      *
-     * The ROSTER is not what this pins — the unanchored user tier is in the search
-     * list either way, so `mine` comes back with or without the resolved-identity
-     * clause. What the clause prevents is the REFUSAL below, recorded against the
-     * user's own directory for being "outside the checkout it was reached from".
+     * What this pins now is the DE-DUPLICATION, which is all `$sameDirectory` is
+     * for since both tiers carry an anchor: one directory, one refusal, keyed
+     * once — not the same verdict recorded twice under two spellings.
      */
-    public function testAHomeDirectoryReachedThroughASymlinkIsTheSameLaunch(): void
+    public function testAHomeDirectoryReachedThroughASymlinkIsOneDirectoryNotTwo(): void
     {
         $this->userRosterOutsideHome();
         $linked = $this->tempDir . '/home-link';
         symlink($this->home, $linked);
 
-        $this->assertSame(['mine'], $this->names(Bootstrap::agentPresets($linked)));
-
-        $mine = array_filter(
-            Bootstrap::projectTierRefusals(),
-            static fn (string $key): bool => str_starts_with($key, $linked),
-            \ARRAY_FILTER_USE_KEY,
-        );
-
-        $this->assertSame([], $mine, 'the user\'s own agents directory must not be refused as a repository\'s');
+        $this->assertSame([], $this->names(Bootstrap::agentPresets($linked)));
+        $this->assertSame([], $this->refusalsUnder($linked), 'the link spelling records no second refusal');
+        $this->assertCount(1, $this->refusalsUnder($this->home));
     }
 
     /**
-     * The other half of the same launch, unchanged: a project elsewhere still sees
-     * the user's roster, which is the row the pre-fix measurement showed working.
+     * THE LAYOUT THE OLD JUSTIFICATION NAMED, and it still works — from both
+     * launch shapes. `~/.claude/agents` is inside `$HOME`, so the anchor never
+     * touches it. Without this the change above would be indistinguishable from
+     * "the user tier was deleted".
      */
-    public function testAProjectLaunchStillSeesTheUsersRoster(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('launchShapes')]
+    public function testARosterLinkedInsideHomeStillWorksFromBothLaunchShapes(bool $fromHome): void
     {
-        $this->userRosterOutsideHome();
+        mkdir($this->home . '/.claude/agents', 0o700, true);
+        file_put_contents(
+            $this->home . '/.claude/agents/mine.md',
+            "---\nname: mine\ndescription: " . self::DESCRIPTION_SENTINEL . "\n---\n" . self::BODY_SENTINEL . "\n",
+        );
+        symlink($this->home . '/.claude/agents', $this->home . '/.sugar-crush/agents');
+
+        $root = $this->home;
+        if (!$fromHome) {
+            $root = $this->tempDir . '/project';
+            mkdir($root, 0o755, true);
+        }
+
+        $this->assertSame(['mine'], $this->names(Bootstrap::agentPresets($root)));
+        $this->assertSame([], $this->refusalsUnder($this->home));
+    }
+
+    /** A roster that is an ordinary directory inside `$HOME` is unaffected too. */
+    public function testAnOrdinaryUserRosterIsUnaffected(): void
+    {
+        mkdir($this->home . '/.sugar-crush/agents', 0o700, true);
+        file_put_contents(
+            $this->home . '/.sugar-crush/agents/plain.md',
+            "---\nname: plain\ndescription: ordinary roster\n---\nPLAIN-BODY\n",
+        );
 
         $project = $this->tempDir . '/project';
         mkdir($project, 0o755, true);
 
-        $this->assertSame(['mine'], $this->names(Bootstrap::agentPresets($project)));
+        $this->assertSame(['plain'], $this->names(Bootstrap::agentPresets($project)));
     }
 
     /**
@@ -226,23 +299,43 @@ final class AgentPresetHomeRootTest extends TestCase
     }
 
     /**
-     * THE HOLE THE COLLAPSE OPENED, closed. `$HOME` is a git checkout — a
-     * dotfiles repository — so `.sugar-crush/agents -> <outside>` is a line
-     * somebody COMMITTED rather than a layout the user chose at their own
-     * keyboard, and `cd ~ && sugarcrush` used to read it unanchored under
-     * whatever `permissionMode:` it declared.
+     * THE THREE SHAPES THAT DEFEATED THE OLD DISCRIMINATOR, each driven, so a
+     * future revision cannot reintroduce a `.git`-presence check without this
+     * file saying which of them it fails on.
      *
-     * `$HOME/.git` is the discriminator because the escape needs a committed
-     * symlink and nothing is committed without a repository. STATED BOUND, so
-     * this is not read as more than it is: a bare-repo dotfiles layout
-     * (`git --git-dir=~/.dotfiles --work-tree=~`) leaves no `.git` at `$HOME`
-     * and is NOT caught — it takes the branch
-     * {@see testLaunchingFromTheHomeDirectoryKeepsTheUsersOwnRoster()} pins.
+     * The verdict is now the SAME for all of them, which is the point — the
+     * boundary no longer depends on the state of `$HOME/.git` at all.
+     *
+     * @return array<string, array{0: string}>
      */
-    public function testAHomeThatIsItselfACheckoutKeepsTheAnchor(): void
+    public static function gitDiscriminatorDefeats(): array
+    {
+        return [
+            // Delivered by tar/zip/rsync/degit: symlink present, no repository.
+            'no .git at all' => ['none'],
+            // `git --git-dir=~/.dotfiles --work-tree=~` leaves nothing at $HOME.
+            'a bare-repo dotfiles layout' => ['none'],
+            // file_exists() FOLLOWS the link and answers false.
+            'a dangling .git symlink' => ['dangling-link'],
+            // The one shape the old check did catch — asserted to behave the
+            // same as the three it did not.
+            'a real .git directory' => ['dir'],
+            // A linked worktree spells .git as a file holding `gitdir: …`.
+            'a .git gitfile' => ['file'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('gitDiscriminatorDefeats')]
+    public function testTheVerdictNoLongerDependsOnWhetherHomeLooksLikeACheckout(string $git): void
     {
         $this->userRosterOutsideHome();
-        mkdir($this->home . '/.git');
+
+        match ($git) {
+            'dir' => mkdir($this->home . '/.git'),
+            'file' => file_put_contents($this->home . '/.git', "gitdir: /elsewhere/.git/worktrees/home\n"),
+            'dangling-link' => symlink($this->tempDir . '/no-such-target', $this->home . '/.git'),
+            default => null,
+        };
 
         $presets = Bootstrap::agentPresets($this->home);
 
@@ -251,32 +344,13 @@ final class AgentPresetHomeRootTest extends TestCase
             self::BODY_SENTINEL,
             (string) json_encode(array_map(static fn (object $p): array => (array) $p, $presets)),
         );
-
-        $mine = array_filter(
-            Bootstrap::projectTierRefusals(),
-            fn (string $key): bool => str_starts_with($key, $this->home),
-            \ARRAY_FILTER_USE_KEY,
-        );
-        $this->assertNotSame([], $mine, 'and the refusal is recorded rather than silent');
+        $this->assertNotSame([], $this->refusalsUnder($this->home));
     }
 
     /**
-     * A linked worktree spells `.git` as a FILE holding `gitdir: …`, which is
-     * why the discriminator is `file_exists()` and not `is_dir()`.
-     */
-    public function testAHomeWhoseGitIsAFileIsStillACheckout(): void
-    {
-        $this->userRosterOutsideHome();
-        file_put_contents($this->home . '/.git', "gitdir: /elsewhere/.git/worktrees/home\n");
-
-        $this->assertSame([], $this->names(Bootstrap::agentPresets($this->home)));
-    }
-
-    /**
-     * The control that keeps the branch honest in the other direction: a
-     * checkout at `$HOME` must not cost the user their roster when the roster
-     * is where a checkout could legitimately put it — INSIDE `$HOME`. Only the
-     * link OUT is refused.
+     * The other direction of the same independence: a `$HOME` that IS a checkout
+     * keeps a roster that stays inside it. Only the link OUT is refused, and
+     * `.git` has nothing to do with either verdict.
      */
     public function testACheckoutHomeStillReadsARosterThatStaysInsideIt(): void
     {
@@ -288,5 +362,23 @@ final class AgentPresetHomeRootTest extends TestCase
         );
 
         $this->assertSame(['inside'], $this->names(Bootstrap::agentPresets($this->home)));
+    }
+
+    /**
+     * THE DISCRIMINATOR IS GONE FROM THE SOURCE, not merely bypassed. A
+     * behavioural assertion cannot tell "the check was removed" from "the check
+     * is still there and something else now fires first", and a dead check with
+     * a false rationale beside it is exactly what this round was called to
+     * remove.
+     */
+    public function testNoGitPresenceCheckRemainsInTheTierDerivation(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $start = strpos($source, 'private static function agentPresetTiers(');
+        $this->assertNotFalse($start, 'agentPresetTiers() is where the tiers are derived');
+
+        $body = substr($source, $start, (int) strpos($source, "\n    }", $start) - $start);
+
+        $this->assertStringNotContainsString('.git', $body);
     }
 }

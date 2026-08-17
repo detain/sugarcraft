@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -251,6 +252,44 @@ final class WorktreeManager
      *
      * Mirrors: same approach as git's exclude file mechanism.
      *
+     * TWO REPOSITORY-CHOSEN INPUTS, both now bounded, and neither was:
+     *
+     *  - WHERE the list lives. `worktreeIncludeFile` comes out of
+     *    `.sugar-crush/config.json` ({@see WorktreeConfig::new()}), so its value
+     *    is chosen by whoever committed that file, and it was concatenated onto
+     *    `$repoRoot` and read. A value of `../../elsewhere/list` therefore named
+     *    a file outside the checkout whose every line became a copy pattern.
+     *  - WHAT the list names. Each line is globbed relative to the include
+     *    file's own directory and the RELATIVE result is concatenated onto
+     *    `$repoRoot` again by {@see copyGlob()}, so a leading `../` survived the
+     *    round trip intact. MEASURED on this host against the ungated build,
+     *    one line, `../secret/id_rsa`:
+     *
+     *        read  <repoRoot>/../secret/id_rsa      (outside the checkout)
+     *        wrote <worktreePath>/../secret/id_rsa  (outside the worktree)
+     *
+     *    Both directions, from one committed line — the read is the exfiltration
+     *    and the write is arbitrary file placement next to the worktree.
+     *
+     * THE TWO GATES ARE NOT EQUALLY REACHABLE, and saying so is the difference
+     * between a measurement and a pair of assertions. The PATTERN gate in
+     * {@see copyGlob()} is what closes the copy, in both directions. The
+     * INCLUDE-FILE gate here closes something narrower, measured by deleting each
+     * in turn: patterns are globbed relative to the include file's OWN directory
+     * while the copy resolves against `$repoRoot`, so an outside list cannot name
+     * a file the in-repo list could not have named anyway. What it does close is
+     * that the outside file is READ at all — `file()` on a path a committed
+     * config value chose — and that its lines then reach `error_log()` through
+     * the pattern refusal below. Two drafts of
+     * {@see \SugarCraft\Crush\Tests\Agents\WorktreeIncludeContainmentTest} asserted
+     * on the copy and stayed green with this gate deleted, which is how the
+     * distinction was found rather than assumed.
+     *
+     * A refused input is SKIPPED rather than thrown on, for the reason
+     * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::list()} skips a refused
+     * entry: one bad line in an optional convenience file must not fail worktree
+     * creation, which has already happened by the time this is called.
+     *
      * @param string $worktreePath Absolute path to the newly created worktree.
      */
     public function resolveWorktreeInclude(string $worktreePath): void
@@ -263,7 +302,29 @@ final class WorktreeManager
             ? $this->repoRoot . '/' . $this->config->worktreeIncludeFile
             : $this->config->worktreeIncludeFile;
 
+        // ABSENCE IS CHECKED FIRST, and the order is the whole correctness of
+        // the refusal notice. `ContainedPath` answers false for anything it
+        // cannot resolve, so containment-then-existence reported "resolves
+        // outside the repository root" for the overwhelmingly common case of a
+        // checkout that simply ships no `.worktreeinclude` — measured as seven
+        // such lines in one run of this class's own suite. A file that is not
+        // there is not an escape; it is nothing.
         if (!file_exists($includeFile)) {
+            return;
+        }
+
+        // The repo root is the boundary only when there IS one. With $repoRoot
+        // empty the include file is a caller-supplied relative path against the
+        // process CWD and there is no repository-chosen component to bound —
+        // the same construction {@see expandPath()} treats as "no repo".
+        if ($this->repoRoot !== '' && !ContainedPath::within($includeFile, $this->repoRoot)) {
+            error_log(sprintf(
+                'WorktreeManager: refusing worktreeIncludeFile "%s" — it resolves outside the repository root '
+                . '(%s), and a file outside the checkout does not list what this checkout wants copied.',
+                $this->config->worktreeIncludeFile,
+                $this->repoRoot,
+            ));
+
             return;
         }
 
@@ -335,10 +396,40 @@ final class WorktreeManager
 
     /**
      * Copy a single file or directory matching a glob pattern from src to dest.
+     *
+     * BOTH ENDS ARE BOUNDED, and the two checks are different questions rather
+     * than one written twice:
+     *
+     *  - the SOURCE is judged by {@see ContainedPath::within()}, which resolves
+     *    it — so a `..` pattern AND a pattern that reaches outside through a
+     *    symlink inside the checkout are both refused;
+     *  - the DESTINATION cannot be judged that way, because it does not exist
+     *    yet and {@see ContainedPath} refuses what it cannot resolve. It is
+     *    judged on the PATTERN instead ({@see patternStaysInside()}), which is
+     *    the only part of the destination path a repository chose.
+     *
+     * The second is not redundant on today's call path — the source check
+     * already refuses everything the destination check would — and that is
+     * exactly why it is written: `within()` is a two-`realpath()` snapshot, so
+     * "the source resolved inside" is a statement about the instant it was
+     * computed, and the write happens later. A purely lexical guard on the one
+     * attacker-chosen string has no such window.
      */
     private function copyGlob(string $srcRoot, string $destRoot, string $pattern): void
     {
         $srcPath = $srcRoot . '/' . $pattern;
+
+        if (!ContainedPath::within($srcPath, $srcRoot) || !self::patternStaysInside($pattern)) {
+            error_log(sprintf(
+                'WorktreeManager: refusing .worktreeinclude pattern "%s" — it leaves the repository root (%s) '
+                . 'or the worktree (%s).',
+                $pattern,
+                $srcRoot,
+                $destRoot,
+            ));
+
+            return;
+        }
 
         if (is_dir($srcPath)) {
             $destPath = $destRoot . '/' . $pattern;
@@ -357,6 +448,48 @@ final class WorktreeManager
             }
             copy($srcPath, $destPath);
         }
+    }
+
+    /**
+     * Can `<root>/<pattern>` name anything outside `<root>` on its spelling
+     * alone?
+     *
+     * SEGMENT-WALKED rather than prefix-compared, and deliberately not routed
+     * through {@see ContainedPath}: the path being judged is one that does not
+     * exist yet, which that class refuses outright (see its doc-block's
+     * `BashEscapeDenyHook` entry for the same trade made for the same reason).
+     * It is also not a substring test — `str_contains($pattern, '..')` would
+     * reject the legitimate `..dotfile` and `a..b/` — so `..` is only a
+     * traversal when it is a whole SEGMENT.
+     *
+     * An absolute pattern is refused too, though today it merely produces the
+     * unreachable `<root>//abs/path`: the guard is about what the string may
+     * NAME, not about which concatenation bug currently defuses it.
+     */
+    private static function patternStaysInside(string $pattern): bool
+    {
+        if ($pattern === '' || str_starts_with($pattern, '/')) {
+            return false;
+        }
+
+        $depth = 0;
+        foreach (explode('/', str_replace('\\', '/', $pattern)) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+
+            if ($segment === '..') {
+                if (--$depth < 0) {
+                    return false;
+                }
+
+                continue;
+            }
+
+            ++$depth;
+        }
+
+        return true;
     }
 
     /**

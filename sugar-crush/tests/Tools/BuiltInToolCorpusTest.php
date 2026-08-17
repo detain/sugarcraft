@@ -423,6 +423,197 @@ final class BuiltInToolCorpusTest extends TestCase
         }
     }
 
+    // ─── constructibility ───────────────────────────────────────────
+
+    /**
+     * THE ENUM CLAUSE'S SIBLING, and it is this repo's own MANDATED class shape:
+     * `final` + `private function __construct()` + a `::new()` factory, which
+     * `CLAUDE.md` and `.claude/rules/model-pattern.md` both require.
+     *
+     * `getNumberOfRequiredParameters() === 0` is true of a zero-argument PRIVATE
+     * constructor, so the `match` fallback never fired and `new $class()` ran
+     * anyway. Measured before the fix:
+     *
+     *     Error: Call to private CorpusProbe\Tools\BuiltIn\Factory::__construct()
+     *     tests/Tools/BuiltInToolTest.php            -> Tests: 80, Errors: 33
+     *     tests/Providers/ToolSchemaEncodingTest.php -> abort inside TestSuiteBuilder->build()
+     *
+     * The tool is DISPATCHABLE — `::new()` builds it — so the fix is to build it
+     * through the factory, not to drop it from the corpus.
+     */
+    public function testAToolWrittenToTheMandatedPrivateConstructorShapeIsBuiltThroughItsFactory(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/Factory.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class Factory implements Tool
+            {
+                private function __construct() {}
+
+                public static function new(): self
+                {
+                    return new self();
+                }
+
+                public function name(): string { return 'factory'; }
+                public function description(): string { return 'factory'; }
+                public function inputSchema(): array { return []; }
+                public function execute(array $args): ToolResult { return ToolResult::error('factory'); }
+            }
+            PHP);
+
+        $this->assertSame(
+            ['CorpusProbe\\Tools\\BuiltIn\\Anchor', 'CorpusProbe\\Tools\\BuiltIn\\Factory'],
+            $this->scanProbe(),
+        );
+
+        $instances = BuiltInToolCorpus::instances($this->probeDir, self::PROBE_PREFIX);
+
+        $this->assertCount(2, $instances);
+        $this->assertSame(
+            ['anchor', 'factory'],
+            array_map(static fn (Tool $t): string => $t->name(), $instances),
+        );
+    }
+
+    /**
+     * The other half of the same question: a private constructor with NO public
+     * zero-argument factory cannot be built by anything a real run does, so it is
+     * not a dispatchable tool and is left out of the corpus rather than fatalled
+     * on.
+     */
+    public function testAToolWithAPrivateConstructorAndNoFactoryIsNotDispatchable(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/Sealed.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class Sealed implements Tool
+            {
+                private function __construct() {}
+
+                public function name(): string { return 'sealed'; }
+                public function description(): string { return 'sealed'; }
+                public function inputSchema(): array { return []; }
+                public function execute(array $args): ToolResult { return ToolResult::error('sealed'); }
+            }
+            PHP);
+
+        $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $this->scanProbe());
+    }
+
+    /**
+     * A `new()` that itself needs arguments is not a zero-argument factory, so
+     * the class is not constructible standalone either — the guard must not be
+     * satisfied by the METHOD NAME alone.
+     */
+    public function testAFactoryThatNeedsArgumentsDoesNotMakeAClassConstructible(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/NeedsArgs.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class NeedsArgs implements Tool
+            {
+                private function __construct(private readonly string $root) {}
+
+                public static function new(string $root): self
+                {
+                    return new self($root);
+                }
+
+                public function name(): string { return 'needsargs'; }
+                public function description(): string { return 'needsargs'; }
+                public function inputSchema(): array { return []; }
+                public function execute(array $args): ToolResult { return ToolResult::error('needsargs'); }
+            }
+            PHP);
+
+        $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $this->scanProbe());
+    }
+
+    /**
+     * THE SHAPE REFLECTION CANNOT SEE COMING: a public zero-argument constructor
+     * that THROWS. It produced the same uncatchable abort inside
+     * `TestSuiteBuilder->build()` as the private one, and the only thing that can
+     * be fixed about it is the legibility of the failure. Asserted on the
+     * MESSAGE, because "it still throws" is the design and "it names the class
+     * and says what to do" is the change.
+     */
+    public function testAConstructorThatThrowsFailsWithANamedMessageRatherThanAnOpaqueAbort(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/Exploding.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class Exploding implements Tool
+            {
+                public function __construct()
+                {
+                    throw new \RuntimeException('needs a live connection');
+                }
+
+                public function name(): string { return 'exploding'; }
+                public function description(): string { return 'exploding'; }
+                public function inputSchema(): array { return []; }
+                public function execute(array $args): ToolResult { return ToolResult::error('exploding'); }
+            }
+            PHP);
+
+        // Reflection sees a public zero-arg constructor, so it IS in the corpus.
+        $this->assertContains('CorpusProbe\\Tools\\BuiltIn\\Exploding', $this->scanProbe());
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('CorpusProbe\\Tools\\BuiltIn\\Exploding could not be constructed standalone');
+
+        BuiltInToolCorpus::instances($this->probeDir, self::PROBE_PREFIX);
+    }
+
+    /**
+     * The pre-existing contract, re-driven now that a `catch (\Throwable)` sits
+     * around it: a tool with REQUIRED constructor arguments must still produce
+     * the "add it to instances()" message and not be swallowed into the generic
+     * one.
+     */
+    public function testAToolWithRequiredConstructorArgumentsStillNamesTheFixture(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Tools/BuiltIn/Wired.php', <<<'PHP'
+            namespace CorpusProbe\Tools\BuiltIn;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class Wired implements Tool
+            {
+                public function __construct(private readonly string $root) {}
+
+                public function name(): string { return 'wired'; }
+                public function description(): string { return 'wired'; }
+                public function inputSchema(): array { return []; }
+                public function execute(array $args): ToolResult { return ToolResult::error('wired'); }
+            }
+            PHP);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('needs constructor arguments');
+
+        BuiltInToolCorpus::instances($this->probeDir, self::PROBE_PREFIX);
+    }
+
     // ─── against the synthetic tree ─────────────────────────────────
 
     /**

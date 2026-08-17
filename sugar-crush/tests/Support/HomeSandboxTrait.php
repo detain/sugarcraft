@@ -41,8 +41,14 @@ trait HomeSandboxTrait
      * Redirect HOME at $dir (created if absent), remembering the real values
      * on the first call so a test may move the sandbox around and still get
      * one clean restore.
+     *
+     * @param bool $create Create $dir when it is absent. FALSE for the spellings
+     *        a test is asserting ABOUT rather than storing files in — a relative
+     *        `.`, a trailing separator, an existing system directory — where
+     *        creating it would either be a no-op, a stray directory under the
+     *        process CWD, or a permission error.
      */
-    protected function useHomeSandbox(string $dir): string
+    protected function useHomeSandbox(string $dir, bool $create = true): string
     {
         if (!$this->homeSandboxActive) {
             $this->homeSandboxOriginalEnv = getenv('HOME');
@@ -50,7 +56,7 @@ trait HomeSandboxTrait
             $this->homeSandboxActive = true;
         }
 
-        if (!is_dir($dir)) {
+        if ($create && !is_dir($dir)) {
             mkdir($dir, 0700, true);
         }
 

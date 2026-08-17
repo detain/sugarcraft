@@ -103,6 +103,30 @@ final class ForeignMemoryImporter
      * entry carries YAML frontmatter; a file without frontmatter is not one of
      * Claude Code's entries and is skipped rather than imported as a blob.
      *
+     * THE USER TIER GOES THROUGH {@see HomeDirectory::owned()}, not
+     * {@see HomeDirectory::path()}, and this was the last reader in the package
+     * still on the latter for a tier whose bodies reach the model.
+     * `path()`'s documented stand-in is `sys_get_temp_dir()` — mode 1777 on
+     * every stock Linux — and the per-ENTRY containment below does not help
+     * when the whole DIRECTORY is attacker-created, because every entry then
+     * resolves neatly inside it. MEASURED on this host with `HOME` pointed at a
+     * mode-1777 directory, against the build that read `path()`:
+     *
+     *     imported=1  refusedDirectories=[]  body='ATTACKER-MEMORY-BODY sk-live-C0FFEE'
+     *                                        tagged source:claude
+     *     HomeDirectory::owned() = NULL   for that same home
+     *
+     * — an entry a different local user wrote entering the memory store with
+     * this tool's own provenance badge on it. A real launch refuses earlier, at
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::trustedConfigDirPath()}, and this
+     * class is dormant; both were the argument this package already rejected
+     * for {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::userDir()},
+     * which was gated in the same commit that left this line alone.
+     *
+     * An EXPLICIT `$claudeHome` is not gated — it is the caller naming a
+     * directory rather than this class deriving one, which is what the
+     * parameter is for.
+     *
      * @param  string      $projectRoot Absolute project path, as Claude Code slugs it.
      * @param  string|null $claudeHome  Override for `~/.claude` (tests, non-default installs).
      * @return int Number of entries imported.
@@ -111,8 +135,21 @@ final class ForeignMemoryImporter
     {
         $this->refusedDirectories = [];
 
-        $home = $claudeHome ?? (HomeDirectory::path() . '/.claude');
-        $dir = rtrim($home, '/') . '/projects/' . $this->claudeProjectSlug($projectRoot) . '/memory';
+        if ($claudeHome === null) {
+            $owned = HomeDirectory::owned();
+            if ($owned === null) {
+                $this->refusedDirectories['~/.claude'] = 'this process cannot establish that the home directory '
+                    . 'it resolved is yours — it does not exist, or it is world-writable, or it is owned by '
+                    . 'another account — so a memory tree found there would be whatever the last local user to '
+                    . 'write in it put there, and its bodies go straight into the model\'s context';
+
+                return 0;
+            }
+
+            $claudeHome = $owned . '/.claude';
+        }
+
+        $dir = rtrim($claudeHome, '/') . '/projects/' . $this->claudeProjectSlug($projectRoot) . '/memory';
 
         $imported = 0;
 

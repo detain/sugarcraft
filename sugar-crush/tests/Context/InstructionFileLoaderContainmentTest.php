@@ -536,4 +536,58 @@ final class InstructionFileLoaderContainmentTest extends TestCase
         $this->assertStringContainsString('ROOT-SIDE-DETAIL', $documents[0]);
         $this->assertStringNotContainsString('DOCS-SIDE-DETAIL', $documents[0]);
     }
+
+    /**
+     * ACCUMULATED REFUSALS CAN OUTLIVE THEIR CONDITION, and the one that is
+     * re-decided must not.
+     *
+     * {@see InstructionFileLoader::refusedPaths()} accumulates rather than
+     * recomputes — deliberately, because `loadForPath()` is called once per
+     * touched path over a whole session and a per-call map would report the last
+     * one's refusals and forget the root file's. What its doc-block never said,
+     * and what a consumer will get wrong, is that an entry is a statement about
+     * the moment it was made. MEASURED before this fix:
+     *
+     *     loadForPath('<repo>/notyet/x.php')  -> null, refused
+     *     mkdir notyet; write notyet/CLAUDE.md
+     *     loadForPath('<repo>/notyet/x.php')  -> "LEGIT\n"
+     *     refusedPaths()                      -> STILL names it refused
+     */
+    public function testARefusalIsDroppedWhenTheSamePathIsReDecidedAndSucceeds(): void
+    {
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $touched = $this->repoRoot . '/notyet/x.php';
+
+        $this->assertNull($loader->loadForPath($touched));
+        $this->assertArrayHasKey($touched, $loader->refusedPaths());
+
+        mkdir($this->repoRoot . '/notyet');
+        file_put_contents($this->repoRoot . '/notyet/CLAUDE.md', "LEGIT\n");
+
+        $this->assertStringContainsString('LEGIT', (string) $loader->loadForPath($touched));
+        $this->assertArrayNotHasKey(
+            $touched,
+            $loader->refusedPaths(),
+            'a refusal that has become untrue must not survive the call that disproved it',
+        );
+    }
+
+    /**
+     * The other direction, so the `unset()` above is a re-decision and not an
+     * erasure: a path that is STILL refused keeps its entry across calls, and a
+     * DIFFERENT path's refusal is untouched by re-deciding this one.
+     */
+    public function testReDecidingOnePathLeavesEveryOtherRefusalStanding(): void
+    {
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $first = $this->repoRoot . '/absent-a/x.php';
+        $second = $this->repoRoot . '/absent-b/y.php';
+
+        $loader->loadForPath($first);
+        $loader->loadForPath($second);
+        $loader->loadForPath($first);
+
+        $this->assertArrayHasKey($first, $loader->refusedPaths(), 'still refused, so still recorded');
+        $this->assertArrayHasKey($second, $loader->refusedPaths(), 'and a sibling refusal is untouched');
+    }
 }

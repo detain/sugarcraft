@@ -96,6 +96,18 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * The dot-paths that exist in `src/`, CLASSIFIED — every one of them, not a
      * list of the ones somebody remembered.
      *
+     * KEYED BY `file|dot-path`, NOT BY THE DOT-PATH, and that is this revision's
+     * whole point. The previous map keyed on the STRING, so one classification
+     * covered every occurrence of it — and `.sugar-crush/config.json` was
+     * classified `user-tier` with the note "rooted at `~`, so nobody but the user
+     * chose the location", which is true of {@see Bootstrap}'s call site and
+     * FALSE of {@see \SugarCraft\Crush\Agents\WorktreeConfig::new()}'s, where the
+     * same string is resolved from `__DIR__` and had no containment at all. The
+     * ninth ungated read path was therefore classified as safe by the instrument
+     * whose job is to classify it. Two more strings are the same shape:
+     * `.claude/skills` and `.sugar-crush/skills` each serve BOTH tiers inside one
+     * file, from one constant.
+     *
      * The KEYS are asserted against a derivation over `src/`, so this map cannot
      * be short: a new dot-path literal anywhere in `src/` reds
      * {@see testTheDotPathEnumerationIsDerivedFromSrc()} until it is classified
@@ -106,35 +118,58 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * @var array<string, string>
      */
     private const DOT_PATHS = [
-        // Repository-chosen: the checkout says where these point.
-        '.claude/agents' => self::REPOSITORY,
-        '.claude/skills' => self::REPOSITORY,
-        '.opencode/agents' => self::REPOSITORY,
-        '.opencode/memory' => self::REPOSITORY,
-        '.opencode/skills' => self::REPOSITORY,
-        '.sugar-crush/agents' => self::REPOSITORY,
-        '.sugar-crush/commands' => self::REPOSITORY,
-        '.sugar-crush/hooks.yaml' => self::REPOSITORY,
-        '.sugar-crush/skills' => self::REPOSITORY,
-        '.sugar-crush/workflows' => self::REPOSITORY,
+        // Repository-chosen: the checkout under analysis says where these point.
+        'Agents/ForeignAgentPresetRegistry.php|.opencode/agents' => self::REPOSITORY,
+        'Chat.php|.sugar-crush/workflows' => self::REPOSITORY,
+        'Cli/Bootstrap.php|.sugar-crush/agents' => self::REPOSITORY,
+        'Cli/Bootstrap.php|.sugar-crush/hooks.yaml' => self::REPOSITORY,
+        'Cli/Bootstrap.php|.sugar-crush/workflows' => self::REPOSITORY,
+        'Commands/CommandLoader.php|.sugar-crush/commands' => self::REPOSITORY,
+        'Memory/ForeignMemoryImporter.php|.opencode/memory' => self::REPOSITORY,
+        'Skills/ForeignSkillDiscovery.php|.opencode/skills' => self::REPOSITORY,
+        'Skills/SkillLoader.php|.sugar-crush/skills' => self::REPOSITORY,
+        'Workflows/WorkflowRegistry.php|.sugar-crush/workflows' => self::REPOSITORY,
+
+        // ONE STRING, BOTH TIERS, inside one file — the shape the old key could
+        // not express. Each of these builds a project path and a `~` path from
+        // the same literal (`ForeignAgentPresetRegistry::scanClaude()`,
+        // `ForeignSkillDiscovery::discoverClaude()`, and `SkillDiscovery`'s
+        // PROJECT_SUBDIR/USER_SUBDIR pair, which are the same string twice).
+        'Agents/ForeignAgentPresetRegistry.php|.claude/agents' => self::BOTH,
+        'Skills/ForeignSkillDiscovery.php|.claude/skills' => self::BOTH,
+        'Skills/SkillDiscovery.php|.sugar-crush/skills' => self::BOTH,
 
         // User-tier: rooted at `~`, so nobody but the user chose the location.
-        '.config/opencode' => self::USER,
-        '.config/sugarcraft-crush' => self::USER,
-        '.local/share' => self::USER,
-        '.sugar-crush/config.dev.json' => self::USER,
-        '.sugar-crush/config.json' => self::USER,
-        '.sugar-crush/config.json.' => self::USER,
-        '.sugar-crush/teams' => self::USER,
-        '.sugar-crush/worktrees' => self::USER,
+        'Agents/ForeignAgentPresetRegistry.php|.config/opencode' => self::USER,
+        'Agents/Team.php|.sugar-crush/teams' => self::USER,
+        'Agents/TeamConfig.php|.sugar-crush/teams' => self::USER,
+        'Agents/TeamManager.php|.sugar-crush/teams' => self::USER,
+        'Agents/Teammate.php|.sugar-crush/teams' => self::USER,
+        'Cli/Help.php|.sugar-crush/config.json' => self::USER,
+        'Cli/Help.php|.sugar-crush/config.json.' => self::USER,
+        'MCP/OAuthClientRegistration.php|.local/share' => self::USER,
+        'Session.php|.config/sugarcraft-crush' => self::USER,
+        'Skills/ForeignSkillDiscovery.php|.config/opencode' => self::USER,
+
+        // PACKAGE-RELATIVE — the tier the old two-value map had no name for, and
+        // the one the ninth read path lived in. Resolved from `__DIR__`, so the
+        // location is chosen by whoever laid the INSTALL out: the monorepo root
+        // in development, `vendor/sugarcraft/` under a composer install. Not `~`
+        // and not the checkout under analysis. Still gated, because a
+        // package-relative path is one a symlink can move just as easily.
+        'Agents/WorktreeConfig.php|.sugar-crush/config.json' => self::PACKAGE,
+        'Providers/ProviderFactory.php|.sugar-crush/config.dev.json' => self::PACKAGE,
 
         // Neither: not a tier this collector is about.
-        '.git/info' => self::NOT_A_TIER,
-        '.well-known/oauth-authorization-server' => self::NOT_A_TIER,
+        'Agents/WorktreeConfig.php|.sugar-crush/worktrees' => self::NOT_A_TIER,
+        'Commands/McpAuthCommand.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
+        'Tools/IgnoreRules.php|.git/info' => self::NOT_A_TIER,
     ];
 
     private const REPOSITORY = 'repository-chosen';
     private const USER = 'user-tier';
+    private const BOTH = 'both tiers, from one string';
+    private const PACKAGE = 'package-relative';
     private const NOT_A_TIER = 'not a tier';
 
     /**
@@ -153,9 +188,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * proven.
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
-     * pulls out every `.<dot-dir>/<segment>` it contains. On this tree that is
-     * TWENTY, of which TEN are repository-chosen. A new one anywhere in `src/`
-     * fails here by name until somebody classifies it.
+     * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
+     * APPEARS IN. On this tree that is TWENTY-EIGHT occurrences of twenty
+     * distinct paths, of which ten distinct paths are repository-chosen. A new
+     * one anywhere in `src/` fails here by file and name until somebody
+     * classifies it — and the SAME path arriving in a SECOND file fails too,
+     * which is the case the string-keyed version could not express.
      */
     public function testTheDotPathEnumerationIsDerivedFromSrc(): void
     {
@@ -170,9 +208,36 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         $this->assertSame(
             $classified,
             array_keys($derived),
-            'a dot-path in src/ that this inventory does not classify: '
+            'a dot-path occurrence in src/ that this inventory does not classify: '
             . implode(', ', array_diff(array_keys($derived), array_keys(self::DOT_PATHS))),
         );
+    }
+
+    /**
+     * THE TIER IS A PROPERTY OF THE OCCURRENCE, not of the string — asserted so
+     * a future revision cannot quietly go back to keying on the path.
+     *
+     * Two strings prove it on this tree: `.sugar-crush/config.json` is user-tier
+     * in `Cli/Help.php` and PACKAGE-RELATIVE in `Agents/WorktreeConfig.php`
+     * (where it had no containment at all for nine rounds), and
+     * `.sugar-crush/workflows` is repository-chosen in three files while
+     * `.sugar-crush/skills` serves BOTH tiers in one.
+     */
+    public function testOneDotPathCanCarryDifferentTiersInDifferentFiles(): void
+    {
+        $byPath = [];
+        foreach (self::DOT_PATHS as $occurrence => $kind) {
+            [, $path] = explode('|', $occurrence, 2);
+            $byPath[$path][$kind] = true;
+        }
+
+        $this->assertSame(
+            [self::USER => true, self::PACKAGE => true],
+            $byPath['.sugar-crush/config.json'],
+            'the string that was classified user-tier everywhere while one of its two homes was ungated',
+        );
+
+        $this->assertArrayHasKey(self::BOTH, $byPath['.sugar-crush/skills']);
     }
 
     /**
@@ -180,12 +245,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
      * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
      * ten.
+     *
+     * `BOTH` counts here: a string serving the project tier is repository-chosen
+     * whatever else it also serves.
      */
     public function testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade(): void
     {
-        $repository = array_keys(
-            array_filter(self::DOT_PATHS, static fn (string $kind): bool => $kind === self::REPOSITORY),
-        );
+        $repository = $this->repositoryChosenPaths();
 
         $this->assertCount(10, $repository);
 
@@ -218,51 +284,208 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         $gaps = ['.claude/agents', '.opencode/agents', '.opencode/memory',
             '.sugar-crush/commands', '.sugar-crush/hooks.yaml'];
 
-        $repository = array_keys(
-            array_filter(self::DOT_PATHS, static fn (string $kind): bool => $kind === self::REPOSITORY),
-        );
-
         $union = array_merge($feeders, $gaps);
         sort($union);
 
-        $this->assertSame($repository, $union, 'every repository-chosen path is one or the other');
+        $this->assertSame(
+            $this->repositoryChosenPaths(),
+            $union,
+            'every repository-chosen path is one or the other',
+        );
         $this->assertSame([], array_intersect($feeders, $gaps), 'and never both');
     }
 
     /**
-     * DORMANT IS NOT UNGATED — the finding this round's gating work came from.
-     * Each of the four dormant holders routes its repository-chosen directory
-     * through {@see \SugarCraft\Crush\Support\ContainedPath}, so "nothing
-     * constructs it yet" is never again the whole answer to "is it contained".
+     * The distinct dot-paths any occurrence of which serves the project tier.
      *
-     * @return array<string, array{0: string}>
+     * @return list<string>
+     */
+    private function repositoryChosenPaths(): array
+    {
+        $paths = [];
+        foreach (self::DOT_PATHS as $occurrence => $kind) {
+            if ($kind === self::REPOSITORY || $kind === self::BOTH) {
+                [, $path] = explode('|', $occurrence, 2);
+                $paths[$path] = true;
+            }
+        }
+
+        $paths = array_keys($paths);
+        sort($paths);
+
+        return $paths;
+    }
+
+    /**
+     * DORMANT IS NOT UNGATED — the finding this round's gating work came from.
+     * Each dormant holder routes its non-`~` directory through
+     * {@see \SugarCraft\Crush\Support\ContainedPath}, so "nothing constructs it
+     * yet" is never again the whole answer to "is it contained".
+     *
+     * THE DOC-BLOCK HERE SAID "FOUR" WHILE THE PROVIDER RETURNED THREE, and a
+     * fourth genuinely existed: {@see \SugarCraft\Crush\Agents\WorktreeConfig}
+     * read `.sugar-crush/config.json` from `__DIR__` with no containment at all,
+     * and {@see \SugarCraft\Crush\Agents\WorktreeManager} then turned that file's
+     * `worktreeIncludeFile` value into a read of an arbitrary file and every one
+     * of its lines into a copy pattern — measured reading outside the checkout
+     * AND writing outside the worktree. A count in a doc-block disagreeing with
+     * the list under it, in the test that exists to catch counts disagreeing with
+     * lists, is why this provider is now the ONLY place the number lives.
+     *
+     * THE REQUIRED GATE KINDS ARE PER-HOLDER, not one blanket pair, because
+     * "both gates everywhere" is a claim that is FALSE of one of them and a test
+     * asserting it would have to be weakened rather than met.
+     * {@see \SugarCraft\Crush\Agents\WorktreeManager} has no directory to
+     * ANCHOR: both of its boundaries are entry-level — the include file against
+     * the repo root, and each copy pattern's source against the same root — so
+     * it needs `within` twice and `below` never. Writing the expectation down
+     * per holder is the difference between a pinned decision and a hole.
+     *
+     * @return array<string, array{0: string, 1: class-string, 2: list<string>}>
      */
     public static function dormantHolders(): array
     {
         return [
-            'foreign agent presets' => ['src/Agents/ForeignAgentPresetRegistry.php'],
-            'foreign memory import' => ['src/Memory/ForeignMemoryImporter.php'],
-            'custom commands' => ['src/Commands/CommandLoader.php'],
+            'foreign agent presets' => [
+                'src/Agents/ForeignAgentPresetRegistry.php',
+                \SugarCraft\Crush\Tests\Agents\ForeignAgentPresetDirContainmentTest::class,
+                ['below', 'within'],
+            ],
+            'foreign memory import' => [
+                'src/Memory/ForeignMemoryImporter.php',
+                \SugarCraft\Crush\Tests\Memory\ForeignMemoryImporterContainmentTest::class,
+                ['below', 'within'],
+            ],
+            'custom commands' => [
+                'src/Commands/CommandLoader.php',
+                \SugarCraft\Crush\Tests\Support\CommandLoaderContainmentTest::class,
+                ['below', 'within'],
+            ],
+            'worktree config' => [
+                'src/Agents/WorktreeConfig.php',
+                \SugarCraft\Crush\Tests\Agents\WorktreeConfigTest::class,
+                ['below', 'within'],
+            ],
+            'worktree include resolution' => [
+                'src/Agents/WorktreeManager.php',
+                \SugarCraft\Crush\Tests\Agents\WorktreeIncludeContainmentTest::class,
+                ['within'],
+            ],
         ];
     }
 
+    /**
+     * PRESENCE IS NOT ENFORCEMENT, which is the category this class's own
+     * doc-block opens by condemning — and this test was an instance of it. It
+     * was `assertStringContainsString('ContainedPath::below(', $source)`, which a
+     * gate whose RESULT IS DISCARDED satisfies exactly as well as a real one.
+     * That is the same defect
+     * {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest} measured
+     * on `InstructionFileLoader::loadRoot()`: call present, result thrown away,
+     * escape fully live, every string-presence assertion green.
+     *
+     * So each holder must have BOTH gates with their results CONSUMED — decided
+     * by the same statement-level rule the inventory uses — and must name a test
+     * class that DRIVES them. A gate nobody executes is a gate nobody has
+     * checked; the inventory can see that a compare is written and enforcing,
+     * and only a behavioural test can see that it is correct.
+     */
     #[\PHPUnit\Framework\Attributes\DataProvider('dormantHolders')]
-    public function testEveryDormantHolderOfARepositoryChosenDirectoryIsGated(string $relative): void
-    {
-        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/' . $relative);
+    public function testEveryDormantHolderOfARepositoryChosenDirectoryIsGated(
+        string $relative,
+        string $driver,
+        array $requiredGates,
+    ): void {
+        $consumed = $this->consumedContainmentCalls(\dirname(__DIR__, 2) . '/' . $relative);
 
-        $this->assertStringContainsString('ContainedPath::below(', $source, "{$relative} anchors its directory");
-        $this->assertStringContainsString('ContainedPath::within(', $source, "{$relative} bounds its entries");
+        foreach ($requiredGates as $gate) {
+            $this->assertContains($gate, $consumed, "{$relative} calls ContainedPath::{$gate}() and uses the answer");
+        }
+
+        $this->assertTrue(class_exists($driver), "{$relative} names a test class that drives its gates");
+        $this->assertNotSame(
+            [],
+            array_filter(
+                get_class_methods($driver),
+                static fn (string $method): bool => str_starts_with($method, 'test'),
+            ),
+            "{$driver} has at least one test",
+        );
     }
 
     /**
-     * Every `.<dir>/<segment>` appearing in a string literal under $src.
+     * The names of every `ContainedPath::within()`/`::below()` in $file whose
+     * result the enclosing statement CONSUMES.
+     *
+     * A deliberately small reimplementation of
+     * {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}'s rule
+     * rather than a call into it: this file asks a yes/no question per holder,
+     * that one derives a whole-tree census, and sharing the machinery would make
+     * the census's data providers depend on this class's fixtures. What is
+     * shared is the RULE — a call that is the whole of its own expression
+     * statement has nowhere to put its answer.
+     *
+     * @return list<string>
+     */
+    private function consumedContainmentCalls(string $file): array
+    {
+        $tokens = [];
+        foreach (token_get_all((string) file_get_contents($file)) as $token) {
+            if (\is_array($token)
+                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+            ) {
+                continue;
+            }
+
+            $tokens[] = $token;
+        }
+
+        $consumed = [];
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_DOUBLE_COLON) {
+                continue;
+            }
+
+            $subject = $tokens[$i - 1] ?? null;
+            $method = $tokens[$i + 1] ?? null;
+
+            if (!\is_array($method) || $method[0] !== \T_STRING
+                || !\in_array(strtolower($method[1]), ['within', 'below'], true)
+            ) {
+                continue;
+            }
+
+            if (!\is_array($subject) || !str_ends_with((string) $subject[1], 'ContainedPath')) {
+                continue;
+            }
+
+            $before = $tokens[$i - 2] ?? null;
+            $discarded = $before === null
+                || \in_array($before, [';', '{', '}', ':', ')'], true)
+                || (\is_array($before) && \in_array($before[0], [\T_OPEN_TAG, \T_ELSE, \T_DO], true));
+
+            if (!$discarded) {
+                $consumed[] = strtolower($method[1]);
+            }
+        }
+
+        return array_values(array_unique($consumed));
+    }
+
+    /**
+     * Every `.<dir>/<segment>` appearing in a string literal under $src, keyed
+     * `<file>|<dot-path>`.
+     *
+     * KEYED BY THE OCCURRENCE, not by the path — see {@see DOT_PATHS} for the
+     * ninth ungated read path the path-keyed version classified as safe. The
+     * file is part of the key because the TIER is a property of where the
+     * string is used, not of the string.
      *
      * Token-derived rather than grepped: a `.claude/agents` inside a doc-comment
-     * is a cross-reference, and the previous instrument's whole-file
-     * concatenation could not tell one from a path the code builds.
+     * is a cross-reference, and an earlier instrument's whole-file concatenation
+     * could not tell one from a path the code builds.
      *
-     * @return array<string, list<string>> dot-path => files it appears in, sorted
+     * @return array<string, true> `<file>|<dot-path>` => true, sorted by key
      */
     private function dotPathsIn(string $src): array
     {
@@ -287,7 +510,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
 
                 if (preg_match_all('#(?:^|/|\'|")(\.[a-z][a-z0-9._-]*/[A-Za-z0-9._-]+)#', $token[1], $matches)) {
                     foreach ($matches[1] as $hit) {
-                        $found[$hit][$relative] = true;
+                        $found[$relative . '|' . $hit] = true;
                     }
                 }
             }
@@ -295,13 +518,15 @@ final class ProjectTierRefusalInventoryTest extends TestCase
 
         ksort($found);
 
-        return array_map(static fn (array $files): array => array_keys($files), $found);
+        return $found;
     }
 
     /**
      * The doc-comment immediately preceding $signature, and nothing else in the
-     * file — see {@see testTheFiveRepositoryChosenDirectoryNames()} for why the
-     * narrowing is the point.
+     * file — see {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()}
+     * for why the narrowing is the point. (This cited
+     * `testTheFiveRepositoryChosenDirectoryNames()`, a method renamed two rounds
+     * ago and gone; a `{@see}` to nothing is the same drift class in miniature.)
      */
     private function docBlockAbove(string $file, string $signature): string
     {

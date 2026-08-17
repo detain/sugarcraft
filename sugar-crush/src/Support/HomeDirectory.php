@@ -59,18 +59,40 @@ final class HomeDirectory
      * or a prompt body through this can therefore be handed one a different
      * local user wrote. {@see owned()} is the resolution for those.
      *
-     * WHICH READERS ARE STILL ON IT, stated as a measured gap rather than
-     * implied away — `grep -rn 'HomeDirectory::path()' src/` on this tree:
-     * {@see \SugarCraft\Crush\Skills\SkillLoader}, {@see
-     * \SugarCraft\Crush\Skills\SkillDiscovery}, {@see
-     * \SugarCraft\Crush\Skills\ForeignSkillDiscovery} and {@see
-     * \SugarCraft\Crush\Commands\CommandLoader} resolve their USER tier through
-     * it and put the resulting bodies in front of the model; {@see
-     * \SugarCraft\Crush\Agents\Team}, {@see \SugarCraft\Crush\Agents\TeamManager},
-     * {@see \SugarCraft\Crush\Agents\Teammate}, {@see
-     * \SugarCraft\Crush\Agents\WorktreeManager} and {@see
-     * \SugarCraft\Crush\Workflows\WorkflowEngine} use it to locate stores they
-     * WRITE, where the fallback is a convenience rather than a trust decision.
+     * WHICH READERS ARE STILL ON IT — the list below is ASSERTED against a
+     * derivation over `src/`, not maintained by hand, and the previous hand list
+     * is why. It claimed to be "every remaining reader named by grep" and was
+     * wrong in three directions at once: it named NINE where `grep` finds TEN;
+     * it named {@see \SugarCraft\Crush\Workflows\WorkflowEngine}, which does not
+     * call this at all (its only mention is a `{@see}`, and the real caller is
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry}); and it omitted
+     * {@see \SugarCraft\Crush\Cli\Bootstrap} and
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} entirely. It also
+     * omitted {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}, whose user
+     * tier put foreign memory bodies in the model's context off this resolution
+     * — that one is now on {@see owned()}, which is what took the count from
+     * eleven to ten. Drift in the sentence asserting there is none is the exact
+     * defect this doc-block exists to remove, so
+     * {@see \SugarCraft\Crush\Tests\Support\HomeDirectoryPathReaderInventoryTest}
+     * fails in BOTH directions — a name here that does not call it, and a caller
+     * in `src/` that is not named here.
+     *
+     * PROMPT-BEARING (the resulting bodies go in front of the model), four:
+     * {@see \SugarCraft\Crush\Skills\SkillLoader},
+     * {@see \SugarCraft\Crush\Skills\SkillDiscovery},
+     * {@see \SugarCraft\Crush\Skills\ForeignSkillDiscovery},
+     * {@see \SugarCraft\Crush\Commands\CommandLoader}.
+     *
+     * STORE LOCATION (the fallback is a convenience, not a trust decision), six:
+     * {@see \SugarCraft\Crush\Agents\Team},
+     * {@see \SugarCraft\Crush\Agents\TeamManager},
+     * {@see \SugarCraft\Crush\Agents\Teammate},
+     * {@see \SugarCraft\Crush\Agents\WorktreeManager},
+     * {@see \SugarCraft\Crush\Workflows\WorkflowRegistry} (its `~` expansion) and
+     * {@see \SugarCraft\Crush\Cli\Bootstrap} (its `homePath()`, which
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::trustedConfigDirPath()} deliberately
+     * does NOT go through).
+     *
      * The first group is the one that should migrate; it is four subsystems with
      * their own suites and it is not this change-set.
      */
@@ -109,11 +131,38 @@ final class HomeDirectory
      * skipped there rather than failing every launch closed. The threat it
      * covers is POSIX-shaped anyway: Windows' `sys_get_temp_dir()` is per-user.
      *
+     * ACLs ARE INVISIBLE TO THIS, and the limit is written down rather than
+     * left to be rediscovered: `fileperms()` reports the mode bits and nothing
+     * else, so `setfacl -m user:mallory:rwx ~` on a `drwx------` home is
+     * ACCEPTED here. It could not be measured on this host (`setfacl` is not
+     * installed) and is stated by inspection of what `fileperms()` can see. The
+     * same goes for anything else that grants write access outside the mode
+     * bits — a bind mount of a shared directory over `$HOME`, or a filesystem
+     * mounted without permission enforcement.
+     *
      * Returns the home AS SPELLED, not its `realpath()`: the checks are made on
      * the resolved directory, but callers concatenate onto this and their own
      * tests, messages and refusal keys are written in the spelling the
      * environment gave. Resolving here would silently rewrite `/tmp/...` to
      * `/private/tmp/...` on macOS for every one of them.
+     *
+     * TWO SPELLINGS ARE EXCEPTIONS TO THAT, because they are the cases where
+     * gate-on-resolved and return-as-spelled genuinely diverge:
+     *
+     *  - A RELATIVE `$HOME` IS REFUSED. `realpath('.')` gates a real directory
+     *    while `'.'` names a different one the moment anything calls `chdir()`,
+     *    and every consumer of this concatenates onto the answer. MEASURED with
+     *    the cwd inside a checkout and `HOME=.`: `owned()` returned `"."`,
+     *    `Bootstrap::trustedConfigDirPath()` returned `"./.sugar-crush"`, and
+     *    `agentPresets(<some other project>)` handed that checkout's own
+     *    `.sugar-crush/agents` the deliberately-privileged USER tier —
+     *    `presets=["relhome"] mode=bypass-permissions refusals=[]`. A relative
+     *    home is not a spelling worth preserving; it is one the caller has to
+     *    fix, and refusing says so.
+     *  - TRAILING SEPARATORS ARE STRIPPED. `HOME=/path/` produced `/path//.sugar-crush`
+     *    in every derived path AND in every refusal key, so two launches of the
+     *    same session keyed the same directory two ways. `/` is returned as
+     *    itself, since stripping it leaves nothing.
      */
     public static function owned(): ?string
     {
@@ -121,6 +170,19 @@ final class HomeDirectory
         if ($home === null) {
             return null;
         }
+
+        // Windows spells absolute paths `C:\Users\x`, which has no leading
+        // separator — hence the drive-letter arm rather than a bare
+        // `str_starts_with($home, '/')`.
+        $absolute = str_starts_with($home, '/')
+            || str_starts_with($home, '\\')
+            || preg_match('#^[A-Za-z]:[\\\\/]#', $home) === 1;
+
+        if (!$absolute) {
+            return null;
+        }
+
+        $home = rtrim($home, '/') ?: '/';
 
         $real = realpath($home);
         if ($real === false || !is_dir($real)) {

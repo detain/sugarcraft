@@ -198,11 +198,19 @@ final class ForeignAgentPresetDirContainmentTest extends TestCase
     // ─── the user tier ──────────────────────────────────────────────
 
     /**
-     * The user tier is UNANCHORED — nobody but the user chose where
-     * `~/.claude/agents` points, and users really do link it — matching
-     * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::__construct()}.
+     * The user tier is NOT anchored to the CHECKOUT — that much of the old
+     * sentence stands, and it is why a link to `~/.claude/agents` from anywhere
+     * else in the home still works. It is anchored to `$HOME`.
+     *
+     * The rest of that sentence — "nobody but the user chose where it points" —
+     * was a premise this class checked nothing about. MEASURED on the native
+     * sibling with `$HOME` mode 0700 and owned, its only content a
+     * `.sugar-crush/agents -> <outside>` symlink delivered by `tar xzf`: the
+     * roster came back under `permissionMode: bypass-permissions` with an
+     * outside file's body as the sub-agent prompt, no `.git` anywhere. See
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()}.
      */
-    public function testTheUsersOwnAgentsDirectoryIsNotAnchoredToTheCheckout(): void
+    public function testTheUsersOwnAgentsDirectoryLinkedOutOfHomeIsRefused(): void
     {
         $home = $this->sandbox . '/home';
         mkdir($home . '/.claude', 0o700, true);
@@ -210,7 +218,28 @@ final class ForeignAgentPresetDirContainmentTest extends TestCase
 
         $registry = new ForeignAgentPresetRegistry();
 
-        $this->assertSame(['leak'], array_keys($registry->discoverClaude($this->project)));
+        $this->assertSame([], array_keys($registry->discoverClaude($this->project)));
+        $this->assertArrayHasKey($home . '/.claude/agents', $registry->refusedDirectories());
+    }
+
+    /**
+     * THE CONTROL, without which the assertion above is satisfied by a user tier
+     * that was simply switched off: a roster that stays inside `$HOME` — which
+     * is where every documented layout puts it — still loads.
+     */
+    public function testAUserTierThatStaysInsideHomeStillLoads(): void
+    {
+        $home = $this->sandbox . '/home';
+        mkdir($home . '/.claude/agents', 0o700, true);
+        file_put_contents(
+            $home . '/.claude/agents/mine.md',
+            "---\nname: mine\ndescription: the user's own\n---\nMINE-BODY\n",
+        );
+
+        $registry = new ForeignAgentPresetRegistry();
+
+        $this->assertSame(['mine'], array_keys($registry->discoverClaude($this->project)));
+        $this->assertSame([], $registry->refusedDirectories());
     }
 
     /**

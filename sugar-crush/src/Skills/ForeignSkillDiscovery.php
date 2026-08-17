@@ -46,15 +46,23 @@ final class ForeignSkillDiscovery
         return $this->discover(
             [
                 // The project tree is confined to itself AND held inside the
-                // checkout; the user's own tree may follow links into the rest
-                // of the user's home and is anchored to nothing, because its
-                // location is not a repository's choice. See
+                // checkout; the user's own tree is held inside `$HOME`. See
                 // {@see SkillLoader::skillFilesIn()}'s $ownedBy and $anchoredIn
                 // — the same "who wrote this file" line this method's PRECEDENCE
                 // rule below is drawn on, applied to the directory as well as to
                 // the links inside it.
+                //
+                // THE USER TIER USED TO BE ANCHORED TO NOTHING, "because its
+                // location is not a repository's choice" — the same premise
+                // {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()}
+                // measured false: a `.claude/skills -> <outside>` symlink
+                // arrives in a tarball as readily as in a clone, and `$ownedBy`
+                // does not catch it because a tarball extracts as the extracting
+                // user. `$HOME` is the anchor that makes "the user's own tree"
+                // true rather than assumed; a link elsewhere INSIDE the home is
+                // unaffected, which is the layout the old sentence was defending.
                 $projectRoot . '/.claude/skills' => [null, $projectRoot],
-                self::homeDir() . '/.claude/skills' => [self::homeDir(), null],
+                self::homeDir() . '/.claude/skills' => [self::homeDir(), self::homeDir()],
             ],
             SkillSource::Claude,
         );
@@ -75,7 +83,8 @@ final class ForeignSkillDiscovery
             [
                 // See {@see discoverClaude()} for the per-tree containment.
                 $projectRoot . '/.opencode/skills' => [null, $projectRoot],
-                self::homeDir() . '/.config/opencode/skills' => [self::homeDir(), null],
+                // Anchored to `$HOME` for the reason discoverClaude() states.
+                self::homeDir() . '/.config/opencode/skills' => [self::homeDir(), self::homeDir()],
             ],
             SkillSource::Opencode,
         );

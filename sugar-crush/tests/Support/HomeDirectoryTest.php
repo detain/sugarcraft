@@ -150,6 +150,138 @@ final class HomeDirectoryTest extends TestCase
     }
 
     /**
+     * THE CLAUSE THE OWNERSHIP WORK WAS TITLED FOR, and it had ZERO coverage.
+     * Deleting the last two lines of {@see HomeDirectory::owned()} — replacing
+     * `return $owner === false || $owner !== posix_geteuid() ? null : $home;`
+     * with `return $home;` — left the FULL suite byte-identical at
+     * `6603 / 68775`, while the doc-block called it "the clause that kills the
+     * other direction". Every neighbouring test drove world-writable,
+     * sticky+world-writable, group-writable, nonexistent, is-a-file and
+     * as-spelled; none drove "owned by another uid", which is the only thing
+     * this clause does.
+     *
+     * MEASURED in one line: `HOME=/usr` (drwxr-xr-x root root) gave
+     * `owned() = NULL` intact and `owned() = "/usr"` with the clause deleted,
+     * at which point `Bootstrap::agentPresets()` proceeds instead of throwing.
+     *
+     * The fixture is a REAL system directory rather than a fabricated one,
+     * because creating a directory owned by another uid needs privileges this
+     * suite does not have. It is skipped rather than faked when no such
+     * directory exists — running as root, or a host where these are not
+     * root-owned.
+     */
+    public function testAHomeOwnedByAnotherAccountIsNamedButNotOwned(): void
+    {
+        if (!\function_exists('posix_geteuid')) {
+            $this->markTestSkipped('the ownership clause is POSIX-only by construction');
+        }
+
+        $foreign = null;
+        foreach (['/usr', '/etc', '/bin', '/opt', '/var'] as $candidate) {
+            $perms = @fileperms($candidate);
+            $owner = @fileowner($candidate);
+
+            // Not world-writable, so a NULL answer can only come from the
+            // ownership clause and not from the mode clause above it.
+            if (is_dir($candidate) && $perms !== false && ($perms & 0o002) === 0
+                && $owner !== false && $owner !== posix_geteuid()
+            ) {
+                $foreign = $candidate;
+
+                break;
+            }
+        }
+
+        if ($foreign === null) {
+            $this->markTestSkipped('no non-world-writable directory owned by another uid on this host');
+        }
+
+        $this->useHomeSandbox($foreign);
+
+        $this->assertSame($foreign, HomeDirectory::resolved(), 'it still RESOLVES — that is the weaker question');
+        $this->assertNull(HomeDirectory::owned(), 'a home owned by another account is not this user\'s');
+    }
+
+    /**
+     * The same clause reached through the caller it exists for: a launch whose
+     * `$HOME` is another account's directory must REFUSE rather than read that
+     * account's permission policy and hook chain.
+     */
+    public function testABootstrapLaunchRefusesAHomeOwnedByAnotherAccount(): void
+    {
+        if (!\function_exists('posix_geteuid') || posix_geteuid() === 0) {
+            $this->markTestSkipped('needs a non-root euid and ext-posix');
+        }
+
+        $perms = @fileperms('/usr');
+        if (!is_dir('/usr') || $perms === false || ($perms & 0o002) !== 0 || @fileowner('/usr') === posix_geteuid()) {
+            $this->markTestSkipped('/usr is not a foreign-owned, non-world-writable directory on this host');
+        }
+
+        $this->useHomeSandbox('/usr');
+
+        $this->expectException(\SugarCraft\Crush\Cli\PermissionConfigException::class);
+        \SugarCraft\Crush\Cli\Bootstrap::agentPresets(sys_get_temp_dir());
+    }
+
+    /**
+     * A RELATIVE `$HOME` is refused, and this is the one case where "gate on
+     * `realpath()`, return as spelled" genuinely diverges: `realpath('.')` gates
+     * a real directory while `'.'` names a different one after any `chdir()`.
+     *
+     * MEASURED before the refusal, cwd inside a checkout and `HOME=.`:
+     * `owned() = "."`, `trustedConfigDirPath() = "./.sugar-crush"`, and
+     * `agentPresets(<some other project>)` gave
+     * `presets=["relhome"] mode=bypass-permissions refusals=[]` — the checkout's
+     * own agents directory read as the privileged USER tier.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function relativeHomeSpellings(): array
+    {
+        return ['the cwd itself' => ['.'], 'a child of the cwd' => ['./sub'], 'a bare name' => ['sub']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('relativeHomeSpellings')]
+    public function testARelativeHomeIsNamedButNotOwned(string $spelling): void
+    {
+        $dir = sys_get_temp_dir() . '/home_directory_rel_' . uniqid('', true);
+        mkdir($dir . '/sub', 0o700, true);
+
+        $cwd = (string) getcwd();
+        chdir($dir);
+
+        try {
+            $this->useHomeSandbox($spelling, create: false);
+
+            $this->assertSame($spelling, HomeDirectory::resolved(), 'it still RESOLVES');
+            $this->assertNull(HomeDirectory::owned());
+        } finally {
+            chdir($cwd);
+            @rmdir($dir . '/sub');
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * A trailing separator is stripped rather than carried into every derived
+     * path: `HOME=/path/` produced `/path//.sugar-crush` in each one AND in
+     * every refusal key, so one directory was keyed two ways.
+     */
+    public function testATrailingSeparatorIsStrippedFromAnOwnedHome(): void
+    {
+        $dir = $this->useHomeSandbox(sys_get_temp_dir() . '/home_directory_slash_' . uniqid('', true));
+        chmod($dir, 0o700);
+
+        $this->useHomeSandbox($dir . '/', create: false);
+
+        $this->assertSame($dir . '/', HomeDirectory::resolved(), 'resolved() is still literally the environment');
+        $this->assertSame($dir, HomeDirectory::owned());
+
+        @rmdir($dir);
+    }
+
+    /**
      * GROUP-WRITABLE IS ACCEPTED, asserted rather than left to the doc-block:
      * `umask 002` layouts give real home directories mode 0775, and refusing
      * those would break working installations to defend against a group the

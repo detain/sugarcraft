@@ -247,4 +247,61 @@ SKILL
 
         $this->assertIsArray($result);
     }
+
+    // -------------------------------------------------------------------------
+    // the user tier's own boundary
+    // -------------------------------------------------------------------------
+
+    /**
+     * `~/.claude/skills -> <outside $HOME>` is REFUSED.
+     *
+     * This pair used to pass `null` as the user tier's anchor, justified as
+     * "its location is not a repository's choice" — the same premise
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()} measured
+     * false across four launch shapes: a symlink out of `$HOME` arrives in a
+     * tarball as readily as in a clone, and the `$ownedBy` check beside it does
+     * not catch that, because a tarball extracts as the extracting user.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function foreignUserSkillTiers(): array
+    {
+        return [
+            'claude' => ['discoverClaude', '.claude/skills'],
+            'opencode' => ['discoverOpencode', '.config/opencode/skills'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignUserSkillTiers')]
+    public function testAUserSkillTreeLinkedOutOfHomeIsRefused(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/anchored-home';
+        $outside = $this->tempDir . '/outside-skills';
+        mkdir($home . '/' . \dirname($relative), 0o700, true);
+        mkdir($outside, 0o700, true);
+        $this->createSkillFile($outside, 'leaked', 'OUTSIDE-SKILL-DESCRIPTION');
+        symlink($outside, $home . '/' . $relative);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertSame([], array_keys((new ForeignSkillDiscovery())->{$method}($this->tempDir . '/project')));
+    }
+
+    /**
+     * THE CONTROL: a link elsewhere INSIDE `$HOME` — the layout the old
+     * justification was actually defending — still loads.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignUserSkillTiers')]
+    public function testAUserSkillTreeLinkedInsideHomeStillLoads(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/inside-home';
+        mkdir($home . '/' . \dirname($relative), 0o700, true);
+        mkdir($home . '/elsewhere', 0o700, true);
+        $this->createSkillFile($home . '/elsewhere', 'mine', 'MY-OWN-SKILL');
+        symlink($home . '/elsewhere', $home . '/' . $relative);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertSame(['mine'], array_keys((new ForeignSkillDiscovery())->{$method}($this->tempDir . '/project')));
+    }
 }

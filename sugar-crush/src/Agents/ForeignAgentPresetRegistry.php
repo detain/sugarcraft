@@ -202,7 +202,7 @@ final class ForeignAgentPresetRegistry
     {
         return $this->scan(
             [
-                [self::userDir('/.claude/agents'), null],
+                [self::userDir('/.claude/agents'), HomeDirectory::owned()],
                 [rtrim($projectRoot, '/') . '/.claude/agents', $projectRoot],
             ],
             SkillSource::Claude,
@@ -216,7 +216,7 @@ final class ForeignAgentPresetRegistry
     {
         return $this->scan(
             [
-                [self::userDir('/.config/opencode/agents'), null],
+                [self::userDir('/.config/opencode/agents'), HomeDirectory::owned()],
                 [rtrim($projectRoot, '/') . '/.opencode/agents', $projectRoot],
             ],
             SkillSource::Opencode,
@@ -262,11 +262,25 @@ final class ForeignAgentPresetRegistry
      * relocatable rather than binding: `realpath()` on both sides means a
      * boundary directory that is itself a symlink travels with the link.
      *
-     * A null anchor is an UNANCHORED read, which is the right answer for the
-     * user's own `~/.claude/agents` — nobody but the user chose where it points
-     * — and matches {@see AgentPresetRegistry::__construct()}'s treatment of the
-     * same tier. A null DIRECTORY is a user tier that could not be attributed to
-     * this user at all; see {@see userDir()}.
+     * THE USER TIER IS ANCHORED TO `$HOME`, and this paragraph used to say the
+     * opposite: "a null anchor is an UNANCHORED read, which is the right answer
+     * for the user's own `~/.claude/agents` — nobody but the user chose where it
+     * points". That premise is not established by anything this class checks.
+     * MEASURED on the native sibling, `$HOME` mode 0700 and owned, its only
+     * content `.sugar-crush/agents -> <outside>` delivered by `tar xzf`: the
+     * roster came back with `permissionMode: bypass-permissions` and an outside
+     * file's body as the sub-agent prompt, and NO `.git` was involved — the
+     * symlink arrived in a tarball. See
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresetTiers()} for the full
+     * four-row measurement and for what the anchor costs. `$HOME` is the anchor
+     * rather than the checkout because it is the boundary that makes "the user's
+     * own directory" TRUE: a link to `~/.claude/agents` is inside it, a link to
+     * `/opt/shared` is not.
+     *
+     * A null DIRECTORY is a user tier that could not be attributed to this user
+     * at all; see {@see userDir()}. A null ANCHOR is still an unanchored read
+     * and no caller passes one today — the shape is kept because the project
+     * tier's anchor is `$projectRoot`, which a caller may legitimately not have.
      *
      * A LIST OF PAIRS rather than a `directory => anchor` map, for the reason
      * {@see AgentPresetRegistry::__construct()} had to grow a normaliser and a
@@ -301,10 +315,15 @@ final class ForeignAgentPresetRegistry
             }
 
             if ($anchor !== null && !ContainedPath::below($dir, $anchor)) {
+                // NAMES THE ANCHOR, not "the checkout": the user tier is
+                // anchored to `$HOME` now, where the objection is that the link
+                // leaves the user's own home rather than that a repository
+                // chose it. See the native sibling's identical correction in
+                // {@see AgentPresetRegistry::readableSearchPaths()}.
                 $this->refusedDirectories[$dir] = sprintf(
-                    'resolves to %s, %s the checkout it was reached from (%s) — a repository chooses where '
-                    . 'this directory is, and a link out of the checkout would put unrelated files\' bodies '
-                    . "in a sub-agent's prompt, under whatever permissionMode they declare",
+                    'resolves to %s, %s the directory it is anchored to (%s) — a link out of that directory '
+                    . "would put unrelated files' bodies in a sub-agent's prompt, under whatever "
+                    . 'permissionMode they declare',
                     (string) realpath($dir),
                     realpath($anchor) === realpath($dir) ? 'which is exactly' : 'outside',
                     $anchor,

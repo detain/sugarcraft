@@ -93,35 +93,175 @@ final class WorktreeConfigTest extends TestCase
     // ::new() factory — config file loading
     // -------------------------------------------------------------------------
 
+    /**
+     * THE FILE THIS TEST USED TO WRITE was `<repo>/.sugar-crush/config.json`,
+     * which `git ls-files` confirms is TRACKED. It backed the bytes up and
+     * restored them in a `finally`, so an interrupted or killed run left a
+     * tracked repository file mutated — and because the monorepo's own copy sets
+     * `worktreeCleanupPeriodDays: 7`, the test also failed with "7 is identical
+     * to 21" in every sandbox that did not carry that file. Three separate
+     * sessions diagnosed that failure and one reviewer declined to run the suite
+     * in-repo because of it.
+     *
+     * The fix is the one #90(a) got: the location is an injectable seam
+     * ({@see WorktreeConfig::new()}'s `$configDir`), the production default is
+     * untouched, and the test drives a temporary tree OUTSIDE the checkout.
+     */
     public function testNewLoadsConfigFromFile(): void
     {
-        // The ::new() factory resolves config.json relative to the repo root
-        // using __DIR__ . '/../../../.sugar-crush/config.json' from src/Agents/.
-        // This test writes a temp config to that exact path, calls ::new(),
-        // then restores the original so other tests are unaffected.
-        $configPath = __DIR__ . '/../../../.sugar-crush/config.json';
-        $backup = file_exists($configPath) ? file_get_contents($configPath) : null;
+        $dir = $this->temporaryTree([
+            'worktreeCleanupPeriodDays' => 21,
+            'worktreeIncludeFile' => '.test-worktreeinclude',
+        ]);
 
-        try {
-            file_put_contents(
-                $configPath,
-                json_encode([
-                    'worktreeCleanupPeriodDays' => 21,
-                    'worktreeIncludeFile' => '.test-worktreeinclude',
-                ]),
-            );
+        $config = WorktreeConfig::new(configDir: $dir);
 
-            $config = WorktreeConfig::new();
+        $this->assertSame(21, $config->worktreeCleanupPeriodDays);
+        $this->assertSame('.test-worktreeinclude', $config->worktreeIncludeFile);
+    }
 
-            $this->assertSame(21, $config->worktreeCleanupPeriodDays);
-            $this->assertSame('.test-worktreeinclude', $config->worktreeIncludeFile);
-        } finally {
-            if ($backup !== null) {
-                file_put_contents($configPath, $backup);
-            } else {
-                unlink($configPath);
-            }
+    /**
+     * The production default is still the directory containing the package —
+     * pinned so making the path injectable cannot quietly become making it
+     * unset.
+     */
+    public function testTheProductionDefaultIsStillThePackagesOwnParentDirectory(): void
+    {
+        $this->assertSame(
+            realpath(\dirname(__DIR__, 3)),
+            realpath(WorktreeConfig::defaultConfigDir()),
+        );
+    }
+
+    /**
+     * NOT A TIDINESS RULE. `worktreeIncludeFile` names a file whose every line
+     * {@see \SugarCraft\Crush\Agents\WorktreeManager} turns into a copy pattern,
+     * so a committed `.sugar-crush -> /elsewhere` used to choose that value from
+     * outside the tree entirely. The directory must resolve STRICTLY inside the
+     * tree it was reached from.
+     */
+    public function testAConfigDirectorySymlinkedOutOfTheTreeIsRefused(): void
+    {
+        $outside = $this->temporaryTree(['worktreeCleanupPeriodDays' => 21]);
+        $tree = $this->makeTempDir();
+        symlink($outside . '/.sugar-crush', $tree . '/.sugar-crush');
+
+        $config = WorktreeConfig::new(configDir: $tree);
+
+        $this->assertSame(7, $config->worktreeCleanupPeriodDays, 'the default, not the outside file\'s value');
+    }
+
+    /**
+     * The second boundary, which the first cannot stand in for: the directory
+     * is where it should be and `config.json` INSIDE it is the symlink out.
+     */
+    public function testAConfigFileSymlinkedOutOfTheDirectoryIsRefused(): void
+    {
+        $outside = $this->temporaryTree(['worktreeIncludeFile' => '.attacker-chosen']);
+        $tree = $this->makeTempDir();
+        mkdir($tree . '/.sugar-crush', 0o700, true);
+        symlink($outside . '/.sugar-crush/config.json', $tree . '/.sugar-crush/config.json');
+
+        $config = WorktreeConfig::new(configDir: $tree);
+
+        $this->assertSame('.worktreeinclude', $config->worktreeIncludeFile);
+    }
+
+    /** No config file at all is the defaults, not a throw. */
+    public function testAnAbsentConfigFileLeavesTheDefaultsInPlace(): void
+    {
+        $config = WorktreeConfig::new(configDir: $this->makeTempDir());
+
+        $this->assertSame(7, $config->worktreeCleanupPeriodDays);
+        $this->assertSame('.worktreeinclude', $config->worktreeIncludeFile);
+    }
+
+    /** Malformed JSON is the defaults too — the file is optional either way. */
+    public function testMalformedJsonLeavesTheDefaultsInPlace(): void
+    {
+        $tree = $this->makeTempDir();
+        mkdir($tree . '/.sugar-crush', 0o700, true);
+        file_put_contents($tree . '/.sugar-crush/config.json', '{not json');
+
+        $config = WorktreeConfig::new(configDir: $tree);
+
+        $this->assertSame(7, $config->worktreeCleanupPeriodDays);
+    }
+
+    /** Explicit arguments still win over the file's values. */
+    public function testAnExplicitArgumentOverridesTheFile(): void
+    {
+        $dir = $this->temporaryTree(['worktreeCleanupPeriodDays' => 21]);
+
+        $this->assertSame(
+            3,
+            WorktreeConfig::new(worktreeCleanupPeriodDays: 3, configDir: $dir)->worktreeCleanupPeriodDays,
+        );
+    }
+
+    /** @var list<string> */
+    private array $tempDirs = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempDirs as $dir) {
+            $this->removeTree($dir);
         }
+
+        $this->tempDirs = [];
+
+        parent::tearDown();
+    }
+
+    /** A directory OUTSIDE the checkout, removed in tearDown. */
+    private function makeTempDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/sugarcrush_worktree_config_' . uniqid('', true);
+        mkdir($dir, 0o700, true);
+        $this->tempDirs[] = $dir;
+
+        return $dir;
+    }
+
+    /**
+     * A temp directory holding `.sugar-crush/config.json` with $values.
+     *
+     * @param array<string, mixed> $values
+     */
+    private function temporaryTree(array $values): string
+    {
+        $dir = $this->makeTempDir();
+        mkdir($dir . '/.sugar-crush', 0o700, true);
+        file_put_contents($dir . '/.sugar-crush/config.json', (string) json_encode($values));
+
+        return $dir;
+    }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        // Links are unlinked, never descended into: these fixtures deliberately
+        // contain a symlink to another fixture, and following it would delete
+        // the sibling's contents through it.
+        foreach ((array) scandir($dir) as $entry) {
+            if ($entry === '.' || $entry === '..' || !is_string($entry)) {
+                continue;
+            }
+
+            $path = $dir . '/' . $entry;
+            if (is_link($path) || is_file($path)) {
+                @unlink($path);
+
+                continue;
+            }
+
+            $this->removeTree($path);
+        }
+
+        @rmdir($dir);
     }
 
     public function testConstructorWorktreeCleanupPeriodDays(): void
