@@ -7,7 +7,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+,
 
 ## Layout
 
-Per-lib skeleton (concrete example `candy-focus/`): `candy-focus/composer.json` · `candy-focus/phpunit.xml` · `candy-focus/README.md` · `candy-focus/CALIBER_LEARNINGS.md` · `candy-focus/src/` (PSR-4 `SugarCraft\Focus\`) · `candy-focus/tests/` · `candy-focus/.vhs/` · `candy-focus/examples/`. Data/codec libs vary the shape: `candy-files/` carries `candy-files/bin`, `candy-files/lang`, and `candy-files/.assets`; `candy-flip/` adds `candy-flip/bin`, `candy-flip/examples`, and `candy-flip/.assets` alongside its `.vhs`.
+Per-lib skeleton (concrete example `candy-focus/`): `candy-focus/composer.json` · `candy-focus/phpunit.xml` · `candy-focus/README.md` · `candy-focus/CALIBER_LEARNINGS.md` · `candy-focus/src/` (PSR-4 `SugarCraft\Focus\`) · `candy-focus/tests/` · `candy-focus/.vhs/` · `candy-focus/examples/`. Data/codec libs vary the shape: `candy-files/` carries `candy-files/bin`, `candy-files/lang`, and `candy-files/.assets`; `candy-flip/` adds `candy-flip/bin`, `candy-flip/examples`, and `candy-flip/.assets` alongside its `.vhs`. The `sugar-crush/` agent app extends it again: `sugar-crush/bin/`, `sugar-crush/docs/`, `sugar-crush/workflows/`, `sugar-crush/examples/workflows/`, plus a runtime config dir `.sugar-crush/` (agent presets + `config.json`).
 
 Repo-root tooling dirs: `.opencode/` (agents, commands, memory, plugins, `.opencode/ocx.jsonc`, `.opencode/opencode.jsonc`) · `.ocx/` (`.ocx/receipt.jsonc`) · `.remember/` (`.remember/now.md`, `.remember/archive.md`) · `.benchmark/` (`.benchmark/player-benchmark.php`) · `.logs/` (`.logs/subtask2.log`).
 
@@ -42,7 +42,7 @@ PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 - TUI `Model` (`candy-core/src/Model.php`): `init()` · `update(Msg): [Model, ?Cmd]` · `view()`. Side effects → `Cmd`, never `view()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`candy-pty/src/Lang.php`).
 - Slug→namespace: `candy-shine/` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`).
-- TEA test harness: `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, `Assertions::assertGoldenAnsi()`.
+- TEA test harness: `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, `Assertions::assertGoldenAnsi()`, and `LoopPin::pinStableClock()` (`candy-testing/src/LoopPin.php`) — call it from `<slug>/tests/bootstrap.php`, since ext-uv arms timers against a per-iteration cached clock and waits bounded on `Loop::get()` then fire early.
 
 ## PR workflow
 

@@ -18,8 +18,8 @@ labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 item 6 ·
-Phase 3 item 1 · Phase 4 items 3-4 · Phase 7 items 1-2 ·
-Phase 8 items 1, 2, 5, 7, 14.
+Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 7 items 1-2 ·
+Phase 8 items 1, 2, 5, 7, 12, 14.
 
 **Sequencing decision (2026-08-17, user):** remaining items are picked
 **functionality first**; security-hardening and audit-instrument work is deferred to
@@ -28,9 +28,24 @@ tightening, and mutation-register/census correctness — anything of that shape 
 surfaces mid-flight gets recorded in the worklog with its probes and picked up in a
 final hardening pass, rather than interrupting the wiring work.
 
-**Now in flight:** **Phase 4 items 1, 2, 5, 7** bundled (all commands/CLI parity,
-same dispatch/registry area). Then **Phase 5**, then Phase 6, then Phase 7 docs,
-then the hardening backlog.
+**Now in flight:** **Phase 5 "Bundle A"** — items 1 (base system prompt), 2 (the
+five tool descriptions), 3 (`dispatchSkill()` environment orientation), plus item
+10's preset-differentiation half. Chosen as the sub-bundle that is file-disjoint
+from Phase 4's area. Then **Phase 5 "Bundle B"** (items 4-7, which all need
+`src/Chat.php`/`src/Renderer.php`), then Phase 6, then Phase 7 docs, then the
+hardening backlog.
+
+**Do not parallelise Phase 5 Bundle B against anything touching `src/Chat.php` or
+`src/Renderer.php`.** The rule learned the hard way in this chain: a *suite run*
+that loads a file another lane is editing shifts `file(__FILE__)` ranges against
+already-loaded reflection and produces phantom failures. Serialise the suite runs,
+not just the writes.
+
+**The deferred security/hardening work now has a real ledger:**
+**`docs/plans/crush_code_hardening_backlog.md`** — 50 items across 6 groups, each
+carrying the probe that established it, so the end-of-plan pass starts from proof
+rather than re-discovery. Items asserted but never probed are marked UNVERIFIED.
+Per the user's rule, the *fix* is deferred but the *finding* never is.
 
 **Three Phase 4 plan claims are already refuted — do not pass them through:**
 `/help` is NOT missing (a row exists at `src/Commands/CommandRegistry.php:121`
@@ -49,6 +64,8 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
 
 | SHA | Plan item |
 |---|---|
+| `abb80cf1` | *(not a plan item)* Phase 4 worklog + the 50-item deferred-hardening ledger |
+| `38614fa9` | Phase 4 items 1, 2, 5, 7 — `/model`, `/help` becomes a command listing, `/clear`, popup hints, parser-keyed dispatch |
 | `939f8ada` | Phase 3 item 1 — draft cursor via `TextArea`; fixed `Ctrl+Backspace`/`Ctrl+Space` dying silently |
 | `3bc5d269` | *(not a plan item)* root path-repo closure completed — 4 libs were installing as upstream zips |
 | `2fa678a7` | *(not a plan item)* per-lib manifests go Packagist-only; path repos become a CI injection; 14 stale locks untracked |
@@ -64,6 +81,30 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
 | `69d58867` | *(follow-up to Phase 1 item 1)* `AgentWorkerPool::executeAll()` hang |
 | `df0a563b` | Phase 1 item 2 — permission-system consolidation |
 | `c182a309` | Phase 7 items 1 + 2 — docs site page + `ENVIRONMENT.md` |
+
+**Four items this plan lists as open are already done in the tree** (measured
+2026-08-18; the plan's own status was overstating what is left):
+
+- **Phase 8 item 12 (`Write` tool distinct from `Edit`) — DONE.**
+  `src/Tools/BuiltIn/Write.php` exists, is imported at `src/Cli/Bootstrap.php:51`,
+  constructed at `:2498`, and covered by both `tests/Tools/BuiltIn/WriteTest.php` and
+  `BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`.
+- **`TerminalBackground::observe()` — WIRED.** Reached from `src/App/App.php:496`; the
+  class's own comments at `:111`/`:127` read "Before `observe()` was wired…", i.e. past
+  tense.
+- **Phase 8 item 3 (`StallDetector`) — the call-site half is done; only the render
+  branch is left, and it is NOT blocked on Phase 1.** The item predicted "purely a
+  call-site + one render branch" and that is exactly the split.
+  `src/Sessions/BackgroundSupervisor.php` imports it (`:8`), holds it (`:46`), defaults
+  it (`:61`), tracks tokens through it (`:706`) and exposes `getStallWarnings()`
+  (`:665`); `src/Tui/AgentOutputState.php` carries `?StallWarning $stallWarning` (`:37`)
+  threaded through `fromDisplayState()` (`:52`). **Nothing paints it** —
+  `grep -rn "stall\|Stall" src/Renderer.php` has zero hits, so the warning reaches a
+  view-state object and stops. The data path runs through `BackgroundSupervisor`, not
+  `AgentManager`, so the plan's stated dependency on Phase 1 does not apply.
+- **`Agent::fromPreset()`'s dropped-field count is recorded three different ways**
+  across the plan, the worklog, and the code docblock (7 / 5 / 8-plus-2). The
+  constructor at HEAD is authoritative; see the hardening ledger.
 
 **Partially complete, do not read the ✅ as "finished":**
 
@@ -264,7 +305,7 @@ This phase is sequenced first among the wiring work because almost every other P
 
 1. ✅ **Add gutter line numbers to the diff view** (`renderDiff()`, `src/Renderer.php:1696-1723`) using the same convention `SyntaxHighlighter`'s existing `lineNumbers` param already implements for markdown fences — turn that flag on for markdown code fences too while in the area, one-line change. **(§4)** — **DONE** (`4e10360b`).
 2. ✅ **Add an in-app keybinding reference** (`/keys` or `?`) — extend the `CommandRegistry` single-source-of-truth pattern that already fixed slash-command drift to cover raw keybindings too. **(§4)** — **DONE** (lane E; `Renderer::renderKeyHelp()` paints `KeyBindingRegistry::live()` rows, so the drift the item worried about is structurally impossible rather than merely absent — verified by `KeyBindingDriftTest`. See `docs/plans/crush_code_worklog.md`).
-3. **Wire `StallDetector`** into the agent dashboard once Phase 1's `AgentManager` wiring lands — the detector itself needs no changes, purely a call-site + one render branch. **(§4, §8)**
+3. **Wire `StallDetector`** into the agent dashboard once Phase 1's `AgentManager` wiring lands — the detector itself needs no changes, purely a call-site + one render branch. **(§4, §8)** — **CALL-SITE HALF DONE, render branch outstanding, and NOT blocked on Phase 1.** `BackgroundSupervisor` already tracks through the detector (`:706`) and exposes `getStallWarnings()` (`:665`); `AgentOutputState` already carries `?StallWarning` (`:37`). Nothing paints it — zero `stall` hits in `src/Renderer.php`. The data path runs through `BackgroundSupervisor`, not `AgentManager`.
 4. **Decide the split-pane compositor's fate** (see "Flagged for consolidation review" above) — wire it to real side-by-side agent output once `AgentManager` exposes a live-output-buffer accessor, or explicitly document it as experimental/deferred the way `AgentsPane`'s dead arm already is. **(§4)**
 5. ✅ **Offer the `adaptive` theme preset** — `SprinklesTheme::adaptive()` already exists, just needs a `ShineTheme` counterpart or a special-cased pairing. **(§4)** — **DONE** (`4e10360b`).
 6. **Record VHS demos** for the permission-prompt modal, an Edit/Write diff result, and the agent dashboard — currently only one tape exists (plain markdown reply). **(§4)**
@@ -273,7 +314,7 @@ This phase is sequenced first among the wiring work because almost every other P
 9. **Fix `Grep`'s missing `InstructionFileLoader` wiring** — `Read`/`Edit`/`Glob` all surface nested `CLAUDE.md`/`AGENTS.md` on touch; `Grep` doesn't. Trivial, ~30 min. **(§6)**
 10. **Add a proactive, size-capped `git diff` to `EnvironmentBlock`** alongside its existing status/log snapshot. **(§6)**
 11. **Give `loadRoot()` monorepo-parent awareness** (or document the gap) — scoping `--root` to a sub-library today silently drops the monorepo-root `CLAUDE.md`/`AGENTS.md` from the system prompt entirely, since neither `loadRoot()` nor `loadForPath()` ever looks above `$root`. Directly relevant to running sugar-crush against its own home repo. **(§6)**
-12. **Add a `Write` tool distinct from `Edit`**, for the common "create a new file" case that `Edit::execute()` cannot do today (it requires `file_exists($path)` and a non-empty match). Near-identical scaffolding to `Edit`/`Read` — path-jail check, `file_put_contents`, a diff against empty content via `Edit`'s existing `unifiedDiff()` machinery so new-file creation gets the same diff-preview/permission-gating treatment instead of round-tripping through a `Bash` heredoc. **(§3)**
+12. ✅ **Add a `Write` tool distinct from `Edit`**, for the common "create a new file" case that `Edit::execute()` cannot do today (it requires `file_exists($path)` and a non-empty match). Near-identical scaffolding to `Edit`/`Read` — path-jail check, `file_put_contents`, a diff against empty content via `Edit`'s existing `unifiedDiff()` machinery so new-file creation gets the same diff-preview/permission-gating treatment instead of round-tripping through a `Bash` heredoc. **(§3)** — **DONE** (`src/Tools/BuiltIn/Write.php`, constructed at `src/Cli/Bootstrap.php:2498`; covered by `WriteTest.php` + a Bootstrap wiring test).
 13. **Expose sub-agent spawning as a model-callable `Task` tool** so the model can decide mid-turn to delegate, matching opencode/Claude Code, rather than requiring a user-driven command. Larger effort — depends on Phase 1's `AgentManager` wiring landing first, needs a `Tool` bridging into `AgentManager::createSubAgent()`/`AgentWorkerPool` and a decision on how the sub-agent's own tool-call stream surfaces back through `ToolStarted`/`ToolFinished`. Treat as a follow-up epic once Phase 1 ships, not a single PR. **(§3)**
 14. ✅ **Document (or unify) the two `PathJail` classes' different contracts** — `src/Agents/PathJail::jailPath()` silently trusts absolute paths (containment enforced only by the separately-called `isAllowed()`), while `src/Tools/PathJail::resolve()` enforces containment inline. Today's only caller pairs the two calls correctly, but the split invites a future caller to skip the second one. Trivial hygiene fix — rename `jailPath()` to make its unchecked nature obvious, or fold containment into it. **(§6)** — **DONE** (`9d92bb5a`+`5af648a9`).
 15. **Note (no fix proposed yet): no file-watching for externally-changed files.** `Read`/`Edit` re-read from disk on every call so there's no stale-in-memory risk, but there's also no proactive "this file changed since you last read it" signal the way Claude Code/opencode have — nothing stops `Edit` from clobbering an external change made between a `Read` and a later `Edit` in the same turn sequence. None of the 13 angle reports sketched a concrete fix for this one; flagging it here as a known gap worth scoping separately rather than folding a half-considered design into this plan. **(§6)**

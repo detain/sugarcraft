@@ -12,4 +12,5 @@ paths:
 - `candy-query` DB is async on the loop: `react/mysql` + `voryx/pgasync` (NOT amphp). `Cmd::promise` takes no trailing `()`.
 - `Database::query()` returns `array|null` — `null` signals a reconnectable error (2002/2003/2013); guard before iterating.
 - Subscriptions pump is on by default: `candy-core` `Program` calls `model->subscriptions()` — required for `candy-query` admin polling.
+- Timer deadlines under `ExtUvLoop` come from a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue when the loop next runs — the analysis lives on `candy-core/src/Program.php`; test suites pin `StreamSelectLoop` via `\SugarCraft\Testing\LoopPin::pinStableClock()`.
 - External CLIs go through an arg-array to `proc_open`, never a shell string; pass every flag via `escapeshellarg((string)($field ?? ''))`, blank included.

@@ -21,7 +21,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 
 Reference `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need a `require` entry ONLY — no `repositories[]` block in a lib manifest (a published lib's `../<dep>` path repo is a hard fatal in a split-repo clone). CI injects the closure before each install; the root manifest keeps its own.
 
-PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`.
+PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`. Libs whose suites arm timers on the shared ReactPHP loop point `bootstrap` at `tests/bootstrap.php` instead (`candy-async`, `candy-mosaic`, `candy-pty`, `candy-testing`, `sugar-crush`).
 
 ## Code conventions
 
@@ -33,7 +33,7 @@ PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning=
 
 ## Tests
 
-PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR), cell-grid (`SugarCraft\Vt\Terminal`), behaviour (`update()` → `[Model,?Cmd]`), coercion (clamp edge cases). Stream-write: slice deltas with `ftell`/`fseek`/`stream_get_contents`, never `ftruncate;rewind;` (canonical `candy-core/tests/RendererTest.php`). FFI tests gate on `requirePtySyscalls()`. `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, golden-file + tape-recorder helpers for TEA programs.
+PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR), cell-grid (`SugarCraft\Vt\Terminal`), behaviour (`update()` → `[Model,?Cmd]`), coercion (clamp edge cases). Stream-write: slice deltas with `ftell`/`fseek`/`stream_get_contents`, never `ftruncate;rewind;` (canonical `candy-core/tests/RendererTest.php`). FFI tests gate on `requirePtySyscalls()`. `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, golden-file + tape-recorder helpers for TEA programs, and `LoopPin::pinStableClock()` (`candy-testing/src/LoopPin.php`) — call it from `<slug>/tests/bootstrap.php` whenever a suite bounds waits with timers on `Loop::get()`: under ext-uv deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue, while `StreamSelectLoop` refreshes at arm time.
 
 **Façade = alias smoke-test only.** A façade lib that re-exports a canonical class via `class_alias` (e.g. `sugar-bits`/`sugar-prompt` → `SugarCraft\Forms\*`, `candy-lister`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`) must NOT copy the canonical lib's full test suite under its own namespace — that re-tests identical code and drifts. Ship ONE `AliasesTest`/`AliasResolutionTest` asserting each alias symbol resolves to its canonical FQN, plus tests only for genuinely lib-local behaviour the façade adds. (See #1275/#1312/#1314 which deleted ~4300 LOC of duplicated façade tests.)
 
