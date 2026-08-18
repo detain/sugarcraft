@@ -141,8 +141,8 @@ curl -sN https://api.anthropic.com/v1/messages \
 Three ways to get off the offline `EchoProvider`, from quickest to most permanent:
 
 1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is the project's own dev/test SGLang endpoint (declared in `.sugar-crush/config.dev.json`, checked into the repo), useful for trying a real (if smaller) model with zero API keys.
-2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. **Switch theme** works the same way for color themes.
-3. **Persisted across restarts:** either of the above choices made via the palette is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD` still take priority over the persisted choice when set, for scripting/CI overrides.
+2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it. **Switch theme** works the same way for color themes.
+3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD` still take priority over the persisted choice when set, for scripting/CI overrides.
 
 ## Using the TUI
 
@@ -156,7 +156,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 |-----|------|
 | `?` (blank input) | Show the in-app keyboard reference. Blank means `trim()`-empty, i.e. empty or made only of the six bytes `trim()` strips — space, tab, newline, carriage return, `NUL` and vertical tab. Not the same as "whitespace-only", in both directions: a line of non-breaking spaces (`U+00A0`), ideographic spaces (`U+3000`) or a form feed is *not* blank, so `?` types a character there, while `NUL` **is** blank without being whitespace. Only two of those six bytes can be typed — space, and `NUL` via `Ctrl`+`Space`. A newline draft is *composed*, with `Alt`+`Enter` (or `Shift`+`Enter` / `Ctrl`+`Enter`, on terminals that report those distinguishably). The other three (tab, carriage return, vertical tab) have no key at all, and no route you can exercise on purpose: sending a message never puts one in your history either, because `Enter` trims the draft before it is sent. They reach the input box exactly one way — **`/rewind` to a checkpoint whose transcript contains a tool result.** Restoring a checkpoint revives every non-`assistant` row as a `user` message with its content unchanged, and a tool row's output is full of tabs; `↑` then recalls that revived message verbatim. That is the whole mechanism, and it is the only one: after a `/rewind` a draft can hold a byte no key emits. Same for the form feed in the non-blank list above — `Ctrl`+`L` types the letter `l`, not `U+000C`. The draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
 | `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on a blank line would otherwise make one impossible. Works after leading whitespace too: `␣??` leaves `␣?` |
-| `/keys`, `/help` | The same reference, by **name**: typing `/k` or `/h` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`, `␣␣/help␣␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works |
+| `/keys` | The same reference, by **name**: typing `/k` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. (`/help` was a second spelling of this and is now the **slash-command list** instead.) It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works |
 | `Enter` | Send |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker |
@@ -206,15 +206,41 @@ discriminated so a text-selection drag does not fire the zone underneath it.
 
 ### Slash commands
 
-`/agents` `/agent` `/bg` `/background` `/fork` `/branch` `/compact` `/mcp`
-`/memory` `/rename` `/rewind` `/sessions` `/share` `/theme` `/websearch`
-`/workflow` `/exit` (`/quit`) — plus any **file-based custom command** found on
-disk.
-Typing `/` opens a live popup of the matches.
+`/agents` (`/agent`) `/bg` (`/background`) `/clear` `/compact` `/fork`
+`/branch` `/help` `/keys` `/mcp` `/memory` `/model` `/rename` `/rewind`
+`/sessions` `/share` `/theme` `/websearch` `/workflow` `/exit` (`/quit`).
 
-**New session**, **Switch model** and **Open docs** are palette-only actions
-(`Ctrl+P`) — they have no slash spelling, so `CommandRegistry` keeps them out
-of the `/` popup.
+The parenthesised spellings are aliases: they dispatch, but they have no
+`CommandRegistry` row of their own, so no surface advertises them.
+
+Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
+(`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each
+command's **argument hint** (`/rename <name>`) — fitting the whole row to the
+terminal rather than letting it run off the edge: the description gives up
+columns first, then the hint, and the name (the row's identity) last.
+
+`/help` lists every command the registry advertises, with its argument hint —
+that is the list above without the three aliases: `/agents`, `/bg` and `/exit`
+appear, `/agent`, `/background` and `/quit` do not.
+`tests/Commands/SlashDispatchTest.php` fails if a fourth unadvertised alias
+turns up without a reason written next to it. `/model` on its own opens the
+same provider picker `Ctrl+P` → **Switch model** opens; `/model <provider>`
+switches straight to one, and an unknown name says so in the transcript instead
+of failing silently. `/clear` empties the transcript and **keeps** the session —
+its id, its name on disk and its checkpoints all survive, so `/rewind` still
+reaches the turns it cleared. That is the opposite trade to **New session**,
+which mints a fresh id and leaves the conversation where it was.
+
+**New session** and **Open docs** are palette-only actions (`Ctrl+P`) — they
+have no slash spelling, so `CommandRegistry` keeps them out of the `/` popup and
+`tests/Commands/SlashDispatchTest.php` fails if a row gains a popup entry
+without gaining a dispatch handler.
+
+**File-based custom commands** (`.sugar-crush/commands/*.md`) are LOADABLE, not
+loaded: `Commands\CommandLoader` parses them and understands
+`description`/`argument-hint`/`model`/`subtask` frontmatter, but nothing in
+`src/` or `bin/` constructs a loader, so no such file is read at runtime and
+nothing dispatches one — a dormant seam, not a shipped feature.
 
 `/bg` really does run the work: it dispatches onto a `BackgroundSupervisor`
 that `bin/sugarcrush` constructs per launch, and the result comes back into

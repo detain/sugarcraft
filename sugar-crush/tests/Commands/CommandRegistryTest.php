@@ -74,13 +74,100 @@ final class CommandRegistryTest extends TestCase
     {
         $slashNames = self::names(CommandRegistry::slashCommands());
 
-        // These three have no "/name" branch in Chat::submit(), so advertising
+        // These two have no "/name" branch in Chat::submit(), so advertising
         // them in the "/" popup would offer a command that does nothing.
-        foreach (['new', 'model', 'docs'] as $paletteOnly) {
+        // `model` used to be a third: crush_code.md Phase 4 item 1 gave it a
+        // real branch, so it is now listed, and
+        // SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()
+        // is what holds this list and the dispatch together from now on -
+        // moving a row into the popup without a handler reds THAT test, which
+        // is the check this one could never be.
+        foreach (['new', 'docs'] as $paletteOnly) {
             $this->assertNotContains($paletteOnly, $slashNames);
         }
+        $this->assertContains('model', $slashNames);
 
         $this->assertSame($slashNames, self::names(CommandRegistry::filter('')));
+    }
+
+    /**
+     * The two lists {@see CommandRegistry::filter()} and
+     * {@see CommandRegistry::filterMatchResults()} return are one list, not two
+     * that agree by inspection: `filter()` is `array_map` over the other one.
+     * Asserted because the popup pairs row N of the first with row N of the
+     * second when it highlights (crush_code.md Phase 4 item 5), and a pairing
+     * by index is only safe while the lengths and the order are the same.
+     */
+    public function testMatchResultsLineUpWithTheSpecsRowForRow(): void
+    {
+        foreach (['', 'r', 're', 'rwd', 'm', 'zzz'] as $prefix) {
+            $specs = CommandRegistry::filter($prefix);
+            $results = CommandRegistry::filterMatchResults($prefix);
+
+            $this->assertSame(
+                self::names($specs),
+                array_map(static fn($result): string => $result->haystack, $results),
+                "filter({$prefix}) and filterMatchResults({$prefix}) must be the same rows in the same order",
+            );
+        }
+    }
+
+    /**
+     * `filter()` rebuilds its specs by keying `slashCommands()` on NAME
+     * (`$byName[$spec->name]`) and looking each `MatchResult` haystack up in
+     * that map, which is only equivalent to the row list while names are
+     * unique. They are - and this is the assertion that keeps it that way.
+     *
+     * Without it the drift is invisible: two rows sharing a name would make
+     * `filter()` return the LATER spec twice while `filterMatchResults()` kept
+     * both rows, and
+     * {@see testMatchResultsLineUpWithTheSpecsRowForRow()} would not notice,
+     * because both sides of that comparison are haystack names and both would
+     * read the same.
+     */
+    public function testCommandNamesAreUniqueBecauseFilterKeysOnThem(): void
+    {
+        $names = self::names(CommandRegistry::all());
+
+        $this->assertSame(
+            array_values(array_unique($names)),
+            $names,
+            'two rows with the same name would make CommandRegistry::filter() return one of them twice',
+        );
+    }
+
+    /**
+     * A bare "/" carries no matched characters, so the popup paints plain names
+     * rather than one fully-highlighted row per advertised command - the same
+     * contract the Ctrl+P palette's empty query has, and the reason Highlighter
+     * no-ops there.
+     *
+     * The row count is derived from the registry below rather than written into
+     * this sentence: a command count in a docblock or a test literal is exactly
+     * the number that goes stale the next time a row is added, which is the rule
+     * `handleHelpCommand()` states and the literal that used to stand here
+     * ("19") broke.
+     */
+    public function testAnEmptyPrefixYieldsIndexLessMatchResults(): void
+    {
+        $results = CommandRegistry::filterMatchResults('');
+
+        $this->assertCount(
+            count(CommandRegistry::slashCommands()),
+            $results,
+            'fixture: the empty prefix lists every slash command, whatever there is now',
+        );
+        // assertSame([], …) and assertTrue(isEmpty()) are one assertion, not
+        // two: MatchResult::isEmpty() IS `matchedIndices === []`, so the second
+        // could never fail once the first passed. Kept the one that names the
+        // row it is talking about in its message.
+        foreach ($results as $result) {
+            $this->assertSame([], $result->matchedIndices, "/{$result->haystack} must carry no matched indices");
+        }
+
+        // And a typed prefix does carry them, so the assertion above is about
+        // the empty prefix rather than about the seam always being empty.
+        $this->assertSame([0, 1], CommandRegistry::filterMatchResults('re')[0]->matchedIndices);
     }
 
     public function testMcpIsAdvertisedInTheSlashPopup(): void

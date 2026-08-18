@@ -498,10 +498,182 @@ final class RendererTest extends TestCase
     {
         $out = Renderer::render($this->chat(buf: '/re'));
 
-        $this->assertStringContainsString('▸ /rename', $out);
-        $this->assertStringContainsString('/rewind', $out);
+        // ANSI-stripped, because the typed "re" now carries its own SGR run
+        // inside the row (crush_code.md Phase 4 item 5), so "▸ /rename" is no
+        // longer contiguous in the raw bytes. The marker and the row are still
+        // what is being asserted - see
+        // testSlashMenuHighlightsTheMatchedRunOfTheTypedPrefix() for the SGR.
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+
+        $this->assertStringContainsString('▸ /rename', $plain);
+        $this->assertStringContainsString('/rewind', $plain);
         // The unselected row is present but not marked as selected.
-        $this->assertStringNotContainsString('▸ /rewind', $out);
+        $this->assertStringNotContainsString('▸ /rewind', $plain);
+    }
+
+    /**
+     * Phase 4 item 5: the "/" popup highlights the run the user typed, through
+     * the same {@see \SugarCraft\Fuzzy\Highlighter} the Ctrl+P palette uses -
+     * before this it was the one of the two command surfaces that could not,
+     * because {@see \SugarCraft\Crush\Commands\CommandRegistry::filter()}
+     * discarded the matcher's indices.
+     *
+     * Mirrors testPaletteHighlightsTheMatchedRunOfATypedQuery() deliberately:
+     * the two surfaces should be asserted the same way, since the point of the
+     * change is that they now share the mechanism.
+     */
+    public function testSlashMenuHighlightsTheMatchedRunOfTheTypedPrefix(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/re'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains((string) preg_replace('/\x1b\[[0-9;]*m/', '', $line), '/rename')) {
+                $row = $line;
+            }
+        }
+
+        $this->assertNotSame('', $row, 'the matching popup row was not rendered');
+        // "/" then an underline-bearing SGR then "re": the typed prefix is its
+        // own styled run, and the "name" after it is not part of it.
+        $this->assertMatchesRegularExpression('/\/\x1b\[[0-9;]*4[;m][^m]*m?re/', $row);
+        // …re<reset><row-style>name… — the row style is re-opened behind the
+        // run's full reset, or everything after the match would render in the
+        // terminal's default colour.
+        $this->assertMatchesRegularExpression('/re\x1b\[0m(\x1b\[[0-9;]*m)+name/', $row);
+    }
+
+    /**
+     * A bare "/" lists every command with nothing typed, so nothing is
+     * highlighted - the index-less MatchResults Highlighter no-ops on. Without
+     * this, "highlight the matched run" would be satisfiable by highlighting
+     * the whole name every time.
+     */
+    public function testSlashMenuHighlightsNothingWhenNothingIsTypedYet(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains((string) preg_replace('/\x1b\[[0-9;]*m/', '', $line), '/sessions')) {
+                $row = $line;
+            }
+        }
+
+        $this->assertNotSame('', $row, 'the bare "/" popup was not rendered');
+        $this->assertStringContainsString('▸ /sessions', $row, 'so the row itself carries no inner SGR at all');
+    }
+
+    /**
+     * Phase 4 item 5: `CommandSpec::$argumentHint` was parsed, stored on the
+     * built-in rows that take arguments, and read by NOTHING - so "/rename" gave
+     * no clue that it wants a name. The popup shows it now.
+     */
+    public function testSlashMenuShowsTheArgumentHint(): void
+    {
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/re')));
+
+        $this->assertStringContainsString('/rename <name> — Rename the current session', $plain);
+        // …and a row with no hint gains no stray spacing from the feature.
+        $this->assertStringContainsString('/rewind — Restore chat state', $plain);
+    }
+
+    /**
+     * The width half of Phase 4 item 5, and the reason the hint is what gets
+     * cut before the name: three different widths are involved here and every
+     * one of them is `/websearch`'s, so each is named with the domain it is
+     * true of - all measured with `Width::string()` over
+     * `CommandRegistry::all()`, never `strlen()`:
+     *
+     * - its HINT ALONE is 58 columns,
+     * - its popup head `/name <hint>` is 69,
+     * - its `  /name <hint>` column in the `/help` listing is 71 (Chat's
+     *   domain, not this one - {@see SlashDispatchTest} pins that side).
+     *
+     * An untruncated hint therefore pushes the row past the terminal, and
+     * {@see Renderer::render()} paints one logical line per physical row, which
+     * is the row-collision bug the frame clip exists to prevent.
+     *
+     * Asserted at SEVEN widths, and by exact row rather than by a width bound,
+     * for two reasons a looser test got wrong before:
+     *
+     * - A bound six columns clear of the boundary (the old
+     *   `assertLessThanOrEqual(60, …)` against an actual 54) cannot see a
+     *   one-column budget error. Dropping the `- 1`
+     *   {@see Renderer::fitSlashMenuHint()} spends on the hint's leading space
+     *   moves a column from the description to the hint, which no width
+     *   assertion can catch now that the row as a whole is fitted - only the
+     *   exact row can.
+     * - The 40-column row was MEASURED and then not asserted, at exactly the
+     *   width where it was wrong: the row was 45 columns wide (stripped, marker
+     *   included) inside a 40-, 30- OR 20-column terminal, because nothing
+     *   clipped the description. Every width collected below is asserted.
+     *
+     * The BOX width (`Width::string()` of the row with its border and padding)
+     * is the invariant that matters for collision, and it is asserted against
+     * the terminal at every width. It is not `assertLessThanOrEqual($cols)` for
+     * the WHOLE frame because the status bar is separately over-wide at narrow
+     * terminals - 54 columns at any width below that, measured, pre-existing,
+     * and nothing to do with this popup.
+     */
+    public function testSlashMenuFitsTheWholeRowNotJustTheHint(): void
+    {
+        // The popup box, and the box only: the input box below it also contains
+        // the '/websearch' draft, so the "▸" marker is what identifies the row.
+        $expected = [
+            20 => '▸ /websearch …',
+            30 => '▸ /websearch — Sear…',
+            40 => '▸ /websearch — Search the web…',
+            60 => '▸ /websearch <query>… — Search the web via SearXNG',
+            80 => '▸ /websearch <query> [--safesearch 0|1|2… — Search the web via SearXNG',
+            100 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|… — Search the web via SearXNG',
+            120 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|year] — Search the web via SearXNG',
+        ];
+
+        foreach ($expected as $cols => $row) {
+            $out = Renderer::render(
+                (new Chat(history: [Message::user('hi')], inputBuf: '/websearch'))->withSize($cols, 30)
+            );
+
+            $box = 0;
+            $found = null;
+            foreach (explode("\n", $out) as $line) {
+                $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+                if (str_contains($plain, '▸ /websearch')) {
+                    $box = Width::string($plain);
+                    // stripBox()'s /u regex rather than trim(): trim()'s
+                    // charlist is byte-based, and "│" and "▸" share a leading
+                    // 0xE2 byte, so trimming the border eats the marker's
+                    // first byte and the row stops being valid UTF-8.
+                    $found = self::stripBox($plain);
+                }
+            }
+
+            $this->assertNotNull($found, "the \"/\" popup was not rendered at {$cols} columns");
+            $this->assertSame($row, $found, "the popup row at {$cols} columns");
+            $this->assertLessThanOrEqual(
+                $cols,
+                $box,
+                "the popup box (border and padding included) must fit a {$cols}-column terminal, "
+                . 'or render() paints it over the row below',
+            );
+        }
+
+        // The three claims the exact rows above encode, said out loud so a
+        // future edit to a description reads as a description change rather
+        // than as a width regression.
+        $this->assertStringContainsString(
+            '/websearch <query> [--safesearch 0|1|2] [--time-range day|month|year] — Search',
+            $expected[120],
+            'at 120 columns the whole hint fits',
+        );
+        $this->assertStringContainsString('…', $expected[60], 'at 60 the hint is truncated, not dropped');
+        $this->assertStringNotContainsString('month', $expected[60]);
+        $this->assertStringNotContainsString(
+            '<query>',
+            $expected[40],
+            'at 40 there is no room for a hint at all, so the description gets every column the name leaves',
+        );
     }
 
     public function testSlashMenuNotRenderedOnceArgumentsStart(): void

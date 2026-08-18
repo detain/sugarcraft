@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Palette\PaletteAction;
+use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
@@ -17,9 +18,16 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  *
  * Adding a row here still does not wire a command up - it only makes an
  * already-dispatched command discoverable/autocompletable. See
- * `Chat::submit()`'s own `str_starts_with()` chain for the actual dispatch,
- * and note that rows flagged `slashVisible: false` are ones that chain has
- * no branch for (they are reachable only through the palette).
+ * `Chat::submit()`'s own name-keyed dispatch for the actual behaviour, and
+ * note that rows flagged `slashVisible: false` are ones that dispatch has no
+ * branch for (they are reachable only through the palette).
+ *
+ * That gap is no longer left to a reader to notice: `Commands\SlashDispatchTest`'s
+ * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits `/name`
+ * for every visible row through the real `Chat::update()` and fails when the
+ * turn goes to the MODEL instead of to a handler, so a row added here with no
+ * dispatch branch reds the suite rather than shipping a command that does
+ * nothing.
  */
 final class CommandRegistry
 {
@@ -52,7 +60,11 @@ final class CommandRegistry
                 'Model',
                 paletteAction: PaletteAction::SwitchModel,
                 paletteLabel: 'Switch model',
-                slashVisible: false,
+                // Optional, and the two forms do different things: bare
+                // `/model` opens the same provider list Ctrl+P's Switch Model
+                // opens, `/model <provider>` switches straight to that one.
+                // See Chat::handleModelCommand().
+                argumentHint: '[provider]',
             ),
             CommandSpec::new(
                 'share',
@@ -106,20 +118,21 @@ final class CommandRegistry
             // row carries no paletteAction, so a $shortcut here would be data
             // no surface shows.
             CommandSpec::new('keys', 'Show the keyboard shortcut reference (or press ?)', 'App'),
-            // `/help` is a SECOND row rather than an alias field because this
-            // registry is what both discovery surfaces read: Chat::submit()
-            // matches '/keys' and '/help' in the same arm, so a registry that
-            // knew only one of them left the spelling most other CLIs use
-            // working when typed in full and invisible in the "/" popup — the
-            // exact drift this class exists to close, one level down.
-            //
-            // The behaviour is what justifies the row; README.md's key table
-            // names both spellings too, but a doc file is not what makes this
-            // necessary and the first version of this comment cited it as
-            // though it were — while the row it cited had been assigned to
-            // another lane and was not in the same commit.
-            CommandSpec::new('help', 'Show the keyboard shortcut reference (same as /keys)', 'App'),
+            // `/help` used to be a second spelling of `/keys` - both arms of
+            // one `Chat::submit()` branch, both opening the keybinding
+            // reference. It now lists the COMMANDS instead, which is what
+            // `/help` means in every other CLI, and leaves the keyboard to
+            // `/keys` and `?`. The row stayed rather than being deleted: it was
+            // already the discoverable spelling, and the two surfaces this
+            // registry feeds are exactly where a rename would have gone
+            // unnoticed.
+            CommandSpec::new('help', 'List every slash command', 'App'),
             CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
+            // Deliberately NOT `/new`: this wipes the transcript and keeps the
+            // session id, so the session file on disk keeps accumulating the
+            // same conversation's checkpoints. `Chat::handleClearCommand()`
+            // enumerates exactly what it does and does not touch.
+            CommandSpec::new('clear', 'Clear the transcript, keeping this session', 'Session'),
             CommandSpec::new('workflow', 'Run, pause, resume, or inspect a workflow', 'Workflow'),
             CommandSpec::new('memory', 'Add, list, search, edit, or clear memory entries', 'Memory'),
             CommandSpec::new('branch', 'Fork the current session into a new branch', 'Session'),
@@ -184,23 +197,62 @@ final class CommandRegistry
      * surfaces "/rewind" instead of nothing. An empty prefix (bare "/")
      * returns every slash command in declared order.
      *
+     * DERIVED from {@see filterMatchResults()} rather than filtering in
+     * parallel with it, for the reason {@see \SugarCraft\Crush\Chat::paletteMatches()}
+     * is derived from `paletteMatchResults()`: two filters over the same rows
+     * are two rows-and-indices lists that can fall out of step, and the "/"
+     * popup pairs a spec with its matched-character indices on every row it
+     * paints.
+     *
      * @return list<CommandSpec>
      */
     public static function filter(string $prefix): array
     {
-        $commands = self::slashCommands();
-        if ($prefix === '') {
-            return $commands;
-        }
-
+        // Keyed on NAME, which is only equivalent to the row list while names
+        // are unique: two rows sharing one would return the later spec twice
+        // while filterMatchResults() kept both rows, and the row-for-row test
+        // could not see it (both sides of that comparison are names). Pinned by
+        // `CommandRegistryTest::testCommandNamesAreUniqueBecauseFilterKeysOnThem()`.
         $byName = [];
-        foreach ($commands as $spec) {
+        foreach (self::slashCommands() as $spec) {
             $byName[$spec->name] = $spec;
         }
 
+        return array_values(array_map(
+            static fn(MatchResult $result): CommandSpec => $byName[$result->haystack],
+            self::filterMatchResults($prefix),
+        ));
+    }
+
+    /**
+     * {@see filter()}'s rows with their matched-character indices kept, in the
+     * SAME order - the spec list is just this list's haystacks looked up by
+     * name (crush_code.md Phase 4 item 5: the indices used to be discarded
+     * here, so {@see \SugarCraft\Crush\Renderer::renderSlashMenu()} had
+     * nothing to highlight with while the Ctrl+P palette beside it did).
+     *
+     * An empty prefix yields index-less results, exactly as the palette's
+     * empty query does - {@see \SugarCraft\Fuzzy\Highlighter} no-ops on
+     * those, so bare "/" paints unstyled names rather than fully-highlighted
+     * ones.
+     *
+     * @return list<MatchResult>
+     */
+    public static function filterMatchResults(string $prefix): array
+    {
+        $commands = self::slashCommands();
+        if ($prefix === '') {
+            return array_map(
+                static fn(CommandSpec $spec): MatchResult => new MatchResult('', $spec->name, 0, []),
+                $commands,
+            );
+        }
+
+        $names = array_map(static fn(CommandSpec $spec): string => $spec->name, $commands);
+
         $length = mb_strlen($prefix);
         $matches = [];
-        foreach ((new SmithWatermanMatcher())->matchAll($prefix, array_keys($byName)) as $result) {
+        foreach ((new SmithWatermanMatcher())->matchAll($prefix, $names) as $result) {
             // matchAll() is a LOCAL alignment: it happily reports a partial
             // hit (query "re" scores against "agents" on the "e" alone), which
             // would leave the popup listing every command. Keep only rows
@@ -212,7 +264,7 @@ final class CommandRegistry
                 continue;
             }
 
-            $matches[] = $byName[$result->haystack];
+            $matches[] = $result;
         }
 
         return $matches;

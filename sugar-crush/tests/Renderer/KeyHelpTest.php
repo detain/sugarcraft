@@ -30,6 +30,7 @@ use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Renderer;
+use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Tui\SessionPicker;
 
 /**
@@ -99,23 +100,62 @@ final class KeyHelpTest extends TestCase
         $this->assertSame([], array_slice($next->history, 2), 'and must not be sent to the model');
     }
 
-    public function testSlashHelpIsAcceptedAsAnAlias(): void
+    /**
+     * `/help` was a SECOND SPELLING of `/keys` — same arm, same reference —
+     * until crush_code.md Phase 4 item 2 gave it the meaning it has in every
+     * other CLI: the command list. This is the pin on the split, and it is
+     * asserted in both directions, because "no longer an alias" is satisfiable
+     * by `/help` doing nothing at all.
+     *
+     * The keyboard reference keeps `/keys` and `?`, and the popup keeps a row
+     * for both spellings — see {@see testTheSlashPopupListsHelpToo()}.
+     */
+    public function testSlashHelpNoLongerOpensTheKeyboardReference(): void
     {
         [$next] = $this->chat('/help')->update(new KeyMsg(KeyType::Enter));
 
-        $this->assertSame(0, $next->keyHelp());
+        $this->assertNull($next->keyHelp(), '/help must not open the keybinding reference any more');
+        $this->assertSame('', $next->inputBuf, 'but it IS a command, so it clears the draft');
+
+        $added = array_slice($next->history, 2);
+        $this->assertCount(1, $added, 'and answers locally rather than going to the model');
+        $this->assertSame(Role::Assistant, $added[0]->role);
+
+        // The command LIST, and specifically the registry's own rows with their
+        // argument hints — not a hand-written blurb that happens to mention a
+        // command or two.
+        foreach (CommandRegistry::slashCommands() as $spec) {
+            $this->assertStringContainsString('/' . $spec->name, $added[0]->content, "/{$spec->name} must be listed");
+            if ($spec->argumentHint !== null) {
+                $this->assertStringContainsString(
+                    $spec->argumentHint,
+                    $added[0]->content,
+                    "/{$spec->name}'s argument hint must be listed",
+                );
+            }
+        }
+
+        // And it points at the screen it used to BE, so the split does not lose
+        // the discoverability the alias was added for.
+        $this->assertStringContainsString('/keys', $added[0]->content);
     }
 
     /**
-     * "/help me name this variable" is a prompt, not a request for the
-     * shortcut list — which is why the two spellings match exactly rather
-     * than by prefix like the argument-taking commands.
+     * "/help me name this variable" is a prompt, not a request for the command
+     * list — which is why `/help` matches exactly rather than by prefix like
+     * the argument-taking commands. Held over from when `/help` opened the
+     * keyboard reference; the guard it pins is the same one.
      */
     public function testAPromptThatMerelyStartsWithHelpIsStillAPrompt(): void
     {
         [$next] = $this->chat('/help me name this variable')->update(new KeyMsg(KeyType::Enter));
 
         $this->assertNull($next->keyHelp());
+        $this->assertContains(
+            '/help me name this variable',
+            self::contents($next),
+            'it goes to the model as a prompt',
+        );
     }
 
     /**
@@ -228,19 +268,21 @@ final class KeyHelpTest extends TestCase
      *    SAME predicate as route 1, so asserting that routes 1 and 2 agree is a
      *    restatement of the two guards and not evidence the corpus supplies —
      *    said plainly because a previous round counted it as the latter;
-     * 3. `D` SUBMITTED as it stands — opens iff `trim(D)` is exactly `/keys` or
-     *    `/help`. This route CAN disagree with route 1, and does: the blank
-     *    drafts, where `?` opens and `Enter` sends nothing, and the ones that ARE
-     *    the command modulo whitespace (`'/keys'`, `' /keys'`, `'/keys '`,
-     *    `"\t/keys"`, `"\n/keys"`, `"\0/keys"`, `"/keys\n"`, `'/help'`,
-     *    `'  /help  '`, `"\n/help"`), where `Enter` opens the reference and `?`
-     *    types a character.
+     * 3. `D` SUBMITTED as it stands — opens iff `trim(D)` is exactly `/keys`. This
+     *    route CAN disagree with route 1, and does: the blank drafts, where `?`
+     *    opens and `Enter` sends nothing, and the ones that ARE the command
+     *    modulo whitespace (`'/keys'`, `' /keys'`, `'/keys '`, `"\t/keys"`,
+     *    `"\n/keys"`, `"\0/keys"`, `"/keys\n"`), where `Enter` opens the
+     *    reference and `?` types a character. The `/help`-shaped drafts were in
+     *    that list until Phase 4 item 2 split `/help` off `/keys`; they are still
+     *    driven, and now assert the reference does not open while the COMMAND
+     *    still runs.
      *
      * Routes 1 and 3 are COMPLEMENTARY, not equivalent — and that is FORCED by the
      * two guards rather than measured here, which is the correction this revision
      * owes the previous one's subject line ("the corpus can finally say so"). `?`
      * opens iff `trim(D) === ''`; a submitted draft opens iff
-     * `trim(D) ∈ {'/keys', '/help'}`; those sets are disjoint by the definition of
+     * `trim(D) === '/keys'`; those sets are disjoint by the definition of
      * `trim`. So NO draft can exhibit "both open", and no corpus — this one
      * included — could ever exhibit one. The set asserted at the foot of this
      * method is therefore a CLOSED-WORLD RECORD of which of ITS OWN members
@@ -261,8 +303,10 @@ final class KeyHelpTest extends TestCase
      *    ones) open it by neither of those routes, and `?` is typed as a
      *    character — widening the arm to unconditional, or to `str_contains`-style
      *    sloppiness, reds this;
-     * 3. and route 3's opening set is exactly `trim(D) ∈ {/keys, /help}`, with
-     *    the disagreement against route 1 spelled out rather than denied.
+     * 3. and route 3's opening set is exactly `trim(D) === '/keys'`, with the
+     *    disagreement against route 1 spelled out rather than denied — and the
+     *    `/help`-shaped drafts assert the OTHER command they now reach, so the
+     *    set shrinking cannot be mistaken for the drafts being dropped.
      *
      * Four things about the corpus itself, every one of which used to be asserted
      * by nothing:
@@ -291,7 +335,9 @@ final class KeyHelpTest extends TestCase
      *     `"\0/keys"`, `"/keys\n"` and `"\n/help"` are pure keystrokes; the
      *     growth rule this docblock states ("the corpus grows into it whenever a
      *     further member of that class is found reachable") was applied to the
-     *     blank half in the previous round and not to this one.
+     *     blank half in an earlier round and not to this one. The `/help` members
+     *     remain reachable and remain driven; they simply reach a different
+     *     command now.
      *   * RECALLED — `update()`'s Up arm, which copies
      *     `lastUserMessageContent()` in verbatim and types no rune at all. This is
      *     the route that reaches `"\t"`, `" \t "`, `"\t/keys"` and `"\u{000C}"`,
@@ -459,7 +505,14 @@ final class KeyHelpTest extends TestCase
 
         foreach ([...$blank, ...$nonBlank] as $draft) {
             $shouldOpen = in_array($draft, $blank, true);
-            $isCommand = in_array(trim($draft), ['/keys', '/help'], true);
+            // `/keys` ALONE since Phase 4 item 2 split `/help` off it. The
+            // `/help`-shaped drafts stayed in the corpus rather than being
+            // deleted with the alias: they are now the members that prove the
+            // reference does NOT open on a draft that is still a command, which
+            // is a stronger row than the one they used to be. What `/help` does
+            // instead is asserted below, in the same loop.
+            $isCommand = trim($draft) === '/keys';
+            $isHelpCommand = trim($draft) === '/help';
             $show = var_export($draft, true);
 
             foreach ([false, true] as $spaceAsSpaceKey) {
@@ -500,6 +553,22 @@ final class KeyHelpTest extends TestCase
                     $disagreesOnSubmit[$draft] = true;
                 }
 
+                // The other side of the split: a `/help`-shaped draft is still
+                // a COMMAND, it just answers with the command list instead of
+                // the keyboard reference. Without this, "the reference does not
+                // open" would be equally satisfied by `/help` having been
+                // deleted, or by it being sent to the model as prose.
+                if ($isHelpCommand) {
+                    $added = array_slice($viaSubmittedDraft->history, count($chat->history));
+                    $this->assertCount(1, $added, "{$show} must answer locally, not go to the model");
+                    $this->assertSame(Role::Assistant, $added[0]->role, "{$show} answers in the transcript");
+                    $this->assertStringContainsString(
+                        'Slash commands',
+                        $added[0]->content,
+                        "{$show} lists the commands",
+                    );
+                }
+
                 // The cost of the widened guard, stated as an assertion: on a blank
                 // draft "?" opens the reference and KEEPS the draft, so nothing the
                 // user typed is discarded; on a non-blank one it is typed.
@@ -521,20 +590,28 @@ final class KeyHelpTest extends TestCase
         // this line was reordering the literals above it, with every behavioural
         // assertion still green — an order artifact wearing an exhaustiveness label.
         //
-        // GROWTH RULE, applied to BOTH halves this round. This set is not a
-        // boundary, so it grows whenever a further member of the disagreement
-        // class turns out to be reachable. The previous round found two ("\0" and
-        // "\n") and grew only the BLANK half with them, leaving the
-        // command-shaped half holding exactly one non-space member ("\t/keys")
-        // that is RECALLED-only. Driven this round, keystrokes only: "\n/keys",
-        // "\0/keys", "/keys\n" and "\n/help" are command-shaped and typeable, and
-        // "\n\n", "\0\0" and " \0 " are blank and typeable. A rule stated on one
-        // half is a rule that has not been applied.
+        // GROWTH RULE, applied to BOTH halves. This set is not a boundary, so it
+        // grows whenever a further member of the disagreement class turns out to
+        // be reachable. An earlier round found two ("\0" and "\n") and grew only
+        // the BLANK half with them, leaving the command-shaped half holding
+        // exactly one non-space member ("\t/keys") that is RECALLED-only. Driven
+        // since, keystrokes only: "\n/keys", "\0/keys" and "/keys\n" are
+        // command-shaped and typeable, and "\n\n", "\0\0" and " \0 " are blank
+        // and typeable. A rule stated on one half is a rule that has not been
+        // applied.
+        //
+        // It SHRANK in Phase 4 item 2, and by the same rule: '/help',
+        // '  /help  ' and "\n/help" left this set because `/help` stopped
+        // opening the reference, so they no longer disagree with "?" about it.
+        // They are still in the corpus above and are still driven — the loop
+        // asserts they answer with the command list instead — which is the
+        // difference between a set that shrank because the behaviour moved and
+        // one that shrank because the drafts were deleted to make it pass.
         ksort($disagreesOnSubmit, SORT_STRING);
         $this->assertSame(
             [
-                '', "\0", "\0\0", "\0/keys", "\t", "\t/keys", "\n", "\n\n", "\n/help", "\n/keys",
-                ' ', " \0 ", " \t ", '  ', '  /help  ', ' /keys', '/help', '/keys', "/keys\n", '/keys ',
+                '', "\0", "\0\0", "\0/keys", "\t", "\t/keys", "\n", "\n\n", "\n/keys",
+                ' ', " \0 ", " \t ", '  ', ' /keys', '/keys', "/keys\n", '/keys ',
             ],
             array_keys($disagreesOnSubmit),
             'the drafts on which "?" and a submitted draft differ: every blank one (only "?" opens) and '
@@ -818,10 +895,12 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * Both spellings `Chat::submit()` accepts have to be discoverable, not just
-     * the one: `/help` worked when typed in full and appeared in no popup,
-     * which is the same registry-vs-behaviour drift {@see CommandRegistry}
-     * exists to close.
+     * `/help` has to be discoverable too. It was originally added to the
+     * registry as a second spelling of `/keys` — it worked when typed in full
+     * and appeared in no popup, the registry-vs-behaviour drift
+     * {@see CommandRegistry} exists to close. Phase 4 item 2 made it a command
+     * in its own right (the slash-command list), and the row it needs is the
+     * same row either way, which is why this test did not have to change.
      */
     public function testTheSlashPopupListsHelpToo(): void
     {

@@ -16,6 +16,7 @@ use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Fuzzy\Highlighter;
+use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -23,6 +24,7 @@ use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Tui\AgentDisplayState;
@@ -218,6 +220,18 @@ final class Renderer
      * anything inside it is truncated to width.
      */
     private const SHELL_CHROME_COLS = 6;
+
+    /**
+     * Columns the "/" popup's own frame costs on top of
+     * {@see SHELL_CHROME_COLS}: `border()` is 1 each side and `padding(0, 1)`
+     * is another 1 each side. Named because the row budget in
+     * {@see renderSlashMenu()} has to subtract it and a boundary spelled twice
+     * is a boundary that drifts.
+     */
+    private const SLASH_MENU_CHROME_COLS = 4;
+
+    /** Below this many columns an argument hint is dropped, not truncated. */
+    private const SLASH_MENU_MIN_HINT_COLS = 4;
 
     /**
      * Narrowest tail {@see toolCallSuffix()} will draw. Below this the row is
@@ -2224,6 +2238,46 @@ final class Renderer
      * "▸" and rendered brighter than the rest. Returns '' (nothing rendered)
      * once matches is empty - inputBuf isn't slash-prefixed, already
      * contains a space, or the typed prefix matches no command.
+     *
+     * Two things this surface used to lack that the Ctrl+P palette beside it
+     * already had (crush_code.md Phase 4 item 5):
+     *
+     * - the ARGUMENT HINT. `CommandSpec::$argumentHint` was parsed from command
+     *   frontmatter, set on the built-in rows that take arguments, and read by
+     *   nothing - so "/rename" gave no clue that it wants a name.
+     * - MATCHED-CHARACTER HIGHLIGHTING, through the SAME {@see Highlighter} and
+     *   the same reopen-the-row-style dance {@see renderPalette()} performs -
+     *   not a second implementation. What the popup needed was the indices,
+     *   which {@see CommandRegistry::filter()} was throwing away;
+     *   {@see Chat::slashMenuMatchResults()} is the seam that keeps them.
+     *
+     * WIDTH: the row is fitted to $budget as a WHOLE, in priority order -
+     * description first, then hint, then (only for a name too wide for the
+     * budget entirely) the name. A row wider than the frame is not a cosmetic
+     * problem here: {@see render()} paints one logical line per physical row,
+     * so an over-wide row collides with the one below it.
+     *
+     * Three different widths are involved and they are easy to confuse, so each
+     * is named with the domain it is true of - all three measured with
+     * `Width::string()` over `CommandRegistry::all()`, and all three
+     * `/websearch`'s:
+     *
+     * - its HINT ALONE is 58 columns,
+     * - its popup head `/name <hint>` is 69,
+     * - its `  /name <hint>` column in the `/help` listing is 71
+     *   (that one is {@see \SugarCraft\Crush\Chat}'s domain, not this one).
+     *
+     * The hint is the first thing truncated after the description because the
+     * name is the row's identity and the description is what the row is FOR; a
+     * hint reduced to "<queâ¦" still says the command takes an argument, which
+     * is the whole job of showing it.
+     *
+     * The description clip is newer than the hint fitting and it is a FIX, not
+     * a refinement: until it landed nothing clipped the row, so the `/websearch`
+     * row rendered 45 columns wide (`Width::string()` on the stripped row,
+     * marker included) inside a 20-, 30- OR 40-column terminal - exactly the
+     * overflow this comment used to claim was impossible. Pinned at seven widths
+     * by `RendererTest::testSlashMenuFitsTheWholeRowNotJustTheHint()`.
      */
     private static function renderSlashMenu(Chat $chat, Theme $theme): string
     {
@@ -2232,13 +2286,57 @@ final class Renderer
             return '';
         }
 
+        $results = $chat->slashMenuMatchResults();
         $selected = $chat->slashMenuIndex();
+
+        // The shell's own chrome, then this popup's border + padding(0, 1), then
+        // the two columns every row spends on its "▸ "/"  " marker.
+        $budget = max(12, $chat->cols() - self::SHELL_CHROME_COLS - self::SLASH_MENU_CHROME_COLS - 2);
+
+        $highlighter = new Highlighter();
+        // Underlined as well as recoloured, for the reason renderPalette() gives:
+        // the selected row is already bold userLabel, so colour alone would make
+        // its matched run indistinguishable from the rest of the row.
+        $matchStyle = Style::new()->foreground($theme->userLabel)->bold()->underline();
+
         $lines = [];
         foreach ($matches as $index => $spec) {
-            $label = '/' . $spec->name . ' — ' . $spec->description;
-            $lines[] = $index === $selected
-                ? Style::new()->foreground($theme->userLabel)->bold()->render('▸ ' . $label)
-                : Style::new()->foreground($theme->systemLabel)->faint()->render('  ' . $label);
+            $rowStyle = $index === $selected
+                ? Style::new()->foreground($theme->userLabel)->bold()
+                : Style::new()->foreground($theme->systemLabel)->faint();
+
+            $hint = self::fitSlashMenuHint($spec, $budget);
+
+            // The name keeps its columns ahead of everything else, so this clip
+            // only bites on a name wider than the whole budget - which the
+            // max(12, …) floor above rules out for every built-in row (the
+            // widest is `/websearch` at 10 columns with its slash, measured with
+            // `Width::string()` over `CommandRegistry::all()`) but not for a
+            // loaded custom command, whose name comes from a filename.
+            $plainName = self::clipToWidth($spec->name, max(1, $budget - 1));
+            $tail = self::clipToWidth(
+                ' — ' . $spec->description,
+                $budget - Width::string('/' . $plainName . $hint),
+            );
+
+            // Highlight the NAME only, and against the plain text: the styled
+            // run carries SGR bytes that no width budget can measure, so every
+            // clip above has to be decided before the highlighter runs.
+            $reopen = self::sgrOpen($rowStyle);
+            $match = $results[$index] ?? new MatchResult('', $spec->name, 0, []);
+            if ($match->haystack !== $plainName) {
+                // Re-key the match onto the name as CLIPPED. Highlighter drops
+                // indices past the end of its haystack, so a matched run the
+                // clip cut off simply stops being highlighted rather than
+                // slicing the wrong bytes out of the shorter string.
+                $match = new MatchResult($match->needle, $plainName, $match->score, $match->matchedIndices);
+            }
+            $name = $highlighter->highlight(
+                $match,
+                static fn(string $run): string => $matchStyle->render($run) . $reopen,
+            );
+
+            $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . '/' . $name . $hint . $tail);
         }
 
         return Style::new()
@@ -2246,6 +2344,60 @@ final class Renderer
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The argument hint as it fits on one popup row, ' '-prefixed, or '' when
+     * this row has no hint or no room for one.
+     *
+     * Truncated to whatever is left after the name and the description have had
+     * their columns, and dropped outright rather than rendered as a bare "…"
+     * when fewer than {@see SLASH_MENU_MIN_HINT_COLS} columns remain - a
+     * one-character stub is noise, and a row with no hint is exactly what every
+     * row looked like before Phase 4.
+     */
+    private static function fitSlashMenuHint(CommandSpec $spec, int $budget): string
+    {
+        $hint = $spec->argumentHint;
+        if ($hint === null) {
+            return '';
+        }
+
+        $spent = Width::string('/' . $spec->name . ' — ' . $spec->description);
+        $room = $budget - $spent - 1;
+        if ($room < self::SLASH_MENU_MIN_HINT_COLS) {
+            return '';
+        }
+
+        return ' ' . self::clipToWidth($hint, $room);
+    }
+
+    /**
+     * Hard-clip one already-laid-out run of plain text to $cols columns,
+     * ellipsis included, and to nothing at all when there are no columns left
+     * to spend. The one clip the "/" popup uses for all three of its parts, so
+     * the name, the hint and the description cannot drift into three different
+     * truncation rules.
+     *
+     * Plain text only: it measures with {@see Width::string()} and cuts with
+     * `mb_substr()`, neither of which can see an SGR escape, so every caller
+     * clips BEFORE it styles.
+     */
+    private static function clipToWidth(string $text, int $cols): string
+    {
+        if ($cols <= 0) {
+            return '';
+        }
+        if (Width::string($text) <= $cols) {
+            return $text;
+        }
+
+        $out = mb_substr($text, 0, max(1, $cols - 1));
+        while ($out !== '' && Width::string($out) > $cols - 1) {
+            $out = mb_substr($out, 0, mb_strlen($out) - 1);
+        }
+
+        return $out . '…';
     }
 
     /**

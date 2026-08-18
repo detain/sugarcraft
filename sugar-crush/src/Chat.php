@@ -22,6 +22,7 @@ use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
@@ -196,6 +197,26 @@ final class Chat implements Model
      * hard idle-compaction threshold.
      */
     private const REMINDER_TOKEN_LIMIT = 100000;
+
+    /**
+     * Columns the `/help` listing gives up to the chrome it will be painted
+     * inside: {@see Renderer}'s shell border + padding(1, 2) is 6, and the rest
+     * is slack so the listing does not sit flush against the border. Same
+     * arithmetic as {@see Renderer}'s own SHELL_CHROME_COLS, kept here rather
+     * than reached for across the class boundary because this side only needs
+     * the number, not the layout.
+     */
+    private const HELP_CHROME_COLS = 10;
+
+    /**
+     * Where the `/help` listing's description column starts. A constant rather
+     * than the widest name-plus-hint in the registry: that is `/websearch`'s, and
+     * measured with `Width::string()` over `CommandRegistry::all()` its hint
+     * alone is 58 columns and its whole `  /name <hint>` column is 71 - which on
+     * an 80-column terminal would leave the descriptions nowhere to go. Rows
+     * wider than this spill their description onto the next line instead.
+     */
+    private const HELP_NAME_COLS = 24;
 
     /**
      * Wall-clock budget for {@see forkToolCalls()}'s forked children.
@@ -4040,168 +4061,9 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        // Handle /exit (and /quit) - same as Ctrl+C / the palette's Exit
-        // action, just reachable without a modifier key.
-        if ($text === '/exit' || $text === '/quit') {
-            return [$this, Cmd::quit()];
-        }
-
-        // Handle /keys - the same in-app keybinding reference "?" opens, under a
-        // NAME rather than a shortcut. That is the whole justification, and it
-        // is about DISCOVERY, not about reach: the row is in CommandRegistry, so
-        // typing "/k" lists it in the "/" popup. Nothing on screen names "?"
-        // before the reference is open -- the idle status bar is
-        // "~0K / 100K context (0%) · Enter to send · Ctrl+P menu · /exit or ^C to
-        // quit", measured -- and the one place it IS named is this row's own
-        // popup description, "(or press ?)", which is precisely the work the row
-        // does. Both spellings' popup rows are asserted, not assumed:
-        // KeyHelpTest::testTheSlashPopupListsKeys() and
-        // ::testTheSlashPopupListsHelpToo().
-        //
-        // It is NOT an escape hatch for a half-typed draft, and three earlier
-        // versions of this comment were wrong about that -- twice by promising a
-        // hatch that does not exist, once by denying an asymmetry that did.
-        // $text is the WHOLE trimmed buffer and the match below is exact.
-        // Driven as real keystrokes (Chat::update() with KeyMsg, two-message
-        // history over EchoBackend, 100x30): "why" then "/keys" leaves inputBuf
-        // 'why/keys' with the "/" popup empty, and Enter SENDS "why/keys" to the
-        // model as a prompt; "why" then "/" is 'why/' with no popup either; and
-        // clearing the draft first -- "why" then three Backspaces -- makes BOTH
-        // work again. Pinned by
-        // KeyHelpTest::testSlashKeysInAHalfTypedDraftIsSentAsAPromptNotAsACommand().
-        //
-        // Say WHICH two routes, because the sentence that used to stand here --
-        // "the two routes agree about WHETHER the reference opens" -- is true of one
-        // pairing and false of another, and a reader takes the false one.
-        //
-        // TRUE, and the escape-hatch property this is all for: with a draft D in
-        // the box, TYPING "/keys" onto it and pressing Enter opens the reference
-        // exactly when "?" on D does. Both reduce to trim(D) === '' -- this route
-        // matches trim(D . "/keys") against "/keys", the "?" arm in update() tests
-        // trim(D) -- so it is a property of the two guards rather than of any
-        // corpus, and the corpus below demonstrates it rather than establishing it.
-        // Saying so is the point: a previous revision counted the corpus as
-        // evidence for a claim its own predicates already forced.
-        //
-        // FALSE: that "?" and this route agree in general. SUBMITTING a draft that
-        // IS the command modulo whitespace opens the reference where "?" types a
-        // character -- measured, " /keys", "/keys ", "\t/keys" and "  /help  " all
-        // open by Enter and none of them by "?" -- and on every blank draft "?"
-        // opens while Enter sends nothing at all. The two are COMPLEMENTARY, never
-        // both open, and the exact disagreement set is asserted rather than
-        // described.
-        //
-        // That is not an escape hatch: reaching it means the draft was the command
-        // and nothing else, which is the command working as named. The hatch the
-        // docs deny is the FIRST pairing, and it stays denied.
-        //
-        // And it was denied wrongly until round 4: the "?" arm tested the raw buffer
-        // while this one trims, so a whitespace-only draft opened via
-        // typing "/keys" onto it and typed " ?" via "?" -- see the "?" arm in
-        // update() for the widened guard and its cost. What earns the claim today is
-        // a corpus chosen against the PREDICATE (drafts either side of the
-        // blank/non-blank boundary, including " ", "  ", "\t", " \t ", " x " and the
-        // command-modulo-whitespace ones) rather than against frame distinctness,
-        // which is what the six-state corpus below was chosen for and is why it
-        // could not see the hole. Both live in KeyHelpTest:
-        // ::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft() for the draft
-        // boundary and all three routes, and
-        // ::testTheCommandAndTheShortcutOpenTheReferenceInExactlyTheSameStates()
-        // for the six non-draft states (empty+idle, a half-typed draft, a turn in
-        // flight, the palette open, a permission prompt pending, a long
-        // transcript scrolled back), each asserted to paint a distinct frame.
-        // Note the in-flight state, where NEITHER route opens it.
-        //
-        // One residual asymmetry, deliberately kept: this route CLEARS the input
-        // buffer and the "?" arm does not, so on a " " draft "/keys"+Enter
-        // discards the space and "?" leaves it. That is the ordinary behaviour of
-        // a submitted command, and the reference is modal either way.
-        //
-        // The way to type a message that STARTS with "?" is the second "?",
-        // which closes the reference and lands the literal character (see
-        // handleKeyHelpKey()).
-        //
-        // /help is accepted as the spelling most other CLIs use. Matched
-        // EXACTLY rather than by prefix, unlike the argument-taking commands
-        // below: "/help me name this variable" is a prompt, not a request for
-        // the shortcut list.
-        if ($text === '/keys' || $text === '/help') {
-            return [$this->withInputBuf('')->withKeyHelp(0), null];
-        }
-
-        // Handle /compact command to manually compact chat history
-        if (str_starts_with($text, '/compact')) {
-            return $this->handleCompactCommand($text);
-        }
-
-        // Handle /workflow commands locally without calling the backend
-        if (str_starts_with($text, '/workflow')) {
-            return $this->handleWorkflowCommand($text);
-        }
-
-        // Handle /share commands locally
-        if (str_starts_with($text, '/share')) {
-            return $this->handleShareCommand($text);
-        }
-
-        // Handle /agent (and /agents) commands locally
-        if (str_starts_with($text, '/agent')) {
-            return $this->handleAgentsCommand($text);
-        }
-
-        // Handle /memory commands locally
-        if (str_starts_with($text, '/memory')) {
-            return $this->handleMemoryCommand($text);
-        }
-
-        // Handle /bg (and its /background spelling) - dispatch a task onto
-        // BackgroundSupervisor (crush_feat.md section 5 E3). Checked before
-        // /branch only for readability; the two prefixes cannot collide.
-        if (str_starts_with($text, '/bg') || str_starts_with($text, '/background')) {
-            return $this->handleBackgroundCommand($text);
-        }
-
-        // Handle /fork command (clone this conversation into a background session)
-        if (str_starts_with($text, '/fork')) {
-            return $this->handleForkCommand($text);
-        }
-
-        // Handle /branch command (fork current session)
-        if (str_starts_with($text, '/branch')) {
-            return $this->handleBranchCommand($text);
-        }
-
-        // Handle /rename command (name current session)
-        if (str_starts_with($text, '/rename')) {
-            return $this->handleRenameCommand($text);
-        }
-
-        // Handle /rewind command (restore from checkpoint)
-        if (str_starts_with($text, '/rewind')) {
-            return $this->handleRewindCommand($text);
-        }
-
-        // Handle /sessions command (R20: list + render the real SessionPicker)
-        if (str_starts_with($text, '/sessions')) {
-            return $this->handleSessionsCommand($text);
-        }
-
-        // Handle /theme command (switch color theme)
-        if (str_starts_with($text, '/theme')) {
-            return $this->handleThemeCommand($text);
-        }
-
-        // Handle /mcp (the discoverable spelling) and the bare "mcp auth …"
-        // form it replaces. The bare form has no leading slash, so it never
-        // showed up in the "/" popup; it stays dispatched here so existing
-        // muscle memory and the palette's ToggleMcp action keep working.
-        if (str_starts_with($text, '/mcp') || str_starts_with($text, 'mcp auth')) {
-            return $this->handleMcpAuthCommand($text);
-        }
-
-        // Handle /websearch command (local search via SearXNG)
-        if (str_starts_with($text, '/websearch')) {
-            return $this->handleWebSearchCommand($text);
+        $dispatched = $this->dispatchCommand($text);
+        if ($dispatched !== null) {
+            return $dispatched;
         }
 
         // Idle-compaction check, once per turn, before dispatching a real
@@ -4272,6 +4134,428 @@ final class Chat implements Model
         // Cmd so the common (unnamed-store-less) path keeps returning the
         // completion Cmd itself.
         return [$next, $titleCmd === null ? $completion : Cmd::batch($completion, $titleCmd)];
+    }
+
+    /**
+     * Route a submitted draft to a slash-command handler, or return null when
+     * it is an ordinary prompt for the model.
+     *
+     * The name is parsed by {@see CommandParser::parse()} (crush_code.md Phase
+     * 4 item 7), which was already built, already tested, and already used by
+     * {@see \SugarCraft\Crush\Commands\AgentsCommand} - while this method's
+     * predecessor re-derived the same thing inline as sixteen
+     * `str_starts_with($text, '/name')` calls. Dispatching on the parsed NAME
+     * instead of on a prefix is what makes the set of live commands a thing a
+     * test can enumerate: `tests/Commands/SlashDispatchTest.php`'s
+     * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits
+     * `/name` for every `slashVisible` row in {@see CommandRegistry} and fails
+     * when the turn reaches the backend, so a registry row with no arm here
+     * reds the suite. The before/after dispatch table for the refactor lives in
+     * that file's other methods rather than in prose here.
+     *
+     * Two guards keep the parse from widening what dispatches, because
+     * `parse()` is deliberately more forgiving than the chain it replaced:
+     *
+     * - it LOWERCASES and strips punctuation out of the name it reports, so
+     *   `/KEYS` and `/keys` and `/k:eys` all parse to `keys`. The old chain
+     *   compared raw bytes and matched none but the last, and `KeyHelpTest`'s
+     *   draft corpus asserts `/KEYS` is sent to the model as prose. Requiring
+     *   the canonical spelling to appear verbatim at the head of the draft
+     *   keeps that exact, for every command at once.
+     * - `$text === '/' . $name` is what keeps the four argument-less commands
+     *   argument-less. `/exit now` and `/keys foo` were prompts before this
+     *   refactor because their arms compared the WHOLE trimmed buffer; a bare
+     *   name match would have quietly turned both into commands.
+     *
+     * What did change, deliberately, is that a name is no longer a PREFIX:
+     * `/compactfoo` and `/rewind3` used to be swallowed by the `/compact` and
+     * `/rewind` handlers, and now go to the model like any other typo. Nothing
+     * advertised them and no test named them - the before/after table for
+     * every registry spelling is in the Phase 4 item 7 report.
+     *
+     * @return array{0: self, 1: ?\Closure}|null
+     */
+    private function dispatchCommand(string $text): ?array
+    {
+        // The bare "mcp auth …" form, which predates the discoverable `/mcp`
+        // spelling and has no leading slash - so CommandParser sees ordinary
+        // prose and returns null for it. Kept as its own branch, ahead of the
+        // parse, so existing muscle memory and the palette's ToggleMcp action
+        // keep working.
+        if (str_starts_with($text, 'mcp auth')) {
+            return $this->handleMcpAuthCommand($text);
+        }
+
+        $parsed = (new CommandParser())->parse($text);
+        if ($parsed === null || !str_starts_with($text, '/' . $parsed->name)) {
+            return null;
+        }
+
+        // Commands that take no arguments at all. `/help me name this variable`
+        // is a prompt, not a request for the command list.
+        if ($text === '/' . $parsed->name) {
+            $bare = match ($parsed->name) {
+                // Same as Ctrl+C / the palette's Exit action, just reachable
+                // without a modifier key.
+                'exit', 'quit' => [$this, Cmd::quit()],
+                'keys' => $this->handleKeysCommand(),
+                'help' => $this->handleHelpCommand(),
+                'clear' => $this->handleClearCommand(),
+                default => null,
+            };
+            if ($bare !== null) {
+                return $bare;
+            }
+        }
+
+        // Commands that take optional arguments. Each handler is passed the
+        // WHOLE draft rather than $parsed->args: they do their own argument
+        // parsing already, and re-splitting it here would be a second parse to
+        // keep in step with theirs.
+        return match ($parsed->name) {
+            'compact' => $this->handleCompactCommand($text),
+            'workflow' => $this->handleWorkflowCommand($text),
+            'share' => $this->handleShareCommand($text),
+            // Both spellings: the registry row is `agents`, and `/agent` was
+            // reachable under the old prefix chain, so it stays reachable.
+            'agent', 'agents' => $this->handleAgentsCommand($text),
+            'memory' => $this->handleMemoryCommand($text),
+            'bg', 'background' => $this->handleBackgroundCommand($text),
+            'fork' => $this->handleForkCommand($text),
+            'branch' => $this->handleBranchCommand($text),
+            'rename' => $this->handleRenameCommand($text),
+            'rewind' => $this->handleRewindCommand($text),
+            'sessions' => $this->handleSessionsCommand($text),
+            'theme' => $this->handleThemeCommand($text),
+            'mcp' => $this->handleMcpAuthCommand($text),
+            'websearch' => $this->handleWebSearchCommand($text),
+            // The only arm that wants the parsed arguments rather than the raw
+            // text: a provider name is one token, and CommandParser has
+            // already unquoted it.
+            'model' => $this->handleModelCommand($parsed->args),
+            default => null,
+        };
+    }
+
+    /**
+     * `/keys` - the same in-app keybinding reference "?" opens, under a NAME
+     * rather than a shortcut. That is the whole justification, and it is about
+     * DISCOVERY, not about reach: the row is in CommandRegistry, so typing "/k"
+     * lists it in the "/" popup. Nothing on screen names "?" before the
+     * reference is open -- the idle status bar is "~0K / 100K context (0%) ·
+     * Enter to send · Ctrl+P menu · /exit or ^C to quit", measured -- and the
+     * two places it IS named are this row's own popup description, "(or press
+     * ?)", which is precisely the work the row does, and the trailer
+     * {@see handleHelpCommand()} prints under its listing ("Press ? or type
+     * /keys for the keyboard shortcut reference."). The second one is NEW and
+     * this diff is what created it: the sentence that stood here said "the ONE
+     * place", and the `/help` split falsified it in the same commit that
+     * claimed to have corrected this docblock for the split.
+     *
+     * `/help` WAS a second spelling of this command and is no longer one
+     * (crush_code.md Phase 4 item 2): it lists the commands now, so everything
+     * below is about `/keys` alone. `KeyHelpTest`'s draft corpus was re-driven
+     * against that split rather than trimmed to fit it -- the `/help`-shaped
+     * drafts stayed in it and now assert the reference does NOT open.
+     *
+     * It is NOT an escape hatch for a half-typed draft, and three earlier
+     * versions of this comment were wrong about that -- twice by promising a
+     * hatch that does not exist, once by denying an asymmetry that did. $text is
+     * the WHOLE trimmed buffer and the match against it is exact. Driven as real
+     * keystrokes (Chat::update() with KeyMsg, two-message history over
+     * EchoBackend, 100x30): "why" then "/keys" leaves inputBuf 'why/keys' with
+     * the "/" popup empty, and Enter SENDS "why/keys" to the model as a prompt;
+     * "why" then "/" is 'why/' with no popup either; and clearing the draft
+     * first -- "why" then three Backspaces -- makes BOTH work again. Pinned by
+     * KeyHelpTest::testSlashKeysInAHalfTypedDraftIsSentAsAPromptNotAsACommand().
+     *
+     * Say WHICH two routes, because the sentence that used to stand here --
+     * "the two routes agree about WHETHER the reference opens" -- is true of one
+     * pairing and false of another, and a reader takes the false one.
+     *
+     * TRUE, and the escape-hatch property this is all for: with a draft D in the
+     * box, TYPING "/keys" onto it and pressing Enter opens the reference exactly
+     * when "?" on D does. Both reduce to trim(D) === '' -- this route matches
+     * trim(D . "/keys") against "/keys", the "?" arm in update() tests trim(D)
+     * -- so it is a property of the two guards rather than of any corpus, and
+     * the corpus demonstrates it rather than establishing it. Saying so is the
+     * point: a previous revision counted the corpus as evidence for a claim its
+     * own predicates already forced.
+     *
+     * FALSE: that "?" and this route agree in general. SUBMITTING a draft that
+     * IS the command modulo whitespace opens the reference where "?" types a
+     * character -- measured, " /keys", "/keys " and "\t/keys" all open by Enter
+     * and none of them by "?" -- and on every blank draft "?" opens while Enter
+     * sends nothing at all. The two are COMPLEMENTARY, never both open, and the
+     * exact disagreement set is asserted rather than described.
+     *
+     * That is not an escape hatch: reaching it means the draft was the command
+     * and nothing else, which is the command working as named. The hatch the
+     * docs deny is the FIRST pairing, and it stays denied.
+     *
+     * And it was denied wrongly until round 4: the "?" arm tested the raw buffer
+     * while this one trims, so a whitespace-only draft opened via typing "/keys"
+     * onto it and typed " ?" via "?" -- see the "?" arm in update() for the
+     * widened guard and its cost. What earns the claim today is a corpus chosen
+     * against the PREDICATE (drafts either side of the blank/non-blank boundary,
+     * including " ", "  ", "\t", " \t ", " x " and the command-modulo-whitespace
+     * ones) rather than against frame distinctness, which is what the six-state
+     * corpus was chosen for and is why it could not see the hole. Both live in
+     * KeyHelpTest: ::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft() for the
+     * draft boundary and all three routes, and
+     * ::testTheCommandAndTheShortcutOpenTheReferenceInExactlyTheSameStates() for
+     * the six non-draft states (empty+idle, a half-typed draft, a turn in
+     * flight, the palette open, a permission prompt pending, a long transcript
+     * scrolled back), each asserted to paint a distinct frame. Note the
+     * in-flight state, where NEITHER route opens it.
+     *
+     * One residual asymmetry, deliberately kept: this route CLEARS the input
+     * buffer and the "?" arm does not, so on a " " draft "/keys"+Enter discards
+     * the space and "?" leaves it. That is the ordinary behaviour of a submitted
+     * command, and the reference is modal either way.
+     *
+     * The way to type a message that STARTS with "?" is the second "?", which
+     * closes the reference and lands the literal character (see
+     * {@see handleKeyHelpKey()}).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleKeysCommand(): array
+    {
+        return [$this->withInputBuf('')->withKeyHelp(0), null];
+    }
+
+    /**
+     * `/model` (crush_code.md Phase 4 item 1) - the slash spelling of the
+     * Ctrl+P palette's Switch Model action, which until now was the ONLY way
+     * to change provider mid-session even though `Tui\Components\SettingsPane`'s
+     * footer already advertised the command.
+     *
+     * Bare `/model` opens the provider list in exactly the state Ctrl+P →
+     * "Switch model" opens it in - `withMode()` resets query and selection, so
+     * `PaletteState::root()->withMode('providers')` and the palette's own
+     * transition produce the identical triple. It does NOT record a palette
+     * MRU use: that ordering is about which rows a Ctrl+P user reaches for,
+     * and typing a command is not reaching for a row.
+     *
+     * `/model <provider>` skips the list, through the same
+     * {@see selectPaletteProvider()} the list's own Enter runs - so the switch
+     * carries the launch's one PermissionGate and project root across, reports
+     * an unknown name into the transcript rather than throwing, and fires
+     * `$onConfigChange('provider', …)`.
+     *
+     * PERSISTENCE: session-only from this class's point of view. The
+     * `onConfigChange` callback is where a `provider` choice becomes durable,
+     * and the callback that writes `~/.sugar-crush/config.json` is installed by
+     * `Cli\Bootstrap::chat()`; a Chat built without one (every embedder, and
+     * every test here) switches for this session and persists nothing.
+     *
+     * @param list<string> $args
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleModelCommand(array $args): array
+    {
+        if ($args === []) {
+            return [$this->withInputBuf('')->mutate([
+                'palette' => PaletteState::root()->withMode('providers'),
+            ]), null];
+        }
+
+        // A provider name is a single token. More than one means the user typed
+        // a sentence, and guessing which word was the name would switch to
+        // something they did not ask for - so say what the command takes and
+        // which names exist, in the transcript, where the answer is readable.
+        if (count($args) !== 1) {
+            $available = implode(', ', $this->availableProviderNames());
+
+            return [$this->withInputBuf('')->mutate(['history' => [
+                ...$this->history,
+                Message::assistant("Usage: /model [provider]. Available: {$available}"),
+            ]]), null];
+        }
+
+        return $this->withInputBuf('')->selectPaletteProvider($args[0]);
+    }
+
+    /**
+     * `/help` (crush_code.md Phase 4 item 2) - the command list, which is what
+     * `/help` means in every other CLI. It used to be a second spelling of
+     * `/keys`, i.e. two names for the keyboard reference and no name at all for
+     * the thing a first-time user is actually asking for.
+     *
+     * Rendered from {@see CommandRegistry::slashCommands()} rather than from a
+     * hand-written list, argument hints included - the hints were parsed,
+     * stored and shown by nothing until Phase 4.
+     *
+     * Laid out against the CURRENT terminal width and then frozen into
+     * history, like every other message this class writes: the transcript
+     * renderer does not re-wrap an assistant turn, and a line wider than the
+     * frame collides with the row below it (see {@see Renderer::render()}'s
+     * tail clip). A later resize to something narrower can therefore leave
+     * this listing over-wide - that is the pre-existing behaviour of every
+     * long message here, not something this command adds, and the alternative
+     * (re-rendering history on resize) is a change to how Message works.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleHelpCommand(): array
+    {
+        $commands = CommandRegistry::slashCommands();
+
+        // Counted here, at render time, from the list being rendered - a
+        // command count written into a docblock or a test literal is exactly
+        // the number that goes stale the next time a row is added.
+        $lines = ['Slash commands (' . count($commands) . '):'];
+
+        // GROUPED, not walked in declared order: the registry INTERLEAVES its
+        // categories - the 'Session' rows arrive in several separate runs, and
+        // the 'App' rows in two - so a "heading whenever the category changes"
+        // walk prints some headings more than once. Deliberately no counts here:
+        // the sentence this replaces claimed "three separate runs" printing a
+        // heading "five times", which are two different wrong numbers and
+        // mutually impossible, and any literal in this spot goes stale the next
+        // time a row moves - `clear`, added by this Phase, is what turned the
+        // `[compact]` run into `[compact, clear]`. The property itself is
+        // derived from the registry and asserted by
+        // `Commands\SlashDispatchTest::testTheHelpListingPrintsOneHeadingPerCategoryNotOnePerRun()`.
+        // Category order is first-appearance order, the same rule
+        // {@see \SugarCraft\Crush\Tui\Components\MenuBar} groups its menus
+        // by.
+        /** @var array<string, list<\SugarCraft\Crush\Commands\CommandSpec>> $byCategory */
+        $byCategory = [];
+        foreach ($commands as $spec) {
+            $byCategory[$spec->category][] = $spec;
+        }
+
+        // max(20, …) is {@see Renderer}'s own floor convention for every box it
+        // sizes, kept rather than invented. It does mean the listing can be
+        // over-wide on a very narrow terminal, and the exact threshold is 26
+        // columns of TERMINAL: below that, the 20-column floor plus the 6
+        // columns of shell chrome it is painted inside exceeds the terminal
+        // itself. Exactly as every other box here can be at that size - and at
+        // that size the status bar is over-wide too, at 54 columns, measured.
+        // Not made worse by this command, not fixed by it.
+        $budget = max(20, ($this->cols ?? 80) - self::HELP_CHROME_COLS);
+        foreach ($byCategory as $category => $rows) {
+            $lines[] = '';
+            $lines[] = self::clip($category, $budget);
+            foreach ($rows as $spec) {
+                $left = '  /' . $spec->name . ($spec->argumentHint !== null ? ' ' . $spec->argumentHint : '');
+                $leftWidth = Width::string($left);
+                if ($leftWidth <= self::HELP_NAME_COLS - 2) {
+                    $lines[] = self::clip($left . str_repeat(' ', self::HELP_NAME_COLS - $leftWidth) . $spec->description, $budget);
+                    continue;
+                }
+
+                // A hint too wide for the name column spills onto its own row
+                // rather than shoving the description off the edge - the usual
+                // `--help` layout, and the reason the description column is a
+                // constant instead of the widest row in the registry. Three
+                // widths are in play and all three are `/websearch`'s, so each
+                // is named with the domain it is true of: the number that
+                // belongs HERE is its whole `  /name <hint>` column at 71
+                // columns, while its popup head `/name <hint>` is 69 and its
+                // hint alone is 58 (all measured with `Width::string()` over
+                // `CommandRegistry::all()`). 71 is wider than this method's own
+                // budget on an 80-column terminal, which is 70, so a
+                // description column sized to it would leave the descriptions
+                // nowhere to go.
+                $lines[] = self::clip($left, $budget);
+                $lines[] = self::clip(str_repeat(' ', self::HELP_NAME_COLS) . $spec->description, $budget);
+            }
+        }
+
+        $lines[] = '';
+        // Clipped like every other row: at 40 columns this sentence is the
+        // longest line in the listing, and an unclipped trailer would be the
+        // one over-wide row the rest of this method exists to avoid.
+        $lines[] = self::clip('Press ? or type /keys for the keyboard shortcut reference.', $budget);
+
+        return [$this->withInputBuf('')->mutate(['history' => [
+            ...$this->history,
+            Message::assistant(implode("\n", $lines)),
+        ]]), null];
+    }
+
+    /**
+     * `/clear` (crush_code.md Phase 4 item 2) - empty the transcript and STAY
+     * in this session. Deliberately not `/new`: the palette's New session
+     * action ({@see handlePaletteNewSession()}) mints a fresh session id and
+     * leaves the old conversation where it was, which is the opposite trade.
+     *
+     * Exactly what it touches, and what it does not:
+     *
+     * - TRANSCRIPT: emptied. That IS the feedback - a confirmation message
+     *   would leave the transcript non-empty, which is the one thing the
+     *   command promises.
+     * - TOKEN/CONTEXT COUNTERS: reset, because there are none to reset. The
+     *   status bar's "~NK / 100K context" is {@see estimateTokenCount()} over
+     *   `$history` on every render, and so are the compaction tiers - clearing
+     *   history is what makes them read zero.
+     * - SCROLL OFFSET and EXPANDED TOOL BODIES: reset. Both index into the
+     *   transcript that just went away.
+     * - PARTIAL STREAMING TEXT: cleared, so a `/clear` typed the instant after
+     *   an aborted turn cannot repaint half a reply above an empty transcript.
+     * - SESSION ID: kept. This is the distinction from `/new`.
+     * - SESSION FILE ON DISK: untouched. No `createSession()`, no delete, no
+     *   rename - which also means the session's title survives.
+     * - CHECKPOINTS: untouched, so `/rewind` still reaches the turns this
+     *   command cleared from view. That is a deliberate choice and the
+     *   arguable one: `/clear` is a "get this off my screen and out of the
+     *   model's context" command, not a redaction tool, and destroying
+     *   recovery points is not something an undo-less TUI command should do
+     *   silently.
+     * - IN-FLIGHT TURN: not cancelled. `update()` swallows Enter while a turn
+     *   is in flight, so this is unreachable mid-turn; Escape is the cancel.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleClearCommand(): array
+    {
+        return [$this->mutate([
+            'history' => [],
+            'inputBuf' => '',
+            'streamingText' => '',
+            'scrollOffset' => 0,
+            'expanded' => [],
+        ]), null];
+    }
+
+    /**
+     * Provider names `/model <name>` accepts, for the usage message. Read from
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::availableProviders()} - the same
+     * list the palette's provider mode browses - and degraded to the empty
+     * string rather than propagated if that read throws, because a usage
+     * message is not worth failing a turn over.
+     *
+     * @return list<string>
+     */
+    private function availableProviderNames(): array
+    {
+        try {
+            return array_map('strval', array_keys(\SugarCraft\Crush\Cli\Bootstrap::availableProviders()));
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Hard-clip one already-laid-out line to $cols columns, ellipsis included.
+     * Used by the `/help` listing, whose rows are built from registry data
+     * that can be arbitrarily long.
+     */
+    private static function clip(string $line, int $cols): string
+    {
+        if (Width::string($line) <= $cols) {
+            return $line;
+        }
+
+        $out = mb_substr($line, 0, max(1, $cols - 1));
+        while ($out !== '' && Width::string($out) > $cols - 1) {
+            $out = mb_substr($out, 0, mb_strlen($out) - 1);
+        }
+
+        return $out . '…';
     }
 
     /**
@@ -6144,11 +6428,50 @@ final class Chat implements Model
      */
     public function slashMenuMatches(): array
     {
+        $prefix = $this->slashMenuPrefix();
+
+        return $prefix === null ? [] : CommandRegistry::filter($prefix);
+    }
+
+    /**
+     * {@see slashMenuMatches()}'s rows with their matched-character indices
+     * kept, in the SAME order and the same length - the spec list is derived
+     * from this one inside {@see CommandRegistry::filter()}, so the two cannot
+     * fall out of step.
+     *
+     * Exists for the same reason {@see paletteMatchResults()} does
+     * (crush_code.md Phase 4 item 5): {@see Renderer::renderSlashMenu()} needs
+     * the indices to highlight the run the user actually typed, and the popup
+     * was the one of the two command surfaces that could not.
+     *
+     * @return list<MatchResult>
+     */
+    public function slashMenuMatchResults(): array
+    {
+        $prefix = $this->slashMenuPrefix();
+
+        return $prefix === null ? [] : CommandRegistry::filterMatchResults($prefix);
+    }
+
+    /**
+     * The in-progress command name being typed (everything after the leading
+     * "/"), or null when the popup must not show at all.
+     *
+     * ONE guard for both {@see slashMenuMatches()} and
+     * {@see slashMenuMatchResults()}, not a copy in each: the renderer pairs row
+     * N of the first with row N of the second, so a guard that drifted between
+     * them would silently highlight one command's matched run on another
+     * command's row - the failure the fallback in
+     * {@see Renderer::renderSlashMenu()} can only stop from crashing, not from
+     * being wrong.
+     */
+    private function slashMenuPrefix(): ?string
+    {
         if (!str_starts_with($this->inputBuf, '/') || str_contains($this->inputBuf, ' ')) {
-            return [];
+            return null;
         }
 
-        return CommandRegistry::filter(substr($this->inputBuf, 1));
+        return substr($this->inputBuf, 1);
     }
 
     /**
