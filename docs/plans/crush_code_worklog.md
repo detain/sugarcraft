@@ -5824,3 +5824,32 @@ Facts established so far, and **two plan claims already refuted**:
   "`str_starts_with()` dispatch chain" is not literally that. **The real shape of
   the dispatch chain is unverified — establish it before briefing item 7.**
 
+
+### Phase 5 pre-flight — every premise checked, and a sequencing constraint
+
+Measured while Phase 4 was in flight (read-only, no files touched). **All six
+checkable premises hold** — unusual for this plan, and worth recording as a
+positive result:
+
+| item | claim | verdict |
+|---|---|---|
+| 5.1 | base system prompt is one string literal | **holds** — `src/Runtime.php:1101`, `$base = 'You are SugarCrush, an AI coding assistant.'`; built in `buildSystemPrompt()` at `:1099` |
+| 5.3 | `dispatchSkill()` bypasses `Agent::systemPrompt()` | **exists** at `src/App/App.php:373` |
+| 5.4 | `contextWindow()` implemented on all 7 providers, never called | **holds** — defined in 8 files (7 providers + `ProviderInterface`); the only `contextWindow()` occurrence outside a definition is a *comment* at `src/Providers/SglangProvider.php:156` saying nothing reads it. `REMINDER_TOKEN_LIMIT` is a hardcoded `100000` at `src/Chat.php:198` with 4 uses (`:4228`, `:6876`, `:6901`) |
+| 5.5 | `shouldCompact()`/`shouldCompactForeground()` are dead code | **holds** — defined at `src/Context/ContextCompactor.php:49` and `:73`, **zero call sites anywhere in `src/`** |
+| 5.6 | `generateExchangeSummary()` is truncation/placeholder logic | **exists** — `src/Context/ContextCompactor.php:687`, one internal caller at `:673` |
+| 5.7 | `TokenTracker` never instantiated | **holds** — `src/Util/TokenTracker.php` exists, no `new TokenTracker` anywhere in `src/` |
+
+**Sequencing constraint — do not parallelise Phase 5 against Phase 4.** Items 5.4
+and 5.5 both need `src/Chat.php` (the `REMINDER_TOKEN_LIMIT` const and the
+`shouldSendReminder()` call site at `:4228`), and 5.7's status-bar readout needs
+`src/Renderer.php` — all three are files the Phase 4 bundle is editing. Even a
+file-disjoint second lane is unsafe here: the rule learned earlier in this chain is
+that a *suite run* which loads a file another lane is editing shifts
+`file(__FILE__)` ranges against already-loaded reflection and produces phantom
+failures. Serialise the suite runs, not just the writes.
+
+A genuinely disjoint sub-bundle exists if parallelism is ever needed: **5.1 + 5.2**
+touch only `src/Runtime.php` and `src/Tools/*`. 5.1 is also the plan's own
+"highest-leverage single change in this phase", so it is the natural next pick once
+Phase 4 lands.
