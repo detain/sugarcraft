@@ -10,17 +10,50 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 
 **A note on the Appendix's voice.** Each of the 13 sections was written by an independent research pass assigned one angle, and several sections cross-reference each other's findings before this document existed as a single file — phrases like "sibling agent," "sibling-confirmed," "the orchestrator," "this agent," or "per the assignment" refer to that research process, not to you the reader. Kept intentionally, per the "close to verbatim" policy above, rather than smoothed over — but worth knowing going in.
 
-## Execution status (updated 2026-08-14)
+## Execution status (updated 2026-08-18)
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage
 labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
-**Complete:** Phase 0 (all 14) · Phase 1 items 1-2 · Phase 4 items 3-4 ·
-Phase 7 items 1-2 · Phase 8 items 1, 5, 7, 14.
+**Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 item 6 ·
+Phase 3 item 1 · Phase 4 items 3-4 · Phase 7 items 1-2 ·
+Phase 8 items 1, 2, 5, 7, 14.
+
+**Sequencing decision (2026-08-17, user):** remaining items are picked
+**functionality first**; security-hardening and audit-instrument work is deferred to
+the end of the plan. That includes path-containment gates, permission-surface
+tightening, and mutation-register/census correctness — anything of that shape that
+surfaces mid-flight gets recorded in the worklog with its probes and picked up in a
+final hardening pass, rather than interrupting the wiring work.
+
+**Now in flight:** **Phase 4 items 1, 2, 5, 7** bundled (all commands/CLI parity,
+same dispatch/registry area). Then **Phase 5**, then Phase 6, then Phase 7 docs,
+then the hardening backlog.
+
+**Three Phase 4 plan claims are already refuted — do not pass them through:**
+`/help` is NOT missing (a row exists at `src/Commands/CommandRegistry.php:121`
+aliasing `/keys`, so item 2 is a *repurpose* decision, not an addition);
+`CommandParser` is NOT unused outside its own test (`src/Commands/AgentsCommand.php`
+uses it); and item 7's "`str_starts_with()` dispatch chain" is not literally that —
+`submit()` mixes exact `$text === '/exit'` matches with 22 `str_starts_with(` uses.
+`argumentHint` IS already a populated `CommandSpec` field, so item 5 is a renderer
+gap only (`Renderer::renderSlashMenu()`, `src/Renderer.php:2228`).
+
+**Beware the plan's own estimates.** Phase 3 item 1 predicted 30-50 lines of
+hand-rolled logic removed; the measured figure was **11**, of which 8 were
+match-arm bodies. Line numbers throughout this plan are stale by many commits.
 
 **Landed in the most recent session:**
+
+| SHA | Plan item |
+|---|---|
+| `939f8ada` | Phase 3 item 1 — draft cursor via `TextArea`; fixed `Ctrl+Backspace`/`Ctrl+Space` dying silently |
+| `3bc5d269` | *(not a plan item)* root path-repo closure completed — 4 libs were installing as upstream zips |
+| `2fa678a7` | *(not a plan item)* per-lib manifests go Packagist-only; path repos become a CI injection; 14 stale locks untracked |
+
+**Earlier sessions:**
 
 | SHA | Plan item |
 |---|---|
@@ -180,7 +213,7 @@ This phase is sequenced first among the wiring work because almost every other P
 
 ### Phase 3 — Sibling-library reuse (candy-*/sugar-bits)
 
-1. **Replace `Chat::$inputBuf` (hand-rolled append-only string) with `sugar-bits`/`candy-forms`' `TextInput`/`TextArea`.** Add the dependency + path-repo entry, give `Chat` a `TextInput $input` field, delegate key handling through `$this->input->update($msg)`. Fixes real user-visible missing cursor-movement, replacing ~30-50 lines of hand-rolled buffer logic with a library call. Recommend as its own PR — touches many call sites that currently read `$inputBuf` as a bare string (slash-command parsing, `/share`, palette-fill-on-select, etc). **(§2)**
+1. **Replace `Chat::$inputBuf` (hand-rolled append-only string) with `sugar-bits`/`candy-forms`' `TextInput`/`TextArea`.** Add the dependency + path-repo entry, give `Chat` a `TextInput $input` field, delegate key handling through `$this->input->update($msg)`. Fixes real user-visible missing cursor-movement, replacing ~30-50 lines of hand-rolled buffer logic with a library call. Recommend as its own PR — touches many call sites that currently read `$inputBuf` as a bare string (slash-command parsing, `/share`, palette-fill-on-select, etc). **(§2)** — **DONE** (`939f8ada`; chose `TextArea` not `TextInput`, measured; removed 11 lines not 30-50; fixed two silently-dead ctrl keys).
 2. **Swap `Tui\Pane`'s hand-rolled `next()` for `candy-focus\FocusRing`**, getting Shift-Tab for free. Small, isolated — good candidate to bundle with item 3 below. **(§2)**
 3. **Wire `sugar-veil`'s `withClickOutsideDismiss()`** onto the permission-prompt/palette/session-picker overlays — `candy-mouse` zone data already flows through the exact code path that needs to consume it; currently a click outside a modal silently no-ops instead of dismissing it. **(§2)**
 4. **Adopt `candy-sprinkles\Table`** for list-shaped output currently hand-`implode()`d (`/sessions`, `/agents`, MCP server list, LSP diagnostics) — land incrementally, one command's output at a time. **(§2)**
@@ -230,7 +263,7 @@ This phase is sequenced first among the wiring work because almost every other P
 ### Phase 8 — UI polish & lower-priority items
 
 1. ✅ **Add gutter line numbers to the diff view** (`renderDiff()`, `src/Renderer.php:1696-1723`) using the same convention `SyntaxHighlighter`'s existing `lineNumbers` param already implements for markdown fences — turn that flag on for markdown code fences too while in the area, one-line change. **(§4)** — **DONE** (`4e10360b`).
-2. **Add an in-app keybinding reference** (`/keys` or `?`) — extend the `CommandRegistry` single-source-of-truth pattern that already fixed slash-command drift to cover raw keybindings too. **(§4)**
+2. ✅ **Add an in-app keybinding reference** (`/keys` or `?`) — extend the `CommandRegistry` single-source-of-truth pattern that already fixed slash-command drift to cover raw keybindings too. **(§4)** — **DONE** (lane E; `Renderer::renderKeyHelp()` paints `KeyBindingRegistry::live()` rows, so the drift the item worried about is structurally impossible rather than merely absent — verified by `KeyBindingDriftTest`. See `docs/plans/crush_code_worklog.md`).
 3. **Wire `StallDetector`** into the agent dashboard once Phase 1's `AgentManager` wiring lands — the detector itself needs no changes, purely a call-site + one render branch. **(§4, §8)**
 4. **Decide the split-pane compositor's fate** (see "Flagged for consolidation review" above) — wire it to real side-by-side agent output once `AgentManager` exposes a live-output-buffer accessor, or explicitly document it as experimental/deferred the way `AgentsPane`'s dead arm already is. **(§4)**
 5. ✅ **Offer the `adaptive` theme preset** — `SprinklesTheme::adaptive()` already exists, just needs a `ShineTheme` counterpart or a special-cased pairing. **(§4)** — **DONE** (`4e10360b`).
