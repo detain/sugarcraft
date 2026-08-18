@@ -5608,3 +5608,219 @@ The brief's decision points, in case it needs re-issuing:
    lane D F3–F7 follow-ups, the three items above, `C:x`, the `.running/*.json`
    residual. **#88** README figure (**6764 / 69788 / 1 skipped** at `15a2e605`).
 7. Never reviewed: `c075adcf` (the permission fix) and `15a2e605`.
+
+---
+
+## Session — Phase 3 item 1 shipped, and the composer path-repo policy inverted
+
+Three commits landed: `939f8ada` (Phase 3 item 1), `3bc5d269` (root path-repo
+closure completed), `2fa678a7` (per-lib manifests go Packagist-only, path repos
+become a CI injection).
+
+### `939f8ada` — Phase 3 item 1: the chat draft gets a cursor
+
+The defect was flat: **there was no cursor movement at all**, so a user could
+not arrow left and fix a typo. `Chat::$inputBuf` is now *derived* from a real
+`SugarCraft\Forms\TextArea\TextArea`; `Renderer` still paints from widget state
+rather than calling `TextArea::view()`, because `Chat::view()` is already
+double-diffed against Program's own renderer.
+
+**`TextArea`, not `TextInput`, and it was measured.** `renderInput()` paints a
+genuine multi-row box, so multi-line drafts are a live visible feature and
+Home/End must be line-scoped. That choice **dissolved** two collisions the brief
+expected to arbitrate: `TextArea` has no history field and no
+`setSuggestions()`/`currentSuggestion()` (verified as absences in the vendored
+copy that actually runs), so `Chat` stays sole owner of `↑` recall and of
+completion. There was no second mechanism to disable.
+
+`mutate()` carries an `input` key and **drops it when a change names `inputBuf`
+alone** — that key means "replace the whole draft" (submit clear, `↑` recall,
+slash completion, checkpoint restore) and reseeds with the cursor at the end.
+Load-bearing: deleting the guard reddens `ChatTest` (11 F + 1 E).
+
+Byte-identity of painted output holds unconditionally with the cursor at the
+end (57 `md5(view())` comparisons across 19 drafts × 3 sizes — CJK, emoji, ZWJ,
+combining marks, RTL, embedded SGR, a lone C1, C0 bytes, the 38–41 column
+boundary): zero differences. That is why `RendererTest`'s goldens needed no
+edit, and mutating the splice back to append-at-end leaves `RendererTest` green
+while reddening `ChatInputCursorTest` — the correct split.
+
+#### The regression the whole suite missed
+
+`TextArea::update()` opens with `if ($msg->ctrl) { return match ($msg->rune) {…
+default => [$this, null] }; }` — it swallows **every** ctrl-flagged key
+regardless of `type`. `Chat` filtered ctrl for `Char` and for `Left`/`Right` but
+not for `Space`/`Backspace`/`Delete`/`Home`/`End`, so:
+
+```
+                                   HEAD          WITH DIFF
+Ctrl+Backspace  "\x1b[127;5u"  =>  'ab c'    =>  'ab cd'   <- dead
+Ctrl+Space      "\x1b[32;5u"   =>  'ab cd '  =>  'ab cd'   <- dead
+```
+
+Both worked at HEAD. Nothing in 6795 tests caught it. Fixed with explicit arms,
+not a bug-for-bug restore: Ctrl+Space inserts a space (exact restoration),
+Ctrl+Backspace deletes the word before the cursor (an **upgrade**, justified by
+word motion now existing, sharing Ctrl+W's boundary), Ctrl+Delete deletes the
+word after (pure addition — no-op at HEAD). Ctrl+Home/End stay no-ops,
+documented as deliberate. The delegation list is now a named const behind a
+total `!$msg->ctrl` guard.
+
+**Honest negative recorded at the site:** that guard has **no detection power
+today** — mutating it away leaves the suite green, because the three explicit
+arms sit above it and Ctrl+Home/End are no-ops either way. Its value is purely
+prospective. No assertion was invented to give it artificial power.
+
+#### Review: ten blockers, all nine actionable ones reproduced
+
+No false alarms this round. Beyond the dead keys:
+
+- **Pure cursor motion reset the "/" popup's selection** — `withInput()` is the
+  every-keystroke route and unconditionally zeroed `slashMenuIndex`, so arrowing
+  inside a `/command` then pressing Enter ran the wrong entry. Now resets only
+  when `value()` actually changed.
+- **`App::clearInputKeys()` sent backspaces only**, leaving the tail of a
+  mid-cursor draft to be typed into the menu.
+- **Eight newly live keystrokes were undisclosed in the `?` reference.** The
+  drift instruments close registry→handler and handler-observation→registry, but
+  **nothing closed new-handler-arm→registry**. Counts were pinned at 58/54, so a
+  new arm with no row left them green — inventory blindness again. Now 66/62,
+  plus a check that reads the delegation const back by reflection and demands an
+  exact label *token* in a live chat row (the first version matched by substring
+  and was blind: deleting `chat.cursor` stayed green because `Alt+← / Alt+→`
+  still contains both glyphs).
+
+**Three tests had no detection power.** The modal-inertness test asserted only
+`inputBuf`, so its five motion keys were inert — leaking motion into the
+invisible widget (`Home` under an open palette moves 5 → 0) left **the entire
+6795-test suite green**. The shared-boundary check was
+`11 === mb_strlen('alpha beta ')`, unfailable — the `(G+T)−G−T` shape again, now
+table-driven over eight drafts. And three rows of the permission-swallow table
+sat at end-of-draft where `Right`/`End`/`Delete` are no-ops anyway, under a
+fixture message claiming "a forward Delete has a tail to take".
+
+**Four false claims shipped next to the code**, all corrected: two present-tense
+comments still asserting the box has no cursor movement; a `wordLeftOffset()`
+docblock citing `vimWordForward()`/`vimWordBackward()` as measured on
+`TextArea`, which **has no vim mode at all** (they are `TextInput`'s); a
+"~200 test assertions" figure (measured 110 occurrences, 91 on assertion lines —
+number dropped rather than replaced with one that will drift); and a
+`freshInput()` docblock crediting a palette fill-on-select that does not exist.
+
+**The plan's estimate was wrong by 4–6×.** It predicted 30–50 lines of
+hand-rolled buffer logic removed; the measured figure is **11 non-comment source
+lines, 8 of them match-arm bodies**. Both multi-byte helpers survive —
+`dropLast()` because the Ctrl+P palette query is a **second** hand-rolled
+append-only buffer, `dropLastWord()` because Chat now owns the boundary for four
+chords. The plan mistook 8 lines of expressions for a subsystem.
+
+Suite: **6806 / 70298 / 1 skipped, exit 0**, verified by the supervisor from a
+clean run rather than taken from the agent's report.
+
+Deferred to hardening, each verified rather than assumed: `withCharLimit(0)`
+leaves the draft unbounded (deliberate); `TextArea::update()`'s Ctrl+O
+`$EDITOR` `proc_open` seam is unreachable today and pinned, one keymap edit away
+from not being; `ESC b`/`ESC f` type a stray letter (identical at HEAD); the
+palette's own query buffer; cursor not persisted in checkpoints; combining marks
+splice onto the block glyph; the input box over-widens past 40 columns
+(byte-identical to HEAD); `KEY_HELP_COLS` says 58 where the widest live row is
+59 (pre-existing).
+
+### `3bc5d269` + `2fa678a7` — the composer path-repo policy, inverted
+
+Triggered by the user's observation that per-lib path repos are absurd for libs
+published as independent packages. **Both halves probed rather than argued:**
+
+- A dangling path repo in the **root** package is a **hard fatal**, not a
+  warning: `PathRepository.php line 163: The url supplied for the path (…)
+  repository does not exist`, exit 1.
+- A **dependency's** `repositories` are **ignored entirely** — a package
+  carrying that same dangling entry installs clean, exit 0.
+
+So the entries were invisible to consumers who merely `require` the package, and
+fatal to anyone cloning the split `sugarcraft/<lib>` repo, where `../candy-buffer`
+does not exist. That third case is why they had to go.
+
+`3bc5d269` first completed the **root** closure, which was genuinely broken:
+56 requires, 54 path repos. `candy-focus` carried a stale `vcs` entry (the only
+non-path repository in the file) and `sugar-gallery` had none, so
+`vendor/sugarcraft/` held **56 symlinks and 4 real directories** — those two plus
+transitive-only `candy-input`/`candy-layout`, each locked `dist=zip src=git`.
+Local edits to those four never reached the root autoloader. Now 58 symlinks,
+0 real dirs, 0 dangling (two orphans from earlier removals, `candy-crush` and
+`super-candy`, swept).
+
+`2fa678a7` then stripped **394 sibling path-repo entries from 53 manifests** —
+every one dropping `repositories` entirely, since no lib had a non-sibling repo
+— and re-injects them at build time via `--fix --strict-closure` before every
+`composer install` (**9 sites** across `ci.yml`, `pty-matrix.yml`, `vhs.yml`).
+Verified both directions: `candy-mouse`/`sugar-veil` rsynced without vendor or
+lock install and pass from Packagist alone (121/269, 201/406); under injection
+their `vendor/sugarcraft/*` are symlinks to `../../../` and tests stay green.
+All 58 libs confirmed published (200 from `repo.packagist.org/p2/<name>.json`).
+
+**The trap that would have made the injection silently useless:** `composer
+install` with a lock whose content-hash no longer matches does **not**
+re-resolve — it warns and installs *from the lock*, exit 0. With 14 committed
+per-lib locks, CI would have ignored the injection and kept testing published
+siblings **while looking green**. Those are untracked now, `/*/composer.lock`
+gitignored, root keeps its own. This executes
+`docs/plans/leftover/phase-01-pty-quickwins/step-02-drop-consumer-locks.md`,
+parked since PR #491 as "composer.lock deletion NOT executed".
+
+`tools/check-path-repos.php` gains `--no-lib-path-repos` (the inverse check, and
+the one that guards the committed tree). Its own test file
+`tools/tests/CheckPathReposTest.php` **could not run on any machine but its
+author's** — it died in `require_once '/home/my/.composer/vendor/autoload.php'`
+before PHPUnit could report anything. Bootstrap made portable; running it
+immediately exposed drift the dead file had hidden (it asserted output contains
+"no path-repo entry", wording the script had stopped using). 4 tests, 23
+assertions, exit 0; mutating the new mode's `exit(1)` to `exit(0)` reddens
+exactly the new test, file restored byte-identical.
+
+**Known and deliberate:** `--strict-closure` now reports ~394 gaps on the
+committed tree BY DESIGN. That is no longer drift.
+
+#### Two corrections I owe the record
+
+1. I told the user per-lib closures were "already partial and inconsistent
+   (`candy-async` has 1 path repo for 6 sibling deps)". **Inverted** — I misread
+   my own column order. `candy-async` has **6 path repos and 1 direct require**;
+   the entries cover the full transitive closure. Per-lib coverage was
+   *near-complete*, so the cost of dropping injection was a near-total loss of
+   cross-lib PR coverage, not a partial one. The user was choosing between
+   options on the strength of that figure and changed answer once corrected.
+   This is the session's own instance of the dominant defect class: **a number
+   written where it did not hold.**
+2. I cited `php tools/check-path-repos.php` exiting 0 as evidence the new
+   `candy-forms` dep was fine. It exits 0 **because it skips anything published
+   on Packagist** — it was not testing that at all.
+
+### IN FLIGHT — Phase 4, investigation only, nothing written
+
+Chosen bundle: **Phase 4 items 1, 2, 5, 7** (all commands/CLI parity, same
+dispatch/registry area). Items 3 and 4 are already ✅; item 6 is a follow-up.
+
+Facts established so far, and **two plan claims already refuted**:
+
+- `slashVisible: false` appears **5** times in `src/Commands/CommandRegistry.php`;
+  the rows are `new` (:35), `model` (:50), `docs` (:66) and two more. Item 1's
+  premise (flip `model` to visible) holds.
+- A `help` row **already exists** at `CommandRegistry.php:121` —
+  `CommandSpec::new('help', 'Show the keyboard shortcut reference (same as /keys)', 'App')`
+  — so item 2's `/help` is **not** a missing command but a *different* command
+  than the plan describes: the plan wants it to render
+  `CommandRegistry::slashCommands()`, while today's row aliases `/keys`. Decide
+  whether to repurpose or add a second row before briefing.
+- **`CommandParser` is NOT unused outside its own test** (item 7's stated
+  premise): `src/Commands/AgentsCommand.php` uses it, as does
+  `tests/Tools/BuiltInToolCorpusTest.php`.
+- `argumentHint` is a real `CommandSpec` field (`src/Commands/CommandSpec.php:64`,
+  parsed from `argument-hint` frontmatter at :168) and **is populated** on at
+  least `share`, `mcp`, `rename`, `bg`, `fork` and one web-search row — so item
+  5 is genuinely a *renderer* gap, not a data gap.
+  `Renderer::renderSlashMenu()` is at `src/Renderer.php:2228`, called from :928.
+- `grep -c "str_starts_with(\$text"` in `src/Chat.php` returns **0**, so item 7's
+  "`str_starts_with()` dispatch chain" is not literally that. **The real shape of
+  the dispatch chain is unverified — establish it before briefing item 7.**
+
