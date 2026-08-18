@@ -27,6 +27,16 @@ namespace SugarCraft\Crush\Tools\Concerns;
 trait CapturesProcessOutput
 {
     /**
+     * Stands in for a successful command's discarded stderr.
+     *
+     * A constant rather than an inline string because {@see Bash::description()}
+     * has to tell the model the same thing this marker says, and two
+     * hand-maintained spellings of one fact drift.
+     */
+    private const SUPPRESSED_STDERR_MARKER =
+        '... [stderr suppressed: the command succeeded and also wrote to stderr; re-run with 2>&1 to see it]';
+
+    /**
      * $maxBytes bounds what is RETAINED per stream, not what is read: the
      * pipes are still drained to completion so the child never blocks on a
      * full buffer, but bytes past the bound are counted and discarded instead
@@ -177,7 +187,10 @@ trait CapturesProcessOutput
      *
      * stderr is surfaced when the command FAILED (that is where the reason
      * lives) or when it succeeded silently on stdout but said something on
-     * stderr. A successful command with real stdout keeps its output clean.
+     * stderr. A successful command with real stdout keeps its output clean --
+     * but not silently: that branch now carries a byte-count marker in place
+     * of the text, because a dropped stream nobody mentions is the same
+     * failure as a truncation nobody mentions.
      *
      * The return is a two-part shape rather than one joined string because
      * the two parts have different claims on a limited budget. `head` is the
@@ -244,6 +257,29 @@ trait CapturesProcessOutput
             ];
         }
 
-        return $onlyStdout;
+        // A succeeding command's stderr still does not join the answer -- that
+        // is the whole point of keeping the streams apart -- but its EXISTENCE
+        // now does. Dropping it in total silence is how a green `phpunit`,
+        // `composer` or compiler run reads as warning-free to a model that
+        // never saw the warnings; the marker costs one line and names the
+        // redirect that recovers them.
+        //
+        // Deliberately WITHOUT a byte count. The only figure available here is
+        // `strlen($run['stderr']) + $stderrDropped`, and it is not stable
+        // across the cap: `runCaptured()` rtrims the retained text, so an
+        // UNCAPPED capture loses its trailing newline while a capped one --
+        // whose retained slice ends mid-line -- does not. The same command
+        // would then report two different totals depending on $maxOutputBytes,
+        // which is a number travelling without its domain and would also break
+        // the cap-invariance the two OutputTruncationTest chatty-stderr cases
+        // pin. Presence plus the recovery instruction is the part that is true
+        // at every cap.
+        return [
+            'head' => $run['stdout'],
+            'tail' => self::SUPPRESSED_STDERR_MARKER,
+            'dropped' => $stdoutDropped,
+            'headMidLine' => $stdoutMidLine,
+            'tailMidLine' => false,
+        ];
     }
 }

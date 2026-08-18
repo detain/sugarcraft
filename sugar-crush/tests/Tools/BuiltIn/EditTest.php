@@ -65,8 +65,13 @@ final class EditTest extends TestCase
             'new_string' => 'PHP',
         ]);
 
-        $this->assertSame("File updated: $path", $result->content());
+        // Exact, not a prefix check: the tally is now part of the summary
+        // (it is the only account of the edit's size the MODEL ever sees --
+        // ToolResult::$diff never reaches the conversation), and the diff blob
+        // still must not be in there.
+        $this->assertSame("File updated: $path (+1 -1 lines)", $result->content());
         $this->assertStringNotContainsString('@@', $result->content());
+        $this->assertStringNotContainsString('Hello PHP', $result->content(), 'the new text is not echoed back');
     }
 
     public function testExecuteDiffShowsExactBeforeAfterLineChange(): void

@@ -133,6 +133,11 @@ final class OutputTruncationTest extends TestCase
      * stderr into the reported loss charged the result for bytes that were
      * never going to appear at any cap. `bash -x`, `curl -v`, `rsync -v`, npm
      * and most compilers all hit this on a perfectly successful run.
+     *
+     * The dropped stderr is now ANNOUNCED (one fixed marker, no byte count --
+     * see the merge for why a count here would not be stable across the cap).
+     * That is a different statement from "this answer is partial", which is
+     * what the two negative assertions below still hold the line on.
      */
     public function testAChattyStderrOnASuccessfulCommandIsNotReportedAsTruncation(): void
     {
@@ -142,9 +147,15 @@ final class OutputTruncationTest extends TestCase
         $result = (new Bash())->execute(['command' => $command, 'id' => 'call_stderr_noise']);
 
         $this->assertFalse($result->isError());
-        $this->assertSame('BUILD OK', $result->content());
+        $this->assertSame(
+            "BUILD OK\n... [stderr suppressed: the command succeeded and also wrote to stderr; "
+            . "re-run with 2>&1 to see it]",
+            $result->content(),
+        );
         $this->assertStringNotContainsString('truncated:', $result->content());
         $this->assertStringNotContainsString('PARTIAL', $result->content());
+        // 73 KB of trace lines, and not one of them in the answer.
+        $this->assertStringNotContainsString('set -x trace line', $result->content());
     }
 
     /** The same command with the cap off is the control: identical content. */

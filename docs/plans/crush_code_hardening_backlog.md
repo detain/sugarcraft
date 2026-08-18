@@ -456,6 +456,98 @@ Fix the tracking, not the code:
   the only thing standing between a cloned preset and `permissionMode`?
 - **Blocked on** Same suite-run serialization constraint as §B1.
 
+### C7 — `AgentDefinition::$defaultTools` is inert end to end: no launch path filters a sub-agent's tool set by it
+
+- **What** Every preset declares a tool roster (`['Read', 'Grep', 'Glob']` for
+  `architect`, `['Read', 'Edit', 'Bash']` for `coder`, and so on) and **nothing
+  restricts a sub-agent to it**. A preset's roster is a label, not a grant. That
+  is not a smaller version of the intended behaviour, it is the opposite of it in
+  the one case that matters: `architect`'s narrower-looking roster does not make
+  the sub-agent read-only.
+- **Where** `sugar-crush/src/Agents/AgentDefinition.php` (the six
+  `defaultTools:` arguments, `:49`/`:66`/`:83`/`:109`/`:126`/`:142`);
+  `src/Agents/Agent.php:83` (`tools: $definition->defaultTools`);
+  `src/Agents/AgentManager.php:383-389` (the `CompleteRequest` the presets
+  actually launch through).
+- **Severity** Real bug — **functionality today, permission surface once wired.**
+  Dormant in the sense that no roster is being *violated* (there is no
+  enforcement to violate); live in the sense that a prompt or a UI listing can
+  describe a containment the runtime does not provide.
+- **Evidence** Probed at the working tree, 2026-08-18:
+  - `grep -rn 'defaultTools' src/` → nine hits: the constructor property, the six
+    preset literals, `Agent.php:83`, and one comment. **No filter.**
+  - `Agent::$tools` from there on is only **copied, serialised and displayed**:
+    `src/Agents/Agent.php:151` (`'tools' => $this->tools` in `toArray()`),
+    `:166`/`:182`/`:202` (`with*()` copies), `src/Agents/Teammate.php:86`, and
+    `src/Commands/AgentsCommand.php:132-133`, which *prints* the roster to the
+    user (`"  Tools:       " . implode(", ", $agent->tools)`). That display site
+    is the one worth flagging: it shows the operator a roster that constrains
+    nothing.
+  - `AgentManager::executeSubAgent()` builds its `CompleteRequest` with `model`,
+    `messages` and `systemPrompt` and **no `tools` argument at all**
+    (`src/Agents/AgentManager.php:383-389`), so an `architect` sub-agent does not
+    get read-only tools — it gets none.
+  - The one path that does put a roster on an `Agent` from a caller's data,
+    `WorkflowEngine` (`src/Workflows/WorkflowEngine.php:865`, `tools:
+    $task->tools`), lands it in the same inert field; and `WorkflowEngine` is
+    never constructed in production (§C5).
+- **Step** Wire `Agent::$tools` into the request the sub-agent actually runs —
+  i.e. resolve the roster to `Tool` instances and pass them on
+  `CompleteRequest::$tools` in `executeSubAgent()`, with the `Bash(git:*)`-style
+  scoped entries resolved through the permission surface rather than by string
+  match. **Add the assertion first**: nothing currently fails while the field is
+  inert, which is why this shipped with a preset prompt asserting a grant that
+  did not exist. Sequence with §A6 (`fromPreset()`'s dropped fields) and §B1 —
+  this is tool-capability filtering, so it lands in the permission-surface pass,
+  not in a functionality round.
+- **Blocked on** Nothing technical. Deliberately deferred out of Phase 5
+  "Bundle A" (a functionality round) because it touches the permission surface.
+  Until it lands, no preset prompt may assert a tool grant — the `architect`
+  prompt was reworded to state its METHOD instead, and that rewording is the
+  only thing standing between this seam and a false model-facing claim.
+
+### C8 — `App::dispatchSkill()` and the simulated worker are a dormant PAIR: a correct payload with nothing to deliver it to
+
+- **What** `dispatchSkill()` now builds a correct fork payload — the skill body
+  reaches the worker through `Agent::systemPrompt()`, with an `EnvironmentBlock`
+  captured at `$root` and at the fork's own model, so both of `ProcessExecutor`'s
+  send sites agree about it. **No fork is oriented by it.** The method has no
+  production caller, and the executor it would reach ignores both fields it
+  sends.
+- **Where** `sugar-crush/src/App/App.php` (`dispatchSkill()`, and the
+  `withEnvironment()` capture inside it); `src/Agents/AgentWorkerPool.php`
+  (`executeOne()` → `ProcessExecutor` fallback);
+  `src/Agents/ProcessExecutor.php:455-470` (the two send sites) and `:515+`
+  (`createInlineWorkerScript()`).
+- **Severity** Dormant seam — **not a bug, and not a deletion candidate.** The
+  payload half is a real fix that will be needed the moment either half of the
+  pair goes live; recorded here so a hardening pass does not read the wiring as
+  working.
+- **Evidence** Probed at the working tree, 2026-08-18:
+  - `grep -rn dispatchSkill src/ bin/` → the definition, one docblock
+    cross-reference from `applySkillsToSystemPrompt()`, and the comment inside
+    the method. **No invocation.** The only caller anywhere is
+    `tests/App/AppSkillDispatchTest.php`.
+  - `ProcessExecutor` sends both `agent.prompt` (`:459`,
+    `$agent->agent->systemPrompt()`) and `request.systemPrompt` (`:466`) — which
+    is why the payload had to be correct on the `Agent`, not only on the
+    request.
+  - `createInlineWorkerScript()` is still the Phase-1 simulation and consumes
+    **neither**: it reads `$agentConfig['name']` and `$task` only, and its own
+    comment says *"this is a simplified simulation that doesn't actually call an
+    LLM"*. Same simulation as §C4, viewed from the skill-fork side.
+- **Step** No code change owed for the payload. When §C4 replaces the simulation,
+  assert that a dispatched skill's worker actually receives the environment
+  block (cwd / git / platform / model lines), and wire a production caller for
+  `context: fork` skills at the same time — the two halves have to land together
+  or the seam stays dormant with a passing test.
+- **Blocked on** §C4 (the simulated executor). Note for whoever picks this up:
+  the comment that used to sit on `dispatchSkill()` described this outcome in the
+  **present tense** while the paragraph below it criticised a *different*
+  mechanism for never being reached. A mechanically correct fix can still ship a
+  false sentence about what it accomplishes; the tense is now future and says
+  why.
+
 ---
 
 ## D. Audit-instrument correctness (deliberately deferred — audit hygiene)

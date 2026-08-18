@@ -53,8 +53,17 @@ final class ProcessOutputCaptureTest extends TestCase
         $leaked = (string) ob_get_clean();
 
         $this->assertSame('', $leaked);
-        // Succeeded with real stdout, so stderr stays out of the result.
-        $this->assertSame('to-stdout', $result->content());
+        // Succeeded with real stdout, so the stderr TEXT stays out of the
+        // result -- but its existence is announced, because a dropped stream
+        // nobody mentions reads to the model as a stream that was never
+        // written. Asserted as an exact string so the marker cannot be lost or
+        // reworded silently.
+        $this->assertSame(
+            "to-stdout\n... [stderr suppressed: the command succeeded and also wrote to stderr; "
+            . "re-run with 2>&1 to see it]",
+            $result->content(),
+        );
+        $this->assertStringNotContainsString('to-stderr', $result->content(), 'the text itself must not be merged in');
         $this->assertFalse($result->isError());
     }
 

@@ -85,7 +85,7 @@ final class BuiltInToolTest extends TestCase
         $tool = new Read();
 
         $this->assertSame('Read', $tool->name());
-        $this->assertSame('Read contents of a file', $tool->description());
+        $this->assertStringStartsWith('Read contents of a file', $tool->description());
     }
 
     public function testBashToolHasCorrectNameAndDescription(): void
@@ -93,7 +93,7 @@ final class BuiltInToolTest extends TestCase
         $tool = new Bash();
 
         $this->assertSame('Bash', $tool->name());
-        $this->assertSame('Execute a bash command', $tool->description());
+        $this->assertStringStartsWith('Execute a bash command', $tool->description());
     }
 
     public function testEditToolHasCorrectNameAndDescription(): void
@@ -101,7 +101,7 @@ final class BuiltInToolTest extends TestCase
         $tool = new Edit();
 
         $this->assertSame('Edit', $tool->name());
-        $this->assertSame('Edit a file by replacing text', $tool->description());
+        $this->assertStringStartsWith('Edit a file by replacing text', $tool->description());
     }
 
     public function testGrepToolHasCorrectNameAndDescription(): void
@@ -153,13 +153,22 @@ final class BuiltInToolTest extends TestCase
         $this->assertStringContainsString('vendor/**/*.php', $description, 'the opt-out has to be spelled out');
     }
 
-    /** A caller that turned pruning off must not advertise a prune list. */
+    /**
+     * A caller that turned pruning off must not advertise a prune list — but
+     * it still needs the shared when-to-reach-for-this guidance, which is why
+     * this asserts the two halves separately instead of pinning the whole
+     * string. The prune list is the only part that is conditional.
+     */
     public function testGlobDescriptionDropsThePruneNoteWhenPruningIsDisabled(): void
     {
-        $this->assertSame(
-            'Find files matching a glob pattern',
-            (new Glob(prunedDirs: []))->description(),
-        );
+        $description = (new Glob(prunedDirs: []))->description();
+
+        $this->assertStringStartsWith('Find files matching a glob pattern', $description);
+        $this->assertStringContainsString('`**` matches across directory levels', $description);
+        $this->assertStringNotContainsString('skips', $description);
+        foreach (['vendor', 'node_modules', '.phpunit.cache'] as $dir) {
+            $this->assertStringNotContainsString($dir, $description, $dir);
+        }
     }
 
     public function testWebFetchToolHasCorrectNameAndDescription(): void

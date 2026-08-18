@@ -52,9 +52,47 @@ final readonly class Bash implements Tool
     {
         return 'Bash';
     }
+    /**
+     * The three facts a first-time caller cannot infer and pays a wasted turn
+     * for: nothing survives between calls (each {@see execute()} builds a
+     * fresh `bash -c`, so a `cd`, an export or a shell function is gone by the
+     * next one), the result is bounded (see {@see $maxOutputBytes}), and stderr
+     * is NOT unconditionally part of the answer.
+     *
+     * That last clause is stated per branch because
+     * {@see CapturesProcessOutput::mergeCapturedOutput()} decides per branch,
+     * and the three branches disagree: stderr is appended when the command
+     * FAILED, stands in for the whole answer when stdout was empty, and is
+     * replaced by a marker when a SUCCEEDING command wrote to both. An earlier
+     * draft of this description said "stdout and stderr are merged"
+     * unconditionally, which reads a green `phpunit` or compiler run as
+     * warning-free when the warnings went to stderr and were dropped — a
+     * false claim is worse than the terse sentence it replaced.
+     *
+     * The byte figure is READ OFF $maxOutputBytes rather than written out,
+     * because a caller that raised or disabled the cap would otherwise be
+     * advertising a number that is not its own.
+     */
     public function description(): string
     {
-        return 'Execute a bash command';
+        $bound = $this->maxOutputBytes > 0
+            ? sprintf(
+                'The result is clipped at %s bytes, with a marker naming what was dropped.',
+                number_format($this->maxOutputBytes),
+            )
+            : 'There is no size cap on this instance.';
+
+        return 'Execute a bash command. Each call is a fresh `bash -c`, so nothing carries '
+            . 'over from the previous one — not the working directory (a `cd` here has no '
+            . 'effect on the next call), not environment variables, not shell functions. '
+            . 'Output is captured, not written to the terminal. You get stdout; stderr is '
+            . 'appended after it only when the command exits non-zero, and is returned on '
+            . 'its own when the command wrote nothing to stdout. A command that SUCCEEDS '
+            . 'while writing to stderr has that stderr replaced by a one-line marker, not '
+            . 'included — so append 2>&1 yourself when the warnings are what you are after. '
+            . $bound . ' '
+            . 'Prefer Read/Grep/Glob for reading and searching files; reach for this for '
+            . 'build, test and git work, and for anything those tools cannot do.';
     }
     public function inputSchema(): array
     {

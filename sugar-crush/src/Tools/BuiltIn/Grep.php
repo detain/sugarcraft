@@ -49,21 +49,54 @@ final readonly class Grep implements Tool, ParallelSafe
      * prune list is: a default the model only learns about AFTER it has
      * already asked the wrong question costs a turn, and "no hits" in a tree
      * that was never searched is indistinguishable from "no hits".
+     *
+     * The regex dialect is stated for the same reason and is the one clause a
+     * model is most likely to get wrong unprompted: {@see execute()} builds
+     * `grep -rn` with NO `-E` and NO `-P`, so the pattern is GNU basic
+     * regular expression (BRE) syntax. crush_code.md section 12 asserted ERE
+     * here; that is wrong, and the difference is not cosmetic — in BRE `a|b`
+     * matches the literal three characters `a|b`, and `(a)` and `a+` match
+     * their own punctuation rather than grouping or repeating.
+     *
+     * GNU, not "POSIX", and the qualifier is load-bearing rather than pedantic:
+     * the escaped operators the text goes on to recommend — `\|`, `\+`, `\?` —
+     * are GNU EXTENSIONS. Strict POSIX BRE has no alternation operator at all,
+     * so saying "POSIX basic" and then instructing the model to escape its way
+     * to alternation describes a dialect that does not exist. The host binary
+     * here is GNU grep 3.11, and the escaped forms are proven against it in
+     * `ToolDescriptionGuidanceTest`.
+     *
+     * The no-matches clause names the scoring rule `execute()` actually
+     * applies (`isError: exitCode > 1`), which the model cannot otherwise
+     * distinguish from a failed search.
      */
     public function description(): string
     {
-        return 'Search for a pattern in files. Skips ' . implode(', ', IgnoreRules::DEFAULT_EXCLUDED_DIRS)
+        return 'Search for a pattern in files, recursively. The pattern is a GNU basic '
+            . 'regular expression — this runs `grep -rn`, not PCRE — so `|`, `+`, `?`, `(`, '
+            . '`)`, `{` and `}` match themselves unless backslash-escaped. Use include to '
+            . 'scope by filename glob (e.g. "*.php"). Finding nothing is a normal result, '
+            . 'not an error; only grep itself failing is reported as one. Skips '
+            . implode(', ', IgnoreRules::DEFAULT_EXCLUDED_DIRS)
             . ' and anything the project\'s .gitignore excludes; pass include_ignored: true to search those too.';
     }
 
     public function inputSchema(): array
     {
+        // Only a rooted instance is contained, so only a rooted instance says
+        // so — the unrooted one (a test, an embedder) genuinely accepts any
+        // readable directory.
+        $pathScope = $this->root !== null ? ' Must be inside the workspace root.' : '';
+
         return [
         'type' => 'object',
         'properties' => [
-            'pattern' => ['type' => 'string', 'description' => 'The regex pattern to search for'],
-            'path' => ['type' => 'string', 'description' => 'Directory path to search in'],
-            'include' => ['type' => 'string', 'description' => 'File pattern to match (e.g., *.php)'],
+            // Reconciled with description(): the schema used to say only
+            // "regex pattern", which a model reasonably reads as PCRE. It is
+            // GNU BRE, and the two strings must not disagree about that.
+            'pattern' => ['type' => 'string', 'description' => 'The pattern to search for, as a GNU basic regular expression (BRE). Escape |, +, ?, ( and ) to use them as operators rather than literals.'],
+            'path' => ['type' => 'string', 'description' => 'Directory path to search in.' . $pathScope],
+            'include' => ['type' => 'string', 'description' => 'Filename glob limiting which files are searched (e.g., *.php). Defaults to every file.'],
             'description' => [
                 'type' => 'string',
                 'description' => 'Clear, concise 5-10 word description in active voice of what this search looks for (e.g. "Locate callers of describeToolCall", not "greps a regex").',

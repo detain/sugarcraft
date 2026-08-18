@@ -13,6 +13,7 @@ use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\App\OpenSkillPickerMsg;
 use SugarCraft\Crush\App\SelectSkillMsg;
+use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
@@ -264,5 +265,172 @@ final class AppSkillDispatchTest extends TestCase
         // Assert
         $this->assertStringNotContainsString('fork-skill', $result);
         $this->assertStringContainsString('thread-skill', $result);
+    }
+
+    // -------------------------------------------------------------------------
+    // dispatchSkill() environment orientation (crush_code.md Phase 5 item 3 /
+    // section 12 finding 4).
+    //
+    // The path built its CompleteRequest by hand with `systemPrompt:
+    // $skill->content`, so it constructed an Agent and then never called
+    // Agent::systemPrompt() on it — a fork-context skill ran with no cwd, no
+    // git state, no platform and no date, while AgentManager's sub-agents (the
+    // sibling launch path) got all four.
+    //
+    // These reuse the mock-executor seam the two tests above already use; no
+    // new scaffolding, and the CompleteRequest the pool is handed is captured
+    // straight off the call.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Runs a fork-context skill through a mock executor and hands back the
+     * CompleteRequest and SubAgent the pool was given.
+     *
+     * @return array{0: CompleteRequest, 1: SubAgent}
+     */
+    private function captureForkDispatch(App $app, Skill $skill): array
+    {
+        $captured = null;
+
+        $executor = $this->createMock(ExecutorInterface::class);
+        $executor->expects($this->once())
+            ->method('execute')
+            ->willReturnCallback(function (SubAgent $subAgent, CompleteRequest $request) use (&$captured): AgentResult {
+                $captured = [$request, $subAgent];
+
+                return new AgentResult(agentId: $subAgent->id, status: AgentStatus::Completed, output: 'ok');
+            });
+
+        $result = $app->dispatchSkill($skill, new AgentWorkerPool(maxConcurrent: 1, executor: $executor), 'do the fork task');
+
+        $this->assertNotNull($result, 'a fork-context skill must be dispatched, not fall through');
+        $this->assertIsArray($captured);
+
+        return $captured;
+    }
+
+    /**
+     * The whole finding in one assertion: the request carries the skill body
+     * AND the environment block, in that order. Reverting to `systemPrompt:
+     * $skill->content` leaves the body and drops the block.
+     */
+    public function testDispatchSkillDeliversTheEnvironmentBlockAlongsideTheSkillBody(): void
+    {
+        $registry = new SkillRegistry();
+        $forkSkill = $this->skillFromYaml("description: Fork skill\ncontext: fork", 'fork-skill');
+        $registry->register(['fork-skill' => $forkSkill]);
+
+        [$request] = $this->captureForkDispatch(
+            App::new($this->provider, 'test-model')->withAvailableSkills($registry),
+            $forkSkill,
+        );
+
+        $prompt = (string) $request->systemPrompt;
+
+        $this->assertStringContainsString('Content for fork-skill.', $prompt, 'the skill body must still be delivered');
+        $this->assertStringContainsString('<env>', $prompt);
+        $this->assertStringContainsString('Working directory: ', $prompt);
+        $this->assertStringContainsString('Current date: ', $prompt);
+        $this->assertLessThan(
+            strpos($prompt, '<env>'),
+            strpos($prompt, 'Content for fork-skill.'),
+            'Agent::systemPrompt() puts the prompt first and the block after it',
+        );
+    }
+
+    /**
+     * Half two of the fix, and the half Agent::systemPrompt()'s own fallback
+     * gets wrong: the block orients at the App's configured `--root`, not at
+     * the process directory. A `--root candy-shine` fork has to be told it is
+     * standing in candy-shine.
+     *
+     * The temp directory is chosen precisely because it is NOT getcwd(), so the
+     * two answers are distinguishable — which is the only way this test has any
+     * power at all.
+     */
+    public function testDispatchSkillOrientsTheForkAtTheConfiguredRootNotTheProcessDirectory(): void
+    {
+        $root = sys_get_temp_dir() . '/crush_fork_root_' . uniqid('', true);
+        mkdir($root);
+
+        try {
+            $this->assertNotSame(getcwd(), $root, 'the fixture is only meaningful if the two differ');
+
+            $registry = new SkillRegistry();
+            $forkSkill = $this->skillFromYaml("description: Fork skill\ncontext: fork", 'fork-skill');
+            $registry->register(['fork-skill' => $forkSkill]);
+
+            [$request] = $this->captureForkDispatch(
+                App::new($this->provider, 'test-model')->withAvailableSkills($registry)->withRoot($root),
+                $forkSkill,
+            );
+
+            $prompt = (string) $request->systemPrompt;
+
+            $this->assertStringContainsString('Working directory: ' . $root, $prompt);
+            $this->assertStringNotContainsString('Working directory: ' . getcwd(), $prompt);
+        } finally {
+            @rmdir($root);
+        }
+    }
+
+    /**
+     * And half three: captured at the FORK's model, not the session's. The
+     * block renders a `Model:` line, so a skill declaring `model:` in its
+     * frontmatter would otherwise be handed a prompt naming the session model
+     * — the exact defect Bootstrap::agentManager()'s per-agent capture exists
+     * to prevent, restated for this launch path.
+     */
+    public function testDispatchSkillStampsTheForksOwnModelIntoTheEnvironmentBlock(): void
+    {
+        $registry = new SkillRegistry();
+        $forkSkill = $this->skillFromYaml(
+            "description: Fork skill\ncontext: fork\nmodel: skill-declared-model",
+            'fork-skill',
+        );
+        $registry->register(['fork-skill' => $forkSkill]);
+
+        $this->assertSame('skill-declared-model', $forkSkill->model, 'the fixture must actually declare a model');
+
+        [$request, $subAgent] = $this->captureForkDispatch(
+            App::new($this->provider, 'session-model')->withAvailableSkills($registry),
+            $forkSkill,
+        );
+
+        $prompt = (string) $request->systemPrompt;
+
+        $this->assertStringContainsString('Model: skill-declared-model', $prompt);
+        $this->assertStringNotContainsString('Model: session-model', $prompt);
+        $this->assertSame('skill-declared-model', $subAgent->agent->model);
+    }
+
+    /**
+     * The block has to be attached to the Agent, not merely folded into the
+     * request: ProcessExecutor sends the request's systemPrompt AND, as a
+     * separate field, `$agent->agent->systemPrompt()` — so an Agent carrying no
+     * environment would send one oriented half and one unoriented half.
+     */
+    public function testDispatchSkillAttachesTheBlockToTheAgentTheExecutorAlsoReads(): void
+    {
+        $root = sys_get_temp_dir() . '/crush_fork_agent_' . uniqid('', true);
+        mkdir($root);
+
+        try {
+            $registry = new SkillRegistry();
+            $forkSkill = $this->skillFromYaml("description: Fork skill\ncontext: fork", 'fork-skill');
+            $registry->register(['fork-skill' => $forkSkill]);
+
+            [$request, $subAgent] = $this->captureForkDispatch(
+                App::new($this->provider, 'test-model')->withAvailableSkills($registry)->withRoot($root),
+                $forkSkill,
+            );
+
+            // The two fields ProcessExecutor sends must agree about where the
+            // fork is standing.
+            $this->assertStringContainsString('Working directory: ' . $root, $subAgent->agent->systemPrompt());
+            $this->assertSame($subAgent->agent->systemPrompt(), (string) $request->systemPrompt);
+        } finally {
+            @rmdir($root);
+        }
     }
 }

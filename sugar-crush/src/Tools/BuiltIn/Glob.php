@@ -117,16 +117,39 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
      * the model only learns about AFTER it has already asked the wrong
      * question costs a turn. Naming the directories up front lets it write
      * `vendor/**\/*.php` the first time.
+     *
+     * Stays COMPUTED, and the added when-to-reach-for-this guidance is shared
+     * by both branches: a caller that switched pruning off (`prunedDirs: []`)
+     * still needs to know what the tool is for and what it returns, it just
+     * has no prune list to be warned about.
      */
     public function description(): string
     {
-        $pruned = $this->prunedDirNames();
-        if ($pruned === []) {
-            return 'Find files matching a glob pattern';
+        // `**` is the tool's own advertised pattern shape (see inputSchema()
+        // and match()'s note on PHP glob() having no globstar), so the lead
+        // spells it rather than leaving the model to guess whether recursion
+        // is supported at all.
+        $lead = 'Find files matching a glob pattern (e.g. "**/*.php") under a base directory. '
+            . 'Reach for this instead of a shell `find`/`ls` when you know how the files are '
+            . 'named but not where they live: `**` matches across directory levels, and '
+            . 'matches come back one path per line, followed by notes naming anything '
+            . 'pruned, gitignored, not followed or clipped.';
+
+        // Claimed only by an instance that HAS the loader, because only then
+        // does execute() interleave instruction-file content with the paths --
+        // and a result that is not purely a path list has to say so.
+        if ($this->instructionLoader !== null) {
+            $lead .= ' A CLAUDE.md/AGENTS.md governing a matched file\'s directory is '
+                . 'surfaced above that path the first time the directory is touched.';
         }
 
-        return sprintf(
-            'Find files matching a glob pattern. A recursive `**` walk skips %s by default; '
+        $pruned = $this->prunedDirNames();
+        if ($pruned === []) {
+            return $lead;
+        }
+
+        return $lead . sprintf(
+            ' A recursive `**` walk skips %s by default; '
             . 'naming one of those directories in the pattern (e.g. "%s/**/*.php") or pointing '
             . 'path inside it searches there instead.',
             implode(', ', $pruned),

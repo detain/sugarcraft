@@ -39,22 +39,45 @@ final readonly class Edit implements Tool
     {
         return 'Edit';
     }
+    /**
+     * States the match contract up front, because every clause of it is
+     * otherwise learned from an error string after a wasted turn: the
+     * uniqueness rejection, the zero-match rejection and the
+     * must-already-exist requirement all live in {@see execute()} and each one
+     * leaves the file untouched.
+     *
+     * The result clause describes what the MODEL receives, which is
+     * {@see ToolResult::content()} and nothing else. An earlier draft promised
+     * "a unified diff of what changed"; the diff is real but rides
+     * {@see ToolResult::$diff}, a field only the renderer and the event stream
+     * read -- `Runtime::settle()` builds the model's message from `content()`
+     * alone. So the honest clause is the line tally {@see changeSummary()}
+     * puts in `content()`, plus the fact that the new text is not echoed back.
+     */
     public function description(): string
     {
-        return 'Edit a file by replacing text';
+        return 'Edit a file by replacing text: one exact, unique occurrence of old_string '
+            . 'becomes new_string. Read the file first — old_string must match the bytes on '
+            . 'disk exactly, indentation and line endings included. Matching more than once '
+            . 'is rejected unless replace_all is set, and matching zero times is rejected '
+            . 'too; either way the file is left untouched, never partially edited. The file '
+            . 'must already exist — use Write to create one. On success the result names the '
+            . 'path and counts the lines added and removed, as "(+2 -1 lines)"; it does not '
+            . 'echo the new file contents back, so Read the file again if you need to see '
+            . 'the edit in context.';
     }
     public function inputSchema(): array
     {
         return [
         'type' => 'object',
         'properties' => [
-            'file_path' => ['type' => 'string', 'description' => 'Path to file to edit'],
-            'old_string' => ['type' => 'string', 'description' => 'The text to replace'],
-            'new_string' => ['type' => 'string', 'description' => 'The replacement text'],
+            'file_path' => ['type' => 'string', 'description' => 'Path to the file to edit. It must already exist; use Write to create a new file.'],
+            'old_string' => ['type' => 'string', 'description' => 'The text to replace, matched byte-for-byte against the file on disk. Must occur exactly once unless replace_all is set.'],
+            'new_string' => ['type' => 'string', 'description' => 'The replacement text. May be empty to delete old_string.'],
             // `boolean`, not `bool`: JSON Schema has no `bool` type, and a
             // guided-decoding backend (SGLang outlines/xgrammar) can reject
             // or mis-constrain a field whose declared type it cannot resolve.
-            'replace_all' => ['type' => 'boolean', 'description' => 'Replace all occurrences'],
+            'replace_all' => ['type' => 'boolean', 'description' => 'Replace every occurrence instead of requiring old_string to be unique.'],
             'description' => [
                 'type' => 'string',
                 'description' => 'Clear, concise 5-10 word description in active voice of what this edit does (e.g. "Rename the legacy config helper", not "edits a file").',
@@ -189,7 +212,7 @@ final readonly class Edit implements Tool
             ? self::unifiedDiff($path, $originalContent, $newContent)
             : '';
 
-        $message = "File updated: $path";
+        $message = "File updated: $path" . self::changeSummary($diff);
         if ($nestedContent !== null) {
             $message = $nestedContent . "\n\n" . $message;
         }
@@ -209,4 +232,40 @@ final readonly class Edit implements Tool
         );
     }
 
+    /**
+     * ` (+2 -1 lines)` for a real change, `''` for a write that changed nothing.
+     *
+     * The model is handed `content()` and nothing else, so without this the
+     * only report of an edit's effect is the word "updated" -- which is the
+     * same string a 1-character typo fix and a 400-line replacement produce.
+     * A tally is what lets the model notice its `old_string` matched somewhere
+     * far bigger than it meant, without spending a turn re-Reading the file.
+     *
+     * Counted off the diff rather than off the two file contents so it is the
+     * SAME change the renderer shows from {@see ToolResult::$diff}; deriving it
+     * independently is how the summary and the diff come to disagree. The
+     * `+++`/`---` guards are needed because the header lines are themselves
+     * `+`- and `-`-prefixed.
+     */
+    private static function changeSummary(string $diff): string
+    {
+        if ($diff === '') {
+            return '';
+        }
+
+        $added = 0;
+        $removed = 0;
+        foreach (explode("\n", $diff) as $line) {
+            if (str_starts_with($line, '+++') || str_starts_with($line, '---')) {
+                continue;
+            }
+            if (str_starts_with($line, '+')) {
+                $added++;
+            } elseif (str_starts_with($line, '-')) {
+                $removed++;
+            }
+        }
+
+        return sprintf(' (+%d -%d lines)', $added, $removed);
+    }
 }

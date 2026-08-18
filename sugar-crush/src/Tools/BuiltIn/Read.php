@@ -84,9 +84,40 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
     {
         return 'Read';
     }
+    /**
+     * The cap is the behaviour worth stating: an oversize file comes back
+     * SHORT rather than as an error (see {@see execute()}), and a model told
+     * only "read a file" has no reason to suspect the content it got was the
+     * head of a larger one.
+     *
+     * The byte figure is read off $maxBytes rather than written out — a caller
+     * that passed its own cap would otherwise advertise the default's number
+     * instead of its own. The prefer-this-over-`cat` clauses are conditional
+     * for the same reason: containment and instruction-file surfacing come
+     * from two DIFFERENT injected collaborators, and an instance holding
+     * neither must not claim either.
+     */
     public function description(): string
     {
-        return 'Read contents of a file';
+        // Each advantage is claimed only by the instance that actually has
+        // it: containment comes from a root or a worktree jail, and the
+        // instruction-file surfacing comes from the loader. A standalone
+        // instance has neither, and must not advertise them.
+        $advantages = [];
+        if ($this->worktreeJail !== null || $this->root !== null) {
+            $advantages[] = 'it is confined to the workspace root';
+        }
+        if ($this->instructionLoader !== null) {
+            $advantages[] = 'any CLAUDE.md/AGENTS.md governing the file\'s directory is '
+                . 'surfaced with the content the first time that directory is touched';
+        }
+        $advantages[] = 'a read failure comes back as a tool error rather than as a crash';
+
+        return 'Read contents of a file from the local filesystem. Content comes back up to '
+            . number_format($this->maxBytes) . ' bytes; a larger file is truncated to that '
+            . 'much and marked "... [truncated]" rather than erroring, so a short result may '
+            . 'be the head of a longer file. Prefer this over `cat`/`head` through Bash: '
+            . implode('; ', $advantages) . '.';
     }
     public function inputSchema(): array
     {

@@ -23,6 +23,7 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandRegistry;
+use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -369,6 +370,32 @@ final class App implements Model
      * caller can distinguish "not handled here — fall back to the normal
      * inline path via applySkillsToSystemPrompt()" from "handled, here is
      * the result".
+     *
+     * The skill body is delivered through {@see Agent::systemPrompt()} rather
+     * than as a bare CompleteRequest::$systemPrompt, so the payload this method
+     * hands out is now correct and both of {@see ProcessExecutor}'s send sites
+     * agree about it — see the note at the capture below for why the block is
+     * taken at $root and at the fork's own model.
+     *
+     * No fork is oriented by it YET, and the correct tense here is future. This
+     * method has no production caller: `grep -rn dispatchSkill src/ bin/` finds
+     * this definition and one docblock cross-reference from
+     * {@see applySkillsToSystemPrompt()}, and nothing that invokes it — the only
+     * caller anywhere is `tests/App/AppSkillDispatchTest.php`. The executor it
+     * would reach,
+     * {@see ProcessExecutor::createInlineWorkerScript()}, is still the Phase-1
+     * simulation — it reads `$agentConfig['name']` and the task, and consumes
+     * neither `agent.prompt` nor `request.systemPrompt`. So this is a DORMANT
+     * SEAM whose payload is ready, not a live orientation path; it will orient
+     * a fork once a real executor and a production caller exist. Logged as
+     * §C8 in docs/plans/crush_code_hardening_backlog.md, alongside §C4 for the
+     * simulated executor.
+     *
+     * Worth naming, because the mistake is easy to repeat: an earlier revision
+     * of this comment described the outcome in the present tense while the
+     * paragraph below it criticised a DIFFERENT mechanism for never being
+     * reached. A fix that is mechanically right can still ship a false
+     * sentence about what it accomplishes.
      */
     public function dispatchSkill(Skill $skill, AgentWorkerPool $pool, string $task): ?AgentResult
     {
@@ -388,6 +415,38 @@ final class App implements Model
             isActive: true,
         );
 
+        // Attached BEFORE the SubAgent is built, because two different
+        // consumers read the orientation back out and they must agree:
+        // ProcessExecutor sends the request's systemPrompt AND, separately,
+        // `$agent->agent->systemPrompt()`. Handing $skill->content straight to
+        // CompleteRequest bypassed Agent::systemPrompt() altogether, so a
+        // fork-context skill WOULD run with no cwd, no git state, no platform
+        // and no date once anything called this — the same unreached-mechanism
+        // defect as the root AGENTS.md-loading gap, resurfaced in a sibling
+        // launch path (crush_code.md section 12 finding 4). Subjunctive on
+        // purpose: see the method docblock. Nothing calls dispatchSkill() in
+        // production yet, so this repairs the payload before the path opens
+        // rather than fixing an observed misbehaviour.
+        //
+        // Captured here rather than left to Agent::systemPrompt()'s
+        // last-resort `EnvironmentBlock::capture(getcwd(), ...)` for the two
+        // reasons Bootstrap::agentManager() already established for the agent
+        // roster:
+        //
+        //   - At $root, not the process directory. The block renders the
+        //     "Working directory"/"Is directory a git repo" lines that orient
+        //     the model, and on a `--root candy-shine` run they have to name
+        //     the directory the tools are jailed to. The fallback spelling
+        //     mirrors Runtime::projectRoot() exactly, including that null
+        //     stays distinguishable from "explicitly rooted at getcwd()".
+        //   - At THIS agent's model, not the session's. render() writes a
+        //     `Model:` line, and a skill may declare its own `model:` in
+        //     frontmatter — one shared session-wide instance would stamp the
+        //     session's model onto a fork running a different one.
+        $agent = $agent->withEnvironment(
+            EnvironmentBlock::capture($this->root ?? (getcwd() ?: ''), $agent->model),
+        );
+
         $subAgent = new SubAgent(
             id: uniqid('skill_fork_'),
             agent: $agent,
@@ -399,7 +458,7 @@ final class App implements Model
             messages: [
                 ['role' => 'user', 'content' => $task],
             ],
-            systemPrompt: $skill->content,
+            systemPrompt: $agent->systemPrompt(),
         );
 
         return $pool->executeOne($subAgent, $request);
