@@ -132,13 +132,25 @@ jobs:
             echo "macos_count=$(echo "$JSON" | jq -c ".macos_matrix | $COUNT")"
           } >> "$GITHUB_OUTPUT"
 
-  # Verify every "@dev" intra-monorepo dependency has a path-repo entry
-  # so composer install resolves via symlink, never the upstream remote.
-  # Catches the CLAUDE.md gotcha: "new transitive @dev deps need their
-  # path-repo added to every consuming lib's repositories[]". Cheap —
-  # one PHP run, no composer install needed.
+  # Path-repo policy, which is INVERTED between the committed tree and the CI
+  # checkout, and the direction matters:
+  #
+  #   committed  no <lib>/composer.json may carry a sibling path-repo. Each lib
+  #              is published standalone as sugarcraft/<lib>, and Composer's
+  #              PathRepository HARD FAILS on a url that does not exist, so
+  #              `../candy-buffer` breaks `composer install` for anyone who
+  #              clones the split repo. (Harmless to consumers who merely
+  #              `require` the package: Composer honours `repositories` only on
+  #              the ROOT package and ignores a dependency's.)
+  #   CI / local the entries are re-injected by `--fix --strict-closure` before
+  #              each `composer install` (see the "Link sibling libs" steps), so
+  #              a PR's own sibling code is what gets tested rather than
+  #              whatever is published on Packagist.
+  #
+  # The monorepo root keeps its full closure in git — the root IS the directory
+  # those ../ urls resolve against.
   path-repo-check:
-    name: 'Path-repo closure'
+    name: 'Path-repo policy'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -147,10 +159,17 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-      - name: Verify path-repo closure
+      - name: Verify no sibling path-repos in published manifests
+        run: php tools/check-path-repos.php --no-lib-path-repos
+      - name: Verify the root closure is complete
         run: php tools/check-path-repos.php
       - name: Verify no unused path-repo deps
         run: php tools/check-path-repos.php --unused
+      - name: Verify injection restores a full local closure
+        run: |
+          php tools/check-path-repos.php --fix --strict-closure
+          php tools/check-path-repos.php --strict-closure
+          git checkout -- .
 
   # Guard against SugarCraft-org doc links pinned to the pre-flip default branch.
   # The org default branch moved main→master (see CONTRIBUTING.md "flip every
@@ -277,6 +296,13 @@ jobs:
           restore-keys: |
             vendor-v3-${{ matrix.php }}-${{ matrix.lib }}-
 
+      # Re-inject the sibling path-repos that are deliberately absent from the
+      # committed manifests (see the path-repo-check job). Without this, every
+      # sugarcraft/* dep resolves from Packagist and a PR that breaks a sibling
+      # would go green here.
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
+
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
 
@@ -324,6 +350,9 @@ jobs:
           key: vendor-win-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-win-v3-${{ matrix.php }}-${{ matrix.lib }}-
+
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
@@ -382,6 +411,9 @@ jobs:
           key: vendor-mac-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-mac-v3-${{ matrix.php }}-${{ matrix.lib }}-
+
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
@@ -488,6 +520,9 @@ jobs:
       # not-found errors on `Coverage · candy-vcr` (see #857/#858).
       # `composer install` already keys all per-lib reads off the
       # actions/checkout content; we don't need a separate cache for it.
+
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
         run: |
@@ -741,6 +776,9 @@ jobs:
           key: vendor-stan-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-stan-v3-${{ matrix.php }}-${{ matrix.lib }}-
+
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n

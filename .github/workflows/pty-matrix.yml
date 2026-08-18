@@ -96,6 +96,9 @@ jobs:
           key: ${{ steps.composer-cache.outputs.key }}
           restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-
 
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
+
       - name: Install candy-pty deps
         run: cd candy-pty && composer install --prefer-dist --no-progress -n
 
@@ -126,6 +129,9 @@ jobs:
           php-version: '8.3'
           extensions: ${{ env.PHP_EXTENSIONS }}
           coverage: none
+
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install candy-pty deps
         run: cd candy-pty && composer install --prefer-dist --no-progress -n

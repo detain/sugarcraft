@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-reel",
-    "description": "Terminal video player for SugarCraft — plays mp4 (and more) by decoding frames on the fly and rendering them to ASCII / ANSI / truecolor half-block / sixel / kitty output.",
+    "description": "Terminal video player for SugarCraft \u2014 plays mp4 (and more) by decoding frames on the fly and rendering them to ASCII / ANSI / truecolor half-block / sixel / kitty output.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -53,71 +53,6 @@
             "SugarCraft\\Reel\\Tests\\": "tests/"
         }
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-buffer",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-palette",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-input",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-ansi",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-mosaic",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-flip",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-pty",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-testing",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "minimum-stability": "dev",
     "prefer-stable": true
 }

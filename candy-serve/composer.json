@@ -57,42 +57,5 @@
     "prefer-stable": true,
     "scripts": {
         "serve": "php bin/soft-serve serve"
-    },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-async",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-ansi",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-input",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-pty",
-            "options": {
-                "symlink": true
-            }
-        }
-    ]
+    }
 }

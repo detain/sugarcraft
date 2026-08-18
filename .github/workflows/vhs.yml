@@ -255,6 +255,9 @@ jobs:
           restore-keys: |
             composer-${{ matrix.lib }}-
 
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
+
       - name: Install lib deps
         if: steps.check.outputs.needs_render == 'true'
         working-directory: ${{ matrix.lib }}
@@ -356,6 +359,9 @@ jobs:
           key: composer-sugar-dash-${{ hashFiles('sugar-dash/composer.json') }}
           restore-keys: |
             composer-sugar-dash-
+
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install lib deps
         working-directory: sugar-dash

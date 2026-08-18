@@ -4,6 +4,13 @@
 .caliber/learning/
 /vendor/
 **/vendor/
+# Per-lib locks only. The root keeps its lock: the monorepo root is an
+# application-shaped package pinning the whole tree. Each <lib>/ is published
+# standalone as sugarcraft/<lib>, and a committed lock there both pins sibling
+# revisions a consumer never wanted and makes `composer install` silently
+# ignore the CI path-repo injection (install resolves from the lock, warns, and
+# exits 0). See docs/plans/leftover/phase-01-pty-quickwins/step-02-drop-consumer-locks.md
+/*/composer.lock
 .phpunit.result.cache
 **/.phpunit.result.cache
 .phpunit.cache/

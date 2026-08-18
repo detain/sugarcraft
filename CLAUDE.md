@@ -30,7 +30,7 @@ done
 ```
 
 ```sh
-php tools/check-path-repos.php --fix
+php tools/check-path-repos.php --no-lib-path-repos
 PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 ```
 
@@ -51,7 +51,7 @@ Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr cre
 ## Gotchas
 
 - `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED; drop `--strict`.
-- New transitive `@dev` deps need a path-repo in every consuming `repositories[]` — copy `sugar-charts/composer.json`; verify `php tools/check-path-repos.php`.
+- New `sugarcraft/*` deps are a `require` bump only — siblings resolve from Packagist. Never commit a `repositories[]` entry in a lib manifest (hard fatal for split-repo clones) or a per-lib `composer.lock` (makes CI's path-repo injection a no-op). Verify `php tools/check-path-repos.php --no-lib-path-repos`.
 - `.github/workflows/vhs.yml` `all=(...)` array hand-maintained; `ci.yml` auto-discovers via `scripts/affected-libs.php`. GIFs re-rendered by `candy-vcr` (not upstream vhs); GIFs are committed.
 - Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
 - Per-lib `composer.lock`/`vendor/` go stale — `composer update` before trusting a local phpunit failure.

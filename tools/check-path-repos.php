@@ -73,6 +73,11 @@ $noNetwork = false;
 // its own dead-dependency report and exits). It does NOT change the default
 // closure-check behaviour, so existing CI invocations are unaffected.
 $unused = false;
+// --no-lib-path-repos asserts the OPPOSITE of the closure check, on the
+// committed tree: no <lib>/composer.json may carry a sibling path-repo, because
+// each lib is published standalone and such an entry is a hard fatal for anyone
+// who clones the split repo. Read-only; the root is exempt.
+$noLibPathRepos = false;
 
 foreach ($_SERVER['argv'] as $arg) {
     if ($arg === '--fix') {
@@ -81,6 +86,8 @@ foreach ($_SERVER['argv'] as $arg) {
         $strictClosure = true;
     } elseif ($arg === '--no-network') {
         $noNetwork = true;
+    } elseif ($arg === '--no-lib-path-repos') {
+        $noLibPathRepos = true;
     } elseif ($arg === '--unused') {
         $unused = true;
     } elseif ($arg === '--help' || $arg === '-h') {
@@ -142,6 +149,12 @@ Options:
   --unused          Report DEAD path-repo deps (unused requires + lingering repo
                     entries) instead of missing ones. Read-only; exits 1 on any
                     finding. Runs on its own — ignores the other flags.
+  --no-lib-path-repos
+                    Assert NO <lib>/composer.json carries a sibling path-repo
+                    (the root is exempt). This is what runs in CI on the
+                    committed tree: a sibling path-repo in a published manifest
+                    is a hard fatal for anyone who clones the split repo, since
+                    ../<dep> does not exist there. Read-only; runs on its own.
   --help            Show this usage message.
 
 Exit codes:
@@ -151,6 +164,64 @@ Exit codes:
 
 EOF
     );
+    exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// --no-lib-path-repos: the INVERSE of the closure check, and the one that runs
+// in CI on the committed tree.
+//
+// Each <lib>/ is published standalone as sugarcraft/<lib>. A sibling path-repo
+// entry there is a HARD FATAL for anyone who clones the split repo, because
+// Composer's PathRepository refuses a url that does not exist and the sibling
+// directory only exists inside the monorepo:
+//
+//   PathRepository.php: The `url` supplied for the path (../candy-buffer)
+//   repository does not exist
+//
+// It is NOT a problem for consumers who merely `require` the package —
+// Composer honours `repositories` only on the ROOT package and ignores a
+// dependency's entirely (measured, both directions). So the entries are
+// invisible to consumers and fatal to cloners, which is why they are stripped
+// from the committed tree and re-injected by CI via --fix --strict-closure.
+//
+// The monorepo root is exempt and keeps its full closure: the root IS the
+// directory those `../` urls resolve against. Read-only; exits 1 on any find.
+// ---------------------------------------------------------------------------
+if ($noLibPathRepos) {
+    $libDirs = [];
+    foreach (\glob($root . '/*/composer.json') ?: [] as $manifest) {
+        $libDirs[\basename(\dirname($manifest))] = true;
+    }
+
+    $offenders = [];
+    $scanned = 0;
+    foreach (\glob($root . '/*/composer.json') ?: [] as $manifest) {
+        $slug = \basename(\dirname($manifest));
+        $decoded = \json_decode((string) \file_get_contents($manifest), true);
+        if (!\is_array($decoded)) {
+            \fwrite(\STDERR, "check-path-repos: cannot parse {$slug}/composer.json\n");
+            exit(2);
+        }
+        $scanned++;
+        foreach ($decoded['repositories'] ?? [] as $repo) {
+            if (($repo['type'] ?? '') !== 'path' || !isset($repo['url'])) {
+                continue;
+            }
+            $target = \basename(\rtrim((string) $repo['url'], '/'));
+            if (isset($libDirs[$target])) {
+                $offenders[] = "{$slug}: sibling path-repo for {$target} (url {$repo['url']})";
+            }
+        }
+    }
+
+    \fwrite(\STDOUT, "check-path-repos: scanned {$scanned} libs for sibling path-repos\n");
+    if ($offenders !== []) {
+        \fwrite(\STDOUT, "\nSibling path-repos in published manifests:\n  - " . \implode("\n  - ", $offenders) . "\n");
+        \fwrite(\STDOUT, "\nThese make `composer install` a hard fatal in a standalone clone of the\nsplit repo. Remove them; CI re-injects with --fix --strict-closure.\n");
+        exit(1);
+    }
+    \fwrite(\STDOUT, "check-path-repos: no sibling path-repos in per-lib manifests\n");
     exit(0);
 }
 

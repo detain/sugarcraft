@@ -1,6 +1,6 @@
 # SugarCraft contributor playbook
 
-PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/` wired via path repositories.
+PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/`; siblings resolve from Packagist, and path repositories are injected at build time (never committed to a lib manifest).
 
 ## Source-of-truth files
 
@@ -9,7 +9,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 - `LOCALES.md` — i18n locale codes
 - `CALIBER_LEARNINGS.md` (root + per-lib) — accumulated patterns/gotchas
 - `docs/index.html` — public site tiles · `docs/lib/<slug>.html` — per-lib pages **generated** by `tools/gen-docs.php` from `docs/_data/<slug>.{json,body.html}` (never hand-edit)
-- `scripts/affected-libs.php` — dynamic CI matrix · `tools/check-path-repos.php` — closure checker
+- `scripts/affected-libs.php` — dynamic CI matrix · `tools/check-path-repos.php` — path-repo policy (`--no-lib-path-repos` guards the committed tree; `--fix --strict-closure` is the CI injection)
 - `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) — per-lib audit findings + remediation plans · `docs/plans/leftover/` phased step files · `docs/repo_map/` (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`)
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `codecov.yml`, `.php-cs-fixer.dist.php`
 
@@ -19,7 +19,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 
 ## Lib skeleton & composer.json
 
-Reference `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need `require` entry AND a `{type: path, url: "../<dep>", options:{symlink:true}}` repo for the FULL transitive closure.
+Reference `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need a `require` entry ONLY — no `repositories[]` block in a lib manifest (a published lib's `../<dep>` path repo is a hard fatal in a split-repo clone). CI injects the closure before each install; the root manifest keeps its own.
 
 PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`.
 
@@ -60,7 +60,7 @@ Mark `plans/AUDIT_*.md` items ✅ inline where they live; skip `credit upstream 
 ## Gotchas
 
 - `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED; drop `--strict`.
-- New transitive `@dev` deps need their path-repo in EVERY consuming `repositories[]`.
+- New `sugarcraft/*` deps are a `require` bump only; verify with `php tools/check-path-repos.php --no-lib-path-repos`. Never commit a per-lib `composer.lock` — `composer install` then resolves from it and silently ignores CI's path-repo injection.
 - `vhs.yml` `all=(...)` array hand-maintained; `ci.yml` dynamic via `scripts/affected-libs.php`.
 - Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
 - Run sub-agents ONE AT A TIME — concurrent writes to `MATCHUPS.md`/`README.md` collide.

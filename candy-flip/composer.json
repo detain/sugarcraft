@@ -33,50 +33,6 @@
         "sugarcraft/candy-pty": "dev-master",
         "ext-gd": "*"
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-pty",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-ansi",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-input",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-buffer",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-testing",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "require-dev": {
         "phpunit/phpunit": "^10.0",
         "sugarcraft/candy-testing": "dev-master"

@@ -32,29 +32,6 @@
         "react/stream": "^1.2",
         "sugarcraft/candy-core": "dev-master"
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-ansi",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-pty",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },

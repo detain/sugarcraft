@@ -22,43 +22,6 @@
         "issues": "https://github.com/sugarcraft/sugar-crumbs/issues",
         "source": "https://github.com/sugarcraft/sugar-crumbs"
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-mouse",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-ansi",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-input",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-pty",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",

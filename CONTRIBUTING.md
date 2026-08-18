@@ -28,18 +28,38 @@ for d in candy-core candy-ansi candy-buffer candy-layout candy-async candy-testi
 done
 ```
 
-The libraries are wired together via `composer.json` path repositories,
-so changes to (say) `candy-core/src/Util/Width.php` are reflected
-immediately in `candy-shine`'s test run with no rebuild step.
+Sibling libraries resolve from Packagist, **not** from committed path
+repositories. Each `<lib>/` is published standalone as `sugarcraft/<lib>`,
+and a `{"type":"path","url":"../candy-buffer"}` entry in a published
+manifest is a hard fatal for anyone who clones that split repo — Composer
+refuses a path url that does not exist. So per-lib manifests carry no
+`repositories[]` block at all; only the root does, because the monorepo
+root is the directory those `../` urls resolve against.
 
-If your change introduces a new `sugarcraft/* @dev` dep, run
-`php tools/check-path-repos.php --fix` to auto-insert the missing path-repo
-entry before committing. The checker walks the FULL transitive `sugarcraft/*`
-require graph (not just direct requires), so a gap introduced several hops away
-is caught and reported with the dependency path that needs it. The bare script
-(`--fix` omitted) is read-only — use it to verify closure without making
-changes; add `--strict-closure` to require a local path-repo for every
-transitive dep even when it is already published on Packagist.
+To get local wiring back — so an edit to `candy-core/src/Util/Width.php`
+shows up in `candy-shine`'s test run — inject the path repos, then throw
+them away:
+
+```sh
+php tools/check-path-repos.php --fix --strict-closure   # scratch only
+cd candy-shine && composer update && vendor/bin/phpunit
+cd .. && git checkout -- '*/composer.json'              # never commit these
+```
+
+CI does exactly this before every `composer install`, which is how a PR
+that breaks a sibling still fails the dependent lib's job.
+
+If your change introduces a new `sugarcraft/*` dep, the only edit is the
+`require` line — every lib is published, so it resolves. Before committing,
+verify no injected entries leaked in:
+
+```sh
+php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
+```
+
+Do not commit a per-lib `composer.lock` (`/*/composer.lock` is gitignored;
+the root keeps its own). A committed lock makes `composer install` resolve
+from the lock and silently ignore the injection — it only warns.
 
 ## Style guide
 
