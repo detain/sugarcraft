@@ -5853,3 +5853,210 @@ A genuinely disjoint sub-bundle exists if parallelism is ever needed: **5.1 + 5.
 touch only `src/Runtime.php` and `src/Tools/*`. 5.1 is also the plan's own
 "highest-leverage single change in this phase", so it is the natural next pick once
 Phase 4 lands.
+
+---
+
+### Phase 4 items 1/2/5/7 — `38614fa9`
+
+Shipped `/model`, `/help` repurposed into a command listing, a new `/clear`,
+argument hints + fuzzy highlighting in the "/" popup, and `submit()`'s 16-arm
+`str_starts_with` chain replaced by `CommandParser`-keyed dispatch. Suite
+6806/70298 → **6831/70640**, 1 skipped, exit 0. Verified by the supervisor, not
+taken on report — twice, once after the implementation round and once after the fix
+round.
+
+**Refutations of the plan, found before implementing.** `/help` already existed as
+a registry row (`CommandRegistry.php:121`), so item 2 was a *repurpose*, not an
+addition. `CommandParser` was not unused outside its own test — `AgentsCommand`
+uses it. `argumentHint` was already a populated `CommandSpec` field, so item 5 was
+a renderer gap only. And **there is no `/new` slash command** against which
+item 2's `/clear` could be "deliberately distinct": `new` is `slashVisible: false`
+and reachable only via Ctrl+P, so `/clear` is defined against the *palette action*.
+Also refuted mid-round: the brief's own claim that `slashVisible: false` appears 5
+times (it is 4, of which 3 are data rows and the 4th is prose in a docblock) and
+that only two tests touch `/help` (nine sites in `KeyHelpTest.php` do).
+
+**The authoring agent caught the dominant defect in its own work** — a first for
+this chain. It had written "60 columns" in `Renderer.php` and "69 columns" in
+`Chat.php` for the same `/websearch` hint, then resolved it into the three domains
+that actually exist: hint alone **58**, popup head `/name <hint>` **69**, help
+listing column `␣␣/name <hint>` **71**. The reviewer then found a **third** site
+(`Chat.php:4436`) still carrying 69 where 71 belonged — so the correction was half
+applied, and the same file states all three correctly 4200 lines earlier.
+
+#### What the review confirmed clean, and is worth not re-deriving
+
+- **No dispatch widening.** 64 drafts driven through real `Chat::update()` and
+  diffed against a reconstruction of the deleted 16-arm chain. Every divergence is
+  a *narrowing* in the documented prefix→name direction. Also structurally
+  guaranteed: if `str_starts_with($text, '/'.$parsed->name)` holds and N is an arm,
+  the old chain's `str_starts_with($text, '/N')` held too.
+- **`/model`'s failure path is correct.** Unknown id → transcript line, `inFlight`
+  false, palette null, and **the old backend survives by object identity** — the
+  catch mutates only `palette` + `history`, and `onConfigChange` never fires. No
+  half-swap.
+- **`KeyHelpTest`'s draft corpus is byte-identical to HEAD.** The three `/help`
+  drafts were *reclassified* into a new expectation block, not removed, and
+  `$disagreesOnSubmit` is still a closed-world sorted `assertSame`. A corpus edit is
+  the classic place coverage dies silently; this one was honest.
+- **README's `/model` persistence claim is true** — `Bootstrap::chat()` installs the
+  `onConfigChange` callback that writes `~/.sugar-crush/config.json`
+  (`src/Cli/Bootstrap.php:309`), and the picker and `/model <id>` share it.
+
+#### F5 — inventory blindness, reproduced by shipping an undisclosed command
+
+`dispatchCommand()` had **22** names against **19** advertised rows. The reviewer
+added `'zzzsecret' => $this->handleClearCommand(),` with no registry row and **the
+full 6825-test suite stayed green**. The new inventory closed registry→arm and left
+arm→registry wide open — the *same asymmetry* as the earlier round where 8
+keystrokes shipped undisclosed with counts pinned at 58/54.
+
+Closed by extracting the arm keys from `dispatchCommand()`'s **own source** via
+Reflection + `token_get_all` (curly depth excludes nested matches; paren/bracket
+depth stops a string in an arm *value* being read as a key), with
+`quit`/`agent`/`background` on an allowlist that is **asserted in reverse** so a
+dead entry cannot linger, plus a non-vacuity guard requiring all 19 advertised
+names to be found. A hand-written list of arms would have been the same blindness
+one level up.
+
+#### F9 — the width machinery had zero coverage, on the frame-corruption class
+
+`$budget = 100000` at `src/Chat.php:4421` rendered a **77-column frame in a
+40-column terminal** with the full suite green. `HELP_CHROME_COLS`,
+`HELP_NAME_COLS`, every `clip()` call and the comment claiming an unclipped trailer
+would be the one over-wide row were all unpinned. Now pinned at 20/30/40/60/80/100/
+120 with the expectation **derived** — `min(natural width measured at 400 cols,
+max(20, cols − HELP_CHROME_COLS))`, chrome read by reflection — plus a non-vacuity
+assertion that the clip actually bites at 40. Seven mutations red it. Honest gap
+recorded: the category-heading `clip()` cannot be pinned by width, because the
+longest category (`Appearance`, 10 columns) fits inside the 20-column floor at
+every terminal size.
+
+**Treated as functionality, not hardening**, and the call held on review: an
+over-wide row corrupts the frame because the diff renderer paints one line per row,
+and this repo has already shipped and fixed that bug once.
+
+#### F7 — a pre-existing overflow, fixed rather than parked
+
+The popup row was **45 columns wide at 20, 30 and 40-column terminals** — genuinely
+pre-existing, but the comment newly claiming *"every row is clipped"* was not, and
+the test had **measured `$widths[40][0]` and then asserted only the 60 case**. The
+row is now fitted as a whole, `description → hint → name`, through one
+`Renderer::clipToWidth()` that is also the hint's truncator (one rule, not two),
+with the highlighter's `MatchResult` re-keyed onto the clipped name. Box width
+18/24/34 at 20/30/40, unchanged at 54/74/94/104 for 60/80/100/120.
+
+F8 is why exactness mattered: after this fix a one-column budget error no longer
+*overflows* the row, it moves a column from description to hint — invisible to any
+`assertLessThanOrEqual` bound. The replacement asserts the exact stripped row at all
+seven widths.
+
+#### F4 — "every clause is asserted" was false for three of them
+
+Deleting `streamingText`, `scrollOffset` and `expanded` from `handleClearCommand()`
+left the **full suite** green, and `assertSame(0, $after->scrollOffset())` restated
+a default (`Chat.php:536`) on a fixture that never scrolled. Fixture now arrives
+with all three non-default and asserts each *before* `/clear`. The two clauses that
+were already true are recorded so they are not re-litigated: token counters really
+are derived (`estimateTokenCount()` recomputes over `$history`; no stored field),
+and an in-flight turn really is not cancelled (the `if ($this->inFlight)` guard
+precedes the Enter arm).
+
+#### F3 — bare `/agent` is not a command at all
+
+`slashMenuShouldIntercept()` returns true unless the typed text *exactly* equals a
+matched registry name. `agents` is the row; `agent` is not. So `/agent` + Enter is
+**popup-completed to `/agents `**, never dispatched — and the test claiming to guard
+the `agent` arm passed for an unrelated reason, with the arm's deletion changing
+nothing. The real net was always `ChatTest.php:1780` and
+`AgentManagerWiringTest.php:346`, which drive `/agent <name>` and so bypass the
+popup by containing a space.
+
+#### Numbers corrected, each with its domain
+
+- `Chat.php:4436` reused the popup's **69** where the help listing's **71** belongs.
+- `Chat.php:4405-7` claimed "three runs of Session rows … prints that heading five
+  times" — wrong twice over and internally impossible. Measured: **4** Session runs,
+  **2** App runs (unmentioned), **13** runs total, **9** distinct categories. Counts
+  are now derived in a test, not written in prose.
+- The `/keys` docblock's *"the one place it IS named"* gained a second place in this
+  very diff (the `/help` trailer). It was billed as "corrected for the /help split";
+  that clause was not.
+- The `handleHelpCommand()` hedge "below ~30 columns" is now the exact threshold:
+  **26 columns of terminal** (20-column floor + 6 of shell chrome).
+- README: `/help` does not list `/agent`, `/background` or `/quit` — none have
+  registry rows. And file-based custom commands are **loadable, not loaded**:
+  `grep -rn 'new CommandLoader' src/ bin/` has no hits. Seam left dormant per the
+  standing rule.
+
+---
+
+### Deferred-hardening ledger — `docs/plans/crush_code_hardening_backlog.md`
+
+Built on the user's instruction to **defer the fix, never the finding**: *"make
+notes and steps for it .. dont ignore the problems but where possible push the
+fixing of the security ones to the end"*. The acceptance target is explicit — they
+want to daily-drive sugar-crush once functionality is done, while the security pass
+is still being worked.
+
+50 items across 6 groups (path containment 6 · permission surface 3 · process/
+execution 6 · audit-instrument correctness 12 · deferred UX/correctness 16 ·
+documented dormant seams 7), each carrying the probe that established it so the
+end-of-plan pass starts from proof rather than re-discovery. Findings asserted but
+never probed are marked **UNVERIFIED** rather than dressed up. No Step anywhere says
+"delete", per the standing rule.
+
+**It corrected four items the supervisor had been carrying, which is why it was
+worth building rather than trusting running notes:**
+
+1. **Lane D F3–F7 already landed** in `dad90b18`. Confirmed independently:
+   `patternStaysInside()` is live in a real guard at `WorktreeManager.php:473`,
+   `isConstructible()` is a loud throw at `tests/Tools/BuiltInToolCorpus.php:275`,
+   and F7's `readableDefaultConfigPath()` is at `ProviderFactory.php:196`. Only two
+   residuals survive — `C:x` drive-relative and `.running/*.json`. The worklog queue
+   line listing all five as owed **contradicts the commit table in its own session**.
+2. **`KEY_HELP_COLS` is 64, not 58.** The supervisor's own backlog note —
+   "`KEY_HELP_COLS` says 58 while the widest live row is 59" — was itself an
+   instance of the chain's signature defect. 58 is a *docblock* claim about the
+   widest declared row (`Renderer.php:556`); the constant at `:562` is **64**. Five
+   columns of headroom, nothing can truncate. Stale prose, not a rendering risk.
+3. **`Agent::fromPreset()`'s dropped-field set has three different values** —
+   worklog 7, code docblock 5, constructor at HEAD **8 behavioural + 2 more**. All
+   three recorded, measured set flagged authoritative.
+4. **`TerminalBackground::observe()` and the `Write` tool are already wired**,
+   contradicting `crush_code.md`'s status block — the plan overstates what is left.
+
+Contradictions flagged rather than silently resolved: tracker numbers **#83 and #85
+each denote two different findings** across sessions (both meanings carried by
+content, not number), and **#88's figure has eight successive measurements**, latest
+6806/70298 at `939f8ada` — already superseded by this round's 6831/70640, so #88
+must be re-measured *after* a round lands, never before.
+
+---
+
+### Environment — Caliber hooks removed, hook suppression dropped
+
+Not plan work, but it changes how every future commit in this repo is made.
+
+The `PostToolUse` → `caliber learn observe` hook was erroring on every single agent
+call (`/bin/sh: 1: caliber: not found`). The entire `hooks` block in
+`~/.claude/settings.json` was Caliber and **every entry was already broken**: four
+`caliber learn …` commands with the binary absent from `PATH`, and six entries
+pointing at `caliber-session-freshness.sh` / `caliber-freshness-notify.sh`, neither
+of which exists anywhere on disk — each duplicated three times, so `SessionStart`
+and `Notification` were firing a missing script three times per event. Block
+removed; JSON revalidated; backup at
+`~/.claude/settings.json.bak-precaliber-removal`.
+
+**There is no git pre-commit hook in this repo at all** — `.git/hooks/` holds only
+`*.sample` files and `core.hooksPath` is unset. So the `git -c
+core.hooksPath=/dev/null` this chain had been prefixing every commit with was
+guarding against something that does not exist. **Dropped at the user's
+instruction** — *"if i ever add a hook i dont want that to blindside me"* — and it
+was contrary to the standing rule anyway, which was to let a Caliber hook fire and
+then unstage what it auto-regenerated, not to suppress hooks wholesale. `38614fa9`
+was committed with a plain `git commit`.
+
+The tracked `<!-- caliber:managed:pre-commit -->` blocks in `CLAUDE.md`/`AGENTS.md`
+were deliberately **left in place**: they are correct for machines that do have
+Caliber, and encoding a local-machine fact into shared repo docs is the worse trade.

@@ -1,0 +1,1179 @@
+# sugar-crush — hardening / audit-instrument backlog
+
+**What this is.** A single actionable ledger of every security, containment,
+permission-surface and audit-instrument finding that `crush_code.md`'s 13-angle
+audit and its review chain **measured and then deliberately deferred**. It is
+compiled from `docs/plans/crush_code_worklog.md` (5855 lines), `crush_code.md`'s
+execution-status block, and `git log`/source verification at HEAD
+`cfc00909e47de9159e5af6517aa75c21c55b069d` (2026-08-18).
+
+**The rule that produced it.** The user's instruction, verbatim (2026-08-17):
+
+> "security updates are to be held off till the end of the plan where possible…
+> i mean make notes and steps for it .. dont ignore the problems but where
+> possible push the fixing of the security ones to the end … id like to start
+> using it with all the functionality finished asap .. while we finish the
+> security parts of it"
+
+So: **defer the fix, never the finding.** Everything below was probed once, by a
+review round that had a sandbox and a mutation protocol. This file exists so the
+end-of-plan hardening pass starts **from proof rather than re-discovery**.
+
+**Acceptance target.** The user wants to daily-drive `bin/sugarcrush` as soon as
+the functionality phases (4 → 5 → 6 → rest of 2 → 7) land, *while this backlog is
+still open*. So each entry's Severity is written from that angle: what does a
+single-user, own-checkout, own-`$HOME` operator actually risk today. Almost
+everything here needs either a **cloned/tarball-delivered repository** or a
+**second local user**; a solo operator on their own trees is the least-exposed
+case, which is exactly why the deferral is affordable.
+
+**A caveat on five in-flight files' line numbers.** `sugar-crush/src/Chat.php`,
+`src/Renderer.php`, `src/Commands/CommandRegistry.php`, `README.md` and several
+files under `sugar-crush/tests/` were **modified and uncommitted** while this was
+compiled (a concurrent Phase 4 lane). Line references into those five files were
+read against the **working tree**, not against HEAD, and will move again when that
+lane commits. Every citation into any other file is against HEAD. No test suite
+was run during compilation, deliberately: a run that loads a file another lane is
+editing shifts `file(__FILE__)` ranges against already-loaded reflection and
+produces phantom failures.
+
+**Reading the numbers.** This document is made almost entirely of counts, widths
+and `file:line` references — the failure mode this whole chain kept producing
+was *a number that travelled without its domain*. So: every count names what it
+counts; every line was re-checked against the current file (per the caveat
+above) and marked **DRIFTED**
+where it moved; and where the worklog corrected an earlier measurement, the
+**latest** figure is given and the superseded one is named.
+
+**Standing rule, honored throughout.** No Step below says "delete it". Where a
+subsystem is unwired, the fix is to wire it or to document it as an intentional
+dormant seam. The audit's own research agents proposed several deletions and were
+explicitly overridden during compilation; §F records those as seams, not as work.
+
+---
+
+## Status corrections to apply before executing this list
+
+Three things the supervisor's running list carries that are **stale at HEAD**.
+Fix the tracking, not the code:
+
+1. **"lane D findings F3–F7 follow-ups" are already landed.** `dad90b18`'s own
+   commit message closes them: *"F3-F7 in the same round: the include gate no
+   longer skips on the constructor default; `patternStaysInside()` refuses
+   backslash- and drive-rooted patterns (C:x drive-relative remains a stated
+   known gap, unmeasurable on a POSIX host); an unconstructible tool fails loudly
+   instead of vanishing; and the discarded-result rule now names consumption."*
+   Verified in source: `WorktreeManager::resolveWorktreeInclude()` gate is
+   unconditional (`src/Agents/WorktreeManager.php:311-360`);
+   `patternStaysInside()` refuses `\`-rooted and `[A-Za-z]:[\\/]` patterns
+   (`:575`); `isConstructible()` moved out of `isDispatchableTool()` into
+   `instances()` where a false is a named throw plus an `instanceof Tool` check
+   (`tests/Tools/BuiltInToolCorpus.php:251`, `:527`, `:565`);
+   `statementStartIn()` gained the named-argument-colon and `)`-boundary arms
+   (`tests/Support/ContainedPathInventoryTest.php:905`); F7's
+   `ProviderFactory::defaultConfigPath()` gained a gated
+   `readableDefaultConfigPath()` in the same commit
+   (`src/Providers/ProviderFactory.php:145`, `:199`).
+   **The two genuine residuals from that group survive as §A1 and §A2 below.**
+   The worklog contradicts itself here — see *Contradictions*.
+2. **`TerminalBackground::observe()` is wired.** `crush_code.md` still lists it as
+   a dormant seam awaiting two `App/App.php` edits; at HEAD `src/App/App.php:496`
+   calls it and `src/Tui/TerminalBackground.php:111` reads *"Before `observe()`
+   was wired…"*. Not a backlog item.
+3. **The `Write` tool is wired.** `crush_code.md` says Phase 8 item 12 is
+   "deliberately not registered"; at HEAD `src/Cli/Bootstrap.php:2498`
+   constructs it. Closed by `c2ab3e31`.
+
+---
+
+## A. Path containment / jail
+
+### A1 — `patternStaysInside()` allows the drive-relative spelling `C:x`
+
+- **What** A `.worktreeinclude` pattern of the Windows drive-relative form `C:x`
+  (colon with **no** separator after it) passes the lexical pattern guard, and on
+  Windows that form denotes a path relative to the current directory *on drive C*
+  — i.e. potentially outside the source root.
+- **Where** `sugar-crush/src/Agents/WorktreeManager.php:575`
+  (`patternStaysInside()`); the residual is stated in its own docblock at
+  `:560-573`.
+- **Severity** Containment gap — **Windows-only, and UNVERIFIED as exploitable**.
+- **Evidence** Lane D round 9's F4 measured, on the *pre-fix* predicate, that
+  `\etc\passwd`, `C:\Users\victim\.ssh\id_rsa`, `C:/Users/x` and a bare `\` were
+  all ALLOWED while `/etc/passwd` was refused. `dad90b18` closed all of those
+  (`str_starts_with($pattern,'\\')` plus `preg_match('#^[A-Za-z]:[\\\\/]#',…)`).
+  What remains is only the separator-less `C:x`, and the code says so in the
+  honest form: *"THE RESIDUAL IS UNVERIFIED, not argued away: this host is POSIX,
+  so whether `<root>/C:x` reaches the drive-relative path or is rejected by the
+  Windows filesystem as a colon inside a component could not be driven here. It
+  is a negative result — an untested case — and not a claim of safety."*
+- **Step** Establish the consequence on a real Windows host first (does
+  `<root>/C:x` resolve, or does the filesystem reject a colon inside a path
+  component?). Only then decide: widening the predicate to bare `[A-Za-z]:`
+  closes it, but the predicate is deliberately the *same one*
+  `HomeDirectory::owned()` uses (`src/Support/HomeDirectory.php`), and two
+  spellings of one absoluteness test is how the two drift — so widen **both** or
+  neither, in one edit.
+- **Blocked on** Access to a Windows host. Nothing else.
+
+### A2 — `WorkflowEngine`'s `.running/*.json` pause files bypass the anchored path
+
+- **What** Every *read* `WorkflowRegistry` performs goes through the containment-
+  anchored answer, but the engine's pause files are written to and read back from
+  the **configured** `workflowsPath()`. So a `~/.sugar-crush/workflows ->
+  <outside>` link that the registry refuses to `list()` or `require` out of still
+  relocates `<outside>/.running/*.json`.
+- **Where** `sugar-crush/src/Workflows/WorkflowRegistry.php:275`
+  (`workflowsPath()`, residual stated at `:262-274`);
+  `sugar-crush/src/Workflows/WorkflowEngine.php:62` (`PAUSE_DIR = '.running'`)
+  and `:308` (`getPauseFilePath()`).
+- **Severity** Containment gap — bounded, and the bound is written down.
+- **Evidence** Surfaced not by a reviewer but by `dad90b18`'s **own new
+  instrument**: `tests/Support/ReadPathCensusTest.php` derives every read/execute
+  sink in `src/` (76 occurrences, `require`/`include` and generated-code strings
+  included) and demands a per-occurrence verdict; writing the verdict for this
+  one forced the residual into the record. The commit message states the harm
+  bound: *"What that yields an attacker is the engine's own JSON in a directory
+  they already chose — not code, not a foreign file's contents."*
+- **Step** Do **not** hand the engine a second, stricter accessor — the code
+  argues, correctly, that two accessors could then disagree about where a run was
+  paused. Either anchor `workflowsPath()` itself (and accept that a user's own
+  symlinked workflows directory stops pausing), or move the pause directory out
+  of the registry's tree entirely onto a path the process chose. Whichever is
+  picked, the choice must be asserted, not described.
+- **Blocked on** Nothing. Independent of the plan's remaining phases.
+
+### A3 — tracker #84: a same-checkout `workflows` symlink still discloses `*.yaml` basenames
+
+- **What** A repository can commit `.sugar-crush/workflows -> <another directory
+  inside the same checkout>` and have that directory's `*.yaml` **basenames**
+  disclosed through the workflow listing.
+- **Where** `sugar-crush/src/Workflows/WorkflowRegistry.php`
+  (`readableProjectDir()` / `yamlDirectories()`, `:565` and `:728`).
+- **Severity** Containment gap — documented as *a reduction, not an elimination*.
+- **Evidence** Filed as tracker **#84** (worklog `:2020`, confirmed and sharpened
+  at `:2278`). The reason it was not closed is a measured cost, not an oversight:
+  closing it would refuse the ordinary `-> tools/workflows` layout.
+- **Step** No code change unless someone decides basename disclosure *within a
+  checkout the user already cloned* is worth breaking `-> tools/workflows` for.
+  Recommended resolution is to **close this as accepted risk with the cost
+  written next to it**, which is most of what the current docblock already does.
+- **Blocked on** A product decision, not an engineering one.
+
+### A4 — lane D F-6: the dangling-link refusal misses the one-component-higher layout
+
+- **What** With the symlink one component higher — `.sugar-crush -> <a directory
+  that exists but has no workflows/ in it>` — `realpath('<root>/.sugar-crush/
+  workflows')` is `false` **and** `is_link(...)` is `false`, so the dangling-link
+  refusal does not fire and the directory is granted.
+- **Where** `sugar-crush/src/Workflows/WorkflowRegistry.php:528-540` as cited by
+  the review. **DRIFTED** — at HEAD that region is inside the
+  `yamlDirectories()`/`readableProjectDir()` doc cluster (`:522-565`); re-locate
+  by the refusal string rather than the line.
+- **Severity** Instrument blindness / claim defect — **not a live escape**.
+- **Evidence** The review that found it also pushed on it and failed to exploit
+  it: *"Not exploitable as far as the reviewer pushed it: **0 disclosures in
+  40,000 `list()` calls** against a child flipping the target, and once the
+  target exists the directory is refused."* What is wrong is the **claim**: the
+  doc says the residual window costs "write access to the checkout", but in that
+  layout the path that must appear is *outside* the checkout (`/tmp/pwn/
+  workflows`) — i.e. write access to `/tmp`.
+- **Step** Correct the claim in the docblock to name the real precondition
+  (write access to the *link target's* parent, which may be outside the
+  checkout). Optionally add the one-component-higher layout to the refusal, but
+  measure the false-refusal cost first — this is the same trade as A3.
+- **Blocked on** Nothing.
+
+### A5 — foreign agent presets scan user-then-project, last-write-wins
+
+- **What** `ForeignAgentPresetRegistry` scans the user tier then the project
+  tier and lets the project tier overwrite, so a **cloned repository's**
+  `.claude/agents/reviewer.md` outranks the user's own
+  `~/.claude/agents/reviewer.md`. Its sibling `ForeignSkillDiscovery`
+  deliberately does the **opposite**, with the argument written out.
+- **Where** `sugar-crush/src/Agents/ForeignAgentPresetRegistry.php:169`
+  (`discover()`); the asymmetry and its reasoning are in the docblock at
+  `:148-168`. Wired into production by `15a2e605` via
+  `src/Cli/Bootstrap.php:793` (`foreignAgentPresets()`) →
+  `:693` (`agentRoster()`).
+- **Severity** Containment gap — **newly reachable**, bounded by layering.
+- **Evidence** `15a2e605`'s record: the wiring *"does not widen it (native still
+  wins) but makes it reachable for the first time."* Final precedence is
+  **foreign < built-in < native preset**, ordered in one place in
+  `agentRoster()`. The registry's own docblock states the harm shape it is
+  choosing to keep: *"foreign content arrives with any repository you clone, and
+  letting it displace a name the user relies on is the 'cloned content silently
+  redefines the user's setup' shape. The same argument applies here with a
+  stronger conclusion, since an imported preset carries a sub-agent's whole
+  prompt."* It was recorded rather than changed because reversing it is a
+  behaviour change with its own pinned tests.
+- **Step** Reverse the merge direction so the **user** tier wins, matching
+  `ForeignSkillDiscovery::discoverClaude()`, and invert the tests that currently
+  pin the project-wins direction rather than deleting them (this chain's
+  convention). Keep the union operator (`$claude + $this->scanOpencode(...)`) —
+  the docblock records why a spread or `array_merge` breaks numeric-string
+  filename stems like `12.md`.
+- **Blocked on** Nothing. Independent of §A6.
+
+### A6 — `Agent::fromPreset()` silently drops the preset's behavioural fields
+
+- **What** The preset→`Agent` bridge carries only `name`, `description`,
+  `initialPrompt`, `model`, `tools`, `skills`. Every richer field is dropped
+  without notice — which today *bounds* the §A5 exposure, but the bound is only
+  as good as `Agent`'s shape.
+- **Where** `sugar-crush/src/Agents/Agent.php:116` (`fromPreset()`); the field
+  set is `sugar-crush/src/Agents/AgentPreset.php:22-37`.
+- **Severity** Containment gap — a **load-bearing accident**, which is the
+  dangerous kind.
+- **Evidence** Counted at HEAD against `AgentPreset`'s constructor: **8
+  behavioural fields dropped** — `disallowedTools`, `permissionMode`,
+  `maxTurns`, `mcpServers`, `memory`, `background`, `effort`, `isolation` — plus
+  `color` and `source` not carried. **Two records disagree and both undercount**:
+  the worklog names seven (`permissionMode`, `disallowedTools`, `maxTurns`,
+  `memory`, `background`, `effort`, `isolation` — no `mcpServers`), and
+  `fromPreset()`'s own docblock names five (`permissionMode`, `maxTurns`,
+  `effort`, `isolation`, `mcpServers` — no `disallowedTools`, `memory`,
+  `background`). The 8+2 figure above is measured against the constructor at
+  HEAD and is the one to use.
+- **Step** Whatever else happens, make the drop **explicit and asserted**: a test
+  that enumerates `AgentPreset`'s constructor by reflection and fails when a new
+  field appears without a decision recorded for it. Then decide per field. Note
+  the trap: carrying `permissionMode` through would make a **cloned repo's**
+  preset able to request `bypass-permissions`, which is the escape lane D
+  measured in a different path (worklog `:4790`: `permissionMode=bypass-
+  permissions` arriving from a foreign preset). So the correct move for
+  `permissionMode` is probably to keep dropping it and *say so*, not to wire it.
+- **Blocked on** Nothing, but sequence it **after** §A5 so the precedence rule
+  is settled before the field surface widens.
+
+---
+
+## B. Permission surface
+
+### B1 — `c075adcf` (the permission fix) shipped without adversarial review
+
+- **What** The commit that made a permission prompt stop answering to a slash
+  command was committed without the adversarial review round this chain applies
+  to everything else. That omission is itself the gap.
+- **Where** commit `c075adcf`, *"sugar-crush: lane E round 8 — a permission
+  prompt no longer answers to a slash command"*. Touches `src/Chat.php`,
+  `src/Renderer.php`, `src/Permissions/*`,
+  `src/Commands/KeyBindingRegistry.php`, `tests/Renderer/KeyHelpTest.php`.
+- **Severity** Instrument blindness — an unreviewed change to the **permission
+  gate**, i.e. the highest-consequence surface in the package.
+- **Evidence** Recorded four separate times in the worklog queue as
+  *"Never reviewed: `c075adcf` (the permission fix)"* (`:5485`, `:5610`), and
+  the review brief for it *"never ran"*. What the round *self*-reported is
+  substantive and re-drivable: all nine slash commands are swallowed whole;
+  `/agents`, Enter, `y` approves once at keystroke nine; `ay` grants at keystroke
+  two; `an` cancels the confirm and leaves the prompt ARMED; `and` cancels and
+  DISARMS. It also self-reported two defects a reviewer would have looked for —
+  see §B2 — and that *"the first draft of the queued-ask test could not fail"*.
+- **Step** Run the review. The brief is reconstructable from the worklog section
+  "Round 8 landed — `c075adcf`". Re-drive the nine-command table and the
+  `ay`/`an`/`and` sequences against HEAD, and attack the ARMED-prompt keyboard
+  ownership, since Phase 3 item 1 (`939f8ada`) has since changed key routing
+  underneath it.
+- **Blocked on** A window with no full-suite run in flight (standing rule 4:
+  editing a file while a run of it is in flight shifts `file(__FILE__)` ranges
+  against already-loaded reflection and produces phantom failures).
+
+### B2 — every keybinding description except one is pinned by nothing
+
+- **What** A binding's *description* text can be reverted or rewritten and the
+  entire suite stays green. The drift suite reads a description only for
+  keyish-token violations and paints it; it never asserts its words.
+- **Where** `sugar-crush/src/Commands/KeyBindingRegistry.php` (rows, e.g.
+  `:393` `chat.cursor`); the instruments are
+  `tests/Commands/KeyBindingDriftTest.php` and `tests/Renderer/KeyHelpTest.php`.
+- **Severity** Instrument blindness.
+- **Evidence** Measured by `c075adcf`'s own fix agent, not by a reviewer:
+  reverting `permission.always`'s wording left `KeyBindingRegistryTest`,
+  `KeyBindingDriftTest`, `KeyHelpTest` and `RendererTest` **all green**. One
+  assertion was added for that single row; *"every other row's wording remains
+  unpinned, and that is a standing gap worth its own round."*
+- **Step** Make the drift test assert each row's description against a declared
+  expectation, or — better, given this chain's history with hand-maintained
+  figures — derive the check: for each row, assert the description's promised
+  key spellings and effect verbs against the handler actually reached.
+  `KeyBindingDriftTest::alternates()` (`:181`) is already half of that machinery.
+- **Blocked on** Nothing. Naturally bundles with §B1.
+
+### B3 — `$projectTierRefusals` is reset only in `chat()`
+
+- **What** The launch-wide collector of "which directories were refused and why"
+  is cleared on one entry path only, so a second `Bootstrap` call on another
+  entry path inherits the previous launch's refusals.
+- **Where** `sugar-crush/src/Cli/Bootstrap.php:210` (declaration), `:247`
+  (the only reset, inside `chat()`); accessor at `:513`; drained into at `:461`,
+  `:472`, `:809`, `:882`, `:890`, `:1432`.
+- **Severity** Real bug — but **cosmetic in the shipped binary**, structural for
+  consumers.
+- **Evidence** `15a2e605` recorded it as deliberately left, third of three:
+  *"`$projectTierRefusals` is reset only in `chat()`."* The reasoning for the
+  reset that *does* exist is at `:236-247` and states the harm exactly:
+  *"`chat($badRepo)` followed by `chat($goodRepo)` still reported `$badRepo`'s
+  directory as refused — harmless for the one launch a real binary makes, wrong
+  for every consumer the accessor's doc-block invites."* The same sentence is
+  the argument for extending the reset to the other entry paths.
+- **Step** Reset it at every `Bootstrap` entry point that builds a fresh launch
+  (not just `chat()`), and keep `$reportedProjectTierRefusals` deliberately
+  **un**reset — the asymmetry at `:241-246` is correct and reasoned ("say this
+  once per process" survives across launches).
+- **Blocked on** Nothing.
+
+---
+
+## C. Process / execution
+
+### C1 — tracker #60: `ScriptHook` has no execution timeout
+
+- **What** A config-file hook script that never exits wedges the CLI. The drain
+  loop blocks on a **null** `stream_select` timeout, so there is no upper bound
+  on a hook's runtime.
+- **Where** `sugar-crush/src/Hooks/ScriptHook.php:238`
+  (`@stream_select($read, $write, $except, null)`); `proc_open` at `:158`.
+- **Severity** Real bug — availability, reachable from a file the repository or
+  the user supplies (`.sugar-crush/hooks.yaml`).
+- **Evidence** Filed as tracker **#60** in the worklog's "Queued follow-ups
+  found by the review chain" (`:566-572`): *"`ScriptHook` has no execution
+  timeout (a hook that never exits wedges the CLI; **pre-existing**,
+  deliberately excluded from the security fix)"*. Confirmed present at HEAD.
+  The null timeout is *argued for* in code (`:234-237`) on cost grounds — *"a
+  hook that runs for a minute costs no polling"* — which is a real benefit and
+  not a mistake; what is missing is a ceiling on top of it.
+- **Step** Keep the null-timeout blocking drain (it is the right shape) but wrap
+  it in a wall-clock deadline: compute a deadline once, pass the remaining
+  budget as the `stream_select` timeout each iteration, and on expiry
+  `proc_terminate()` and report the hook as failed. Make the budget
+  configurable with a documented default, and follow this project's LLM-timeout
+  rule in spirit — a hook is *not* an LLM call, so a bounded total here is
+  correct where it would be wrong on a provider request.
+- **Blocked on** Nothing.
+
+### C2 — `TextArea`'s Ctrl+O `$EDITOR` `proc_open` seam is one keymap edit from live
+
+- **What** The vendored `candy-forms` `TextArea` binds Ctrl+O to
+  `openInEditor()`, which spawns `$EDITOR` via `proc_open`. `Chat` does not
+  route Ctrl+O to the widget today, so the seam is unreachable — but it is one
+  keymap addition away from being a live process-spawn driven by an environment
+  variable.
+- **Where** `candy-forms/src/TextArea/TextArea.php:127` (`'o' => [$this,
+  $this->openInEditor()]`), exit-code handling documented at `:742`. The gate is
+  `sugar-crush/src/Chat.php:109` (`DRAFT_KEYS`, the delegation const) behind a
+  total `!$msg->ctrl` guard, plus the explicit ctrl arms at `:1163-1175`.
+- **Severity** Containment gap — **dormant**, and pinned as dormant.
+- **Evidence** `939f8ada`'s deferral list, verified rather than assumed:
+  *"`TextArea::update()`'s Ctrl+O `$EDITOR` `proc_open` seam is unreachable
+  today and pinned, one keymap edit away from not being."* The reason Ctrl+O
+  cannot arrive is recorded in `Chat.php`'s own comment: a ctrl-flagged `Char`
+  goes to `insertRune()` and **not** to `update()`, *"because
+  `TextArea::update()` reserves ctrl+a/e/u/k/o for its own line edits"*.
+- **Step** Do **not** remove it. Before anyone binds Ctrl+O in `Chat`, require:
+  (a) `$EDITOR` validated as an executable path rather than passed to a shell,
+  (b) the spawn suppressed entirely in the non-interactive `-p`/`run` path and
+  under `PermissionMode` values that disallow execution, and (c) a test that
+  fails if Ctrl+O reaches `DRAFT_KEYS`. Item (c) can land **now**, cheaply, and
+  is the highest-value half.
+- **Blocked on** Nothing for (c). (a)/(b) only matter if the binding is added.
+
+### C3 — `withCharLimit(0)` leaves the chat draft unbounded
+
+- **What** The draft editor is constructed with `withCharLimit(0)`, disabling
+  `TextArea`'s 65536-character paste-DoS guard.
+- **Where** `sugar-crush/src/Chat.php:6213` (`freshInput()`), reasoning at
+  `:6183-6189`.
+- **Severity** Containment gap — **deliberate, reasoned, and narrow**.
+- **Evidence** `939f8ada` recorded it as deferred-and-verified: *"`withCharLimit(0)`
+  leaves the draft unbounded (deliberate)"*. The code states both halves of the
+  trade: *"Its 65536 default is a paste-DoS guard, and this box has no paste path
+  (a `PasteMsg` is dropped by `update()`), but it DOES receive arbitrarily long
+  revived checkpoint rows through the Up arm — a cap would silently truncate one,
+  which is a feature loss the previous hand-rolled string did not have."*
+- **Step** Not "add a cap". Either (i) confirm the `PasteMsg`-dropped claim still
+  holds with a test that fails if a paste path is ever added, and leave the limit
+  at 0 with that test as the guard; or (ii) add a large cap that *refuses loudly*
+  instead of truncating, so a revived checkpoint row cannot be silently lost.
+  (i) is cheaper and matches the measured reality.
+- **Blocked on** Nothing.
+
+### C4 — tracker #80: `ProcessExecutor::createInlineWorkerScript()` is still a simulation
+
+- **What** No workflow stage reaches a live model: the inline worker script the
+  executor generates is the Phase-1 simulation.
+- **Where** `sugar-crush/src/Agents/ProcessExecutor.php`
+  (`createInlineWorkerScript()`).
+- **Severity** Real bug — functionality, **and an audit trap**.
+- **Evidence** Tracker **#80** (worklog `:1253`, `:1683`, `:2007`, `:3455`). The
+  trap is stated at `:3456`: *"a WIRED tier over a SIMULATED executor reads as
+  working."* That is why it belongs in a hardening ledger and not only in a
+  feature queue — anything that measures workflow execution end-to-end will
+  measure the simulation and call it green.
+- **Step** Replace the generated script with a real invocation path, and — before
+  that — add an assertion that fails while the simulation is in place, so the
+  "reads as working" state cannot recur silently.
+- **Blocked on** Phase 2's `WorkflowEngine` construction work; overlaps with
+  tracker #79 (§E7).
+
+### C5 — `AgentWorkerPool::waitForCompletion()` is still a blocking `usleep()` poll
+
+- **What** The pool's completion wait blocks the event loop on a sleep-poll.
+  `69d58867` fixed the *hang* (a worker dying without writing), not the
+  *blocking*.
+- **Where** `sugar-crush/src/Agents/AgentWorkerPool.php`
+  (`waitForCompletion()`).
+- **Severity** Real bug — **dormant today**.
+- **Evidence** `crush_code.md`'s own "Partially complete, do not read the ✅ as
+  finished" block: *"`AgentWorkerPool::waitForCompletion()` is **still a blocking
+  `usleep()` poll** — `69d58867` fixed the hang, not the blocking, and it is safe
+  today only because `Chat::executeAgents()` has zero production callers and
+  `WorkflowEngine` is never constructed."* Both of those safety conditions are
+  scheduled to stop being true in Phase 2.
+- **Step** Convert to the fork-plus-socket pattern already proven in
+  `EngineBackend::completeAsync()` (named as the fix for tracker #79 as well).
+  **Sequence this before** whatever wires `Chat::executeAgents()` or constructs
+  `WorkflowEngine` in production, or a freeze ships with it.
+- **Blocked on** Nothing to fix; but it **blocks** Phase 2's engine wiring.
+
+### C6 — `15a2e605` (foreign agent-preset wiring) shipped without adversarial review
+
+- **What** The commit that made foreign, repository-authored agent presets reach
+  the live roster for the first time was not reviewed.
+- **Where** commit `15a2e605`; wiring at `src/Cli/Bootstrap.php:693`/`:793`.
+- **Severity** Instrument blindness — over a surface that carries **a sub-agent's
+  whole prompt** out of a cloned repository.
+- **Evidence** Worklog queue `:5611`: *"Never reviewed: `c075adcf` (the
+  permission fix) and `15a2e605`."* The commit did self-report two things a
+  reviewer would want to re-drive: that the brief's literal wording ("wire it
+  alongside the native registry construction") would have ranked a cloned repo's
+  preset **above** the built-in `reviewer`, and that the plan's own cross-tool
+  precedence claim was false — `discover()` cited `SkillLoader::loadAll()` as its
+  authority, a method about **native** tiers, and the real rule resolves the pair
+  the other way (**opencode wins for skills, Claude wins for agents**).
+- **Step** Review it against §A5 and §A6 specifically: is `foreign < built-in <
+  native` actually what `agentRoster()` produces for every collision shape
+  (including numeric-stem filenames), and is the field-drop in `fromPreset()`
+  the only thing standing between a cloned preset and `permissionMode`?
+- **Blocked on** Same suite-run serialization constraint as §B1.
+
+---
+
+## D. Audit-instrument correctness (deliberately deferred — audit hygiene)
+
+Lane B round 22 owes findings **F1–F9** against `f0d95785`. All nine are
+**parked, not next** — the sequencing decision explicitly covers instruments:
+*"Audit-instrument correctness defers too — mutation registers, censuses,
+inventories are audit hygiene, not functionality."*
+
+All nine live in one file, `sugar-crush/tests/VhsTapeContractTest.php` (5902
+lines at HEAD), which has not been touched since `f0d95785` — so every citation
+below still resolves. **F1 is the one to fix first**: an 8-assertion tautology is
+worse than no check, because it reads as coverage.
+
+**The sweep figures to trust** (independently re-derived by the round-22
+reviewer, and lane B's set was confirmed correct): **38 leaves** (14/16/4/4),
+swept one at a time → **21 killed / 17 survivors**, survivor set 1:1 with
+`SWEEP_SURVIVORS` (`:235`), classes summing 4/6/7, **two** warning-only kills.
+This **supersedes** two earlier figures: the register's own `38 / 22 killed /
+one warning-only` (three wrong numbers) and the round-19/20 reviewer's
+`37 / 16 / 21 plus a 17th` (does not reconcile).
+
+**A trap to carry into any re-sweep:** both warning-only kills are red *purely*
+via `failOnWarning="true"` changing the exit code. The printed banner still reads
+`OK, but there were issues!` — anyone sweeping by reading output rather than `$?`
+records them as **survivors**.
+
+### D1 — F1 [HIGH]: `sweepLeafCensus()`'s reconciliation is identically zero
+
+- **What** The reconciliation asserted to keep two instruments honest is
+  `(G + T) − G − T`, identically 0 for any token stream. 8 assertions, **zero**
+  detection power.
+- **Where** `tests/VhsTapeContractTest.php:3469`
+  (`self::sweepLeafCensus($tokens) …`), with `guardCensus()` and the
+  byte-identical `$ternaries` recomputation immediately above (`:3464`).
+- **Severity** Instrument blindness.
+- **Evidence** Measured **GREEN** under all of: adding `T_FOREACH` to the
+  anchors; removing `T_BOOLEAN_AND` from the operators; adding `T_SL`; widening
+  `isTernaryCondition()`; **breaking `isTernaryCondition()` to `return false`
+  always**; and adding a third census term that is 0 on these methods. Only a
+  *non-zero* third term reds it. So the file's two claims — *"neither side can be
+  widened or narrowed without the other's figure moving"* and *"this subtraction
+  is what makes a third round of it red instead of quiet"* — are both false.
+- **Step** Replace the subtraction with a comparison that can disagree: assert
+  the census against an **independently derived** leaf count (a different parse
+  strategy, or a pinned per-method expectation table), not against a recomputation
+  of one of its own terms. What actually prevents drift today is the shared
+  constant — see D4 — so pin that instead of pretending the arithmetic does it.
+- **Blocked on** Must not start while a full-suite run is in flight: editing this
+  file mid-run shifts `file(__FILE__)` ranges.
+
+### D2 — F2 [HIGH]: four ternary shapes are invisible; a real ternary leaf lands green
+
+- **What** `isTernaryCondition()` misses a `?` preceded by any token outside its
+  whitelist, so four real ternary shapes are not counted as leaves.
+- **Where** `tests/VhsTapeContractTest.php:3750` (`isTernaryCondition()`),
+  consumed at `:3464`, `:3666`, `:3794`.
+- **Severity** Instrument blindness — in the **under-count** direction, which the
+  file itself calls *"the direction that matters"*.
+- **Evidence** The four missed shapes: `Foo::class ? :` (prev `T_CLASS`),
+  `match($z){…} ? :` (prev `}`), `"x$b" ? :` (prev bare `"`), and
+  heredoc/nowdoc (prev `T_END_HEREDOC`). Whole-file mutation: inserting
+  `$z = self::class ? 1 : 2;` or `$z = "x$depth" ? 1 : 2;` into `callArgument()`
+  leaves **OK (115 / 625)** with the register total still **38**; the
+  `$depth >= 0 ? 1 : 2` control **reds**. Same defect class as round 19's `??=`
+  finding, one operator along, and these four are **not** among the escapes the
+  file's own failure message enumerates.
+- **Step** Widen the predicate to those four token kinds and add each as a fixture
+  that reds the register. Note the coupling: widening it also changes D1's
+  arithmetic — but D1's arithmetic cannot detect that, which is D1.
+- **Blocked on** D1 first (fixing the tautology is what makes D2's fix
+  verifiable).
+
+### D3 — F3 [MEDIUM-HIGH]: one `fragment` row is satisfied by a different leaf's bytes
+
+- **What** Nothing constrains a survivor row's `fragment` to be **unique within
+  its method**, so a row can be satisfied by a *different* leaf's bytes.
+- **Where** `tests/VhsTapeContractTest.php:235` (`SWEEP_SURVIVORS`), row 9;
+  fragment matching at `:3402`
+  (`self::methodSourceWithoutComments($survivor['method'])`).
+- **Severity** Instrument blindness — *"verbatim the failure mode the `fragment`
+  half was added to prevent, reintroduced in the commit that added it."*
+- **Evidence** 16 of 17 survivor rows red on a meaning-preserving respelling.
+  **Row 9 does not.** Its fragment `$depth === 1` occurs **twice** in
+  `callArgument()` — the registered survivor (an early-continue) and a KILL
+  (`elseif ($token === ',' && $depth === 1)`). Rewriting the survivor as
+  `if (1 === $depth)` leaves the file green. Worse: **deleting that leaf
+  outright** and rebaselining 16→15 / 38→37 / 21→20 also leaves the register
+  test green.
+- **Step** Assert each `fragment` occurs **exactly once** in its method's
+  comment-stripped source, and fail the row when it does not — which forces
+  whoever adds a row to pick a discriminating fragment.
+- **Blocked on** Nothing beyond the file-lock constraint.
+
+### D4 — F4 [MEDIUM]: 4 of the shared domain's 11 members can be deleted in silence
+
+- **What** The shared token domain the two censuses draw from has 11 members;
+  removing 4 of them is **silent**, so the claim *"widen or narrow the domain
+  here and BOTH figures move together"* is false for those 4.
+- **Where** `tests/VhsTapeContractTest.php` — the shared operator/anchor constant
+  consumed by `guardCensus()` and `sweepLeafCensus()` (`:3789`).
+- **Severity** Instrument blindness — **narrowing is the leaf-hiding direction**.
+- **Evidence** Sharing is genuinely real (no second copy; removing an *occurring*
+  member reds both censuses). But `T_COALESCE_EQUAL`, `T_LOGICAL_AND`,
+  `T_LOGICAL_OR` and `T_LOGICAL_XOR` are all **SILENT** on removal — exactly the
+  four the docblocks argue hardest for (*"every one of them was invisible to the
+  regex these censuses replaced"*). Adding `T_FOREACH` is silent too. They are
+  load-bearing only against a **future** leaf, and nothing pins the constant's
+  content the way `KEYWORDS` is pinned.
+- **Step** Pin the constant's **content** the way `KEYWORDS` is pinned — an
+  explicit expected member list — so narrowing it reds regardless of whether any
+  current leaf uses the removed member.
+- **Blocked on** Nothing beyond the file-lock constraint. Fixing this is what
+  actually delivers what D1 falsely claims, so bundle D1+D4.
+
+### D5 — F5 [MEDIUM]: the twin defect, reintroduced by round 21's own new assertion
+
+- **What** An `assertLessThanOrEqual`'s failure message cites, as the measurement
+  proving it bites, a scenario in which it is **never reached** — an earlier check
+  in the same loop fires first.
+- **Where** `tests/VhsTapeContractTest.php:3431` (`self::assertLessThanOrEqual(`);
+  the fragment check that pre-empts it is at `:3402`, in the same `foreach`.
+- **Severity** Instrument blindness / claim defect.
+- **Evidence** The message cites dropping `splitNamedArgument()`'s
+  `\is_array($argument[0])` and correcting 4→3 / 38→37 / 21→20. Driven: the
+  fragment check — added in the **same commit**, **earlier in the same
+  `foreach`** — fires first, so the assertion is never reached in its own cited
+  scenario. It *is* reachable, but only by a route the message does not describe:
+  `methodSourceWithoutComments()` (`:3540`) strips comments and **keeps string
+  literals**, so a nowdoc containing the fragment satisfies the row while the leaf
+  is gone.
+- **Step** Rewrite the message to describe the route that actually reaches the
+  assertion (the nowdoc/string-literal route), or reorder the checks so the cited
+  scenario is the reaching one. Either way the message must state the measurement
+  that is true of it.
+- **Blocked on** Interacts with D3 (same `foreach`, same ordering) — fix together.
+
+### D6 — F6 [MEDIUM]: the register's own sweep instruction contradicts itself and is false
+
+- **What** The sweep instruction a future sweeper is told to follow is wrong, and
+  following it produces the conclusion that the register is stale.
+- **Where** `tests/VhsTapeContractTest.php:4328-4329` — verified at HEAD, reading
+  *"It now reports 'killed' for all thirty-eight without the flag, and a survivor
+  is green either way."*
+- **Severity** Instrument blindness — it actively misdirects the next sweeper.
+- **Evidence** Measured across five survivors, each run twice: green **only** with
+  `--exclude-group syntax-census`; **without** it, every one exits 1. So a sweeper
+  who follows that sentence records **38 kills / 0 survivors** and concludes the
+  register is stale.
+- **Step** Correct the sentence to state the `--exclude-group syntax-census`
+  requirement, and add the `failOnWarning` banner trap (see the group preamble) to
+  the same instruction block — both are things a sweeper gets wrong by reading
+  rather than measuring.
+- **Blocked on** Nothing beyond the file-lock constraint. Cheapest of the nine.
+
+### D7 — F7 [LOW-MEDIUM]: `isTernaryCondition()` false-positives on `#[Attr] ?type`
+
+- **What** A nullable parameter type preceded by an attribute is mis-classified as
+  a ternary, because `]` is not in the docblock's enumeration of what may precede
+  a nullable `?` and `]` falls on the ternary side.
+- **Where** `tests/VhsTapeContractTest.php:3750` (`isTernaryCondition()`).
+- **Severity** Instrument blindness — false-RED direction (over-count).
+- **Evidence** Adding `#[\SensitiveParameter] ?string $z = null` to
+  `callArgument()` **reds** the register with a figure moved and no leaf added;
+  the bare `?string $z = null` control is **silent**. Not hypothetical:
+  `callArgument()`'s own docblock probes `#[\SensitiveParameter]`.
+- **Step** Add `]` to the nullable-type side of the enumeration and to the
+  docblock's list, with the attribute shape as a fixture. Bundle with D2 — same
+  predicate, opposite direction.
+- **Blocked on** D2 (same method).
+
+### D8 — F8 [LOW]: a claim refuted as worded, two screens from the code
+
+- **What** The file states a property of **itself** that is untrue of itself: that
+  the killed total *"exists nowhere as a literal"*, when both `21` and `38` are
+  literals in it.
+- **Where** the claim is at `tests/VhsTapeContractTest.php:3324-3325`
+  (**DRIFTED** by ~1 line from the review's `:3325`; at HEAD `:3325` reads
+  *"…the KILLED total is the subtraction of the two and"*); the literal is at
+  `:3449` (`21,`, inside the multi-line `assertSame`).
+- **Severity** Cosmetic — *"Functionally fine — each is an expected value against
+  a derived actual, and both are falsifiable."*
+- **Step** Reword the claim to what is true: each literal is an *expected* value
+  checked against a derived *actual*. One-line edit.
+- **Blocked on** Nothing.
+
+### D9 — F9 [LOW]: the comment-strip admission is honest but cites the wrong domain
+
+- **What** The comment-strip justifies itself by citing `tokenize()`/`scanRegex()`,
+  which are **outside its only call site's domain**, and does not mention that
+  **strings are not stripped** — which is D5's live half.
+- **Where** `tests/VhsTapeContractTest.php:3540`
+  (`methodSourceWithoutComments()`).
+- **Severity** Cosmetic — and the finding itself is a **negative result**: 0
+  comment-token occurrences of all 17 fragments inside their own methods, so
+  there is **no hidden gap**.
+- **Step** Cite the actual call site's domain and state the strings-are-kept
+  limitation, cross-referencing D5.
+- **Blocked on** Bundle with D5.
+
+### D10 — `ReadPathCensusTest`'s stated weakness: it cannot auto-fail a *missing* check
+
+- **What** The read-path census forces a written verdict per read/execute sink,
+  but a path that never had a containment check produces no compare for it to
+  judge — so it would not have auto-failed the tenth path.
+- **Where** `sugar-crush/tests/Support/ReadPathCensusTest.php` (755 lines).
+- **Severity** Instrument blindness — **the residual of the fix for exactly this
+  class of blindness**.
+- **Evidence** `dad90b18` states it plainly: *"it would **not** have auto-failed
+  the tenth path (the file held two project-tier compares), it would have forced
+  someone to write a sentence next to that `require` where the only true one was
+  'none'."* The positive half is real and worth keeping: it derives **76**
+  read/execute sinks in `src/` (`require`/`include` and generated-code strings
+  included), demands a per-occurrence verdict with four verdict words measured
+  against the mechanism, *"caught a wrong verdict of its author's own on first
+  run"*, and an ungated `file_get_contents` added anywhere in `src/` now reds it
+  **by existing**.
+- **Step** This is the strongest instrument in the package; do not weaken it. The
+  residual is closed by process, not code: require a verdict sentence at review
+  time for every new read sink. If it must be automated, the rule the chain
+  derived is the one to encode — *"the grep must be for the DECISIONS the
+  predicate is supposed to govern (every read of a repo-chosen path), not for the
+  SPELLINGS of the predicate. A sweep instrumented on `str_starts_with` is
+  structurally incapable of finding a MISSING check, which is the more dangerous
+  half."*
+- **Blocked on** Nothing.
+
+### D11 — `KEY_HELP_COLS`'s docblock measurement is stale (58 vs a 59-column widest row)
+
+- **What** The docblock says the widest declared keybinding row was *"measured at
+  58 columns"*; the widest live row is now **59**.
+- **Where** `sugar-crush/src/Renderer.php:555-556` (the docblock claim); the
+  constant itself is `:561`, **value 64**.
+- **Severity** Cosmetic — a stale claim, **not** a truncation risk. The constant
+  is 64, so 59 still fits with 5 columns of headroom, and
+  `KeyHelpTest::testScrollingThroughItShowsEveryLiveBinding()` asserts every
+  description is painted in full, so a row growing past 64 fails rather than
+  clipping.
+- **Evidence** `939f8ada`'s deferral list: *"`KEY_HELP_COLS` says 58 where the
+  widest live row is 59 (pre-existing)."* Verified at HEAD: the const reads 64
+  while the prose reads 58, so the item is about the **prose**, and the
+  worklog's shorthand ("`KEY_HELP_COLS` says 58") is the number-without-its-domain
+  shape it warns about — the 58 is a *measurement of the widest row*, not the
+  constant's value.
+- **Step** Re-measure the widest declared row and update the prose to the measured
+  figure **with what it was measured over**. Better: derive it — have `KeyHelpTest`
+  compute the widest row and assert the headroom, so the prose cannot go stale.
+- **Blocked on** Nothing.
+
+### D12 — `ContainedPath`'s read-tier count was deleted rather than fixed
+
+- **What** The head of `ContainedPath` used to carry a count of read tiers. It
+  said five, then seven, then eight, was wrong within a round each time, and is
+  now **deleted** — so there is no instrument on how many repository-chosen read
+  paths exist.
+- **Where** `sugar-crush/src/Support/ContainedPath.php` (class docblock).
+- **Severity** Instrument blindness — a **deliberate** removal of a figure that
+  could not be kept true by hand.
+- **Evidence** `dad90b18`: *"The tier count at the head of `ContainedPath` is
+  DELETED, not re-incremented. It said five, then seven, then eight, wrong within
+  a round each time, and could not move at all while the tenth and eleventh paths
+  were open."*
+- **Step** Do not restore a hand-maintained number. If a count is wanted, derive
+  it from `ReadPathCensusTest`'s own sink enumeration (§D10) so it cannot drift,
+  and cite the census as its domain.
+- **Blocked on** Nothing.
+
+---
+
+## E. Deferred UX / correctness follow-ups (not security)
+
+### E1 — issue #88: the README's whole-suite figure
+
+- **What** `README.md` advertises a test/assertion count that is many commits
+  stale.
+- **Where** `sugar-crush/README.md:396` — **"6,424 tests / 51,767 assertions, 0
+  failures, 1 skipped"**. (Line may drift: another agent is editing this file.)
+- **Severity** Cosmetic.
+- **Evidence** Deferred **five times** by name in the worklog queue, each time
+  with a fresh true measurement, because every landing round moves it. The
+  measurement history, latest first — **use the latest, and re-measure before
+  writing**: **6806 / 70298 / 1 skipped** at `939f8ada` (verified by the
+  supervisor from a clean run, not taken from an agent's report); 6764 / 69788 at
+  `15a2e605`; 6742 / 69699 at `dad90b18`; 6678 / 69306 at `c075adcf`; 6678 /
+  69298 at `f0d95785`; 6603 / 68722 at `f8b37f63`; 6525 / 68522 at `1fa7af45`;
+  6465 / 68244 at `cbdb5e2e` (confirmed twice). An earlier reported
+  6386 / 45478 was explicitly disowned: *"That does not describe the
+  repository."*
+- **Step** Land it **last**, in a standalone commit, when nothing else is in
+  flight — that is why it has slipped five times. Lane E round 4 already deleted
+  the *freshness promise* next to the figure, so the sentence is honest about
+  being point-in-time; keep it that way and put the run command beside the
+  number so the figure carries its provenance.
+- **Blocked on** Everything else landing. It is the natural final commit.
+
+### E2 — `ESC b` / `ESC f` type a stray letter instead of moving by word
+
+- **What** readline's Alt+B / Alt+F word motion, when a terminal sends it as
+  `ESC b`/`ESC f`, decodes as `KeyMsg(Char "b", alt)` and is **typed** rather
+  than moving the cursor.
+- **Where** `sugar-crush/src/Chat.php:1145-1152` (the reasoning) and `:1153-1156`
+  (the arms that do handle `Left`/`Right` with alt/ctrl).
+- **Severity** Real bug — **identical at HEAD before the cursor work**, so a
+  regression it is not.
+- **Evidence** `939f8ada` recorded it as deferred-and-verified: *"`ESC b`/`ESC f`
+  type a stray letter (identical at HEAD)"*. The code states the same and names
+  the sibling case that is also unbound: *"`ESC ESC[D`, the ESC-prefixed Alt+Left
+  some terminals emit, decodes as TWO messages (Escape, then a bare Left), so the
+  Escape is consumed by the Escape arm above and the Left moves one character
+  rather than one word."*
+- **Step** A keymap addition: route `KeyMsg(Char 'b'|'f', alt)` to
+  `wordLeftOffset()`/`wordRightOffset()` (`src/Chat.php:6334`, `:6341`), which
+  already exist. Deliberately excluded from `939f8ada` as *"a keymap addition
+  rather than part of moving the draft into the widget"*.
+- **Blocked on** Nothing.
+
+### E3 — the Ctrl+P palette has its own hand-rolled append-only query buffer
+
+- **What** After the chat draft got a real cursor, the command palette's query is
+  still a hand-rolled append/`dropLast` string — no cursor movement in it.
+- **Where** `sugar-crush/src/Chat.php:6701`
+  (`withPaletteQuery(self::dropLast($this->palette->query))`); the helper survives
+  at `:6912` **specifically because** of this second buffer.
+- **Severity** Real bug — cosmetic in effect (a short query), structural in shape.
+- **Evidence** `939f8ada`: *"the palette's own query buffer"*, deferred. And the
+  reason `dropLast()` survived the refactor at all: *"`dropLast()` because the
+  Ctrl+P palette query is a **second** hand-rolled append-only buffer"* — which
+  is also why the plan's 30–50-line estimate came out at **11** non-comment lines
+  removed, 8 of them match-arm bodies.
+- **Step** Give the palette the same `TextArea`/`TextInput` treatment the draft
+  got. Note `freshInput()`'s docblock records that the palette *"has no
+  fill-on-select at all — its selections run actions, and its own query buffer is
+  a separate string this widget never sees"*, so this is additive and does not
+  touch the draft's ownership of completion or `↑` recall.
+- **Blocked on** Nothing.
+
+### E4 — the draft cursor position is not persisted in checkpoints
+
+- **What** A restored checkpoint reseeds the draft with the cursor at the end
+  rather than where it was.
+- **Where** `sugar-crush/src/Chat.php` — the `input`/`inputBuf` `mutate()` keys
+  (reasoning at `:6265-6273`, `inputCursorOffset()` at `:6275`); checkpoint
+  restore is one of the four whole-draft writers.
+- **Severity** Cosmetic.
+- **Evidence** `939f8ada`: *"cursor not persisted in checkpoints"*, deferred and
+  verified. The mechanism is by design: *"`mutate()` carries an `input` key and
+  **drops it when a change names `inputBuf` alone** — that key means 'replace the
+  whole draft' (submit clear, `↑` recall, slash completion, checkpoint restore)
+  and reseeds with the cursor at the end."* Deleting that guard reddens
+  `ChatTest` (11 F + 1 E), so it is load-bearing.
+- **Step** Persist the flat character offset alongside the draft in the checkpoint
+  state map (`inputCursorOffset()` already produces exactly that shape, and its
+  docblock notes the flat form is *"also the shape the checkpoint state map …
+  see"*), and restore it via `withInputCursor()` (`:6291`).
+- **Blocked on** Nothing.
+
+### E5 — combining marks splice onto the block cursor glyph
+
+- **What** The block cursor `█` is spliced into the draft at a character offset,
+  so a combining mark immediately after that offset composes onto the **cursor
+  glyph** rather than onto its base character.
+- **Where** `sugar-crush/src/Renderer.php:2929` (`renderInput()`); the splice is
+  at `:2956-2958` (`$body = "> " . mb_substr(...) . $cursor . mb_substr(...)`).
+- **Severity** Cosmetic.
+- **Evidence** `939f8ada`: *"combining marks splice onto the block glyph"*,
+  deferred and verified. Bounded by the byte-identity result from the same
+  round: with the cursor at the end, painted output is byte-identical to the
+  pre-cursor form across **57 `md5(view())` comparisons over 19 drafts × 3 sizes**
+  — CJK, emoji, ZWJ, combining marks, RTL, embedded SGR, a lone C1, C0 bytes, and
+  the 38–41 column boundary — **zero differences**. So this only manifests
+  mid-draft. A related residual is already stated in code at `:2942-2947`: on a
+  draft whose cursor sits inside an escape sequence (reachable only via a revived
+  checkpoint row, never by typing) the two sanitizer passes can disagree and the
+  glyph lands a column or two off.
+- **Step** Compute the cursor position on **grapheme** clusters rather than code
+  points, and paint the cursor as a reverse-video attribute on the cluster at the
+  offset instead of splicing a glyph between clusters.
+- **Blocked on** Nothing.
+
+### E6 — the input box over-widens past the terminal at 40 columns
+
+- **What** `renderInput()` sets **no width** at all — the bordered box grows with
+  its content, so a long single-line draft emits rows wider than the terminal.
+- **Where** `sugar-crush/src/Renderer.php:2959-2964` (the `Style::new()->border()
+  ->padding(0,1)->render($body)` chain, with no `->width(...)`).
+- **Severity** Real bug — **pre-existing and byte-identical to HEAD**; the
+  render-invariant class that caused PR #1403.
+- **Evidence** `939f8ada`: *"the input box over-widens past 40 columns
+  (byte-identical to HEAD)"*, deferred and verified. This is the same invariant
+  the project already learned the hard way — *"no over-wide lines (the diff
+  renderer is 1 line/row)"* — and the same class as the tab-expansion break
+  `4e10360b` fixed in the diff gutter (`Width::string("\t") === 0` while
+  `Style::render()` paints a tab as 4 spaces, so a diff at `cols: 40` emitted
+  48-cell rows).
+- **Step** Give the box an explicit content width derived from `$chat->cols()`
+  minus its own chrome (the pattern already used for the keybinding reference at
+  `src/Renderer.php:701`), and wrap or scroll the draft within it. `renderInput()`
+  already receives `$chat`, so the width is available.
+- **Blocked on** Nothing. Highest user-visible value in group E.
+
+### E7 — tracker #79: `/workflow run` freezes the TUI
+
+- **What** A real `/workflow run` blocks the event loop for the duration of the
+  run.
+- **Where** `sugar-crush/src/Chat.php` (documented at the `/workflow` dispatch;
+  the fix is named in code).
+- **Severity** Real bug — availability, on a user-invoked command.
+- **Evidence** Tracker **#79** (worklog `:3457`): *"Now DOCUMENTED in `Chat.php`
+  with the fix named (`EngineBackend::completeAsync()`'s fork-plus-socket
+  pattern); the fix itself is its own change-set."*
+- **Step** Apply the fork-plus-socket pattern from
+  `EngineBackend::completeAsync()`. Bundle with §C5, which needs the same
+  treatment and gates the same subsystem.
+- **Blocked on** Nothing to start; overlaps Phase 2's engine work.
+
+### E8 — tracker #85 (lane-D sense): "Stages completed" counts a synthetic pre-flight stage
+
+- **What** The workflow result line prints `count($result->stageResults)`, and the
+  pre-flight builds **one synthetic `StageResult`** whose own comment says
+  "Nothing ran" — so a run that dispatched nothing reports
+  "Stages completed: 1".
+- **Where** **DRIFTED** — the review cited `src/Chat.php:3823`; at HEAD the
+  print is at **two** sites, `sugar-crush/src/Chat.php:4868` and `:4943`. The
+  pre-flight is `src/Workflows/WorkflowEngine.php:506-533` per the review (also
+  likely drifted; locate by the "Nothing ran" comment).
+- **Severity** Real bug — reporting only.
+- **Evidence** Measured: stage 2 declaring `Bash` under `dont-ask` →
+  *"Workflow 'danger' failed … Stages completed: 1 … (0.00s elapsed)"* while
+  stage 1 never ran — proven by the round's **own**
+  `WorkflowFailureReportingTest.php:47-48` (`expects($this->never())`), which
+  asserts nothing about that line. Same shape after resume: "Stages completed: 0"
+  for a workflow that had completed one. Deferred because `Chat.php` was owned by
+  a concurrent lane.
+- **Step** Count only stages that actually dispatched (exclude the synthetic
+  pre-flight `StageResult`), and fix **both** print sites — the count has since
+  been duplicated. Add the assertion the failure-reporting test lacks.
+- **Blocked on** Nothing.
+
+### E9 — tracker #86: the `README.md:272` half of lane D's F-3
+
+- **What** The second half of lane D round 5's F-3 was a `README.md` claim,
+  deferred because `README.md` was owned by a concurrent lane.
+- **Where** `sugar-crush/README.md:272` as cited — **UNVERIFIED at HEAD**; the
+  README has changed substantially since, and the ledger compiler could not
+  match a claim at that line to the finding.
+- **Severity** Unknown — recorded so it is not lost.
+- **Evidence** Worklog `:3961-3963`: *"Its F-5 (`Chat.php:3823`'s 'Stages
+  completed') and the `README.md:272` half of its F-3 are DEFERRED to trackers
+  **#85** and **#86**, both recorded with their measurements so they can be
+  picked up cold."* Lane D round 5's F-3 as written up (`:3817`) is *"the wiring
+  test cannot catch a recurrence of the bug it was written for"* — which does not
+  obviously have a README half, so the mapping of #86 to a specific claim is
+  itself uncertain.
+- **Step** Re-read the "Lane D round-5 review" section of the worklog (`:3767`
+  onward) in full and re-derive what the README half was, before spending any
+  time on the line number. See *Unresolved references*.
+- **Blocked on** Reconstructing the finding.
+
+### E10 — tracker #78: `Doctor::name()` is lowercase where nine sibling tools are TitleCase
+
+- **What** The tool-schema name is `'doctor'` while the other built-in tools are
+  TitleCase.
+- **Where** `sugar-crush/src/Tools/BuiltIn/Doctor.php:44-47`. Verified at HEAD.
+- **Severity** Cosmetic.
+- **Evidence** Tracker **#78** (worklog `:3450`): *"Deliberately not renamed by a
+  review round: the model already knows the name. Belongs to whoever owns the
+  tool schema."*
+- **Step** Rename with the schema, or record the inconsistency in the tool-naming
+  test as intentional. Note the real risk is the *rename*, not the status quo —
+  the model has been trained on prompts containing `doctor`.
+- **Blocked on** A tool-schema decision.
+
+### E11 — tracker #82: an orphaned docblock in `MenuBar`
+
+- **What** Two consecutive docblocks with no declaration between them, so the
+  first documents nothing.
+- **Where** `sugar-crush/src/Tui/Components/MenuBar.php` — cited as `:362-368`;
+  **confirmed present at HEAD** around `:362-371` (the `handleKey()`-persistence
+  docblock is immediately followed by the dropdown-panel docblock).
+- **Severity** Cosmetic.
+- **Evidence** Tracker **#82** (worklog `:1280`, `:1699`, `:3462`).
+- **Step** Attach the orphan to the declaration it describes, or fold its content
+  into the surviving docblock. Two-line edit.
+- **Blocked on** Nothing.
+
+### E12 — trackers #83/#85 (palette sense): Ctrl+P opens a palette the shell never paints
+
+- **What** `Ctrl+P` (and `Ctrl+K`, which translates to it) opens a hosted-`Chat`
+  palette that the shell's full-pane agent dashboard never paints and never
+  drives — visible-but-undrivable in the skill-picker and F10-menu states.
+- **Where** `sugar-crush/src/Tui/Renderer.php` (`renderAgentDashboard()`), which
+  *"never renders the hosted chat at all — verified"*.
+- **Severity** Real bug — a live keychord with no visible result.
+- **Evidence** Worklog `:2500` and `:3463` (filed under **two different tracker
+  numbers**, see *Contradictions*). The escape route was measured and rejected:
+  *"Yielding the chord makes it **worse** (`ProviderSelectCmd` → `/model`)."* And
+  a cheaper mitigation was considered and rejected **in-lane**: a shell-side cue
+  (`hostedNotice`/dashboard footer) *"change[s] the chrome line count, hence
+  `paneRows` and dashboard geometry — a layout change belonging to [this item],
+  not to a review-fix round."*
+- **Step** Either have the shell composite the hosted palette, or have the palette
+  stand down while the dashboard owns the pane. This is a layout change and
+  should be sized as one.
+- **Blocked on** Phase 4's `/model` work touches the adjacent chord — sequence
+  after it.
+
+### E13 — tracker #61: the unsearchable-directory tests assert a throw root does not produce
+
+- **What** Two tests assert an exception that a **root** user never triggers,
+  because root can traverse a `chmod 0` directory. Fine on a uid-1000 dev host;
+  CI containers often run as root.
+- **Where** `sugar-crush/tests/Cli/BootstrapUserConfigTest.php` and
+  `tests/Cli/BootstrapPermissionGateTest.php` are the candidates at HEAD
+  (both contain unsearchable-directory fixtures); the review did not name the
+  file. **Location approximate.**
+- **Severity** Instrument blindness — a CI-only false green/red.
+- **Evidence** Worklog `:566-572`: *"#61 P1.2's unsearchable-dir tests assert a
+  throw **root does not produce** — fine locally (uid 1000) but CI containers
+  often run as root."*
+- **Step** Gate those assertions on `posix_geteuid() !== 0` with an explicit
+  `markTestSkipped` naming the reason, so "exempt" is distinguishable from
+  "forgotten" — the pattern `tests/Providers/ProviderConnectTimeoutTest.php:56`
+  already uses.
+- **Blocked on** Nothing.
+
+### E14 — `src/ToolRegistry.php` declares its own `SugarCraft\Crush\Tool`
+
+- **What** A second class literally named `Tool` in the root namespace, one `use`
+  statement away from colliding with the tool **interface** every built-in tool
+  implements.
+- **Where** `sugar-crush/src/ToolRegistry.php:5` (`namespace SugarCraft\Crush;`)
+  and `:33` (`final class Tool`). Confirmed at HEAD.
+- **Severity** Real bug waiting to happen — a latent collision, not a live
+  defect.
+- **Evidence** Worklog `:5192`: *"Reported, unowned: `src/ToolRegistry.php`
+  declares its own `SugarCraft\Crush\Tool`, one `use` away from colliding with
+  the tool interface."*
+- **Step** **Do not delete it** — `crush_code.md`'s consolidation-review list
+  flags root-namespace `ToolRegistry` as superseded-with-zero-production-callers,
+  and the standing rule is that removal needs explicit human sign-off. The safe
+  move now is to *move* it into a distinct namespace (or rename the class) so the
+  collision cannot be created accidentally, and to leave the consolidation
+  decision to the human review it is already queued for.
+- **Blocked on** Nothing for the rename; the consolidation decision is separate.
+
+### E15 — tracker #81: port the vhs lexical grammar into `candy-vcr`
+
+- **What** `candy-vcr/src/Tape/Lexer.php` has no JSON token and no regex token,
+  so it does not implement upstream vhs's real grammar.
+- **Where** `candy-vcr/src/Tape/Lexer.php` (a **sibling lib**, not `sugar-crush`).
+- **Severity** Real bug — in the tape renderer, not in the agent.
+- **Evidence** Tracker **#81** (worklog `:1261`, `:1692`, `:2010`, `:3458`).
+  Lane B round 15 established four portable facts to port with it: *"tab is
+  whitespace, there are THREE time units not two, the JSON closer is synthesized,
+  and both the keyword gate and the suffix gate are on token KIND not text."*
+  Three independent vhs oracles were built and all three agree (worklog
+  `:4535-4540`).
+- **Step** Port the grammar into `candy-vcr`, carrying the named constants with
+  the Go predicate names plus the grammar write-up. Out of `sugar-crush`'s scope
+  — record it here only so it is not lost with the worklog.
+- **Blocked on** Nothing, but it belongs to `candy-vcr`, not this plan.
+
+### E16 — `HookManager::applyPreHooks()` and the `ToolStarted`/`ToolFinished` payloads
+
+- **What** Flagged by an early round as *"the same stale-`toolArgs` family as
+  `HookDispatcher` was"*, with `ToolStarted`/`ToolFinished` still carrying the
+  **pre-rewrite** `ToolCall` on both pipelines.
+- **Where** `sugar-crush/src/Hooks/HookManager.php:199` (`applyPreHooks()`); the
+  re-scan reasoning is at `:180`.
+- **Severity** **UNVERIFIED at HEAD.** `df0a563b` (*"make the permission gate a
+  real hook, and stop rewrites reaching the tool unjudged"*) plausibly closed it,
+  and `:180` now documents a re-scan of rewritten arguments — but no record
+  states the flagged item as closed.
+- **Evidence** Worklog `:574-577`: *"Also flagged by round 3, not queued yet:
+  `HookManager::applyPreHooks()` is the same stale-`toolArgs` family as
+  `HookDispatcher` was, and `ToolStarted`/`ToolFinished` still carry the
+  pre-rewrite `ToolCall` on both pipelines."* It was never assigned a tracker.
+- **Step** Re-establish it before spending fix time: drive a rewriting pre-hook
+  and assert what `ToolStarted`/`ToolFinished` observers actually receive. If the
+  events still carry the pre-rewrite call, decide whether that is a defect —
+  observers may legitimately want the original — and **document the choice**
+  either way, since the ambiguity is what made this sit unqueued for the whole
+  chain.
+- **Blocked on** The measurement.
+
+---
+
+## F. Known dormant seams — documented, NOT work
+
+These are features intentionally left unwired. **They are not bugs and none of
+them is a deletion candidate.** The standing rule on this project is to complete
+a dormant seam or document it as one — never to remove it because it looks dead.
+They are listed so a hardening pass does not mistake them for defects, and so
+anyone who *does* wire one knows what gate to add at the same time.
+
+- **F1 — `src/Commands/CommandLoader.php`: file-based custom commands are
+  loadable, and nothing constructs a loader in production.** `grep -rn 'new
+  CommandLoader' src/ bin/` returns **nothing** at HEAD; the only occurrences of
+  the name in `src/` are six `{@see}` cross-references from other classes'
+  docblocks. The class is complete (3-tier discovery, frontmatter parsing,
+  containment via `loadFromDirectory($dir, ?$anchoredIn)` at `:83`/`:90`,
+  `loadUserCommands()` at `:179` — **DRIFTED** from the review's `:138` —
+  `loadProjectCommands()` at `:205`). Wiring it is a **Phase 2 functionality
+  item**, and `crush_code.md` records the prerequisite: the template-substitution
+  engine (`$ARGUMENTS`/`$1`/`` !`cmd` ``/`@file`) does not exist, so *"wiring the
+  loader alone isn't sufficient"*. When it is wired, note that lane D round 10
+  already fixed its containment (user tier switched from `HomeDirectory::path()`
+  to `owned()` and given an `$anchoredIn`) — that fix was for the **eleventh read
+  path**, and the seam being dormant is what limited the blast radius until then.
+- **F2 — `TextArea` Ctrl+O `$EDITOR` `proc_open`.** See §C2, which is the same
+  seam viewed as a hardening prerequisite.
+- **F3 — `AgentPoolConfig::$maxRetries`.** `src/Agents/AgentPoolConfig.php:51`
+  (`= 2`). `crush_code.md`: *"documented as an intentional dormant seam rather
+  than wired, because re-running a sub-agent that already edited files or spent
+  tokens is a behavioural decision, not a bug fix."* The per-sub-agent
+  equivalent is `src/Agents/SubAgent.php:54`.
+- **F4 — `Tui\Components\InputPane`.** Reachable only on the non-hosted branch:
+  `src/Tui/Renderer.php:349` (`$bottom = $hosted ? '' : InputPane::render(...)`),
+  and `Bootstrap::app()` always constructs a hosted `Chat`. Unlike `AgentsPane`,
+  nothing documents it as intentional — `crush_code.md` explicitly calls this
+  *"worth a human decision (document it as intentionally dormant the way
+  `AgentsPane` already is, or remove it, but only with explicit sign-off; not an
+  automatic removal)"*. **The cheap, rule-compliant action is to write the
+  docblock**, which converts an ambiguity into a documented seam.
+- **F5 — the tmux/iTerm2 split-pane compositor.**
+  `src/Tui/Renderer.php:63` (`renderWithSplit()`) and `:109`
+  (`renderForCurrentEnvironment()`); the only reference to the latter outside its
+  own definition is a docblock mention at `src/Renderer.php:134`, so it has
+  **zero production callers**. Deferred per its own docblock pending a public
+  live-output-buffer accessor on `AgentManager` (`src/Agents/AgentManager.php:329`
+  describes what it needs). That accessor is Phase 1 item 1's remaining
+  follow-up, and it also gates Phase 8 item 4.
+- **F6 — `Agent::$isActive`.** Named as an intentional dormant seam in
+  `Agent::fromPreset()`'s docblock (`src/Agents/Agent.php:113-114`), pointing at
+  `fromDefinition()` for the reasoning.
+- **F7 — `Tui\SessionTabs` / `SessionTab`.** Deliberately bypassed; the live tab
+  strip reimplements the same semantics directly against `SessionStore`.
+  **DRIFTED** — `crush_code.md` cites `src/Renderer.php:124-134`; at HEAD the
+  reasoning is in the class docblock at `src/Renderer.php:163-167` (*"its
+  constructor always…"*), cross-referenced from `:1393`. On `crush_code.md`'s
+  consolidation-review list, which is a human decision point, not a task.
+
+---
+
+## Contradictions found between sources
+
+1. **The worklog contradicts itself about lane D F3–F7.** The queue at
+   `docs/plans/crush_code_worklog.md:5608` lists *"lane D F3–F7 follow-ups"* as
+   still owed, in the same session whose commit table (`:5504-5508`) lists
+   `dad90b18` — whose commit message says *"F3-F7 in the same round"* and whose
+   changes are verifiable in source at HEAD. **Resolution: the commit is right,
+   the queue line is stale.** Only the `C:x` residual (§A1) and the
+   `.running/*.json` residual (§A2) survive from that group. Recorded rather than
+   silently dropped because the supervisor's running list inherited the stale
+   line.
+2. **Tracker numbers #83 and #85 each denote two different things.** `#83` is
+   *"`README.md:42` advertises 4,337 tests / 12,587 assertions"* at `:2017`
+   (itself later corrected: *"#83 corrected — stale test counts are at
+   `README.md:377`, not `:42`"*, `:2277`) and *"`Ctrl+P`/`Ctrl+K` opens a
+   hosted-Chat palette"* at `:3463`. `#85` is the palette item at `:2500` and
+   *"`Chat.php:3823`'s 'Stages completed'"* at `:3963`. The worklog already warns
+   about this class of error at `:3430`: *"CAUTION on IDs: an earlier draft of
+   this section cited tracker numbers that do not exist."* **Both meanings are
+   carried above** (§E8 and §E12) with their content rather than their number,
+   which is the only unambiguous handle.
+3. **`Agent::fromPreset()`'s dropped-field set has three different values.** The
+   worklog says seven fields, the code docblock says five, and the constructor
+   measured at HEAD gives eight behavioural fields plus two more. See §A6 — the
+   measured set is the one to use, and the disagreement is itself the argument
+   for making the drop assertion-backed.
+4. **`KEY_HELP_COLS` "says 58".** The constant reads **64**; the **58** is a
+   docblock claim about the widest declared row. The worklog's shorthand attaches
+   a number to the wrong subject — the exact defect class this chain tracked for
+   fifteen rounds. See §D11.
+5. **`crush_code.md` and HEAD disagree on three closures** —
+   `TerminalBackground::observe()` (wired), the `Write` tool (registered), and
+   Phase 2 item 6 / `ForeignSkillDiscovery` (wired since `d1e0f2b1`; `15a2e605`
+   added the missing **proof**, and recorded that *"the plan's line numbers are
+   stale by several commits"*). `crush_code.md` is untracked and hand-maintained;
+   HEAD wins.
+
+---
+
+## Unresolved references — found but not pinned down
+
+Recorded so they are not lost when the worklog stops being read.
+
+- **Tracker #86** (§E9). The `README.md:272` half of lane D round 5's F-3 could
+  not be matched to a claim at HEAD, and lane D F-3 as written up
+  (*"the wiring test cannot catch a recurrence of the bug it was written for"*)
+  does not obviously have a README half. Reconstruct from the worklog's
+  "Lane D round-5 review" section (`:3767`) before spending time on it.
+- **Tracker #61's exact test file** (§E13). The review named the finding, not the
+  file. Two files at HEAD carry unsearchable-directory fixtures
+  (`tests/Cli/BootstrapUserConfigTest.php`,
+  `tests/Cli/BootstrapPermissionGateTest.php`); which pair of assertions was meant
+  was not established.
+- **`HookManager::applyPreHooks()`** (§E16). Flagged in round 3, never queued,
+  never given a tracker, and plausibly closed by `df0a563b` without anyone saying
+  so. **UNVERIFIED** in both directions.
+- **Trackers #58 and #59** (Bedrock streaming discarding its connect bound; a
+  stale `ProviderConnectTimeoutTest` exemption). Both **appear closed** at HEAD —
+  `src/Providers/BedrockProvider.php:82` sets `connect_timeout` from
+  `connectTimeoutSeconds()`, and `tests/Providers/ProviderConnectTimeoutTest.php`
+  now carries a self-checking exemption list (`:422-423` asserts every exemption
+  names a file that still exists). Not carried as backlog items; noted here in
+  case the streaming path (`BedrockProvider::completeStream()`, `:201`) turns out
+  to build its own client.
+- **Tracker #87** (lane D round 5's F-1, the live `AgentPresetRegistry` escape).
+  Filed at worklog `:3967` and never mentioned again by number; the commit
+  `b35c0f2d` (*"lane D round 6 — the agent-preset escape, and a corpus that could
+  not see it"*) almost certainly closed it. Treated as closed; verify by number if
+  anyone reopens the tracker list.
+- **`#63`'s follow-up** — *"the timer bounds computing, not thrashing"*
+  (worklog `:4863`). `enforceTimeLimit` landed in `4dbf5074`; the follow-up
+  section was not read in full for this compilation.
+- **The `.claude/settings.json` mystery** (worklog `:4526-4532`). The file is
+  modified and uncommitted with every Caliber hook stripped out; *"Neither I nor
+  any agent wrote it — lane E's reviewer independently reported the same."* Not a
+  code finding, but an unexplained working-tree change that two independent
+  observers logged. Left untouched, as it has been throughout.
