@@ -8,10 +8,11 @@ alwaysApply: false
 
 - Tests at `<slug>/tests/<Class>Test.php`, namespace `<NS>\<Sub>\Tests\…`.
 - `bootstrap="vendor/autoload.php"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"` (see `candy-core/phpunit.xml`). Every public method ≥1 test.
+- **Loop-pinning bootstrap** — a suite bounding waits with timers on the shared `Loop::get()` uses `bootstrap="tests/bootstrap.php"` + `\SugarCraft\Testing\LoopPin::pinStableClock()` (`candy-async`, `candy-mosaic`, `candy-pty`, `candy-testing`, `sugar-crush`). ext-uv computes deadlines against a clock refreshed once per loop iteration, so a timer armed after synchronous idle fires immediately; `StreamSelectLoop` refreshes at arm time. See `candy-testing/src/LoopPin.php` and `candy-core/src/Program.php`.
 
 Patterns (`sugar-bits/tests/`, `candy-core/tests/`, `candy-vt/tests/`):
 - **Snapshot byte** — assert raw `\x1b[1m`-style SGR strings from `view()`. Don't abstract.
-- **Golden render** — `<slug>/tests/GoldenRenderTest.php` asserts byte-exact `view()`/`render()` output against committed `<slug>/tests/fixtures/*.golden` files via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi($path, $output)`. Needs `sugarcraft/candy-testing` dev-dep + path-repo (canonical `sugar-charts/tests/GoldenRenderTest.php`).
+- **Golden render** — `<slug>/tests/GoldenRenderTest.php` asserts byte-exact `view()`/`render()` output against committed `<slug>/tests/fixtures/*.golden` files via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi($path, $output)`. Needs `sugarcraft/candy-testing` dev-dep only — CI injects the path repos (canonical `sugar-charts/tests/GoldenRenderTest.php`).
 - **Snapshot cell-grid** — drive through `SugarCraft\Vt\Terminal\Terminal`, assert `$term->screen()->cell($r,$c)` (`$screen->cols`/`rows` are properties).
 - **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]`.
 - **Coercion** — negative/oversized index, empty, null; assert clamp/no-op.
