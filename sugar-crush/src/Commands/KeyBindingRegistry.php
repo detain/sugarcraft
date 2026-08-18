@@ -379,8 +379,33 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.newline', 'Alt+Enter', 'Insert a newline instead of sending', $c),
             KeyBinding::new('chat.slash-menu', '↑ / ↓', 'Move through the "/" command popup', $c),
             KeyBinding::new('chat.recall', '↑', 'Recall your last message (empty input box)', $c),
+            // ── the draft's own editing keyboard ─────────────────────────
+            //
+            // Everything from here to `chat.space` is answered by the draft
+            // editor (`candy-forms`' TextArea, wired in crush_code.md Phase 3
+            // item 1). Every row here except `chat.backspace` and
+            // `chat.word-delete` was declared in the round AFTER the keystroke
+            // it describes went live, which is the gap
+            // `ChatInputCursorTest::testEveryDelegatedKeyTypeIsDisclosedInTheReference()`
+            // now closes: it fails if the next one arrives the same way.
             KeyBinding::new('chat.backspace', 'Backspace', 'Delete the previous character', $c),
+            KeyBinding::new('chat.delete-forward', 'Delete', 'Delete the character under the cursor', $c),
+            KeyBinding::new('chat.cursor', '← / →', 'Move the cursor one character', $c),
+            // Labelled with the ALT spelling, and the Ctrl one carried as the
+            // alternate, because of what reads this field: KeyBinding::ctrlRune()
+            // takes the single-character tail of any `Ctrl+…` label as a RUNE
+            // and hands it to chatCtrlRunes(), a set KeyboardHandler compares
+            // against KeyMsg::$rune. An arrow never arrives as a rune, so a
+            // `Ctrl+←` label would put a member in that claim set that nothing
+            // can ever match. Both spellings are driven either way — the
+            // `(or …)` form is what KeyBindingDriftTest presses.
+            KeyBinding::new('chat.word-motion', 'Alt+← / Alt+→', 'Move one word (or Ctrl+← / Ctrl+→)', $c),
+            KeyBinding::new('chat.line-ends', 'Home / End', 'Jump to the first or last column', $c),
+            KeyBinding::new('chat.draft-rows', '↑ / ↓', 'Move between the rows of a multi-line draft', $c),
             KeyBinding::new('chat.word-delete', 'Ctrl+W', 'Delete the previous word (or Alt+Backspace)', $c),
+            KeyBinding::new('chat.word-delete-back', 'Ctrl+Backspace', 'Delete the previous word', $c),
+            KeyBinding::new('chat.word-delete-forward', 'Ctrl+Delete', 'Delete the word after the cursor', $c),
+            KeyBinding::new('chat.space', 'Ctrl+Space', 'Insert a blank character (modifier ignored)', $c),
             KeyBinding::new('chat.page', 'PgUp / PgDn', 'Scroll the transcript by a screenful', $c),
             KeyBinding::new('chat.palette', 'Ctrl+P', 'Open the command palette', $c),
             KeyBinding::new('chat.tool-output', 'Ctrl+O', 'Expand or collapse the newest tool output', $c),

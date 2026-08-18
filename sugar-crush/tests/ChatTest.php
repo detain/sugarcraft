@@ -120,6 +120,34 @@ final class ChatTest extends TestCase
         $this->assertSame('hel', $hel->inputBuf);
     }
 
+    /**
+     * `$inputBuf` is DERIVED from the draft's editor (crush_code.md Phase 3
+     * item 1 replaced the hand-rolled string with `candy-forms`' TextArea), so
+     * the two can never be allowed to disagree about what is in the box. Every
+     * write route is exercised here: the widget's own editing, the "replace
+     * the whole draft" string key, and a mutation that touches neither.
+     *
+     * The cursor's own behaviour lives in `ChatInputCursorTest`; what is
+     * pinned here is only that this class's public string stays the widget's
+     * value through mutate().
+     */
+    public function testInputBufAndTheDraftEditorCannotDisagree(): void
+    {
+        $states = [];
+        $states['seeded'] = new Chat(inputBuf: 'seed');
+        [$states['typed']] = $states['seeded']->update(new KeyMsg(KeyType::Char, 'x'));
+        [$states['backspaced']] = $states['typed']->update(new KeyMsg(KeyType::Backspace));
+        [$states['newline']] = $states['backspaced']->update(new KeyMsg(KeyType::Enter, alt: true));
+        [$states['resized']] = $states['newline']->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $states['restring'] = $states['resized']->withThemeName('light');
+
+        foreach ($states as $label => $chat) {
+            $this->assertSame($chat->input->value(), $chat->inputBuf, "{$label}: the two drifted apart");
+        }
+
+        $this->assertSame("seed\n", $states['restring']->inputBuf, 'fixture: and the edits really happened');
+    }
+
     public function testSpaceKeyAppendsSpace(): void
     {
         $chat = new Chat();

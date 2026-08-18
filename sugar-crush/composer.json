@@ -41,6 +41,7 @@
         "google/cloud-ai-platform": "^1.0",
         "symfony/yaml": "^7.4",
         "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-forms": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-shine": "dev-master",
         "sugarcraft/candy-fuzzy": "dev-master",

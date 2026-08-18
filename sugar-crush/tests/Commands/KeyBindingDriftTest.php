@@ -248,9 +248,15 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 58 declared rows — and THAT is the domain
-     * of the zero. It says nothing about prose not yet written; it says those 58
+     * Zero false positives across all 66 declared rows — and THAT is the domain
+     * of the zero. It says nothing about prose not yet written; it says those 66
      * rows are clean under this pattern.
+     *
+     * The eight rows the draft's editing keyboard added are what it cost to keep
+     * that zero: `chat.line-ends` reads "Jump to the first or last column"
+     * rather than naming the two keys, because `End` is in the alternation
+     * above and its own label already says `Home / End`. That is the trade this
+     * pattern is for.
      *
      * Holes left open ON PURPOSE, because closing them costs more than it buys:
      *
@@ -269,7 +275,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because five `*.move` rows describe arrow movement
-     * (eight rows carry an arrow GLYPH in their label; both counts are asserted
+     * (eleven rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -505,14 +511,15 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            8,
+            11,
             $arrowLabelled,
-            'KEYISH\'s docblock says eight rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says eleven rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
-        // count the interesting one — the extra three are `chat.slash-menu`,
-        // `chat.recall` and `menu.switch`.
+        // count the interesting one — the extra six are `chat.slash-menu`,
+        // `chat.recall`, `chat.cursor`, `chat.word-motion`, `chat.draft-rows`
+        // and `menu.switch`.
         $this->assertSame([], array_diff($move, $arrowLabelled));
     }
 
@@ -675,10 +682,95 @@ final class KeyBindingDriftTest extends TestCase
                 [$next] = $this->chat([], 'ab')->update($k[0]);
                 $this->assertSame('a', $next->inputBuf);
             },
+            // ── the draft's editing keyboard ─────────────────────────────
+            //
+            // Every one of these drives Chat::update() and reads the effect
+            // back off inputBuf / inputCursorOffset(), never off the widget:
+            // it is the ROUTING that these rows document and that can break.
+            // Each starts from a cursor parked mid-draft, because at the end of
+            // the draft a forward move and a forward delete are both no-ops and
+            // an observation could not tell them from an unanswered key.
+            'chat.delete-forward' => function (array $k): void {
+                $mid = $this->draftCursorAt($this->chat([], 'abcd'), 2);
+                [$next] = $mid->update($k[0]);
+                $this->assertSame('abd', $next->inputBuf, 'the character UNDER the cursor goes');
+                $this->assertSame(2, $next->inputCursorOffset(), 'and the cursor stays put');
+            },
+            'chat.cursor' => function (array $k): void {
+                $mid = $this->draftCursorAt($this->chat([], 'abcd'), 2);
+
+                [$left] = $mid->update($k[0]);
+                [$right] = $mid->update($k[1]);
+                $this->assertSame(1, $left->inputCursorOffset(), 'the first key must move LEFT');
+                $this->assertSame(3, $right->inputCursorOffset(), 'the second key must move RIGHT');
+                $this->assertSame('abcd', $left->inputBuf, 'motion must never edit');
+                $this->assertSame('abcd', $right->inputBuf);
+            },
+            'chat.word-motion' => function (array $k): void {
+                $mid = $this->draftCursorAt($this->chat([], 'alpha beta gamma'), 8);
+
+                [$left] = $mid->update($k[0]);
+                [$right] = $mid->update($k[1]);
+                $this->assertSame(6, $left->inputCursorOffset(), 'the first key must move a word LEFT');
+                $this->assertSame(10, $right->inputCursorOffset(), 'the second key must move a word RIGHT');
+                $this->assertSame('alpha beta gamma', $left->inputBuf, 'word motion must never edit');
+            },
+            'chat.line-ends' => function (array $k): void {
+                $mid = $this->draftCursorAt($this->chat([], 'abcd'), 2);
+
+                [$home] = $mid->update($k[0]);
+                [$end] = $mid->update($k[1]);
+                $this->assertSame(0, $home->inputCursorOffset(), 'the first key must go to the first column');
+                $this->assertSame(4, $end->inputCursorOffset(), 'the second key must go to the last');
+            },
+            'chat.draft-rows' => function (array $k): void {
+                // THREE rows, built the way a user builds them, with the cursor
+                // parked on the middle one — the only starting point from which
+                // both directions have somewhere to go, so "the highlight
+                // moved" cannot be satisfied by a clamp.
+                $draft = $this->chat([], 'ab');
+                foreach (['cd', 'ef'] as $row) {
+                    [$draft] = $draft->update(new KeyMsg(KeyType::Enter, alt: true));
+                    foreach (['0' => $row[0], '1' => $row[1]] as $rune) {
+                        [$draft] = $draft->update(new KeyMsg(KeyType::Char, $rune));
+                    }
+                }
+                $this->assertSame("ab\ncd\nef", $draft->inputBuf, 'fixture: a three-row draft');
+                [$draft] = $draft->update($k[0]);
+                $this->assertSame(5, $draft->inputCursorOffset(), 'fixture: cursor on the middle row');
+
+                [$up] = $draft->update($k[0]);
+                [$down] = $draft->update($k[1]);
+                $this->assertSame(2, $up->inputCursorOffset(), 'the first key must move to the row ABOVE');
+                $this->assertSame(8, $down->inputCursorOffset(), 'the second key must move to the row BELOW');
+                $this->assertSame("ab\ncd\nef", $up->inputBuf, 'vertical motion must never edit');
+                $this->assertSame("ab\ncd\nef", $down->inputBuf);
+            },
             'chat.word-delete' => function (array $k): void {
                 [$next] = $this->chat([], 'foo bar')->update($k[0]);
                 $this->assertNotSame('foo bar', $next->inputBuf);
                 $this->assertStringNotContainsString('bar', $next->inputBuf);
+            },
+            'chat.word-delete-back' => function (array $k): void {
+                $mid = $this->draftCursorAt($this->chat([], 'alpha beta gamma'), 11);
+                [$next] = $mid->update($k[0]);
+                $this->assertSame('alpha gamma', $next->inputBuf, 'the word BEFORE the cursor goes');
+                $this->assertSame(6, $next->inputCursorOffset());
+            },
+            'chat.word-delete-forward' => function (array $k): void {
+                // Parked at the end of "alpha", so the whitespace under the
+                // cursor goes with the word — the same run wordRightOffset()
+                // skips, which is what makes the two share one boundary.
+                $mid = $this->draftCursorAt($this->chat([], 'alpha beta gamma'), 5);
+                [$next] = $mid->update($k[0]);
+                $this->assertSame('alpha gamma', $next->inputBuf, 'the word AFTER the cursor goes');
+                $this->assertSame(5, $next->inputCursorOffset(), 'and the cursor stays put');
+            },
+            'chat.space' => function (array $k): void {
+                $mid = $this->draftCursorAt($this->chat([], 'abcd'), 2);
+                [$next] = $mid->update($k[0]);
+                $this->assertSame('ab cd', $next->inputBuf, 'a blank lands AT the cursor');
+                $this->assertSame(3, $next->inputCursorOffset());
             },
             'chat.page' => function (array $k): void {
                 $history = [];
@@ -1208,6 +1300,26 @@ final class KeyBindingDriftTest extends TestCase
      * A Chat over a real, throwaway {@see SessionStore} holding $count rows,
      * pointed at the first of them.
      */
+    /**
+     * Park the draft's cursor at `$offset` by pressing Left, which is a real
+     * keystroke through the real arm rather than a reach into the widget.
+     *
+     * Every seeded draft starts with the cursor at its END (see
+     * `Chat::freshInput()`), so counting back is the only direction needed.
+     */
+    private function draftCursorAt(Chat $chat, int $offset): Chat
+    {
+        $from = $chat->inputCursorOffset();
+        $this->assertGreaterThanOrEqual($offset, $from, 'fixture: the seed cursor starts at the end');
+
+        for ($i = $from; $i > $offset; $i--) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Left));
+        }
+        $this->assertSame($offset, $chat->inputCursorOffset(), 'fixture: the cursor did not reach that column');
+
+        return $chat;
+    }
+
     private function chatWithSessions(int $count): Chat
     {
         $store = new SessionStore($this->sandbox . '/sessions-' . (++$this->storeSeq) . '.db');
@@ -1548,6 +1660,37 @@ final class KeyBindingDriftTest extends TestCase
      * recognise) lands in {@see testEveryLabelIsALiteralChordOrADeclaredException()}
      * instead of quietly opting out of label coverage.
      */
+    /**
+     * The named keys a label may carry a `Ctrl+`/`Alt+` prefix on, mapped to
+     * the KeyType a terminal reports for them.
+     *
+     * Shared by both modifier branches of {@see token()} so the two cannot
+     * drift apart, and it exists because the arrow glyphs are ONE character
+     * long: without it, `Ctrl+←` would be read back as a printable rune press
+     * (see that method's comment).
+     */
+    private const MODIFIABLE_NAMED = [
+        'Enter' => KeyType::Enter,
+        'Backspace' => KeyType::Backspace,
+        'Delete' => KeyType::Delete,
+        'Space' => KeyType::Space,
+        'Home' => KeyType::Home,
+        'End' => KeyType::End,
+        '↑' => KeyType::Up,
+        '↓' => KeyType::Down,
+        '←' => KeyType::Left,
+        '→' => KeyType::Right,
+    ];
+
+    /**
+     * The one entry of {@see MODIFIABLE_NAMED} that arrives with a rune as well
+     * as a type. Measured through candy-core's decoder, not assumed:
+     * `InputReader::parse("\x1b[32;5u")` yields `KeyMsg(Space, ctrl)` with rune
+     * `" "`, while `parse("\x1b[127;5u")` yields `KeyMsg(Backspace, ctrl)` with
+     * rune `""`. Anything absent here is pressed with an empty rune.
+     */
+    private const MODIFIABLE_RUNE = ['Space' => ' '];
+
     private const HAND_DRIVEN = [
         // "any text" — the palette filter answers every printable character,
         // so there is no single chord to press.
@@ -1614,9 +1757,19 @@ final class KeyBindingDriftTest extends TestCase
             // KeyBinding::ctrlRune() draws when it refuses to read a rune off
             // them. Shift only picks the direction, so both reach Chat's one
             // session-cycling arm.
+            //
+            // The arrow GLYPHS have to be named here too, and not for
+            // tidiness: they are one character long, so the `mb_strlen === 1`
+            // arm below would read `Ctrl+←` back as `KeyMsg(Char, '←', ctrl)`
+            // — a rune no terminal sends — and the observation would press a
+            // key the app cannot answer while looking driven. Same hazard
+            // testAGlyphLabelIsUnreadableRatherThanPressedAsARune() pins for
+            // the unmodified form, arriving through a different door.
             return match (true) {
                 $rest === 'Tab' => new KeyMsg(KeyType::Tab, '', ctrl: true),
                 $rest === 'Shift+Tab' => new KeyMsg(KeyType::Tab, '', ctrl: true, shift: true),
+                isset(self::MODIFIABLE_NAMED[$rest])
+                    => new KeyMsg(self::MODIFIABLE_NAMED[$rest], self::MODIFIABLE_RUNE[$rest] ?? '', ctrl: true),
                 mb_strlen($rest) === 1 => self::ctrl(mb_strtolower($rest)),
                 default => null,
             };
@@ -1624,10 +1777,13 @@ final class KeyBindingDriftTest extends TestCase
 
         if (str_starts_with($token, 'Alt+')) {
             $rest = substr($token, 4);
-            $named = ['Enter' => KeyType::Enter, 'Backspace' => KeyType::Backspace];
 
-            if (isset($named[$rest])) {
-                return new KeyMsg($named[$rest], '', alt: true);
+            if (isset(self::MODIFIABLE_NAMED[$rest])) {
+                return new KeyMsg(
+                    self::MODIFIABLE_NAMED[$rest],
+                    self::MODIFIABLE_RUNE[$rest] ?? '',
+                    alt: true,
+                );
             }
 
             return mb_strlen($rest) === 1 ? new KeyMsg(KeyType::Char, $rest, alt: true) : null;
@@ -1638,7 +1794,10 @@ final class KeyBindingDriftTest extends TestCase
             'Esc' => KeyType::Escape,
             'Tab' => KeyType::Tab,
             'Backspace' => KeyType::Backspace,
+            'Delete' => KeyType::Delete,
             'Space' => KeyType::Space,
+            'Home' => KeyType::Home,
+            'End' => KeyType::End,
             'F10' => KeyType::F10,
             'PgUp' => KeyType::PageUp,
             'PgDn' => KeyType::PageDown,

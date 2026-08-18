@@ -882,6 +882,54 @@ final class AppModelTest extends TestCase
 
         $this->assertNotNull($next->chat);
         $this->assertSame('', $next->chat->inputBuf);
+        $this->assertSame(
+            '/sessions',
+            $this->lastUserMessage($next->chat),
+            'the draft has to be GONE, not merely followed by the command',
+        );
+    }
+
+    /**
+     * The same, with the cursor parked in the middle of the draft.
+     *
+     * `clearInputKeys()` used to be `mb_strlen($inputBuf)` backspaces, which
+     * was exactly right while the draft was an append-only string with no
+     * cursor. Once the draft became a `candy-forms` TextArea
+     * ({@see Chat::$input}), backspaces delete BEHIND the cursor, so this
+     * draft kept its whole tail and the menu command was typed into the gap —
+     * "half /sessionswritten". Half the clear is Deletes now, and only a
+     * cursor that is not at the end can tell the two forms apart.
+     */
+    public function testDispatchingACommandClearsADraftTheCursorIsSittingInsideOf(): void
+    {
+        $chat = new Chat([], 'half written');
+        foreach (array_fill(0, 8, new KeyMsg(KeyType::Left)) as $key) {
+            [$chat] = $chat->update($key);
+        }
+        $this->assertSame(
+            4,
+            $chat->inputCursorOffset(),
+            'fixture: eight characters of tail AHEAD of the cursor — which is the half a '
+            . 'backspace-only clear leaves behind',
+        );
+
+        [$next] = $this->app()->withChat($chat)->consumeShellCmd(new MenuSelectedMsg('Session', 'Switch session'));
+
+        $this->assertNotNull($next->chat);
+        $this->assertSame('', $next->chat->inputBuf);
+        $this->assertSame('/sessions', $this->lastUserMessage($next->chat));
+    }
+
+    /** The content of the newest Role::User message in $chat's history. */
+    private function lastUserMessage(Chat $chat): ?string
+    {
+        for ($i = count($chat->history) - 1; $i >= 0; $i--) {
+            if ($chat->history[$i]->role === \SugarCraft\Crush\Role::User) {
+                return $chat->history[$i]->content;
+            }
+        }
+
+        return null;
     }
 
     /**

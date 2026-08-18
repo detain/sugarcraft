@@ -868,13 +868,21 @@ final class KeyHelpTest extends TestCase
      * The regression `?` introduced, and the escape hatch that repays it.
      *
      * Binding `?` on an empty line made a message that STARTS with `?`
-     * untypeable — not awkward, impossible. Measured on the shipped commit:
-     * this input box has no cursor movement (no `KeyType::Left`/`Right` arm
-     * anywhere in `Chat`) and no paste path, so column 0 is reachable only by
-     * typing the first character, `?why` on an empty line left `inputBuf`
-     * empty, and backspacing an existing draft down to empty never yields `?`
-     * either. `/keys` is not a mitigation: it opens the very screen such a user
-     * is trying to get past.
+     * untypeable — not awkward, impossible. Measured on the commit that
+     * introduced the bind: this input box HAD no cursor movement (there was no
+     * `KeyType::Left`/`Right` arm anywhere in `Chat`) and no paste path, so
+     * column 0 was reachable only by typing the first character, `?why` on an
+     * empty line left `inputBuf` empty, and backspacing an existing draft down
+     * to empty never yields `?` either. `/keys` is not a mitigation: it opens
+     * the very screen such a user is trying to get past.
+     *
+     * The cursor half of that measurement has since expired: the draft moved
+     * into `candy-forms`' TextArea (crush_code.md Phase 3 item 1), so a
+     * NON-empty draft now has a second route — Home, then `?` — driven by
+     * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`.
+     * On a genuinely empty line there is still no character for the cursor to
+     * sit in front of, so what this test pins is unchanged and remains the only
+     * route in that case.
      *
      * So the second `?` closes the reference AND lands the character. Driven
      * here as real keystrokes, one per character, exactly as a user types them.
@@ -948,24 +956,34 @@ final class KeyHelpTest extends TestCase
     public function testTheFooterSaysThatTheSecondQuestionMarkTypesOne(): void
     {
         // Two sizes, because the hint is a different string in each: 100x30
-        // overflows the box (54 live rows plus 9 headers and 8 separators = 71
+        // overflows the box (62 live rows plus 9 headers and 8 separators = 79
         // content lines, against a 25-line body) so the footer carries the
-        // scroll clause as well, while 100x80 fits the whole list and drops it.
+        // scroll clause as well, while 100x90 fits the whole list and drops it.
         //
         // The live-row count moved 53 -> 54 when `permission.rearm` was
         // declared: a permission prompt disarmed by a stray keystroke can only
         // be answered again after Enter re-arms it, and a live binding the
         // reference does not list is exactly what this file exists to catch.
+        // It moved 54 -> 62 when the draft's own editing keyboard was declared
+        // — eight rows for keystrokes that had been live and undocumented since
+        // the draft moved into `candy-forms`' TextArea, which is the same
+        // failure one round later.
         //
         // The 25 derives from renderKeyHelp() rather than being counted off a
         // screenshot: at 100x30, keyHelpGeometry() gives boxRows = rows - 2 = 28,
         // the border takes two more so viewport = 26, and the footer itself
         // takes one, so body = 25. Which is why the measured
-        // Renderer::keyHelpMaxOffset() here is 71 - 25 = 46; an earlier version
+        // Renderer::keyHelpMaxOffset() here is 79 - 25 = 54; an earlier version
         // of this comment said 27, a body that would have made it 43. Both
         // overflow figures are asserted below rather than left in the prose,
         // since a body height stated and not read back is what went wrong.
-        foreach ([[100, 30, 46], [100, 80, 0]] as [$cols, $rows, $expectedOverflow]) {
+        //
+        // The second size was 100x80 and had to GROW to 100x90 when those eight
+        // rows landed, which is the same arithmetic read the other way: a body
+        // of 80 - 2 - 2 - 1 = 75 no longer holds 79 lines, while 90 gives 85 and
+        // does. The 0 below is what measures that, so the "fits" half of this
+        // test cannot quietly become a second overflow case.
+        foreach ([[100, 30, 54], [100, 90, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1029,9 +1047,15 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
+            // 90 rows, not 80: the list is 79 content lines now (62 live rows,
+            // 9 headers, 8 separators), and an 80-row terminal gives a body of
+            // 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form and this
+            // assertion would be measuring the same string twice. See
+            // testTheFooterSaysThatTheSecondQuestionMarkTypesOne() for the same
+            // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 80))),
+                Width::of($this->footer($this->chat('', $cols, 90))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }
@@ -1733,6 +1757,116 @@ final class KeyHelpTest extends TestCase
         );
         [$answered] = $separated->update(new KeyMsg(KeyType::Char, 'y'));
         $this->assertNull($answered->pendingPermission(), 'and "y" still answers it');
+    }
+
+    /**
+     * The keys the draft grew when it moved into `candy-forms`' TextArea
+     * (crush_code.md Phase 3 item 1) are swallowed by a live prompt too.
+     *
+     * The arm rule below was measured when `Chat` had no cursor at all: every
+     * key that could reach the draft was a `Char`, a `Space` or a `Backspace`.
+     * `Left`/`Right`/`Home`/`End`/`Delete` now reach it as well, through the
+     * delegation at the foot of `Chat::update()`, as do `Ctrl+Space` and the
+     * two ctrl word-deletes through their own arms just above it. All of them
+     * sit BELOW the `pendingPermission` arm — so this is the same claim as the
+     * table below, extended to the arms that did not exist when the table was
+     * written. Motion keys are the interesting half: they are not answers, so
+     * they must DISARM the prompt exactly as `/` does, and they must not move a
+     * cursor in a box the user cannot see.
+     *
+     * A seeded draft rather than {@see blockedOnPermission()}'s empty one,
+     * because an empty draft cannot tell "nothing was typed" from "the tail was
+     * deleted forward".
+     *
+     * And the cursor is parked in the MIDDLE of it, which is what gives the
+     * table its power. Measured with no modal at all, on this same draft with
+     * the cursor at its end: `Right`, `End` and `Delete` are already no-ops
+     * there (nowhere further right to go, no tail to take), so a row asserting
+     * they changed nothing would have held with the swallow deleted. From
+     * offset 4 all six of the motion/edit keys have somewhere to go or
+     * something to take.
+     *
+     * Lives in THIS file and not beside the rest of the cursor tests in
+     * `ChatInputCursorTest` for a reason that is about measurement, not tidiness:
+     * this file is one of the three that {@see
+     * testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg()} pins
+     * as the domain `Chat::requestPermission()`'s mutation table was measured
+     * over. Adding a fourth constructing file would silently widen that domain
+     * and stale every figure in that table; adding one prompt-dependent test to
+     * a file already inside it is exactly the growth that table's own caveat
+     * ("it grows by one for every prompt-dependent test added to those three
+     * files") accounts for.
+     */
+    public function testCursorMotionAndEditingAreSwallowedByALivePromptToo(): void
+    {
+        $draft = 'half written';
+        $seeded = $this->chat($draft);
+        // Parked mid-draft BEFORE the prompt goes up, through the same Left
+        // arm the table below then has to prove is unreachable.
+        foreach (array_fill(0, 8, new KeyMsg(KeyType::Left)) as $left) {
+            [$seeded] = $seeded->update($left);
+        }
+        [$blocked] = $seeded->update(new \SugarCraft\Crush\PermissionRequestMsg(
+            Message::assistant(''),
+            new \SugarCraft\Crush\ToolCall('bash', ['description' => 'rm'], 'call_1'),
+            'Run rm -rf build/?',
+        ));
+        $this->assertNotNull($blocked->pendingPermission(), 'fixture: the prompt must be up');
+        $this->assertSame($draft, $blocked->inputBuf, 'fixture: with a draft behind it');
+        $this->assertSame(
+            4,
+            $blocked->inputCursorOffset(),
+            'fixture: and the cursor mid-draft, so every key below has somewhere to go or something to take',
+        );
+
+        foreach ([
+            'Left' => new KeyMsg(KeyType::Left),
+            'Right' => new KeyMsg(KeyType::Right),
+            'Home' => new KeyMsg(KeyType::Home),
+            'End' => new KeyMsg(KeyType::End),
+            'Delete' => new KeyMsg(KeyType::Delete),
+            'Backspace' => new KeyMsg(KeyType::Backspace),
+            'Space' => new KeyMsg(KeyType::Space),
+            'Char' => new KeyMsg(KeyType::Char, 'z'),
+            'Alt+Left' => new KeyMsg(KeyType::Left, alt: true),
+            'Ctrl+W' => new KeyMsg(KeyType::Char, 'w', ctrl: true),
+            // The three ctrl forms `Chat::update()` claims explicitly rather
+            // than delegating (TextArea::update() drops every ctrl-flagged key
+            // outside its own rune table, so a delegated one would be inert
+            // for the wrong reason and this table could not tell the swallow
+            // from that).
+            'Ctrl+Space' => new KeyMsg(KeyType::Space, ' ', ctrl: true),
+            'Ctrl+Backspace' => new KeyMsg(KeyType::Backspace, ctrl: true),
+            'Ctrl+Delete' => new KeyMsg(KeyType::Delete, ctrl: true),
+        ] as $label => $key) {
+            [$next] = $blocked->update($key);
+
+            $this->assertSame($draft, $next->inputBuf, "{$label} reached the draft's text");
+            $this->assertSame(4, $next->inputCursorOffset(), "{$label} moved the draft's cursor");
+            $this->assertNotNull($next->pendingPermission(), "{$label} answered the prompt");
+            $this->assertSame(
+                PermissionPromptStage::Disarmed,
+                $next->permissionStage(),
+                "{$label} is not an answer, so it must take the answer keys away",
+            );
+        }
+
+        // Alt+Enter is in the inertness claim and OUT of the disarm one, and
+        // that is measured rather than assumed: `handlePermissionKey()` reads
+        // `KeyType::Enter` without looking at modifiers, so an Alt+Enter at a
+        // live prompt takes the RE-ARM arm — it leaves the stage Armed, not
+        // Disarmed, which is the opposite of every key above. The half this
+        // change is responsible for still holds: it puts no newline in the
+        // draft. That is pre-existing routing, not something the widget
+        // delegation touches, and rebinding it would be a permission-keymap
+        // decision.
+        [$altEnter] = $blocked->update(new KeyMsg(KeyType::Enter, alt: true));
+        $this->assertSame($draft, $altEnter->inputBuf, 'Alt+Enter must not insert a newline behind the modal');
+        $this->assertSame(
+            PermissionPromptStage::Armed,
+            $altEnter->permissionStage(),
+            'and it re-arms, because the prompt Enter arm does not inspect modifiers',
+        );
     }
 
     /**

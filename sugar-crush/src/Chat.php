@@ -42,6 +42,7 @@ use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Commands\WebSearchCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
+use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\Sentinel;
@@ -88,6 +89,56 @@ use SugarCraft\Crush\Session\SessionStore;
  */
 final class Chat implements Model
 {
+    /**
+     * The key types {@see update()} hands straight to the draft editor when no
+     * arm above has claimed them and no ctrl flag is set.
+     *
+     * A `const` rather than an inline array so it is one readable list AND so
+     * a test can read the delegation set back instead of re-typing it: a
+     * KeyType added here is a keystroke the draft newly answers, and
+     * `ChatInputCursorTest::testEveryDelegatedKeyTypeIsDisclosedInTheReference()`
+     * fails until {@see Commands\KeyBindingRegistry} discloses it. That
+     * instrument exists because `Delete`, `Left`/`Right` and `Home`/`End`
+     * arrived live and undocumented, and nothing noticed for a round.
+     *
+     * `Up`/`Down` are NOT here: they delegate only on a draft that already has
+     * a second line, which is a condition, not a plain membership test — see
+     * their own arm.
+     */
+    private const DRAFT_KEYS = [
+        KeyType::Char,
+        KeyType::Space,
+        KeyType::Backspace,
+        KeyType::Delete,
+        KeyType::Left,
+        KeyType::Right,
+        KeyType::Home,
+        KeyType::End,
+    ];
+
+    /**
+     * The user's in-progress draft of the next turn, as a plain string.
+     *
+     * DERIVED, not stored: it is `$this->input->value()`, re-read in the
+     * constructor on every clone. It stays a public property (rather than
+     * becoming an accessor) because it is the field {@see Renderer}, the
+     * checkpoint state map and this lib's existing assertions already read, and
+     * because "what is in the box" genuinely is state — it is only the
+     * CURSOR that the widget added, and that is exposed separately by
+     * {@see inputCursorOffset()}.
+     *
+     * Writing it still works, through the `inputBuf` key on
+     * {@see mutate()} or {@see withInputBuf()}: that key means "replace the
+     * whole draft" and reseeds the widget with the cursor at the end.
+     */
+    public readonly string $inputBuf;
+
+    /**
+     * The draft's editor. See the constructor parameter of the same name for
+     * why this, and not {@see $inputBuf}, is the source of truth.
+     */
+    public readonly TextArea $input;
+
     private readonly Backend $backend;
 
     /**
@@ -249,7 +300,7 @@ final class Chat implements Model
      */
     public function __construct(
         public readonly array $history = [],
-        public readonly string $inputBuf = '',
+        string $inputBuf = '',
         public readonly bool $inFlight = false,
         ?Backend $backend = null,
         private readonly bool $streaming = false,
@@ -581,7 +632,24 @@ final class Chat implements Model
          * re-clamped in {@see Renderer::renderView()}.
          */
         private readonly ?int $keyHelp = null,
+        /**
+         * The draft's editing widget — `candy-forms`' {@see TextArea}, which
+         * owns the value AND the cursor (crush_code.md Phase 3 item 1).
+         *
+         * `$inputBuf` above is now a SEED for this, not a peer of it: when
+         * both arrive, the widget wins and `$inputBuf` is re-derived from
+         * `value()` in the body below, so the two can never disagree about
+         * what is in the box. {@see mutate()} is what keeps that rule honest
+         * across a clone — see the reseed guard there.
+         */
+        ?TextArea $input = null,
     ) {
+        // The widget is the source of truth; $inputBuf is its projection.
+        // Seeding via setValue() lands the cursor at the end of the draft,
+        // which is what every "replace the draft" route wants (a submit
+        // clearing it, an Up recall, a palette fill).
+        $this->input = $input ?? self::freshInput()->setValue($inputBuf);
+        $this->inputBuf = $this->input->value();
         $this->liveToolEvents = $liveToolEvents ?? new \ArrayObject();
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -853,8 +921,13 @@ final class Chat implements Model
             // Alt-prefixed-key fix); Shift/Ctrl+Enter only arrive
             // distinguishably on terminals that report the Kitty keyboard
             // protocol unprompted, but cost nothing to also honor.
+            //
+            // Inserted AT the cursor rather than appended, which is the whole
+            // point of the widget: before this arm went through
+            // {@see TextArea::insertRune()} it appended to the end of the
+            // draft, so splitting an existing line in two was impossible.
             $msg->type === KeyType::Enter && ($msg->alt || $msg->shift || $msg->ctrl)
-                => [$this->withInputBuf($this->inputBuf . "\n"), null],
+                => [$this->withInput($this->input->insertRune("\n")), null],
             $msg->type === KeyType::Enter
                 => $this->slashMenuShouldIntercept()
                     ? $this->completeSlashMenuSelection()
@@ -975,18 +1048,31 @@ final class Chat implements Model
             // whitespace draft. Same-looking guard, opposite conclusion, because
             // one arm destroys the buffer and this one does not.
             //
-            // The blank-line guard still costs one message: the one that STARTS
-            // with "?". Measured, that cost is total rather than awkward - this
-            // input box has no cursor movement at all (no KeyType::Left or
-            // KeyType::Right arm anywhere in this file) and no paste path, so
-            // column 0 is only ever reached by typing the first character, and
-            // "?why" typed on an empty line used to leave inputBuf empty and the
-            // reference open. /keys is NOT the escape hatch for that: it opens
-            // the same reference, which is not what a user COMPOSING a "?"
-            // question wants. The escape hatch is the second "?" - see
-            // handleKeyHelpKey(), where "?" both closes the reference and lands
-            // the literal character, so "??why" types "?why" and the footer hint
-            // on screen says so.
+            // The blank-line guard still costs one keystroke on the message
+            // that STARTS with "?": typed left to right on an empty line,
+            // "?why" used to leave inputBuf empty and the reference open. The
+            // escape hatch is the second "?" - see handleKeyHelpKey(), where
+            // "?" both closes the reference and lands the literal character, so
+            // "??why" types "?why" and the footer hint on screen says so.
+            // /keys is NOT that hatch: it opens the same reference, which is
+            // not what a user COMPOSING a "?" question wants.
+            //
+            // A previous revision of this comment called that cost "total"
+            // on the grounds that "this input box has no cursor movement at
+            // all (no KeyType::Left or KeyType::Right arm anywhere in this
+            // file) ... so column 0 is only ever reached by typing the first
+            // character". Both halves of that were true when written and the
+            // first half is now FALSE: crush_code.md Phase 3 item 1 delegated
+            // the draft to candy-forms' TextArea, and Left/Right/Home/End
+            // reach it from the arms at the foot of this match. So there is now
+            // a SECOND hatch, and it is the ordinary one a user would reach
+            // for: type "why", press Home, type "?" - the guard does not fire
+            // (trim("why") is not empty), the Char goes to the widget, and the
+            // draft becomes "?why". Driven in
+            // ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark().
+            // The "??" hatch stays, unchanged and still the only one on a
+            // genuinely empty line, where there is no other character for the
+            // cursor to sit in front of.
             $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
                 && $msg->rune === '?' && trim($this->inputBuf) === ''
                 => [$this->withKeyHelp(0), null],
@@ -995,21 +1081,126 @@ final class Chat implements Model
             // Alt-prefixed-key fix - before it, Alt+Backspace mis-decoded
             // as a bare Escape and quit the app instead of reaching here at
             // all). Must be checked before the plain Backspace arm below.
+            //
+            // Ctrl+Backspace is in this arm and is an UPGRADE, not a
+            // bug-for-bug restoration: at HEAD it reached the plain-Backspace
+            // arm and deleted one character. It shares the boundary helper
+            // with Ctrl+W deliberately, because word motion (Alt/Ctrl+←/→)
+            // now exists, so a keyboard where the modifier means "by word" on
+            // the arrows and "by character" on Backspace would be
+            // inconsistent with itself. Real bytes: `CSI 127;5u`, the Kitty
+            // spelling, decodes to KeyMsg(Backspace, ctrl).
             ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'w')
-                || ($msg->type === KeyType::Backspace && $msg->alt)
-                => [$this->withInputBuf(self::dropLastWord($this->inputBuf)), null],
+                || ($msg->type === KeyType::Backspace && ($msg->alt || $msg->ctrl))
+                => [$this->deleteInputWordBefore(), null],
+            // The forward mirror of the arm above, through the forward
+            // boundary helper. A pure ADDITION: `CSI 3;5~` was a no-op at
+            // HEAD (nothing claimed a ctrl-flagged Delete, and there was no
+            // Delete arm at all), so there is no previous behaviour to keep.
+            $msg->type === KeyType::Delete && $msg->ctrl
+                => [$this->deleteInputWordAfter(), null],
+            // Word motion. Checked ahead of the plain Left/Right delegation
+            // below, and ahead of nothing else - no arm above claims an
+            // arrowed modifier. See {@see wordLeftOffset()} for why Chat owns
+            // the boundary instead of the widget.
+            //
+            // Both modifiers, and which BYTES reach this arm is measured at
+            // candy-core's decoder rather than assumed:
+            // InputReader::parse("\x1b[1;5D") yields KeyMsg(Left, ctrl) - the
+            // xterm-family spelling - and parse("\x1b[1;3D") yields
+            // KeyMsg(Left, alt), the spelling terminals that report modifiers
+            // in CSI parameters use for Alt. Home/End arrive as both
+            // `CSI H`/`CSI F` and `CSI 1~`/`CSI 4~`, and Delete as `CSI 3~`;
+            // all five were driven through the decoder.
+            //
+            // Two encodings a terminal may send for the same INTENT do NOT
+            // reach here, and neither is a regression - both behave exactly as
+            // they did before this arm existed:
+            //
+            //   * `ESC ESC[D`, the ESC-prefixed Alt+Left some terminals emit,
+            //     decodes as TWO messages (Escape, then a bare Left), so the
+            //     Escape is consumed by the Escape arm above and the Left
+            //     moves one character rather than one word;
+            //   * `ESC b`/`ESC f`, readline's Alt+B/Alt+F word motion, decodes
+            //     as KeyMsg(Char "b", alt) and is therefore TYPED by the
+            //     delegation below, exactly as it was before this change.
+            //
+            // Binding those two is a keymap addition rather than part of
+            // moving the draft into the widget, so it is left as a follow-up
+            // instead of smuggled in here.
+            ($msg->type === KeyType::Left && ($msg->alt || $msg->ctrl))
+                => [$this->withInputCursor($this->wordLeftOffset()), null],
+            ($msg->type === KeyType::Right && ($msg->alt || $msg->ctrl))
+                => [$this->withInputCursor($this->wordRightOffset()), null],
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the real SessionStore listing — see
             // cycleSessionTab()'s docblock for the decode/routing chain a
             // real keypress takes and how this relates to Tui\SessionTabs.
             $msg->type === KeyType::Tab && $msg->ctrl
                 => $this->cycleSessionTab($msg->shift ? -1 : 1),
-            $msg->type === KeyType::Char
-                => [$this->withInputBuf($this->inputBuf . $msg->rune), null],
-            $msg->type === KeyType::Space
-                => [$this->withInputBuf($this->inputBuf . ' '), null],
-            $msg->type === KeyType::Backspace
-                => [$this->withInputBuf(self::dropLast($this->inputBuf)), null],
+            // A ctrl-flagged Char no arm above claimed types the LETTER, and
+            // that is pinned rather than tidy: KeyHelpTest's byte map asserts
+            // Ctrl+L puts "l" in the box and Ctrl+K puts "k", which is the
+            // measurement behind its "a form feed is not typeable" claim.
+            // So it goes to insertRune() and NOT to update(), because
+            // TextArea::update() reserves ctrl+a/e/u/k/o for its own line
+            // edits and would swallow those two instead of typing them.
+            // Re-binding them is a keymap decision, not part of moving the
+            // buffer into the widget.
+            $msg->type === KeyType::Char && $msg->ctrl
+                => [$this->withInput($this->input->insertRune($msg->rune)), null],
+            // Ctrl+Space types a space, which is exactly what HEAD did with
+            // it: `CSI 32;5u` decodes to KeyMsg(Space, ctrl), and HEAD's
+            // Space arm did not inspect modifiers. It needs its own arm here
+            // because TextArea::update() answers a ctrl-flagged key from its
+            // OWN ctrl table (rune a/e/u/k/o) and drops everything else, so a
+            // ctrl-flagged Space handed to the widget is swallowed. Same
+            // reasoning, same route, as the ctrl-flagged Char above.
+            $msg->type === KeyType::Space && $msg->ctrl
+                => [$this->withInput($this->input->insertRune(' ')), null],
+            // Vertical motion, but only on a draft that HAS a second line.
+            // Single-line drafts keep today's behaviour exactly: the Up arms
+            // above (slash popup, recall-on-empty) and then the no-op default
+            // below, all of which are pinned. On a multi-line draft the no-op
+            // was the bug - the newline was insertable and then unreachable.
+            !$msg->ctrl && ($msg->type === KeyType::Up || $msg->type === KeyType::Down)
+                && str_contains($this->inputBuf, "\n")
+                => $this->delegateToInput($msg),
+            // Everything left that edits or moves within the draft is the
+            // widget's: character/space insertion and Backspace (which used
+            // to be this file's hand-rolled append/dropLast pair), plus
+            // Left/Right/Home/End/Delete, none of which had an arm here at
+            // all before - this input box had no cursor movement whatsoever.
+            //
+            // Below the modal arms above by construction: a live permission
+            // prompt, the keybinding reference, the palette and the session
+            // picker each return before this match is reached, so typing
+            // stays inert while any of them owns the keyboard.
+            //
+            // ── the `!$msg->ctrl` guard is load-bearing ──────────────────
+            //
+            // TextArea::update() opens with `if ($msg->ctrl)` and answers from
+            // its own five-entry rune table, dropping every other ctrl-flagged
+            // key REGARDLESS of type. So a ctrl-flagged member of the list
+            // below reaches the widget and dies there. That is how Ctrl+Space
+            // and Ctrl+Backspace became dead keys when this delegation
+            // replaced HEAD's hand-rolled Space/Backspace arms; both now have
+            // an explicit arm above, as does Ctrl+Delete.
+            //
+            // The guard is TOTAL rather than per-key on purpose: a KeyType
+            // added to this list in future cannot silently inherit the
+            // widget's ctrl-swallowing, it simply keeps whatever this file
+            // decided for its ctrl form.
+            //
+            // Ctrl+Home / Ctrl+End are the two ctrl forms left as no-ops, and
+            // that is a deliberate omission for a later round rather than an
+            // oversight: they were no-ops at HEAD too, so nothing regresses.
+            // What they SHOULD mean is start / end of the whole draft, since
+            // plain Home/End are line-scoped here (TextArea::update() answers
+            // them with moveCursor($row, …), and this box can have rows) — and
+            // deciding that is a keymap addition, not part of the ctrl filter.
+            !$msg->ctrl && \in_array($msg->type, self::DRAFT_KEYS, true)
+                => $this->delegateToInput($msg),
             default => [$this, null],
         };
     }
@@ -1654,7 +1845,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 54 live rows across 9 contexts — 58 in all, four of them
+     * declares 62 live rows across 9 contexts — 66 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -1666,10 +1857,18 @@ final class Chat implements Model
      *
      * That one exception is what makes a message beginning with "?" typeable
      * again, and it is a real cost repaid rather than a flourish. `update()`'s
-     * "?" arm binds the character on an empty input line, and this input box
-     * has no cursor movement and no paste path, so before this arm existed
-     * "?why" could not be composed AT ALL — measured, the "?" opened the
+     * "?" arm binds the character on an empty input line, and when this arm was
+     * written that input box HAD no cursor movement and no paste path, so
+     * "?why" could not be composed AT ALL — measured then, the "?" opened the
      * reference and the remaining runes were swallowed, leaving inputBuf empty.
+     *
+     * The cursor half of that is no longer true: crush_code.md Phase 3 item 1
+     * moved the draft into `candy-forms`' TextArea, so there is now a second
+     * route — type "why", press Home, type "?" — which
+     * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`
+     * drives. This arm is still the only route on a genuinely EMPTY line,
+     * where there is no character for the cursor to sit in front of, and it
+     * stays for that case (and because the footer already advertises it).
      *
      * Three options were weighed. Dropping the "?" shortcut is not one of them:
      * the shortcut is the feature. Letting the next unbound printable rune fall
@@ -3743,7 +3942,25 @@ final class Chat implements Model
             'liveToolEvents' => $this->liveToolEvents,
             'streamingText' => $this->streamingText,
             'keyHelp' => $this->keyHelp,
+            'input' => $this->input,
         ];
+
+        // The two write routes into the draft, kept from fighting.
+        //
+        // A change naming `input` is the widget having edited itself, and the
+        // constructor re-derives `inputBuf` from its value(), so the stale
+        // `inputBuf` carried above is harmless.
+        //
+        // A change naming `inputBuf` ALONE is "replace the whole draft" —
+        // submit clearing it, an Up recall, a slash/palette completion, a
+        // checkpoint restore. Carrying the old widget through would let it
+        // overrule the new string (it wins in the constructor), so it is
+        // dropped and the constructor rebuilds it from the string with the
+        // cursor at the end. Without this the draft would silently ignore
+        // every one of those writes.
+        if (array_key_exists('inputBuf', $changes) && !array_key_exists('input', $changes)) {
+            unset($constructorProps['input']);
+        }
 
         return new self(...array_merge($constructorProps, $changes));
     }
@@ -5666,7 +5883,253 @@ final class Chat implements Model
         // can never leak into the new one. See slashMenuMatches()'s docblock
         // for why this makes the stored index always valid without an
         // explicit clamp on every read.
-        return $this->mutate(['inputBuf' => $buf, 'slashMenuIndex' => 0]);
+        //
+        // "Every CHANGE" is the honest scope, and the guard is what makes it
+        // one: a write of the string already in the box leaves the match set
+        // alone, so it must leave the selection alone too. Same rule, same
+        // reason, as {@see withInput()}'s - where the case that matters is a
+        // cursor move.
+        $changes = ['inputBuf' => $buf];
+        if ($buf !== $this->inputBuf) {
+            $changes['slashMenuIndex'] = 0;
+        }
+
+        return $this->mutate($changes);
+    }
+
+    /**
+     * A blank, focused draft editor.
+     *
+     * **TextArea, not TextInput, and that is measured rather than assumed.**
+     * `candy-forms` ships both; `TextInput` is single-line. This box is not:
+     * the Alt/Shift/Ctrl+Enter arm in {@see update()} inserts a newline, and
+     * {@see reviveCheckpointMessage()} can put a multi-line tool row in the
+     * box via the Up arm. Driven before choosing — a two-line draft
+     * ("ab", Alt+Enter, "cd") rendered through {@see Renderer::renderInput()}
+     * paints a genuine TWO-ROW bordered box, so multi-line drafts are a live,
+     * visible feature and not a latent one. On `TextInput` the cursor is a
+     * single flat offset with no notion of rows, so Home/End would jump to
+     * the ends of the whole draft rather than of the line the user is on, and
+     * Up/Down would mean nothing on a draft that visibly has rows.
+     *
+     * Focused at construction because {@see TextArea::update()} returns the
+     * receiver unchanged for every `KeyMsg` while blurred — an unfocused
+     * widget here would silently swallow all typing. The Cmd `focus()`
+     * returns (the cursor-blink tick) is deliberately dropped: Chat paints
+     * its own block cursor in {@see Renderer::renderInput()} and never calls
+     * {@see TextArea::view()}, so a blink subscription would drive redraws
+     * for a cursor nothing reads.
+     *
+     * `withCharLimit(0)` restores TextArea's pre-limit unbounded behaviour.
+     * Its 65536 default is a paste-DoS guard, and this box has no paste path
+     * (a `PasteMsg` is dropped by {@see update()}), but it DOES receive
+     * arbitrarily long revived checkpoint rows through the Up arm — a cap
+     * would silently truncate one, which is a feature loss the previous
+     * hand-rolled string did not have.
+     *
+     * Two collisions the plan for this change flagged are DISSOLVED by this
+     * choice rather than resolved by policy, and both are properties of
+     * TextArea that TextInput does not share:
+     *
+     *   * **History has one owner.** `TextInput` carries `withHistory()`/
+     *     `addToHistory()` and binds Up/Down to it, which would have fought
+     *     Chat's own recall (the Up-on-empty arm in {@see update()}, and
+     *     {@see reviveCheckpointMessage()}'s checkpoint revival). TextArea has
+     *     no history field at all — measured, `grep -n history` over
+     *     `candy-forms/src/TextArea/TextArea.php` returns nothing — so Chat
+     *     stays the sole owner and there is no second mechanism to disable.
+     *   * **Completion has one owner.** Likewise `setSuggestions()`/
+     *     `currentSuggestion()` exist only on `TextInput`. The "/" popup keeps
+     *     writing through {@see withInputBuf()}, unchanged — as do the four
+     *     other whole-draft writers, which is the complete list of that
+     *     method's callers (`grep -n 'withInputBuf('`): the Up-recall arm, the
+     *     Ctrl+A `/agents` dispatch, the keyHelp `?` append, and `/keys`
+     *     clearing the box. The palette is NOT among them: it has no
+     *     fill-on-select at all — its selections run actions, and its own
+     *     query buffer is a separate string this widget never sees.
+     */
+    private static function freshInput(): TextArea
+    {
+        [$focused] = TextArea::new()->withCharLimit(0)->focus();
+        \assert($focused instanceof TextArea);
+
+        return $focused;
+    }
+
+    /**
+     * Replace the draft's editor, keeping its cursor.
+     *
+     * The `input` key on {@see mutate()} is the "the widget edited itself"
+     * write, as against `inputBuf`'s "replace the whole draft".
+     *
+     * The slashMenuIndex reset is conditional on the TEXT having changed, and
+     * that condition is the whole point of the guard rather than an
+     * optimisation. This is the every-keystroke route, so it is also the route
+     * a pure cursor MOVE takes — and a move does not change the filtered match
+     * set, so re-highlighting the top match would silently throw away a
+     * selection the user made with ↑/↓ and send Enter to the wrong entry
+     * ("/" then two Downs then Left used to land back on index 0). When the
+     * text does change the reset is exactly {@see withInputBuf()}'s: a stale
+     * index from a differently filtered list must not leak into the new one.
+     */
+    private function withInput(TextArea $input): self
+    {
+        $changes = ['input' => $input];
+        if ($input->value() !== $this->inputBuf) {
+            $changes['slashMenuIndex'] = 0;
+        }
+
+        return $this->mutate($changes);
+    }
+
+    /**
+     * Hand one keystroke to the draft editor.
+     *
+     * Both call sites guard on `!$msg->ctrl` and they are the only two — a
+     * ctrl-flagged key must never arrive here, because `TextArea::update()`
+     * answers ctrl from its own five-rune table and DROPS everything else,
+     * which turns a delegated ctrl chord into a dead key rather than an error.
+     * See the guard's comment at the foot of {@see update()} for the two that
+     * died that way and where they live now.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function delegateToInput(KeyMsg $msg): array
+    {
+        [$next] = $this->input->update($msg);
+        \assert($next instanceof TextArea);
+
+        return [$this->withInput($next), null];
+    }
+
+    /**
+     * Where the cursor is in {@see $inputBuf}, as a character offset from
+     * the start of the whole draft (newlines counted as one character each).
+     *
+     * Flat rather than (row, column) because every caller — Ctrl+W's word
+     * boundary, {@see Renderer::renderInput()}'s cursor glyph,
+     * {@see App\App::clearInputKeys()}'s synthetic clear — reasons about the
+     * draft as one string, which is also the shape the checkpoint state map
+     * and every slash-command parser see.
+     */
+    public function inputCursorOffset(): int
+    {
+        $offset = 0;
+        foreach (explode("\n", $this->inputBuf) as $row => $line) {
+            if ($row >= $this->input->line()) {
+                break;
+            }
+            $offset += mb_strlen($line, 'UTF-8') + 1;
+        }
+
+        return $offset + $this->input->column();
+    }
+
+    /**
+     * Move the draft's cursor to a flat character offset (clamped to the
+     * draft), leaving the text alone.
+     */
+    private function withInputCursor(int $offset): self
+    {
+        return $this->withInput(self::seekInput($this->input, $offset));
+    }
+
+    /** Map a flat character offset onto the widget's (row, column) cursor. */
+    private static function seekInput(TextArea $input, int $offset): TextArea
+    {
+        $offset = max(0, $offset);
+        foreach (explode("\n", $input->value()) as $row => $line) {
+            $len = mb_strlen($line, 'UTF-8');
+            if ($offset <= $len) {
+                return $input->setCursor($row, $offset);
+            }
+            $offset -= $len + 1;
+        }
+
+        return $input->moveToEnd();
+    }
+
+    /**
+     * The offset one word to the LEFT of the cursor.
+     *
+     * Deliberately the same boundary {@see dropLastWord()} uses, applied to
+     * the draft up to the cursor rather than to the whole draft, so Ctrl+W
+     * and Alt+Left cannot disagree about where a word starts. TextArea has no
+     * word MOTION to delegate to — measured over
+     * `vendor/sugarcraft/candy-forms/src/TextArea/TextArea.php`, its only
+     * word-aware member is the public `word()` (the run of non-whitespace
+     * under the cursor, a reader with no cursor effect), and it has no vim
+     * mode at all: `vimWordForward()`/`vimWordBackward()`/`$vimMode` live in
+     * the sibling `TextInput.php`, which this box does not use. So Chat
+     * keeps ownership of the boundary and drives the widget's public
+     * {@see TextArea::setCursor()} with it. `\s` in that pattern includes
+     * "\n", so word motion crosses a line break rather than sticking at
+     * column 0.
+     */
+    private function wordLeftOffset(): int
+    {
+        $at = $this->inputCursorOffset();
+        $before = mb_substr($this->inputBuf, 0, $at, 'UTF-8');
+
+        return mb_strlen(self::dropLastWord($before), 'UTF-8');
+    }
+
+    /**
+     * The offset one word to the RIGHT of the cursor — past any whitespace
+     * under it, then past the run of non-whitespace after that. Trailing
+     * whitespace with no word behind it moves to the end of the draft, which
+     * is {@see wordLeftOffset()}'s mirror image (`dropLastWord()` on a
+     * whitespace-only prefix collapses it to 0).
+     */
+    private function wordRightOffset(): int
+    {
+        $at = $this->inputCursorOffset();
+        $after = mb_substr($this->inputBuf, $at, null, 'UTF-8');
+        if (preg_match('/^\s*[^\s]+/u', $after, $m) !== 1) {
+            return mb_strlen($this->inputBuf, 'UTF-8');
+        }
+
+        return $at + mb_strlen($m[0], 'UTF-8');
+    }
+
+    /**
+     * Ctrl+W / Alt+Backspace: drop the word before the cursor and leave the
+     * cursor where that word started, keeping everything after it.
+     *
+     * Before the cursor existed this was `dropLastWord($inputBuf)` — the
+     * tail of the WHOLE draft. This is a strict generalisation: with the
+     * cursor at the end (which is where every seed, recall and completion
+     * leaves it) the two agree byte for byte, and mid-draft this one no
+     * longer eats text the user has already moved past.
+     */
+    private function deleteInputWordBefore(): self
+    {
+        $at = $this->inputCursorOffset();
+        $kept = self::dropLastWord(mb_substr($this->inputBuf, 0, $at, 'UTF-8'));
+        $tail = mb_substr($this->inputBuf, $at, null, 'UTF-8');
+
+        return $this->withInput(self::seekInput(
+            $this->input->setValue($kept . $tail),
+            mb_strlen($kept, 'UTF-8'),
+        ));
+    }
+
+    /**
+     * Ctrl+Delete: drop the word AFTER the cursor and leave the cursor where
+     * it was, keeping everything before it.
+     *
+     * The mirror of {@see deleteInputWordBefore()}, and it shares the boundary
+     * with word motion the same way that one does — {@see wordRightOffset()}
+     * here, {@see wordLeftOffset()} there — so a forward word-delete can never
+     * take a different amount of text than a forward word-move skips over.
+     */
+    private function deleteInputWordAfter(): self
+    {
+        $at = $this->inputCursorOffset();
+        $kept = mb_substr($this->inputBuf, 0, $at, 'UTF-8');
+        $tail = mb_substr($this->inputBuf, $this->wordRightOffset(), null, 'UTF-8');
+
+        return $this->withInput(self::seekInput($this->input->setValue($kept . $tail), $at));
     }
 
     /**
@@ -6142,6 +6605,10 @@ final class Chat implements Model
      * Drop the last UTF-8 codepoint from `$s`. Plain `substr(-1)`
      * would corrupt multi-byte input — a backspace after typing
      * an emoji should remove the whole grapheme.
+     *
+     * Now the PALETTE query's backspace only. The draft's backspace moved to
+     * {@see TextArea}, which needs a cursor-relative delete this cannot do;
+     * the palette query has no cursor, so it still wants exactly this.
      */
     private static function dropLast(string $s): string
     {

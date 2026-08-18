@@ -766,11 +766,24 @@ final class App implements Model
      * lives in, so it has to start from empty or "/compact" appended to a
      * half-written sentence would be submitted as prose.
      *
+     * Backspaces alone stopped being enough the moment the draft grew a
+     * cursor ({@see Chat::$input}): they delete BEHIND it, so a draft the
+     * user had arrowed into the middle of kept its whole tail and the menu
+     * command was typed into the gap. The tail is deleted FORWARD instead —
+     * one Delete per character after the cursor, both halves keystrokes the
+     * draft editor really handles rather than a direct buffer write.
+     *
      * @return list<KeyMsg>
      */
     private static function clearInputKeys(Chat $chat): array
     {
-        return array_fill(0, mb_strlen($chat->inputBuf), new KeyMsg(KeyType::Backspace));
+        $before = $chat->inputCursorOffset();
+        $after = max(0, mb_strlen($chat->inputBuf) - $before);
+
+        return [
+            ...array_fill(0, $before, new KeyMsg(KeyType::Backspace)),
+            ...array_fill(0, $after, new KeyMsg(KeyType::Delete)),
+        ];
     }
 
     /**

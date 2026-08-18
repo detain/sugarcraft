@@ -2816,13 +2816,50 @@ final class Renderer
         return implode("\n", $rows);
     }
 
+    /**
+     * Paint the input box.
+     *
+     * The box is painted HERE and not by `TextArea::view()`, deliberately:
+     * this styling (theme border, the "> " prompt, the block cursor that
+     * disappears mid-turn) is tuned against the status-bar layout below it and
+     * the frame clip in {@see render()}, and a second render path would fight
+     * it. The widget is read for STATE only — its value and its cursor.
+     *
+     * The cursor is drawn where the widget says it is, which is what makes
+     * cursor motion visible at all; before {@see Chat::$input} existed the
+     * glyph was unconditionally appended to the end of the draft. When the
+     * cursor IS at the end, this produces byte-identical output to that
+     * older form.
+     */
     private static function renderInput(Chat $chat, Theme $theme): string
     {
         $cursor = $chat->inFlight ? '' : '█';
         // The in-progress input buffer is untrusted keystroke data (e.g. a
         // bracketed-paste dump can smuggle ESC/C0/DEL). Strip it before it hits
         // the terminal so a paste can't inject control sequences at draw time.
-        $body = "> " . self::untrusted($chat->inputBuf) . $cursor;
+        //
+        // Sanitized WHOLE and then split, rather than split and sanitized in
+        // halves: `Sanitize::untrusted()` is context-sensitive (it strips ANSI
+        // sequences, and its lone-C1 test looks BACKWARD at preceding bytes),
+        // so sanitizing two halves can emit bytes sanitizing the whole would
+        // drop. This way the painted text is exactly what it always was for
+        // every draft, and only the cursor's COLUMN is computed from a second
+        // pass over the prefix. Residual, stated because it is real and
+        // unfixable without a byte map out of the sanitizer: on a draft whose
+        // cursor sits inside an escape sequence (reachable only via a revived
+        // checkpoint row, never by typing), the two passes can disagree and
+        // the glyph lands a column or two off. Nothing unsafe reaches the
+        // terminal either way — both passes strip C0/C1.
+        $clean = self::untrusted($chat->inputBuf);
+        $at = min(
+            mb_strlen($clean, 'UTF-8'),
+            mb_strlen(self::untrusted(
+                mb_substr($chat->inputBuf, 0, $chat->inputCursorOffset(), 'UTF-8')
+            ), 'UTF-8'),
+        );
+        $body = "> " . mb_substr($clean, 0, $at, 'UTF-8')
+            . $cursor
+            . mb_substr($clean, $at, null, 'UTF-8');
         return Style::new()
             ->border(Border::normal())
             ->borderForeground($theme->border)
