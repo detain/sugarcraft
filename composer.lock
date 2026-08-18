@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2971ebd07c168f40ea2dde194e8ee7f4",
+    "content-hash": "39291283e888b5cdfadfda9f2ff2b8ee",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3214,7 +3214,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-async",
-                "reference": "733cbca976b48de553dbdd48e93d5bff738d6571"
+                "reference": "55a05c13f3eb2bfe78677e8c3cb5ca67c8aab91b"
             },
             "require": {
                 "php": "^8.3",
@@ -3223,7 +3223,8 @@
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -3520,16 +3521,10 @@
         {
             "name": "sugarcraft/candy-focus",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-focus.git",
-                "reference": "6ea81381ec64c9b3a2c3aa7a6825ad1d818752c8"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-focus/zipball/6ea81381ec64c9b3a2c3aa7a6825ad1d818752c8",
-                "reference": "6ea81381ec64c9b3a2c3aa7a6825ad1d818752c8",
-                "shasum": ""
+                "type": "path",
+                "url": "candy-focus",
+                "reference": "1281c1329a24220103ea7674d80cb1acfb08fa7e"
             },
             "require": {
                 "php": "^8.3"
@@ -3537,7 +3532,6 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -3574,7 +3568,10 @@
                 "source": "https://github.com/sugarcraft/candy-focus",
                 "docs": "https://sugarcraft.github.io/lib/candy-focus.html"
             },
-            "time": "2026-08-01T15:37:38+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-forms",
@@ -3819,16 +3816,10 @@
         {
             "name": "sugarcraft/candy-input",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-input.git",
-                "reference": "b559cd98d04cd118bb14d26d82d7cae585e9ae03"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/b559cd98d04cd118bb14d26d82d7cae585e9ae03",
-                "reference": "b559cd98d04cd118bb14d26d82d7cae585e9ae03",
-                "shasum": ""
+                "type": "path",
+                "url": "candy-input",
+                "reference": "1dd21498e249f92df969b48a4e66e4c93b01e1ab"
             },
             "require": {
                 "php": "^8.3",
@@ -3838,14 +3829,17 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Input\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Input\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -3870,11 +3864,14 @@
                 "tui"
             ],
             "support": {
-                "docs": "https://sugarcraft.github.io/lib/candy-input.html",
                 "issues": "https://github.com/sugarcraft/candy-input/issues",
-                "source": "https://github.com/sugarcraft/candy-input"
+                "source": "https://github.com/sugarcraft/candy-input",
+                "docs": "https://sugarcraft.github.io/lib/candy-input.html"
             },
-            "time": "2026-08-01T16:18:45+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-kit",
@@ -3939,16 +3936,10 @@
         {
             "name": "sugarcraft/candy-layout",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-layout.git",
-                "reference": "9026aa56022eead19f649ff6b3ed35822ec23746"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-layout/zipball/9026aa56022eead19f649ff6b3ed35822ec23746",
-                "reference": "9026aa56022eead19f649ff6b3ed35822ec23746",
-                "shasum": ""
+                "type": "path",
+                "url": "candy-layout",
+                "reference": "6bb06cb08328a655672bdf569a829a1c664cba02"
             },
             "require": {
                 "php": "^8.3"
@@ -3956,14 +3947,17 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Layout\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Layout\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -3985,11 +3979,14 @@
                 "terminal"
             ],
             "support": {
-                "docs": "https://github.com/sugarcraft/candy-layout/blob/master/README.md",
                 "issues": "https://github.com/sugarcraft/candy-layout/issues",
-                "source": "https://github.com/sugarcraft/candy-layout/tree/master"
+                "source": "https://github.com/sugarcraft/candy-layout/tree/master",
+                "docs": "https://github.com/sugarcraft/candy-layout/blob/master/README.md"
             },
-            "time": "2026-08-01T16:07:05+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-lister",
@@ -4299,7 +4296,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "f87d238aefee71fd775daca9df1a27df5d8fc5fd"
+                "reference": "4227562228b9476e9d0d80c1770b77c7d652fd4d"
             },
             "require": {
                 "ext-gd": "*",
@@ -4311,7 +4308,8 @@
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "react/http": "^1.11"
+                "react/http": "^1.11",
+                "sugarcraft/candy-testing": "dev-master"
             },
             "suggest": {
                 "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
@@ -4481,7 +4479,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-pty",
-                "reference": "d59307116864687e064091cc4a2cb439203d3cb7"
+                "reference": "75e5270042a92c794cd2f6bb85ae09d8775408ce"
             },
             "require": {
                 "ext-ffi": "*",
@@ -4494,6 +4492,7 @@
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master",
                 "sugarcraft/candy-vcr": "dev-master",
                 "sugarcraft/candy-vt": "dev-master"
             },
@@ -4898,10 +4897,11 @@
             "dist": {
                 "type": "path",
                 "url": "candy-testing",
-                "reference": "b608cb74e996ca75cf161d281e6c1bcf3771d057"
+                "reference": "a52fceb84d6ff0abbed5333a0b3ab9d1e59bf3f0"
             },
             "require": {
                 "php": "^8.3",
+                "react/event-loop": "^1.6",
                 "sugarcraft/candy-buffer": "@dev",
                 "sugarcraft/candy-core": "@dev"
             },
@@ -5712,23 +5712,30 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "980f081e6f767296e6f2d271cf36c59f3cb05025"
+                "reference": "832a8944b3abb0acdbbce70fc2881585639a6ff1"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
+                "ext-sqlite3": "*",
                 "google/cloud-ai-platform": "^1.0",
                 "guzzlehttp/guzzle": "^7.12.1",
                 "openai-php/client": "^0.10",
                 "php": "^8.3",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-forms": "dev-master",
+                "sugarcraft/candy-fuzzy": "dev-master",
+                "sugarcraft/candy-mosaic": "dev-master",
+                "sugarcraft/candy-mouse": "dev-master",
                 "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
-                "symfony/yaml": "^7.0"
+                "sugarcraft/sugar-veil": "dev-master",
+                "symfony/yaml": "^7.4"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "mockery/mockery": "^1.6",
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-pty": "dev-master"
             },
             "suggest": {
                 "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom)."
@@ -5855,16 +5862,10 @@
         {
             "name": "sugarcraft/sugar-gallery",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/sugar-gallery.git",
-                "reference": "ca30d797420b3fb6910adf73f86731f1eae3898c"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/sugar-gallery/zipball/ca30d797420b3fb6910adf73f86731f1eae3898c",
-                "reference": "ca30d797420b3fb6910adf73f86731f1eae3898c",
-                "shasum": ""
+                "type": "path",
+                "url": "sugar-gallery",
+                "reference": "b359ecdab50ff87d0482d4e1dfd57ab5a1622755"
             },
             "require": {
                 "php": "^8.3",
@@ -5875,14 +5876,17 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Gallery\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Gallery\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -5896,21 +5900,24 @@
             "description": "Poster grids and rails for media TUIs — a 2-D virtualized PosterGrid with sparse range paging, a horizontal Rail carousel, and a PosterCard tile. Renderer-agnostic (holds pre-rendered poster cells).",
             "homepage": "https://github.com/sugarcraft/sugar-gallery",
             "keywords": [
-                "Virtualization",
                 "carousel",
                 "gallery",
                 "grid",
                 "poster",
                 "sugarcraft",
                 "terminal",
-                "tui"
+                "tui",
+                "virtualization"
             ],
             "support": {
-                "docs": "https://sugarcraft.github.io/lib/sugar-gallery.html",
                 "issues": "https://github.com/sugarcraft/sugar-gallery/issues",
-                "source": "https://github.com/sugarcraft/sugar-gallery"
+                "source": "https://github.com/sugarcraft/sugar-gallery",
+                "docs": "https://sugarcraft.github.io/lib/sugar-gallery.html"
             },
-            "time": "2026-08-01T17:34:26+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/sugar-glow",
@@ -8111,7 +8118,6 @@
         "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
-        "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-focus": 20,
         "sugarcraft/candy-forms": 20,
@@ -8122,18 +8128,18 @@
         "sugarcraft/candy-lister": 20,
         "sugarcraft/candy-log": 20,
         "sugarcraft/candy-metrics": 20,
+        "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-mines": 20,
         "sugarcraft/candy-mold": 20,
         "sugarcraft/candy-mosaic": 20,
-        "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-query": 20,
         "sugarcraft/candy-serve": 20,
+        "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-shell": 20,
         "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,
-        "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
         "sugarcraft/candy-vcr": 20,
         "sugarcraft/candy-vt": 20,
@@ -8162,13 +8168,14 @@
         "sugarcraft/sugar-tick": 20,
         "sugarcraft/sugar-toast": 20,
         "sugarcraft/sugar-veil": 20,
-        "sugarcraft/sugar-wishlist": 20
+        "sugarcraft/sugar-wishlist": 20,
+        "sugarcraft/candy-files": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
-    "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
 }
