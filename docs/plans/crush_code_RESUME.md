@@ -263,12 +263,31 @@ measured against a 4,096 budget, with the false promise in the model-facing head
 five corrections the fix agent made to the supervisor's brief, and the two review findings
 that were against the supervisor's own backlog rather than the code.
 
-**In flight: E21** — the implementation round of "wire the automatic 85% compaction tier to
-the model", brief at `/tmp/…/scratchpad/e21-brief.md` (330 lines, measured at `a72c5b0a`,
-baseline 7204/75944/1). Recovery if that round's result was lost: the brief is
-self-contained, so re-spawn against it. **Then review → fix → verify → commit as usual —
-E21 has NOT been reviewed yet.** If the tree is clean and `git log` shows an E21/Phase 5
-item 6 commit, that round finished; move to C1 in §11.
+**As of 2026-08-19 the working tree carries UNCOMMITTED Bundle E21 work** (Phase 5 item 6
+finished: the automatic 85% tier now asks the model). Implementation done and
+supervisor-verified at **7221 / 76068 / 1, exit 0** (baseline 7204/75944/1 at `916a4ed7`).
+**It is in its adversarial review round — do not commit unreviewed.** Recovery if that review
+was lost: the review brief is self-contained at `/tmp/…/scratchpad/e21-review.md` (180 lines);
+re-spawn against it, using the worklog's E21 section for the claims to verify. Then fix →
+verify → commit.
+
+Dirty set: `src/Chat.php` · `src/HistoryCompactedMsg.php` ·
+`tests/Chat/AutomaticCompactionModelSummaryTest.php` (new) · `crush_code.md` (status only).
+
+**Two things from E21 that outlive the bundle.** First, **the supervisor's recommended design
+shipped a real bug** and the implementer was right to refuse it: an assistant-role notice
+after the parked prompt makes the dispatched history END on an assistant turn, which is a
+prefill the model continues — the turn would answer the compaction notice instead of the user.
+The fix is a `Role::System` notice BEFORE the prompt, pinned on the wire rather than the
+transcript. Second, and independent of this bundle: **`ContextCompactor::groupIntoPairs()`
+(`src/Context/ContextCompactor.php:421`) silently DROPS a non-user/non-assistant message that
+directly follows a user turn**, because the `else` branch pushes a standalone only when
+`$currentPair === null` and a user turn leaves it non-null. `submit()` appends
+`[system(notice), user(text), system(reminder)]`, so **the live 70% context reminder is erased
+by the next compaction, in production, today.** Silent permanent loss in a compaction
+primitive; pre-existing. It needs its own bundle — the fix shifts pair counts and several
+`tests/Context/` and `tests/Chat/` fixtures move with it. **Add it to §11 as its own queue
+entry when E21 commits.**
 
 **`crush_code.md`'s status block still needs Phase 2 items 3 and 5 marked complete** (see
 §9 — measured already-done, no code needed) and item 6 promoted from 🟡 to ✅ once E21

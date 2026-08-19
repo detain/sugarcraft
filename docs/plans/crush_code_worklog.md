@@ -6930,3 +6930,133 @@ never re-polled mid-session while `PromptStabilityTest` pins the opposite, and w
 bundle's own new `MemoryBlock` docblock builds its prompt-caching argument on the true
 version · the backoff figure's domain (1.5s per provider call; ~12s per turn at `maxSteps`
 8) · `App::$memoryStore`'s docblock naming the wrong object.
+
+---
+
+## Bundle E21 — Phase 5 item 6 finished: the automatic 85% tier now asks the model
+
+**Implementation round. UNCOMMITTED, IN ADVERSARIAL REVIEW as of 2026-08-19.** Suite
+verified by the supervisor personally: **7221 tests / 76068 assertions / 1 skipped, exit 0**
+(2m26s), against a measured baseline of 7204/75944/1 at `916a4ed7`. +17 tests / +124
+assertions, all in one new file; no existing test's expectations edited; no new `src/` file,
+so both `BuiltInToolCorpusTest` censuses and `BinSugarcrushWiringTest::crushSourceFiles` are
+untouched.
+
+Dirty set: `src/Chat.php` · `src/HistoryCompactedMsg.php` ·
+`tests/Chat/AutomaticCompactionModelSummaryTest.php` (new) · `crush_code.md` (status only).
+
+### What was wrong
+
+`/compact` typed by hand asked the model for summaries; the **automatic 85% tier** compacted
+on the local heuristic alone. That is the lossier of the two paths and the one that actually
+fires in real use, because users do not type `/compact` — the session just fills up. So the
+exchanges replaced by `[exchanged information]` placeholders were precisely the ones nobody
+chose to condense. Item 6's own wording is "when a provider is available"; on that tier one
+is.
+
+### The design: park the submission behind the round-trip
+
+The tier now echoes the prompt, sets `inFlight` true, latches `pendingCompactionId`, and
+returns the summarization Cmd. `applyModelCompaction()` compacts, re-runs the 95% blocking
+check against the compacted wire, and then dispatches the turn. The parked prompt rides on
+`HistoryCompactedMsg`'s new 5th param rather than on `Chat`, so any route that abandons a
+summarization by releasing the latch drops the parked turn with it — no second field to keep
+in step at four sites.
+
+Three methods came out of it: `buildSummarizationRequest()` (the shared core, extracted from
+`scheduleModelCompaction()`), `scheduleParkedCompaction()` (the new tier route), and
+`dispatchTurn()` (the turn tail extracted from `submit()`, so the two routes cannot drift on
+`generation`, the `CancellationToken`, `saveCheckpoint`, the completion Cmd and the title Cmd).
+
+### THE SUPERVISOR'S RECOMMENDED SHAPE SHIPPED A REAL BUG
+
+My brief recommended echoing `Message::user($text)` plus a **one-line assistant notice**. The
+implementer measured what that produces and refused it, correctly.
+
+An assistant-role notice *after* the prompt — and then `compactionChanges()` appending its own
+`Role::Assistant` report after that — means **the history dispatched to the provider ends on
+an assistant turn.** Traced through `EngineBackend::toTypedMessages()` (`Role::Assistant` →
+`AssistantMessage`) and `VertexProvider::formatAnthropicMessages()` (renders it as an
+`assistant` turn; a `SystemMessage` is hoisted out of `messages` entirely): that is a
+**prefill the model continues.** The turn would have answered the compaction notice instead
+of the user's prompt.
+
+Correct shape, now implemented: `Role::System` notice **before** the prompt, prompt last,
+landing report also `Role::System` via a new `$tierNotice` switch on `compactionChanges()`.
+Pinned **on the wire** rather than on the transcript.
+
+### And a second, independent reason the notice must precede the prompt — which is a live production bug
+
+`ContextCompactor::groupIntoPairs()` (`src/Context/ContextCompactor.php:421`) **silently drops
+a non-user/non-assistant message that directly follows a user turn.** The `else` branch pushes
+a standalone only when `$currentPair === null`, and a user turn leaves it non-null with
+`assistant === null`.
+
+Probed directly: fixture `[…, user('q4'), system('REMINDER-AFTER-USER'), assistant('reply4')]`
+through `compact()` → the system message is **absent** from the output. Move it before the
+user turn → it survives.
+
+**This hits production today, and predates this bundle.** `submit()` appends
+`[system(notice), user(text), system(reminder)]` — so the live **70% context reminder is
+erased by the next compaction**, every time. Silent permanent data loss in a compaction
+primitive. Wants its own bundle, because fixing `groupIntoPairs()` shifts pair counts and
+several `tests/Context/` and `tests/Chat/` fixtures move with it. Backlog entry to be written
+in the fix round.
+
+### Four more corrections to the supervisor's brief
+
+1. **The spend-cap case I specified is unreachable.** `submit()` runs `spendCapRefusal()`
+   *before* the tier block, so an over-85% prompt in a capped session is refused outright and
+   the tier never runs (measured: `sumCalls=0`, `cmd=null`, draft kept). There is no
+   "compacts on the heuristic, says so, and dispatches the turn" to build. A
+   `spendCapReached()` gate stayed inside `scheduleParkedCompaction()` as defence — the gate
+   belongs to the provider call, not to the caller's ordering — returning null, not a notice.
+2. **"`/clear`, `/rewind` and New session during the parked window" is not drivable.** With
+   `inFlight === true`, `update()` swallows every keystroke except Ctrl+C and Escape; Ctrl+P
+   cannot even open the palette. The reachable set was pinned instead. This is also why no
+   new latch-clearing sites were needed.
+3. **`compactionChanges('', …)` "as today" was not sufficient** — it needed the
+   report-role/wording switch, for the prefill reason above.
+4. Minor but load-bearing: `scheduleModelCompaction()`'s null-backend check **must** precede
+   its spend-cap check, or a capped offline session gets a cap notice instead of the offline
+   path. Order preserved, now with a comment saying why.
+
+### The three questions the brief deliberately left open
+
+1. **Should the park notice quote the figures?** Yes — and they are *passed in* from the two
+   locals the tier already read (`$tokenCount` from `estimateTokenCount()` at the top of
+   `submit()`, `$tokenLimit` from `contextTokenLimit()`), never recomputed, so they cannot
+   drift from the decision that produced them. Each is pinned **by its own label** against an
+   independently measured value plus an `assertNotSame`, so swapping the two reds.
+2. **Reuse `scheduleModelCompaction()` or extract a core?** Extract — four measured
+   differences defeat reuse (`inFlight` false vs true; the spend-cap arm answering via
+   `compactNow()`, which clears `inFlight` and dispatches nothing; the notice's text *and its
+   role and position*; and the Msg needing `parkedSubmission`). The genuinely shared question
+   is "which exchanges would this compaction condense, and what request gets lines for them".
+   The extraction pushed the offer-set **probe shape** to the caller, which turned out to
+   matter: `/compact` probes with `[…, user(text), assistant('')]` and the parked route with
+   `[…, system(''), user(text)]`, because the compactor's grouping counts roles and
+   positions, not content.
+3. **Anything else reachable while `inFlight === true` that can strand the latch?** No — the
+   double-Escape cancel arm was the only one. All 24 `'inFlight' => false` sites in
+   `src/Chat.php` were walked: 21 are `submit()`/`dispatchCommand()` helpers behind the
+   swallow; of the three in `update()`, the `AssistantMsg` settle arm needs an outstanding
+   completion (there is none, and all three `new AssistantMsg` producers stamp a non-null
+   generation so a stale one is dropped) and the permission-denied arm needs a
+   `pendingPermission`, which only a tool batch produces.
+
+### Three further findings recorded, not fixed
+
+- A parked summarization **cannot be cancelled at the provider**, only locally: no
+  `CancellationToken` is threaded into `completeAsync()`, so a cancelled parked turn is still
+  billed for the summary (`update()` accounts usage ahead of the latch check, deliberately).
+  Pre-existing for `/compact`; now it also gates a submitted turn.
+- A **hung summary provider** leaves the parked window open with only Ctrl+C / double-Escape
+  as exits and no on-screen hint. Correct by policy — no total-request timeout, ever — but
+  the exit is undiscoverable. Claimed signature for the renderer to key a hint off:
+  `inFlight && inFlightCancellation === null`.
+- The **latch-mismatch drop** in `update()` never touches `inFlight`, so it would wedge the
+  session if a parked message were ever dropped while `inFlight` is true. Today unreachable.
+  Deliberately **not** "fixed": clearing `inFlight` in the drop path would let a stale parked
+  message kill a live turn. The invariant belongs beside the property docblock — if a fifth
+  latch-releasing site is ever added, it must clear `inFlight` in the same `mutate()`.
