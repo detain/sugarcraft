@@ -138,7 +138,12 @@ F3–F7 already landed in `dad90b18` · the `Write` tool and `TerminalBackground
 are already wired · `StallDetector`'s call-site half is done and it is **not** blocked
 on Phase 1 · `KEY_HELP_COLS` is 64, not the 58 the backlog claimed · tracker numbers
 #83 and #85 each denote two different findings · #88's figure has eight successive
-measurements, so re-measure it *after* a round lands, never before.
+measurements, so re-measure it *after* a round lands, never before. · Phase 5 item 7's
+"feed it from `AssistantMsg` usage data already flowing through `EngineBackend`/`Runtime`"
+is false — usage dies at two seams: `Runtime::runBatch()` yields
+`new AssistantMessage($content, $toolCalls, $reasoning)` and `Backend::complete()`
+returns a `Message`, neither of which has any usage field, and
+`grep tokensUsed src/Backend/EngineBackend.php` is empty.
 
 ## 10. Current state and the queue
 
@@ -148,8 +153,8 @@ believing any number written anywhere.
 
 ## 11. QUEUE — in order
 
-- **B1** Phase 5 items 4,5 — provider `contextWindow()` wiring + live 85%/95%
-  compaction tiers. *(implemented; in the fix round as of 2026-08-19)*
+- ~~**B1** Phase 5 items 4,5 — provider `contextWindow()` wiring + live 85%/95%
+  compaction tiers.~~ **DONE `08cc1b6a`** (6931/71073/1, exit 0).
 - **B2** Phase 5 items 6,7 — model-driven `generateExchangeSummary()`; instantiate
   `TokenTracker`, cost readout in the status bar, spend cap (`SUGARCRUSH_MAX_COST` or
   `/budget $N`). Adds a slash command, so it must satisfy Phase 4's arm→registry

@@ -10,7 +10,7 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 
 **A note on the Appendix's voice.** Each of the 13 sections was written by an independent research pass assigned one angle, and several sections cross-reference each other's findings before this document existed as a single file — phrases like "sibling agent," "sibling-confirmed," "the orchestrator," "this agent," or "per the assignment" refer to that research process, not to you the reader. Kept intentionally, per the "close to verbatim" policy above, rather than smoothed over — but worth knowing going in.
 
-## Execution status (updated 2026-08-18)
+## Execution status (updated 2026-08-19)
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage
@@ -18,7 +18,7 @@ labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 item 6 ·
-Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-3 + 10's preset half ·
+Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-5 + 10's preset half ·
 Phase 7 items 1-2 · Phase 8 items 1, 2, 5, 7, 12, 14.
 
 **START HERE WHEN RESUMING: `docs/plans/crush_code_RESUME.md`.** It carries the
@@ -33,12 +33,23 @@ tightening, and mutation-register/census correctness — anything of that shape 
 surfaces mid-flight gets recorded in the worklog with its probes and picked up in a
 final hardening pass, rather than interrupting the wiring work.
 
-**Now in flight:** **Phase 5 "Bundle B1"** — items 4 (threshold tied to the
-provider's real `contextWindow()`) and 5 (the two dead `ContextCompactor` predicates
-made live at 85%/95%, no idle gate). Implemented and in its fix round. Then **B2**
-(items 6-7), **B3** (items 8-10a), then Phase 2's six wiring bundles, Phase 3
-items 2-5, Phase 6, Phase 7 docs, Phase 8's remainder, Phase 2 item 9, and the
-hardening backlog last. Full ordered queue in `docs/plans/crush_code_RESUME.md` §11.
+**Now in flight:** **Phase 5 "Bundle B2"** — items 6 (model-driven
+`generateExchangeSummary()` in place of the `[exchanged information]` placeholder) and
+7 (`TokenTracker` instantiated, a cost readout on the status bar, and a spend cap).
+Then **B3** (items 8-10a), then Phase 2's six wiring bundles, Phase 3 items 2-5,
+Phase 6, Phase 7 docs, Phase 8's remainder, Phase 2 item 9, and the hardening backlog
+last. Full ordered queue in `docs/plans/crush_code_RESUME.md` §11.
+
+**Item 7's plan text is wrong and must not be passed through as written.** It says to
+feed `TokenTracker` from "`AssistantMsg` usage data already flowing through
+`EngineBackend`/`Runtime`". That usage data does not flow. `Providers\CompleteResponse`
+does carry `tokensUsed`/`costUsd`, but `Runtime::runBatch()` yields
+`new AssistantMessage($content, $toolCalls, $reasoning)` and drops both;
+`Messages\AssistantMessage` has exactly those three constructor params;
+`Backend::complete()` returns a `Message`, which has no usage fields either; and
+`grep tokensUsed src/Backend/EngineBackend.php` is empty. The figure has to be carried
+across two seams that currently discard it, which makes item 7 larger than
+"instantiate `TokenTracker`" suggests.
 
 **Do not parallelise Phase 5 Bundle B against anything touching `src/Chat.php` or
 `src/Renderer.php`.** The rule learned the hard way in this chain: a *suite run*
@@ -69,6 +80,8 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
 
 | SHA | Plan item |
 |---|---|
+| `08cc1b6a` | Phase 5 items 4, 5 — the limit is the model's real context window; the 85%/95% tiers go live (and the offline path's tiers were all switched off by an `EchoProvider` answering `1_000_000`) |
+| `eaf3fd46` | *(not a plan item)* the `crush_code_RESUME.md` entry point + Bundle A/B1 worklog |
 | `bf3495f5` | Phase 5 items 1-3 + 10's preset half — a real system prompt, honest tool descriptions, forks that know where they are |
 | `abb80cf1` | *(not a plan item)* Phase 4 worklog + the 50-item deferred-hardening ledger |
 | `38614fa9` | Phase 4 items 1, 2, 5, 7 — `/model`, `/help` becomes a command listing, `/clear`, popup hints, parser-keyed dispatch |
@@ -281,8 +294,8 @@ This phase is sequenced first among the wiring work because almost every other P
 1. **Rewrite the base system prompt** (`Runtime::buildSystemPrompt()`, one string literal today: `'You are SugarCrush, an AI coding assistant.'`) to add tool-use guidance, tone/verbosity calibration, ask-vs-act policy, and explicit security boundaries — see §12's full before/after text. Highest-leverage single change in this phase. **(§12)**
 2. **Expand the five most-used tool descriptions** (`Bash`/`Edit`/`Read`/`Grep`/`Glob` — currently one-clause each) — see §12 for drafted replacement text per tool. **(§12)**
 3. **Fix `App::dispatchSkill()`** to route through `Agent::systemPrompt()` instead of handing `$skill->content` straight to `CompleteRequest` — fork-context skills currently run with zero environment orientation. **(§12)**
-4. **Tie `REMINDER_TOKEN_LIMIT` to the active provider's real `contextWindow()`** instead of a hardcoded 100,000 — `contextWindow()` is already correctly implemented on all 7 providers and simply never called. **(§8, §10)**
-5. **Promote `ContextCompactor::shouldCompact()`/`shouldCompactForeground()` from dead code to live triggers** (call at the same site as the existing `shouldSendReminder()` check), and drop the idle-time gate on the 95% tier — an *active* session crossing 95% is the more dangerous case, not the idle one. **(§10)**
+4. ✅ **Tie `REMINDER_TOKEN_LIMIT` to the active provider's real `contextWindow()`** instead of a hardcoded 100,000 — `contextWindow()` is already correctly implemented on all 7 providers and simply never called. **(§8, §10)** — **DONE** (`08cc1b6a`), via the capability interface `Backend\ReportsContextWindow` rather than a required `Backend` method: three of four backends have no model behind them, and a required method would force each to invent a number that then silently becomes the compaction denominator. Note the plan's "already correctly implemented" is not quite right — `EchoProvider` answered `1_000_000` as a stand-in for "unlimited", which switched every tier off on the real offline and degrade path; it answers 0 now, and 0-means-unknown is the documented contract.
+5. ✅ **Promote `ContextCompactor::shouldCompact()`/`shouldCompactForeground()` from dead code to live triggers** (call at the same site as the existing `shouldSendReminder()` check), and drop the idle-time gate on the 95% tier — an *active* session crossing 95% is the more dangerous case, not the idle one. **(§10)** — **DONE** (`08cc1b6a`). Making the 85% tier automatic exposed two bugs that had been reachable only via an explicit `/compact` and are fixed in the same commit: the preserved messages were rebuilt from the wire format, destroying `reasoning`/`imageBytes`/`imageProtocol`/`toolResults`/`createdAt` on the very turns the tier advertises keeping in full, and the 95% tier committed its rewrite then refused the turn without reporting it — making the destructive path the silent one.
 6. **Replace `generateExchangeSummary()`'s truncation/placeholder logic with a real model-driven summarization call** when a provider is available, falling back to the current heuristic only when one isn't (e.g. pure unit-test harness). This is the fix that makes `/compact` actually preserve what a compaction feature exists to preserve. **(§10, §12)**
 7. **Instantiate `TokenTracker`**, feed it from `AssistantMsg` usage data already flowing through `EngineBackend`/`Runtime`, add a running cost readout to the status bar, and add a hard spend cap (`SUGARCRUSH_MAX_COST` env var or `/budget $N` command) — closes a real trust gap for unattended use (workflows, background sessions). **(§8, §10, §13)**
 8. **Retry transient provider failures with backoff** (2-3 attempts, exponential, network/5xx/timeout only) inside `EngineBackend::runCompleteInChild()` before falling through to the current hard-fail. **(§10)**

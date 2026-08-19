@@ -6237,3 +6237,164 @@ no matter how many times the turn is retried" is false (driven: turns 1-7 refuse
 window — the real dead end is a *single* exchange over 95%), and §E17's claim that
 `$tokensUsed` is 0 on every streaming path is false for two of six providers —
 `VertexProvider::parseAnthropicChunk()` emits the prompt half, split, on the stream.
+
+---
+
+## Bundle B1 fix round — `08cc1b6a` (2026-08-19)
+
+Suite verified by the supervisor, not by report: **6931 tests, 71073 assertions, 1
+skipped, exit 0**, up from 6918/70996. The one skip is still `McpClientTest`'s
+mock-builtins skip. `SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves`
+passed on all four of the agent's full runs and on mine; untouched.
+`.sugar-crush/config.json` md5 unchanged, `check-path-repos --no-lib-path-repos`
+exits 0, no per-lib lock, none of the forbidden files touched. 15 mutations applied,
+15 killed.
+
+### The offline path's tiers were all switched off, and the fix was a behaviour change
+
+`EchoProvider::contextWindow()` answered `1_000_000` — a stand-in for "unlimited"
+written while the method had zero readers. Once item 4 made it the compaction
+denominator, that number put the real offline **and degrade** path's tiers at
+700k/850k/950k/1M estimated tokens, against a history that cannot reach them. Every
+tier was structurally unreachable on the default run.
+
+The wrong fix would have been to correct the prose and leave the number. The agent
+made the unknown case explicit instead: `contextWindow()` returns **0**, and
+`ProviderInterface::contextWindow()`'s docblock now carries the contract — **0 means
+unknown, never unlimited**. Measured on `Bootstrap::backend()`, before → after:
+window `1000000 → 100000`, tiers `700000/850000/950000/1000000 →
+70000/85000/95000/100000`.
+
+`tests/Cli/BootstrapContextWindowTest.php` pins all four as absolute estimated-token
+counts on the backend the CLI really builds, each at its boundary from both sides
+(69,999 vs 70,000 · 84,999 vs 85,000 · 100,000 vs 100,001), with fixtures exact by
+construction and self-checked against `Chat::contextTokens()`. The mutation restoring
+`1_000_000` kills four tests. `EchoProviderTest`'s `assertGreaterThan(0, …)` became
+`assertSame(0, …)` — strictly stronger.
+
+Three docblocks were corrected to say that "no model behind it" is a claim about the
+**provider**, not the backend class. That distinction is the round's own instance of
+the recurring defect, caught before shipping.
+
+### The automatic tier destroyed metadata on the turns it advertised preserving
+
+`messagesFromWire()` rebuilt every preserved message from the wire format. Measured
+on a preserved assistant turn: `createdAt 1234567890 → now`, `toolCalls 1 → 0`,
+`toolResults 1 → 0`, `reasoning 'I thought hard' → null`, `imageBytes 'PNGDATA' →
+null`. The renderer paints all five. Before B1 this happened only on an explicit
+`/compact`; B1 made it automatic and per-turn, which is what moved it from hardening
+to functionality.
+
+**The review's suggested fallback would not have worked, and the agent said so.**
+"Restore everything `toWire()` emits" still loses three of the four things the
+renderer draws, because `reasoning`, `imageBytes`, `imageProtocol`, `toolResults` and
+`createdAt` have **no wire representation at all**. The fix keeps the original
+`Message` objects: `messagesFromWire($wire, $original)` recovers the preserved block
+as the **longest common suffix of (role, content) pairs** and hands those back as the
+same objects, building fresh messages only for genuinely-new summary entries.
+Backwards matching is what makes the alignment sound — the walk is contiguous, so a
+reused message sits at the same distance from both ends. Pinned field-by-field on the
+automatic path, not by object identity. Mutations "drop the reuse branch" and "match
+from the front" both killed.
+
+Two ways the suffix comes up *short* are documented honestly in the docblock (the
+compactor drops the earlier of two consecutive assistants, and re-orders a `user`
+followed by a non-user role): the degradation is "fewer messages keep their
+metadata", never "a wrong message keeps someone else's".
+
+### The destructive path was the silent one
+
+The 95% blocking tier adopted the rewritten history and then refused the turn without
+reporting the rewrite. The adoption decision now happens before the blocking tier is
+consulted and the notice is committed ahead of the refusal, so the rewrite is reported
+on both outcomes and the 0%-savings suppression applies to both. Mutation "drop the
+notice from the refusal" kills two tests.
+
+### Five false prose claims, and one the review had also gotten wrong
+
+- `contextUsagePercent()`'s ">1.0 means the 95% tier will refuse" is false. Driven:
+  2,400 messages at **139%** of the fallback window **dispatched**, usage after 1%.
+- `FALLBACK_TOKENS` was described as a conservative floor. It is larger than **six**
+  provider/model pairs, not the five the review counted — `OpenAIProvider`'s `gpt-4`,
+  `gpt-3.5-turbo` and `default`, plus `BedrockProvider`'s two llama3 entries and its
+  `default`. The docblock now says it is not a floor, and why no single value could be.
+- The `tests/` sweep the previous round missed: `RendererTest.php:790`/`:797`,
+  `ChatTest.php:1892`/`:2312`, and `RuntimeTest.php:1419` — the last of which **the
+  review also missed**. Its "exactly 100000" comment located the threshold on a
+  literal; 100,000 is the threshold there now only because the *mocked* provider
+  returns 0 and `resolve()` falls back.
+
+### Two ledger entries corrected, both by measurement, and the numbers disagree with the review's
+
+**§E18** was retitled *"one exchange bigger than the tier is a permanent refusal; a
+big HISTORY is not"*. On its own fixture (13 × ~50,000 chars, 325,286 estimated
+tokens): turns 1-4 refused, **turn 5 dispatched** — 325,286 → 250,531 → 200,768 →
+151,005 → 101,241. The review measured 7 refusals at ~25k each; the agent measured 4
+at ~49,760. Both are right for their tree: B3's fix makes the refusal append three
+messages instead of two, so the preserve window shifts twice as fast. The genuine dead
+end is a *single* 800,000-char exchange, refused on all 5 attempts with the estimate
+*rising* each time (200,148 → 200,660).
+
+**§E17**'s "0 on every streaming path" holds for four of six providers and is false for
+`BedrockProvider` (final `metadata` event carries the turn total) and
+`VertexProvider::parseAnthropicChunk()` (`input_tokens` on `message_start`,
+`output_tokens` on `message_delta`). Its *Blocked-on* was amended: the decision blocks
+it, not the data.
+
+### The full-suite survivor is closed, and the escape hatches turned out to be wrong
+
+The previous round's worst finding — reverting `contextUsagePercent()`'s denominator
+to the retired 100,000 left 6,918 tests byte-identical — is now killed by a test
+pinning both the fraction and the string the bar prints (22,000 estimated tokens
+against an 88,000-token window is 25%; against 100,000 it is 22%).
+
+Message figures are pinned as *facts*: two label-keyed tests read each number out by
+the label beside it, compare against an independently measured value, and assert the
+two differ so a swap is visible. The unit-flip mutation that survived last round is
+killed.
+
+The escapes are pinned **behaviourally** — every slash command the refusal names is
+extracted, submitted on the refused chat, and the turn retried, asserting which
+actually unblock. That is how two review claims were found wrong: **`/fork` is not an
+escape** (it spawns a background session and leaves this history in place; without a
+supervisor it answers "Background sessions not configured"), and **`/compact` is one**
+(measured 100,487 → 80,574 estimated tokens, next turn dispatched). The refusal now
+names `/clear` and `/compact`, drops `/fork`, and stops claiming compaction cannot
+help.
+
+`testCustomCompactorThresholdsSurviveAMutate`'s vacuous half is closed — the regex
+widened to catch "70 percent" and decimals, proved by restoring the old pattern and
+watching a spelled-out message run green. **The honest gap is stated rather than
+dressed up:** the percentage loop still has zero matches against today's wording,
+which names no percentage, so it is a forward guard against a regressed message and
+not present coverage.
+
+### Two smaller things worth keeping
+
+`IdleCompactionPolicy::shouldPrompt()` gained an optional `?int $now` so its 3600-second
+boundary is not asserted against two independent clock reads, plus a test that the
+default clock IS the wall clock — so the seam cannot be the only thing the boundary
+test proves. And the `290` declaration figure is now asserted alongside the `271` file
+count, with a consistency assertion between them; previously adding one `src/` file
+redded only the sibling number.
+
+### One new finding, not caused by this change-set
+
+`ChatTest::tearDownAfterClass()`'s stranded-IPC assertion is an **intermittent
+pre-existing flake in a shared `/tmp`**. It failed once (6 `/tmp/sc_chat_tool_*.json`
+files, all stamped the same instant) and passed on three subsequent full runs;
+`ChatTest` in isolation strands zero files across two runs, diffed by filename. `/tmp`
+held 78 such files from other processes spanning an hour, and `ToolIpcFiles::sweepOnce()`'s
+one-hour reclaim was deleting old ones mid-run. Left untouched. Worth a ledger entry
+if it recurs.
+
+### Filed rather than fixed
+
+**§E19** — `BedrockProvider::formatMessages()` flattens `SystemMessage` to `'user'`,
+producing consecutive same-role turns for the new leading notice. Settled by reading
+rather than deferred blindly: it already did this for the pre-existing 70% reminder and
+for every `Message::toolRunning()` placeholder, so the notice introduces no new shape.
+Filed with its fix (hoist into Converse's own `system` field). `VertexProvider` hoists
+every `SystemMessage` into the top-level `system` field so position is irrelevant
+there, and `OpenAIProvider` emits `role: system` in place, which Chat Completions
+accepts anywhere.
