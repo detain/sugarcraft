@@ -6,15 +6,53 @@ namespace SugarCraft\Crush;
 
 use RuntimeException;
 
- /**
+/**
  * MCP client that connects to Claude Code via stdio transport.
  * Sends JSON-RPC 2.0 messages and receives responses using
  * non-blocking I/O so the TUI loop stays responsive.
  *
  * Mirrors the MCP spec stdio transport:
  * https://modelcontextprotocol.io/specification/basic/transports/
+ *
+ * A DORMANT SEAM, and named so you can tell which one you are reading. This
+ * class was `SugarCraft\Crush\McpClient` and shared its basename with
+ * {@see \SugarCraft\Crush\MCP\McpClient} — a different class in a
+ * different namespace over a different transport: Guzzle HTTP (plus stdio and
+ * git server shapes) against servers named in an injected JSON config path,
+ * with per-agent-preset allowlists enforced through
+ * {@see \SugarCraft\Crush\MCP\McpRouter}. The two never collided under
+ * PSR-4 and neither was broken by the sharing; their two TEST files DID share
+ * a basename, and readers of this tree have more than once attributed one
+ * file's behaviour to the other over it. That is the whole of what the rename
+ * fixes, and no call site moved, because there are none.
+ *
+ * DORMANT IS NOT UNGATED, and dormant is also not deleted. MEASURED, and quoted
+ * as it actually returns: outside the two class files themselves,
+ * `grep -rn McpClient src/ bin/ examples/` reports exactly ONE line —
+ *
+ *   src/Providers/Concerns/HttpClientDefaults.php:33: * to `src/MCP/McpClient.php`'s `timeout => 30`. That value is correct there
+ *
+ * — which is a DOC COMMENT comparing timeouts, not a construction. (An earlier
+ * revision of this paragraph said the command "reports nothing"; it never did.)
+ * So the conclusion the grep was cited for stands: NEITHER client is
+ * constructed by a real run, and "the other one is the live one" is not a thing
+ * that can be said about either. That the one hit names the SIBLING rather than
+ * this class is also why the dormancy test for this class
+ * ({@see \SugarCraft\Crush\Tests\ClaudeCodeMcpClientTest::testNothingInSrcBinOrExamplesReachesThisDormantSeam()})
+ * separates comments from code with `token_get_all()` rather than grepping
+ * bytes: a doc-comment mention reaches nothing, and reporting one as a call site
+ * would be this file's own basename confusion in a new costume. The only caller
+ * of this class today is
+ * {@see \SugarCraft\Crush\Tests\ClaudeCodeMcpClientTest}. It spawns
+ * `$command` (default `claude --mcp`) through `proc_open` with no
+ * {@see \SugarCraft\Crush\Support\ContainedPath} anchor and no
+ * {@see \SugarCraft\Crush\Permissions\PermissionGate} in front of the tool
+ * calls it forwards, which is survivable ONLY while it stays unreachable from
+ * a run. Wiring it up (crush_code.md Phase 2 item 2, a separate change) has to
+ * bring those two gates with it; reaching for it before then is how a
+ * process-spawning seam goes live ungated.
  */
-final class McpClient
+final class ClaudeCodeMcpClient
 {
     private const READ_CHUNK_SIZE = 8192;
 
@@ -297,7 +335,7 @@ final class McpClient
     }
 
     /**
-     * Create an McpClient with default settings for Claude Code.
+     * Create a ClaudeCodeMcpClient with default settings for Claude Code.
      *
      * @param array<string, mixed>|null $options capability options to send in handshake
      */

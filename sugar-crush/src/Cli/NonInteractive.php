@@ -83,6 +83,8 @@ final class NonInteractive
      * that just happened.
      *
      * When `$SUGARCRUSH_BACKEND_CMD` selects {@see \SugarCraft\Crush\Backend\CommandBackend}
+     * or `$SUGARCRUSH_BACKEND_CMD_STREAM` selects
+     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend}
      * — or an embedder injects its own {@see \SugarCraft\Crush\Backend} — nothing
      * has been retried at all: `grep -rn TransientFailure src/` reaches only
      * `Runtime`, `AgentManager` and the providers, so a delegating backend's
@@ -281,7 +283,8 @@ final class NonInteractive
      * {@see Bootstrap::selectedProviderName()}'s own precedence: a non-empty
      * `$SUGARCRUSH_PROVIDER` wins, so if it is set it IS the source.
      *
-     * Note this also refuses the `$SUGARCRUSH_BACKEND_CMD` tier that {@see
+     * Note this also refuses the `$SUGARCRUSH_BACKEND_CMD` /
+     * `$SUGARCRUSH_BACKEND_CMD_STREAM` tiers that {@see
      * Bootstrap::backend()} would drop to next when BOTH are set. Substituting
      * a shell-out for a requested provider is a smaller lie than substituting
      * Echo, but it is the same lie: the caller reads one string and cannot see
@@ -326,8 +329,13 @@ final class NonInteractive
      * same "plausible canned sentence" trap as the misconfigured one, so the
      * run says so out loud on the stream that is not the result.
      *
-     * Silent when `$SUGARCRUSH_BACKEND_CMD` is what got selected: that IS an
-     * explicit backend choice, and it really did run.
+     * Silent when either shell-out tier is what got selected
+     * (`$SUGARCRUSH_BACKEND_CMD` or `$SUGARCRUSH_BACKEND_CMD_STREAM`): that IS
+     * an explicit backend choice, and it really did run. The condition asks
+     * {@see Bootstrap::selectedProviderLabel()} rather than reading env vars
+     * here, so a tier added to {@see Bootstrap::backend()} cannot leave this
+     * notice claiming nothing was configured on a run that configured
+     * something — which is what a second copy of the list would have done.
      */
     private static function noticeOfflineDefault(): void
     {
@@ -337,8 +345,9 @@ final class NonInteractive
 
         \fwrite(
             \STDERR,
-            "sugarcrush: no provider configured (SUGARCRUSH_PROVIDER and SUGARCRUSH_BACKEND_CMD unset,"
-            . " none persisted); answering from the offline echo provider.\n"
+            "sugarcrush: no provider configured (SUGARCRUSH_PROVIDER, SUGARCRUSH_BACKEND_CMD and"
+            . " SUGARCRUSH_BACKEND_CMD_STREAM unset, none persisted); answering from the offline"
+            . " echo provider.\n"
         );
     }
 

@@ -99,7 +99,7 @@ final class StatusBarSpendTest extends TestCase
 
     /**
      * With no cap and nothing reported the bar carries NO spend segment — which
-     * is every offline run, every `$SUGARCRUSH_BACKEND_CMD` run, and every
+     * is every offline run, every `$SUGARCRUSH_BACKEND_CMD*` shell-out run, and every
      * streamed session whose provider sends no usage block. `$` appears nowhere
      * else on the bar, so its absence is the check.
      */

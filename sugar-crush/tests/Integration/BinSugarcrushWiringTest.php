@@ -11,6 +11,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
@@ -28,9 +29,19 @@ use SugarCraft\Crush\Tools\BuiltIn\Read;
  * out to bin/sugarcrush itself: the bin script ends in Program::run(), which
  * attaches to a real TTY and blocks, so it cannot be driven from a
  * deterministic, CI-safe test.
+ *
+ * HOME and the whole backend-selection chain
+ * ({@see BackendSelectionEnvSandboxTrait}) are sandboxed per test. The chain
+ * matters because these tests assert on the ENGINE backend `Bootstrap::backend()`
+ * builds — its tool set, its loaders — and either shell-out variable merely
+ * exported in the developer's shell selects a `CommandBackend` instead, which
+ * has none of them. Measured before the clearing was added: one error here in a
+ * full run.
  */
 final class BinSugarcrushWiringTest extends TestCase
 {
+    use BackendSelectionEnvSandboxTrait;
+
     private string $tempDir;
     private string $originalHome;
     private mixed $originalServerHome;
@@ -60,10 +71,14 @@ final class BinSugarcrushWiringTest extends TestCase
         // scanning the DEVELOPER's ~/.claude/skills.
         $this->originalServerHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = $this->tempDir . '/home';
+
+        $this->clearBackendSelectionEnv();
     }
 
     protected function tearDown(): void
     {
+        $this->restoreBackendSelectionEnv();
+
         if ($this->originalHome !== '') {
             putenv('HOME=' . $this->originalHome);
         } else {

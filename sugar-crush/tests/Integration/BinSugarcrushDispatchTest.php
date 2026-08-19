@@ -757,6 +757,48 @@ final class BinSugarcrushDispatchTest extends TestCase
     }
 
     /**
+     * A run configured ONLY through `$SUGARCRUSH_BACKEND_CMD_STREAM` must not
+     * be told it configured nothing.
+     *
+     * {@see \SugarCraft\Crush\Cli\NonInteractive}'s offline notice keys on
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::selectedProviderLabel()},
+     * which had exactly one shell-out variable in it. Add a tier to
+     * `Bootstrap::backend()` without teaching that helper about it and `-p`
+     * answers from the tier it really selected while announcing on stderr that
+     * nothing was configured — a claim about `SUGARCRUSH_BACKEND_CMD`'s domain,
+     * printed over a run in a different one.
+     *
+     * `cat > /dev/null` before the reply is load-bearing: the child has to
+     * consume the JSON history the parent writes, or the parent's write races
+     * the closing pipe and takes an EPIPE.
+     */
+    public function testAStreamingShellOutRunIsNotToldNoProviderIsConfigured(): void
+    {
+        $result = $this->runBin(
+            ['-p', 'anything'],
+            ['SUGARCRUSH_BACKEND_CMD_STREAM' => 'cat > /dev/null; echo STREAMED42'],
+        );
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('STREAMED42', $result['stdout'], 'the streaming tier never ran');
+        $this->assertStringNotContainsString('no provider configured', $result['stderr']);
+        $this->assertStringNotContainsString('offline echo provider', $result['stderr']);
+    }
+
+    /**
+     * The same run with the variable removed DOES get the notice, so the
+     * assertion above cannot be passing because the notice was deleted.
+     */
+    public function testTheOfflineNoticeStillFiresWithNeitherShellOutVariableSet(): void
+    {
+        $result = $this->runBin(['-p', 'anything'], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('no provider configured', $result['stderr']);
+        $this->assertStringContainsString('SUGARCRUSH_BACKEND_CMD_STREAM', $result['stderr'], 'the notice has to name every variable it claims is unset');
+    }
+
+    /**
      * Run the real bin/sugarcrush in a child process.
      *
      * stdin is /dev/null (never a TTY, so nothing can block waiting on input)

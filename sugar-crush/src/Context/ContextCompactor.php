@@ -50,7 +50,7 @@ final class ContextCompactor
          * Model-written one-line summaries for stage 2, keyed by
          * {@see exchangeKey()}. Empty is the ordinary state and means "use the
          * heuristic", which is what every caller without a provider gets — pure
-         * unit tests, the echo provider, and a `$SUGARCRUSH_BACKEND_CMD`
+         * unit tests, the echo provider, and either `$SUGARCRUSH_BACKEND_CMD*`
          * shell-out all legitimately have no model to ask
          * (crush_code.md Phase 5 item 6).
          *

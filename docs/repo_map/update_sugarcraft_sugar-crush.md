@@ -39,7 +39,8 @@ sugar-crush/src/
 ├── CommandParser.php            # Parses /command slash-input
 ├── StreamingDirectoryLister.php # Generator-based lazy directory enumeration
 ├── McpMessage.php              # JSON-RPC 2.0 envelope
-├── McpClient.php                # MCP stdio client for Claude Code integration
+├── ClaudeCodeMcpClient.php     # MCP stdio client for Claude Code integration (was McpClient.php; the
+│                               # HTTP client is src/MCP/McpClient.php, which kept the name)
 ├── Attachment.php              # File/image attachment
 ├── AttachmentType.php          # Enum: File | Image
 ├── Backend.php                  # Interface: complete(), completeAsync()
@@ -107,7 +108,7 @@ final class ToolResult {
 
 - **Backend interface** — Pluggable adapter pattern for LLM providers
 - **ToolRegistry** — Register custom tools with name, signature, execute handler
-- **McpClient** — Extensible via stdio transport (only Claude Code currently)
+- **ClaudeCodeMcpClient** — Extensible via stdio transport (only Claude Code currently). Renamed from `McpClient`; `src/MCP/McpClient.php` is a different class over Guzzle HTTP and kept that name
 
 ## Strengths
 
@@ -264,7 +265,7 @@ final class ToolResult {
 
 **Title:** HTTP and SSE transport support beyond stdio
 
-**Description:** Currently McpClient only supports stdio transport (Claude Code). MCP spec supports stdio, HTTP, and SSE transports.
+**Description:** Currently `ClaudeCodeMcpClient` (the class this item was written about, then named `McpClient`) only supports stdio transport (Claude Code). MCP spec supports stdio, HTTP, and SSE transports. Note the separate `src/MCP/McpClient.php` already speaks HTTP.
 
 **Why it matters:** MCP is the primary extensibility mechanism for AI tools. Supporting HTTP/SSE enables integration with more MCP servers.
 
@@ -274,7 +275,7 @@ final class ToolResult {
 
 - Add `McpTransport` interface with `send(Message): ?Message`
 - Implement `StdioTransport`, `HttpTransport`, `SseTransport`
-- Update `McpClient` to accept transport via constructor
+- Update `ClaudeCodeMcpClient` to accept transport via constructor
 - Support per-server transport configuration
 
 **Estimated complexity:** Medium (4-6h)
@@ -346,13 +347,13 @@ final class ToolResult {
 
 **Title:** Make MCP client not Claude Code-specific
 
-**Description:** Currently `McpClient::forClaudeCode()` is the only documented factory. The client should be a general-purpose MCP client.
+**Description:** Currently `ClaudeCodeMcpClient::forClaudeCode()` is the only documented factory. The client should be a general-purpose MCP client.
 
 **Why it matters:** MCP is a standard protocol. A general-purpose client enables integration with any MCP-compatible server.
 
 **Implementation ideas:**
 
-- Generic `McpClient::forServer(command, args, transport)` factory
+- Generic `ClaudeCodeMcpClient::forServer(command, args, transport)` factory
 - Remove Claude Code-specific assumptions
 - Support `initialize`, `tools/call`, `tools/list` standard methods
 - Document JSON-RPC 2.0 message format
@@ -851,7 +852,11 @@ public function testToolTimeoutHandling(): void {
 
 **Problem:** No native PHP MCP implementation.
 
-**Solution:** Implement MCP client and server in PHP:
+**Solution:** Implement MCP client and server in PHP. Since realised as
+`SugarCraft\Crush\MCP\McpClient` / `MCP\HttpMcpServer` / `MCP\StdioMcpServer`
+/ `MCP\GitMcpServer` — that client is the one that KEPT the name `McpClient`;
+the Claude-Code stdio client sketched elsewhere in this document is now
+`SugarCraft\Crush\ClaudeCodeMcpClient`:
 
 ```php
 // Client
@@ -1020,7 +1025,7 @@ curl -X POST http://localhost:8080/chat -d '{"message": "hello"}'
 ### 8. MCP Additional Transports
 
 - HTTP and SSE transport support
-- General-purpose `McpClient`
+- General-purpose MCP client (`src/MCP/McpClient.php` is that today; `ClaudeCodeMcpClient` remains stdio-only)
 
 ## Major Architectural Upgrades (6-12 months)
 

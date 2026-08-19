@@ -38,9 +38,13 @@ use SugarCraft\Crush\Role;
  *
  * HOME and the provider env vars are redirected/cleared for the whole class,
  * same convention as {@see BootstrapHookFileTest}: `backend()` consults
- * $SUGARCRUSH_PROVIDER, $SUGARCRUSH_BACKEND_CMD and a persisted provider in
- * `~/.sugar-crush/config.json` before it reaches the echo arm, and this test is
- * about the echo arm.
+ * $SUGARCRUSH_PROVIDER, $SUGARCRUSH_BACKEND_CMD, $SUGARCRUSH_BACKEND_CMD_STREAM
+ * and a persisted provider in `~/.sugar-crush/config.json` before it reaches the
+ * echo arm, and this test is about the echo arm. All FOUR tiers, not the two
+ * this sentence used to name — the `setUp()` list below was widened when the
+ * streaming variable was added and this paragraph was not, which is the same
+ * "list short by one" defect in prose instead of in code. $SUGARCRUSH_MODEL is
+ * cleared alongside them because it renames whatever tier wins.
  */
 final class BootstrapContextWindowTest extends TestCase
 {
@@ -68,7 +72,7 @@ final class BootstrapContextWindowTest extends TestCase
         $this->originalServerHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = $this->home;
 
-        foreach (['SUGARCRUSH_PROVIDER', 'SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_MODEL'] as $var) {
+        foreach (['SUGARCRUSH_PROVIDER', 'SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_BACKEND_CMD_STREAM', 'SUGARCRUSH_MODEL'] as $var) {
             $this->originalEnv[$var] = getenv($var);
             putenv($var);
         }

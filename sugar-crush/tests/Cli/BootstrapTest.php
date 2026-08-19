@@ -36,6 +36,7 @@ final class BootstrapTest extends TestCase
         $volatile = [
             'SUGARCRUSH_PROVIDER',
             'SUGARCRUSH_BACKEND_CMD',
+            'SUGARCRUSH_BACKEND_CMD_STREAM',
             'SUGARCRUSH_MODEL',
             'SUGARCRUSH_TITLE_MODEL',
             'SUGARCRUSH_DISABLE_MOUSE',

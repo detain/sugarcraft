@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -19,9 +20,17 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * `src/` or `bin/` at all, so the replacement was a diagnostic nothing read:
  * the README claimed skips "are also readable from SkillManager::skipped()",
  * which was true of the API and false of the product.
+ *
+ * Every test here calls `Bootstrap::backend()` and needs the run to land on the
+ * ENGINE path, since a shell-out backend performs no skill scan. So the
+ * backend-selection chain is cleared for the whole class as well as HOME: with
+ * `$SUGARCRUSH_BACKEND_CMD` or `$SUGARCRUSH_BACKEND_CMD_STREAM` merely exported
+ * in the developer's shell, two of these tests failed — measured, before the
+ * clearing was added.
  */
 final class BootstrapSkillSkipsTest extends TestCase
 {
+    use BackendSelectionEnvSandboxTrait;
     use HomeSandboxTrait;
 
     private string $tempDir;
@@ -37,10 +46,12 @@ final class BootstrapSkillSkipsTest extends TestCase
         $this->project = $this->tempDir . '/project';
         mkdir($this->project, 0700, true);
         $this->useHomeSandbox($this->home);
+        $this->clearBackendSelectionEnv();
     }
 
     protected function tearDown(): void
     {
+        $this->restoreBackendSelectionEnv();
         $this->restoreHomeSandbox();
         $this->removeDirectory($this->tempDir);
 

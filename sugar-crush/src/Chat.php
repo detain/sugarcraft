@@ -5903,7 +5903,8 @@ final class Chat implements Model
      * (crush_code.md Phase 5 item 6).
      *
      * Null is the ordinary answer and it is not a failure: no summary backend
-     * (offline, `$SUGARCRUSH_BACKEND_CMD`, every unit test), or a history with
+     * (offline, either `$SUGARCRUSH_BACKEND_CMD*` shell-out, every unit test),
+     * or a history with
      * nothing a model could usefully summarise. The caller then compacts
      * synchronously on the heuristic exactly as it always did.
      *
@@ -6021,7 +6022,8 @@ final class Chat implements Model
      * one of the two routes uses.
      *
      * Null is the ordinary answer and not a failure: no {@see $summaryBackend}
-     * (offline, `$SUGARCRUSH_BACKEND_CMD`, every unit test), or nothing a model
+     * (offline, either `$SUGARCRUSH_BACKEND_CMD*` shell-out, every unit test),
+     * or nothing a model
      * could usefully be asked. Each caller then does what it did before this
      * existed — compact on the heuristic.
      *

@@ -44,6 +44,52 @@ final class CommandBackendTest extends TestCase
             'a non-existent command should produce an "[error: ...]" message, not crash');
     }
 
+    /**
+     * A reply that is the single character `0` is an answer, not an absence.
+     *
+     * `stream_get_contents()` returns `string|false`, and the read used to be
+     * `stream_get_contents($pipes[1]) ?: ''` — under which `"0"` is falsy and
+     * the whole reply became the empty string. `printf` rather than `echo`
+     * deliberately: with a trailing newline the string is `"0\n"`, which is
+     * truthy, and the bug hides. One character of data loss, on the path whose
+     * docblock promises stdout back with one `trim()` and nothing else.
+     */
+    public function testAReplyOfExactlyZeroIsNotSwallowed(): void
+    {
+        $backend = new CommandBackend(['printf', '0']);
+
+        $this->assertSame('0', $backend->complete([Message::user('hi')])->content);
+    }
+
+    /**
+     * The same for stderr on the failure path: a stderr tail of `"0"` used to
+     * be `?:`-flattened away, so the fenced hint the message promises was
+     * silently omitted for it.
+     */
+    public function testAStderrTailOfExactlyZeroStillReachesTheErrorHint(): void
+    {
+        $backend = new CommandBackend('printf 0 >&2; exit 3');
+        $content = $backend->complete([Message::user('hi')])->content;
+
+        $this->assertStringContainsString('exited 3', $content);
+        $this->assertStringContainsString("```\n0\n```", $content, 'the stderr tail was dropped for being "0"');
+    }
+
+    /**
+     * The documented exception to "stdout comes back as-is": `trim()` at the
+     * ends, which is deliberate (a wrapper's `echo` adds a newline nobody wants
+     * rendered) but does reach INTO the reply's first line — a four-space
+     * indent that made line one a code block is gone, while interior newlines,
+     * blank lines and indents survive. Pinned so the docblock's claim and its
+     * stated exception are both measured rather than asserted.
+     */
+    public function testStdoutSurvivesInsideAndIsTrimmedOnlyAtTheEnds(): void
+    {
+        $backend = new CommandBackend(['printf', "    indented\nline two\n\nline four\n"]);
+
+        $this->assertSame("indented\nline two\n\nline four", $backend->complete([])->content);
+    }
+
     // =========================================================================
     // completeAsync() Tests
     // =========================================================================

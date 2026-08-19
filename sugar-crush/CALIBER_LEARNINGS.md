@@ -151,12 +151,12 @@ than silently working around it.
 
 ## MCP client (stdio transport)
 
-- **`McpClient`** spawns a child process via `proc_open` with piped stdio; non-blocking reads via `stream_set_blocking(false)` keep the TUI loop responsive.
+- **`ClaudeCodeMcpClient`** (was `McpClient`, renamed so it no longer shares a basename with the HTTP-transport `MCP\McpClient`) spawns a child process via `proc_open` with piped stdio; non-blocking reads via `stream_set_blocking(false)` keep the TUI loop responsive.
 - **JSON-RPC 2.0 framing**: messages are newline-delimited (`$message->toJson() . "\n"`); `readMessages()` splits on `\n` and parses each chunk via `McpMessage::parse()`.
 - **`McpMessage`** covers all four JSON-RPC 2.0 packet types: request, response, notification, error. Factory methods: `request()`, `notification()`, `success()`, `error()`.
 - **`McpMessage::parse()`** validates `jsonrpc: "2.0"` presence and returns `null` for malformed input — callers handle null gracefully.
 - **Polling loop** with `usleep(10000)` (10 ms) waits up to 100 attempts for a matching response id — avoids blocking the TUI while still being responsive.
-- **`McpClient::forClaudeCode()`** factory provides the canonical `command: 'claude', args: ['--mcp']` invocation for the official Claude Code MCP server.
+- **`ClaudeCodeMcpClient::forClaudeCode()`** factory provides the canonical `command: 'claude', args: ['--mcp']` invocation for the official Claude Code MCP server.
 - **`disconnect()`** closes pipes and calls `proc_close()` in a loop; `__destruct()` ensures cleanup if the client is abandoned.
 
 ## Buffer diffing

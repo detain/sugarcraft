@@ -450,22 +450,28 @@ final class ForeignAgentPresetWiringTest extends TestCase
     }
 
     /**
-     * A real launch, with the two backend-selection env vars cleared: either one set
-     * selects a `CommandBackend` and a different construction path. Same dance
-     * {@see FeatWiringReachabilityTest} performs for the same reason.
+     * A real launch, with all THREE backend-selection env vars cleared —
+     * `$SUGARCRUSH_PROVIDER` and both shell-out variables, which is what the code
+     * below does and what this sentence used to under-count as "two". Either
+     * shell-out variable selects a `CommandBackend` and a different construction
+     * path. Same dance {@see FeatWiringReachabilityTest} performs for the same
+     * reason.
      */
     private function launchChat(): void
     {
         $provider = getenv('SUGARCRUSH_PROVIDER');
         $command = getenv('SUGARCRUSH_BACKEND_CMD');
+        $streamCommand = getenv('SUGARCRUSH_BACKEND_CMD_STREAM');
         putenv('SUGARCRUSH_PROVIDER');
         putenv('SUGARCRUSH_BACKEND_CMD');
+        putenv('SUGARCRUSH_BACKEND_CMD_STREAM');
 
         try {
             Bootstrap::chat($this->repo);
         } finally {
             $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
             $command === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $command);
+            $streamCommand === false ? putenv('SUGARCRUSH_BACKEND_CMD_STREAM') : putenv('SUGARCRUSH_BACKEND_CMD_STREAM=' . $streamCommand);
         }
     }
 

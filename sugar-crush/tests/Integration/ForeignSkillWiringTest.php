@@ -258,20 +258,26 @@ final class ForeignSkillWiringTest extends TestCase
      */
     private function engineSkillRegistry(): SkillRegistry
     {
-        // Both backend-selection env vars are cleared for the call: either one set
-        // selects a CommandBackend, which holds no registry at all, so a value
-        // inherited from the environment would turn a wiring regression into a
-        // different assertion. Same dance as FeatWiringReachabilityTest.
+        // All THREE backend-selection env vars are cleared for the call --
+        // SUGARCRUSH_PROVIDER and both shell-out variables, which is what the
+        // code below does and what this comment used to under-count as "both".
+        // Either shell-out variable selects a command backend, which holds no
+        // registry at all, so a value inherited from the environment would turn a
+        // wiring regression into a different assertion. Same dance as
+        // FeatWiringReachabilityTest.
         $provider = getenv('SUGARCRUSH_PROVIDER');
         $command = getenv('SUGARCRUSH_BACKEND_CMD');
+        $streamCommand = getenv('SUGARCRUSH_BACKEND_CMD_STREAM');
         putenv('SUGARCRUSH_PROVIDER');
         putenv('SUGARCRUSH_BACKEND_CMD');
+        putenv('SUGARCRUSH_BACKEND_CMD_STREAM');
 
         try {
             $backend = Bootstrap::chat($this->repo)->backend();
         } finally {
             $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
             $command === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $command);
+            $streamCommand === false ? putenv('SUGARCRUSH_BACKEND_CMD_STREAM') : putenv('SUGARCRUSH_BACKEND_CMD_STREAM=' . $streamCommand);
         }
 
         $this->assertInstanceOf(EngineBackend::class, $backend);

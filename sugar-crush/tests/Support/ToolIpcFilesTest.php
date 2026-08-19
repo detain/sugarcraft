@@ -285,6 +285,12 @@ final class ToolIpcFilesTest extends TestCase
 
         $provider = getenv('SUGARCRUSH_PROVIDER');
         $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
+        // The streaming variable belongs in this list for the same reason the
+        // other two do: it is a tier of the same selection chain, and a list that
+        // names all but the newest member is the defect the chain keeps
+        // producing. It happens not to change this test's outcome -- the sweep
+        // runs before any tier is chosen -- which is exactly why it was missed.
+        $streamCmd = getenv('SUGARCRUSH_BACKEND_CMD_STREAM');
 
         // setUp() already put HOME here (both spellings); this test only needs
         // the same directory to assert against.
@@ -294,6 +300,7 @@ final class ToolIpcFilesTest extends TestCase
             $latch->setValue(null, false);
             putenv('SUGARCRUSH_PROVIDER');
             putenv('SUGARCRUSH_BACKEND_CMD');
+            putenv('SUGARCRUSH_BACKEND_CMD_STREAM');
 
             Bootstrap::backend($this->dir);
 
@@ -303,6 +310,7 @@ final class ToolIpcFilesTest extends TestCase
             $latch->setValue(null, $wasSwept);
             $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
             $cmd === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $cmd);
+            $streamCmd === false ? putenv('SUGARCRUSH_BACKEND_CMD_STREAM') : putenv('SUGARCRUSH_BACKEND_CMD_STREAM=' . $streamCmd);
         }
     }
 

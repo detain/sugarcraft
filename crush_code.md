@@ -17,9 +17,41 @@ authoritative, resumable record — including every review finding, the sabotage
 labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
-**Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 item 6 ·
+**Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1, 3, 5, 6, 8 ·
 Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-7 + 10's preset half ·
 Phase 7 items 1-2 · Phase 8 items 1, 2, 5, 7, 12, 14.
+
+**Phase 2 items 3 and 5 needed no code** — both were already wired and the plan's
+premise was measured false. Item 3 is live at `Cli/Bootstrap.php:374`. Item 5 is
+live in `Bootstrap::hooks()` and deliberately NOT routed through
+`HookManager::loadFromFile()`: hook entries are read once per process, so a
+session cannot install hooks into itself mid-session, and routing item 5 through
+the file loader would have promised that it can.
+
+**Phase 2 items 1 and 8 are complete** (bundle C1). Item 1 renamed
+`SugarCraft\Crush\McpClient` to `ClaudeCodeMcpClient` so it no longer shares a
+basename with `SugarCraft\Crush\MCP\McpClient`; the seam stays dormant and is
+now pinned by a test that reds the day anyone wires it without bringing
+`ContainedPath` and `PermissionGate` along. Item 8 wired `StreamingCommandBackend`
+as tier 3 behind `$SUGARCRUSH_BACKEND_CMD_STREAM`, below `$SUGARCRUSH_BACKEND_CMD`
+and above the persisted provider.
+
+Item 8 carried more than the plan described. The dormant class could not return a
+newline **from any command whatsoever** — `fgets` splits on `\n`, `rtrim` strips
+the `\r`, the join separator is `''` — so every doc that framed the flattening as
+a wrapper-choice problem was recommending a wrapper that cannot exist. A
+terminated blank line now means a literal newline, which lets the token protocol
+express any string. Three further defects went with it: an unbounded 100%-CPU spin
+when a descendant holds stdout after the child exits (the blanket `$timeout = 120`
+this bundle removed had been its only bound), an escape hatch a `trap '' TERM`
+child could hold for 8s against a 1s deadline, and `CommandBackend` returning an
+EMPTY answer whenever the whole reply was `0`, via `?: ''`.
+
+Two claims are withdrawn rather than delivered. `$onToken` fires per token, but
+the read loop blocks the ReactPHP loop, so the `withTick` subscription that paints
+deltas cannot run until the completion has already resolved — measured six
+callbacks and **zero** render ticks. The non-blocking rewrite is backlog E34, and
+cancellation-during-shell-out is E35.
 
 **Phase 5 item 6 is now complete on BOTH routes** (bundle E21). `/compact` asked
 the model from B2; the automatic 85% tier now does too — it parks the submitted

@@ -1278,7 +1278,8 @@ final class Renderer
      *
      * Empty string — no segment at all — when the session has neither a cap nor
      * a reported spend, which is every offline run, every
-     * `$SUGARCRUSH_BACKEND_CMD` run and every streamed session whose provider
+     * `$SUGARCRUSH_BACKEND_CMD`/`$SUGARCRUSH_BACKEND_CMD_STREAM` shell-out run
+     * and every streamed session whose provider
      * sends no usage block. A `$0.0000` on those would cost columns to say
      * nothing, and worse, would say the wrong thing: see
      * {@see \SugarCraft\Crush\Chat::hasReportedSpend()}.

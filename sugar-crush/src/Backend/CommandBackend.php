@@ -35,6 +35,25 @@ use SugarCraft\Crush\Message;
  * process exit code is captured. A non-zero exit returns an
  * "[error: …]" assistant message rather than throwing; backend
  * failures shouldn't crash the chat shell.
+ *
+ * STDOUT IS RETURNED WITH EXACTLY ONE TRANSFORMATION APPLIED: `trim()`, at the
+ * two ends. Everything INSIDE survives — every newline, every blank line,
+ * every indent — which is what makes the wrapper above usable. What does not
+ * survive is whitespace at the ends, and the claim is stated with its
+ * exception because the exception is reachable: an indented FIRST line loses
+ * its indentation (so a reply that opens with a four-space code block opens
+ * with prose instead), a trailing newline is dropped, and a reply consisting
+ * only of whitespace comes back empty. The trim stays deliberately — a
+ * wrapper's `echo` adds a trailing newline nobody wants rendered, and every
+ * caller of this class renders the content as markdown.
+ *
+ * {@see StreamingCommandBackend} deliberately does NOT do this — it treats one
+ * terminated line as one token, an empty line as a literal newline, and joins
+ * with the empty string — so the wrapper above is not interchangeable between
+ * the two, and each has its own env var (`$SUGARCRUSH_BACKEND_CMD` here,
+ * `$SUGARCRUSH_BACKEND_CMD_STREAM` there). There is also no completion
+ * deadline of any kind on this path, deliberately; a completion can
+ * legitimately run tens of minutes.
  */
 final class CommandBackend implements Backend
 {
@@ -66,15 +85,46 @@ final class CommandBackend implements Backend
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
-        $cmd = is_array($this->command) ? $this->command : $this->command;
-        $proc = @proc_open($cmd, $descriptor, $pipes);
+        // `proc_open()` already differentiates the two shapes natively — a
+        // string goes through `/bin/sh -c`, a list is exec'd directly — so
+        // there is nothing for the caller to branch on. This line used to be
+        // `$cmd = is_array($this->command) ? $this->command : $this->command;`,
+        // both arms identical; the same dead ternary sat in
+        // {@see StreamingCommandBackend}, where it was next to the option that
+        // was supposed to make it mean something.
+        //
+        // NO OPTIONS, for either shape — identical to
+        // {@see StreamingCommandBackend}, which makes the same escaping promise
+        // in the same words and must not disagree with this one. The option in
+        // question is `bypass_shell`, which is WINDOWS-ONLY. MEASURED on PHP
+        // 8.3 / Linux it is inert for both shapes (the string `"printf a;
+        // printf b"` still reaches `/bin/sh -c` with it set; the list
+        // `["printf", "a;b"]` still exec's directly), and a LIST does not need
+        // it anywhere: passing an array means PHP opens the process directly,
+        // WITHOUT going through a shell, and escapes the arguments itself (PHP
+        // 7.4 UPGRADING — "the process will be opened directly … PHP will take
+        // care of any necessary argument escaping"). Nothing is claimed here
+        // about what Windows does with a STRING command; that is unmeasured on
+        // this platform.
+        $proc = @proc_open($this->command, $descriptor, $pipes);
         if (!is_resource($proc)) {
             return Message::assistant('_[error: failed to spawn backend command]_');
         }
         fwrite($pipes[0], $payload);
         fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]) ?: '';
-        $stderr = stream_get_contents($pipes[2]) ?: '';
+        // `=== false` and not `?:`. `stream_get_contents()` returns
+        // `string|false`, and `"0" ?: ''` is `''` in PHP — so a wrapper whose
+        // ENTIRE reply is the single character `0` with no trailing newline
+        // used to come back as an empty assistant message. Same for a stderr
+        // tail of `"0"` on the failure path below.
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        if ($stdout === false) {
+            $stdout = '';
+        }
+        if ($stderr === false) {
+            $stderr = '';
+        }
         fclose($pipes[1]);
         fclose($pipes[2]);
         $exit = proc_close($proc);

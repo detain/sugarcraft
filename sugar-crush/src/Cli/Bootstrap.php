@@ -13,6 +13,7 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CommandBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
@@ -1092,12 +1093,41 @@ final class Bootstrap
      *      built-in coding tools (Bash/Read/Edit/Glob/Grep/WebFetch) gated by the
      *      safety hooks. $SUGARCRUSH_MODEL overrides the model.
      *   2. $SUGARCRUSH_BACKEND_CMD — dependency-free shell-out: a command that
-     *      reads JSON history on stdin and writes the reply to stdout.
-     *   3. A provider name persisted by a previous Ctrl+P "Switch model"
+     *      reads JSON history on stdin and writes the reply to stdout, which
+     *      is returned as-is but for one `trim()` at the ends
+     *      ({@see CommandBackend}).
+     *   3. $SUGARCRUSH_BACKEND_CMD_STREAM — the same shell-out under the
+     *      OTHER stdout contract, a TOKEN STREAM rather than prose: one token
+     *      per TERMINATED line, a TERMINATED BLANK line meaning a literal
+     *      newline in the answer, an unterminated empty remainder meaning
+     *      nothing, and the tokens joined with the EMPTY STRING — the newline
+     *      between two tokens is framing, not text
+     *      ({@see StreamingCommandBackend}). `$onToken` is called once per
+     *      token as the command produces it; the read loop is synchronous, so
+     *      the TUI does not repaint until the completion resolves (see that
+     *      class's docblock — the display half of this claim was withdrawn
+     *      after measurement, and a non-blocking rewrite is a backlog item).
+     *      Ranked BELOW tier 2 rather than above it so tier 2 stays
+     *      byte-identical for everyone who already uses it, including a run
+     *      with both variables exported — the two protocols are genuinely
+     *      different and neither serves the other (a PROSE wrapper run through
+     *      tier 3 loses every newline it emitted, and each blank line it
+     *      emitted comes back as ONE newline rather than two, so a paragraph
+     *      break, a list and a code fence do not survive), so a run that sets
+     *      both is ambiguous and the older, documented meaning wins. Ranked
+     *      above tier 4 for the same reason tier 2 is: an exported variable is
+     *      a decision made about THIS run, a persisted provider is one made
+     *      about some earlier one.
+     *   4. A provider name persisted by a previous Ctrl+P "Switch model"
      *      (see writeUserConfig()) — makes that choice survive a restart
      *      without needing $SUGARCRUSH_PROVIDER exported every time.
-     *   4. (default) the offline EchoProvider, still run through the engine so the
+     *   5. (default) the offline EchoProvider, still run through the engine so the
      *      binary launches with zero network and zero config.
+     *
+     * For BOTH shell-out variables, absence means unset, empty OR
+     * whitespace-only — see {@see backendCommandEnv()}, which is also what
+     * {@see backendCommandTierIsSelected()} asks, so the tier this method
+     * selects and the tier the label helpers report can never disagree.
      *
      * Also the process's one startup sweep of abandoned forked-tool payloads
      * ({@see ToolIpcFiles::sweepOnce()}) — every real run reaches this method
@@ -1146,9 +1176,22 @@ final class Bootstrap
             }
         }
 
-        $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
-        if ($cmd !== false && $cmd !== '') {
+        $cmd = self::backendCommandEnv('SUGARCRUSH_BACKEND_CMD');
+        if ($cmd !== null) {
             return new CommandBackend($cmd);
+        }
+
+        $streamCmd = self::backendCommandEnv('SUGARCRUSH_BACKEND_CMD_STREAM');
+        if ($streamCmd !== null) {
+            // No idle deadline argument: the default is "none", which is the
+            // parity CommandBackend above has always had. See
+            // {@see StreamingCommandBackend::__construct()} for why the old
+            // 120-second total cap is gone rather than merely raised. Pinned by
+            // {@see \SugarCraft\Crush\Tests\Cli\BootstrapShellOutTierTest::testTheStreamingTierIsConstructedWithNoIdleDeadline()},
+            // which reflects on the instance this line returns — a comment
+            // cannot stop someone passing a 1 here, and a test on the class's
+            // DEFAULT does not see the call site at all.
+            return new StreamingCommandBackend($streamCmd);
         }
 
         $persisted = self::readUserConfig()['provider'] ?? null;
@@ -2787,8 +2830,9 @@ final class Bootstrap
      * unconstructable, {@see backend()} warns on stderr and degrades to
      * Echo while this row still names the requested provider — recording
      * the request is more useful than recording the fallback, and the
-     * store has no column for both. The `$SUGARCRUSH_BACKEND_CMD` and
-     * default paths have no provider name at all, so they are labelled
+     * store has no column for both. Both shell-out paths
+     * (`$SUGARCRUSH_BACKEND_CMD`, `$SUGARCRUSH_BACKEND_CMD_STREAM`) and the
+     * default path have no provider name at all, so they are labelled
      * honestly as such rather than given an invented one.
      *
      * Public because {@see NonInteractive::run()} needs to distinguish "this
@@ -2804,9 +2848,12 @@ final class Bootstrap
     {
         $name = self::selectedProviderName();
         if ($name === null) {
-            $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
-
-            return $cmd !== false && $cmd !== '' ? ['command', 'unknown'] : ['echo', 'echo'];
+            // ONE label for both shell-out tiers. The label answers "did a
+            // model behind a provider produce this?", and the answer is no for
+            // either variable; a third label would also have to be taught to
+            // {@see provider()}, whose `$name === 'command'` arm is what keeps
+            // a shell-out run from being captioned "echo" in the status bar.
+            return self::backendCommandTierIsSelected() ? ['command', 'unknown'] : ['echo', 'echo'];
         }
 
         $model = getenv('SUGARCRUSH_MODEL');
@@ -2824,8 +2871,8 @@ final class Bootstrap
 
     /**
      * The provider name this run selected, or null when the run is not on
-     * a provider at all (`$SUGARCRUSH_BACKEND_CMD`'s shell-out, or the
-     * offline Echo default). Same precedence {@see backend()} applies:
+     * a provider at all (either shell-out tier — see
+     * {@see backendCommandTierIsSelected()} — or the offline Echo default). Same precedence {@see backend()} applies:
      * `$SUGARCRUSH_PROVIDER`, then the name persisted by a previous Ctrl+P
      * "Switch model".
      *
@@ -2846,14 +2893,68 @@ final class Bootstrap
             return $env;
         }
 
-        $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
-        if ($cmd !== false && $cmd !== '') {
+        if (self::backendCommandTierIsSelected()) {
             return null;
         }
 
         $persisted = self::readUserConfig()['provider'] ?? null;
 
         return is_string($persisted) && $persisted !== '' ? $persisted : null;
+    }
+
+    /**
+     * Whether this run is on one of {@see backend()}'s two shell-out tiers —
+     * `$SUGARCRUSH_BACKEND_CMD` or `$SUGARCRUSH_BACKEND_CMD_STREAM`.
+     *
+     * Both selection helpers above ask exactly this question and both have to
+     * get the same answer: {@see selectedProviderName()} returns null so a
+     * stale persisted provider does not outrank a shell-out that
+     * {@see backend()} really is about to construct, and
+     * {@see selectedProviderLabel()} labels the run 'command' so
+     * {@see \SugarCraft\Crush\Cli\NonInteractive} does not announce "no
+     * provider configured" to someone who configured one. When the streaming
+     * variable was added, reading only the first of the two here is precisely
+     * how those two answers would have drifted apart.
+     */
+    private static function backendCommandTierIsSelected(): bool
+    {
+        foreach (['SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_BACKEND_CMD_STREAM'] as $var) {
+            if (self::backendCommandEnv($var) !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The command one of the two shell-out variables names, or null when that
+     * variable is ABSENT — which includes unset, empty, and WHITESPACE-ONLY.
+     *
+     * The whitespace case is not pedantry: `export SUGARCRUSH_BACKEND_CMD='   '`
+     * (or the same on the streaming variable) used to select the shell-out tier,
+     * spawn `sh -c '   '`, exit 0 and return an EMPTY assistant message, while
+     * {@see selectedProviderLabel()} labelled the run 'command' so nothing
+     * warned about it — a run with no model, no answer and no complaint. There
+     * is no command a caller could mean by a string of spaces, and absence is
+     * the only reading that leaves the next tier reachable.
+     *
+     * Both selection sites go through here so they cannot disagree: this method
+     * defines what "the variable is set" MEANS, and {@see backend()} choosing a
+     * tier while {@see backendCommandTierIsSelected()} denied one existed is
+     * exactly the drift that would attribute a `-p` answer to the wrong
+     * backend. The value is returned UNTRIMMED — leading whitespace is
+     * harmless to `sh -c` and trimming would silently rewrite the command a
+     * caller actually exported.
+     */
+    private static function backendCommandEnv(string $var): ?string
+    {
+        $value = getenv($var);
+        if ($value === false || trim($value) === '') {
+            return null;
+        }
+
+        return $value;
     }
 
     /**

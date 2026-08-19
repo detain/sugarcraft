@@ -13,6 +13,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Renderer as LiveRenderer;
+use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
 
 /**
@@ -66,12 +67,21 @@ use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
  */
 final class AgentManagerWiringTest extends TestCase
 {
+    // Used for its CHAIN constant only. The trait's clear/restore helpers are
+    // instance methods and this class's fixture is class-level, so the loop is
+    // spelled out in setUpBeforeClass()/tearDownAfterClass() below — but the
+    // LIST is not copied, which is the whole point of the constant.
+    use BackendSelectionEnvSandboxTrait;
+
     private static string $tempDir = '';
     private static string $repo = '';
     private static string $brokenRepo = '';
     private static string $originalHome = '';
 
     private static mixed $originalServerHome = null;
+
+    /** @var array<string, string|false> */
+    private static array $originalBackendEnv = [];
     private static ?App $app = null;
     private static ?Chat $brokenChat = null;
 
@@ -85,6 +95,13 @@ final class AgentManagerWiringTest extends TestCase
      * — agents/) off it, and a developer's real preset directory would
      * otherwise land in the roster assertions, which count and name
      * registrations.
+     *
+     * The backend-selection chain ({@see BackendSelectionEnvSandboxTrait}) is
+     * cleared for the same window and for the same reason: this launch has to
+     * land on the ENGINE path, because a shell-out backend has no provider,
+     * no model and no agent roster to report. Measured, with either
+     * `$SUGARCRUSH_BACKEND_CMD` or `$SUGARCRUSH_BACKEND_CMD_STREAM` merely
+     * exported in the developer's shell: two failures here.
      */
     public static function setUpBeforeClass(): void
     {
@@ -106,6 +123,11 @@ final class AgentManagerWiringTest extends TestCase
         self::$originalServerHome = $_SERVER['HOME'] ?? null;
         putenv('HOME=' . self::$tempDir . '/home');
         $_SERVER['HOME'] = self::$tempDir . '/home';
+
+        foreach (self::CHAIN as $var) {
+            self::$originalBackendEnv[$var] = getenv($var);
+            putenv($var);
+        }
 
         self::writePreset(self::$repo . '/.sugar-crush/agents', 'docs-writer', 'Writes the docs');
         self::writePreset(self::$tempDir . '/home/.sugar-crush/agents', 'house-style', 'Enforces house style');
@@ -137,6 +159,12 @@ final class AgentManagerWiringTest extends TestCase
         } else {
             $_SERVER['HOME'] = self::$originalServerHome;
         }
+
+        foreach (self::$originalBackendEnv as $var => $value) {
+            $value === false ? putenv($var) : putenv($var . '=' . $value);
+        }
+        self::$originalBackendEnv = [];
+
         self::removeDirectory(self::$tempDir);
 
         parent::tearDownAfterClass();

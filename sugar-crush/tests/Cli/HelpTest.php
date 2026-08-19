@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use Composer\InstalledVersions;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
 
 final class HelpTest extends TestCase
@@ -40,10 +41,15 @@ final class HelpTest extends TestCase
         // actually list every option ArgvParser accepts.
         $this->assertStringContainsString('--root', $screen);
 
-        // Env vars section
+        // Env vars section. Kept for the smoke value, but NOT the guard: a
+        // prefix match cannot tell SUGARCRUSH_BACKEND_CMD from
+        // SUGARCRUSH_BACKEND_CMD_STREAM, which is how the latter's whole block
+        // shipped unpinned. See
+        // testEveryBackendSelectionVariableIsDocumentedOnTheHelpScreen().
         $this->assertStringContainsString('SUGARCRUSH_PROVIDER', $screen);
         $this->assertStringContainsString('SUGARCRUSH_MODEL', $screen);
         $this->assertStringContainsString('SUGARCRUSH_BACKEND_CMD', $screen);
+        $this->assertStringContainsString('SUGARCRUSH_BACKEND_CMD_STREAM', $screen);
     }
 
     /**
@@ -109,6 +115,131 @@ final class HelpTest extends TestCase
         $this->assertContains('-p', $scraped);
         $this->assertContains('-h', $scraped);
         $this->assertContains('--help', $scraped);
+    }
+
+    /**
+     * The environment-variable analogue of {@see flagsRecognizedByTheParser()}:
+     * read the backend-selection variables straight out of {@see Bootstrap}'s
+     * own selection methods and require each one to be named on the help screen.
+     *
+     * WHY THIS EXISTS. `SUGARCRUSH_BACKEND_CMD_STREAM` shipped with a nine-line
+     * block in `--help` that NOTHING pinned: deleting the entire block left this
+     * file green, because the only assertion in the neighbourhood was
+     * `assertStringContainsString('SUGARCRUSH_BACKEND_CMD', $screen)` and the
+     * OLDER variable's line satisfies it. A prefix cannot tell two variables
+     * apart, so that assertion was blind to the newer one by construction —
+     * presence of a substring, not truth of a claim.
+     *
+     * WHY IT SCRAPES INSTEAD OF LISTING. A hand-written list here would be
+     * exactly as blind to the NEXT variable as the assertion above was to this
+     * one. The names come from the source of the four methods that actually
+     * decide and label the tier, so a fifth variable added to any of them is
+     * documented or red.
+     *
+     * SCOPE, stated so it is not mistaken for more than it is. This guards the
+     * BACKEND-SELECTION variables only — the subset the help screen's own
+     * "Environment variables" section exists to cover for that purpose:
+     * `SUGARCRUSH_PROVIDER`, `SUGARCRUSH_MODEL`, `SUGARCRUSH_BACKEND_CMD` and
+     * `SUGARCRUSH_BACKEND_CMD_STREAM`. MEASURED on this tree: `src/` and `bin/`
+     * name 20 distinct `SUGARCRUSH_*` variables and `Help.php` documents 6 of
+     * them — the four above plus `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS` and
+     * `SUGARCRUSH_PARALLEL_TOOL_DEADLINE`. (Five before this bundle added the
+     * streaming variable, which is the figure the review that prompted this
+     * guard quotes.) The other 14 — `SUGARCRUSH_TITLE_MODEL`,
+     * `SUGARCRUSH_SUMMARY_MODEL`, `SUGARCRUSH_MAX_COST`,
+     * `SUGARCRUSH_PERMISSION_MODE`, `SUGARCRUSH_SEARCH_ENDPOINT`,
+     * `SUGARCRUSH_SESSION_RETENTION_DAYS`, `SUGARCRUSH_CONNECT_TIMEOUT`,
+     * `SUGARCRUSH_BACKGROUND`, `SUGARCRUSH_DEBUG_SKILLS`,
+     * `SUGARCRUSH_TOOL_CALL_PARSER`, `SUGARCRUSH_DISABLE_MOUSE`,
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS`, `SUGARCRUSH_WORKTREES_DIR` and
+     * `SUGARCRUSH_SHARE_UPLOAD_URL` — are undocumented on this screen and are a
+     * KNOWN, separately tracked gap in the hardening backlog. Widening this
+     * scrape to all 20 would red immediately, which is that backlog item's job
+     * and not this guard's. `docs/ENVIRONMENT.md` is the page that does claim to
+     * cover all of them, and does: all 20 appear there.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function backendSelectionVariables(): array
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $lines = \explode("\n", $source);
+
+        $vars = [];
+        // Reflection gives the BODY's line span, which excludes the docblock —
+        // so a variable merely NAMED in prose above a method is not scraped as
+        // one the method reads. That matters: `backend()`'s docblock mentions
+        // `$OPENAI_API_KEY`, which this screen has no business documenting.
+        foreach ([
+            'backend',                         // tiers 1-3, the selection itself
+            'selectedProviderName',            // tier 1 vs tier 4, for the label
+            'selectedProviderLabel',           // the model override on the label
+            'backendCommandTierIsSelected',    // the two shell-out tiers, by name
+        ] as $method) {
+            $reflected = new \ReflectionMethod(Bootstrap::class, $method);
+            $body = \implode("\n", \array_slice(
+                $lines,
+                $reflected->getStartLine() - 1,
+                $reflected->getEndLine() - $reflected->getStartLine() + 1,
+            ));
+
+            \preg_match_all("/'(SUGARCRUSH_[A-Z0-9_]+)'/", $body, $found);
+            foreach ($found[1] as $var) {
+                $vars[$var] = [$var];
+            }
+        }
+
+        \ksort($vars);
+
+        return $vars;
+    }
+
+    /**
+     * @dataProvider backendSelectionVariables
+     */
+    public function testEveryBackendSelectionVariableIsDocumentedOnTheHelpScreen(string $var): void
+    {
+        $section = self::environmentSectionOfTheScreen();
+
+        // The variable has to be named in the ENVIRONMENT VARIABLES section, not
+        // merely somewhere on the screen: the exit-code prose names
+        // $SUGARCRUSH_PROVIDER too, and a variable documented only there is not
+        // documented as a variable.
+        $this->assertStringContainsString(
+            $var,
+            $section,
+            "Bootstrap's backend selection reads {$var} but Help::screen()'s"
+                . ' "Environment variables" section does not name it',
+        );
+    }
+
+    public function testTheBackendSelectionVariableScrapeActuallyFoundTheKnownVariables(): void
+    {
+        // Guards the test above from passing vacuously if Bootstrap's selection
+        // methods are renamed or restructured: an empty provider would document
+        // nothing and assert nothing.
+        $scraped = \array_keys(self::backendSelectionVariables());
+
+        $this->assertContains('SUGARCRUSH_PROVIDER', $scraped);
+        $this->assertContains('SUGARCRUSH_BACKEND_CMD', $scraped);
+        $this->assertContains('SUGARCRUSH_BACKEND_CMD_STREAM', $scraped);
+        $this->assertContains('SUGARCRUSH_MODEL', $scraped);
+    }
+
+    /**
+     * The "Environment variables:" block of the screen, up to the next
+     * top-level heading.
+     */
+    private static function environmentSectionOfTheScreen(): string
+    {
+        $screen = Help::screen();
+        $start = \strpos($screen, 'Environment variables:');
+        self::assertNotFalse($start, 'the screen has no "Environment variables:" section at all');
+
+        $rest = \substr($screen, $start);
+        $end = \strpos($rest, "\nExit codes");
+
+        return $end === false ? $rest : \substr($rest, 0, $end);
     }
 
     public function testScreenContainsUsageExamples(): void

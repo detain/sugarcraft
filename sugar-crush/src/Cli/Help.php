@@ -61,8 +61,25 @@ Environment variables:
   SUGARCRUSH_PROVIDER    Provider to use: openai, anthropic, claude-code,
                          sglang, bedrock, vertex, custom
   SUGARCRUSH_MODEL       Model name (overrides provider default)
-  SUGARCRUSH_BACKEND_CMD Shell command for a custom backend adapter.
-                         Receives JSON history on stdin, writes JSON reply to stdout.
+  SUGARCRUSH_BACKEND_CMD Shell command for a custom backend adapter, under the
+                         PROSE contract: receives JSON history on stdin, writes
+                         the reply text to stdout, which is used verbatim
+                         (trimmed at the two ends only, so every newline, blank
+                         line and indent inside survives).
+  SUGARCRUSH_BACKEND_CMD_STREAM
+                         The same shell-out under the other contract, a TOKEN
+                         STREAM: one token per line, the newline between two
+                         tokens is framing and is dropped, and a BLANK line is
+                         a literal newline in the answer. The callback fires per
+                         token as the command produces them, but the read loop
+                         is synchronous, so the screen repaints once at the end
+                         rather than token by token. Not interchangeable with
+                         SUGARCRUSH_BACKEND_CMD in either direction — a prose
+                         wrapper run through this variable comes back with every
+                         newline gone and each blank line collapsed to one.
+                         SUGARCRUSH_BACKEND_CMD outranks it when both are set.
+                         For both, unset, empty and whitespace-only all count
+                         as absent.
   SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS
                          Run a turn's tool calls strictly one at a time.
                          Concurrent dispatch is the default and only ever

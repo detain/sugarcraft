@@ -35,7 +35,7 @@ sugar-crush/src/
 ├── CommandParser.php             # Parses /command slash-input; extracts name + args
 ├── StreamingDirectoryLister.php # Generator-based lazy directory enumeration
 ├── McpMessage.php               # JSON-RPC 2.0 envelope (request/response/notification/error)
-├── McpClient.php                 # MCP stdio client for Claude Code integration
+├── ClaudeCodeMcpClient.php       # MCP stdio client for Claude Code integration (was McpClient.php)
 ├── Attachment.php               # File/image attachment
 ├── AttachmentType.php           # Enum: File | Image
 ├── Backend.php                  # Interface: complete(), completeAsync()
@@ -239,13 +239,20 @@ public function complete(array $history, callable $onToken = null): Message {
 
 ### 1.6 MCP Client
 
-**File:** `src/McpClient.php`
+**File:** `src/ClaudeCodeMcpClient.php`
 
-JSON-RPC 2.0 stdio client for Claude Code integration:
+JSON-RPC 2.0 stdio client for Claude Code integration. RENAMED from
+`src/McpClient.php` / `SugarCraft\Crush\McpClient`: it shared its basename with
+`src/MCP/McpClient.php` (`SugarCraft\Crush\MCP\McpClient`), a different class
+over a different transport — Guzzle HTTP plus stdio and git server shapes,
+against servers named in an injected JSON config. That sibling KEPT the name
+`McpClient`, which is why this one had to change: readers of this tree have
+attributed one file's behaviour to the other over the shared basename. Every
+`McpClient` still written bare in this map means that HTTP sibling.
 
 ```php
-// From McpClient.php:17-31
-final class McpClient {
+// From ClaudeCodeMcpClient.php:43-57
+final class ClaudeCodeMcpClient {
     public function __construct(
         public readonly ?string $command = null,   // default: 'claude'
         public readonly array $args = [],             // default: ['--mcp']
@@ -556,7 +563,7 @@ Requires PHP >= 8.3 (due to readonly properties, first-class callable `Closure::
 | `ToolCallTest.php` | fromArray/toArray round-trip, defaults |
 | `ToolResultTest.php` | ok()/error() factories, isError() predicate, toWire() shape |
 | `CommandParserTest.php` | Slash detection, name normalization, quote respecting, whitespace splitting |
-| `McpClientTest.php` | connect/disconnect, callTool/listTools, non-blocking reads |
+| `ClaudeCodeMcpClientTest.php` | connect/disconnect, callTool/listTools, non-blocking reads, plus the rename and the dormancy grep |
 | `McpMessageTest.php` | JSON-RPC parse/serialize, request/notification/success/error factories |
 | `CompactorTest.php` | Threshold partitioning, extension→category mapping, maxPerGroup overflow |
 | `StreamingDirectoryListerTest.php` | Lazy yield, empty/non-dir/no-handle graceful, listFiles filter, count scan |
@@ -616,7 +623,7 @@ Dependent packages: None yet
 | `Backend` interface | `fantasy.Provider` | `sugar-crush` pattern |
 | `Chat` (MVU Model) | `internal/ui/model.go` | `candy-core` |
 | `ToolCall`/`ToolResult` | `internal/agent/tools/*.go` | `sugar-crush` |
-| `McpClient` | `modelcontextprotocol/go-sdk` | Not yet ported |
+| `ClaudeCodeMcpClient` | `modelcontextprotocol/go-sdk` | Not yet ported |
 | `Session` | SQLite session storage | `candy-sprinkles` (future) |
 | `CommandParser` | Input parsing | `sugar-crush` |
 | `Compactor` | `gum` file compaction | `sugar-crush` |
@@ -695,7 +702,7 @@ The sugar-crush implementation introduces several patterns NOT present in upstre
 
 2. **LSP integration** — `LspClient` class connecting to gopls/tsserver
 
-3. **MCP transports** — Add HTTP and SSE support to McpClient
+3. **MCP transports** — Add HTTP and SSE support to `ClaudeCodeMcpClient` (the stdio client; the separate `MCP\McpClient` already speaks HTTP)
 
 4. **Permission system** — Tool allow-lists with confirmation prompts
 
@@ -723,7 +730,7 @@ The sugar-crush implementation introduces several patterns NOT present in upstre
 | `src/ToolCall.php` | 54 | Tool invocation request VO |
 | `src/ToolResult.php` | 64 | Tool execution result VO |
 | `src/ToolRegistry.php` | 189 | Tool registration + 5 built-ins |
-| `src/McpClient.php` | 312 | JSON-RPC 2.0 stdio client |
+| `src/ClaudeCodeMcpClient.php` | 338 | JSON-RPC 2.0 stdio client (renamed from `src/McpClient.php`) |
 | `src/McpMessage.php` | 222 | JSON-RPC 2.0 envelope |
 | `src/Session.php` | 253 | UI state persistence |
 | `src/Compactor.php` | 253 | File grouping by type/size |

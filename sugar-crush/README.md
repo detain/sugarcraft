@@ -105,7 +105,7 @@ still helps for an outage longer than the couple of seconds of backoff that
 spends; it is just not the first one.
 
 The retry lives in the provider call, so it covers the engine and nothing else.
-A run whose backend is `$SUGARCRUSH_BACKEND_CMD`'s external command delegates
+A run whose backend is either `$SUGARCRUSH_BACKEND_CMD` variable's external command delegates
 instead of calling a provider, and its `1` is a first attempt — retrying it from
 outside is the only retry it gets.
 
@@ -149,13 +149,60 @@ curl -sN https://api.anthropic.com/v1/messages \
   -H "content-type: application/json" -d "$payload" | jq -r '.content[0].text'
 ```
 
+There is a second variable for the *streaming* shell-out,
+`SUGARCRUSH_BACKEND_CMD_STREAM`, and it is deliberately not the same one. It is
+a **token-stream** protocol, not a prose one: the wrapper writes **one token per
+line**, the newline *between* two tokens is framing and is dropped, and a
+**blank line means a literal newline** in the answer (an unterminated empty
+remainder at EOF means nothing). That blank-line rule is the only way the
+protocol can express a line break at all, and it is what makes it able to
+express any string.
+
+So the two contracts are mutually exclusive in both directions. Run the prose
+wrapper above through the streaming variable and every newline it emitted is
+gone while each blank line it emitted comes back as *one* newline rather than
+two — a paragraph break, a list and a code fence do not survive the trip. Run a
+token-per-line wrapper through `SUGARCRUSH_BACKEND_CMD` and you get its framing
+newlines verbatim, one word per line. That is why the streaming backend has its
+own variable instead of inheriting this one. `SUGARCRUSH_BACKEND_CMD` wins if
+both are set; for either variable, unset, empty and whitespace-only all count as
+absent. Neither path imposes any completion deadline.
+
+**What "streaming" buys you today is the callback, not a live screen.** The
+backend invokes its per-token callback as each token's newline lands on the pipe,
+but the read loop is synchronous and the async wrapper runs the whole of it
+inside one ReactPHP `futureTick` — so the event loop is blocked for the duration
+of the completion, and the TUI repaints once, when the answer resolves, rather
+than token by token. Measured against a wrapper emitting six tokens 300ms apart,
+with a 50ms periodic timer standing in for the render tick: six callbacks, at
+0.006s/0.306s/0.612s/0.912s/1.212s/1.512s, and **zero** timer ticks in that
+window. A non-blocking rewrite is tracked in the hardening backlog; the one-shot
+`-p` path passes no callback at all. See
+[`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md#the-two-shell-out-variables) for the
+byte-level comparison and for the Windows `bypass_shell` note.
+
+```bash
+export SUGARCRUSH_BACKEND_CMD_STREAM=~/bin/ollama-stream.sh
+./bin/sugarcrush
+```
+
+```bash
+#!/usr/bin/env bash
+# ~/bin/ollama-stream.sh — satisfies the TOKEN protocol, not the prose one:
+# `jq -r` prints one line per streamed content chunk, and prints an EMPTY line
+# for a chunk that is just "\n" — which is exactly how this protocol spells a
+# line break. Do not point this variable at the prose wrapper above.
+payload=$(jq -nc --argjson h "$(cat)" '{model:"llama3", stream:true, messages:$h}')
+curl -sN http://localhost:11434/api/chat -d "$payload" | jq -r '.message.content'
+```
+
 ### Choosing a backend without editing anything
 
 Three ways to get off the offline `EchoProvider`, from quickest to most permanent:
 
 1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is the project's own dev/test SGLang endpoint (declared in `.sugar-crush/config.dev.json`, checked into the repo), useful for trying a real (if smaller) model with zero API keys.
 2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it. **Switch theme** works the same way for color themes.
-3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD` still take priority over the persisted choice when set, for scripting/CI overrides.
+3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD`/`$SUGARCRUSH_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides.
 
 ## Using the TUI
 
@@ -473,8 +520,11 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**6,424 tests / 51,767 assertions, 0 failures, 1 skipped** — the whole of
-`sugar-crush/tests/` in one `vendor/bin/phpunit` run on PHP 8.3.6, 1m52s. The
+**7,276 tests / 76,239 assertions, 0 failures, 1 skipped** — the whole of
+`sugar-crush/tests/` (that suite only, not the monorepo) in one
+`vendor/bin/phpunit` run on PHP 8.3.6, 2m38s. Measured 2026-08-19; the figure
+that stood here before, 6,424/51,767 in 1m52s, was behind the suite by 852 tests
+and 24,472 assertions. The
 skip is `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`,
 which `markTestSkipped`s itself with "would require mocking built-in functions"
 — reaching `loadConfig()`'s `file_get_contents` failure branch needs a

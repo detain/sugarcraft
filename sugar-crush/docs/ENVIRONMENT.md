@@ -32,7 +32,8 @@ All are named `SUGARCRUSH_*` — no underscore between `SUGAR` and `CRUSH`. See
 | `SUGARCRUSH_TITLE_MODEL` | the `titleModel` key in `~/.sugar-crush/config.json`, else the provider's default model | The cheap small model used to auto-name a session after its first exchange. Kept separate from `SUGARCRUSH_MODEL` so naming never costs a full tool-capable agent turn. |
 | `SUGARCRUSH_SUMMARY_MODEL` | the `summaryModel` key in `~/.sugar-crush/config.json`, else the provider's default model | The model that writes `/compact`'s exchange summaries. Runs on its own tool-less backend, so a compaction cannot call a tool or raise a permission prompt. Deliberately defaults to the provider's default rather than to `SUGARCRUSH_TITLE_MODEL`'s cheap titling model: a compaction summary is what the model will be shown of the earlier conversation from then on, and a bad one is permanent context loss. Unset it and a run with no provider at all still compacts, using the local heuristic. |
 | `SUGARCRUSH_MAX_COST` | unset — no cap | A spend ceiling for this launch, in US dollars (fractional allowed, e.g. `2.50`). A leading `$` and surrounding whitespace are accepted, so `$2.50` works. `/budget` sets, shows and clears the same ceiling at runtime. A **present but unusable** value stops the launch with exit 2 rather than being ignored — `5USD`, `five dollars`, `0`, `-5` and `1e309` (which is infinity, and would install a cap that never triggers) all refuse to start. Empty or unset is absence and means no cap. The asymmetry with `/budget 0`, which merely answers in the transcript, is deliberate: that refusal is *visible*, whereas this variable is read once at launch, so discarding it silently would hand the user an uncapped session they believed was capped. Enforcement refuses the **next** turn once the reported spend has reached the cap; it does not abort one in flight, so the final total can overshoot by that one turn's cost. It also gates `/compact`'s model-written summaries — the compaction still happens, on the local heuristic, and says so. It only ever acts on figures a provider actually reported, and a streamed turn commonly reports none — so this is a budget guard, not a spending control. |
-| `SUGARCRUSH_BACKEND_CMD` | unset — the provider is used directly | Path to a command that reads JSON history on stdin and writes the reply to stdout. Set it to avoid PHP provider SDKs entirely. Takes priority over a persisted provider choice. |
+| `SUGARCRUSH_BACKEND_CMD` | unset — the provider is used directly | The **prose** shell-out: a command that reads JSON history on stdin and writes the reply to stdout, which is used **verbatim** — newlines, blank lines, lists and code fences all survive (a `trim()` at the two ends is the only transformation). Set it to avoid PHP provider SDKs entirely. Takes priority over a persisted provider choice, and over `SUGARCRUSH_BACKEND_CMD_STREAM`. There is no completion deadline on this path; a completion can legitimately run for many minutes. See [The two shell-out variables](#the-two-shell-out-variables). |
+| `SUGARCRUSH_BACKEND_CMD_STREAM` | unset | The same shell-out under the **other** stdout contract, a **token stream** rather than prose: the command writes **one token per line**, the newline *between* two tokens is framing and is dropped, and a **blank line is a literal newline** in the answer (an unterminated empty remainder at EOF is nothing at all). So the protocol can express any string — but only through that blank-line rule. **The two variables are not interchangeable in either direction:** a wrapper written for `SUGARCRUSH_BACKEND_CMD` (e.g. `curl … \| jq -r '.content[0].text'`, which emits the model's prose) comes back through this one with every newline it emitted gone and each blank line collapsed to a single newline — so a paragraph break, a list and a code fence do not survive. Use this only for a wrapper that really does emit one token per line, such as `curl -sN … \| jq -r '.message.content'` against Ollama's streaming endpoint. Ranked below `SUGARCRUSH_BACKEND_CMD` (which wins when both are set) and above a persisted provider choice. No completion deadline either. See [The two shell-out variables](#the-two-shell-out-variables). |
 | `SUGARCRUSH_SEARCH_ENDPOINT` | `http://skynet2.interserver.net:8080/search` | Search API the built-in `WebSearch` tool queries. |
 | `SUGARCRUSH_PERMISSION_MODE` | the `permissionMode` key in `~/.sugar-crush/config.json`, else `bypass-permissions` | The launch's permission mode: `default`, `accept-edits`, `plan`, `auto`, `dont-ask` or `bypass-permissions`. Same vocabulary an agent preset's `permissionMode:` frontmatter uses, so `plan` means the same thing in both places. An **unrecognised value stops the launch** with exit 2 rather than being ignored — every fallback in the chain ends somewhere more permissive, so silently discarding a mode the user set on purpose is a fail-open. An empty value counts as unset and falls through to the config. The permissive default is a **stopgap**: the main loop had no gate at all before it existed, and every Ask-answering mode fails closed on the engine path today, so a stricter default would have refused edits rather than prompting. With no `permissionRules` configured, `bypass-permissions` is *identical* to having no gate — the `rm -rf /` circuit breaker refuses nothing that `ConfirmRemoveHook` does not already refuse more broadly and earlier. What it buys is a gate that is reachable and configurable. |
 | `SUGARCRUSH_SESSION_RETENTION_DAYS` | `0` — retention is **off**, nothing is ever pruned | A positive whole number of days. Each launch drops sessions untouched for at least that long and reports on stderr what it removed. A session you have named is never pruned whatever its age, and neither is the session the launch is about to resume. Non-numeric, empty and negative values read as `0`; values are capped at `36500` (100 years). |
@@ -44,12 +45,72 @@ All are named `SUGARCRUSH_*` — no underscore between `SUGAR` and `CRUSH`. See
 | `SUGARCRUSH_BACKGROUND` | unset — the terminal is asked directly over OSC 11, falling back to `COLORFGBG`, and to dark when neither says anything | Forces what the `adaptive` theme believes about the terminal's background: `light` or `dark`, case-insensitive and surrounding whitespace ignored. **Any other value is ignored** rather than treated as an error, so a typo falls through to detection instead of pinning the wrong palette. This is a statement, not a measurement, so it outranks *both* detection sources — including the terminal's own OSC 11 answer, which is otherwise authoritative. That ordering is what keeps this variable useful at all: most terminals do answer, so ranking the measurement first would leave it with nothing to override. Only consulted by the `adaptive` theme — a theme picked by name (`/theme light`) does not detect anything. |
 | `SUGARCRUSH_WORKTREES_DIR` | `WorktreeConfig`'s `basePath`, itself defaulting to `.sugar-crush/worktrees/` | Base directory under which per-teammate git worktrees are created. Replaces the configured path outright. A `~/` prefix is expanded; a value containing `..` is rejected rather than resolved. |
 | `SUGARCRUSH_SHARE_UPLOAD_URL` | `https://share.sugarcraft.dev` | Base URL `/share` uploads to. Point it at a private host to keep transcripts off the public default. |
+| `SUGARCRUSH_DEBUG_SKILLS` | unset — skill-load failures are silent on stderr | Set to any value other than empty or `0` to put `SkillLoader`'s per-skip and per-refused-directory lines back on stderr. Off by default because the TUI renders to stdout under an alt screen and a skill scan also runs mid-session on the Ctrl+P provider switch, so a stray stderr line lands inside a frame the renderer believes it owns; the diagnostic is not lost when it is off — every skip is readable from `SkillManager::skipped()` and the launch prints one bounded summary line. Added to this table late: it was the one variable `src/` reads that this page did not list, which made the page's own "every environment variable" claim false. |
 
 Every flag-style variable above (`SUGARCRUSH_DISABLE_MOUSE`,
 `SUGARCRUSH_DISABLE_MOUSE_CLICKS`, `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS`)
 treats unset, empty **and the literal string `0`** as "not set", so
 `SUGARCRUSH_DISABLE_MOUSE=0` reads as "leave the mouse on" rather than as
 any-value-means-true.
+
+### The two shell-out variables
+
+They are two **different protocols**, which is the whole reason there are two
+variables rather than one. `SUGARCRUSH_BACKEND_CMD` is prose: stdout *is* the
+answer. `SUGARCRUSH_BACKEND_CMD_STREAM` is a token stream: one token per line,
+the newline between tokens is framing, and a terminated blank line is a literal
+newline in the answer. Neither can stand in for the other, and nothing tries to
+guess which one it was handed. Measured on this tree against a wrapper printing
+`"Para one line one.\nPara one line two.\n\nPara two.\n"`:
+
+| variable | what SugarCrush received |
+|---|---|
+| `SUGARCRUSH_BACKEND_CMD` | `"Para one line one.\nPara one line two.\n\nPara two."` |
+| `SUGARCRUSH_BACKEND_CMD_STREAM` | `"Para one line one.Para one line two.\nPara two."` |
+
+**Streaming is a callback, not yet a live screen.** The streaming backend calls
+its callback once per token, at the moment that token's newline lands on the
+pipe. But the read loop is **synchronous**, and the async wrapper runs the whole
+of it inside one ReactPHP `futureTick`, so the event loop is blocked for the
+duration of the completion and the TUI's render tick cannot run until the answer
+has already resolved. Measured on this tree — `completeAsync()` under a live
+`Loop::run()`, a 50ms periodic timer standing in for the render tick, and a
+wrapper emitting six tokens 300ms apart:
+
+| | observed |
+|---|---|
+| callback invocations | 6, at 0.006s / 0.306s / 0.612s / 0.912s / 1.212s / 1.512s |
+| loop ticks during the stream | **0** |
+
+So what you get today is a per-token callback plus one repaint at the end.
+Making the read loop non-blocking is tracked in the hardening backlog. (The
+one-shot `-p` path passes no callback at all.)
+
+**Absence means unset, empty *or* whitespace-only,** for both variables. One
+helper (`Bootstrap::backendCommandEnv()`) defines that, and every site that
+either selects the tier or labels the run asks it, so the tier a launch selects
+and the tier it reports can never disagree. This matters because
+`export SUGARCRUSH_BACKEND_CMD='   '` previously selected the shell-out tier,
+ran `sh -c '   '`, exited 0 and returned an empty assistant message while
+nothing warned — a run with no model, no answer and no complaint. There is no
+command a caller could mean by a string of spaces, and reading it as absence is
+the only reading that leaves the next tier reachable. The value is passed on
+**untrimmed**, so a command with leading whitespace still runs as written.
+
+**Windows: `bypass_shell` is no longer passed.** Both shell-out backends call
+`proc_open()` with no options array. They previously passed
+`['bypass_shell' => true]` — a Windows-only option — for both command shapes,
+behind a branch whose two arms were identical, so relative to earlier releases a
+Windows user loses that option on both shapes. What is known: the option is
+Windows-only; it was **measured inert on Linux/PHP 8.3** (with it set, the
+string `"printf a; printf b"` still went through `/bin/sh -c`, and the list
+`["printf", "a;b"]` still exec'd directly — byte-identical either way); and
+passing the command as an **array** does not need it in the first place, because
+PHP then opens the process directly, without a shell, and escapes the arguments
+itself (PHP 7.4 UPGRADING: "the process will be opened directly … PHP will take
+care of any necessary argument escaping"). Nothing is claimed here about what
+Windows does with a **string** command — that is not something this project can
+run. If you are on Windows, pass your command as a list.
 
 ---
 

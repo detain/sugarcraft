@@ -78,6 +78,7 @@ final class NonInteractiveProviderFailureTest extends TestCase
         'SUGARCRUSH_MODEL',
         'SUGARCRUSH_TITLE_MODEL',
         'SUGARCRUSH_BACKEND_CMD',
+        'SUGARCRUSH_BACKEND_CMD_STREAM',
         'SUGARCRUSH_CONNECT_TIMEOUT',
         // Everything ProviderFactory::defaultConfig() and the provider
         // constructors read, i.e. everything that decides whether a given
@@ -246,6 +247,34 @@ final class NonInteractiveProviderFailureTest extends TestCase
 
         $this->assertSame(NonInteractive::EXIT_OK, $code, 'the stale persisted name must not hard-fail a command backend');
         $this->assertStringContainsString('echo me back', $stdout, 'the command backend never ran');
+    }
+
+    /**
+     * The STREAMING shell-out tier, driven through {@see NonInteractive::run()}
+     * for the same reason the test above is: the two selection helpers agreeing
+     * is not the same fact as `run()` not hard-failing, and this tier was added
+     * after both were written.
+     *
+     * `cat` alone would deadlock nothing but would also answer with the JSON
+     * history verbatim, which under THIS tier's one-token-per-line contract
+     * arrives as a single line and is fine. The explicit reply keeps the
+     * assertion about the tier rather than about JSON formatting.
+     */
+    public function testTheStreamingBackendCommandAlsoOutranksAPersistedProviderWithoutHardFailing(): void
+    {
+        Bootstrap::writeUserConfig(['provider' => self::UNKNOWN_PROVIDER]);
+        putenv('SUGARCRUSH_BACKEND_CMD_STREAM=cat > /dev/null; echo STREAMEDREPLY');
+        $args = ArgvParser::parse(['sugarcrush', '-p', 'hello', '--root', $this->tempDir . '/repo']);
+
+        $this->assertNull(Bootstrap::selectedProviderName());
+        $this->assertSame('command', Bootstrap::selectedProviderLabel()[0]);
+
+        ob_start();
+        $code = NonInteractive::run($args);
+        $stdout = (string) ob_get_clean();
+
+        $this->assertSame(NonInteractive::EXIT_OK, $code, 'the stale persisted name must not hard-fail a streaming shell-out');
+        $this->assertStringContainsString('STREAMEDREPLY', $stdout, 'the streaming backend never ran');
     }
 
     /**

@@ -6,15 +6,26 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Isolates ~/.sugar-crush/config.json under a temp HOME, same convention as
  * BinSugarcrushWiringTest/SessionTest, so this never touches the real
  * per-user config file on the machine running the suite.
+ *
+ * The backend-selection chain is cleared too
+ * ({@see BackendSelectionEnvSandboxTrait}). A persisted `provider` key is TIER 4
+ * of that chain, so a test about it is only testing anything while tiers 1-3 are
+ * absent — and
+ * {@see testBackendFallsBackToPersistedProviderBeforeEcho()} carried a comment
+ * ASSERTING that precondition with no `putenv()` behind it, which is why either
+ * shell-out variable exported in the developer's shell reddened it. Measured:
+ * one failure before the clearing was added.
  */
 final class BootstrapUserConfigTest extends TestCase
 {
+    use BackendSelectionEnvSandboxTrait;
     use HomeSandboxTrait;
 
     private string $tempDir;
@@ -30,10 +41,12 @@ final class BootstrapUserConfigTest extends TestCase
         // the config dir while every skill tree kept reading the developer's
         // real ~/.claude/skills -- see HomeSandboxTrait.
         $this->useHomeSandbox($this->tempDir . '/home');
+        $this->clearBackendSelectionEnv();
     }
 
     protected function tearDown(): void
     {
+        $this->restoreBackendSelectionEnv();
         $this->restoreHomeSandbox();
 
         parent::tearDown();
@@ -120,8 +133,13 @@ final class BootstrapUserConfigTest extends TestCase
 
     public function testBackendFallsBackToPersistedProviderBeforeEcho(): void
     {
-        // No SUGARCRUSH_PROVIDER/SUGARCRUSH_BACKEND_CMD env set - only a
-        // persisted choice. 'sglang' builds without a reachable server
+        // Tiers 1-3 of the selection chain are absent — SUGARCRUSH_PROVIDER,
+        // SUGARCRUSH_BACKEND_CMD and SUGARCRUSH_BACKEND_CMD_STREAM are all
+        // cleared in setUp() by BackendSelectionEnvSandboxTrait, which is what
+        // makes this test about tier 4. It previously said the same thing as a
+        // bare comment with no putenv() behind it, so a developer with either
+        // shell-out variable exported got a CommandBackend and a red. Only a
+        // persisted choice remains; 'sglang' builds without a reachable server
         // (see BootstrapTest's own comment on the same point).
         Bootstrap::writeUserConfig(['provider' => 'sglang']);
         $backend = Bootstrap::backend($this->tempDir);

@@ -16,6 +16,7 @@ use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Permissions\PermissionDecision;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\ToolCall;
 
 /**
@@ -27,10 +28,18 @@ use SugarCraft\Crush\ToolCall;
  *
  * HOME is redirected at a temp dir for the whole class, same convention as
  * {@see BootstrapUserConfigTest}, so nothing here reads or writes the real
- * ~/.sugar-crush/config.json.
+ * ~/.sugar-crush/config.json. `$SUGARCRUSH_PERMISSION_MODE` is cleared for the
+ * same reason, and so is the whole backend-selection chain
+ * ({@see BackendSelectionEnvSandboxTrait}): three tests here assert that
+ * `Bootstrap::backend()` returns an {@see EngineBackend} carrying the gate, and
+ * either shell-out variable merely exported in the developer's shell selects a
+ * `CommandBackend` instead — measured, three failures before the clearing was
+ * added.
  */
 final class BootstrapPermissionGateTest extends TestCase
 {
+    use BackendSelectionEnvSandboxTrait;
+
     private string $tempDir;
     private string $originalHome;
     private mixed $originalServerHome;
@@ -58,6 +67,8 @@ final class BootstrapPermissionGateTest extends TestCase
 
         $this->originalMode = getenv('SUGARCRUSH_PERMISSION_MODE');
         putenv('SUGARCRUSH_PERMISSION_MODE');
+
+        $this->clearBackendSelectionEnv();
     }
 
     protected function tearDown(): void
@@ -79,6 +90,8 @@ final class BootstrapPermissionGateTest extends TestCase
         } else {
             putenv('SUGARCRUSH_PERMISSION_MODE');
         }
+
+        $this->restoreBackendSelectionEnv();
 
         // chmod-000 fixtures are written by two of the tests below (one on the
         // file, one on the directory); make the tree removable again before

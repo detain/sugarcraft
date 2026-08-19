@@ -58,7 +58,7 @@ final class BootstrapTrustGateSelfGrantTest extends TestCase
         $this->originalServerHome = $_SERVER['HOME'] ?? null;
         $_SERVER['HOME'] = $this->home;
 
-        foreach (['SUGARCRUSH_PROVIDER', 'SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_MODEL', 'SUGARCRUSH_PERMISSION_MODE'] as $var) {
+        foreach (['SUGARCRUSH_PROVIDER', 'SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_BACKEND_CMD_STREAM', 'SUGARCRUSH_MODEL', 'SUGARCRUSH_PERMISSION_MODE'] as $var) {
             $this->originalEnv[$var] = getenv($var);
             putenv($var);
         }

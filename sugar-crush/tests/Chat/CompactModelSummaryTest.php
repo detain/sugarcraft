@@ -474,7 +474,7 @@ final class CompactModelSummaryTest extends TestCase
 
     /**
      * The fallback is not an error path. With no summary backend — every unit
-     * test, every offline run, every `$SUGARCRUSH_BACKEND_CMD` run — `/compact`
+     * test, every offline run, every `$SUGARCRUSH_BACKEND_CMD*` shell-out run — `/compact`
      * is synchronous, returns no Cmd, and compacts in the same update() call.
      */
     public function testWithNoSummaryBackendCompactIsSynchronousAndHeuristicExactlyAsBefore(): void

@@ -17,9 +17,12 @@ use SugarCraft\Crush\Cli\PermissionConfigException;
  *
  * HOME and the provider env vars are redirected/cleared for the whole class,
  * same convention as {@see BootstrapContextWindowTest}: both resolvers consult
- * `$SUGARCRUSH_PROVIDER`, `$SUGARCRUSH_BACKEND_CMD` and a provider persisted to
+ * `$SUGARCRUSH_PROVIDER`, `$SUGARCRUSH_BACKEND_CMD`,
+ * `$SUGARCRUSH_BACKEND_CMD_STREAM` and a provider persisted to
  * `~/.sugar-crush/config.json`, and a real one in the developer's own
- * environment would otherwise decide the answers.
+ * environment would otherwise decide the answers. All FOUR tiers — the
+ * `setUp()` list below was widened for the streaming variable in the same diff
+ * that left this sentence naming only two of them.
  */
 final class BootstrapSpendAndSummaryTest extends TestCase
 {
@@ -50,6 +53,7 @@ final class BootstrapSpendAndSummaryTest extends TestCase
         foreach ([
             'SUGARCRUSH_PROVIDER',
             'SUGARCRUSH_BACKEND_CMD',
+            'SUGARCRUSH_BACKEND_CMD_STREAM',
             'SUGARCRUSH_MODEL',
             'SUGARCRUSH_TITLE_MODEL',
             'SUGARCRUSH_SUMMARY_MODEL',

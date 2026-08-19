@@ -995,9 +995,11 @@ final class FeatWiringReachabilityTest extends TestCase
         $provider = getenv('SUGARCRUSH_PROVIDER');
         $model = getenv('SUGARCRUSH_MODEL');
         $command = getenv('SUGARCRUSH_BACKEND_CMD');
+        $streamCommand = getenv('SUGARCRUSH_BACKEND_CMD_STREAM');
         putenv('SUGARCRUSH_PROVIDER');
         putenv('SUGARCRUSH_MODEL');
         putenv('SUGARCRUSH_BACKEND_CMD');
+        putenv('SUGARCRUSH_BACKEND_CMD_STREAM');
 
         try {
             $engine = Bootstrap::chat($this->tempDir . '/repo')->workflowEngine();
@@ -1006,6 +1008,7 @@ final class FeatWiringReachabilityTest extends TestCase
             $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
             $model === false ? putenv('SUGARCRUSH_MODEL') : putenv('SUGARCRUSH_MODEL=' . $model);
             $command === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $command);
+            $streamCommand === false ? putenv('SUGARCRUSH_BACKEND_CMD_STREAM') : putenv('SUGARCRUSH_BACKEND_CMD_STREAM=' . $streamCommand);
         }
 
         $this->assertInstanceOf(WorkflowEngine::class, $engine);
@@ -1158,11 +1161,14 @@ final class FeatWiringReachabilityTest extends TestCase
      * The backend a plain launch hands the Chat — the engine half of the app,
      * as opposed to {@see Bootstrap::app()}'s display copies.
      *
-     * The two backend-selection env vars are cleared for the call and restored
-     * after: `$SUGARCRUSH_BACKEND_CMD` selects a `CommandBackend`, which has no
-     * tools and no registry, so a value leaked in from the environment (or from
-     * an earlier test in the same PHPUnit process) would turn a real wiring
-     * regression into a silently different assertion.
+     * All THREE backend-selection env vars are cleared for the call and restored
+     * after — `$SUGARCRUSH_PROVIDER` and both shell-out variables, which is what
+     * the code below does and what this sentence used to under-count as "two".
+     * Either `$SUGARCRUSH_BACKEND_CMD` or `$SUGARCRUSH_BACKEND_CMD_STREAM`
+     * selects a command backend, which has no tools and no registry, so a value
+     * leaked in from the environment (or from an earlier test in the same
+     * PHPUnit process) would turn a real wiring regression into a silently
+     * different assertion.
      */
     private function launchedEngineBackend(): EngineBackend
     {
@@ -1184,14 +1190,17 @@ final class FeatWiringReachabilityTest extends TestCase
     {
         $provider = getenv('SUGARCRUSH_PROVIDER');
         $command = getenv('SUGARCRUSH_BACKEND_CMD');
+        $streamCommand = getenv('SUGARCRUSH_BACKEND_CMD_STREAM');
         putenv('SUGARCRUSH_PROVIDER');
         putenv('SUGARCRUSH_BACKEND_CMD');
+        putenv('SUGARCRUSH_BACKEND_CMD_STREAM');
 
         try {
             return Bootstrap::chat($this->tempDir . '/repo');
         } finally {
             $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
             $command === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $command);
+            $streamCommand === false ? putenv('SUGARCRUSH_BACKEND_CMD_STREAM') : putenv('SUGARCRUSH_BACKEND_CMD_STREAM=' . $streamCommand);
         }
     }
 

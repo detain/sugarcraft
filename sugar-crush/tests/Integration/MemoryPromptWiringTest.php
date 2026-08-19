@@ -23,6 +23,7 @@ use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 
 /**
  * The route crush_code.md Phase 5 item 9 had to build: MemoryStore -> App ->
@@ -34,9 +35,18 @@ use SugarCraft\Crush\Runtime;
  * is asserted here, because a route is only as wired as its weakest hop and the
  * previous state of this feature is exactly what "looks wired, never fires"
  * looks like.
+ *
+ * The backend-selection chain is cleared for every test
+ * ({@see BackendSelectionEnvSandboxTrait}), because the tests that start at
+ * {@see Bootstrap::backend()} assert on an {@see EngineBackend} and either
+ * shell-out variable merely exported in the developer's shell selects a
+ * `CommandBackend`, which carries no memory store at all. Measured before the
+ * clearing was added: two failures here.
  */
 final class MemoryPromptWiringTest extends TestCase
 {
+    use BackendSelectionEnvSandboxTrait;
+
     private string $dir;
 
     private MemoryStore $store;
@@ -46,10 +56,13 @@ final class MemoryPromptWiringTest extends TestCase
         $this->dir = sys_get_temp_dir() . '/crush_mempromptwire_' . bin2hex(random_bytes(6));
         mkdir($this->dir, 0o700, true);
         $this->store = new MemoryStore($this->dir);
+        $this->clearBackendSelectionEnv();
     }
 
     protected function tearDown(): void
     {
+        $this->restoreBackendSelectionEnv();
+
         // Restore write permission first, or rmrf() cannot unlink inside the
         // directory testAnUnusableMemoryDirectory... deliberately locked.
         $locked = $this->dir . '/readonly-home/.sugar-crush/memory';
@@ -356,9 +369,11 @@ final class MemoryPromptWiringTest extends TestCase
      *
      * Named for what it reaches, because the old name ("a real bootstrap-built
      * backend") claimed the whole of `Bootstrap`. `HOME` points at a fresh
-     * directory with nothing persisted and `$SUGARCRUSH_PROVIDER` unset, so
-     * `backend()` never delegates to `backendFor()` and builds the Echo engine
-     * itself. Deleting `backendFor()`'s `->withMemoryStore(...)` left this test —
+     * directory with nothing persisted, and the whole selection chain —
+     * `$SUGARCRUSH_PROVIDER`, `$SUGARCRUSH_BACKEND_CMD` and
+     * `$SUGARCRUSH_BACKEND_CMD_STREAM` — is cleared in `setUp()`, so `backend()`
+     * neither delegates to `backendFor()` nor drops to a shell-out tier; it
+     * builds the Echo engine itself. Deleting `backendFor()`'s `->withMemoryStore(...)` left this test —
      * and the other 100 in this file's neighbourhood — green.
      * {@see testTheProviderSelectedBackendPathCarriesAMemoryStoreToo()} covers
      * the arm every configured user actually takes.
@@ -389,7 +404,11 @@ final class MemoryPromptWiringTest extends TestCase
      * The OTHER construction arm, and the one every configured run takes.
      *
      * `backend()` delegates to `backendFor()` whenever `$SUGARCRUSH_PROVIDER` is
-     * set (`Bootstrap:1132`) or a provider is persisted (`:1157`), and
+     * set (tier 1) or a provider is persisted (tier 4) — the two shell-out
+     * variables in between return their own backends and never reach
+     * `backendFor()` at all. Cited by tier rather than by line number: the two
+     * numbers that stood here (`Bootstrap:1132` / `:1157`) had already drifted
+     * off the lines they named. And
      * `Chat::selectPaletteProvider()` calls `backendFor()` directly for the
      * Ctrl+P / `/model` hot-swap. So this arm is the default for anyone who has
      * ever picked a provider, and deleting its `->withMemoryStore(...)` was
