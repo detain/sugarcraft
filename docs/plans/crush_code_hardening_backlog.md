@@ -1293,6 +1293,21 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **Blocked on** Nothing but a Bedrock credential to verify against. Not urgent:
   it cannot be a regression from the context-tier work, since the reminder tier
   already produced it.
+- **Note 2026-08-19 — MORE REACHABLE, same bug.** The 85% tier's parked route
+  (Phase 5 item 6) emits a `Role::System` park notice BEFORE the prompt and a
+  `Role::System` tier report AFTER it, so it produces the adjacency **with no 70%
+  reminder present at all** — previously the shape needed either the reminder or a
+  tool-running placeholder. Measured on the dispatched wire, tail roles
+  `system user system system`, which Bedrock's mapping renders as **four
+  consecutive `user` entries** (`OpenAI: user assistant system user system`;
+  `Vertex: system hoisted out of messages, ends on user`). The mapping is
+  CONFIRMED; the Converse 400 remains SUSPECTED — nobody has called Bedrock.
+  Moving the report ahead of the prompt was considered and rejected: measured, it
+  gives `system system user system`, the same four consecutive `user` entries after
+  the mapping, so no message position available to `Chat` reduces the number. Only
+  this entry's own Step does. The measurement is recorded in
+  `compactionChanges()`'s docblock so the next person to reach for "just move the
+  notice" finds it first.
 
 ### E20 — the spend cap can be overshot by one whole agentic turn, and the turn cannot be aborted
 
@@ -1347,6 +1362,19 @@ fixture. What is left after the correction is a narrower but real dead end.
     exits, which used to dispatch nothing and so made the call free in the readout.
   - **Still open, and this row's actual remaining work:** the mid-turn abort. The
     overshoot described above is unchanged.
+- **Amended 2026-08-19 (E21 fix round) — a THIRD gate, closing a bypass E21 itself
+  introduced.** The 85% tier's parked route is the one place in the app that starts
+  a turn without passing `spendCapRefusal()`: that check ran in an earlier
+  `update()`, and the summarization dispatched between then and the dispatch is
+  itself billed. Probed on the unfixed bundle: spend $0.50 against a $1.00 cap, the
+  summary reported $0.60, the session sat at $1.10 with the cap reached, and the
+  parked turn was **dispatched anyway** (1 conversation-backend call) while a
+  freshly typed prompt at the same spend was correctly refused. `applyModelCompaction()`
+  now re-checks `spendCapReached()` before the 95% tier and refuses the turn through
+  the shared `spendCapTurnRefusal()`, naming the summarization as what reached the
+  cap. Note this was NOT an instance of the documented overshoot allowance: there
+  the crossing happens inside a turn already under way, whereas here it happened in
+  a previous `update()` and the app was electing to start a fresh chargeable turn.
 
 ### E21 — the automatic 85% compaction tier uses the heuristic summarizer, never the model
 
@@ -1379,6 +1407,16 @@ fixture. What is left after the correction is a narrower but real dead end.
   automatic tier is also where most real compactions happen and it is the lossier
   path. The scope boundary is legitimate in engineering terms — see the Evidence
   above — but it was filed under the wrong marker.
+- **CLOSED 2026-08-19 (bundle E21).** Shipped as the Step describes:
+  `Chat::scheduleParkedCompaction()` parks the submitted turn behind the
+  summarization, `applyModelCompaction()` re-sites the 95% blocking check where the
+  compacted history first exists, and both routes dispatch through the extracted
+  `Chat::dispatchTurn()`. With no summary backend the tier is the same synchronous
+  heuristic code it always was. Three follow-ups came out of it and are filed
+  separately: §E31 (the route's dormant cap gate's shape), §E32 (a parked
+  summarization cannot be cancelled at the provider), §E33 (the 70% reminder is
+  appended per turn). The spend-cap bypass the first cut introduced is recorded in
+  §E20's E21 amendment.
 
 ### E22 — the transcript box is not wrapped to `cols()`, so a long message paints an over-wide row
 
@@ -1421,6 +1459,16 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **Blocked on** Nothing. It is its own bundle because the wrap has to be
   reconciled with the scroll offset (a wrapped message occupies more rows than one)
   and with `expanded` tool bodies.
+- **Note 2026-08-19 — a second caller is now waiting on this.** The 85% tier's
+  parked route adds two more app-authored transcript messages: the park notice
+  (trimmed to **193** characters in the E21 fix round, from 220) and the tier
+  report (**219**). Neither is the app's worst case — measured, the 95% blocking
+  refusal is **423** characters and the idle-compaction advisory **391**, both
+  pre-existing and both longer — so the claim that the park notice is "the longest
+  app-authored message in the app" is false; it is fourth. But all of them paint as
+  a single unwrapped row, and the tier that emits the new two fires without anyone
+  asking for it, so this entry now has an unattended caller as well as the
+  `/compact`-and-long-reply ones. Role-agnostic, as this entry already records.
 
 ### E23 — `ContextCompactor::exchangeKey()` collapses byte-identical exchanges, and the "harmless" clause is a judgement
 
@@ -1698,6 +1746,99 @@ fixture. What is left after the correction is a narrower but real dead end.
   protect `crush_code.md`, which no test reads.
 - **Blocked on** Nothing. A choice about which of two rot-protection styles this
   repo wants for planning documents.
+
+### E31 — the parked tier's dormant spend-cap gate answers `null` where `/compact` answers with a notice
+
+- **What** `Chat::scheduleParkedCompaction()` opens with
+  `if ($this->spendCapReached()) { return null; }`, i.e. it downgrades a capped
+  session to the heuristic summarizer in SILENCE. Its sibling
+  `scheduleModelCompaction()` (`/compact`) deliberately does the opposite: it
+  answers with a notice naming the spend, the cap and the `/budget` figure that
+  would lift it, because "a silent downgrade is indistinguishable from having no
+  provider at all, and the user set the ceiling that caused it".
+- **Where** `sugar-crush/src/Chat.php` — `scheduleParkedCompaction()`'s first
+  statement, versus `scheduleModelCompaction()`'s cap arm.
+- **Severity** None today: dormant, and the wrong answer is only lossier, not
+  unsafe. It becomes a real silent downgrade the day the ordering upstream changes.
+- **Evidence** Unreachable as written, and that was measured rather than assumed:
+  `submit()` runs `spendCapRefusal()` before the 85% block, so a capped session's
+  ordinary prompt is refused outright and never reaches the tier. A mutation
+  deleting the gate survives the whole suite (M08 in the E21 review), which is the
+  definition of unasserted defence — now said in those words in the docblock rather
+  than left to look covered.
+- **Step** Keep the gate (repo policy is wire-don't-remove) but give it the
+  `compactNow`-with-notice shape its sibling uses, so that if `submit()`'s ordering
+  ever changes the capped session is TOLD it is on the heuristic instead of
+  silently getting the lossier path. The notice text already exists in
+  `scheduleModelCompaction()`; the two would share it.
+- **Blocked on** Nothing. It is a shape decision worth making before the ordering
+  it depends on is ever touched.
+
+### E32 — a parked summarization cannot be cancelled at the provider, so a cancelled turn still pays for it
+
+- **What** During the 85% tier's parked window, double-Escape abandons the turn:
+  the latch is released, the summaries are dropped when they land, and no turn is
+  ever sent. What it cannot do is stop the summarization CALL. `Chat` holds no
+  cancellation token for it — `Backend::completeAsync($prompt)` is invoked with no
+  `CancellationToken` argument at all on that path, and during the parked window
+  `$this->inFlightCancellation?->cancel()` is a no-op on null, because
+  `scheduleParkedCompaction()` deliberately arms no token (there is no backend turn
+  yet). So the user cancels, the request runs to completion in the background, and
+  the cost is accounted — correctly — against their key.
+- **Where** `sugar-crush/src/Chat.php` — `buildSummarizationRequest()`'s
+  `Cmd::promise` (the `completeAsync($prompt)` call), the double-Escape arm in
+  `update()`, and `scheduleParkedCompaction()`.
+- **Severity** Money, not correctness. Bounded by one summarization per parked
+  turn; a compaction reads the whole earlier conversation, so it is routinely the
+  largest single prompt the app sends.
+- **Evidence** Settled by reading the three sites rather than by driving a
+  provider. `sugar-crush/tests/Chat/AutomaticCompactionModelSummaryTest.php::testAnAbandonedSummarizationIsStillBilled()`
+  pins the accounting half behaviourally: after a cancel, the landing still bills
+  the call. That test asserts the current behaviour is HONEST, not that it is
+  desirable.
+- **Step** Arm a `CancellationToken` for the summarization itself and thread it
+  into `completeAsync()`, then cancel it from the double-Escape arm alongside the
+  latch release. **The standing policy applies and is not negotiable while doing
+  it: a short `connect_timeout` is fine, a blanket total-request timeout on a
+  completion never is** — a completion can legitimately run for many minutes.
+  Cancellation is the mechanism; a deadline is not.
+- **Blocked on** Nothing, but it touches the shared `buildSummarizationRequest()`
+  seam that `/compact` also uses, and `/compact`'s route has no `inFlight` window
+  to cancel from — so the two routes need different cancel triggers for one shared
+  call.
+
+### E33 — the 70% reminder is appended to PERMANENT history every turn, and compaction now keeps every copy
+
+- **What** `Chat::dispatchTurn()` appends `contextReminderMessage()` to `history`
+  on every turn once the estimate passes the reminder threshold. It is not a
+  transient render-time hint: it is committed, checkpointed, sent on the wire, and
+  sent again on every subsequent turn alongside a fresh copy of itself. A session
+  driven twenty turns past 70% carries twenty near-identical ~171-character system
+  messages whose whole content is "consider running /compact".
+- **Where** `sugar-crush/src/Chat.php` — `dispatchTurn()`'s reminder arm and
+  `contextReminderMessage()`.
+- **Severity** Wasted context on the very histories that are short of it, plus
+  transcript noise. Not security.
+- **Evidence** Newly worth recording because the E21 fix round changed what happens
+  to those copies. `ContextCompactor::groupIntoPairs()` used to DROP a
+  non-user/non-assistant message directly following a user turn, which is exactly
+  where the reminder lands — so compaction silently deleted every reminder, and the
+  waste was self-limiting by accident. That drop also erased `_Request cancelled._`
+  and the tier's own report, so it had to go. With it gone, measured on a 20-turn
+  history with a reminder after every prompt: `compact()` returns 50 messages
+  instead of 30 and frees 32% of the estimate instead of 46%, and the difference is
+  almost entirely preserved reminders. Correct — a compaction must not erase what it
+  was handed — but it makes the duplication visible and worth fixing at the source.
+- **Step** Emit the reminder ONCE per crossing rather than per turn: either keep it
+  out of `history` and render it from state (the same treatment the status bar's
+  context indicator already gets), or suppress it when the newest history entry is
+  already a reminder. Prefer the first: a message the app can re-derive does not
+  need to be on the wire at all. `groupSimilarExchanges()` already collapses
+  consecutive identical entries, which is why the waste shows up as 20 copies rather
+  than 20 collapsed ones — they are not adjacent.
+- **Blocked on** Nothing, but it changes what a wire looks like for every session
+  over 70%, so it wants its own bundle and its own fixture diff rather than riding
+  along with a tier change.
 
 ---
 

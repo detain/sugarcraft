@@ -750,6 +750,186 @@ final class ContextCompactorTest extends TestCase
         $this->assertLessThan($originalTokens, $compactedTokens, 'Compacted messages should have fewer tokens');
     }
 
+    // ─── nothing handed to a compaction is silently dropped ──────
+
+    /**
+     * A history whose Nth exchange also carries a standalone message, plus enough
+     * other exchanges that the compaction really runs.
+     *
+     * @return list<array{role:string,content:string}>
+     */
+    private function historyWithMarkerAt(string $position, string $marker, int $turns = 12): array
+    {
+        $messages = [];
+        for ($i = 0; $i < $turns; $i++) {
+            if ($i === 0 && $position === 'before-user') {
+                $messages[] = $this->msg('system', $marker);
+            }
+            $messages[] = $this->msg('user', "question {$i} " . str_repeat('q', 200));
+            if ($i === 0 && $position === 'after-user') {
+                $messages[] = $this->msg('system', $marker);
+            }
+            $messages[] = $this->msg('assistant', "answer {$i} " . str_repeat('a', 400));
+            if ($i === 0 && $position === 'after-assistant') {
+                $messages[] = $this->msg('system', $marker);
+            }
+        }
+
+        return $messages;
+    }
+
+    /**
+     * A standalone (non-user, non-assistant) message survives a compaction from
+     * EVERY position it can occupy — and the middle one is the case that did not.
+     *
+     * `after-user` is a message directly following a user turn whose reply has not
+     * arrived yet, and {@see ContextCompactor::groupIntoPairs()} used to drop it
+     * outright: the standalone was pushed only when no pair was open, and a user
+     * turn leaves one open. The other two positions always worked, and they are
+     * here so a fix that traded one position for another cannot pass.
+     *
+     * Asserted on the CONTENT surviving rather than on the pair count, because the
+     * content is the property — a compaction may re-shape and truncate, it may not
+     * erase.
+     */
+    public function testAStandaloneMessageSurvivesCompactionFromEveryPosition(): void
+    {
+        foreach (['before-user', 'after-user', 'after-assistant'] as $position) {
+            $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 2));
+            $result = $compactor->compact($this->historyWithMarkerAt($position, 'MARKER-KEEP-ME'));
+
+            $text = implode("\n", array_column($result, 'content'));
+            $this->assertStringContainsString(
+                'MARKER-KEEP-ME',
+                $text,
+                "a standalone message {$position} must not be erased by a compaction",
+            );
+        }
+    }
+
+    /**
+     * The same message survives when it lands in the PRESERVED tail rather than in
+     * the summarized block, which is a different code path — {@see
+     * ContextCompactor::flattenPairs()} rather than the summarizer — and the one
+     * that has to hand the message back verbatim rather than truncated.
+     */
+    public function testAStandaloneMessageAfterAUserTurnSurvivesVerbatimInThePreservedTail(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 10));
+        $messages = [];
+        for ($i = 0; $i < 12; $i++) {
+            $messages[] = $this->msg('user', "question {$i} " . str_repeat('q', 200));
+            $messages[] = $this->msg('assistant', "answer {$i} " . str_repeat('a', 400));
+        }
+        // The newest turn, i.e. inside the preserved tail.
+        $messages[] = $this->msg('user', 'the last thing asked');
+        $messages[] = $this->msg('system', 'MARKER-KEEP-ME verbatim');
+
+        $result = $compactor->compact($messages);
+
+        $this->assertContains(
+            ['role' => 'system', 'content' => 'MARKER-KEEP-ME verbatim'],
+            $result,
+            'a preserved standalone is handed back untouched, not summarized',
+        );
+        $this->assertSame(
+            ['user', 'system'],
+            array_column(array_slice($result, -2), 'role'),
+            'and in its original position, after the user turn it followed',
+        );
+    }
+
+    /**
+     * `_Request cancelled._` is the ONLY record that a turn was aborted, and it
+     * lands in exactly the position the grouping used to drop: directly after the
+     * user prompt whose reply never came.
+     *
+     * Erasing it did not just lose a line of scrollback. The compacted history is
+     * fed straight back to the model, so what the provider saw was a user prompt
+     * with no answer and no explanation — an unanswered turn. Reachable with no
+     * provider, no tier and no summary backend involved: cancel a turn, keep
+     * working, wait for a compaction.
+     */
+    public function testTheRequestCancelledMarkerSurvivesACompaction(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 2));
+        $messages = [];
+        $messages[] = $this->msg('user', 'do the risky thing');
+        $messages[] = $this->msg('system', '_Request cancelled._');
+        for ($i = 0; $i < 12; $i++) {
+            $messages[] = $this->msg('user', "question {$i} " . str_repeat('q', 200));
+            $messages[] = $this->msg('assistant', "answer {$i} " . str_repeat('a', 400));
+        }
+
+        $result = $compactor->compact($messages);
+        $text = implode("\n", array_column($result, 'content'));
+
+        $this->assertStringContainsString('_Request cancelled._', $text);
+        $this->assertStringContainsString(
+            'do the risky thing',
+            $text,
+            'fixture: the prompt it belongs to is condensed, not dropped, so the pair is the real shape',
+        );
+    }
+
+    /**
+     * Two consecutive assistant turns both survive. The pair grouping used to
+     * OVERWRITE the first with the second, and that shape is produced by the app
+     * itself: every notice appended as `Message::assistant()` after a history that
+     * already ends in an assistant reply — the `/compact` landing report, the
+     * spend-cap refusal, the 95% blocking refusal.
+     */
+    public function testTwoConsecutiveAssistantTurnsBothSurviveACompaction(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 2));
+        $messages = [];
+        for ($i = 0; $i < 5; $i++) {
+            $messages[] = $this->msg('user', "question {$i}");
+            $messages[] = $this->msg('assistant', "REPLY-{$i}");
+        }
+        $messages[] = $this->msg('assistant', 'REPORT-APPENDED-AFTERWARDS');
+
+        $result = $compactor->compact($messages);
+        $text = implode("\n", array_column($result, 'content'));
+
+        $this->assertStringContainsString('REPLY-4', $text, 'the real reply must not be overwritten by the notice');
+        $this->assertStringContainsString('REPORT-APPENDED-AFTERWARDS', $text);
+    }
+
+    /**
+     * The fix keeps the PAIR COUNT intact, and the pair count is what decides how
+     * much a compaction can do: {@see ContextCompactor::stagePairs()} preserves the
+     * last `recentPreserveCount` PAIRS, and
+     * {@see ContextCompactor::exchangesToSummarize()} offers a model only pairs
+     * holding both halves.
+     *
+     * Pinned on a history with a reminder after every prompt, because that is the
+     * state of every session that ever reaches the 85% tier (the 70% reminder
+     * fires first and is appended per turn). The obvious alternative fix — close
+     * the open pair and push the standalone as its own entry — preserves the
+     * message and takes this number from 10 to 0, i.e. silently disables
+     * model-written summaries on exactly the histories the automatic tier runs on.
+     */
+    public function testAReminderAfterEveryPromptDoesNotDestroyTheOfferedExchangeSet(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 10));
+        $messages = [];
+        for ($i = 0; $i < 20; $i++) {
+            $messages[] = $this->msg('user', "question {$i} " . str_repeat('q', 200));
+            $messages[] = $this->msg('system', 'Heads up: this conversation has grown to ~1234 estimated tokens.');
+            $messages[] = $this->msg('assistant', "answer {$i} " . str_repeat('a', 400));
+        }
+
+        $this->assertCount(
+            10,
+            $compactor->exchangesToSummarize($messages),
+            '20 pairs less the 10 preserved: a reminder inside an exchange must not split it',
+        );
+
+        $text = implode("\n", array_column($compactor->compact($messages), 'content'));
+        $this->assertStringContainsString('Heads up: this conversation has grown', $text);
+    }
+
     /**
      * Helper to count tokens using same approximation as ContextCompactor.
      */

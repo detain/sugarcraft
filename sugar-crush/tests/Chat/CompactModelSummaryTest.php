@@ -511,6 +511,66 @@ final class CompactModelSummaryTest extends TestCase
         );
     }
 
+    /**
+     * OFFLINE BEATS CAPPED, and the order of the two early returns is what makes
+     * it so.
+     *
+     * A capped session with a summary backend gets the cap notice — that is
+     * `scheduleModelCompaction()`'s deliberate refusal to downgrade in silence.
+     * A capped session with NO summary backend must get the ordinary
+     * `Context compacted:` answer instead: with no provider at all there is
+     * nothing the cap prevented, and telling the user to raise a ceiling that was
+     * never in the way sends them to fix the wrong thing.
+     *
+     * Both halves are asserted, because the ordering only exists as the relative
+     * position of two `if`s and either one alone would look correct.
+     */
+    public function testACappedSessionWithNoSummaryBackendReportsAPlainCompactionAndNotTheCap(): void
+    {
+        $tracker = new \SugarCraft\Crush\Util\TokenTracker();
+        $tracker->addTotalUsage(1_000, 5.0);
+
+        $offline = new Chat(
+            history: $this->history(),
+            inputBuf: '/compact',
+            backend: new EchoBackend(),
+            compactorConfig: $this->compactorConfig(),
+            tokenTracker: $tracker,
+            maxCostUsd: 1.0,
+            summaryBackend: null,
+        );
+        [$next, $cmd] = $this->submit($offline);
+        $answer = $next->history[count($next->history) - 1]->content;
+
+        $this->assertNull($cmd);
+        $this->assertStringStartsWith('Context compacted:', $answer);
+        $this->assertStringNotContainsString(
+            'Spend cap reached',
+            $answer,
+            'there was no provider for the cap to have stopped',
+        );
+
+        // The control: the same cap, WITH a provider, does say so.
+        $seen = null;
+        $capped = new Chat(
+            history: $this->history(),
+            inputBuf: '/compact',
+            backend: new EchoBackend(),
+            compactorConfig: $this->compactorConfig(),
+            tokenTracker: $tracker,
+            maxCostUsd: 1.0,
+            summaryBackend: $this->summarizer('1. never asked', $seen),
+        );
+        [$cappedNext, $cappedCmd] = $this->submit($capped);
+
+        $this->assertNull($cappedCmd, 'the compaction still runs, it just runs on the heuristic');
+        $this->assertNull($seen, 'and the model is not asked');
+        $this->assertStringContainsString(
+            'Spend cap reached',
+            $cappedNext->history[count($cappedNext->history) - 1]->content,
+        );
+    }
+
     /** An empty transcript answers as it always did, with no provider call. */
     public function testAnEmptyTranscriptStillAnswersWithoutAskingAnyone(): void
     {

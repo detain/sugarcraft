@@ -18,10 +18,15 @@ labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 item 6 ·
-Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-5, 7 + 10's preset half ·
+Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-7 + 10's preset half ·
 Phase 7 items 1-2 · Phase 8 items 1, 2, 5, 7, 12, 14.
-**Partial:** Phase 5 item 6 (🟡 — `/compact` yes, the automatic 85% tier no; see
-backlog E21).
+
+**Phase 5 item 6 is now complete on BOTH routes** (bundle E21). `/compact` asked
+the model from B2; the automatic 85% tier now does too — it parks the submitted
+turn behind the summarization round-trip (`Chat::scheduleParkedCompaction()`),
+re-sites the 95% blocking check at the landing where the compacted history first
+exists, and dispatches through the extracted `Chat::dispatchTurn()`. With no
+summary backend the tier is the same synchronous heuristic code it always was.
 
 **START HERE WHEN RESUMING: `docs/plans/crush_code_RESUME.md`.** It carries the
 standing directive, the review loop, the sequencing rules, the environment facts, the

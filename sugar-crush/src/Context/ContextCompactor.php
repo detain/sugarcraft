@@ -392,7 +392,12 @@ final class ContextCompactor
     /**
      * Flatten pairs produced by groupIntoPairs() back into a flat message array.
      *
-     * @param array<array{user:string,assistant:?string,?standalone?:bool,?role?:string}> $pairs
+     * Round-trips: every message that went into {@see groupIntoPairs()} comes
+     * back out, in the order it went in, `interleaved` riders included — see that
+     * method's docblock for the three app-authored messages that used to be lost
+     * here instead.
+     *
+     * @param array<array{user:string,assistant:?string,standalone?:bool,role?:string,interleaved?:list<array{role:string,content:string}>}> $pairs
      * @return array<array{role:string,content:string}>
      */
     private function flattenPairs(array $pairs): array
@@ -405,6 +410,9 @@ final class ContextCompactor
             }
 
             $messages[] = ['role' => 'user', 'content' => $pair['user']];
+            foreach ($pair['interleaved'] ?? [] as $rider) {
+                $messages[] = $rider;
+            }
             if ($pair['assistant'] !== null) {
                 $messages[] = ['role' => 'assistant', 'content' => $pair['assistant']];
             }
@@ -416,8 +424,42 @@ final class ContextCompactor
     /**
      * Group a flat message array into user/assistant pairs.
      *
+     * A message that is neither `user` nor a reply to an open pair becomes a
+     * `standalone` entry, EXCEPT in one position: directly after a user turn
+     * that has not been answered yet. There the pair is still open and waiting
+     * for its assistant reply, so closing it to make room for a standalone would
+     * invent an exchange boundary the conversation does not have. Such a message
+     * rides along on the pair in `interleaved` instead, and
+     * {@see flattenPairs()} re-emits it between the user turn and the reply.
+     *
+     * THAT POSITION USED TO DROP THE MESSAGE ENTIRELY — the standalone was
+     * pushed only when no pair was open, and a user turn leaves one open with
+     * `assistant === null`. Three app-authored messages land exactly there, and
+     * the third is the one that made it a correctness bug rather than a cosmetic
+     * one:
+     *
+     *  - the 70% context reminder ({@see \SugarCraft\Crush\Chat}), appended
+     *    immediately after the submitted prompt;
+     *  - the automatic tier's own report, appended after the prompt on the
+     *    parked route;
+     *  - **`_Request cancelled._`**, which is the ONLY record that a turn was
+     *    aborted. Erasing it left the compacted history carrying a user prompt
+     *    with no answer and no explanation, and that history is fed straight
+     *    back to the model as an unanswered turn. Reachable with no provider and
+     *    no tier involved: cancel a turn, keep working, wait for a compaction.
+     *
+     * Riding on the pair rather than becoming a standalone of its own is what
+     * keeps the PAIR COUNT unchanged, and the pair count is load-bearing twice
+     * over: {@see stagePairs()} preserves the last `recentPreserveCount` PAIRS,
+     * and {@see exchangesToSummarize()} offers a model only pairs that have both
+     * halves. Measured on a 20-turn history with a reminder after every prompt,
+     * closing the pair instead took the offered set from 10 exchanges to **0** —
+     * i.e. it would have silently disabled model-written summaries on precisely
+     * the histories the automatic tier fires on, since a session past the 70%
+     * reminder tier is every session that ever reaches 85%.
+     *
      * @param array<array{role:string,content:string}> $messages
-     * @return array<array{user:string,assistant:?string}> Pairs with user content and optional assistant content
+     * @return array<array{user:string,assistant:?string,standalone?:bool,role?:string,interleaved?:list<array{role:string,content:string}>}>
      */
     private function groupIntoPairs(array $messages): array
     {
@@ -434,17 +476,20 @@ final class ContextCompactor
                     $pairs[] = $currentPair;
                 }
                 $currentPair = ['user' => $content, 'assistant' => null];
-            } elseif ($role === 'assistant' && $currentPair !== null) {
+            } elseif ($role === 'assistant' && $currentPair !== null && $currentPair['assistant'] === null) {
                 $currentPair['assistant'] = $content;
+            } elseif ($currentPair !== null && $currentPair['assistant'] === null) {
+                // Directly after an unanswered user turn: see this method's
+                // docblock for why this rides on the pair instead of closing it.
+                $currentPair['interleaved'][] = ['role' => $role, 'content' => $content];
             } else {
-                // Other roles or assistant without a user pair - treat as standalone
-                if ($currentPair !== null && $currentPair['assistant'] !== null) {
+                // Other roles, or an assistant turn with no user turn to pair
+                // with - its own standalone entry.
+                if ($currentPair !== null) {
                     $pairs[] = $currentPair;
                     $currentPair = null;
                 }
-                if ($currentPair === null) {
-                    $pairs[] = ['user' => '', 'assistant' => $content, 'standalone' => true, 'role' => $role];
-                }
+                $pairs[] = ['user' => '', 'assistant' => $content, 'standalone' => true, 'role' => $role];
             }
         }
 
@@ -799,8 +844,11 @@ final class ContextCompactor
      *
      * Takes an array of pairs (from groupIntoPairs) and produces one
      * summary message per pair, capturing "what happened and any key decisions made."
+     * A pair carrying `interleaved` riders produces one extra truncated line per
+     * rider, so that nothing the compaction was handed is silently dropped —
+     * {@see groupIntoPairs()} for what those riders are and why.
      *
-     * @param array<array{user:string,assistant:?string,?standalone?:bool,?role?:string}> $pairs
+     * @param array<array{user:string,assistant:?string,standalone?:bool,role?:string,interleaved?:list<array{role:string,content:string}>}> $pairs
      * @return array<array{role:string,content:string}>
      */
     private function summarizeExchanges(array $pairs): array
@@ -833,6 +881,24 @@ final class ContextCompactor
                     'role' => 'assistant',
                     'content' => '[summary] ' . $summary,
                 ];
+
+                // A rider is an app-authored message that landed inside this
+                // exchange (see groupIntoPairs()). It gets its own truncated line
+                // rather than being folded into the summary above, because the
+                // summary is keyed to the user/assistant text alone - a
+                // model-written one never saw the rider at all - so folding it in
+                // would mean either re-keying every summary or dropping the
+                // rider, and `_Request cancelled._` is the case where dropping it
+                // loses the only record of how the turn ended.
+                foreach ($pair['interleaved'] ?? [] as $rider) {
+                    $riderContent = (string) $rider['content'];
+                    $summaries[] = [
+                        'role' => (string) $rider['role'],
+                        'content' => '[summary] ' . (mb_strlen($riderContent) > 120
+                            ? $this->truncateWithEllipsis($riderContent, 120)
+                            : $riderContent),
+                    ];
+                }
             }
         }
 
