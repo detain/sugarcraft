@@ -64,6 +64,26 @@ final class TerminalBackground
      */
     private static ?bool $observed = null;
 
+    /**
+     * The terminal's OSC 11 answer as the COLOUR it actually reported, or null
+     * while we haven't been told.
+     *
+     * Kept BESIDE {@see $observed} rather than replacing it: `isDark()` has
+     * real callers ({@see \SugarCraft\Crush\Theme::adaptive()}) for which one
+     * bit is the whole answer, and it also has two other sources — the
+     * `SUGARCRUSH_BACKGROUND` override and `COLORFGBG` — that carry no RGB at
+     * all, so the bit cannot be derived from this field in general.
+     *
+     * It exists because one bit is NOT the whole answer for legibility. The
+     * shell's chrome is spliced over the frame without painting a background of
+     * its own, so the colour a border is actually seen against is the
+     * terminal's, and "dark" spans everything from #000000 to #333f58 — a
+     * spread of 3.4x in relative luminance, wide enough to move a border from
+     * legible to invisible. {@see \SugarCraft\Crush\Theme} resolves its shell
+     * tokens against this value for exactly that reason.
+     */
+    private static ?Color $observedColor = null;
+
     /** Static-only: this is a detector, not a value object. */
     private function __construct() {}
 
@@ -89,6 +109,11 @@ final class TerminalBackground
     public static function observe(BackgroundColorMsg $msg): void
     {
         self::$observed = $msg->isDark();
+        // The message carries r/g/b; reducing it to one bit here and throwing
+        // the rest away is what left the shell resolving its chrome against a
+        // background token nothing paints. Both are recorded, from the one
+        // message, so they can never disagree about which terminal answered.
+        self::$observedColor = Color::rgb($msg->r, $msg->g, $msg->b);
     }
 
     /** The observed OSC 11 answer, or null if the terminal hasn't told us. */
@@ -97,10 +122,54 @@ final class TerminalBackground
         return self::$observed;
     }
 
+    /**
+     * The observed OSC 11 colour, or null if the terminal hasn't told us.
+     * Unlike {@see color()} this is the MEASUREMENT alone: no override, no
+     * `COLORFGBG` inference, no nominal fallback.
+     */
+    public static function observedColor(): ?Color
+    {
+        return self::$observedColor;
+    }
+
+    /**
+     * The best-known colour the terminal actually paints behind this process —
+     * the value every contrast decision in the shell is made against.
+     *
+     * Precedence is {@see isDark()}'s, by construction rather than by
+     * coincidence: explicit override, then the terminal's own OSC 11 reply,
+     * then `COLORFGBG`. Only the middle tier carries real RGB; the other two
+     * carry one bit, so they resolve to the terminal's own black/white palette
+     * slots ({@see Color::ansi()} 0 and 15 — nominally #000000/#ffffff). That
+     * nominal is a floor, not a measurement: a dark terminal painted #282a36
+     * reports as #000000 here until OSC 11 answers, which UNDERSTATES how much
+     * contrast the chrome needs. It is the safe direction to be wrong in only
+     * for the light tier; for the dark tier the OSC 11 reply is what corrects
+     * it, a beat after launch, exactly as it corrects `adaptive`.
+     *
+     * @param array<string,string>|null $env Defaults to a snapshot of getenv().
+     */
+    public static function color(?array $env = null): Color
+    {
+        $env ??= self::defaultEnv();
+
+        $override = self::override($env);
+        if ($override !== null) {
+            return $override ? Color::ansi(0) : Color::ansi(15);
+        }
+
+        if (self::$observedColor !== null) {
+            return self::$observedColor;
+        }
+
+        return self::detect($env) ? Color::ansi(0) : Color::ansi(15);
+    }
+
     /** Drop the observed answer (tests; also correct after a terminal swap). */
     public static function forget(): void
     {
         self::$observed = null;
+        self::$observedColor = null;
     }
 
     /**

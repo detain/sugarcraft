@@ -7,12 +7,32 @@ namespace SugarCraft\Core\Util;
 use SugarCraft\Core\Lang;
 
 /**
- * A color value, expressed as RGB internally.
+ * A color value, expressed as RGB internally — plus, for the two constructors
+ * that name a palette SLOT rather than a colour, which slot that was.
  *
  * Construct via {@see Color::rgb()}, {@see Color::hex()}, {@see Color::ansi()},
  * or {@see Color::ansi256()}. Render to an SGR escape via {@see toFg()} /
  * {@see toBg()}, downsampling automatically to fit the supplied
  * {@see ColorProfile}.
+ *
+ * The slot memory ({@see $ansiIndex}) exists because "RGB internally" was
+ * lossy in exactly one direction that mattered. `Color::ansi(8)` collapsed to
+ * [127,127,127] and forgot it had ever been index 8, so on a terminal
+ * advertising more than 16 colours it came back out as `\e[38;5;244m` (the
+ * nearest 256-cube grey) or `\e[38;2;127;127;127m` (absolute RGB) instead of
+ * `\e[90m`. That defeats the whole point of a 16-colour theme:
+ * {@see \SugarCraft\Sprinkles\Theme::ansi()} is built exclusively from
+ * `Color::ansi(0..8)` precisely so the app DEFERS to the terminal's own
+ * palette, and a user who picks it to make an app match their terminal got
+ * absolute values that ignore it.
+ *
+ * Only {@see ansi()} and {@see ansi256()} record a slot. Every derived colour
+ * loses it, and must: a lightened palette-8 is not palette 8 any more, and
+ * emitting `\e[90m` for it would silently discard the adjustment. That falls
+ * out of the arithmetic rather than needing a rule — {@see lighten()},
+ * {@see darken()} and {@see complementary()} route through {@see hsl()} to
+ * {@see rgb()}, and {@see alpha()}/{@see blend()} construct directly, so none
+ * of them carries an index forward.
  */
 final class Color
 {
@@ -28,10 +48,16 @@ final class Color
         12 => [ 92,  92, 255],  13 => [255,   0, 255],  14 => [  0, 255, 255],  15 => [255, 255, 255],
     ];
 
+    /**
+     * @param ?int $ansiIndex The palette slot this colour WAS named as (0-255),
+     *                        or null for a colour named as RGB. See the class
+     *                        docblock; {@see toSgr()} is the only reader.
+     */
     private function __construct(
         public readonly int $r,
         public readonly int $g,
         public readonly int $b,
+        public readonly ?int $ansiIndex = null,
     ) {
     }
 
@@ -70,17 +96,32 @@ final class Color
         );
     }
 
-    /** Construct from a standard ANSI-16 index (0-15). */
+    /**
+     * Construct from a standard ANSI-16 index (0-15).
+     *
+     * The RGB stored alongside is xterm's default for that slot, used for every
+     * colour-space question ({@see luminance()}, {@see toHex()}, downsampling
+     * distance). It is NOT what gets emitted: the index is remembered and
+     * {@see toSgr()} writes the palette code, so the terminal's own value for
+     * the slot is what the user actually sees.
+     */
     public static function ansi(int $index): self
     {
         if (!isset(self::ANSI16[$index])) {
             throw new \InvalidArgumentException(Lang::t('color.ansi_out_of_range', ['index' => $index]));
         }
         [$r, $g, $b] = self::ANSI16[$index];
-        return new self($r, $g, $b);
+        return new self($r, $g, $b, $index);
     }
 
-    /** Construct from an xterm-256 palette index (0-255). */
+    /**
+     * Construct from an xterm-256 palette index (0-255).
+     *
+     * Records the slot for the same reason {@see ansi()} does — a 256-colour
+     * index is the terminal's to resolve, and re-deriving it from RGB on the way
+     * out can land on a different index (the round trip is not the identity for
+     * every slot, since the cube and the greyscale ramp overlap).
+     */
     public static function ansi256(int $index): self
     {
         if ($index < 0 || $index > 255) {
@@ -96,10 +137,11 @@ final class Color
                 $levels[intdiv($i, 36)],
                 $levels[intdiv($i, 6) % 6],
                 $levels[$i % 6],
+                $index,
             );
         }
         $g = 8 + ($index - 232) * 10;
-        return new self($g, $g, $g);
+        return new self($g, $g, $g, $index);
     }
 
     /**
@@ -456,6 +498,13 @@ final class Color
         if (!$profile->supportsAnsi()) {
             return '';
         }
+        // Deliberately does NOT honour {@see $ansiIndex}, unlike
+        // {@see toSgr()}: SGR 58 has no 4-bit palette form at all, and the only
+        // 16-colour spelling available here is the FOREGROUND slot below — so
+        // honouring the index at a 256/truecolor profile would trade a
+        // downsampled underline for a recoloured piece of text, which is the
+        // worse of the two. A palette-slot underline keeps the per-profile
+        // behaviour it has always had.
         if ($profile->supportsTrueColor()) {
             return Ansi::CSI . '58;2;' . $this->r . ';' . $this->g . ';' . $this->b . 'm';
         }
@@ -475,6 +524,35 @@ final class Color
         if (!$profile->supportsAnsi()) {
             return '';
         }
+
+        // A colour named as a palette SLOT stays a palette slot at every
+        // profile that can address one — the whole point of choosing a slot is
+        // to defer to the terminal's own value for it, and both the 256-cube and
+        // the truecolor forms are absolute values that override exactly that.
+        // RGB colours keep downsampling as before, which is the only behaviour
+        // the profile tiers were ever about.
+        if ($this->ansiIndex !== null) {
+            if ($this->ansiIndex < 16) {
+                $code = $fg
+                    ? ($this->ansiIndex < 8 ? 30 + $this->ansiIndex : 90 + ($this->ansiIndex - 8))
+                    : ($this->ansiIndex < 8 ? 40 + $this->ansiIndex : 100 + ($this->ansiIndex - 8));
+
+                return Ansi::CSI . $code . 'm';
+            }
+
+            // A 256-slot on a 16-colour terminal has no palette code to keep,
+            // so it downsamples like any other colour.
+            if ($profile->supports256()) {
+                return $fg ? Ansi::fg256($this->ansiIndex) : Ansi::bg256($this->ansiIndex);
+            }
+
+            $idx = $this->nearestAnsi16();
+            $code = $fg ? ($idx < 8 ? 30 + $idx : 90 + ($idx - 8))
+                        : ($idx < 8 ? 40 + $idx : 100 + ($idx - 8));
+
+            return Ansi::CSI . $code . 'm';
+        }
+
         if ($profile->supportsTrueColor()) {
             return $fg
                 ? Ansi::fgRgb($this->r, $this->g, $this->b)

@@ -228,4 +228,121 @@ final class ColorTest extends TestCase
         $this->assertSame(0.0, Color::rgb(0, 0, 0)->luminance());
         $this->assertEqualsWithDelta(1.0, Color::rgb(255, 255, 255)->luminance(), 1e-9);
     }
+    // =========================================================================
+    // Palette-slot survival: a colour NAMED as an index stays an index
+    // =========================================================================
+
+    /**
+     * The bug this pins: `Color::ansi(8)` used to collapse to [127,127,127] and
+     * forget it had ever been index 8, so on any terminal advertising more than
+     * 16 colours it came back out as `38;5;244` (the nearest 256-cube grey) or
+     * `38;2;127;127;127` (absolute RGB). A 16-colour theme is built from
+     * `Color::ansi()` precisely so the app DEFERS to the terminal's own palette,
+     * and both of those override it.
+     */
+    public function testAnAnsi16SlotStaysAPaletteCodeAtEveryProfileThatSupportsAnsi(): void
+    {
+        foreach ([ColorProfile::Ansi, ColorProfile::Ansi256, ColorProfile::TrueColor] as $profile) {
+            $this->assertSame("\x1b[90m", Color::ansi(8)->toFg($profile), $profile->name);
+            $this->assertSame("\x1b[100m", Color::ansi(8)->toBg($profile), $profile->name);
+            // Low half of the palette uses the 30-37 / 40-47 codes.
+            $this->assertSame("\x1b[33m", Color::ansi(3)->toFg($profile), $profile->name);
+            $this->assertSame("\x1b[43m", Color::ansi(3)->toBg($profile), $profile->name);
+        }
+    }
+
+    /**
+     * An RGB colour that happens to EQUAL a palette slot's nominal value is not
+     * a palette slot, and must keep downsampling. This is the property that
+     * makes the change a memory of intent rather than a lookup table: #7f7f7f is
+     * byte-identical to `Color::ansi(8)`'s RGB and must still render as absolute
+     * truecolor.
+     */
+    public function testAnRgbColourMatchingASlotsNominalValueStillDownsamples(): void
+    {
+        $rgb = Color::hex('#7f7f7f');
+        $slot = Color::ansi(8);
+
+        $this->assertSame($slot->toHex(), $rgb->toHex(), 'precondition: same RGB');
+        $this->assertSame("\x1b[38;2;127;127;127m", $rgb->toFg(ColorProfile::TrueColor));
+        $this->assertSame("\x1b[38;5;244m", $rgb->toFg(ColorProfile::Ansi256));
+        $this->assertNotSame($rgb->toFg(ColorProfile::TrueColor), $slot->toFg(ColorProfile::TrueColor));
+    }
+
+    /** A 256-slot keeps its index where the profile can address one, and only downsamples below that. */
+    public function testAnAnsi256SlotStaysAnIndexUntilTheProfileCannotAddressOne(): void
+    {
+        $c = Color::ansi256(202);
+
+        $this->assertSame("\x1b[38;5;202m", $c->toFg(ColorProfile::TrueColor));
+        $this->assertSame("\x1b[38;5;202m", $c->toFg(ColorProfile::Ansi256));
+        // No 4-bit spelling for slot 202, so it falls back to nearest-of-16.
+        $this->assertSame("\x1b[91m", $c->toFg(ColorProfile::Ansi));
+        // ansi256(0-15) IS the 16-colour palette and keeps its 4-bit code.
+        $this->assertSame("\x1b[90m", Color::ansi256(8)->toFg(ColorProfile::TrueColor));
+    }
+
+    /** A profile with no ANSI at all still emits nothing, slot or not. */
+    public function testAPaletteSlotStillEmitsNothingWithoutAnsiSupport(): void
+    {
+        $this->assertSame('', Color::ansi(8)->toFg(ColorProfile::Ascii));
+        $this->assertSame('', Color::ansi(8)->toBg(ColorProfile::NoTty));
+    }
+
+    /**
+     * Every DERIVED colour loses the slot, and must: a lightened palette-8 is
+     * not palette 8 any more, and emitting `\x1b[90m` for it would silently
+     * discard the adjustment. Asserted in both directions — the derived value
+     * renders as absolute RGB, and it is not the slot's code.
+     */
+    public function testDerivedColoursLoseThePaletteOrigin(): void
+    {
+        $slot = Color::ansi(8);
+        $slotSgr = $slot->toFg(ColorProfile::TrueColor);
+
+        $derived = [
+            'lighten'       => $slot->lighten(0.2),
+            'darken'        => $slot->darken(0.2),
+            'alpha'         => $slot->alpha(0.5),
+            'blend'         => $slot->blend(Color::ansi(1), 0.5),
+            'complementary' => $slot->complementary(),
+        ];
+
+        foreach ($derived as $name => $colour) {
+            $sgr = $colour->toFg(ColorProfile::TrueColor);
+            $this->assertMatchesRegularExpression('/^\x1b\[38;2;\d+;\d+;\d+m$/', $sgr, $name);
+            $this->assertNotSame($slotSgr, $sgr, $name);
+            $this->assertNull($colour->ansiIndex, $name);
+        }
+    }
+
+    /**
+     * The slot memory changes emission only. Every colour-space question is
+     * still answered from the stored RGB, which is what the downsampler, the
+     * contrast maths and the hex round-trip all rely on.
+     */
+    public function testThePaletteOriginDoesNotChangeAnyColourSpaceAnswer(): void
+    {
+        $slot = Color::ansi(8);
+
+        $this->assertSame('#7f7f7f', $slot->toHex());
+        $this->assertEqualsWithDelta(Color::hex('#7f7f7f')->luminance(), $slot->luminance(), 1e-12);
+        $this->assertTrue($slot->isDark());
+        $this->assertSame(8, $slot->ansiIndex);
+        $this->assertNull(Color::hex('#7f7f7f')->ansiIndex);
+    }
+
+    /**
+     * SGR 58 has no 4-bit palette form, and the only 16-colour spelling
+     * available is the FOREGROUND slot — so honouring the index here would trade
+     * a downsampled underline for recoloured text. Deliberately unchanged.
+     */
+    public function testUnderlineColourDoesNotHonourThePaletteOrigin(): void
+    {
+        $slot = Color::ansi(8);
+
+        $this->assertSame("\x1b[58;2;127;127;127m", $slot->toUnderline(ColorProfile::TrueColor));
+        $this->assertSame("\x1b[58;5;244m", $slot->toUnderline(ColorProfile::Ansi256));
+        $this->assertSame("\x1b[90m", $slot->toUnderline(ColorProfile::Ansi));
+    }
 }

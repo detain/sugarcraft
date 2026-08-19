@@ -33,6 +33,7 @@ use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
@@ -325,6 +326,26 @@ final class App implements Model
     public function withMemoryStore(?MemoryStore $v): self
     {
         return $this->mutate(memoryStore: $v);
+    }
+
+    /**
+     * The colour theme the SHELL's chrome paints with.
+     *
+     * Delegated to the hosted {@see Chat} rather than stored here, because the
+     * theme name is Chat state ({@see Chat::withThemeName()}, persisted by
+     * `/theme` and reloaded by {@see \SugarCraft\Crush\Cli\Bootstrap}) and a
+     * second copy on App would be a second source of truth that `/theme` does
+     * not update — the shell would keep painting the old palette around a
+     * re-themed transcript.
+     *
+     * {@see Theme::default()} covers the chat-less App: the shell is
+     * constructible without a hosted chat (every `App::new()` in the suite, and
+     * the split/agent-pane paths), and in that shape nothing has recorded a
+     * theme preference at all.
+     */
+    public function theme(): Theme
+    {
+        return $this->chat?->theme() ?? Theme::default();
     }
 
     /**

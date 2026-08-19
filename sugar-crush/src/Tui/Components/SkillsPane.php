@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Theme;
 
 /**
  * The shell's skills sidebar.
@@ -40,6 +40,7 @@ final class SkillsPane
         // Every branch is capped at the rows the pane actually has: the
         // sidebar is clipped by Tui\Renderer anyway, and an unbounded list
         // costs a styled string per skill per frame for rows nobody sees.
+        $theme = $a->theme();
         $budget = max(1, $rows - self::CHROME_ROWS);
         $labelWidth = max(1, $width - self::CHROME_COLS);
 
@@ -51,8 +52,8 @@ final class SkillsPane
             $offset = max(0, min($a->skillPickerIndex - $budget + 1, count($a->skillPickerOptions) - $budget));
             foreach (array_slice($a->skillPickerOptions, $offset, $budget, true) as $row => $skill) {
                 $isCursor = $row === $a->skillPickerIndex;
-                $lines[] = self::badgePrefix($skill) . Style::new()
-                    ->foreground(Color::hex($isCursor ? '#00ffaa' : '#7d6e98'))
+                $lines[] = self::badgePrefix($skill, $theme) . Style::new()
+                    ->foreground($isCursor ? $theme->shellPrimary : $theme->shellMuted)
                     ->render(Width::truncate(
                         ($isCursor ? '▸ ' : '  ') . $skill->name . ' — ' . $skill->description,
                         $labelWidth,
@@ -71,9 +72,9 @@ final class SkillsPane
                     // SelectSkillMsg path) and bare name strings (SkillManager's
                     // legacy path) depending on caller -- render either.
                     $label = $skill instanceof Skill ? $skill->name : (string) $skill;
-                    $prefix = $skill instanceof Skill ? self::badgePrefix($skill) : '';
+                    $prefix = $skill instanceof Skill ? self::badgePrefix($skill, $theme) : '';
                     $lines[] = $prefix . Style::new()
-                        ->foreground(Color::hex('#c5b6dd'))
+                        ->foreground($theme->shellForeground)
                         ->render(Width::truncate('• ' . $label, $labelWidth));
                 }
                 $body = implode("\n", $lines);
@@ -81,7 +82,7 @@ final class SkillsPane
                 $available = array_slice(array_values($a->availableSkills->all()), 0, $budget);
 
                 if ($available === []) {
-                    $body = Style::new()->foreground(Color::hex('#7d6e98'))
+                    $body = Style::new()->foreground($theme->shellMuted)
                         ->render('(no skills enabled)');
                 } else {
                     $lines = [];
@@ -89,8 +90,8 @@ final class SkillsPane
                         // Dimmer than an enabled row and bulleted with '·'
                         // rather than '•': these are discovered-but-not-on,
                         // and the pane must not read as if they were active.
-                        $lines[] = self::badgePrefix($skill) . Style::new()
-                            ->foreground(Color::hex('#7d6e98'))
+                        $lines[] = self::badgePrefix($skill, $theme) . Style::new()
+                            ->foreground($theme->shellMuted)
                             ->render(Width::truncate('· ' . $skill->name, $labelWidth));
                     }
                     $body = implode("\n", $lines);
@@ -104,8 +105,8 @@ final class SkillsPane
             ->width($width);
 
         $st = $a->pane === \SugarCraft\Crush\Tui\Pane::Skills
-            ? $st->borderForeground(Color::hex('#00ffaa'))
-            : $st->borderForeground(Color::hex('#ff66aa'));
+            ? $st->borderForeground($theme->shellPrimary)
+            : $st->borderForeground($theme->border);
 
         return $st->render($body);
     }
@@ -115,12 +116,12 @@ final class SkillsPane
      * native content (crush_feat.md §10.5 — a native skill deliberately gets
      * no badge, so the badge means "imported" at a glance).
      */
-    private static function badgePrefix(Skill $skill): string
+    private static function badgePrefix(Skill $skill, Theme $theme): string
     {
         $badge = $skill->source->badge();
 
         return $badge === ''
             ? ''
-            : Style::new()->foreground($skill->source->color())->render($badge . ' ');
+            : Style::new()->foreground($skill->source->color($theme))->render($badge . ' ');
     }
 }

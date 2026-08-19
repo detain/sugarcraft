@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tui\Components;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Chat;
@@ -182,16 +183,26 @@ final class SettingsPaneTest extends TestCase
         $this->assertStringContainsString('/model', $plain);
     }
 
-    public function testFocusedBorderIsGreenAndUnfocusedIsPink(): void
+    /**
+     * Focus is a VISIBLE difference, not a particular hue: the focused box
+     * carries the palette's `primary`, the unfocused one the palette's
+     * contrast-checked `border`, and the two must not be the same bytes or
+     * there is no focus cue at all.
+     */
+    public function testFocusedAndUnfocusedBordersComeFromDistinctThemeTokens(): void
     {
-        $this->assertStringContainsString(
-            "\x1b[38;2;0;255;170m",
-            SettingsPane::render($this->app(Pane::Settings), 40, 20),
-        );
-        $this->assertStringContainsString(
-            "\x1b[38;2;255;102;170m",
-            SettingsPane::render($this->app(Pane::Chat), 40, 20),
-        );
+        $theme = $this->app()->theme();
+        $focus = $theme->shellPrimary->toFg(ColorProfile::TrueColor);
+        $rest = $theme->border->toFg(ColorProfile::TrueColor);
+
+        $this->assertNotSame($focus, $rest, 'focused and unfocused borders must differ');
+
+        $focused = SettingsPane::render($this->app(Pane::Settings), 40, 20);
+        $unfocused = SettingsPane::render($this->app(Pane::Chat), 40, 20);
+
+        $this->assertStringContainsString($focus, $focused);
+        $this->assertStringNotContainsString($focus, $unfocused);
+        $this->assertStringContainsString($rest, $unfocused);
     }
 
     public function testRenderNeverExceedsItsRowOrColumnBudget(): void

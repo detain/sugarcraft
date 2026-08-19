@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -34,16 +33,17 @@ final class FilesPane
 
     public static function render(App $a, int $width, int $rows): string
     {
+        $theme = $a->theme();
         $files = self::recentFiles($a, max(1, $rows - self::CHROME_ROWS));
 
         if ($files === []) {
-            $body = Style::new()->foreground(Color::hex('#7d6e98'))
+            $body = Style::new()->foreground($theme->shellMuted)
                 ->render('(no files attached)');
         } else {
             $lines = [];
             foreach ($files as $file) {
                 $lines[] = Style::new()
-                    ->foreground(Color::hex('#c5b6dd'))
+                    ->foreground($theme->shellForeground)
                     ->render(Width::truncate(
                         '📄 ' . PaneLabel::of(basename($file)),
                         max(1, $width - self::CHROME_COLS),
@@ -58,8 +58,8 @@ final class FilesPane
             ->width($width);
 
         $st = $a->pane === \SugarCraft\Crush\Tui\Pane::Files
-            ? $st->borderForeground(Color::hex('#00ffaa'))
-            : $st->borderForeground(Color::hex('#ff66aa'));
+            ? $st->borderForeground($theme->shellPrimary)
+            : $st->borderForeground($theme->border);
 
         return $st->render($body);
     }

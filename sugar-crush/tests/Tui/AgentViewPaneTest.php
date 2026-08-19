@@ -6,21 +6,29 @@ namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentViewPane;
+use SugarCraft\Crush\Theme;
 
 /**
  * @see AgentViewPane
  */
 final class AgentViewPaneTest extends TestCase
 {
+    /** The palette every colour assertion below is stated against. */
+    private static function theme(): Theme
+    {
+        return Theme::byName('dark');
+    }
+
     // =========================================================================
     // AgentViewPane::render — empty list → placeholder with border
     // =========================================================================
 
     public function testRenderEmptyArrayReturnsPlaceholderWithBorder(): void
     {
-        $output = AgentViewPane::render([], -1, 80, 20);
+        $output = AgentViewPane::render([], -1, 80, 20, self::theme());
 
         $this->assertStringContainsString('(no active agents)', $output);
         $this->assertStringContainsString('agents', $output);
@@ -43,7 +51,7 @@ final class AgentViewPaneTest extends TestCase
             ),
         ];
 
-        $output = AgentViewPane::render($agents, -1, 80, 20);
+        $output = AgentViewPane::render($agents, -1, 80, 20, self::theme());
 
         $this->assertStringContainsString('c1', $output);
         $this->assertStringContainsString('Reading', $output);
@@ -77,7 +85,7 @@ final class AgentViewPaneTest extends TestCase
             ),
         ];
 
-        $output = AgentViewPane::render($agents, -1, 80, 20);
+        $output = AgentViewPane::render($agents, -1, 80, 20, self::theme());
 
         $this->assertStringContainsString('c1', $output);
         $this->assertStringContainsString('r2', $output);
@@ -110,17 +118,20 @@ final class AgentViewPaneTest extends TestCase
             ),
         ];
 
-        $bg = "\e[48;2;35;35;56m";
+        // The highlight FILL, read off the palette: the literal #232338 this
+        // replaced was a dark band, which on a light terminal was painted under
+        // text picked to be read on light.
+        $bg = self::theme()->shellSeparator->toBg(ColorProfile::TrueColor);
 
         // When index 1 (r2) is selected, r2 line has background, c1 line does not.
-        $output = AgentViewPane::render($agents, 1, 80, 20);
+        $output = AgentViewPane::render($agents, 1, 80, 20, self::theme());
         $lines = explode("\n", $output);
         // lines[0] = top border, lines[1] = c1 (not selected), lines[2] = r2 (selected), lines[3] = bottom border
         $this->assertStringNotContainsString($bg, $lines[1]); // c1 not selected
         $this->assertStringContainsString($bg, $lines[2]);     // r2 selected
 
         // When index 0 (c1) is selected, c1 line has background, r2 line does not.
-        $output2 = AgentViewPane::render($agents, 0, 80, 20);
+        $output2 = AgentViewPane::render($agents, 0, 80, 20, self::theme());
         $lines2 = explode("\n", $output2);
         $this->assertStringContainsString($bg, $lines2[1]);     // c1 selected
         $this->assertStringNotContainsString($bg, $lines2[2]); // r2 not selected
@@ -143,7 +154,7 @@ final class AgentViewPaneTest extends TestCase
             ),
         ];
 
-        $output = AgentViewPane::render($agents, -1, 80, 20);
+        $output = AgentViewPane::render($agents, -1, 80, 20, self::theme());
 
         // The operation should be truncated (contain the ellipsis character)
         $this->assertStringContainsString("\u{2026}", $output);
@@ -155,50 +166,48 @@ final class AgentViewPaneTest extends TestCase
     // AgentViewPane::statusColor — all 6 statuses
     // =========================================================================
 
-    public function testStatusColorWorkingReturnsGreen(): void
+    public function testStatusColorMapsEachStatusToItsSemanticThemeToken(): void
     {
-        $color = AgentViewPane::statusColor('working');
-        $this->assertSame('#9ece6a', $color->toHex());
+        $t = self::theme();
+
+        $this->assertSame($t->shellSuccess->toHex(), AgentViewPane::statusColor('working', $t)->toHex());
+        $this->assertSame($t->shellWarning->toHex(), AgentViewPane::statusColor('waiting', $t)->toHex());
+        $this->assertSame($t->shellInfo->toHex(), AgentViewPane::statusColor('streaming', $t)->toHex());
+        $this->assertSame($t->shellError->toHex(), AgentViewPane::statusColor('failed', $t)->toHex());
+        $this->assertSame($t->shellMuted->toHex(), AgentViewPane::statusColor('completed', $t)->toHex());
+        $this->assertSame($t->shellMuted->toHex(), AgentViewPane::statusColor('stopped', $t)->toHex());
     }
 
-    public function testStatusColorWaitingReturnsYellow(): void
+    /**
+     * The two panes are documented as sharing one mapping
+     * (AgentViewPane::STATUS_TOKEN "matched to AgentStatusBar's"); assert it
+     * rather than trusting the comment, in every palette.
+     */
+    public function testStatusColoursAgreeWithAgentStatusBarInEveryPalette(): void
     {
-        $color = AgentViewPane::statusColor('waiting');
-        $this->assertSame('#e0af68', $color->toHex());
-    }
-
-    public function testStatusColorStreamingReturnsBlue(): void
-    {
-        $color = AgentViewPane::statusColor('streaming');
-        $this->assertSame('#7aa2f7', $color->toHex());
-    }
-
-    public function testStatusColorFailedReturnsRed(): void
-    {
-        $color = AgentViewPane::statusColor('failed');
-        $this->assertSame('#f7768e', $color->toHex());
-    }
-
-    public function testStatusColorCompletedReturnsGray(): void
-    {
-        $color = AgentViewPane::statusColor('completed');
-        $this->assertSame('#7d6e98', $color->toHex());
-    }
-
-    public function testStatusColorStoppedReturnsGray(): void
-    {
-        $color = AgentViewPane::statusColor('stopped');
-        $this->assertSame('#7d6e98', $color->toHex());
+        foreach (Theme::names() as $name) {
+            $t = Theme::byName($name);
+            foreach (['working', 'waiting', 'streaming', 'failed', 'completed', 'stopped', 'nonsense'] as $status) {
+                $this->assertSame(
+                    \SugarCraft\Crush\Tui\AgentStatusBar::statusColor($status, $t)->toHex(),
+                    AgentViewPane::statusColor($status, $t)->toHex(),
+                    "{$name}/{$status}",
+                );
+            }
+        }
     }
 
     // =========================================================================
-    // AgentViewPane::statusColor — unknown status defaults to gray
+    // AgentViewPane::statusColor — unknown status defaults to the completed token
     // =========================================================================
 
-    public function testStatusColorUnknownDefaultsToGray(): void
+    public function testStatusColorUnknownDefaultsToTheCompletedToken(): void
     {
-        $color = AgentViewPane::statusColor('unknown-nonsense');
-        $this->assertSame('#7d6e98', $color->toHex());
+        $t = self::theme();
+        $this->assertSame(
+            AgentViewPane::statusColor('completed', $t)->toHex(),
+            AgentViewPane::statusColor('unknown-nonsense', $t)->toHex(),
+        );
     }
 
     // =========================================================================
@@ -207,9 +216,10 @@ final class AgentViewPaneTest extends TestCase
 
     public function testStatusColorIsCaseInsensitive(): void
     {
-        $this->assertSame('#9ece6a', AgentViewPane::statusColor('WORKING')->toHex());
-        $this->assertSame('#9ece6a', AgentViewPane::statusColor('Working')->toHex());
-        $this->assertSame('#f7768e', AgentViewPane::statusColor('FAILED')->toHex());
-        $this->assertSame('#7d6e98', AgentViewPane::statusColor('COMPLETED')->toHex());
+        $t = self::theme();
+        $this->assertSame($t->shellSuccess->toHex(), AgentViewPane::statusColor('WORKING', $t)->toHex());
+        $this->assertSame($t->shellSuccess->toHex(), AgentViewPane::statusColor('Working', $t)->toHex());
+        $this->assertSame($t->shellError->toHex(), AgentViewPane::statusColor('FAILED', $t)->toHex());
+        $this->assertSame($t->shellMuted->toHex(), AgentViewPane::statusColor('COMPLETED', $t)->toHex());
     }
 }

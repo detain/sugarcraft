@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
@@ -258,7 +257,7 @@ final class Renderer
         if ($withDropdown) {
             $col = MenuBar::activeMenuColumn();
             $top = self::lineCount($menuBar);
-            foreach (MenuBar::renderDropdownMarked() as $i => $panelLine) {
+            foreach (MenuBar::renderDropdownMarked($a->theme()) as $i => $panelLine) {
                 if ($top + $i >= $frameRows) {
                     break;
                 }
@@ -397,7 +396,7 @@ final class Renderer
         // taking part in the layout above, so opening a menu cannot reflow the
         // panes underneath it. Applied after the clips so it is never the thing
         // that gets trimmed away.
-        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown(), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($a->theme()), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
 
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
@@ -492,13 +491,15 @@ final class Renderer
      */
     private static function hostedNotice(App $a): string
     {
+        $theme = $a->theme();
+
         if ($a->error !== null && $a->error !== '') {
-            return Style::new()->foreground(Color::hex('#f7768e'))->bold()
+            return Style::new()->foreground($theme->shellError)->bold()
                 ->render(' error: ' . $a->error);
         }
 
         if ($a->status !== null && $a->status !== '') {
-            return Style::new()->foreground(Color::hex('#9ece6a'))->render(' ' . $a->status);
+            return Style::new()->foreground($theme->shellSuccess)->render(' ' . $a->status);
         }
 
         return '';
@@ -618,8 +619,11 @@ final class Renderer
      * of — so there is a single status-bar implementation. This class only
      * supplies the crush theme (per-segment colours) and the segment set,
      * including the literal `[Tab] Switch Pane` hint. The provider / model
-     * colours (`#9ece6a` / `#e0af68`) and the error (`#f7768e` bold) vs. status
-     * (`#9ece6a`) precedence are unchanged from the previous hand-rolled string.
+     * ROLES (`shellSuccess` / `shellWarning`) and the error (`shellError` bold)
+     * vs. status (`shellSuccess`) precedence are unchanged from the previous
+     * hand-rolled string; the literals those roles replaced were #9ece6a /
+     * #e0af68 / #f7768e, i.e. tokyoNight's success/warning/error, hardcoded
+     * whatever palette the user picked.
      *
      * Behaviour note: the primitive skips an empty segment, so when there is
      * neither an error nor a status the previous hand-rolled template's trailing
@@ -628,21 +632,22 @@ final class Renderer
      */
     private static function statusBar(App $a): string
     {
+        $theme = $a->theme();
         $segments = [
-            Segment::of($a->provider->name(), Style::new()->foreground(Color::hex('#9ece6a'))),
-            Segment::of($a->model, Style::new()->foreground(Color::hex('#e0af68'))),
+            Segment::of($a->provider->name(), Style::new()->foreground($theme->shellSuccess)),
+            Segment::of($a->model, Style::new()->foreground($theme->shellWarning)),
             Segment::of('[Tab] Switch Pane'),
         ];
 
         if ($a->error) {
             $segments[] = Segment::of(
                 'error: ' . $a->error,
-                Style::new()->foreground(Color::hex('#f7768e'))->bold(),
+                Style::new()->foreground($theme->shellError)->bold(),
             );
         } elseif ($a->status) {
             $segments[] = Segment::of(
                 $a->status,
-                Style::new()->foreground(Color::hex('#9ece6a')),
+                Style::new()->foreground($theme->shellSuccess),
             );
         }
 

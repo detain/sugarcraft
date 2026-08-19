@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\App\App;
@@ -18,6 +17,7 @@ use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\Mode;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Theme;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Veil\Position;
@@ -185,13 +185,14 @@ final class AgentDashboardPane
         // Two rows go to the box's own top and bottom border.
         $budget = max(1, $rows - 2);
 
+        $theme = $a->theme();
         $entries = self::entries($a);
         if ($entries === []) {
             // AgentViewPane already owns the styled "(no active agents)" box.
-            return AgentViewPane::render([], -1, $inner, $budget);
+            return AgentViewPane::render([], -1, $inner, $budget, $theme);
         }
 
-        $frame = self::box(self::body($a, $entries, $inner, $budget), $a, $inner);
+        $frame = self::box(self::body($a, $entries, $inner, $budget, $theme), $a, $inner, $theme);
 
         $overlay = self::peekOverlay($a, $width, $rows);
         if ($overlay === '') {
@@ -233,7 +234,7 @@ final class AgentDashboardPane
         $overlayWidth = max(20, min($width - 8, 72));
         $overlayRows = max(3, min($rows - 4, 12));
 
-        return AgentOutputPane::render($entries[$selected], $overlayWidth, $overlayRows, Mode::Peek);
+        return AgentOutputPane::render($entries[$selected], $overlayWidth, $overlayRows, $a->theme(), Mode::Peek);
     }
 
     /**
@@ -241,7 +242,7 @@ final class AgentDashboardPane
      *
      * @param list<AgentOutputState> $entries
      */
-    private static function body(App $a, array $entries, int $inner, int $budget): string
+    private static function body(App $a, array $entries, int $inner, int $budget, Theme $theme): string
     {
         $grouped = [];
         foreach ($entries as $index => $entry) {
@@ -257,15 +258,15 @@ final class AgentDashboardPane
             $members = $grouped[$groupId];
             $lines[] = Style::new()
                 ->bold()
-                ->foreground(AgentViewPane::statusColor($members[0][1]->status))
+                ->foreground(AgentViewPane::statusColor($members[0][1]->status, $theme))
                 ->render($label . ' (' . count($members) . ')');
 
             foreach ($members as [$index, $entry]) {
-                $lines[] = self::row($index, $entry, $a->selectedAgentIndex === $index, $inner);
+                $lines[] = self::row($index, $entry, $a->selectedAgentIndex === $index, $inner, $theme);
             }
         }
 
-        return implode("\n", self::clip($lines, $budget, $inner));
+        return implode("\n", self::clip($lines, $budget, $inner, $theme));
     }
 
     /**
@@ -277,14 +278,14 @@ final class AgentDashboardPane
      * block here would be mistaken for one of them by
      * {@see \SugarCraft\Crush\Renderer::maskImageMarkers()}.
      */
-    private static function row(int $index, AgentDisplayState $entry, bool $selected, int $inner): string
+    private static function row(int $index, AgentDisplayState $entry, bool $selected, int $inner, Theme $theme): string
     {
         $slot = $index < self::MAX_JUMP_SLOTS ? '[' . ($index + 1) . ']' : '   ';
         $label = Style::new()
-            ->foreground(Color::hex($selected ? '#e0af68' : '#565676'))
+            ->foreground($selected ? $theme->shellWarning : $theme->shellMuted)
             ->render($slot);
 
-        $line = $label . ' ' . AgentStatusBar::renderAgentLine($entry);
+        $line = $label . ' ' . AgentStatusBar::renderAgentLine($entry, $theme);
 
         return Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line;
     }
@@ -296,7 +297,7 @@ final class AgentDashboardPane
      * @param list<string> $lines
      * @return list<string>
      */
-    private static function clip(array $lines, int $budget, int $inner): array
+    private static function clip(array $lines, int $budget, int $inner, Theme $theme): array
     {
         if (count($lines) <= $budget) {
             return $lines;
@@ -305,7 +306,7 @@ final class AgentDashboardPane
         $kept = array_slice($lines, 0, max(0, $budget - 1));
         $hidden = count($lines) - count($kept);
         $trailer = Style::new()
-            ->foreground(Color::hex('#565676'))
+            ->foreground($theme->shellMuted)
             ->render('… ' . $hidden . ' more');
 
         $kept[] = Width::string($trailer) > $inner ? Width::truncateAnsi($trailer, $inner) : $trailer;
@@ -318,7 +319,7 @@ final class AgentDashboardPane
      * {@see AgentsPane} colours the sidebar version so the two read as one
      * widget family.
      */
-    private static function box(string $body, App $a, int $inner): string
+    private static function box(string $body, App $a, int $inner, Theme $theme): string
     {
         $style = Style::new()
             ->border(Border::rounded()->withTitle(' agents '))
@@ -326,8 +327,8 @@ final class AgentDashboardPane
             ->width($inner);
 
         $style = $a->pane === Pane::Agents
-            ? $style->borderForeground(Color::hex('#00ffaa'))
-            : $style->borderForeground(Color::hex('#ff66aa'));
+            ? $style->borderForeground($theme->shellPrimary)
+            : $style->borderForeground($theme->border);
 
         return $style->render($body);
     }

@@ -7,6 +7,8 @@ namespace SugarCraft\Crush\Tests\Tui;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
+use SugarCraft\Crush\Theme;
+use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * @see AgentDisplayState
@@ -14,6 +16,18 @@ use SugarCraft\Crush\Tui\AgentStatusBar;
  */
 final class AgentStatusBarTest extends TestCase
 {
+    /**
+     * The palette every colour assertion below is stated against. Named once,
+     * because a status colour is now a THEME LOOKUP: what `working` resolves to
+     * is `dark`'s `success`, not a constant, and the property worth asserting
+     * is the mapping plus its distinctness - not a hex the user can change with
+     * `/theme`.
+     */
+    private static function theme(): Theme
+    {
+        return Theme::byName('dark');
+    }
+
     // =========================================================================
     // AgentDisplayState — elapsed / usage display helpers
     // =========================================================================
@@ -78,54 +92,53 @@ final class AgentStatusBarTest extends TestCase
     // AgentStatusBar::statusColor — colour mapping
     // =========================================================================
 
-    public function testStatusColorWorkingIsGreen(): void
+    public function testStatusColorMapsEachStatusToItsSemanticThemeToken(): void
     {
-        $color = AgentStatusBar::statusColor('working');
-        $this->assertSame('#9ece6a', $color->toHex());
+        $t = self::theme();
+
+        $this->assertSame($t->shellSuccess->toHex(), AgentStatusBar::statusColor('working', $t)->toHex());
+        $this->assertSame($t->shellWarning->toHex(), AgentStatusBar::statusColor('waiting', $t)->toHex());
+        $this->assertSame($t->shellInfo->toHex(), AgentStatusBar::statusColor('streaming', $t)->toHex());
+        $this->assertSame($t->shellError->toHex(), AgentStatusBar::statusColor('failed', $t)->toHex());
+        $this->assertSame($t->shellMuted->toHex(), AgentStatusBar::statusColor('completed', $t)->toHex());
+        // Stopped shares `completed`'s token, as the two literals it replaced
+        // were both the same grey.
+        $this->assertSame($t->shellMuted->toHex(), AgentStatusBar::statusColor('stopped', $t)->toHex());
     }
 
-    public function testStatusColorWaitingIsYellow(): void
+    /**
+     * The dot exists to be told apart at a glance, so the four LIVE states must
+     * not collide. Asserted for every offered palette, because a mapping that
+     * is distinct in `dark` and degenerate in `light` is still a broken dot.
+     */
+    public function testStatusColoursAreMutuallyDistinctInEveryPalette(): void
     {
-        $color = AgentStatusBar::statusColor('waiting');
-        $this->assertSame('#e0af68', $color->toHex());
+        foreach (Theme::names() as $name) {
+            $t = Theme::byName($name);
+            $hexes = array_map(
+                static fn(string $s): string => AgentStatusBar::statusColor($s, $t)->toHex(),
+                ['working', 'waiting', 'streaming', 'failed', 'completed'],
+            );
+
+            $this->assertSame($hexes, array_values(array_unique($hexes)), "collision under theme {$name}");
+        }
     }
 
-    public function testStatusColorStreamingIsBlue(): void
+    public function testStatusColorUnknownDefaultsToTheCompletedToken(): void
     {
-        $color = AgentStatusBar::statusColor('streaming');
-        $this->assertSame('#7aa2f7', $color->toHex());
-    }
-
-    public function testStatusColorFailedIsRed(): void
-    {
-        $color = AgentStatusBar::statusColor('failed');
-        $this->assertSame('#f7768e', $color->toHex());
-    }
-
-    public function testStatusColorCompletedIsGray(): void
-    {
-        $color = AgentStatusBar::statusColor('completed');
-        $this->assertSame('#7d6e98', $color->toHex());
-    }
-
-    public function testStatusColorStoppedIsGray(): void
-    {
-        // Stopped also maps to gray (same as completed).
-        $color = AgentStatusBar::statusColor('stopped');
-        $this->assertSame('#7d6e98', $color->toHex());
-    }
-
-    public function testStatusColorUnknownDefaultsToGray(): void
-    {
-        $color = AgentStatusBar::statusColor('unknown-nonsense');
-        $this->assertSame('#7d6e98', $color->toHex());
+        $t = self::theme();
+        $this->assertSame(
+            AgentStatusBar::statusColor('completed', $t)->toHex(),
+            AgentStatusBar::statusColor('unknown-nonsense', $t)->toHex(),
+        );
     }
 
     public function testStatusColorIsCaseInsensitive(): void
     {
-        $this->assertSame('#9ece6a', AgentStatusBar::statusColor('WORKING')->toHex());
-        $this->assertSame('#9ece6a', AgentStatusBar::statusColor('Working')->toHex());
-        $this->assertSame('#f7768e', AgentStatusBar::statusColor('FAILED')->toHex());
+        $t = self::theme();
+        $this->assertSame($t->shellSuccess->toHex(), AgentStatusBar::statusColor('WORKING', $t)->toHex());
+        $this->assertSame($t->shellSuccess->toHex(), AgentStatusBar::statusColor('Working', $t)->toHex());
+        $this->assertSame($t->shellError->toHex(), AgentStatusBar::statusColor('FAILED', $t)->toHex());
     }
 
     // =========================================================================
@@ -143,7 +156,7 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0031,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
         $this->assertStringContainsString('coder-1', $line);
     }
@@ -159,7 +172,7 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0031,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
         $this->assertStringContainsString('[waiting]', $line);
     }
@@ -175,7 +188,7 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0089,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
         $this->assertStringContainsString('Generating API tests', $line);
     }
@@ -191,7 +204,7 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0012,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
         $this->assertStringContainsString('1m 30s', $line);
     }
@@ -207,7 +220,7 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0042,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
         $this->assertStringContainsString('1,234 tok', $line);
         $this->assertStringContainsString('$0.0042', $line);
@@ -219,7 +232,7 @@ final class AgentStatusBarTest extends TestCase
 
     public function testRenderEmptyListReturnsEmptyString(): void
     {
-        $result = AgentStatusBar::render([]);
+        $result = AgentStatusBar::render([], self::theme());
         $this->assertSame('', $result);
     }
 
@@ -236,7 +249,7 @@ final class AgentStatusBarTest extends TestCase
             ),
         ];
 
-        $output = AgentStatusBar::render($agents);
+        $output = AgentStatusBar::render($agents, self::theme());
 
         // A single agent produces a single line with no internal newline.
         $this->assertSame(0, substr_count($output, "\n"));
@@ -264,7 +277,7 @@ final class AgentStatusBarTest extends TestCase
             ),
         ];
 
-        $output = AgentStatusBar::render($agents);
+        $output = AgentStatusBar::render($agents, self::theme());
 
         $this->assertSame(1, substr_count($output, "\n")); // 2 agents → 1 newline
         $this->assertStringContainsString('coder-1', $output);
@@ -292,7 +305,7 @@ final class AgentStatusBarTest extends TestCase
             ),
         ];
 
-        $output = AgentStatusBar::render($agents);
+        $output = AgentStatusBar::render($agents, self::theme());
 
         $posA = strpos($output, 'agent-a');
         $posB = strpos($output, 'agent-b');
@@ -317,10 +330,13 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0003,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
-        // Green SGR sequence (38;2;158;206;106).
-        $this->assertStringContainsString("\e[38;2;158;206;106m", $line);
+        // The palette's `success`, as the SGR bytes a TrueColor Style emits.
+        $this->assertStringContainsString(
+            self::theme()->shellSuccess->toFg(ColorProfile::TrueColor),
+            $line,
+        );
     }
 
     public function testRenderedFailedLineContainsRedSGR(): void
@@ -334,10 +350,13 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0001,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
-        // Red SGR sequence (38;2;247;118;142).
-        $this->assertStringContainsString("\e[38;2;247;118;142m", $line);
+        // The palette's `error`.
+        $this->assertStringContainsString(
+            self::theme()->shellError->toFg(ColorProfile::TrueColor),
+            $line,
+        );
     }
 
     public function testRenderedCompletedLineContainsGraySGR(): void
@@ -351,9 +370,12 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0020,
         );
 
-        $line = AgentStatusBar::renderAgentLine($agent);
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
-        // Gray SGR sequence (38;2;125;110;152).
-        $this->assertStringContainsString("\e[38;2;125;110;152m", $line);
+        // The palette's `muted`.
+        $this->assertStringContainsString(
+            self::theme()->shellMuted->toFg(ColorProfile::TrueColor),
+            $line,
+        );
     }
 }

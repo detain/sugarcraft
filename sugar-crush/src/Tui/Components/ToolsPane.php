@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\ToolResult;
 
 /**
@@ -36,16 +36,17 @@ final class ToolsPane
 
     public static function render(App $a, int $width, int $rows): string
     {
-        $entries = self::recentCalls($a, max(1, $rows - self::CHROME_ROWS));
+        $theme = $a->theme();
+        $entries = self::recentCalls($a, max(1, $rows - self::CHROME_ROWS), $theme);
 
         if ($entries === []) {
-            $body = Style::new()->foreground(Color::hex('#7d6e98'))
+            $body = Style::new()->foreground($theme->shellMuted)
                 ->render('(tool history empty)');
         } else {
             $lines = [];
             foreach ($entries as [$label, $color]) {
                 $lines[] = Style::new()
-                    ->foreground(Color::hex($color))
+                    ->foreground($color)
                     ->render(Width::truncate($label, max(1, $width - self::CHROME_COLS)));
             }
             $body = implode("\n", $lines);
@@ -57,8 +58,8 @@ final class ToolsPane
             ->width($width);
 
         $st = $a->pane === \SugarCraft\Crush\Tui\Pane::Tools
-            ? $st->borderForeground(Color::hex('#00ffaa'))
-            : $st->borderForeground(Color::hex('#ff66aa'));
+            ? $st->borderForeground($theme->shellPrimary)
+            : $st->borderForeground($theme->border);
 
         return $st->render($body);
     }
@@ -73,9 +74,9 @@ final class ToolsPane
      * BOTTOM (`clipHead()` keeps the top), so the rows that survive clipping
      * have to be the recent ones.
      *
-     * @return list<array{0: string, 1: string}> [label, hex colour]
+     * @return list<array{0: string, 1: \SugarCraft\Core\Util\Color}> [label, colour]
      */
-    private static function recentCalls(App $a, int $budget): array
+    private static function recentCalls(App $a, int $budget, Theme $theme): array
     {
         $entries = [];
         $history = $a->chat?->history ?? [];
@@ -87,7 +88,7 @@ final class ToolsPane
             // its content is the same model-authored one-liner the transcript
             // shows (see Message::describeToolCall()).
             if ($message->pendingToolCallId !== null) {
-                $entries[] = ['◌ ' . PaneLabel::of($message->content), '#fde68a'];
+                $entries[] = ['◌ ' . PaneLabel::of($message->content), $theme->shellWarning];
 
                 continue;
             }
@@ -98,8 +99,8 @@ final class ToolsPane
                 }
                 $name = PaneLabel::of($result->name);
                 $entries[] = $result->isError()
-                    ? ['✖ ' . $name . ' — ' . PaneLabel::of((string) $result->error), '#ff5f87']
-                    : ['✔ ' . $name, '#9ece6a'];
+                    ? ['✖ ' . $name . ' — ' . PaneLabel::of((string) $result->error), $theme->shellError]
+                    : ['✔ ' . $name, $theme->shellSuccess];
                 if (count($entries) >= $budget) {
                     break;
                 }

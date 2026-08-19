@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Crush\Theme;
 
 /**
  * Keyboard-navigable session picker overlay for the SugarCrush TUI.
@@ -145,13 +145,13 @@ final class SessionPicker
     /**
      * Render the session picker overlay.
      */
-    public function render(int $width, int $height): string
+    public function render(int $width, int $height, Theme $theme): string
     {
         $filtered = $this->filteredSessions();
         $selectedSession = $this->selectedSession();
 
         // Build header
-        $header = $this->renderHeader($width);
+        $header = $this->renderHeader($width, $theme);
         $headerHeight = substr_count($header, "\n") + 1;
 
         // Calculate visible range for scrolling
@@ -164,12 +164,12 @@ final class SessionPicker
         foreach ($visibleSessions as $i => $session) {
             $actualIndex = $startIndex + $i;
             $isSelected = $actualIndex === $this->selectedIndex;
-            $lines[] = $this->renderSessionLine($session, $isSelected, $width);
+            $lines[] = $this->renderSessionLine($session, $isSelected, $width, $theme);
         }
 
         if ($lines === []) {
             $lines[] = Style::new()
-                ->foreground(Color::hex('#7d6e98'))
+                ->foreground($theme->shellMuted)
                 ->render('  (no sessions)');
         }
 
@@ -178,48 +178,48 @@ final class SessionPicker
         // Wrap in border
         $st = Style::new()
             ->border(Border::rounded()->withTitle(' sessions '))
-            ->borderForeground(Color::hex('#00ffaa'))
+            ->borderForeground($theme->shellPrimary)
             ->padding(0, 1)
             ->width($width);
 
         // If no sessions match filter, show different styling
         if ($filtered === [] && $this->branchFilter !== null) {
-            $st = $st->borderForeground(Color::hex('#fde68a'));
+            $st = $st->borderForeground($theme->shellWarning);
         }
 
-        return $header . "\n" . $st->render($body) . $this->renderFooter($width, $selectedSession);
+        return $header . "\n" . $st->render($body) . $this->renderFooter($width, $selectedSession, $theme);
     }
 
     /**
      * Render the header with title and branch filter indicator.
      */
-    private function renderHeader(int $width): string
+    private function renderHeader(int $width, Theme $theme): string
     {
         $title = Style::new()
-            ->foreground(Color::hex('#00ffaa'))
+            ->foreground($theme->shellPrimary)
             ->bold()
             ->render(' session picker ');
 
         $filterText = '';
         if ($this->branchFilter !== null) {
             $filterText = '  ' . Style::new()
-                ->foreground(Color::hex('#fde68a'))
+                ->foreground($theme->shellWarning)
                 ->render('branch:') . ' ' . Style::new()
-                ->foreground(Color::hex('#00ffaa'))
+                ->foreground($theme->shellPrimary)
                 ->render($this->branchFilter);
         }
 
         $controls = Style::new()
-            ->foreground(Color::hex('#7d6e98'))
+            ->foreground($theme->shellMuted)
             ->render(' ↑↓ browse  ');
         $controls .= Style::new()
-            ->foreground(Color::hex('#7d6e98'))
+            ->foreground($theme->shellMuted)
             ->render('↵ resume  ');
         $controls .= Style::new()
-            ->foreground(Color::hex('#7d6e98'))
+            ->foreground($theme->shellMuted)
             ->render('space preview  ');
         $controls .= Style::new()
-            ->foreground(Color::hex('#7d6e98'))
+            ->foreground($theme->shellMuted)
             ->render('esc close');
 
         $separator = str_repeat('─', max(0, $width - 2));
@@ -232,11 +232,11 @@ final class SessionPicker
      *
      * @param array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string} $session
      */
-    private function renderSessionLine(array $session, bool $isSelected, int $width): string
+    private function renderSessionLine(array $session, bool $isSelected, int $width, Theme $theme): string
     {
         $indicator = $isSelected ? '▶' : ' ';
-        $nameStyle = $isSelected ? Color::hex('#00ffaa') : Color::hex('#c5b6dd');
-        $metaStyle = Color::hex('#7d6e98');
+        $nameStyle = $isSelected ? $theme->shellPrimary : $theme->shellForeground;
+        $metaStyle = $theme->shellMuted;
 
         // Truncate name if needed
         $maxNameLen = 20;
@@ -269,7 +269,7 @@ final class SessionPicker
     /**
      * Render the footer with selected session details.
      */
-    private function renderFooter(int $width, array|null $session): string
+    private function renderFooter(int $width, array|null $session, Theme $theme): string
     {
         if ($session === null) {
             return '';
@@ -283,10 +283,10 @@ final class SessionPicker
         }
 
         $footer = "\n" . Style::new()
-            ->foreground(Color::hex('#7d6e98'))
+            ->foreground($theme->border)
             ->render('─'.str_repeat('─', $width - 2));
         $footer .= "\n" . Style::new()
-            ->foreground(Color::hex('#c5b6dd'))
+            ->foreground($theme->shellForeground)
             ->render('  ' . $summary);
 
         return $footer;

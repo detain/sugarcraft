@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Crush\Theme;
 
 /**
  * Renders the Agent View list pane — a scrollable, selectable list of all
@@ -16,15 +17,17 @@ use SugarCraft\Sprinkles\Style;
  * Agent row format (left-to-right):
  *   [dot] name  [status]  operation…  elapsed  usage
  *
- * Colour coding mirrors AgentStatusBar:
- *   Green  (#9ece6a): working
- *   Yellow (#e0af68): waiting
- *   Blue   (#7aa2f7): streaming
- *   Red    (#f7768e): failed
- *   Gray   (#7d6e98): completed / stopped
+ * Colour coding mirrors AgentStatusBar, by {@see Theme} token:
+ *   `shellSuccess`: working
+ *   `shellWarning`: waiting
+ *   `shellInfo`:    streaming
+ *   `shellError`:   failed
+ *   `shellMuted`:   completed / stopped
  *
- * The selected-agent highlight uses a dark background inversion so it is
- * legible regardless of the terminal colour scheme.  Arrow-key navigation
+ * The selected-agent highlight fills the row with the palette's `separator`
+ * and keeps the status colour on top. It used to fill a literal #232338, which
+ * is an inversion only on a dark terminal — on a light one it painted a dark
+ * band under text chosen to be read on light.  Arrow-key navigation
  * is handled by the caller (KeyboardHandler / App state); this class only
  * renders the current selection state passed in.
  *
@@ -32,14 +35,14 @@ use SugarCraft\Sprinkles\Style;
  */
 final class AgentViewPane
 {
-    /** Hex values matched to AgentStatusBar::STATUS_HEX. */
-    private const STATUS_HEX = [
-        'working'   => '#9ece6a',
-        'waiting'   => '#e0af68',
-        'streaming' => '#7aa2f7',
-        'failed'    => '#f7768e',
-        'completed' => '#7d6e98',
-        'stopped'   => '#7d6e98',
+    /** Theme tokens matched to {@see AgentStatusBar}'s STATUS_TOKEN. */
+    private const STATUS_TOKEN = [
+        'working'   => 'shellSuccess',
+        'waiting'   => 'shellWarning',
+        'streaming' => 'shellInfo',
+        'failed'    => 'shellError',
+        'completed' => 'shellMuted',
+        'stopped'   => 'shellMuted',
     ];
 
     /**
@@ -53,12 +56,12 @@ final class AgentViewPane
      *                                               lists are silently truncated at render time;
      *                                               scrolling is handled by the caller).
      */
-    public static function render(array $agents, int $selectedIndex, int $width, int $maxRows): string
+    public static function render(array $agents, int $selectedIndex, int $width, int $maxRows, Theme $theme): string
     {
         // Early exit — empty list: show a tasteful placeholder inside the border.
         if ($agents === []) {
             $body = Style::new()
-                ->foreground(Color::hex('#565676'))
+                ->foreground($theme->shellMuted)
                 ->render('(no active agents)');
 
             return Style::new()
@@ -79,7 +82,7 @@ final class AgentViewPane
         for ($i = 0; $i < $count; $i++) {
             $agent = $agents[$i];
             $isSelected = ($i === $selectedIndex);
-            $statusColor = self::statusColor($agent->status);
+            $statusColor = self::statusColor($agent->status, $theme);
 
             // Colour dot + name + status badge.
             $dot  = Style::new()->foreground($statusColor)->render("\u{25CF}");
@@ -100,13 +103,13 @@ final class AgentViewPane
                 // Inverted highlight — dark background, status-colour foreground.
                 $rowStyle = Style::new()
                     ->foreground($statusColor)
-                    ->background(Color::hex('#232338'));
+                    ->background($theme->shellSeparator);
             } else {
                 $rowStyle = Style::new()
-                    ->foreground(Color::hex('#7d6e98'));
+                    ->foreground($theme->shellMuted);
             }
 
-            $rightStyle = Style::new()->foreground(Color::hex('#565676'));
+            $rightStyle = Style::new()->foreground($theme->shellMuted);
 
             // Right-pad the left section so the right section lands at the edge.
             $leftPadded = str_pad($leftSection, $width - strlen($rightSection) - 1, ' ', STR_PAD_RIGHT);
@@ -126,13 +129,13 @@ final class AgentViewPane
 
     /**
      * Resolve the colour for a given operational status string.
-     * Defaults to gray (#7d6e98) for unknown statuses.
+     * Falls back to the `completed` token for unknown statuses.
      */
-    public static function statusColor(string $status): Color
+    public static function statusColor(string $status, Theme $theme): Color
     {
-        $hex = self::STATUS_HEX[strtolower(trim($status))] ?? self::STATUS_HEX['completed'];
+        $token = self::STATUS_TOKEN[strtolower(trim($status))] ?? self::STATUS_TOKEN['completed'];
 
-        return Color::hex($hex);
+        return $theme->$token;
     }
 
     /**

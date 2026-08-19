@@ -7,33 +7,40 @@ namespace SugarCraft\Crush\Tui;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Crush\Theme;
 
 /**
- * Colour-coded left border mirrors AgentStatusBar / AgentViewPane:
- *   Green  (#9ece6a): actively producing output
- *   Yellow (#e0af68): waiting for tool results OR stalled
- *   Red    (#f7768e): error condition
- *   Gray   (#7d6e98): completed / stopped
+ * Colour-coded left border mirrors AgentStatusBar / AgentViewPane, by
+ * {@see Theme} token:
+ *   `shellSuccess`: actively producing output
+ *   `shellWarning`: waiting for tool results OR stalled
+ *   `shellError`:   error condition
+ *   `shellMuted`:   completed / stopped
  *
- * When a stall warning is active the border switches to amber (#e0af68)
- * and a "⚠ stalled" indicator appears in the header line.
+ * When a stall warning is active the border switches to the palette's warning
+ * colour ({@see STALL_TOKEN}) and a "⚠ stalled" indicator appears in the
+ * header line.
  *
  * Mirrors charmbracelet/crush per-agent streaming display design.
  */
 final class AgentOutputPane
 {
-    /** Hex values matched to AgentStatusBar::STATUS_HEX. */
-    private const STATUS_HEX = [
-        'working'   => '#9ece6a',
-        'waiting'   => '#e0af68',
-        'streaming' => '#7aa2f7',
-        'failed'    => '#f7768e',
-        'completed' => '#7d6e98',
-        'stopped'   => '#7d6e98',
+    /** Theme tokens matched to {@see AgentStatusBar}'s STATUS_TOKEN. */
+    private const STATUS_TOKEN = [
+        'working'   => 'shellSuccess',
+        'waiting'   => 'shellWarning',
+        'streaming' => 'shellInfo',
+        'failed'    => 'shellError',
+        'completed' => 'shellMuted',
+        'stopped'   => 'shellMuted',
     ];
 
-    /** Amber used for stall warning — same as waiting but semantically distinct. */
-    private const STALL_HEX = '#e0af68';
+    /**
+     * Token used for the stall warning — the same one `waiting` resolves to
+     * but semantically distinct, exactly as the two literals it replaces were
+     * both #e0af68.
+     */
+    private const STALL_TOKEN = 'shellWarning';
 
     /** Maximum output lines shown in peek mode. */
     public const PEEK_LINES = 4;
@@ -46,28 +53,29 @@ final class AgentOutputPane
      * @param int              $height Available terminal rows for the pane.
      * @param Mode             $mode   PEEK = last N lines in a tile; ATTACH = full focus.
      */
-    public static function render(AgentOutputState $state, int $width, int $height, Mode $mode = Mode::Peek): string
+    public static function render(AgentOutputState $state, int $width, int $height, Theme $theme, Mode $mode = Mode::Peek): string
     {
         $isStalled = $state->stallWarning !== null;
+        $stallColor = $theme->{self::STALL_TOKEN};
         $borderColor = $isStalled
-            ? Color::hex(self::STALL_HEX)
-            : self::borderColor($state->status);
+            ? $stallColor
+            : self::borderColor($state->status, $theme);
         $agentColor  = $isStalled
-            ? Color::hex(self::STALL_HEX)
-            : self::statusColor($state->status);
+            ? $stallColor
+            : self::statusColor($state->status, $theme);
 
         // ── Header line ───────────────────────────────────────────────────
         // "● name  [status]  model  tok | $cost  ⚠ stalled"
         $dot     = Style::new()->foreground($agentColor)->render("\u{25CF}");
         $name    = Style::new()->bold()->foreground($agentColor)->render($state->name);
         $status  = Style::new()->foreground($agentColor)->render('[' . $state->status . ']');
-        $model   = Style::new()->foreground(Color::hex('#7aa2f7'))->render($state->model);
-        $usage   = Style::new()->foreground(Color::hex('#565676'))->render($state->usageDisplay());
+        $model   = Style::new()->foreground($theme->shellInfo)->render($state->model);
+        $usage   = Style::new()->foreground($theme->shellMuted)->render($state->usageDisplay());
         $header  = "{$dot} {$name} {$status}  {$model}  {$usage}";
 
         if ($isStalled) {
             $stallIndicator = Style::new()
-                ->foreground(Color::hex(self::STALL_HEX))
+                ->foreground($stallColor)
                 ->bold()
                 ->render('  ⚠ stalled');
             $header .= $stallIndicator;
@@ -77,16 +85,16 @@ final class AgentOutputPane
         $lines = $state->outputBuffer;
 
         if ($mode === Mode::Peek) {
-            return self::renderPeek($header, $lines, $borderColor, $state->name, $width);
+            return self::renderPeek($header, $lines, $borderColor, $state->name, $width, $theme);
         }
 
-        return self::renderAttach($header, $lines, $borderColor, $state->name, $width, $height);
+        return self::renderAttach($header, $lines, $borderColor, $state->name, $width, $height, $theme);
     }
 
     /**
      * Peek mode: compact tile showing header + last N buffer lines.
      */
-    private static function renderPeek(string $header, array $lines, Color $borderColor, string $agentName, int $width): string
+    private static function renderPeek(string $header, array $lines, Color $borderColor, string $agentName, int $width, Theme $theme): string
     {
         // Show last PEEK_LINES lines (most recent at bottom).
         $peekLines = array_slice($lines, -self::PEEK_LINES);
@@ -95,7 +103,7 @@ final class AgentOutputPane
         // Preview label when buffer exceeds peek window.
         if (count($lines) > self::PEEK_LINES) {
             $bodyLines[] = Style::new()
-                ->foreground(Color::hex('#565676'))
+                ->foreground($theme->shellMuted)
                 ->render('  + ' . (count($lines) - self::PEEK_LINES) . ' more line(s)…');
         }
 
@@ -110,7 +118,7 @@ final class AgentOutputPane
             ->borderTopForeground($borderColor)
             ->borderRightForeground($borderColor)
             ->borderBottomForeground($borderColor)
-            ->foreground(Color::hex('#c5b6dd'))
+            ->foreground($theme->shellForeground)
             ->padding(0, 1)
             ->width($width)
             ->render($body);
@@ -119,7 +127,7 @@ final class AgentOutputPane
     /**
      * Attach mode: full-focus view with full buffer and line count footer.
      */
-    private static function renderAttach(string $header, array $lines, Color $borderColor, string $agentName, int $width, int $height): string
+    private static function renderAttach(string $header, array $lines, Color $borderColor, string $agentName, int $width, int $height, Theme $theme): string
     {
         // Reserve rows: 1 header + 1 blank + 1 footer = 3; rest for output.
         $outputRows = max(1, $height - 3);
@@ -128,7 +136,7 @@ final class AgentOutputPane
         $outputStyled = [];
         foreach ($visibleLines as $line) {
             $outputStyled[] = Style::new()
-                ->foreground(Color::hex('#e0e0e0'))
+                ->foreground($theme->shellForeground)
                 ->render($line);
         }
 
@@ -143,7 +151,7 @@ final class AgentOutputPane
         $footerLine = '';
         if ($footerParts !== []) {
             $footerLine = Style::new()
-                ->foreground(Color::hex('#565676'))
+                ->foreground($theme->shellMuted)
                 ->render('  ' . implode('  ·  ', $footerParts));
         }
 
@@ -163,7 +171,7 @@ final class AgentOutputPane
             ->borderTopForeground($borderColor)
             ->borderRightForeground($borderColor)
             ->borderBottomForeground($borderColor)
-            ->foreground(Color::hex('#c5b6dd'))
+            ->foreground($theme->shellForeground)
             ->padding(0, 1)
             ->width($width)
             ->render($body);
@@ -174,20 +182,20 @@ final class AgentOutputPane
      * Green = actively producing output, Yellow = waiting for tool results,
      * Red = error, Gray = completed / stopped.
      */
-    public static function borderColor(string $status): Color
+    public static function borderColor(string $status, Theme $theme): Color
     {
-        $hex = self::STATUS_HEX[strtolower(trim($status))] ?? self::STATUS_HEX['completed'];
+        $token = self::STATUS_TOKEN[strtolower(trim($status))] ?? self::STATUS_TOKEN['completed'];
 
-        return Color::hex($hex);
+        return $theme->$token;
     }
 
     /**
      * Resolve the foreground colour for a given operational status string.
      */
-    public static function statusColor(string $status): Color
+    public static function statusColor(string $status, Theme $theme): Color
     {
-        $hex = self::STATUS_HEX[strtolower(trim($status))] ?? self::STATUS_HEX['completed'];
+        $token = self::STATUS_TOKEN[strtolower(trim($status))] ?? self::STATUS_TOKEN['completed'];
 
-        return Color::hex($hex);
+        return $theme->$token;
     }
 }

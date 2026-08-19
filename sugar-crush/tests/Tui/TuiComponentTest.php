@@ -17,6 +17,7 @@ use SugarCraft\Crush\Tui\Components\SkillsPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
+use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * @see ChatPane
@@ -30,6 +31,18 @@ use SugarCraft\Crush\Tui\Renderer;
 final class TuiComponentTest extends TestCase
 {
     private ProviderInterface $provider;
+
+    /**
+     * The exact SGR bytes a Sprinkles Style emits for this colour as a
+     * foreground. Style's default profile is TrueColor, so this is what the
+     * pane output actually carries - derived from the theme rather than
+     * hardcoded, because the whole point of W3 is that the shell's colours are
+     * the PALETTE's now and a literal here would re-freeze one palette.
+     */
+    private static function fg(\SugarCraft\Core\Util\Color $c): string
+    {
+        return $c->toFg(ColorProfile::TrueColor);
+    }
 
     protected function setUp(): void
     {
@@ -120,17 +133,16 @@ final class TuiComponentTest extends TestCase
     {
         Renderer::setSize(120, 40);
 
-        // Chat pane focused - should have cyan/green border (#00ffaa)
+        // Chat pane focused - should carry the palette's `primary`
         $appFocused = $this->makeApp(Pane::Chat);
         $outputFocused = ChatPane::render($appFocused, 120, 40);
-        // The focus border uses \x1b[38;2;0;255;170m for #00ffaa
-        $this->assertStringContainsString("\x1b[38;2;0;255;170m", $outputFocused);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
 
-        // Chat pane not focused - should have pink border (#ff66aa)
+        // Chat pane not focused - should carry the palette's (contrast-checked) `border`
         $appUnfocused = $this->makeApp(Pane::Skills);
         $outputUnfocused = ChatPane::render($appUnfocused, 120, 40);
-        // The unfocused border uses \x1b[38;2;255;102;170m for #ff66aa
-        $this->assertStringContainsString("\x1b[38;2;255;102;170m", $outputUnfocused);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
     }
 
     // =========================================================================
@@ -174,12 +186,13 @@ final class TuiComponentTest extends TestCase
         // Input pane focused
         $appFocused = $this->makeApp(Pane::Input);
         $outputFocused = InputPane::render($appFocused, 120);
-        $this->assertStringContainsString("\x1b[38;2;0;255;170m", $outputFocused);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
 
         // Input pane not focused
         $appUnfocused = $this->makeApp(Pane::Chat);
         $outputUnfocused = InputPane::render($appUnfocused, 120);
-        $this->assertStringContainsString("\x1b[38;2;255;102;170m", $outputUnfocused);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
     }
 
     // =========================================================================
@@ -251,12 +264,13 @@ final class TuiComponentTest extends TestCase
         // Skills pane focused
         $appFocused = $this->makeApp(Pane::Skills);
         $outputFocused = SkillsPane::render($appFocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;0;255;170m", $outputFocused);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
 
         // Skills pane not focused
         $appUnfocused = $this->makeApp(Pane::Chat);
         $outputUnfocused = SkillsPane::render($appUnfocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;255;102;170m", $outputUnfocused);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
     }
 
     /**
@@ -309,9 +323,9 @@ final class TuiComponentTest extends TestCase
 
         $output = SkillsPane::render($app, 40, 20);
 
-        // Badge text, its own colour (#ffb86c), and the badge preceding the name.
+        // Badge text, its own theme token, and the badge preceding the name.
         $this->assertStringContainsString('[claude]', $output);
-        $this->assertStringContainsString("\x1b[38;2;255;184;108m", $output);
+        $this->assertStringContainsString(self::fg($app->theme()->shellWarning), $output);
         $this->assertMatchesRegularExpression('/\[claude\].*imported-skill/s', $output);
     }
 
@@ -326,7 +340,7 @@ final class TuiComponentTest extends TestCase
         $output = SkillsPane::render($app, 40, 20);
 
         $this->assertStringContainsString('[opencode]', $output);
-        $this->assertStringContainsString("\x1b[38;2;139;233;253m", $output);
+        $this->assertStringContainsString(self::fg($app->theme()->shellInfo), $output);
     }
 
     /**
@@ -450,12 +464,13 @@ final class TuiComponentTest extends TestCase
         // Agents pane focused
         $appFocused = $this->makeApp(Pane::Agents);
         $outputFocused = AgentsPane::render($appFocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;0;255;170m", $outputFocused);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
 
         // Agents pane not focused
         $appUnfocused = $this->makeApp(Pane::Chat);
         $outputUnfocused = AgentsPane::render($appUnfocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;255;102;170m", $outputUnfocused);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
     }
 
     // =========================================================================
@@ -506,12 +521,13 @@ final class TuiComponentTest extends TestCase
         // Files pane focused
         $appFocused = $this->makeApp(Pane::Files);
         $outputFocused = FilesPane::render($appFocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;0;255;170m", $outputFocused);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
 
         // Files pane not focused
         $appUnfocused = $this->makeApp(Pane::Chat);
         $outputUnfocused = FilesPane::render($appUnfocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;255;102;170m", $outputUnfocused);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
     }
 
     // =========================================================================
@@ -541,12 +557,13 @@ final class TuiComponentTest extends TestCase
         // Tools pane focused
         $appFocused = $this->makeApp(Pane::Tools);
         $outputFocused = ToolsPane::render($appFocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;0;255;170m", $outputFocused);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
 
         // Tools pane not focused
         $appUnfocused = $this->makeApp(Pane::Chat);
         $outputUnfocused = ToolsPane::render($appUnfocused, 40, 20);
-        $this->assertStringContainsString("\x1b[38;2;255;102;170m", $outputUnfocused);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
     }
 
     // =========================================================================

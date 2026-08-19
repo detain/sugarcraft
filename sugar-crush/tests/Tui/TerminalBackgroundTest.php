@@ -235,6 +235,84 @@ final class TerminalBackgroundTest extends TestCase
         TerminalBackground::forget();
 
         $this->assertNull(TerminalBackground::observed());
+        $this->assertNull(TerminalBackground::observedColor());
         $this->assertTrue(TerminalBackground::isDark(['COLORFGBG' => '15;0']));
+    }
+
+    // =========================================================================
+    // W3(b): the OSC 11 reply's RGB is retained, not reduced to one bit
+    // =========================================================================
+
+    /**
+     * The whole point: `isDark()` cannot tell #0e0e14 from #333f58, and the
+     * shell's chrome contrast differs by a factor of 3.4 between them. Both are
+     * recorded from the ONE message so they can never disagree about which
+     * terminal answered.
+     */
+    public function testObserveRetainsTheReportedColourBesideTheDarkBit(): void
+    {
+        TerminalBackground::observe(new BackgroundColorMsg(0x33, 0x3f, 0x58));
+
+        $this->assertTrue(TerminalBackground::observed());
+        $colour = TerminalBackground::observedColor();
+        $this->assertNotNull($colour);
+        $this->assertSame('#333f58', $colour->toHex());
+        $this->assertSame([0x33, 0x3f, 0x58], [$colour->r, $colour->g, $colour->b]);
+    }
+
+    /**
+     * Two different dark terminals must NOT collapse to the same answer — the
+     * failure the one-bit memo had by construction.
+     */
+    public function testTwoDifferentDarkBackgroundsStayDistinguishable(): void
+    {
+        TerminalBackground::observe(new BackgroundColorMsg(0x0e, 0x0e, 0x14));
+        $first = TerminalBackground::color();
+
+        TerminalBackground::observe(new BackgroundColorMsg(0x33, 0x3f, 0x58));
+        $second = TerminalBackground::color();
+
+        $this->assertNotSame($first->toHex(), $second->toHex());
+        // ...while the bit they both reduce to is identical, which is exactly
+        // why the bit was not enough.
+        $this->assertTrue($first->isDark());
+        $this->assertTrue($second->isDark());
+    }
+
+    /**
+     * `color()`'s precedence is `isDark()`'s, by construction: the explicit
+     * override outranks even the terminal's own reply.
+     */
+    public function testColourFollowsTheSamePrecedenceAsIsDark(): void
+    {
+        TerminalBackground::observe(new BackgroundColorMsg(0, 0, 0));
+
+        $this->assertSame('#000000', TerminalBackground::color(['COLORFGBG' => '0;15'])->toHex());
+
+        // Override on top: a statement outranks a measurement, both here and in
+        // isDark(), so the two can never disagree about which terminal to
+        // resolve a theme against.
+        $env = [TerminalBackground::ENV_OVERRIDE => 'light'];
+        $this->assertSame('#ffffff', TerminalBackground::color($env)->toHex());
+        $this->assertFalse(TerminalBackground::isDark($env));
+    }
+
+    /**
+     * With no reply at all, `color()` falls back through `COLORFGBG` to a
+     * NOMINAL black/white — a floor, not a measurement (see the method's
+     * docblock), and it must agree with `isDark()` on the same input.
+     */
+    public function testColourFallsBackToTheNominalMonochromeWithNoReply(): void
+    {
+        $this->assertSame('#000000', TerminalBackground::color(['COLORFGBG' => '15;0'])->toHex());
+        $this->assertSame('#ffffff', TerminalBackground::color(['COLORFGBG' => '0;15'])->toHex());
+
+        foreach ([['COLORFGBG' => '15;0'], ['COLORFGBG' => '0;15'], []] as $env) {
+            $this->assertSame(
+                TerminalBackground::isDark($env),
+                TerminalBackground::color($env)->isDark(),
+                'color() and isDark() must not disagree about the same environment',
+            );
+        }
     }
 }

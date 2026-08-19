@@ -3,5 +3,5 @@ PHP 8.3.6 (cli) (built: May 25 2026 13:12:06) (NTS)
 # example: radio
 ---
 [38;2;135;75;253m>◉ Option A[0m
-[38;2;127;127;127m ○ Option B[0m
-[38;2;127;127;127m ○ Option C[0m[0m
+[90m ○ Option B[0m
+[90m ○ Option C[0m[0m

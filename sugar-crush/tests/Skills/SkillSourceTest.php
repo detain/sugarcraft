@@ -7,6 +7,10 @@ namespace SugarCraft\Crush\Tests\Skills;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillSource;
+use SugarCraft\Crush\Theme;
+use SugarCraft\Crush\Tui\TerminalBackground;
+use SugarCraft\Core\Msg\BackgroundColorMsg;
+use SugarCraft\Sprinkles\Theme as SprinklesTheme;
 
 /**
  * Tests for SkillSource — provenance tagging for foreign skill imports.
@@ -42,23 +46,57 @@ final class SkillSourceTest extends TestCase
     // color()
     // -------------------------------------------------------------------------
 
-    public function testEachSourceHasItsOwnBadgeColor(): void
+    /**
+     * The badge is meant to be scannable without reading it, so no two sources
+     * may share a hue.
+     *
+     * DOMAIN: asserted for each offered palette against that palette's OWN
+     * background, i.e. a terminal themed to match the theme the user picked.
+     * On a terminal background no palette token is legible against (a mid
+     * grey), {@see Theme} escalates several tokens onto one monochrome floor
+     * and this promise does not hold - see SkillSource::color()'s docblock for
+     * why legibility wins that tie.
+     */
+    public function testEachSourceHasItsOwnBadgeColorInEveryPalette(): void
     {
-        // The badge is meant to be scannable without reading it, so no two
-        // sources may share a hue.
-        $rgb = array_map(
-            static fn(SkillSource $s): string => $s->color()->r . ',' . $s->color()->g . ',' . $s->color()->b,
-            SkillSource::cases()
-        );
+        foreach (Theme::names() as $name) {
+            TerminalBackground::forget();
+            $sprinkles = self::sprinklesFor($name);
+            TerminalBackground::observe(new BackgroundColorMsg(
+                $sprinkles->background->r,
+                $sprinkles->background->g,
+                $sprinkles->background->b,
+            ));
 
-        $this->assertCount(count(SkillSource::cases()), array_unique($rgb));
+            $theme = Theme::byName($name);
+            $rgb = array_map(
+                static fn(SkillSource $s): string => $s->color($theme)->toHex(),
+                SkillSource::cases()
+            );
+
+            $this->assertCount(count(SkillSource::cases()), array_unique($rgb), "hue collision under {$name}");
+        }
+
+        TerminalBackground::forget();
     }
 
-    public function testClaudeColorIsAmber(): void
+    public function testClaudeBadgeUsesTheWarningToken(): void
     {
-        $c = SkillSource::Claude->color();
+        $theme = Theme::byName('dark');
 
-        $this->assertSame([255, 184, 108], [$c->r, $c->g, $c->b]);
+        $this->assertSame($theme->shellWarning->toHex(), SkillSource::Claude->color($theme)->toHex());
+    }
+
+    /** `adaptive` resolves to dark/light, so it has no background token of its own. */
+    private static function sprinklesFor(string $name): SprinklesTheme
+    {
+        return match ($name) {
+            'light' => SprinklesTheme::light(),
+            'dracula' => SprinklesTheme::dracula(),
+            'tokyoNight' => SprinklesTheme::tokyoNight(),
+            'ansi' => SprinklesTheme::ansi(),
+            default => SprinklesTheme::dark(),
+        };
     }
 
     // -------------------------------------------------------------------------

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -110,8 +109,9 @@ final class SettingsPane
         $inner = max(1, $width - self::CHROME_COLS);
         $budget = max(1, $rows - self::CHROME_ROWS);
 
-        $labelStyle = Style::new()->foreground(Color::hex('#7d6e98'));
-        $valueStyle = Style::new()->foreground(Color::hex('#c5b6dd'));
+        $theme = $a->theme();
+        $labelStyle = Style::new()->foreground($theme->shellMuted);
+        $valueStyle = Style::new()->foreground($theme->shellForeground);
 
         $lines = [];
         foreach (self::settings($a) as [$label, $value]) {
@@ -129,8 +129,8 @@ final class SettingsPane
             ->width($width);
 
         $st = $a->pane === Pane::Settings
-            ? $st->borderForeground(Color::hex('#00ffaa'))
-            : $st->borderForeground(Color::hex('#ff66aa'));
+            ? $st->borderForeground($theme->shellPrimary)
+            : $st->borderForeground($theme->border);
 
         return $st->render(implode("\n", array_slice($lines, 0, $budget)));
     }

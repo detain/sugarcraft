@@ -9,9 +9,27 @@ use SugarCraft\Crush\Tui\AgentOutputPane;
 use SugarCraft\Crush\Tui\AgentOutputState;
 use SugarCraft\Crush\Tui\Mode;
 use SugarCraft\Crush\Tui\StallWarning;
+use SugarCraft\Crush\Theme;
+use SugarCraft\Core\Util\Color;
 
 final class AgentOutputPaneTest extends TestCase
 {
+    /** The palette every colour assertion below is stated against. */
+    private static function theme(): Theme
+    {
+        return Theme::byName('dark');
+    }
+
+    /**
+     * The `r;g;b` triple a TrueColor SGR carries for this colour — the shape
+     * these tests match on, so an assertion catches the colour whether it is
+     * used as a foreground (38;2;…) or a border (also 38;2;…).
+     */
+    private static function rgb(Color $c): string
+    {
+        return $c->r . ';' . $c->g . ';' . $c->b;
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // render() — Mode::Peek
     // ─────────────────────────────────────────────────────────────────
@@ -29,7 +47,7 @@ final class AgentOutputPaneTest extends TestCase
             outputBuffer: [],
         );
 
-        $output = AgentOutputPane::render($state, 60, 10, Mode::Peek);
+        $output = AgentOutputPane::render($state, 60, 10, self::theme(), Mode::Peek);
 
         // Header must be present (contains agent name and status).
         $this->assertStringContainsString('coder-1', $output);
@@ -52,7 +70,7 @@ final class AgentOutputPaneTest extends TestCase
             outputBuffer: ['line 1', 'line 2', 'line 3'],
         );
 
-        $output = AgentOutputPane::render($state, 60, 10, Mode::Peek);
+        $output = AgentOutputPane::render($state, 60, 10, self::theme(), Mode::Peek);
 
         // All three lines must appear (buffer is <= PEEK_LINES = 4).
         $this->assertStringContainsString('line 1', $output);
@@ -76,7 +94,7 @@ final class AgentOutputPaneTest extends TestCase
             outputBuffer: $lines,
         );
 
-        $output = AgentOutputPane::render($state, 60, 10, Mode::Peek);
+        $output = AgentOutputPane::render($state, 60, 10, self::theme(), Mode::Peek);
 
         // Only last PEEK_LINES (4) lines should appear: 5, 6, 7, 8.
         $this->assertStringContainsString('line 5', $output);
@@ -109,7 +127,7 @@ final class AgentOutputPaneTest extends TestCase
         );
 
         // Height large enough to show all lines.
-        $output = AgentOutputPane::render($state, 60, 20, Mode::Attach);
+        $output = AgentOutputPane::render($state, 60, 20, self::theme(), Mode::Attach);
 
         // Header present.
         $this->assertStringContainsString('coder-1', $output);
@@ -136,7 +154,7 @@ final class AgentOutputPaneTest extends TestCase
         );
 
         // Height of 6 → reserve 3 → outputRows = 3.
-        $output = AgentOutputPane::render($state, 60, 6, Mode::Attach);
+        $output = AgentOutputPane::render($state, 60, 6, self::theme(), Mode::Attach);
 
         // Lines 1-3 should be visible.
         $this->assertStringContainsString('output line 1', $output);
@@ -155,31 +173,34 @@ final class AgentOutputPaneTest extends TestCase
 
     public function testBorderColorAllSixStatuses(): void
     {
-        // status → expected hex (with #)
+        $t = self::theme();
+        // status → the Theme token that must colour it
         $expected = [
-            'working'   => '#9ece6a',
-            'waiting'   => '#e0af68',
-            'streaming' => '#7aa2f7',
-            'failed'    => '#f7768e',
-            'completed' => '#7d6e98',
-            'stopped'   => '#7d6e98',
+            'working'   => $t->shellSuccess,
+            'waiting'   => $t->shellWarning,
+            'streaming' => $t->shellInfo,
+            'failed'    => $t->shellError,
+            'completed' => $t->shellMuted,
+            'stopped'   => $t->shellMuted,
         ];
 
-        foreach ($expected as $status => $hex) {
-            $color = AgentOutputPane::borderColor($status);
+        foreach ($expected as $status => $token) {
+            $color = AgentOutputPane::borderColor($status, $t);
             $this->assertSame(
-                $hex,
+                $token->toHex(),
                 $color->toHex(),
-                "borderColor({$status}) should return #{$hex}",
+                "borderColor({$status}) must come from the palette, not a literal",
             );
         }
     }
 
-    public function testBorderColorUnknownStatusDefaultsToGray(): void
+    public function testBorderColorUnknownStatusDefaultsToTheCompletedToken(): void
     {
-        $color = AgentOutputPane::borderColor('not-a-real-status');
-        // Default is 'completed' which maps to #7d6e98.
-        $this->assertSame('#7d6e98', $color->toHex());
+        $t = self::theme();
+        $this->assertSame(
+            AgentOutputPane::borderColor('completed', $t)->toHex(),
+            AgentOutputPane::borderColor('not-a-real-status', $t)->toHex(),
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -188,30 +209,33 @@ final class AgentOutputPaneTest extends TestCase
 
     public function testStatusColorAllSixStatuses(): void
     {
+        $t = self::theme();
         $expected = [
-            'working'   => '#9ece6a',
-            'waiting'   => '#e0af68',
-            'streaming' => '#7aa2f7',
-            'failed'    => '#f7768e',
-            'completed' => '#7d6e98',
-            'stopped'   => '#7d6e98',
+            'working'   => $t->shellSuccess,
+            'waiting'   => $t->shellWarning,
+            'streaming' => $t->shellInfo,
+            'failed'    => $t->shellError,
+            'completed' => $t->shellMuted,
+            'stopped'   => $t->shellMuted,
         ];
 
-        foreach ($expected as $status => $hex) {
-            $color = AgentOutputPane::statusColor($status);
+        foreach ($expected as $status => $token) {
+            $color = AgentOutputPane::statusColor($status, $t);
             $this->assertSame(
-                $hex,
+                $token->toHex(),
                 $color->toHex(),
-                "statusColor({$status}) should return #{$hex}",
+                "statusColor({$status}) must come from the palette, not a literal",
             );
         }
     }
 
-    public function testStatusColorUnknownStatusDefaultsToGray(): void
+    public function testStatusColorUnknownStatusDefaultsToTheCompletedToken(): void
     {
-        $color = AgentOutputPane::statusColor('unknown-status');
-        // Default is 'completed' which maps to #7d6e98.
-        $this->assertSame('#7d6e98', $color->toHex());
+        $t = self::theme();
+        $this->assertSame(
+            AgentOutputPane::statusColor('completed', $t)->toHex(),
+            AgentOutputPane::statusColor('unknown-status', $t)->toHex(),
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -239,11 +263,10 @@ final class AgentOutputPaneTest extends TestCase
             stallWarning: $stallWarning,
         );
 
-        $output = AgentOutputPane::render($state, 60, 10, Mode::Peek);
+        $output = AgentOutputPane::render($state, 60, 10, self::theme(), Mode::Peek);
 
-        // STALL_HEX is '#e0af68' (amber/yellow) with RGB (224,175,104).
-        // The border color ANSI code [38;2;224;175;104m must appear when stalled.
-        $this->assertStringContainsString('224;175;104', $output);
+        // The stall colour is the palette's `warning`, not a literal amber.
+        $this->assertStringContainsString(self::rgb(self::theme()->shellWarning), $output);
         // Agent name and status still visible.
         $this->assertStringContainsString('coder-1', $output);
         $this->assertStringContainsString('[working]', $output);
@@ -270,10 +293,10 @@ final class AgentOutputPaneTest extends TestCase
             stallWarning: $stallWarning,
         );
 
-        $output = AgentOutputPane::render($state, 60, 20, Mode::Attach);
+        $output = AgentOutputPane::render($state, 60, 20, self::theme(), Mode::Attach);
 
-        // Amber border color must appear in stall state.
-        $this->assertStringContainsString('224;175;104', $output);
+        // The palette's warning colour must appear in the stall state.
+        $this->assertStringContainsString(self::rgb(self::theme()->shellWarning), $output);
         // Buffer content still visible.
         $this->assertStringContainsString('first output', $output);
         $this->assertStringContainsString('second output', $output);
@@ -293,12 +316,10 @@ final class AgentOutputPaneTest extends TestCase
             stallWarning: null,
         );
 
-        $output = AgentOutputPane::render($state, 60, 10, Mode::Peek);
+        $output = AgentOutputPane::render($state, 60, 10, self::theme(), Mode::Peek);
 
-        // When not stalled, border uses STATUS_HEX not STALL_HEX.
-        // STALL_HEX is #e0af68 (224;175;104) - should NOT appear.
-        // The working status color is #9ece6a (158;206;106).
-        $this->assertStringContainsString('158;206;106', $output);
+        // When not stalled, the border uses the STATUS token, not STALL_TOKEN.
+        $this->assertStringContainsString(self::rgb(self::theme()->shellSuccess), $output);
         // Normal status still visible.
         $this->assertStringContainsString('coder-1', $output);
     }
@@ -337,14 +358,13 @@ final class AgentOutputPaneTest extends TestCase
             stallWarning: $stallWarning,
         );
 
-        $normalOutput = AgentOutputPane::render($normalState, 60, 10, Mode::Peek);
-        $stalledOutput = AgentOutputPane::render($stalledState, 60, 10, Mode::Peek);
+        $normalOutput = AgentOutputPane::render($normalState, 60, 10, self::theme(), Mode::Peek);
+        $stalledOutput = AgentOutputPane::render($stalledState, 60, 10, self::theme(), Mode::Peek);
 
-        // Normal state uses working color (#9ece6a = 158;206;106).
-        $this->assertStringContainsString('158;206;106', $normalOutput);
-        // Stalled state uses amber color (#e0af68 = 224;175;104), not working color.
-        $this->assertStringContainsString('224;175;104', $stalledOutput);
-        // Stalled state should NOT use the working color.
-        $this->assertStringNotContainsString('158;206;106', $stalledOutput);
+        // Normal state uses the `working` token (the palette's success).
+        $this->assertStringContainsString(self::rgb(self::theme()->shellSuccess), $normalOutput);
+        // Stalled state uses the stall token (the palette's warning) instead.
+        $this->assertStringContainsString(self::rgb(self::theme()->shellWarning), $stalledOutput);
+        $this->assertStringNotContainsString(self::rgb(self::theme()->shellSuccess), $stalledOutput);
     }
 }

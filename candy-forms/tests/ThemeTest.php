@@ -82,8 +82,13 @@ final class ThemeTest extends TestCase
     {
         $theme = Theme::ansi();
         $rendered = $theme->error->render('Error!');
-        // True-color red: 38;2;255;0;0
-        $this->assertStringContainsString("\x1b[38;2;255;0;0m", $rendered);
+        // Theme::ansi() names Color::ansi(9) — bright red — and an explicitly
+        // chosen palette SLOT reaches the wire as the palette code (SGR 91), not
+        // as absolute RGB. That is the whole point of an `ansi` theme: the
+        // terminal's own red, whatever the user configured it to be. The
+        // 38;2;255;0;0 this replaces was the up-conversion, i.e. this theme
+        // overriding the palette it exists to defer to.
+        $this->assertStringContainsString("\x1b[91m", $rendered);
         $this->assertStringContainsString('Error!', $rendered);
     }
 
@@ -99,8 +104,8 @@ final class ThemeTest extends TestCase
     {
         $theme = Theme::ansi();
         $rendered = $theme->prompt->render('$');
-        // True-color cyan: 38;2;0;255;255
-        $this->assertStringContainsString("\x1b[38;2;0;255;255m", $rendered);
+        // Color::ansi(14), bright cyan, as the palette code (SGR 96).
+        $this->assertStringContainsString("\x1b[96m", $rendered);
     }
 
     public function testAnsiThemeRendersSelectedOptionBold(): void

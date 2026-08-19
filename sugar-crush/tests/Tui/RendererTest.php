@@ -308,16 +308,21 @@ final class RendererTest extends TestCase
      * `" $provider | $model | [Tab] Switch Pane | $status"` with the crush
      * colours. Reverting to the hand-rolled concat would keep this green only
      * because the migration reproduces the exact same bytes — which is the point.
+     *
+     * The three colours are now read off the App's own {@see Theme} rather than
+     * written as hex: the legacy literals (#9ece6a/#e0af68/#f7768e) were
+     * tokyoNight's success/warning/error, so hardcoding them here would assert
+     * that the status bar ignores `/theme` — which was the W3 bug.
      */
     public function testStatusBarStatusCaseIsByteIdenticalToLegacy(): void
     {
         $app = App::new($this->provider, 'test-model')->withStatus('Working');
 
         $legacy = ' '
-            . Style::new()->foreground(Color::hex('#9ece6a'))->render('TestProvider')
-            . ' | ' . Style::new()->foreground(Color::hex('#e0af68'))->render('test-model')
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('TestProvider')
+            . ' | ' . Style::new()->foreground($app->theme()->shellWarning)->render('test-model')
             . ' | [Tab] Switch Pane | '
-            . Style::new()->foreground(Color::hex('#9ece6a'))->render('Working');
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('Working');
 
         $this->assertSame($legacy, self::statusBar($app));
     }
@@ -331,10 +336,10 @@ final class RendererTest extends TestCase
         $app = App::new($this->provider, 'test-model')->withError('Boom')->withStatus('ignored');
 
         $legacy = ' '
-            . Style::new()->foreground(Color::hex('#9ece6a'))->render('TestProvider')
-            . ' | ' . Style::new()->foreground(Color::hex('#e0af68'))->render('test-model')
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('TestProvider')
+            . ' | ' . Style::new()->foreground($app->theme()->shellWarning)->render('test-model')
             . ' | [Tab] Switch Pane | '
-            . Style::new()->foreground(Color::hex('#f7768e'))->bold()->render('error: Boom');
+            . Style::new()->foreground($app->theme()->shellError)->bold()->render('error: Boom');
 
         $this->assertSame($legacy, self::statusBar($app));
         $this->assertStringNotContainsString('ignored', self::statusBar($app));
@@ -353,10 +358,10 @@ final class RendererTest extends TestCase
             ->separator(' | ')
             ->caps(' ', '')
             ->left(
-                Segment::of('TestProvider', Style::new()->foreground(Color::hex('#9ece6a'))),
-                Segment::of('test-model', Style::new()->foreground(Color::hex('#e0af68'))),
+                Segment::of('TestProvider', Style::new()->foreground($app->theme()->shellSuccess)),
+                Segment::of('test-model', Style::new()->foreground($app->theme()->shellWarning)),
                 Segment::of('[Tab] Switch Pane'),
-                Segment::of('Working', Style::new()->foreground(Color::hex('#9ece6a'))),
+                Segment::of('Working', Style::new()->foreground($app->theme()->shellSuccess)),
             )
             ->render();
 
@@ -374,8 +379,8 @@ final class RendererTest extends TestCase
         $app = App::new($this->provider, 'test-model');
 
         $legacy = ' '
-            . Style::new()->foreground(Color::hex('#9ece6a'))->render('TestProvider')
-            . ' | ' . Style::new()->foreground(Color::hex('#e0af68'))->render('test-model')
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('TestProvider')
+            . ' | ' . Style::new()->foreground($app->theme()->shellWarning)->render('test-model')
             . ' | [Tab] Switch Pane | ';
 
         // New output == legacy minus the trailing 3-byte ' | ' dangling separator.

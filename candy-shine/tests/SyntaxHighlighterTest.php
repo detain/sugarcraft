@@ -32,8 +32,11 @@ final class SyntaxHighlighterTest extends TestCase
     private static function assertKeywordStyled(string $needle, string $haystack): void
     {
         // Keyword style in ANSI theme: bold + foreground(ansi(13)=magenta).
-        // Output format: \x1b[1m\x1b[38;2;255;0;255m{keyword}\x1b[0m
-        $pattern = '/\x1b\[1m\x1b\[38;2;255;0;255m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // Output format: \x1b[1m\x1b[95m{keyword}\x1b[0m — Theme::ansi() names
+        // Color::ansi(13) (bright magenta) and a palette SLOT now reaches the
+        // wire as the palette code, so the terminal's own bright magenta is what
+        // paints. The 38;2;255;0;255 form this replaces was the up-conversion.
+        $pattern = '/\x1b\[1m\x1b\[95m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "Keyword '$needle' should be bold+magenta styled");
     }
 
@@ -44,8 +47,8 @@ final class SyntaxHighlighterTest extends TestCase
     private static function assertStringStyled(string $needle, string $haystack): void
     {
         // String style in ANSI theme: foreground(ansi(10)=green).
-        // Output format: \x1b[38;2;0;255;0m{string}\x1b[0m
-        $pattern = '/\x1b\[38;2;0;255;0m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // Output format: \x1b[92m{string}\x1b[0m — Color::ansi(10), bright green.
+        $pattern = '/\x1b\[92m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "String '$needle' should be green styled");
     }
 
@@ -56,8 +59,8 @@ final class SyntaxHighlighterTest extends TestCase
     private static function assertNumberStyled(string $needle, string $haystack): void
     {
         // Number style in ANSI theme: foreground(ansi(11)=yellow).
-        // Output format: \x1b[38;2;255;255;0m{number}\x1b[0m
-        $pattern = '/\x1b\[38;2;255;255;0m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // Output format: \x1b[93m{number}\x1b[0m — Color::ansi(11), bright yellow.
+        $pattern = '/\x1b\[93m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "Number '$needle' should be yellow styled");
     }
 
@@ -68,8 +71,9 @@ final class SyntaxHighlighterTest extends TestCase
     private static function assertCommentStyled(string $needle, string $haystack): void
     {
         // Comment style in ANSI theme: italic + foreground(ansi(8)=grey).
-        // Output format: \x1b[3m\x1b[38;2;127;127;127m{comment}\x1b[0m
-        $pattern = '/\x1b\[3m\x1b\[38;2;127;127;127m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // Output format: \x1b[3m\x1b[90m{comment}\x1b[0m — Color::ansi(8),
+        // bright black.
+        $pattern = '/\x1b\[3m\x1b\[90m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "Comment '$needle' should be italic+grey styled");
     }
 
@@ -411,7 +415,7 @@ final class SyntaxHighlighterTest extends TestCase
         $out  = SyntaxHighlighter::highlight($code, 'sql', self::themed());
 
         // Should not have keyword-styled SELECT (bold+magenta)
-        $this->assertStringNotContainsString("\x1b[1m\x1b[38;2;255;0;255mSELECT\x1b[0m", $out);
+        $this->assertStringNotContainsString("\x1b[1m\x1b[95mSELECT\x1b[0m", $out);
         // But should still be styled with codeBlock (faint)
         $this->assertStringContainsString("\x1b[2m", $out);
     }
@@ -579,7 +583,7 @@ final class SyntaxHighlighterTest extends TestCase
         // Should have styled string "true" (green), not keyword true (magenta).
         self::assertStringStyled('"true"', $out);
         // Keyword true should NOT appear outside the string.
-        $this->assertStringNotContainsString("\x1b[1m\x1b[38;2;255;0;255mtrue\x1b[0m", $out);
+        $this->assertStringNotContainsString("\x1b[1m\x1b[95mtrue\x1b[0m", $out);
     }
 
     public function testCommentContentIsNotHighlightedAsKeyword(): void
@@ -609,9 +613,9 @@ final class SyntaxHighlighterTest extends TestCase
         $out  = SyntaxHighlighter::highlight($code, 'php', self::themed(), lineNumbers: true);
 
         // Line 1 should have styled line number 1 (italic + grey ANSI 8 = 127,127,127).
-        $this->assertMatchesRegularExpression('/\x1b\[3m\x1b\[38;2;127;127;127m1\x1b\[0m/', $out);
+        $this->assertMatchesRegularExpression('/\x1b\[3m\x1b\[90m1\x1b\[0m/', $out);
         // Line 2 should have styled line number 2.
-        $this->assertMatchesRegularExpression('/\x1b\[3m\x1b\[38;2;127;127;127m2\x1b\[0m/', $out);
+        $this->assertMatchesRegularExpression('/\x1b\[3m\x1b\[90m2\x1b\[0m/', $out);
     }
 
     public function testLineNumbersMultiLinePreservesHighlighting(): void
@@ -673,7 +677,7 @@ final class SyntaxHighlighterTest extends TestCase
 
         // The escaped string should be highlighted as a string containing the literal \n.
         // The string token matches the entire "hello\nworld" including the backslash-n characters.
-        $this->assertStringContainsString("\x1b[38;2;0;255;0m", $out);
+        $this->assertStringContainsString("\x1b[92m", $out);
         $this->assertStringContainsString('hello\nworld', $out);
     }
 
@@ -839,7 +843,7 @@ final class SyntaxHighlighterTest extends TestCase
         // The '1' literals must NOT be number-styled (yellow) — tokenisation
         // was skipped. The same content at a small size WOULD get it, so the
         // negative assertion below is meaningful, not vacuous.
-        $this->assertStringNotContainsString("\x1b[38;2;255;255;0m", $out);
+        $this->assertStringNotContainsString("\x1b[93m", $out);
         self::assertNumberStyled('1', SyntaxHighlighter::highlight('x = 1;', 'php', $theme));
     }
 }

@@ -94,12 +94,19 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, true);
         $line = $tf->format(Level::Fatal, 'msg', [], new \DateTimeImmutable(), null, null);
 
-        // Fatal uses white on red + bold: \x1b[38;5;7m\x1b[48;5;1m + bold
+        // Fatal is Color::ansi(7) on Color::ansi(1) + bold (Styles.php), and an
+        // explicitly chosen palette SLOT now reaches the wire as the palette
+        // code rather than as an absolute value: SGR 37/41, not 38;5;7/48;5;1.
+        // Pinning the 48; form asserted the up-conversion this test was written
+        // under, which is the behaviour that made a 16-colour theme stop
+        // deferring to the terminal's own 16 colours.
         $this->assertStringContainsString("\x1b[", $line);
         $this->assertStringContainsString('FTL', $line);
-        // Bold (SGR 1) and background color (SGR 48) sequences
+        // Bold (SGR 1), palette foreground (SGR 37) and palette background
+        // (SGR 41).
         $this->assertMatchesRegularExpression('/\x1b\[1m/', $line);
-        $this->assertMatchesRegularExpression('/\x1b\[48;/', $line);
+        $this->assertMatchesRegularExpression('/\x1b\[37m/', $line);
+        $this->assertMatchesRegularExpression('/\x1b\[41m/', $line);
     }
 
     public function testNoSgrBytesWhenColorsDisabled(): void

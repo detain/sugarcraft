@@ -59,14 +59,23 @@ final class ThemeTest extends TestCase
      */
     public function testAdaptiveFollowsTheDetectedTerminalBackground(): void
     {
+        // Each named theme is resolved WHILE its own background is the observed
+        // one, because W3 made token resolution depend on that background:
+        // `border` escalates when the palette's own value is illegible against
+        // what the terminal actually paints, so `byName('light')` measured under
+        // a black terminal is a different (and correct) colour from the same
+        // name measured under a white one. Comparing across backgrounds would
+        // assert that the escalation does not happen.
         TerminalBackground::observe(new BackgroundColorMsg(255, 255, 255));
         $light = Theme::byName('adaptive');
+        $namedLight = Theme::byName('light');
 
         TerminalBackground::observe(new BackgroundColorMsg(0, 0, 0));
         $dark = Theme::byName('adaptive');
+        $namedDark = Theme::byName('dark');
 
-        $this->assertSame(Theme::byName('light')->border->toHex(), $light->border->toHex());
-        $this->assertSame(Theme::byName('dark')->border->toHex(), $dark->border->toHex());
+        $this->assertSame($namedLight->border->toHex(), $light->border->toHex());
+        $this->assertSame($namedDark->border->toHex(), $dark->border->toHex());
         $this->assertNotSame($light->border->toHex(), $dark->border->toHex());
     }
 

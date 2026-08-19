@@ -1134,7 +1134,7 @@ final class Renderer
             $overlay = self::renderPalette($chat, $theme);
         }
         if ($overlay === '') {
-            $overlay = self::renderSessionPicker($chat);
+            $overlay = self::renderSessionPicker($chat, $theme);
         }
         if ($overlay !== '') {
             // A fresh Veil per render call (rather than one persisted on
@@ -1570,8 +1570,10 @@ final class Renderer
         // `pane:agents` click zone (crush_feat.md §8 E3) — clicking it runs
         // the same /agents dispatch Ctrl+A does. See {@see markPaneHeader()}
         // for why the whole block is not marked.
-        return self::markPaneHeader(Pane::Agents, AgentStatusBar::render($states))
-            . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS);
+        $theme = $chat->theme();
+
+        return self::markPaneHeader(Pane::Agents, AgentStatusBar::render($states, $theme))
+            . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS, $theme);
     }
 
     /**
@@ -3022,7 +3024,7 @@ final class Renderer
      * No zone marking here (unlike {@see markPaletteItems()}): the picker is
      * keyboard-driven only, and its rows carry no click ids.
      */
-    private static function renderSessionPicker(Chat $chat): string
+    private static function renderSessionPicker(Chat $chat, Theme $theme): string
     {
         $picker = $chat->sessionPicker();
         if ($picker === null) {
@@ -3033,7 +3035,7 @@ final class Renderer
         $width = max(20, min($inner - 4, 76));
         $height = max(8, $chat->rows() - 4);
 
-        return $picker->render($width, $height);
+        return $picker->render($width, $height, $theme);
     }
 
     /**

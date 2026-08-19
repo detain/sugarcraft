@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Tui\SessionPicker;
+use SugarCraft\Crush\Theme;
 
 /**
  * @internal
@@ -138,7 +139,7 @@ final class SessionPickerTest extends TestCase
     {
         $sessions = $this->makeSessions();
         $picker = SessionPicker::new($sessions);
-        $output = $picker->render(80, 24);
+        $output = $picker->render(80, 24, Theme::byName('dark'));
         $this->assertIsString($output);
         $this->assertNotEmpty($output);
     }
@@ -146,7 +147,7 @@ final class SessionPickerTest extends TestCase
     public function testRenderWithNoSessions(): void
     {
         $picker = SessionPicker::new([]);
-        $output = $picker->render(80, 24);
+        $output = $picker->render(80, 24, Theme::byName('dark'));
         $this->assertIsString($output);
         $this->assertStringContainsString('(no sessions)', $output);
     }

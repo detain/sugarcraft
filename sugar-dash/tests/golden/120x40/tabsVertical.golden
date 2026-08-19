@@ -3,5 +3,5 @@ PHP 8.3.6 (cli) (built: May 25 2026 13:12:06) (NTS)
 # example: tabsVertical
 ---
 [38;2;135;75;253m>Overview  <[0m│ Overview content                                                                                           
-[38;2;127;127;127m Settings   [0m│
-[38;2;127;127;127m Help       [0m│[0m
+[90m Settings   [0m│
+[90m Help       [0m│[0m

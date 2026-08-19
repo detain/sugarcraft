@@ -207,8 +207,10 @@ final class FrameTest extends TestCase
             ->setSize(20, 5);
 
         $rendered = $frame->render();
-        // Should contain the red SGR code (38;2;255;0;0m or 31m)
-        $this->assertMatchesRegularExpression('/\x1b\[(?:38;2;255;0;0|31)m/', $rendered);
+        // Color::ansi(9) is BRIGHT red, and a palette slot now reaches the wire
+        // as its palette code — SGR 91, not the 38;2;255;0;0 up-conversion and
+        // not 31 (which is plain red, slot 1, a different slot).
+        $this->assertMatchesRegularExpression('/\x1b\[91m/', $rendered);
     }
 
     public function testWithPaddingChangesAllSides(): void

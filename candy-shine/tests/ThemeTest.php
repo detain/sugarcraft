@@ -43,14 +43,18 @@ final class ThemeTest extends TestCase
         $italic = $t->paragraph->render('p');
         $this->assertStringContainsString("\x1b[3m", $italic);
 
-        // ansi256:202 → Color::ansi256(202) → RGB(255,95,0). Default
-        // profile is TrueColor so it renders as 38;2;...
+        // ansi256:202 → Color::ansi256(202), which is a palette SLOT and stays
+        // one: it renders as 38;5;202 at any profile that can address a
+        // 256-colour index, rather than as the slot's nominal RGB(255,95,0).
+        // Naming an index is a request for the terminal's value for that index.
         $code = $t->code->render('c');
-        $this->assertStringContainsString('38;2;255;95;0', $code);
+        $this->assertStringContainsString('38;5;202', $code);
 
         $cb = $t->codeBlock->render('cb');
         $this->assertStringContainsString("\x1b[2m",  $cb); // faint
-        $this->assertStringContainsString("48",       $cb); // bg slot
+        // `ansi:8` is a palette slot, so the background is the 4-bit bright-black
+        // bg code (SGR 100) rather than the extended `48;…` introducer.
+        $this->assertStringContainsString("\x1b[100m", $cb);
     }
 
     public function testFromJsonStringMissingElementsDefaultToPlain(): void

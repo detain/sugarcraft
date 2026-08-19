@@ -223,7 +223,7 @@ final class SessionCommandTest extends TestCase
         $picker = $next->sessionPicker();
         $this->assertNotNull($picker);
         $this->assertSame(2, $picker->count());
-        $rendered = $picker->render(80, 24);
+        $rendered = $picker->render(80, 24, $next->theme());
         $this->assertStringContainsString('Alpha', $rendered);
         $this->assertStringContainsString('Beta', $rendered);
     }
@@ -253,7 +253,7 @@ final class SessionCommandTest extends TestCase
 
         $picker = $next->sessionPicker();
         $this->assertNotNull($picker);
-        $rendered = $picker->render(80, 24);
+        $rendered = $picker->render(80, 24, $next->theme());
         $this->assertStringNotContainsString("\xEE\x80\x80", $rendered);
         $this->assertStringNotContainsString("\xEE\x80\x81", $rendered);
         $this->assertStringContainsString('Alpha', $rendered);

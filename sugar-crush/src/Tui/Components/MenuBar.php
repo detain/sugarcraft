@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
+use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Mouse\Mark;
 
@@ -125,7 +125,8 @@ final class MenuBar
      */
     private static function compose(App $a, ?int $cols, bool $marked): string
     {
-        $tabs = self::paneTabs($a);
+        $theme = $a->theme();
+        $tabs = self::paneTabs($a, $theme);
 
         // The tab strip and the "Currently:" indicator are how the shell is
         // navigated, so when the terminal cannot hold the whole bar it is the
@@ -142,7 +143,12 @@ final class MenuBar
                 break;
             }
             $isActive = self::$activeMenu === $menuIndex;
-            $color = $isActive ? Color::hex('#00ffaa') : Color::hex('#fde68a');
+            // The palettes carry ONE yellow (`warning`), so the bar's two
+            // hand-picked yellows (#fde68a title, #e0af68 amber) collapse onto
+            // it; the open menu switches to `primary` instead of merely going
+            // bold, because `warning` and `primary` are distinct hues in all
+            // five palettes and bold alone is not a colour cue at all.
+            $color = $isActive ? $theme->shellPrimary : $theme->shellWarning;
             $title = Style::new()->foreground($color)->bold()->render($name);
             $output .= $marked
                 ? Mark::zone(self::MENU_TITLE_ZONE_PREFIX . $menuIndex, $title)
@@ -161,16 +167,16 @@ final class MenuBar
      * The focused pane's tab is highlighted; the indicator drives the
      * "Currently: <Label>" hint the status line relies on.
      */
-    private static function paneTabs(App $a): string
+    private static function paneTabs(App $a, Theme $theme): string
     {
         $tabs = ' ';
         foreach (self::PANE_TABS as $pane) {
-            $color = $a->pane === $pane ? Color::hex('#00ffaa') : Color::hex('#7d6e98');
+            $color = $a->pane === $pane ? $theme->shellPrimary : $theme->shellMuted;
             $tabs .= Style::new()->foreground($color)->render('[' . $pane->label() . ']');
             $tabs .= ' ';
         }
 
-        $current = Style::new()->foreground(Color::hex('#fde68a'))
+        $current = Style::new()->foreground($theme->shellWarning)
             ->render('Currently: ' . $a->pane->label());
 
         return $tabs . ' ' . $current;
@@ -376,9 +382,9 @@ final class MenuBar
      *
      * @return list<string> one rendered line per row, borders included
      */
-    public static function renderDropdown(): array
+    public static function renderDropdown(Theme $theme): array
     {
-        return self::dropdownLines(false);
+        return self::dropdownLines(false, $theme);
     }
 
     /**
@@ -391,9 +397,9 @@ final class MenuBar
      *
      * @return list<string>
      */
-    public static function renderDropdownMarked(): array
+    public static function renderDropdownMarked(Theme $theme): array
     {
-        return self::dropdownLines(true);
+        return self::dropdownLines(true, $theme);
     }
 
     /**
@@ -401,7 +407,7 @@ final class MenuBar
      *
      * @return list<string>
      */
-    private static function dropdownLines(bool $marked): array
+    private static function dropdownLines(bool $marked, Theme $theme): array
     {
         if (self::$activeMenu < 1) {
             return [];
@@ -421,12 +427,19 @@ final class MenuBar
         }
 
         $inner = max(array_map(static fn(string $l): int => Width::string($l), $labels));
-        $dim = Style::new()->foreground(Color::hex('#6b7280'));
-        $item = Style::new()->foreground(Color::hex('#e5e7eb'));
+        // The box lines. This panel is spliced OVER the composed frame and fills
+        // no background of its own, so what these glyphs are seen against is the
+        // terminal's own background — which is why the colour comes from
+        // {@see Theme}'s contrast-checked `border` and not from a literal. The
+        // two literals this replaces were #6b7280 and #e5e7eb: the `light`
+        // palette's own `muted` and `border` tokens, frozen into a dark-only
+        // shell, and #6b7280 measures 2.95:1 on a dracula background.
+        $dim = Style::new()->foreground($theme->border);
+        $item = Style::new()->foreground($theme->shellForeground);
 
         // The row Enter would select has to be visible, or the cursor
         // moves invisibly and the user cannot tell what they are about to run.
-        $selected = Style::new()->foreground(Color::hex('#00ffaa'))->bold();
+        $selected = Style::new()->foreground($theme->shellPrimary)->bold();
 
         $lines = [$dim->render('┌' . str_repeat('─', $inner + 2) . '┐')];
         foreach ($labels as $row => $label) {

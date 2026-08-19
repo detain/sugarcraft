@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -17,7 +16,8 @@ final class InputPane
         // columns frame a content area of cols - 4.
         $width = max(1, $cols - 4);
 
-        $placeholder = Style::new()->foreground(Color::hex('#7d6e98'))
+        $theme = $a->theme();
+        $placeholder = Style::new()->foreground($theme->shellMuted)
             ->render('Type your message... (Enter to send, Ctrl+G for group)');
 
         $st = Style::new()
@@ -26,8 +26,8 @@ final class InputPane
             ->width($width);
 
         $st = $a->pane === \SugarCraft\Crush\Tui\Pane::Input
-            ? $st->borderForeground(Color::hex('#00ffaa'))
-            : $st->borderForeground(Color::hex('#ff66aa'));
+            ? $st->borderForeground($theme->shellPrimary)
+            : $st->borderForeground($theme->border);
 
         return $st->render($placeholder);
     }

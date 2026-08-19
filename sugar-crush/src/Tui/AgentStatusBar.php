@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Crush\Theme;
 
 /**
  * Renders agent status indicators for the bottom status bar.
@@ -13,28 +14,37 @@ use SugarCraft\Sprinkles\Style;
  * Each indicator shows the agent name/role, current operational status,
  * current operation description, elapsed time, and token usage/cost.
  *
- * Status colour coding:
- *   - Green  (#9ece6a): actively processing / Working
- *   - Yellow (#e0af68): waiting for input or blocked on a dependency / Waiting
- *   - Blue   (#7aa2f7): streaming output from the LLM / Streaming
- *   - Red    (#f7768e): failed or encountered an error / Failed
- *   - Gray   (#7d6e98): completed successfully or stopped / Completed
+ * Status colour coding, by {@see Theme} token rather than by literal — the
+ * hues below are the roles, and which RGB each resolves to is the active
+ * palette's business (and, where a palette token would be illegible against the
+ * terminal's real background, {@see Theme}'s escalation's business):
+ *   - `shellSuccess`: actively processing / Working
+ *   - `shellWarning`: waiting for input or blocked on a dependency / Waiting
+ *   - `shellInfo`:    streaming output from the LLM / Streaming
+ *   - `shellError`:   failed or encountered an error / Failed
+ *   - `shellMuted`:   completed successfully or stopped / Completed
  *
  * Mirrors the charmbracelet/crush agent view status indicator design.
  */
 final class AgentStatusBar
 {
     /**
+     * Maps status keyword to the {@see Theme} property that colours it.
+     *
+     * A token NAME rather than a Color, because a Theme is resolved per frame
+     * (the palette can move mid-session when OSC 11 answers) and a const
+     * cannot hold one. `completed` and `stopped` share `shellMuted` — the two
+     * hand-picked greys this replaced (#7d6e98 twice) were already identical.
+     *
      * @var array<'working'|'waiting'|'streaming'|'failed'|'completed'|'stopped', string>
-     * Maps status keyword to CSS hex colour.
      */
-    private const STATUS_HEX = [
-        'working'   => '#9ece6a',
-        'waiting'   => '#e0af68',
-        'streaming' => '#7aa2f7',
-        'failed'    => '#f7768e',
-        'completed' => '#7d6e98',
-        'stopped'   => '#7d6e98',
+    private const STATUS_TOKEN = [
+        'working'   => 'shellSuccess',
+        'waiting'   => 'shellWarning',
+        'streaming' => 'shellInfo',
+        'failed'    => 'shellError',
+        'completed' => 'shellMuted',
+        'stopped'   => 'shellMuted',
     ];
 
     /**
@@ -45,15 +55,15 @@ final class AgentStatusBar
      * Returns an empty string when the agent list is empty (caller may
      * choose to suppress the bar entirely in that case).
      */
-    public static function renderAgentLine(AgentDisplayState $agent): string
+    public static function renderAgentLine(AgentDisplayState $agent, Theme $theme): string
     {
-        $color = self::statusColor($agent->status);
+        $color = self::statusColor($agent->status, $theme);
         $dot = self::colouredDot($color);
         $name = Style::new()->bold()->foreground($color)->render($agent->name);
         $status = Style::new()->foreground($color)->render(self::bracket($agent->status));
-        $operation = Style::new()->foreground(Color::hex('#c5b6dd'))->render(self::truncate($agent->operation, 30));
-        $elapsed = Style::new()->foreground(Color::hex('#7d6e98'))->render($agent->elapsedDisplay());
-        $usage = Style::new()->foreground(Color::hex('#7d6e98'))->render($agent->usageDisplay());
+        $operation = Style::new()->foreground($theme->shellForeground)->render(self::truncate($agent->operation, 30));
+        $elapsed = Style::new()->foreground($theme->shellMuted)->render($agent->elapsedDisplay());
+        $usage = Style::new()->foreground($theme->shellMuted)->render($agent->usageDisplay());
 
         return "{$dot} {$name} {$status} {$operation} {$elapsed} {$usage}";
     }
@@ -66,7 +76,7 @@ final class AgentStatusBar
      *
      * @param list<AgentDisplayState> $agents
      */
-    public static function render(array $agents): string
+    public static function render(array $agents, Theme $theme): string
     {
         if ($agents === []) {
             return '';
@@ -74,7 +84,7 @@ final class AgentStatusBar
 
         $lines = [];
         foreach ($agents as $agent) {
-            $lines[] = self::renderAgentLine($agent);
+            $lines[] = self::renderAgentLine($agent, $theme);
         }
 
         return implode("\n", $lines);
@@ -82,14 +92,14 @@ final class AgentStatusBar
 
     /**
      * Resolve the colour for a given operational status string.
-     * Defaults to gray (#7d6e98) when the status is not recognised.
+     * Falls back to the `completed` token when the status is not recognised.
      */
-    public static function statusColor(string $status): Color
+    public static function statusColor(string $status, Theme $theme): Color
     {
         $key = strtolower(trim($status));
-        $hex = self::STATUS_HEX[$key] ?? self::STATUS_HEX['completed'];
+        $token = self::STATUS_TOKEN[$key] ?? self::STATUS_TOKEN['completed'];
 
-        return Color::hex($hex);
+        return $theme->$token;
     }
 
     /**

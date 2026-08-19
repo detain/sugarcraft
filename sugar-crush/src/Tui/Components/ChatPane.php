@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Renderer as LiveRenderer;
+use SugarCraft\Crush\Theme;
 
 /**
  * The shell's chat pane.
@@ -106,6 +106,7 @@ final class ChatPane
         $width = max(20, $cols - self::CHROME_COLS);
         $innerRows = max(1, $rows - self::CHROME_ROWS);
 
+        $theme = $a->theme();
         $images = [];
         $messages = $a->messages;
         if ($a->chat !== null) {
@@ -113,12 +114,12 @@ final class ChatPane
             $body = $view->body;
             $images = $view->images;
         } elseif ($messages === []) {
-            $body = Style::new()->foreground(Color::hex('#7d6e98'))
+            $body = Style::new()->foreground($theme->shellMuted)
                 ->render('Welcome to SugarCrush! Start typing to chat...');
         } else {
             $lines = [];
             foreach ($messages as $msg) {
-                $lines[] = self::formatMessage($msg);
+                $lines[] = self::formatMessage($msg, $theme);
             }
             $body = implode("\n", $lines);
         }
@@ -129,20 +130,20 @@ final class ChatPane
             ->width($width);
 
         $st = $a->pane === \SugarCraft\Crush\Tui\Pane::Chat
-            ? $st->borderForeground(Color::hex('#00ffaa'))
-            : $st->borderForeground(Color::hex('#ff66aa'));
+            ? $st->borderForeground($theme->shellPrimary)
+            : $st->borderForeground($theme->border);
 
         return [$st->render($body), $images];
     }
 
-    private static function formatMessage(Message $msg): string
+    private static function formatMessage(Message $msg, Theme $theme): string
     {
         // Surface the concrete message type (e.g. UserMessage) so the
         // transcript shows provenance, not just the role string.
         $shortName = (new \ReflectionClass($msg))->getShortName();
-        $tag = Style::new()->foreground(Color::hex('#7d6e98'))->render('[' . $shortName . ']');
-        $role = Style::new()->bold()->foreground(Color::hex('#fde68a'))->render($msg->role() . ':');
-        $content = Style::new()->foreground(Color::hex('#c5b6dd'))->render($msg->content());
+        $tag = Style::new()->foreground($theme->shellMuted)->render('[' . $shortName . ']');
+        $role = Style::new()->bold()->foreground($theme->shellWarning)->render($msg->role() . ':');
+        $content = Style::new()->foreground($theme->shellForeground)->render($msg->content());
         return "$tag $role $content";
     }
 }

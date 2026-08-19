@@ -102,9 +102,10 @@ final class SanitizeTest extends TestCase
         // bytes were neutralised, not that the whole block was dropped.
         $this->assertStringContainsString('INJECTED', $rendered);
 
-        // Sanity: the highlighter is active (number 42 → yellow), so the strip is
-        // exercised on the real "before highlighting" path.
-        $this->assertStringContainsString("\x1b[38;2;255;255;0m", $rendered);
+        // Sanity: the highlighter is active (number 42 → Color::ansi(11), bright
+        // yellow, emitted as the palette code SGR 93), so the strip is exercised
+        // on the real "before highlighting" path.
+        $this->assertStringContainsString("\x1b[93m", $rendered);
     }
 
     /**
