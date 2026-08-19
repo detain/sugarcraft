@@ -152,14 +152,16 @@ final readonly class SglangProvider implements ProviderInterface
      * actually pins (§12), i.e. the exact point the server starts rejecting or
      * evicting. It replaces a hardcoded 128,000 that was ~68k short.
      *
-     * KNOWN GAP, disclosed rather than overstated: nothing in sugar-crush
-     * reads `contextWindow()` today. A repo-wide search finds it only on the
-     * provider implementations, {@see ProviderInterface} and provider unit
-     * tests - `EngineBackend`, `App`, `Runtime` and `AgentManager` never call
-     * it. The context-window-budget logic §12 D8 describes does not exist
-     * yet, so nothing observable changes from this correction: it makes the
-     * reported ceiling right ahead of the consumer rather than fixing a
-     * truncation happening now.
+     * That gap is closed as of crush_code.md Phase 5 item 4: this figure is
+     * read. {@see \SugarCraft\Crush\Backend\EngineBackend} exposes it
+     * through {@see \SugarCraft\Crush\Backend\ReportsContextWindow}, and
+     * {@see \SugarCraft\Crush\Chat} makes it the budget its four context
+     * tiers are percentages of - the 70% reminder, 85% automatic compaction,
+     * 95% blocking refusal and the idle-compaction prompt. So on this
+     * provider those now fire at ~137,625 / ~167,116 / ~186,777 estimated
+     * tokens rather than at 70,000 / 85,000 / 95,000, which is what the
+     * hardcoded 100,000 budget they used before produced. {@see
+     * \SugarCraft\Crush\Runtime::shouldPromptIdleCompaction()} reads it too.
      */
     public function contextWindow(): int
     {

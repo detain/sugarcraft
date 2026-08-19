@@ -1239,12 +1239,25 @@ final class Renderer
      *
      * Both numbers come from Chat ({@see Chat::contextTokens()} /
      * {@see Chat::contextTokenLimit()}) rather than being re-derived from the
-     * percentage — the renderer must not hardcode a budget that lives as a
-     * constant on Chat. They carry a leading `~` because neither is measured:
-     * the count is a chars/4 approximation and the limit is this app's fixed
-     * compaction threshold, not the provider's advertised window. Labelling
-     * the estimate is the honest option; printing "12.4K" unqualified would
-     * read as a figure the provider reported.
+     * percentage — the renderer must not hardcode a budget Chat resolves.
+     *
+     * The pair still carries a leading `~`, but for a narrower reason than it
+     * used to: since crush_code.md Phase 5 item 4 the limit IS the model's
+     * advertised context window whenever the backend can report one, so it is
+     * no longer "not the provider's window". The count on the left of the
+     * slash is what stays an approximation — a chars/4 proxy, not a tokenizer
+     * count — which also means the percentage between two units that do not
+     * quite match. Labelling it is the honest option; printing "12.4K"
+     * unqualified would read as a figure the provider reported.
+     *
+     * A backend with no model behind it (echo, a shelled-out command) reports
+     * no window - {@see \SugarCraft\Crush\Providers\EchoProvider} answers 0
+     * for "unknown" precisely so it does not become the denominator - and the
+     * limit shown is then
+     * {@see \SugarCraft\Crush\Context\ContextWindow::FALLBACK_TOKENS}, the
+     * same 100,000 this bar showed before any real window was reachable. That
+     * is the figure the default offline run displays, and the reason it is
+     * unchanged there.
      *
      * $room is the columns the rest of the bar leaves. Forms are tried
      * widest-first and the bare percentage is always emitted as a last

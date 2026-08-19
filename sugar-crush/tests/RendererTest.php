@@ -786,17 +786,28 @@ final class RendererTest extends TestCase
 
         $lastLine = $this->statusBar(Renderer::render($sized));
 
-        // 200 messages x (400 chars / 4 + 10 role overhead) = 22,000 tokens
-        // against Chat's 100,000-token budget.
+        // 200 messages x (400 chars / 4 + 10 role overhead) = 22,000 ESTIMATED
+        // tokens against the 100,000-token fallback window: this fixture's Chat
+        // holds the default EchoBackend, which reports no window, so
+        // ContextWindow::FALLBACK_TOKENS is the denominator. On a real provider
+        // it would be that provider's advertised window and the percentage
+        // would differ - see
+        // {@see \SugarCraft\Crush\Tests\Integration\ContextWindowWiringTest}.
         $this->assertSame(22000, $chat->contextTokens());
         $this->assertSame(100000, $chat->contextTokenLimit());
         $this->assertStringContainsString('~22K / 100K context (22%)', $lastLine);
     }
 
     /**
-     * The count is a chars/4 proxy against a fixed compaction threshold, not
-     * a provider-reported figure, so it is prefixed rather than presented as
-     * a measurement.
+     * The COUNT is a chars/4 proxy, not a tokenizer figure, so it is prefixed
+     * rather than presented as a measurement.
+     *
+     * The limit beside it is no longer in the same boat: since crush_code.md
+     * Phase 5 item 4 it IS the model's advertised context window whenever the
+     * backend can report one, so the reason for the `~` narrowed to the
+     * left-hand number and the mismatch between the two units. It has not gone
+     * away - this fixture's EchoBackend reports no window, so the limit here is
+     * ContextWindow::FALLBACK_TOKENS.
      */
     public function testAbsoluteTokenCountIsLabelledAsAnEstimate(): void
     {

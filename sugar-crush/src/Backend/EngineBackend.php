@@ -44,7 +44,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * works in the typed {@see \SugarCraft\Crush\Messages\Message} hierarchy.
  * Conversion happens here at the seam.
  */
-final class EngineBackend implements Backend
+final class EngineBackend implements Backend, ReportsContextWindow
 {
     /**
      * IDLE ceiling on a forked completion child in {@see completeAsync()} -
@@ -150,6 +150,24 @@ final class EngineBackend implements Backend
     public static function new(ProviderInterface $provider, string $model): self
     {
         return new self($provider, $model);
+    }
+
+    /**
+     * The real context window of the model this backend completes against —
+     * the one number {@see \SugarCraft\Crush\Chat}'s context tiers are
+     * percentages of (crush_code.md Phase 5 item 4).
+     *
+     * Every provider has implemented this correctly for a long time and
+     * nothing could read it: `Chat` holds a {@see Backend}, and `Backend`
+     * exposes only `complete()`/`completeAsync()`. This backend is the one
+     * that owns a {@see ProviderInterface}, so it is the one that can answer,
+     * and it answers by delegating rather than caching — a provider's window
+     * is model-dependent (see {@see \SugarCraft\Crush\Providers\OpenAIProvider})
+     * and this class must not hold a second opinion about it.
+     */
+    public function contextWindow(): int
+    {
+        return $this->provider->contextWindow();
     }
 
     /**

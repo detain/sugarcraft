@@ -16,6 +16,19 @@ interface ProviderInterface
 
     public function supportsJsonSchema(): bool;
 
+    /**
+     * The model's context window in PROVIDER-COUNTED tokens, or 0 when this
+     * provider has no way to know one.
+     *
+     * 0 means UNKNOWN and must never be read as "no limit": it is the signal
+     * {@see \SugarCraft\Crush\Context\ContextWindow::resolve()} turns into
+     * the one named fallback. A provider that guesses a large number instead
+     * silently becomes the denominator of every context tier in
+     * {@see \SugarCraft\Crush\Chat} — the reminder, the automatic
+     * compaction and the blocking refusal are all percentages of this — and a
+     * guess that is too large switches all three off rather than erring
+     * toward compacting early. {@see EchoProvider} is the in-repo case.
+     */
     public function contextWindow(): int;
 
     /**

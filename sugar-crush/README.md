@@ -256,7 +256,15 @@ no-op edit reports as a no-op instead of success. Denied and interrupted calls
 get their own visual state. Tool results that carry images are labelled and
 rendered inline via candy-mosaic. Successful tool bodies are hidden by default
 (`Ctrl+O` or a click opens them). Context usage shows as both a token count and
-a percentage.
+a percentage, and the budget it is measured against is the **live model's own
+context window** as its provider reports it (a backend with no model behind it,
+such as the offline echo default, falls back to 100,000 estimated tokens). That
+budget also drives compaction, per turn and without an idle gate: at 70% a
+system-role reminder rides along with the turn, at 85% older exchanges are
+summarized first and the rewrite is reported in the transcript, and at 95% the
+turn is refused rather than spent on a request the provider would reject. A
+refusal is not a dead end — each attempt drops the oldest preserved exchange,
+and `/clear` frees the whole context at once.
 
 Sessions get a name automatically: after the first exchange a **cheap
 small-model backend** (supplied separately from the conversation backend, so

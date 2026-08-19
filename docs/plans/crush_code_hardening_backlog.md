@@ -1135,6 +1135,167 @@ records them as **survivors**.
 
 ---
 
+### E17 — the 95% blocking tier refuses a turn on an ESTIMATE, not a token count
+
+- **What** `Chat::submit()` now refuses to dispatch a turn when
+  `ContextCompactor::shouldCompactForeground()` reports the history is still at
+  or over 95% of the context window after automatic compaction (crush_code.md
+  Phase 5 item 5). The window on the right of that comparison is the provider's
+  real, tokenizer-counted figure; the count on the left is
+  `Chat::estimateTokenCount()`'s chars/4 + 10-per-message proxy. The two units
+  do not match, so the refusal can be wrong in both directions — a turn that
+  would have fit is refused, or one that will not fit is sent.
+- **Where** `sugar-crush/src/Chat.php` — the tier block in `submit()` and
+  `foregroundBlockedResponse()`; the estimate is `estimateTokenCount()` and
+  `ContextCompactor::countTokens()`; the window comes from
+  `Context/ContextWindow::ofBackend()`.
+- **Severity** Correctness / UX, not security. The direction of the error is
+  benign for overruns (code and CJK tokenize worse than chars/4, so the estimate
+  runs LOW and the tier fires late) and user-visible for false refusals.
+- **Evidence** Measured while wiring the tier: a 2,400-message history of
+  `"question "x20` reads 122,400 estimated tokens; no tokenizer was consulted at
+  any point. A real figure is partly available and unused —
+  `Providers/CompleteResponse::$tokensUsed` is populated on the non-streaming
+  path by six of the seven providers (OpenAI, Custom, Sglang, ClaudeCode, Vertex,
+  Bedrock; Echo has nothing to report). **Corrected 2026-08-19:** an earlier
+  draft of this entry said it "is 0 on every streaming path by those providers'
+  own docblocks", which is false for two of the six, and the correction changes
+  what this item is blocked on. Read on the source:
+
+  - `OpenAIProvider` (`:240`), `CustomProvider`, `SglangProvider` and
+    `ClaudeCodeProvider` do yield `tokensUsed: 0` on every streaming chunk — four
+    of six, as claimed.
+  - `BedrockProvider::completeStream()`'s docblock (`:194-197`) says the opposite
+    on purpose: *"Only the final `metadata` event carries usage, so every chunk
+    before it reports tokensUsed/costUsd of 0 and the last one reports the turn
+    total with empty content."* A turn TOTAL, on the stream.
+  - `VertexProvider::parseAnthropicChunk()` (`:876-897`) is the one that matters
+    most: it emits `tokensUsed: $inputTokens` on `message_start` and
+    `tokensUsed: $outputTokens` on `message_delta` — i.e. the PROMPT half, split
+    out, on the stream. That is precisely the figure the Step below says a single
+    total cannot substitute for, and its supposed absence is what the Blocked-on
+    cited.
+
+  Nothing between the provider and `Chat` carries any of it back:
+  `Backend::complete()` returns a `Message`, which has no token field, so the
+  estimate is still the only number the tier can see. The rest of this entry is
+  unchanged and holds.
+- **Step** Either (a) carry a provider-reported prompt-token count back to
+  `Chat` — which needs `$tokensUsed` split into prompt/completion and a seam on
+  the `Backend` return path, since a single total cannot calibrate a
+  history-size estimate — and use the last real measurement to calibrate the
+  estimator, or (b) keep the proxy and widen the refusal's margin explicitly,
+  documenting the assumed worst-case chars-per-token. Do NOT simply raise the
+  95% threshold: that hides the unit mismatch instead of naming it.
+- **Blocked on** A decision on whether `CompleteResponse::$tokensUsed` is split
+  into prompt/completion and surfaced through `Backend` (an API change every
+  provider and every backend has to fill in). Note that the DECISION is what is
+  blocking, not the data: at least one provider (Vertex, anthropic path) already
+  reports the prompt half on its own, so the seam has a first consumer whether or
+  not the other five are ever taught to split.
+
+### E18 — one exchange bigger than the tier is a permanent refusal; a big HISTORY is not
+
+**Rewritten 2026-08-19.** The original entry said "a session of ten enormous
+exchanges is refused until `/clear`" and that "the refusal stands no matter how
+many times the turn is retried". Both are false, measured on this entry's own
+fixture. What is left after the correction is a narrower but real dead end.
+
+- **What** `ContextCompactor::compact()` preserves the most recent
+  `recentPreserveCount` (10) exchanges in FULL, so there is no "compact harder"
+  path — no truncation within a preserved exchange, no per-message cap. The
+  consequence depends on WHERE the bulk sits:
+
+  - **A large history is self-healing.** Each refusal appends a small
+    notice/user/refusal group, and that group pushes one of the enormous
+    exchanges out of the ten-pair preserve window on the next attempt. So the
+    history really does shrink per attempt and the turn eventually goes out.
+  - **A single exchange over the tier is the actual dead end.** It stays inside
+    the preserve window forever no matter how many small groups pile up behind
+    it, and every refusal makes the total slightly WORSE. `/clear` is the only
+    way out.
+
+- **Where** `sugar-crush/src/Context/ContextCompactor.php:197` (the
+  `count($pairs) <= $preserveCount` early return) and the refusal in
+  `sugar-crush/src/Chat.php`'s `submit()` tier block.
+- **Severity** UX dead end for the single-exchange case, not security. Reachable
+  in normal use: one tool turn that reads a file larger than 95% of the window.
+  The many-exchanges case is a slow start, not a dead end.
+- **Evidence** Both driven at HEAD against the default `EchoBackend`, whose
+  window resolves to `ContextWindow::FALLBACK_TOKENS` (100,000), all figures in
+  ESTIMATED tokens (`Chat::estimateTokenCount()`'s chars/4 + 10 per message):
+
+  - This entry's own fixture — 13 exchanges of ~50,000 chars,
+    `ChatTest::oversizedHistory()`, 26 messages, 325,286 estimated tokens —
+    refuses turns 1 through 4 and **dispatches turn 5**: 325,286 → 250,531 →
+    200,768 → 151,005 → 101,241, i.e. ~49,760 shed per refusal, one whole
+    exchange. Four refused turns, not an indefinite block.
+  - A single 800,000-char exchange (2 messages, 200,020 estimated tokens) is
+    refused on every one of five consecutive attempts and the estimate RISES each
+    time — 200,148 → 200,276 → 200,404 → 200,532 → 200,660 — because the refusal
+    group is the only thing being added and nothing can be evicted.
+  - Cost of the many-exchanges case is four refused turns plus four rewrites of
+    older history. Those rewrites are reported in the transcript as of the
+    reviewer's B3 fix (`Chat::foregroundBlockedResponse()` now carries the same
+    `contextCompactedMessage()` notice the dispatching path emits); before that
+    fix they were silent, which is what made the original "until `/clear`"
+    framing look plausible.
+  - The refusal message no longer names `/fork`: measured,
+    `Chat::handleForkCommand()` leaves this history in place, so it frees nothing
+    here. It names `/clear` (frees everything at once) and `/compact` (sheds the
+    oldest preserved exchange by the same mechanism a retry does), and
+    `ContextWindowWiringTest::testEveryEscapeTheBlockingRefusalNamesActuallyGetsOutOfIt()`
+    drives every command the message names and asserts exactly which ones unblock
+    the next turn.
+
+- **Step** Give the compactor a last-resort pass that truncates WITHIN a
+  preserved exchange (head+tail with an elision marker) rather than dropping it,
+  and only when the ordinary pass has already failed. That is aimed squarely at
+  the single-exchange case, which is the one that cannot recover on its own. Keep
+  the 95% refusal as the backstop for when even that is not enough.
+- **Blocked on** Nothing. Deferred only because functionality-before-hardening
+  puts a working refusal ahead of a better one.
+
+### E19 — `BedrockProvider` flattens every `Role::System` turn to `user`, producing consecutive same-role turns
+
+- **What** Chat's history legitimately contains mid-conversation `Role::System`
+  messages — the 70% context reminder, the 85% compaction notice, and every
+  `Message::toolRunning()` placeholder. `EngineBackend::toTypedMessages()`
+  (`:1219-1231`) turns each into a `Messages\SystemMessage`, and
+  `BedrockProvider::formatMessages()` (`:294`) maps `SystemMessage` to role
+  `'user'` with the comment *"System wrapped as user"*. Two of those in a row —
+  or a system notice adjacent to the real user turn — is two consecutive `user`
+  entries in a Converse `messages` array, which the Anthropic-on-Bedrock models
+  reject.
+- **Where** `sugar-crush/src/Providers/BedrockProvider.php:294` and
+  `sugar-crush/src/Backend/EngineBackend.php:1219`.
+- **Severity** Provider-specific request rejection, not security. Bedrock only.
+- **Evidence** Settled by reading the two other shapes rather than by driving a
+  live provider, and the conclusion is that this is **pre-existing and unrelated
+  to the position** of any one notice:
+  - `VertexProvider::anthropicSystem()` (`:464-482`) hoists EVERY
+    `SystemMessage` out of `messages` into the top-level `system` field, with a
+    docblock saying *"a `system` role inside `messages` is a 400"*. Position in
+    the transcript is irrelevant there; the notices never reach `messages`.
+  - `OpenAIProvider` (`:163`) emits `['role' => 'system', …]` in place, which the
+    Chat Completions API accepts anywhere in the list.
+  - Bedrock is the only one that collapses the role, and it produces the same
+    adjacency for the pre-existing 70% reminder (which lands immediately AFTER
+    the user turn) as for the 85% compaction notice (which lands immediately
+    BEFORE it) and for tool-running placeholders. So the ordering question raised
+    against the compaction notice specifically has no bite: it is one more
+    instance of a shape Bedrock already produced.
+- **Step** Give Bedrock the Vertex treatment — hoist `SystemMessage` content into
+  the Converse request's own `system` field instead of forging a `user` turn —
+  and, independently, decide whether `formatMessages()` should coalesce
+  consecutive same-role entries as a general safety net for the `default => 'user'`
+  arm beside it.
+- **Blocked on** Nothing but a Bedrock credential to verify against. Not urgent:
+  it cannot be a regression from the context-tier work, since the reminder tier
+  already produced it.
+
+---
+
 ## F. Known dormant seams — documented, NOT work
 
 These are features intentionally left unwired. **They are not bugs and none of

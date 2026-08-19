@@ -2685,17 +2685,28 @@ final class KeyHelpTest extends TestCase
 
         // The floor, and the states that attain it — a SET, because $narrowest was
         // computed with a strict `<` and therefore named whichever state
-        // barStates() happens to list first among the ties. Measured, two states
-        // reach 36 at 1x1 with the byte-identical bar
-        // `0% · ⠴ thinking… · Esc Esc to cancel` — `turn in flight` and
-        // `prompt pending` — so "and it is the in-flight bar" was a tie-break
-        // artifact stated as an identification: with a strict `<` over a tie, the
-        // winner is whichever barStates() lists first, and reordering the array
-        // would have flipped the assertion with the fact unchanged. Verified the
-        // other way round instead — iterating barStates() in REVERSE leaves the two
-        // assertions below green, which the old pin could not have been. The fact is
-        // that the floor is 36 and that exactly these two states own it, both of
-        // them unreachable by the idle fixture the sibling sweep uses.
+        // barStates() happens to list first among the ties. Measured, three states
+        // reach 36 at 1x1, two of them with the byte-identical bar
+        // `0% · ⠴ thinking… · Esc Esc to cancel` — so "and it is the in-flight bar"
+        // was a tie-break artifact stated as an identification: with a strict `<`
+        // over a tie, the winner is whichever barStates() lists first, and
+        // reordering the array would have flipped the assertion with the fact
+        // unchanged. Verified the other way round instead — iterating barStates()
+        // in REVERSE leaves the two assertions below green, which the old pin could
+        // not have been. The fact is that the floor is 36 and that exactly these
+        // three states own it, all of them unreachable by the idle fixture the
+        // sibling sweep uses.
+        //
+        // `turn in flight, big context` joined the set in crush_code.md Phase 5
+        // item 5 and is the interesting one. Measured: its 2,400-message history is
+        // 122,400 estimated tokens against the 100,000-token fallback window, so
+        // submit() now compacts at the 85% tier before dispatching — 2,400 messages
+        // down to 21, 1,143 estimated tokens — and the percentage in its readout
+        // went from `122%` to `1%`. Two columns narrower is what drops it onto the
+        // floor, so unlike the other two its bar is not byte-identical to theirs,
+        // only the same width. `context over 100%` still shows its overflow because
+        // it never submits — the tiers are per-turn, and an idle oversized session
+        // is exactly the state they do not touch.
         $floor = min($narrowestPerState);
         $this->assertSame(36, $floor, 'the narrowest bar any state in this corpus can produce');
         $atFloor = array_keys(array_filter($narrowestPerState, static fn(int $w): bool => $w === $floor));
@@ -2703,9 +2714,9 @@ final class KeyHelpTest extends TestCase
         // flip the single-state pin this replaces.
         sort($atFloor);
         $this->assertSame(
-            ['prompt pending', 'turn in flight'],
+            ['prompt pending', 'turn in flight', 'turn in flight, big context'],
             $atFloor,
-            'and these are the states that attain it — both in flight, because requestPermission() sets '
+            'and these are the states that attain it — all in flight, because requestPermission() sets '
             . 'inFlight, which is what makes the cue meet this bar and not the wide idle one',
         );
 

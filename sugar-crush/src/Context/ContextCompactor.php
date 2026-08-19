@@ -13,10 +13,16 @@ namespace SugarCraft\Crush\Context;
  * Stage 2 condenses older exchanges into single-line summaries capturing
  * "what happened and any key decisions made."
  *
- * The compaction trigger uses tiered thresholds:
+ * The compaction trigger uses tiered thresholds — percentages of the token
+ * limit its caller passes in, configurable on {@see CompactorConfig} and shown
+ * here at their defaults:
  * - 70%: reminder sent to lead agent
  * - 85%: background compaction begins
  * - 95%: foreground blocking until space is freed
+ *
+ * The limit itself is resolved by {@see ContextWindow} — the model's real
+ * context window when the backend can report one — so these percentages land on
+ * a different absolute token count per provider.
  *
  * Token counting estimates 1 token ≈ 4 characters for PHP strings.
  */

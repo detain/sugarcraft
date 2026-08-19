@@ -173,18 +173,22 @@ final class BuiltInToolCorpusTest extends TestCase
     /**
      * The doc-block's symbol-kind census, derived. The load-bearing number is the
      * LAST one: `abstract` is the only shape the old `class_exists()`-only guard
-     * classified correctly, and there are none — while the 16 interfaces and 6
+     * classified correctly, and there are none — while the 17 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 268 files declare
-     * 287 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 271 files declare
+     * 290 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
-     * The 268th file (and the 26th enum) is `Permissions/PermissionPromptStage`,
-     * the armed/disarmed/confirming state a permission prompt is in — the thing
-     * that stops an ordinary slash command typed at a live prompt from
-     * answering it.
+     * The three most recent files (crush_code.md Phase 5 items 4/5, which tied
+     * the context tiers to the provider's real window) are `Context/ContextWindow`
+     * and `Context/IdleCompactionPolicy` — the +2 on `concrete` — and
+     * `Backend/ReportsContextWindow`, the +1 on `interface` and the capability
+     * that lets a backend report that window without every Backend implementor
+     * having to invent one. Ordinals are deliberately not quoted here: the walk
+     * below is `RecursiveDirectoryIterator` order, so "the Nth file" is a fact
+     * about the filesystem, not about the tree.
      */
     public function testTheSymbolKindCensusTheDocBlockQuotes(): void
     {
@@ -217,9 +221,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(268, $files, 'php files under src/');
+        $this->assertSame(271, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 220, 'enum' => 26, 'abstract' => 0, 'interface' => 16, 'trait' => 6, 'none' => 0],
+            ['concrete' => 222, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -248,8 +252,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 267 `.php`
-     * files, 286 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names: 271 `.php`
+     * files, 290 top-level declarations, 19 of them secondary in 8 files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *
@@ -257,6 +261,15 @@ final class BuiltInToolCorpusTest extends TestCase
      * than moved: `src/ToolRegistry.php` is outside this change-set's ownership.
      * It is one `use` away from colliding with `SugarCraft\Crush\Tools\Tool`, and
      * `tests/ToolRegistryTest.php` already imports it.
+     *
+     * The two file/declaration figures above are measured (`sourceFiles()` and
+     * `declaredTypes()` over `src/`), not restated: they read 267/286 before
+     * crush_code.md Phase 5 items 4/5 added three files, which was already one
+     * low against {@see testTheSymbolKindCensusTheDocBlockQuotes()}'s own count
+     * of the same tree. Nothing asserted them, which is how they drifted — so
+     * both are asserted below now. The 290 in particular was quoted in BOTH
+     * census docblocks and enforced by neither, which meant adding a file redded
+     * only the sibling test's 271 and left the declaration count to rot.
      */
     public function testTheSecondaryDeclarationCensus(): void
     {
@@ -289,6 +302,20 @@ final class BuiltInToolCorpusTest extends TestCase
 
         $this->assertSame(19, array_sum(array_map('count', $secondary)));
         $this->assertContains('SugarCraft\\Crush\\Tool', $secondary['ToolRegistry.php']);
+
+        // The two figures the docblock quotes, derived here rather than trusted.
+        $files = BuiltInToolCorpus::sourceFiles($this->srcDir);
+        $declarations = 0;
+        foreach ($files as $relative) {
+            $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
+        }
+        $this->assertSame(271, count($files), 'php files under src/');
+        $this->assertSame(290, $declarations, 'top-level declarations in them');
+        $this->assertSame(
+            $declarations - count($files),
+            array_sum(array_map('count', $secondary)),
+            'and the two figures must stay consistent with the per-file census above',
+        );
     }
 
     /**

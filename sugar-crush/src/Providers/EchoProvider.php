@@ -42,9 +42,33 @@ final class EchoProvider implements ProviderInterface
         return false;
     }
 
+    /**
+     * 0 — "unknown", not "enormous".
+     *
+     * This provider has no model behind it; it concatenates a blockquote in
+     * PHP. There is no window it could report, and the 1,000,000 it used to
+     * return was a stand-in for "effectively unlimited" from a time when
+     * nothing read this method (measured: zero call sites in `src/` before
+     * crush_code.md Phase 5 item 4). Now that
+     * {@see \SugarCraft\Crush\Chat}'s context tiers are percentages of it,
+     * an invented 1,000,000 switched all four of them off on the one path
+     * that runs by default: {@see \SugarCraft\Crush\Cli\Bootstrap::backend()}
+     * builds `EngineBackend(EchoProvider)` both as the offline fallback and
+     * as the degrade-after-provider-failure path, so the tiers would have
+     * fired at 700,000 / 850,000 / 950,000 / 1,000,000 estimated tokens
+     * instead of the 70,000 / 85,000 / 95,000 / 100,000 they acted on before
+     * that item.
+     *
+     * Returning 0 routes the answer through
+     * {@see \SugarCraft\Crush\Context\ContextWindow::resolve()} instead, so
+     * the offline path gets the one named, auditable
+     * {@see \SugarCraft\Crush\Context\ContextWindow::FALLBACK_TOKENS}
+     * rather than a fabrication that looks authoritative. See
+     * {@see ProviderInterface::contextWindow()} for the convention.
+     */
     public function contextWindow(): int
     {
-        return 1_000_000;
+        return 0;
     }
 
     public function costPer1kTokens(string $model, string $direction): float

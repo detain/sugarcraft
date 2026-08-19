@@ -41,7 +41,17 @@ final class EchoProviderTest extends TestCase
         $this->assertFalse($this->provider->supportsFunctionCalling());
         $this->assertFalse($this->provider->supportsVision());
         $this->assertFalse($this->provider->supportsJsonSchema());
-        $this->assertGreaterThan(0, $this->provider->contextWindow());
+        // 0 is the UNKNOWN sentinel, not a degenerate value: this provider has
+        // no model behind it, and crush_code.md Phase 5 item 4 made
+        // contextWindow() the denominator of every context tier in Chat. The
+        // 1,000,000 that used to sit here was a stand-in for "unlimited" from
+        // when nothing read the method; measured, it put the live offline
+        // tiers at 700,000/850,000/950,000/1,000,000 estimated tokens instead
+        // of 70,000/85,000/95,000/100,000 - i.e. off. assertSame(0) rather
+        // than a range, because "unknown" is the specific answer
+        // ContextWindow::resolve() is looking for; anything positive is taken
+        // as authoritative and used as-is.
+        $this->assertSame(0, $this->provider->contextWindow());
     }
 
     public function testCostIsAlwaysZero(): void

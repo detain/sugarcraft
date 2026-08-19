@@ -59,6 +59,8 @@ use SugarCraft\Crush\Workflows\WorkflowResult;
 use SugarCraft\Crush\Workflows\WorkflowStatus;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\ContextWindow;
+use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
@@ -188,15 +190,6 @@ final class Chat implements Model
 
     /** @var string|null ID of the currently active session */
     private ?string $currentSessionId = null;
-
-    /**
-     * Token budget used as the {@see ContextCompactor::shouldSendReminder()}
-     * denominator. Mirrors the fixed 100,000-token proxy limit already used
-     * by {@see shouldPromptIdleCompaction()} — so the 70% reminder tier
-     * fires at ~70,000 estimated tokens, comfortably ahead of the 100,000
-     * hard idle-compaction threshold.
-     */
-    private const REMINDER_TOKEN_LIMIT = 100000;
 
     /**
      * Columns the `/help` listing gives up to the chrome it will be painted
@@ -332,7 +325,16 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Crush\Agents\AgentWorkerPool $effectivePool = null,
         ?WorkflowEngineInterface $workflowEngine = null,
         ?AgentManager $agentManager = null,
-        ?CompactorConfig $compactorConfig = null,
+        /**
+         * Thresholds the context tiers use. Promoted to a property so
+         * {@see mutate()} can carry it: it used to be a plain parameter that
+         * only reached the constructor, and mutate() passed `null` in its
+         * place, so a Chat built with custom thresholds silently reverted to
+         * the defaults on the first keystroke. Nothing in the repo passed one
+         * yet, which is why it went unnoticed — and why wiring the tiers
+         * (crush_code.md Phase 5 item 5) had to fix it first.
+         */
+        private readonly ?CompactorConfig $compactorConfig = null,
         ?MemoryStore $memoryStore = null,
         \SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null $sessionStore = null,
         ?string $currentSessionId = null,
@@ -687,7 +689,7 @@ final class Chat implements Model
         ) {
             $workflowEngine->setAgentManager($agentManager);
         }
-        $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
+        $this->compactor = new ContextCompactor($this->compactorConfig ?? CompactorConfig::new());
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
         $this->currentSessionId = $currentSessionId;
@@ -3927,7 +3929,7 @@ final class Chat implements Model
             'backend' => $this->backend,
             'workflowEngine' => $this->workflowEngine,
             'agentManager' => $this->agentManager,
-            'compactorConfig' => null, // compactor is reconstructed from null config (uses default)
+            'compactorConfig' => $this->compactorConfig,
             'memoryStore' => $this->memoryStore,
             'sessionStore' => $this->sessionStore,
             'currentSessionId' => $this->currentSessionId,
@@ -4076,20 +4078,93 @@ final class Chat implements Model
             return $this->idleCompactionPromptResponse($text, $tokenCount);
         }
 
+        // The 85% and 95% compaction tiers (crush_code.md Phase 5 item 5).
+        // ContextCompactor::shouldCompact()/shouldCompactForeground() had zero
+        // call sites anywhere in src/ — the tiered design in the compactor's
+        // own class docblock existed only as prose, so a session filled up
+        // until the provider rejected it. Both are evaluated here, at the same
+        // per-turn point as the reminder below, and deliberately with NO
+        // idle-time gate: a session actively being driven past 95% is the
+        // dangerous case, not the one someone walked away from.
+        //
+        // Order is by descending severity, and the foreground test runs
+        // against the ALREADY-COMPACTED history on purpose. "Blocked until
+        // space is freed" only means anything once the automatic way of
+        // freeing it has been tried and come up short — compaction preserves
+        // the most recent exchanges in full, so a handful of enormous ones
+        // genuinely cannot be shrunk, and that is the state worth refusing on.
+        $tokenLimit = $this->contextTokenLimit();
+        $wireHistory = array_map(
+            static fn(Message $msg): array => $msg->toWire(),
+            $this->history
+        );
+
+        $baseHistory = $this->history;
+        $compactionNotice = null;
+
+        if ($this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
+            $compactedWire = $this->compactor->compact($wireHistory);
+            $savedPercentage = $this->compactor->savingsPercentage();
+
+            // Adopt the compacted history only when it actually bought
+            // something. A history of at most recentPreserveCount exchanges is
+            // returned untouched no matter how large it is, and announcing
+            // "saved 0%" on every turn from there on would be noise reporting
+            // work that did not happen.
+            //
+            // The adoption decision is made HERE, before the blocking tier is
+            // consulted, so that BOTH outcomes go on to report the same thing.
+            // It used to sit after: the turn-still-goes-out path suppressed its
+            // notice at 0% to avoid noise while the turn-refused path adopted
+            // the rewrite unconditionally and said nothing about it at all -
+            // the asymmetry ran the wrong way round, leaving the destructive
+            // outcome as the silent one.
+            if ($savedPercentage > 0) {
+                $compactedHistory = $this->messagesFromWire($compactedWire, $this->history);
+                $baseHistory = $compactedHistory;
+                $wireHistory = $compactedWire;
+                $tokenCount = $this->estimateTokenCount($compactedHistory);
+                $compactionNotice = $this->contextCompactedMessage(
+                    count($this->history),
+                    count($compactedHistory),
+                    $savedPercentage,
+                    $tokenCount,
+                    $tokenLimit,
+                );
+            }
+
+            // Still tested against the COMPACTED wire even when the result was
+            // not adopted: "blocked until space is freed" only means anything
+            // once the automatic way of freeing it has been tried, and a
+            // compaction that freed nothing is exactly the answer "there was
+            // none to free".
+            if ($this->compactor->shouldCompactForeground($compactedWire, $tokenLimit)) {
+                return $this->foregroundBlockedResponse(
+                    $text,
+                    $baseHistory,
+                    $tokenCount,
+                    $tokenLimit,
+                    $compactionNotice,
+                );
+            }
+        }
+
         // Reminder-tier check (R21's ContextCompactor::shouldSendReminder(),
         // 70% of the token budget by default). Unlike the idle-compaction
         // prompt above — which short-circuits the turn entirely and never
         // calls the backend — this is a soft, non-blocking notice: the real
         // prompt still goes out, but a system-role warning is appended
         // alongside it so the user sees context is filling up well before
-        // the hard 85%/95% compaction tiers would kick in.
-        $wireHistory = array_map(
-            static fn(Message $msg): array => $msg->toWire(),
-            $this->history
-        );
-        $sendReminder = $this->compactor->shouldSendReminder($wireHistory, self::REMINDER_TOKEN_LIMIT);
+        // the hard 85%/95% compaction tiers would kick in. Evaluated against
+        // the post-compaction history, so it cannot nag about a state the
+        // tier above just fixed.
+        $sendReminder = $this->compactor->shouldSendReminder($wireHistory, $tokenLimit);
 
-        $newTurnMessages = [Message::user($text)];
+        $newTurnMessages = [];
+        if ($compactionNotice !== null) {
+            $newTurnMessages[] = $compactionNotice;
+        }
+        $newTurnMessages[] = Message::user($text);
         if ($sendReminder) {
             $newTurnMessages[] = $this->contextReminderMessage($tokenCount);
         }
@@ -4097,7 +4172,7 @@ final class Chat implements Model
         $generation = $this->generation + 1;
         $cancellation = new CancellationToken();
         $next = $this->mutate([
-            'history' => [...$this->history, ...$newTurnMessages],
+            'history' => [...$baseHistory, ...$newTurnMessages],
             'inputBuf' => '',
             'inFlight' => true,
             'inFlightCancellation' => $cancellation,
@@ -5194,17 +5269,7 @@ final class Chat implements Model
         $compactedWire = $this->compactor->compact($wireHistory);
         $savingsPercentage = $this->compactor->savingsPercentage();
 
-        // Convert back to Message objects
-        $compactedHistory = [];
-        foreach ($compactedWire as $wire) {
-            $role = \SugarCraft\Crush\Role::from($wire['role'] ?? 'assistant');
-            $content = $wire['content'] ?? '';
-            $compactedHistory[] = match ($role) {
-                Role::User => Message::user($content),
-                Role::Assistant => Message::assistant($content),
-                default => new Message($role, $content, time()),
-            };
-        }
+        $compactedHistory = $this->messagesFromWire($compactedWire, $this->history);
 
         $newCount = count($compactedHistory);
 
@@ -7143,9 +7208,15 @@ final class Chat implements Model
      *
      * This replicates the logic from Runtime::shouldPromptIdleCompaction() for use
      * in the TUI event loop, where Runtime instance is not directly available.
+     * The replicated *logic* now lives in one place —
+     * {@see IdleCompactionPolicy::shouldPrompt()} — so the two callers cannot
+     * disagree about the idle window or the size threshold the way they did
+     * when each wrote both numbers itself. Chat still supplies its own limit:
+     * the backend is what it can see, and it must not reach for a Runtime.
      *
-     * Returns true when session has been idle for more than 3600 seconds (1 hour)
-     * AND token count exceeds 100,000.
+     * Returns true when the session has been idle longer than
+     * {@see IdleCompactionPolicy::IDLE_SECONDS} AND the estimated token count
+     * is past the whole context window {@see contextTokenLimit()} reports.
      *
      * Called once per turn from submit() (see {@see idleCompactionPromptResponse()})
      * right before a real prompt would be dispatched to the backend.
@@ -7155,17 +7226,7 @@ final class Chat implements Model
      */
     public function shouldPromptIdleCompaction(int $tokenCount, ?\DateTimeImmutable $lastActivityAt = null): bool
     {
-        if ($tokenCount <= 100000) {
-            return false;
-        }
-
-        if ($lastActivityAt === null) {
-            return false;
-        }
-
-        $idleSeconds = time() - $lastActivityAt->getTimestamp();
-
-        return $idleSeconds > 3600;
+        return IdleCompactionPolicy::shouldPrompt($tokenCount, $lastActivityAt, $this->contextTokenLimit());
     }
 
     /**
@@ -7187,16 +7248,32 @@ final class Chat implements Model
     }
 
     /**
-     * Current history's estimated size as a fraction of {@see
-     * REMINDER_TOKEN_LIMIT} - the same fixed proxy limit already used by
-     * the 70% reminder tier and idle-compaction check - for the status
-     * bar's context-usage indicator ({@see Renderer}). Not clamped to
-     * [0, 1]: a value above 1.0 is real signal (context has grown past the
-     * reminder threshold and compaction hasn't run yet), not a bug to hide.
+     * Current history's estimated size as a fraction of
+     * {@see contextTokenLimit()} - for the status bar's context-usage
+     * indicator ({@see Renderer}).
+     *
+     * The denominator changed meaning in crush_code.md Phase 5 item 4: it is
+     * the model's real context window whenever the backend can report one, so
+     * this fraction is now "how full is the window", not "how close to a
+     * fixed 100,000-token proxy". Numerator and denominator are also in
+     * different units - an estimated chars/4 count against a
+     * provider-counted window - which is why {@see Renderer} prints the pair
+     * with a leading `~` rather than as a measured percentage.
+     *
+     * Still not clamped to [0, 1]: a value above 1.0 is real signal - the
+     * history as it stands genuinely does not fit - not a bug to hide. It does
+     * NOT predict a refusal, and an earlier draft of this docblock said it
+     * did. The next turn runs automatic compaction first, and whether the
+     * 95% tier then refuses depends entirely on whether compaction can free
+     * enough: measured, a 2,400-message history reading 122% of the
+     * 100,000-token fallback window compacts to 1% and IS dispatched (see
+     * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}'s
+     * `turn in flight, big context` state), while 13 exchanges of ~50,000
+     * chars reading 325% cannot be shrunk past the tier and IS refused.
      */
     public function contextUsagePercent(): float
     {
-        return $this->estimateTokenCount($this->history) / self::REMINDER_TOKEN_LIMIT;
+        return $this->estimateTokenCount($this->history) / $this->contextTokenLimit();
     }
 
     /**
@@ -7214,20 +7291,45 @@ final class Chat implements Model
     }
 
     /**
-     * The denominator behind {@see contextUsagePercent()}: the fixed proxy
-     * budget also used by the 70% reminder tier and the idle-compaction
-     * check. Deliberately NOT the live model's advertised context window -
-     * it is the threshold this app actually acts on.
+     * The denominator behind {@see contextUsagePercent()} and the budget every
+     * context tier is a percentage of: the 70% reminder, the 85% automatic
+     * compaction, the 95% blocking refusal and the idle-compaction prompt.
+     *
+     * This IS the live model's advertised context window now, whenever the
+     * backend implements {@see \SugarCraft\Crush\Backend\ReportsContextWindow}
+     * and reports a positive one - crush_code.md Phase 5 item 4, which replaced
+     * a hardcoded 100,000 that matched no provider in this repo: measured over
+     * every `contextWindow()` in `src/Providers/`, the six with a model behind
+     * them report 8,192 / 16,385 / 128,000 / 196,608 / 200,000 depending on
+     * model, and not one of them 100,000. The seventh (Echo) reports 0 for
+     * "unknown".
+     *
+     * A backend with no model behind it still gets
+     * {@see ContextWindow::FALLBACK_TOKENS}, which is that same 100,000, so
+     * the offline path acts exactly as it did before - and note that "no model
+     * behind it" is a claim about the PROVIDER, not about the backend class.
+     * {@see Backend\EchoBackend} is reachable only through this class's
+     * constructor default; the CLI's offline fallback AND its
+     * degrade-after-provider-failure path both build
+     * `EngineBackend(EchoProvider)`
+     * ({@see \SugarCraft\Crush\Cli\Bootstrap::backend()}), which DOES
+     * implement the capability. That is why
+     * {@see \SugarCraft\Crush\Providers\EchoProvider::contextWindow()}
+     * reports 0 rather than a made-up figure: measured, a 1,000,000 there put
+     * the live offline tiers at 700,000 / 850,000 / 950,000 / 1,000,000
+     * estimated tokens, i.e. switched all four off on the default path.
      */
     public function contextTokenLimit(): int
     {
-        return self::REMINDER_TOKEN_LIMIT;
+        return ContextWindow::ofBackend($this->backend);
     }
 
     /**
      * Build the soft, non-blocking reminder message surfaced once
      * {@see ContextCompactor::shouldSendReminder()} reports the conversation
-     * has crossed its 70%-of-budget tier. Rendered with a distinct
+     * has crossed its share of the budget ({@see CompactorConfig::$reminderThreshold},
+     * 70% by default — which is why neither this docblock nor the message names
+     * a percentage as if it were fixed). Rendered with a distinct
      * `Role::System` (a faint "system: …" line, see {@see Renderer}) rather
      * than the `Role::Assistant` bubble used for the hard idle-compaction
      * prompt, so the two are visually distinguishable and this one never
@@ -7237,8 +7339,220 @@ final class Chat implements Model
     {
         return Message::system(
             "Heads up: this conversation has grown to ~{$tokenCount} estimated "
-            . "tokens, past the 70% context-usage reminder threshold. Consider "
+            . "tokens, past the context-usage reminder threshold. Consider "
             . "running /compact soon to keep the session responsive."
+        );
+    }
+
+    /**
+     * Rebuild a `list<Message>` from the wire arrays
+     * {@see ContextCompactor::compact()} returns, REUSING the original
+     * {@see Message} objects for every exchange compaction preserved in full.
+     *
+     * Rehydrating from the wire alone is lossy in a way the wire format hides:
+     * {@see Message::toWire()} emits `role`, `content`, `attachments` and
+     * `tool_calls` and nothing else, so `$createdAt`, `$toolResults`,
+     * `$pendingToolCallId`, `$reasoning`, `$imageBytes` and `$imageProtocol`
+     * have no representation there at all. {@see Renderer} renders three of
+     * those - tool results, reasoning and images - so a pure round-trip
+     * silently erased rendered tool output, model thinking and inline images
+     * from the transcript and re-stamped every surviving turn with `time()`.
+     * Measured on a preserved assistant turn before this fix:
+     * `createdAt 1234567890 -> now, toolCalls 1 -> 0, toolResults 1 -> 0,
+     * reasoning 'I thought hard' -> null, imageBytes 'PNGDATA' -> null`.
+     * Tolerable while `/compact` was the only way to trigger it and the user
+     * had typed it; not tolerable once submit()'s 85% tier does it
+     * automatically, per turn, on a history the notice claims to have
+     * preserved.
+     *
+     * So nothing is reconstructed that does not have to be. `compact()`
+     * returns `[...summaries, ...preserved]` where the preserved block is the
+     * last `recentPreserveCount` exchanges re-emitted with their role and
+     * content unchanged - which makes it recoverable as the longest common
+     * SUFFIX of `(role, content)` pairs between the wire and `$original`.
+     * Everything in that suffix is handed back as the very same object;
+     * everything before it genuinely IS new text (a `[summary] …` line, a
+     * `[file: …, N lines]` stub, a `[3x] …` group) and is built fresh, stamped
+     * now because that is when it came into existence.
+     *
+     * Matching from the END is what makes the alignment sound: the walk is
+     * contiguous, so every reused message is the one at that exact distance
+     * from the end of both lists. Two known ways the suffix comes up SHORT,
+     * both of which only mean "fewer messages keep their metadata", never a
+     * wrong one: the compactor's own pair grouping drops the earlier of two
+     * consecutive assistant turns, and it re-orders a `user` immediately
+     * followed by a non-user role. And one way it could run LONG - an original
+     * message whose content literally equals the summary line generated for it
+     * - in which case a real `Message` with the identical role and content is
+     * reused in place of a fresh one, which is why that is a curiosity rather
+     * than a hazard.
+     *
+     * @param array<array{role:string,content:string}> $wire
+     * @param list<Message> $original The history `$wire` was compacted from.
+     * @return list<Message>
+     */
+    private function messagesFromWire(array $wire, array $original): array
+    {
+        $wire = array_values($wire);
+        $original = array_values($original);
+        $wireCount = count($wire);
+        $originalCount = count($original);
+
+        $preserved = 0;
+        while ($preserved < $wireCount && $preserved < $originalCount) {
+            $entry = $wire[$wireCount - 1 - $preserved];
+            $candidate = $original[$originalCount - 1 - $preserved];
+            if (
+                ($entry['role'] ?? 'assistant') !== $candidate->role->value
+                || ($entry['content'] ?? '') !== $candidate->content
+            ) {
+                break;
+            }
+            $preserved++;
+        }
+
+        $messages = [];
+        foreach ($wire as $index => $entry) {
+            if ($index >= $wireCount - $preserved) {
+                $messages[] = $original[$originalCount - ($wireCount - $index)];
+                continue;
+            }
+
+            $role = Role::from($entry['role'] ?? 'assistant');
+            $content = $entry['content'] ?? '';
+            $messages[] = match ($role) {
+                Role::User => Message::user($content),
+                Role::Assistant => Message::assistant($content),
+                default => new Message($role, $content, time()),
+            };
+        }
+
+        return $messages;
+    }
+
+    /**
+     * The turn-refusing response of the 95% foreground tier
+     * ({@see ContextCompactor::shouldCompactForeground()}).
+     *
+     * Reached only after automatic compaction has already run and failed to
+     * get back under the tier, so there is nothing further this code can do on
+     * its own: sending anyway means spending a round-trip on a request the
+     * provider is entitled to reject. Shaped like
+     * {@see idleCompactionPromptResponse()} - the typed text lands in history
+     * so it is not lost, no Cmd is scheduled, and `inFlight` stays false so
+     * the next keystroke is accepted immediately. It does not wedge, and the
+     * message says how in terms that were MEASURED rather than assumed:
+     *
+     *  - Retrying works, eventually. Each refusal appends a small user/refusal
+     *    pair, which pushes one enormous exchange out of the ten compaction
+     *    preserves in full - so the history really does shrink per attempt.
+     *    Driven on 13 equal exchanges of ~10,000 estimated tokens against an
+     *    88,000-token window: refused at 100,487 estimated tokens, then the
+     *    very next retry dispatched at 80,664. The dead end is a SINGLE
+     *    exchange bigger than the tier, not a large history.
+     *  - `/compact` does the same thing by the same mechanism (it adopts
+     *    unconditionally and appends its own pair): 100,487 -> 80,574 on that
+     *    fixture, and the following turn went out.
+     *  - `/clear` frees everything at once.
+     *
+     * `/fork` is deliberately NOT offered, though an earlier draft offered it:
+     * {@see handleForkCommand()} spawns a background session and leaves the
+     * user on this branch with this history (see its docblock's contrast with
+     * `/branch`, which keeps the history too), so it frees nothing here - and
+     * without a BackgroundSupervisor and a SessionStore it answers "Background
+     * sessions not configured" instead.
+     *
+     * $history is what this refusal COMMITS, and refusing the turn does not
+     * mean leaving the transcript alone: when compaction freed something, the
+     * older exchanges really were summarized away underneath the refusal, and
+     * $compactionNotice - the very same {@see contextCompactedMessage()} the
+     * dispatching path would have appended - is carried into history ahead of
+     * the refusal so the user is told. It is null exactly when compaction
+     * changed nothing, in which case $history is the untouched original and
+     * there is nothing to report.
+     *
+     * @param list<Message> $history The history to commit: compacted when
+     *                               compaction freed anything, otherwise the
+     *                               original untouched.
+     * @param int $tokenCount ESTIMATED tokens (chars/4 proxy) in $history.
+     * @param int $tokenLimit PROVIDER-COUNTED context window from
+     *                        {@see contextTokenLimit()}.
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function foregroundBlockedResponse(
+        string $inputText,
+        array $history,
+        int $tokenCount,
+        int $tokenLimit,
+        ?Message $compactionNotice = null,
+    ): array {
+        $response = "This turn was NOT sent: the conversation is at ~{$tokenCount} "
+            . "estimated tokens against a {$tokenLimit}-token context window, still "
+            . "over the blocking tier after automatic compaction ran: compaction "
+            . "preserves the most recent exchanges in full, and those alone overflow "
+            . "this window. Each further attempt drops the oldest of them, so "
+            . "re-sending or running /compact will get through after a pass or two; "
+            . "/clear frees the whole context at once.";
+
+        $committed = $history;
+        if ($compactionNotice !== null) {
+            $committed[] = $compactionNotice;
+        }
+
+        $next = $this->mutate([
+            'history' => [...$committed, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+            'lastActivityAt' => new \DateTimeImmutable(),
+        ]);
+
+        return [$next, null];
+    }
+
+    /**
+     * The notice the 85% tier ({@see ContextCompactor::shouldCompact()}) leaves
+     * behind after rewriting history under the user.
+     *
+     * Role::System like the reminder, not Role::Assistant: it is the app
+     * reporting on itself, and it rides along with the turn rather than
+     * replacing it. Emitted on BOTH outcomes of that rewrite - the turn that
+     * then goes out, and the turn {@see foregroundBlockedResponse()} refuses -
+     * because what it reports is the rewrite, not the dispatch.
+     *
+     * Every figure names the domain it is true of, because the two token
+     * numbers here are NOT the same kind of thing - the count is a chars/4
+     * estimate, the window is what the provider advertises - and
+     * {@see \SugarCraft\Crush\Tests\Integration\ContextWindowWiringTest} pins
+     * each number against the label next to it rather than against the sentence,
+     * so swapping the two reds a test.
+     *
+     * Position: this rides BEFORE the user turn (it reports on history that
+     * already existed) while the reminder rides after it. That asymmetry is
+     * deliberate and provider-safe, which was checked rather than assumed:
+     * {@see \SugarCraft\Crush\Providers\VertexProvider}'s anthropic path
+     * hoists every SystemMessage out of `messages` into the top-level `system`
+     * field, so position cannot matter there, and
+     * {@see \SugarCraft\Crush\Providers\OpenAIProvider} emits `role: system`
+     * in place, which Chat Completions accepts anywhere.
+     * {@see \SugarCraft\Crush\Providers\BedrockProvider} flattens
+     * SystemMessage to `user` and so produces consecutive same-role turns - but
+     * it already did that for the reminder and for every
+     * {@see Message::toolRunning()} placeholder, so it is a pre-existing Bedrock
+     * shape rather than anything this notice introduced (backlog §E19).
+     */
+    private function contextCompactedMessage(
+        int $beforeMessages,
+        int $afterMessages,
+        int $savedPercentage,
+        int $tokenCount,
+        int $tokenLimit,
+    ): Message {
+        return Message::system(
+            "Context reached the automatic-compaction tier, so older exchanges were "
+            . "summarized: {$beforeMessages} messages -> {$afterMessages} messages, "
+            . "~{$savedPercentage}% of the estimated token count freed "
+            . "(~{$tokenCount} estimated tokens now, against a "
+            . "{$tokenLimit}-token context window)."
         );
     }
 
@@ -7249,13 +7563,34 @@ final class Chat implements Model
      * submission as fresh activity, so the nudge does not repeat on the
      * very next message.
      *
+     * What the advisory offers changed in crush_code.md Phase 5 item 5, and
+     * the message had to change with it. It used to end "or send another
+     * message to proceed anyway", which was true while nothing enforced the
+     * window. It cannot be now: this tier fires only when the estimate is past
+     * the WHOLE window ({@see IdleCompactionPolicy::shouldPrompt()}), which is
+     * necessarily past the 85% and 95% tiers too, so the follow-up it invited
+     * always lands on {@see submit()}'s compaction block. Measured on a
+     * 26-message / 325,286-estimated-token fixture against the 100,000-token
+     * fallback window: turn 1 got this advisory, turn 2 was refused and its
+     * history[0] went from 50,003 chars to a summary line.
+     *
+     * "Refused" is not guaranteed either, which is why the text below promises
+     * neither: whether the follow-up gets through depends on whether automatic
+     * compaction can free enough (measured, a 2,400-message history at 122% of
+     * the fallback window compacts to 1% and IS dispatched). Both outcomes
+     * rewrite history, and that is the part worth saying out loud.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function idleCompactionPromptResponse(string $inputText, int $tokenCount): array
     {
+        $limit = $this->contextTokenLimit();
         $response = "This session has been idle for over an hour and has grown to "
-            . "~{$tokenCount} estimated tokens. Run /compact to shrink the context "
-            . "before continuing, or send another message to proceed anyway.";
+            . "~{$tokenCount} estimated tokens, past its {$limit}-token context "
+            . "window. Run /compact to shrink the context before continuing. Sending "
+            . "another message instead will not send it as-is: the next turn is over "
+            . "the automatic-compaction tier, so older exchanges are summarized first, "
+            . "and the turn is refused outright if that does not free enough.";
 
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],

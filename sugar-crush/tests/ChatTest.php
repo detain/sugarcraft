@@ -32,6 +32,7 @@ use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolResult;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\BatchMsg;
@@ -1888,7 +1889,10 @@ final class ChatTest extends TestCase
     public function testSubmitPromptsIdleCompactionInsteadOfCallingBackendWhenIdleAndOversized(): void
     {
         // ~500,000 chars ≈ 125,010 estimated tokens (1 token ≈ 4 chars + 10
-        // overhead), comfortably over the 100,000-token threshold.
+        // overhead), comfortably over the whole window this Chat's default
+        // EchoBackend resolves to — 100,000, ContextWindow::FALLBACK_TOKENS,
+        // because an echo backend reports no window. The idle tier is the only
+        // one measured against the WHOLE window rather than a percentage of it.
         $bigMessage = Message::user(str_repeat('x', 500_000));
         $chat = (new Chat(history: [$bigMessage], inputBuf: 'hello again'))
             ->withLastActivity(new \DateTimeImmutable('2 hours ago'));
@@ -1916,23 +1920,347 @@ final class ChatTest extends TestCase
         );
     }
 
-    public function testSubmitDispatchesToBackendNormallyWhenRecentlyActiveDespiteOversizedHistory(): void
+    /**
+     * The other half of the idle gate: a session far past its window but a
+     * user who is right here does NOT get the idle prompt.
+     *
+     * What it gets instead changed in crush_code.md Phase 5 item 5, and this
+     * test was rewritten rather than relaxed. It used to assert the turn was
+     * dispatched, which was only ever true because nothing enforced the
+     * window: 325,286 estimated tokens (26 messages of ~50,000 chars at
+     * chars/4 + 10 per message) against the default EchoBackend's
+     * 100,000-token fallback is over the 95% blocking tier, and automatic
+     * compaction cannot get back under it — it preserves the most recent 10
+     * exchanges in full and those alone are ~250,220 tokens. So the turn is
+     * now refused instead of being sent at a provider entitled to reject it.
+     *
+     * The claim the original test existed for still holds and is still pinned:
+     * this is the BLOCKING tier, not the idle prompt. The distinguisher is
+     * structural, not wording — the idle path leaves history untouched, so a
+     * shrunken history[0] is reachable only through the compaction tier, and
+     * the message count (23 compacted + 2) could not come from the idle path
+     * either (26 + 2).
+     */
+    public function testSubmitRefusesTheTurnAtTheBlockingTierWhenActiveAndPastTheWindow(): void
     {
-        $bigMessage = Message::user(str_repeat('x', 500_000));
-        $chat = (new Chat(history: [$bigMessage], inputBuf: 'hello'))
+        $chat = (new Chat(history: self::oversizedHistory(), inputBuf: 'hello'))
             ->withLastActivity(new \DateTimeImmutable('5 minutes ago'));
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // Refused: nothing scheduled, and the shell is left accepting input.
+        $this->assertNull($cmd);
+        $this->assertFalse($next->inFlight);
+
+        // 3 summaries + the 10 preserved pairs (20 messages) + the notice for
+        // the rewrite + the user turn + the refusal. The notice is the part
+        // that arrived after the reviewer's B3: refusing the turn does not mean
+        // leaving history alone, and this path used to adopt the rewrite in
+        // silence while the DISPATCHING path announced it.
+        $this->assertCount(26, $next->history);
+        $this->assertSame(Role::System, $next->history[23]->role);
+        $this->assertSame('hello', $next->history[24]->content);
+        $this->assertSame(Role::Assistant, $next->history[25]->role);
+
+        // Compaction ran before the refusal — only reachable via the tier
+        // under test, never via the idle prompt — and the notice reports the
+        // real before/after counts rather than a literal.
+        $this->assertLessThan(500, mb_strlen($next->history[0]->content));
+        $this->assertSame(50_003, mb_strlen($chat->history[0]->content), 'fixture: originals are large');
+        $this->assertStringContainsString(
+            count($chat->history) . ' messages -> 23 messages',
+            $next->history[23]->content,
+        );
+    }
+
+    /**
+     * The 95% tier may not rewrite history in silence — the asymmetry the
+     * reviewer's B3 found ran the wrong way round.
+     *
+     * The 85% tier deliberately suppresses its notice when compaction freed
+     * nothing (announcing "saved 0%" every turn would be noise); the blocking
+     * tier used to adopt the rewrite UNCONDITIONALLY and say nothing at all,
+     * which made the destructive outcome the quiet one. Both now report the
+     * same rewrite through the same message, and the pin is structural: the
+     * refused turn carries a Role::System entry whose before/after counts match
+     * the fixture and the result, sitting between the surviving history and the
+     * user turn.
+     */
+    public function testTheBlockingTierReportsTheRewriteItCommitted(): void
+    {
+        $history = self::oversizedHistory();
+        $chat = new Chat(history: $history, inputBuf: 'hello');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd, 'fixture: the turn must be refused');
+
+        $notice = $next->history[count($next->history) - 3];
+        $this->assertSame(Role::System, $notice->role);
+        $this->assertStringContainsString(
+            count($history) . ' messages -> ' . (count($next->history) - 3) . ' messages',
+            $notice->content,
+        );
+        $this->assertSame(Role::User, $next->history[count($next->history) - 2]->role);
+        $this->assertSame(Role::Assistant, $next->history[count($next->history) - 1]->role);
+
+        // And the rewrite really happened underneath it.
+        $this->assertLessThan(500, mb_strlen($next->history[0]->content));
+        $this->assertGreaterThan(50_000, mb_strlen($history[0]->content));
+    }
+
+    /**
+     * The automatic 85% tier must not destroy the metadata on the exchanges it
+     * PRESERVES — the reviewer's B2, and a functionality bug rather than
+     * hardening because `/compact` used to be the only way to trigger it and
+     * the user had typed it.
+     *
+     * `Message::toWire()` emits role, content, attachments and tool_calls, so a
+     * pure wire round-trip has no representation at all for `$createdAt`,
+     * `$toolResults`, `$reasoning`, `$imageBytes` or `$imageProtocol` — and
+     * {@see \SugarCraft\Crush\Renderer} renders tool results, reasoning and
+     * images. Measured before the fix, on the very last assistant turn of a
+     * history the notice claims to preserve in full: `createdAt 1234567890 ->
+     * now, toolCalls 1 -> 0, toolResults 1 -> 0, reasoning 'I thought hard' ->
+     * null, imageBytes 'PNGDATA' -> null`.
+     *
+     * Pinned on the AUTOMATIC path (a plain Enter on an over-tier history), not
+     * on `/compact`, and field by field rather than by object identity — the
+     * fix happens to hand back the same instance, but what must hold is that
+     * the renderable state survives, however it is carried.
+     */
+    public function testTheBackgroundTierPreservesMetadataOnTheTurnsItKeeps(): void
+    {
+        $history = self::compactableHistory();
+        array_pop($history);
+        $rich = new Message(
+            Role::Assistant,
+            'done',
+            1_234_567_890,
+            toolCalls: [new ToolCall('bash', ['command' => 'ls'], 'tc1')],
+            toolResults: [new ToolResult('bash', 'listing', null, 'tc1')],
+            reasoning: 'I thought hard',
+            imageBytes: 'PNGDATA',
+            imageProtocol: 'kitty',
+        );
+        $history[] = $rich;
+
+        $chat = new Chat(history: $history, inputBuf: 'hello');
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertInstanceOf(\Closure::class, $cmd, 'fixture: the turn must still go out');
+        $this->assertLessThan(500, mb_strlen($next->history[0]->content), 'fixture: compaction must have run');
+
+        // 3 summaries + 20 preserved: the rich turn is the last preserved one.
+        $kept = $next->history[22];
+        $this->assertSame('done', $kept->content);
+        $this->assertSame(1_234_567_890, $kept->createdAt, 'the original timestamp, not a fresh time()');
+        $this->assertCount(1, $kept->toolCalls);
+        $this->assertSame('bash', $kept->toolCalls[0]->name);
+        $this->assertCount(1, $kept->toolResults);
+        $this->assertSame('listing', $kept->toolResults[0]->result);
+        $this->assertSame('I thought hard', $kept->reasoning);
+        $this->assertSame('PNGDATA', $kept->imageBytes);
+        $this->assertSame('kitty', $kept->imageProtocol);
+    }
+
+    /**
+     * The idle prompt's follow-up, driven — the reviewer's B4.
+     *
+     * The message used to end "or send another message to proceed anyway". That
+     * survived the diff textually and stopped being true: this tier fires only
+     * when the estimate is past the WHOLE window, which is necessarily past the
+     * 85% and 95% tiers too, so the invited follow-up always lands on the
+     * newly-live compaction block. Measured on this fixture: turn 1 gets the
+     * advisory with history untouched, turn 2 is REFUSED and history[0] has gone
+     * from 50,003 chars to a summary line.
+     *
+     * The positive claim is pinned structurally (not dispatched, and history
+     * rewritten — the exact opposite of "proceed anyway"); the single string
+     * assertion is a regression pin on the retired promise itself, which has no
+     * structural form.
+     */
+    public function testTheIdlePromptsFollowUpLandsOnTheCompactionTiers(): void
+    {
+        $history = self::oversizedHistory();
+        $chat = (new Chat(history: $history, inputBuf: 'hello'))
+            ->withLastActivity(new \DateTimeImmutable('2 hours ago'));
+
+        [$prompted, $promptCmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($promptCmd);
+        $advisory = $prompted->history[count($prompted->history) - 1]->content;
+        $this->assertStringContainsString('/compact', $advisory);
+        $this->assertStringNotContainsString(
+            'proceed anyway',
+            $advisory,
+            'the tiers below make an unconditional "send it anyway" promise false',
+        );
+        $this->assertSame(
+            mb_strlen($history[0]->content),
+            mb_strlen($prompted->history[0]->content),
+            'the idle prompt itself must not compact',
+        );
+
+        // The follow-up the advisory is about.
+        $followUp = new Chat(history: $prompted->history, inputBuf: 'again');
+        [$next, $cmd] = $followUp->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd, 'it did NOT proceed');
+        $this->assertFalse($next->inFlight);
+        $this->assertLessThan(
+            mb_strlen($history[0]->content),
+            mb_strlen($next->history[0]->content),
+            'and history was rewritten underneath it, which "anyway" also denies',
+        );
+    }
+
+    /**
+     * Tier ORDER: an idle session that is ALSO over the blocking tier gets the
+     * idle prompt, and its history is left alone.
+     *
+     * Both short-circuit the turn, so the observable difference is what
+     * happened to history: the idle prompt appends to it untouched, the
+     * blocking tier replaces it with the compacted form. Pinning that pins the
+     * ordering in submit() without asserting on any wording.
+     */
+    public function testIdlePromptWinsOverTheCompactionTiersAndLeavesHistoryIntact(): void
+    {
+        $history = self::oversizedHistory();
+        $chat = (new Chat(history: $history, inputBuf: 'hello'))
+            ->withLastActivity(new \DateTimeImmutable('2 hours ago'));
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertCount(count($history) + 2, $next->history);
+        $this->assertSame(
+            mb_strlen($history[0]->content),
+            mb_strlen($next->history[0]->content),
+            'the idle prompt must not compact',
+        );
+        $this->assertSame('hello', $next->history[26]->content);
+        $this->assertStringContainsString('/compact', $next->history[27]->content);
+    }
+
+    /**
+     * The 85% tier that does NOT block: compaction frees enough, so the turn
+     * goes out with a Role::System notice recording what was thrown away.
+     *
+     * Fixture is 3 enormous exchanges followed by 10 trivial ones — 90,286
+     * estimated tokens, over the 85,000 background tier of the EchoBackend's
+     * 100,000-token fallback window. Compaction summarizes the 3 (the 10
+     * preserved pairs are the trivial ones) and lands at ~337, well under the
+     * 95,000 blocking tier, so this is the path where the tier acts and the
+     * user's prompt still reaches the backend.
+     */
+    public function testSubmitCompactsAtTheBackgroundTierAndStillDispatchesTheTurn(): void
+    {
+        $history = self::compactableHistory();
+        $chat = new Chat(history: $history, inputBuf: 'hello');
 
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertInstanceOf(\Closure::class, $cmd);
         $this->assertTrue($next->inFlight);
-        // History is also well over the 70% reminder tier here (see
-        // R-reminder-consumer tests below), so a Role::System notice rides
-        // along after the user turn — a soft, non-blocking addition, unlike
-        // the hard idle-compaction short-circuit this test is guarding.
-        $this->assertCount(3, $next->history);
-        $this->assertSame('hello', $next->history[1]->content);
-        $this->assertSame(Role::System, $next->history[2]->role);
+
+        // 3 summaries + 20 preserved + the notice + the user turn. No reminder
+        // rides along: the compacted history is ~337 estimated tokens, nowhere
+        // near the 70,000-token reminder tier.
+        $this->assertCount(25, $next->history);
+        $this->assertSame(Role::System, $next->history[23]->role);
+        $this->assertSame(Role::User, $next->history[24]->role);
+        $this->assertSame('hello', $next->history[24]->content);
+
+        // The notice's figures are the real before/after counts, read back
+        // from the fixture and the result rather than written as literals.
+        $notice = $next->history[23]->content;
+        $this->assertStringContainsString(
+            count($history) . ' messages -> ' . (count($next->history) - 2) . ' messages',
+            $notice,
+        );
+
+        // History really was rewritten: the enormous first exchange is a
+        // one-line summary now.
+        $this->assertLessThan(500, mb_strlen($next->history[0]->content));
+    }
+
+    /**
+     * The 85% tier fires but compaction buys NOTHING, so it must stay silent.
+     *
+     * Ten exchanges is exactly recentPreserveCount, so ContextCompactor::compact()
+     * returns the history untouched no matter how large it is — and a history
+     * between the 85% and 95% tiers is one this app will see on every single turn
+     * from there on. Announcing "saved 0%" each time would report work that did
+     * not happen. The reminder still rides along (90,000 estimated tokens is over
+     * the 70,000 reminder tier), which is what makes the assertion sharp: the
+     * turn carries exactly ONE added system message and it sits AFTER the user
+     * turn, where a reminder goes, not before it, where a compaction notice would.
+     */
+    public function testTheBackgroundTierStaysSilentWhenCompactionFreesNothing(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 10; $i++) {
+            $history[] = Message::user("u{$i} " . str_repeat('x', 17_956));
+            $history[] = Message::assistant("a{$i} " . str_repeat('y', 17_956));
+        }
+        $chat = new Chat(history: $history, inputBuf: 'hello');
+
+        // 90,000 estimated tokens: over the 85,000 background tier of the
+        // 100,000-token fallback window, under the 95,000 blocking tier.
+        $this->assertSame(90_000, $chat->contextTokens());
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertCount(22, $next->history);
+        $this->assertSame(Role::User, $next->history[20]->role);
+        $this->assertSame('hello', $next->history[20]->content);
+        $this->assertSame(Role::System, $next->history[21]->role);
+    }
+
+    /**
+     * 13 exchanges of ~50,000 chars each: 26 messages, 325,286 estimated
+     * tokens at ContextCompactor's chars/4 + 10-per-message rate. Past the 95%
+     * blocking tier of the 100,000-token fallback window, and unshrinkable —
+     * compaction preserves 10 whole exchanges and those are ~250,220 tokens on
+     * their own. Prefixes differ so the three summaries stay distinct;
+     * identical ones would be collapsed into a single "[3x] …" entry by
+     * ContextCompactor's stage 3 and the counts below would shift.
+     *
+     * @return list<Message>
+     */
+    private static function oversizedHistory(): array
+    {
+        $history = [];
+        for ($i = 0; $i < 13; $i++) {
+            $history[] = Message::user("u{$i} " . str_repeat('x', 50_000));
+            $history[] = Message::assistant("a{$i} " . str_repeat('y', 50_000));
+        }
+
+        return $history;
+    }
+
+    /**
+     * 3 enormous exchanges then 10 trivial ones: 26 messages, 90,286 estimated
+     * tokens — over the 85% background tier of the 100,000-token fallback
+     * window, and compactable to ~337 because the 10 exchanges compaction
+     * preserves in full are the trivial ones.
+     *
+     * @return list<Message>
+     */
+    private static function compactableHistory(): array
+    {
+        $history = [];
+        for ($i = 0; $i < 3; $i++) {
+            $history[] = Message::user("u{$i} " . str_repeat('x', 60_000));
+            $history[] = Message::assistant("a{$i} " . str_repeat('y', 60_000));
+        }
+        for ($i = 0; $i < 10; $i++) {
+            $history[] = Message::user("q{$i}");
+            $history[] = Message::assistant("r{$i}");
+        }
+
+        return $history;
     }
 
     public function testSubmitDispatchesToBackendNormallyWhenIdleButHistorySmall(): void
@@ -1983,9 +2311,11 @@ final class ChatTest extends TestCase
     public function testSubmitSurfacesReminderMessageAlongsideRealPromptWhenOverReminderThreshold(): void
     {
         // ~280,000 chars ≈ 70,010 estimated tokens (1 token≈4 chars + 10
-        // overhead) — over ContextCompactor's default 70% reminder tier of
-        // Chat's 100,000-token proxy limit (70,000), but comfortably under
-        // the 100,000-token hard idle-compaction threshold.
+        // overhead) — over ContextCompactor's default 70% reminder tier of the
+        // 100,000-token window the default EchoBackend resolves to
+        // (ContextWindow::FALLBACK_TOKENS, so 70,000), but comfortably under
+        // that window itself, which is where the idle tier sits. The budget is
+        // no longer a constant on Chat: on a real provider both numbers move.
         $bigMessage = Message::user(str_repeat('x', 280_000));
         $chat = new Chat(history: [$bigMessage], inputBuf: 'hello');
 

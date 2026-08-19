@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -1259,8 +1261,21 @@ final class Runtime
      * Determine whether to prompt the user about idle-session compaction.
      *
      * Returns true when:
-     *   - The session has been idle for more than 3600 seconds (1 hour), AND
-     *   - The token count exceeds 100,000
+     *   - The session has been idle for more than
+     *     {@see IdleCompactionPolicy::IDLE_SECONDS}, AND
+     *   - The estimated token count is past the WHOLE context window this
+     *     runtime's provider reports
+     *
+     * That threshold used to be a hardcoded 100,000 written here and again in
+     * {@see \SugarCraft\Crush\Chat::shouldPromptIdleCompaction()} - two
+     * copies of one number, neither tied to the model actually being talked
+     * to, in a class that holds a provider whose real window it never asked
+     * for (crush_code.md Phase 5 item 4). The limit is now
+     * {@see ContextWindow::resolve()} over `$this->provider->contextWindow()`:
+     * this runtime's provider, not `$app`'s, because it is the one that will
+     * receive the request and therefore the one whose ceiling matters. A
+     * provider reporting nothing usable falls back to the same 100,000 this
+     * always used, so a session with no real window behaves as before.
      *
      * This is a pure check — the actual offer to compact is handled in
      * Chat.php based on this check.
@@ -1270,16 +1285,10 @@ final class Runtime
      */
     public function shouldPromptIdleCompaction(App $app, int $tokenCount): bool
     {
-        if ($tokenCount <= 100000) {
-            return false;
-        }
-
-        if ($app->lastActivityAt === null) {
-            return false;
-        }
-
-        $idleSeconds = time() - $app->lastActivityAt->getTimestamp();
-
-        return $idleSeconds > 3600;
+        return IdleCompactionPolicy::shouldPrompt(
+            $tokenCount,
+            $app->lastActivityAt,
+            ContextWindow::resolve($this->provider->contextWindow()),
+        );
     }
 }

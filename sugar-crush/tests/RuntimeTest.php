@@ -1416,7 +1416,12 @@ final class RuntimeTest extends TestCase
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('name')->willReturn('test');
 
-        // Exactly 100000 tokens - should be false (not MORE than 100000)
+        // Exactly 100000 tokens - should be false (the test is `>`, not `>=`).
+        // 100,000 is the threshold here because the mocked provider's
+        // contextWindow() returns 0 and ContextWindow::resolve() turns that into
+        // FALLBACK_TOKENS; it is no longer a literal in Runtime. A provider
+        // reporting a real window moves this boundary with it - see
+        // ContextWindowWiringTest::testRuntimesIdleThresholdMovesWithItsProvidersWindow().
         $app = App::new($provider, 'test-model')
             ->withLastActivity(new DateTimeImmutable('2 hours ago'));
 
