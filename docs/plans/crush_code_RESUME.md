@@ -72,7 +72,7 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — twenty-four rounds running
+## 5. THE recurring defect — twenty-six rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
@@ -274,60 +274,77 @@ pile-up), supervisor-verified at 7285 / 76294 / 1, exit 0. Bundle C1 is `6bc5218
 (7276/76239/1). **Phase 5 is complete. Phase 2 items 1, 3, 5, 6 and 8 are complete** — 3 and 5
 needed no code and the plan's premise about both was measured false (see §9).
 
-## ⚠️ BUNDLE C3 IS IN THE WORKING TREE, UNCOMMITTED, AND MUST NOT SHIP AS-IS
+## BUNDLE C3 IS COMMITTED — `3b0ba8fe`. Phase 2 item 2 done.
 
-**Phase 2 item 2 (MCP) is implemented and reviewed but NOT committed**, and it carries a HIGH
-SECURITY defect the review found. Do not commit it until fix round A lands.
+Supervisor-verified TWICE, and the second run is the one that counts: **7387 / 76813 / 1, exit 0
+against LOCAL sibling symlinks** (and 7387 / 76811 / 2 against Packagist copies — see the vendor
+note below for why the two differ). Implementation + adversarial review (17 findings, 5 surviving
+mutations) + two fix rounds. `src/` is **276** files.
 
-State: implementation done, adversarial review done (17 findings, 5 surviving mutations), **fix
-round A brief WRITTEN AND READY BUT NOT LAUNCHED** at
-`/tmp/claude-1000/-home-sites-sugarcraft/ee99e40f-1cef-4bc4-8c0a-90ae8bc11daf/scratchpad/c3-fixA.md`
-— it is self-contained, so re-spawn against it. Suite on the uncommitted tree, verified by me:
-**7321 / 76412 / 1, exit 0**; `src/` is **276** files (one new: `src/Tools/McpToolBridge.php`).
+**The security defect is closed, and I verified it myself rather than taking the agent's word.**
+`.mcp.json` now requires the root to be listed under `trustedProjectMcp` in the user's own
+`~/.sugar-crush/config.json`. Measured personally, three ways: untrusted root in `plan` → payload
+never runs; untrusted in `default` → never runs; **grant written → runs** (the positive control
+matters — a gate that simply broke MCP would also show "no payload" and would have looked like a
+pass). The refusal is visible through the real `chat()` path, naming the root and the key to add.
 
-**THE SECURITY DEFECT.** `.mcp.json` executes arbitrary repository-supplied commands **at launch,
-in every permission mode including `plan`**, with no trust check and no user-visible output.
-Measured: a payload that is not even a valid MCP server (`initialize` fails, server discarded,
-`tools=10`) still ran its command. **Starting IS the execution.** `README.md:441` already
-documents this exact threat model for `.sugar-crush/hooks.yaml` — off by default, "No permission
-mode protects you from it (`plan` included)", grant only via the user's own
-`~/.sugar-crush/config.json` under `trustedProjectHooks`. C3 introduced a second instance of the
-hole this project already closed.
+Findings 6, 7, 10-14 landed in fix round B, plus two hand-offs: the `error_log()` diagnostic is now
+asserted rather than silenced, and the `projectTierRefusals()` count got its missing domain — "TEN"
+is true of dot-DIRECTORY paths, and `.mcp.json` is a bare dot-file the derivation cannot see, so
+the figure a reader wants is **EIGHT** paths feeding that map.
 
-Fix round A gates it behind a **NEW sibling key `trustedProjectMcp`** — new rather than reusing
-`trustedProjectHooks`, because reusing it would retroactively grant MCP execution to every root a
-user already trusted for hooks, which is a silent widening of a security grant.
+**Two things fix round B reported and deliberately did not change — both still open, my call:**
 
-**NOT deferred under the security-later rule.** That rule covers PRE-EXISTING issues; this one is
-introduced by the bundle in flight, the mechanism to fix it already exists, and shipping it would
-make daily-driving actively dangerous.
+1. `mcpClient()`'s untrusted branch is guarded `$canonicalRoot === false || !projectMcpIsTrusted(…)`,
+   and the `false` arm is **unreachable** there (`is_file()` already succeeded on a path composed
+   from `$canonicalRoot`). Same shape as the dead `stdClass` clause round A deleted — but here the
+   dead arm is the fail-CLOSED direction on a security gate. **Decision: keep it, document it as
+   deliberate belt-and-braces.** A later reader deleting it "because it is unreachable" is exactly
+   how a gate acquires a hole, and the cost of keeping it is one branch.
+2. Neither refusal branch writes `$mcpClients`, so an untrusted root re-stats and re-checks trust on
+   every `tools()` call. Harmless and idempotent; the memo docblock reads as if every outcome is
+   cached, which is the claim to correct, not the behaviour.
 
-**Fix round A** (brief ready): findings 1 (trust gate), 2 (every bridge call routes to the FIRST
-server advertising that tool name), 3 (a nested `properties: []` 400s the ENTIRE request), 4 (a
-forked child that starts its own servers can never stop them), 5 (`stop()` kills the `sh -c`
-wrapper, not the server — fix by using `proc_open()`'s ARRAY form), 8 (memo key is the raw
-spelling, so four spellings of one root gave four clients and eight processes), 9 (the launch hang
-— and a read timeout is NOT sufficient, see below), the four surviving mutations, and deleting one
-dead branch.
+## ⚠️ VENDOR STATE IS NOW A THING TO CHECK, and it silently changes what "green" means
 
-**Fix round B** (brief NOT yet written): findings 6 ("gated exactly as `Bash`" is false in `plan`,
-the one mode the headline test uses — `evaluatePlan()` allows `Bash` and denies any `mcp__`), 7
-("a broken config is reported on stderr" is true for ONE of five broken shapes), 10, 11
-(non-array `required` silently discarded), 12 (`isError` strict `=== true` reads `"true"`/`1` as
-success), 13 (empty `content[]` reads as success with no output), 14 (the `DYNAMIC_TOOL_CLASSES`
-exemption's discipline is prose only — the deliberate one-line case is unguarded). Backlog
-E40/E41/E42 already carry findings 16, 17 and the rest.
+Mid-round, something ran `composer update` and replaced `sugar-crush/vendor/sugarcraft/*`'s
+symlinks with real Packagist directories — so the suite stopped testing the monorepo's own
+`candy-*` and started testing published copies, with no signal except a skip count moving 1 → 2
+(`GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed` self-skips when there are
+no symlinks). **A 2-skip run means you are not testing the monorepo.** It also left an unrelated
+third-party bump in the tracked root `composer.lock` (aws-sdk 3.390.4 → 3.393.1 and others), which
+I reverted rather than letting it ride along inside a feature commit.
 
-**The launch hang needs a WALL-CLOCK DEADLINE, not a read timeout.** `start()` makes TWO unbounded
-reads, and `readResponse()` is `while (true) { … if isNotification() continue; }` — a server
-emitting valid JSON-RPC notifications forever starves it while every individual `fgets()` returns
-promptly (`timeout 20 php probe.php -> rc=124`). Three categories, not two: dead, slow, and
-**live-chatty-never-answering**.
+Restore local wiring with the documented loop, and note it is `sugarcraft/*` scoped so third-party
+versions do not move:
 
-**MEASURE YOUR OWN INVARIANTS FROM THE REPO ROOT WITH ABSOLUTE PATHS.** I got this wrong once:
-after `cd sugar-crush`, `md5sum .sugar-crush/config.json` reads a DIFFERENT, untracked file
-(`dfbee969ef3987bc183247d97bfdf73c`) and `check-path-repos` exits 1 purely because `tools/` is
-not on that path. The invariant is `/home/sites/sugarcraft/.sugar-crush/config.json`.
+    php tools/check-path-repos.php --fix --strict-closure
+    cd sugar-crush && composer update 'sugarcraft/*' --quiet
+    cd .. && git checkout -- '*/composer.json'      # NEVER commit these
+    php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
+
+`vendor/` is gitignored, so reverting the manifests keeps the symlinks AND a clean tree. **Tell
+every agent not to run `composer install`/`update`** — it silently undoes this.
+
+## THE COUNT, and two items that had fallen out of the queue
+
+**47 of 75 plan items complete (63%), 28 left.** Counted by item from `crush_code.md`'s phase
+sections: Phase 0=14, 1=3, 2=9, 3=5, 4=7, 5=10, 6=6, 7=6, 8=15.
+
+Two corrections the arithmetic forced, both of them errors in THIS file:
+
+- **"PHASE 5 IS COMPLETE" was wrong.** Item **10b** — differentiate the five hardcoded
+  `AgentDefinition` preset prompts, currently generic one-liners that do not mention the skills
+  they grant — is untouched. B3 shipped 10a (the `EnvironmentBlock` OS-version line) only.
+  Phase 5 is items 1-9 + 10a.
+- **Phase 4 item 6 was missing from the queue entirely.** Real subcommands (`mcp list`,
+  `session list`/`delete`, `models`, `doctor`, `completion bash|zsh|fish`), `--config <path>`, a
+  0/1/2 exit-code convention, and warn-not-silently-drop on an unrecognised `--output-format`.
+  Never done, just absent from §11.
+
+The item count is not effort. Phase 2 item 4 alone is bigger than all of Phase 7; Phase 8's nine
+remaining items are mostly small. And the hardening backlog (E1-E42, and growing as rounds land) is
+a SECOND queue, deliberately held to the end.
 
 **The two lessons this session added, both from C1:**
 
@@ -409,8 +426,10 @@ inside those two files were renamed too before assuming the item is half-done.
   compactions happen. Pick E21 up before calling Phase 5 finished.
 - ~~**B3** Phase 5 items 8,9,10a.~~ **DONE `a72c5b0a`** (7204/75944/1, exit 0).
 - ~~**E21** — finish Phase 5 (wire the automatic 85% tier to the model).~~ **DONE `261ac59d`**
-  (7237/76136/1, exit 0). **PHASE 5 IS COMPLETE.** It also fixed four silent-loss bugs in
+  (7237/76136/1, exit 0). It also fixed four silent-loss bugs in
   `ContextCompactor::groupIntoPairs()` and one spend-cap bypass it had itself introduced.
+  **This row used to claim "PHASE 5 IS COMPLETE". That was wrong** — item **10b** (the five
+  preset prompts) is untouched, so Phase 5 is items 1-9 + 10a. See §10's count.
 - ~~**E33** — the 70% reminder piling up in permanent history.~~ **DONE `7ed551b6`**
   (7285/76294/1, exit 0). Deduplicated: strip unconditionally, append only when the tier fires.
   Also fixed a bug the review found and I had not thought to look for — **`/rewind` was
@@ -434,37 +453,36 @@ inside those two files were renamed too before assuming the item is half-done.
   deliberate.
 - ~~**C2** Phase 2 item 3 — `WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`.~~
   **ALREADY DONE** — `Bootstrap.php:374` passes it. Measured 2026-08-19, see §9. No work.
-- **C3** Phase 2 item 2 — MCP. **NEXT UP.** The plan's framing is wrong in two ways, and my own
-  first measurement of it was ALSO wrong in the direction that matters — corrected in full at
-  `/tmp/…/scratchpad/c3-measured.md`, read that before briefing. **The gating already exists and
-  is better built than I assumed:** `MCP\McpClient` already reads `$config['mcpServers']` (the
-  exact `.mcp.json` key, so the convention is implemented and only the PATH is unchosen),
-  already dispatches `stdio`/`http`/`git` server types, already **fails CLOSED** (with no
-  `AgentPreset` and `$unrestricted = false`, `listTools()`/`callTool()` "see and reach nothing at
-  all"), and already routes through `McpRouter` with deny patterns. Its Guzzle `timeout => 30` is
-  an MCP HTTP bound, NOT an LLM bound, so the no-total-request-timeout rule does not touch it.
-  **So three things are missing, and one is a DECISION:** the config path choice; lifecycle
-  (`startServers()`/`stopServers()` — these SPAWN PROCESSES, so reuse C1's bounded
-  SIGTERM→signal-9 `terminateAndReap()` rather than inventing a third escalation); and the `Tool`
-  adapter. The decision: the client fails closed and the MAIN chat agent has no `AgentPreset`, so
-  as things stand it would see ZERO MCP tools. Options are a synthetic preset, `unrestricted:
-  true` on the main path (**bypasses `McpRouter` entirely — a security posture change, not a
-  wiring detail**), or routing MCP calls through `PermissionGate`. **Proceeding with
-  `PermissionGate`** unless the user says otherwise: MCP tools are arbitrary external process and
-  HTTP execution, that gate is what this app already uses to put a human in front of exactly
-  that, and it is the reversible choice. Raised with the user 2026-08-19; no objection received.
-  Original (partly wrong) framing follows for the record. Measured 2026-08-19, full write-up at
-  `/tmp/…/scratchpad/c3-measured.md`: (a) `.mcp.json` appears **nowhere** in `src/` or `bin/` —
-  it is README prose, and `MCP\McpClient` takes an injected `$configPath`; (b) the MCP **auth**
-  path IS already wired (`McpAuthStore` at `Chat.php:9112`, `Commands/McpAuthCommand.php`) while
-  the MCP **tool** path has ZERO production users — `McpClient`, `McpRouter`, the `McpServer`
-  interface and all three implementations (`GitMcpServer`, `HttpMcpServer`, `StdioMcpServer`)
-  plus the 41KB `GitCommandHandlers`. So `/mcp auth` works and the model has no MCP tools at
-  all. Five pieces: config loading, client construction + process lifecycle, the `Tool` bridge
-  (the real work), `ContainedPath`/`PermissionGate` gating, and `McpRouter`'s per-`AgentPreset`
-  allow/deny lists. **NAMING HAZARD:** `src/MCP/McpTool.php` already exists as a DTO with no
-  `execute()` — do not name an adapter `McpTool` and recreate exactly the basename collision
-  C1's item 1 just renamed away from. Probably two bundles.
+- ~~**C3** Phase 2 item 2 — MCP tools reachable.~~ **DONE `3b0ba8fe`** (7387/76813/1, exit 0
+  against local siblings). Three rounds: implement, adversarial review, two fix rounds. The
+  headline is not the wiring but the gate — see §10. `trustedProjectMcp` is a NEW key, verified by
+  me in all three directions including the positive control. E40/E41/E42 carry the deferred
+  remainder.
+- **W1 — IN FLIGHT: the user's live render bug, and it jumps the queue.** Reported while
+  daily-driving: long assistant lines "not wrapped but cut off", then a blank line, then unrelated
+  content. Measured root cause: the renderer emits a row **204 columns wide in a 100-column
+  terminal**, the terminal soft-wraps it, and candy-core's absolute `cursorTo()` then paints later
+  rows at stale coordinates. Nothing was cut — the tail is in the frame bytes. One unpassed
+  argument: `renderView()` computes `cols - SHELL_CHROME_COLS` correctly and `renderHistory()`
+  forwards it to tool results and diffs, but builds the Markdown renderer as
+  `new Markdown($theme->markdown)` — and candy-shine's word wrap is **opt-in, default OFF**.
+  `renderStreamingTurn()` has the same defect and receives no width at all.
+  **Half 1 (pass the width) is not the whole fix**: candy-shine deliberately never wraps code
+  blocks or tables, so a fenced block with a long line keeps the bug fully reproducible, and those
+  are constant in a coding agent's replies. Half 2 is a frame-level width invariant, preferring
+  `Width::wrapAnsi()` (content-preserving) over `Width::truncate` (which deletes) for reply BODY
+  text. Four hazards named in the brief: zone sentinels come in pairs and an unmatched open marker
+  makes `Scan::parse()` throw and costs the whole frame its click zones; image markers share
+  U+E000 with those sentinels; `mb_substr()` cannot see an SGR escape; and wrapping makes the
+  transcript taller, which interacts with the existing height clip and the scroll arithmetic.
+  Brief at `/tmp/…/scratchpad/w1-brief.md`, self-contained.
+  **No test in 7,387 measured row width against the terminal — that absence is why this shipped.**
+- **Phase 5 item 10b** — differentiate the five hardcoded `AgentDefinition` preset prompts. Small,
+  and it is what stops Phase 5 being finished.
+- **Phase 4 item 6** — real subcommands (`mcp list`, `session list`/`delete`, `models`, `doctor`
+  health-check distinct from the model-invoked tool, `completion bash|zsh|fish`), `--config <path>`,
+  a 0/1/2 exit-code convention, warn-not-silently-drop on an unrecognised `--output-format`. **This
+  row was missing from the queue entirely** until the item arithmetic caught it.
 - **C4** Phase 2 item 4 — **the biggest remaining item.** Wire `CommandLoader::loadAll()`
   AND build the missing template-substitution engine (`$ARGUMENTS`, `$1`, backtick-cmd,
   `@file` — none exist; a `grep -rn ARGUMENTS src/` returns three hits, all unrelated prose).

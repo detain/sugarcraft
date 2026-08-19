@@ -2177,6 +2177,99 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
+### E43 — code blocks and tables are reflowed because nothing can scroll them horizontally
+
+- **What** Bundle W1 makes the transcript honour the pane width, which it must —
+  a row wider than the terminal breaks candy-core's one-logical-line-per-row model
+  and every row painted after it lands at a stale absolute coordinate. But
+  `candy-shine` deliberately never wraps code blocks or tables ("they have their
+  own width semantics", `candy-shine/src/Renderer.php:175-176`), so W1's
+  frame-level net is what handles them, and reflowing a code block is a
+  compromise: it preserves every byte and damages the shape, which for aligned
+  code or a wide table is exactly the information the reader wanted. The real
+  answer is horizontal scrolling (or a per-block "expand" the way tool results
+  already have one), not reflow.
+- **Where** `sugar-crush/src/Renderer.php` — `renderHistory()` and whatever W1
+  lands as the width net; `candy-shine/src/Renderer.php` for why the wrap does
+  not cover these two block types.
+- **Severity** Not security. A readability regression against the alternative of
+  a corrupted frame, so the compromise is the right way round — but it is a
+  compromise, and it should not be filed as finished.
+- **Evidence** Measured before W1: with word wrap ON at 94 columns, a fenced code
+  block containing a 150-character line still renders one row 150 columns wide.
+- **Step** A horizontal offset for code/table blocks driven by the existing
+  expand/collapse keys, or a per-block toggle between reflow and clip. Whichever
+  ships, the width invariant W1 establishes must keep holding for every state.
+- **Blocked on** W1 landing first — the invariant is the floor this builds on.
+- **Related** The `renderDiff()` precedent (`Width::truncate` for diff rows) is
+  the same trade made the other way, and is defensible there because a
+  horizontal cut in a diff row reads naturally.
+
+---
+
+### E44 — a `composer update` silently moves the suite off the monorepo, and the only signal is a skip count
+
+- **What** `sugar-crush/vendor/sugarcraft/*` is symlinked to the sibling libs when
+  path repos are injected, and replaced with real Packagist directories by any
+  `composer install`/`update` that runs without the injection. When that happens
+  the suite stops testing the monorepo's own `candy-*` and starts testing
+  published copies **with no failure and no warning** — the sole observable
+  difference is `Skipped: 1` becoming `Skipped: 2`, because
+  `GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed`
+  self-skips on the absence of symlinks. A self-skip is not a signal; it is the
+  absence of one.
+- **Where** `sugar-crush/tests/Tools/BuiltIn/GitignoreAwarenessTest.php:255`
+  (the `markTestSkipped`), `tools/check-path-repos.php`, `CONTRIBUTING.md`'s
+  local-wiring loop.
+- **Severity** Not security. It costs correctness of *verification*, which is
+  worse than it sounds: every "green, exit 0" in this chain means one of two
+  different things depending on a state nobody was watching.
+- **Evidence** Happened during bundle C3's fix rounds. Same code measured
+  **7387 / 76811 / 2** against Packagist copies and **7387 / 76813 / 1** against
+  local symlinks. It also left an unrelated third-party bump (aws-sdk 3.390.4 →
+  3.393.1 and others) in the tracked root `composer.lock`, which would have
+  ridden along inside a feature commit had it not been noticed and reverted.
+- **Step** Make the mode explicit rather than inferable: have the suite assert
+  which wiring it is running under (both modes legitimate, neither silent) so the
+  banner says so, and state it in the resume/contributing docs as a pre-verify
+  check. The cycle guard that currently self-skips should keep its skip for
+  genuine Packagist installs, but the SUITE should not be able to change what it
+  tests without saying so.
+- **Blocked on** Nothing.
+- **Related** The house rule that per-lib `composer.lock` is never committed, and
+  that CI injects path repos before every install — this is the same hazard on the
+  developer's side of that boundary.
+
+---
+
+### E45 — two leftovers from C3's gate, both reported by the fix round and deliberately not changed
+
+- **What** (a) `Bootstrap::mcpClient()`'s untrusted branch is guarded
+  `$canonicalRoot === false || !projectMcpIsTrusted(…)`, and the `false` arm is
+  **unreachable** at that point, because `is_file()` has already succeeded on a
+  path composed from `$canonicalRoot`. It is structurally the same as the dead
+  `stdClass` clause deleted for finding 15 — except this dead arm is the
+  fail-CLOSED direction on a security gate. **Decision taken: keep it**, because a
+  later reader deleting an unreachable guard "because it is unreachable" is how a
+  gate acquires a hole, and the cost of keeping it is one branch. What is missing
+  is the docblock saying that on purpose. (b) Neither refusal branch writes
+  `$mcpClients`, so an untrusted or out-of-tree root re-stats and re-checks trust
+  on every `tools()` call, while the memo's docblock reads as if every outcome is
+  cached.
+- **Where** `sugar-crush/src/Cli/Bootstrap.php` — `mcpClient()` and the
+  `$mcpClients` docblock.
+- **Severity** Neither is a hole. (a) is a documentation gap on a security gate,
+  which is the kind that gets "cleaned up" later. (b) is idempotent and the notice
+  is deduped.
+- **Evidence** Bundle C3 fix round B, reported and left alone by instruction.
+- **Step** Document (a) as deliberate belt-and-braces at the branch. For (b),
+  correct the memo docblock's scope rather than the behaviour — caching a refusal
+  would mean a mid-session grant could not take effect, and the freeze already
+  makes that a non-goal.
+- **Blocked on** Nothing.
+
+---
+
 ## Contradictions found between sources
 
 1. **The worklog contradicts itself about lane D F3–F7.** The queue at

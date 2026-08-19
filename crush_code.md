@@ -17,9 +17,17 @@ authoritative, resumable record — including every review finding, the sabotage
 labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
-**Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1, 3, 5, 6, 8 ·
-Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-7 + 10's preset half ·
+**Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1, 2, 3, 5, 6, 8 ·
+Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-9 + 10a ·
 Phase 7 items 1-2 · Phase 8 items 1, 2, 5, 7, 12, 14.
+
+**47 of 75 items, counted by item.** The count is not effort: Phase 2 item 4 alone is
+larger than all of Phase 7. Phase 5 is NOT complete — item **10b** (differentiate the five
+hardcoded `AgentDefinition` preset prompts) is untouched, and a note in
+`docs/plans/crush_code_RESUME.md` claiming the phase was finished was wrong. Phase 4 item
+**6** (real subcommands, `--config`, an exit-code convention, `--output-format` warning) is
+also outstanding and had fallen out of the RESUME queue entirely; the arithmetic is what
+caught it.
 
 **Phase 2 items 3 and 5 needed no code** — both were already wired and the plan's
 premise was measured false. Item 3 is live at `Cli/Bootstrap.php:374`. Item 5 is
@@ -27,6 +35,27 @@ live in `Bootstrap::hooks()` and deliberately NOT routed through
 `HookManager::loadFromFile()`: hook entries are read once per process, so a
 session cannot install hooks into itself mid-session, and routing item 5 through
 the file loader would have promised that it can.
+
+**Phase 2 item 2 is complete** (bundle C3, `3b0ba8fe`) — `.mcp.json` is discovered, its
+servers started, and each tool exposed to the model as `mcp__<server>__<tool>` through a new
+`Tools\McpToolBridge`. It took three rounds because of the gate, not the wiring: starting an
+MCP server IS executing a command the repository chose, so the first working version ran the
+repo author's shell on launch in every permission mode including `plan`, with nothing in the
+transcript. Measured — a payload that was not even a valid MCP server (handshake failed,
+server discarded, `tools=10`) still ran its command. **Starting IS the execution.** So
+`.mcp.json` is honoured only for a root listed under `trustedProjectMcp` in the user's own
+`~/.sugar-crush/config.json`, a NEW key rather than reusing `trustedProjectHooks`, because
+reusing it would retroactively grant MCP execution to every root already trusted for hooks.
+`README.md:441` had documented this exact threat model for `.sugar-crush/hooks.yaml` and
+already closed it; C3's first cut reintroduced it one file over. The supervisor's own safety
+argument — that a bridge call rides the PreToolUse chain exactly as `Bash` does — was
+carefully verified and answered the wrong question: that gate sees tool CALLS and never sees
+`proc_open()`. Six correctness defects went with it (every call routed to the FIRST server
+advertising a tool name; a nested `properties: []` 400ing the ENTIRE request; `stop()` killing
+the `sh -c` wrapper while the server survived on PPID 1 still answering; a forked child unable
+to stop its own servers while able to kill the parent's; an unbounded handshake against a
+server that emits valid notifications forever; four spellings of one root giving four clients).
+Deferred with findings recorded: **E40**, **E41**, **E42**.
 
 **Phase 2 items 1 and 8 are complete** (bundle C1). Item 1 renamed
 `SugarCraft\Crush\McpClient` to `ClaudeCodeMcpClient` so it no longer shares a

@@ -7515,7 +7515,7 @@ a timeout kill.
 
 ---
 
-## Bundle C3 — Phase 2 item 2, MCP tools reachable. IMPLEMENTED + REVIEWED, **NOT YET COMMITTED**
+## Bundle C3 — Phase 2 item 2, MCP tools reachable. **COMMITTED `3b0ba8fe`**
 
 Suite on the uncommitted tree, verified by me without a pipe: **7321 / 76412 / 1, exit 0**.
 Entry baseline 7285 / 76294 / 1. `src/` 275 → **276** (one new file, `src/Tools/McpToolBridge.php`).
@@ -7644,3 +7644,150 @@ hyphens are ubiquitous in real MCP keys). The fifth is genuinely dead code.
     containment was the ONLY control, and a perfectly contained in-repo `.mcp.json` is arbitrary
     code execution at launch.
 11. **My "slow vs dead" framing was insufficient** — the third category is where it actually hangs.
+
+
+---
+
+## Bundle C3, fix rounds A and B — what the two rounds actually changed
+
+Supervisor-verified twice, and the pair of numbers is itself the finding: **7387 / 76811 / 2 against
+Packagist sibling copies, 7387 / 76813 / 1 against local sibling symlinks.** Same code. The delta is
+`GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed`, which self-skips when the
+checkout has no path-repo symlinks — so a `composer update` someone ran mid-round had quietly moved
+the suite off the monorepo and onto published `candy-*`, and the only signal was a skip count. I
+restored local wiring (`check-path-repos --fix --strict-closure`, `composer update 'sugarcraft/*'`,
+then `git checkout -- '*/composer.json'`) and re-verified before believing the commit was green.
+Recorded in RESUME §10 as a standing check.
+
+### The gate, verified by me rather than accepted from the agent
+
+Three measurements, and the third is the one that makes the other two mean anything:
+
+    untrusted root, plan mode        tools=10  payload=no
+    untrusted root, default mode     tools=10  payload=no
+    GRANT WRITTEN, default mode      tools=10  payload=RAN     <- positive control
+
+Without the third, a gate that had simply broken MCP entirely would have produced two clean "no"
+rows and looked like a pass. That is the same shape as the error that caused this bundle's security
+defect in the first place — a verification that confirms what you asked instead of what matters — so
+it was worth the extra probe. The refusal is visible through the real `chat()` path and names both
+the root and the key to add.
+
+### Round A — findings 1, 2, 3, 4, 5, 8, 9, 15, eleven mutations killed
+
+`trustedProjectRoots($config, $key, $nothingTrusted)` is now key-parameterised with
+`trustedProjectHookRoots()` as a thin wrapper, so the relative-entry refusal (`"."` as a global
+bypass), `~` expansion and the once-per-process warning cannot drift between the hooks key and the
+MCP key. The grant is frozen per process: a `trustedProjectMcp` entry written mid-session does not
+take effect in the session that wrote it — which the brief did not specify, contradicted the agent's
+first test, and is now its own test alongside a project-tree-cannot-self-grant test.
+
+`proc_open()`'s ARRAY form replaced the string form, which is what makes the shutdown escalation land
+on the server instead of a shell wrapper:
+
+    BEFORE  sh -c '/usr/bin/php' '…/stubborn.php'   <- direct child
+            /usr/bin/php …/stubborn.php             <- the actual server
+            stop() → wrapper dead in 0.01s, server ALIVE on PPID 1, still answering tools/call
+    AFTER   /usr/bin/php …/stubborn_mcp.php         <- direct child IS the server
+            stop() → 1.01s, SIGTERM ignored, signal-9 escalation lands, gone
+
+The handshake deadline is wall-clock, not a read timeout, because `readResponse()` loops on
+`isNotification()` and a chatty server starves it while every individual `fgets()` returns promptly
+(`timeout 15 php probe.php` → rc=124 both for a silent server and a chatty one; after, both throw at
+2.01s with `startTimeout=2`). 60s default, reasoned from a cold `npx -y @modelcontextprotocol/…`
+fetching a package tree.
+
+**A fixture that did not reproduce, caught before it shipped a false green.** The first fork test
+asserted the worker's server was dead after the worker exited — and the mutation it was written to
+kill SURVIVED. The ordinary fixture server exits on stdin EOF, and the worker's exit closes the pipe,
+so the server died whether or not anything stopped it. A `SURVIVOR_SERVER` fixture that sleeps past
+EOF made the mutation red. This is the second instance this session of the lesson that a fixture can
+fail to exhibit the defect it was built for.
+
+**The agent reverted its own change and wrote down why.** It first made `registerMcpShutdown()`
+per-pid, then judged it redundant given pid-keyed `stopMcpServers()` — an inherited hook already does
+the right thing in a child — so keeping it would have been a property with a docblock and no test,
+the exact shape of a surviving mutation.
+
+### Round B — findings 6, 7, 10-14, plus two hand-offs
+
+The six-mode permission table, re-measured on the tree rather than copied from my brief, matched:
+
+    mode                 an mcp__* name   Bash
+    default              ask              ask
+    accept-edits         ask              ask
+    plan                 deny             allow    <- the sole divergence
+    auto                 allow            allow
+    dont-ask             deny             deny
+    bypass-permissions   allow            allow
+
+So *"every bridge call is gated exactly as `Bash`"* — the sentence the whole `unrestricted: true`
+posture rested on — is false in `plan`, and `plan` is the mode the headline differential test uses.
+It is now pinned as a decision rather than a sentence, with the key set derived from
+`PermissionMode::cases()` so a seventh mode is an unlisted key rather than silence. Four prose sites
+carried the false claim, not the three I listed: the fourth was a test's own docblock restating it as
+its rationale. Two more were user-facing in `README.md`, which my brief had scoped out entirely.
+
+The `unrestricted:` reasoning became **TWO CONTROLS, TWO JOBS** — the trust list bounds *launching*,
+PreToolUse bounds *calling*, neither substitutes for the other — and the `Bash` comparison survives
+only where it is true, on the scoping question.
+
+`isError` now parses explicitly instead of `=== true`, because PHP truthiness inverts the common
+case (`"false"` is a truthy string): `true,1,"1","true"` → error; `false,0,"0","false",""` → not;
+absent/null → not; anything else → error AND the content carries `[unreadable isError: 2 — treated
+as a failure]` with the raw value in its JSON spelling, so `1` and `"1"` stay distinguishable.
+
+`DYNAMIC_TOOL_CLASSES` became a `class-string => 'Test\Class::testMethod'` map asserted by
+reflection, requiring public + non-static + `test`-prefixed, since an entry pointing at a private
+helper would satisfy `method_exists()` while proving nothing. Watched failing, which is the only way
+to know a guard guards:
+
+    evidence → ::testAModelToolCallProvesNothingBecauseIDoNotExist   rc=1, names the entry
+    + BuiltIn\Bash::class => '…::testIAmAnUnwiredToolTrustMe'        rc=1, 2 failures
+    (on the old flat list, both were rc=0 everywhere)
+
+**The count with the missing domain.** My brief said the `projectTierRefusals()` figures "still count
+directories". They do not say "directories" — they say "paths", and the real defect was one level in:
+the number's domain is the derivation's SHAPE (`.<dir>/<segment>`), which a bare dot-file cannot
+match, and `.mcp.json` is exactly the path that falls through it. `src/` holds 20 such literals, 10
+repository-chosen — true of dot-DIRECTORY paths — plus two bare dot-files the regex cannot see. The
+figure a reader actually wants is **EIGHT** repository-chosen paths feeding that map. Asserted, not
+just written: a test now pins that `.mcp.json` is absent from the derivation, present backticked
+where the counts are stated, and that the `DOT-DIRECTORY` qualifier is there.
+
+**The `error_log()` diagnostic was asserted rather than silenced.** It honours the `error_log` ini
+setting, which makes it the one stderr write in that class a test can observe, so the test points it
+at a file and asserts the message. Kept and checked beats quiet.
+
+### Corrections the two rounds made to my briefs — fifteen across the pair
+
+The ones that would have changed the code:
+
+1. **`stream_set_timeout()` does not work on a `proc_open()` pipe on this host.** My brief prescribed
+   it. It returns false for an STDIO stream and a subsequent `fgets()` still blocked the full 5s.
+2. **"Give each cached client its owner pid, OR key `$mcpClients` by pid" — not equivalent.** Only
+   keying by pid is correct; a per-client owner pid still lets a child find the PARENT's cached
+   client and reuse pipes belonging to another process.
+3. **Mutation M3 as I wrote it could not be kept** — it described a guard that the finding-4 fix
+   necessarily deletes.
+4. **Finding 8's "sharper form" is no longer reachable** once pid keying lands, because a forked
+   worker never reads the parent's memo at all.
+5. **Finding 3's "in `inputSchema()`, in `normalizeToolSchema()`, or both"** — "both" is not a live
+   option without a shared helper, and a shared helper means a new `src/*.php` file and five moving
+   censuses.
+6. **Finding 11 posed a problem with no non-loosening answer**, and I wrote it as though a third
+   option existed: keeping a bogus `required` entry 400s the request that carries it, coercing one
+   invents a property name. Dropping and saying so plainly is the only usable outcome.
+7. **Finding 14's fallback advice was backwards on cost** — the map was cheaper than the
+   `count() === 1` fallback, and the fallback would have been actively worse: capping the exemption
+   at one entry blocks the `src/LSP/LspTool.php` the corpus already anticipates.
+8. **The two figures live in `projectTierRefusals()`, not in the `$projectTierRefusals` property's
+   docblock** — two docblocks a few hundred lines apart, and the inventory test scopes to their
+   union, so editing the one I named would have been green and wrong.
+9. **The sandbox recipe in both briefs is now a no-op** — "re-point each relative
+   `vendor/sugarcraft/*` symlink" has nothing to re-point on a Packagist-installed tree.
+
+And one the agent caught in its own first draft, which is this chain's signature defect appearing
+inside the work of fixing it: it wrote an `array_values()` plus a paragraph arguing it was
+load-bearing against index gaps — and it was a **no-op**, because the result is accumulated into a
+fresh array and can never have a gap. Both removed.
