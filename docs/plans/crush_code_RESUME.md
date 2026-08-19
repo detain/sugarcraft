@@ -278,52 +278,88 @@ copies, which is the same code and why the vendor check below exists.
 **47 of 75 plan items, 28 left.** See the `#N`-tracker section below before answering any question
 about totals — the answer is not the sum of the series.
 
-## ⚠️ BUNDLE W1 IS IN FLIGHT, UNCOMMITTED — the user's live render bug
+## ⚠️ BUNDLE W1 — IMPLEMENTED AND SUITE-VERIFIED, REVIEW ROUND RUNNING, UNCOMMITTED
 
 **A user bug report that jumps the audit queue**, because frame corruption counts as functionality
 under §3. Reported while daily-driving: long assistant lines "not wrapped but cut off", then a blank
 line, then unrelated content.
 
-**State as of this note:** implementation round running or just finished. Working tree carries
-`sugar-crush/src/Renderer.php` (+152/-4) and a new untracked
-`sugar-crush/tests/Renderer/PaneWidthInvariantTest.php` (518 lines). **Nothing committed.** Brief at
-`/tmp/…/scratchpad/w1-brief.md` is self-contained — re-spawn against it if the round was lost.
+**State:** implementation round returned. Working tree carries `sugar-crush/src/Renderer.php`
+(+191/-7) and a new untracked `sugar-crush/tests/Renderer/PaneWidthInvariantTest.php` (125 tests,
+7370 assertions). **Nothing committed.** The adversarial review round is IN FLIGHT against
+`/tmp/…/scratchpad/w1-review.md` (221 lines, self-contained — re-spawn against it if lost).
 
-**The diagnosis, measured, because it is not what the report sounds like.** Nothing is truncated: at
-`cols=100` the renderer emits a **204-column row**, the terminal soft-wraps it, and candy-core's
-absolute `cursorTo()` then paints later rows at stale coordinates. The tail is present in the frame
-bytes. **The broken invariant is one-logical-line-per-row** — the same one `renderDiff()` guards with
-`Width::truncate` and the status bar guards by never wrapping.
+**Supervisor-verified myself: `Tests: 7512, Assertions: 84183, Skipped: 1`, rc=0, 2m57.8s.** Baseline
+was 7387 / 76813 / 1, so the delta is exactly the new test file. One skip → vendor kept its symlinks.
+`check-path-repos` rc=0, config md5 unchanged, `git stash list` still 9 entries.
 
-**Root cause: one argument computed correctly and never passed.** `renderView()` (`:907-910`) computes
-`max(20, cols - SHELL_CHROME_COLS)` and `renderHistory()` forwards it to tool results and diffs, but
-builds the markdown renderer as `new Markdown($theme->markdown)` (`:1713`) — and candy-shine's word
-wrap is **opt-in, default OFF** (`candy-shine/src/Renderer.php:105`). `renderStreamingTurn()` (`:1781`,
-called `:932`) has the same defect and receives no width at all.
+**STILL OWED:** the review round's findings, a fix round if it finds anything, a re-verified suite,
+then commit. Full round detail is in the worklog under "Bundle W1 — implementation round returned".
 
-**Half 1 is not the fix.** candy-shine deliberately never wraps code blocks or tables
-(`candy-shine/src/Renderer.php:175-176`); measured, a fenced block with a 150-char line still emits a
-150-wide row at wrap=94. Half 2 is a frame-level width invariant, preferring `Width::wrapAnsi()`
-(content-preserving) over `Width::truncate` (which deletes) for reply body text.
+**MY DIAGNOSIS WAS WRONG ABOUT THE MECHANISM, and it is under review rather than accepted.** I wrote
+that the terminal soft-wraps the over-wide row and candy-core's absolute `cursorTo()` paints later
+rows at stale coordinates. The implementer reports the hosted path never emits an over-wide row at
+all: `ChatPane.php` wraps the body in `Style::new()->width($width)` and candy-sprinkles' `width()`
+TRUNCATES (`candy-sprinkles/src/Style.php:1000-1004`, `Width::truncateAnsi`), with
+`Tui/Renderer.php:394` clipping the composed frame. My 204-column measurement was real but taken
+against standalone `Chat::view()` — a number written next to the wrong domain, §5 again, in the brief
+whose whole job was ground truth. **The user's own words were "cut off", which IS truncation; I
+replaced an accurate description with a theory.** The fix is the same either way, which is the only
+reason it cost nothing.
 
-**Four hazards, each already the cause of a bug here:** zone sentinels come in pairs and an unmatched
-open marker makes `Scan::parse()` THROW, costing the whole frame its click zones; image markers share
-U+E000 with those sentinels; `mb_substr()` cannot see an SGR escape; and wrapping makes the transcript
-taller, which touches the height clip and the scroll arithmetic.
+**The absence that let it ship: no test among 7,387 measured row width against the terminal.** Proven,
+not asserted — with the src change alone and the new file absent, the suite came out byte-identical to
+baseline. Not one test rendered prose long enough to wrap at its fixture width.
 
-**WHAT IS STILL OWED ON W1:** supervisor suite verification (never trust the agent's totals), an
-adversarial review round on the diff, a fix round if it finds anything, then commit. Baseline to beat
-is **7387 / 76813 / 1, exit 0**.
+## ⚠️ BUNDLE W2 IS QUEUED NEXT — input blocked while a turn runs. USER-REPORTED.
 
-**The absence that let it ship: no test among 7,387 measured row width against the terminal.** Every
-renderer assertion checked content, not geometry. The invariant test is the real deliverable.
+**Second live bug report, same priority class as W1.** Verbatim: *"when i send a chat message and its
+processing the request im unable to type new text into the chat . im alaso unable to use things like
+Ctrl-P to bring up the command pallete … new messages should be typable and sendable (well really
+queued for processing if its mid processing the previous message) during that time"*, then *"it shoudl
+be doing these requests asynchronously anyways it shouldnt be blocking"*.
 
-## AFTER W1: `#88`, then the queue
+**Full measured brief: `/tmp/…/scratchpad/w2-measured.md` (128 lines).** The headline, because it
+decides the size of the bundle: **the async half is already done.**
+`Chat::scheduleBackendCompletion()` (`:5231`) returns `Cmd::promise(fn() => $backend->completeAsync(…))`
+and `completeAsync()` forks a child. Driven proof the loop delivers keystrokes mid-turn: with
+`inFlight: true`, an `Escape` KeyMsg mutates state (`lastEscapeAt` null → set).
 
-`#88` is the stale README figure — `sugar-crush/README.md:531` advertises "7,276 tests / 76,239
-assertions" (bundle C1's number) against a tree at 7,387 / 76,813, and `:551` carries a separate
-`4,337/12,587`. **Standalone commit, after W1 lands and nothing else is in flight** — a suite figure
-committed mid-bundle is stale before it is pushed.
+**The defect is one policy return: `src/Chat.php:1141-1146`,** `if ($this->inFlight) { return [$this,
+null]; }` — a blanket swallow, so everything lexically below it is dead for the whole turn. Measured
+`inFlight` vs idle for the same KeyMsg: `Char 'x'` leaves `inputBuf` empty vs `'x'`; `Ctrl+P` leaves
+`palette` null vs OPEN.
+
+**Do not just delete the swallow** — its stated reason ("the user racing ahead and queuing another turn
+into a half-formed history") is real. Split it: keys reach the input box and the overlays, and **Enter
+enqueues instead of dispatching**.
+
+Two constraints from the brief: `dispatchTurn()` (`:4502`) has exactly two callers and its docblock
+warns a third copy is where the generation, cancellation token, checkpoint or title Cmd goes missing —
+**the drain must call it**; and `scheduleParkedCompaction()` (`:6287`) already implements "hold a
+submission, dispatch later" for the 85% tier, so reuse that shape rather than inventing queue state.
+
+**The census trap:** `grep "'inFlight' => false" src/Chat.php` gives 26 — but 4 are comment prose and
+one (`:4586`) is a serialized checkpoint payload, not a state transition. **21 are real writes**, and a
+queue draining at only one strands the user's message. One of the two that settle a real turn is the
+CANCEL path, where draining would send a message the user just tried to stop.
+
+**W2 must land AFTER W1** — showing a queued message touches `Renderer.php`, which W1 owns right now.
+
+## ORDER: W1 → W2 → `#88` → the audit queue
+
+`#88` is the stale README suite figure. **Moved to AFTER the live-bug bundles, not straight after W1**,
+and for a measurable reason: the figure has now been invalidated three times in one session (7,276 →
+7,387 → 7,512) and W2 will move it again. Writing it between two bundles guarantees writing it wrong.
+Take it from the verification run of the last live-bug commit, in a standalone commit with nothing else
+in flight.
+
+**Prepared edit: `/tmp/…/scratchpad/88-readme-figure.md`.** Read it first — it corrects an error in my
+own earlier note here. That note said `README.md:551` carries a second stale figure, `4,337/12,587`.
+**It is not stale and must not be touched**: it is introduced by "For scale rather than for accuracy:
+the first figure to stand here …" and is a deliberate historical citation kept to show the drift.
+Updating it destroys the point it makes. Only `:531`'s figure is live — plus its runtime and its
+delta sentence, both of which are part of the measurement rather than decoration.
 
 ## BUNDLE C3 IS COMMITTED — `3b0ba8fe`. Phase 2 item 2 done.
 
@@ -569,25 +605,24 @@ inside those two files were renamed too before assuming the item is half-done.
   headline is not the wiring but the gate — see §10. `trustedProjectMcp` is a NEW key, verified by
   me in all three directions including the positive control. E40/E41/E42 carry the deferred
   remainder.
-- **W1 — IN FLIGHT: the user's live render bug, and it jumps the queue.** Reported while
-  daily-driving: long assistant lines "not wrapped but cut off", then a blank line, then unrelated
-  content. Measured root cause: the renderer emits a row **204 columns wide in a 100-column
-  terminal**, the terminal soft-wraps it, and candy-core's absolute `cursorTo()` then paints later
-  rows at stale coordinates. Nothing was cut — the tail is in the frame bytes. One unpassed
-  argument: `renderView()` computes `cols - SHELL_CHROME_COLS` correctly and `renderHistory()`
-  forwards it to tool results and diffs, but builds the Markdown renderer as
-  `new Markdown($theme->markdown)` — and candy-shine's word wrap is **opt-in, default OFF**.
-  `renderStreamingTurn()` has the same defect and receives no width at all.
-  **Half 1 (pass the width) is not the whole fix**: candy-shine deliberately never wraps code
-  blocks or tables, so a fenced block with a long line keeps the bug fully reproducible, and those
-  are constant in a coding agent's replies. Half 2 is a frame-level width invariant, preferring
-  `Width::wrapAnsi()` (content-preserving) over `Width::truncate` (which deletes) for reply BODY
-  text. Four hazards named in the brief: zone sentinels come in pairs and an unmatched open marker
-  makes `Scan::parse()` throw and costs the whole frame its click zones; image markers share
-  U+E000 with those sentinels; `mb_substr()` cannot see an SGR escape; and wrapping makes the
-  transcript taller, which interacts with the existing height clip and the scroll arithmetic.
-  Brief at `/tmp/…/scratchpad/w1-brief.md`, self-contained.
-  **No test in 7,387 measured row width against the terminal — that absence is why this shipped.**
+- **W1 — REVIEW ROUND IN FLIGHT. Implemented, suite-verified at 7512/84183/1 rc=0, uncommitted.**
+  The user's live render bug: long assistant lines "not wrapped but cut off", then a blank line, then
+  unrelated content. Landed as two halves — thread `wrapWidth:` into candy-shine at both Markdown
+  sites, plus a frame-level `fitToPane()` invariant at `Renderer.php:957` that wraps over-wide body
+  rows (`Width::wrapAnsi`, content-preserving) and truncates tool rows. See §"BUNDLE W1" above and the
+  worklog for the full round, including **the four corrections the implementer made to my brief and my
+  own wrong diagnosis of the mechanism**. Still owed: review findings, fix round, re-verify, commit.
+- **W2 — NEXT, ahead of the audit queue: input is blocked while a turn runs. USER-REPORTED.**
+  Typing and Ctrl+P are both dead mid-turn. **Not an async problem — the async work is already done**
+  (`scheduleBackendCompletion()` returns `Cmd::promise(fn() => $backend->completeAsync(…))`, which
+  forks a child; a driven `Escape` mutates state mid-turn, proving the loop delivers keys). The defect
+  is one policy return, `Chat.php:1141-1146`'s blanket `if ($this->inFlight)` swallow. Do NOT delete
+  it — split it, and make **Enter enqueue** rather than dispatch. The drain must call `dispatchTurn()`
+  (two callers today; its docblock warns a third copy loses the generation stamp, the cancellation
+  token, the checkpoint or the title Cmd), and `scheduleParkedCompaction()` already implements
+  hold-then-dispatch for the 85% tier. Census trap: 26 grep hits for `'inFlight' => false`, of which 4
+  are comment prose and one is a checkpoint payload — **21 real writes**, and one of the two that
+  settle a real turn is the CANCEL path. Brief at `/tmp/…/scratchpad/w2-measured.md`, self-contained.
 - **Phase 5 item 10b** — differentiate the five hardcoded `AgentDefinition` preset prompts. Small,
   and it is what stops Phase 5 being finished.
 - **Phase 4 item 6** — real subcommands (`mcp list`, `session list`/`delete`, `models`, `doctor`

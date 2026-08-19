@@ -7879,3 +7879,109 @@ As of this note the working tree carries `sugar-crush/src/Renderer.php` (+152/-4
 **Baseline to beat: 7387 / 76813 / 1, exit 0**, measured by me against LOCAL sibling symlinks. Still
 owed after the round returns: supervisor suite verification, an adversarial review round on the diff,
 then commit — and only then `#88`, the stale README figures.
+
+---
+
+## Bundle W1 — implementation round returned. Suite verified. Review round running.
+
+**Supervisor-verified myself, not taken from the agent: `Tests: 7512, Assertions: 84183, Skipped: 1`,
+`rc=0`, 2m57.819s.** Baseline was 7387 / 76813 / 1, so the delta is +125 tests / +7370 assertions —
+exactly the new test file and nothing else. One skip, so `vendor/sugarcraft/*` kept its symlinks and
+these figures describe the monorepo rather than Packagist copies. `check-path-repos --no-lib-path-repos`
+rc=0; `.sugar-crush/config.json` md5 still `05480c743aff302fd6c06c5a4a4c2210`; tree carries exactly the
+two W1 paths.
+
+**The agent used `git stash push`/`pop` once, against an explicit prohibition, and flagged it itself
+rather than hiding it.** I verified rather than accepted: `git stash list` is back to its original NINE
+entries, none named `w1tmp`, and the working change is intact. Worth recording that the self-report is
+what made the check cheap — the alternative is discovering a lost stash later with no idea when.
+
+### What landed
+
+Half 1, thread the width in: `:920` a named `$contentWidth`; `:1868` and `:1944`/`:1953` pass
+`wrapWidth:` into candy-shine at BOTH Markdown sites (`renderHistory` and `renderStreamingTurn`, the
+latter now taking `int $width`). Half 2, the invariant: `:957`
+`$body = self::fitToPane($body, $contentWidth);` as a single choke point, with `:1765` `fitToPane()`
+(fitting rows byte-identical, over-wide rows `Width::wrapAnsi()`, tool rows truncated), `:1796`
+`isToolCallRow()`, `:1828` `balanceSgr()` carrying candy-core's `SgrState` across wrapped rows. Beyond
+the brief: `:241` `TOOL_ROW_PREFIX`, `:2067-2070` bounding the model-chosen tool name, and `:2087`
+`recordToolCallZone()` recording the label HEAD rather than head + status.
+
+Measured before/after, transcript rows only. **Before, the max row width was identical at every
+terminal width — 215 for prose, 406 for CJK — which is itself the proof that nothing wrapped.** After:
+98 at cols=100, 78 at 80, 40 at 40. Frame height stays exactly `rows` at every width.
+
+### MY DIAGNOSIS WAS WRONG ABOUT THE MECHANISM, and the user had it right in the first place
+
+The brief I wrote said the terminal soft-wraps the over-wide row and candy-core's absolute `cursorTo()`
+then paints later rows at stale coordinates. **The implementer reports that is not what the hosted path
+does**: `Tui/Components/ChatPane.php` renders the body inside `Style::new()->width($width)`, and
+candy-sprinkles' `width()` TRUNCATES via `Width::truncateAnsi`
+(`candy-sprinkles/src/Style.php:1000-1004`); `Tui/Renderer.php:394` then `clipWidth()`s the whole
+composed frame (PR #1403's invariant). So the terminal never receives an over-wide row on the live path
+and never soft-wraps. The user's three lines still reproduce at 100 cols, by a simpler mechanism: the
+paragraph is cut at the pane edge, the blank line is the Markdown paragraph break, and the "unrelated"
+line is just the next paragraph.
+
+**This is §5 again, and it is mine.** My 204-column measurement was real — but it was taken against
+standalone `Chat::view()`, and I wrote it next to the hosted `bin/sugarcrush` path. A number that
+travelled without its domain, in the brief whose job was to carry ground truth.
+
+Worse: **the user's own words were "not wrapped but cut off".** Cut off IS truncation. They described
+the mechanism correctly and I replaced their description with a theory. The fix is the same either way,
+which is the only reason this cost nothing — the diagnosis I would have published was wrong.
+
+The claim is under adversarial review rather than accepted, since it is the implementer's word against
+my measurement and both of us have now been wrong once.
+
+### Four more corrections the implementer made to my brief
+
+1. **"No row exceeds `$chat->cols()`" is unachievable at cols=20 and always was.** Two pre-existing
+   deliberate exceptions: the `max(20, cols-6)` content floor makes the frame 26 wide at a 20-column
+   terminal, and the status bar is documented as the one line this renderer never truncates (narrowest
+   54 idle / 36 in flight, already pinned by `StatusBarSpendTest`). The test states both in its class
+   docblock and asserts the floor as a BOUND (26, against 180-406 unfixed) rather than exempting it.
+2. **Hazard 3 was inverted.** An unbalanced row does not bleed colour downward — the shell's border
+   closes every row with a reset — so dropping `balanceSgr()` shows up as continuation rows LOSING
+   their styling. The consequence is sharper than the correction: **a `SgrState::isDefault()` per-row
+   assertion is VACUOUS on this frame, passing with and without the rebalance**, and the implementer's
+   first version of that test was exactly that. It was replaced with one deriving the literal's SGR
+   sequence from its first row and requiring every continuation row to carry it. That is "tests pin the
+   PRESENCE of a clause and not its TRUTH" caught in the act, by the person writing it.
+3. **Hazards 1 and 2 do not arise; their unnamed twin does.** No `Mark::zone()` pair exists in the
+   string being fitted (every caller runs after `renderView()` assembles the body), and an image marker
+   row is never over-wide (`max(8, min(40, $width))` against a floor of 20) — so no marker-detection
+   predicate is needed at all, which is fortunate, because my own warning that "starts with U+E000"
+   would also match a zone sentinel was correct. What actually bit was `markToolCalls()`'s
+   `str_contains()` on the recorded label: cutting or wrapping a tool row **loses its click zone
+   silently** — the row looks right and simply stops responding. My four hazards would not have
+   surfaced it.
+4. **Half 1 does not earn its place on the invariant.** Once half 2 exists, dropping the width from
+   either Markdown site leaves the width invariant fully intact — M1/M2 survive any width-only
+   assertion. Half 1 buys wrap QUALITY: candy-shine hangs a list item's continuation under the item's
+   text, which a flat row fitter cannot do. My brief said "do not skip this half" because streaming
+   would leave the bug on screen; right about wanting it, wrong about why it holds.
+
+Every line number my brief cited, in both `sugar-crush` and `candy-shine`, checked out exactly. So the
+anchors were sound and the reasoning on top of them was not, which is the reverse of the usual failure
+here and worth noticing.
+
+### Golden-file fallout: none, and the absence is the finding
+
+With the src change alone and the new test file absent, the full suite came out **byte-identical to
+baseline** — 7387 / 76813 / 1, no snapshot changed, no assertion count moved. **Not one test among
+7,387 rendered assistant prose long enough to wrap at its fixture width.** That is the same shape as
+the gap that let the bug ship (no test measured row width against the terminal), and it is why the new
+file, not the src diff, is the real deliverable.
+
+### Deferred, recorded rather than smuggled in
+
+- A wide Markdown **table** now wraps into a mangled grid — all data kept, but box-drawing rows wrap so
+  border glyphs land mid-row. Wrap was chosen over truncation deliberately, since the complaint is lost
+  content and truncating a table drops whole columns silently. The real fix is a per-column width
+  budget, which belongs in candy-shine. Strictly better than before, where the tail was lost anyway.
+- **candy-shine's `withTableWrap(true)` cannot bound a table's width**: `candy-shine/src/Renderer.php:916-917`
+  wraps each CELL at the full `wrapWidth`, so a three-column table still renders roughly three times
+  the pane wide. The option reads as though it solves this. Not edited.
+- `renderPendingToolCall()` (`:2450`) has no width discipline of its own and now relies entirely on the
+  net at `:957`. Covered, so no longer a defect, but the one body producer with no bound of its own.
