@@ -72,18 +72,27 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — eighteen rounds running
+## 5. THE recurring defect — nineteen rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
 It has appeared in *every single round*, including inside the work of the agent
 fixing the previous round's instance of it, and in the supervisor's own notes.
 
-**New as of round 18, and worth knowing:** the defect is now routinely caught by the
-same agent that introduced it — B3's implementer self-caught three, including a test
-whose NAME asserted a completeness its body did not have. That is progress, not a
-reason to skip the review round: every round's review has still found something the
-implementer did not.
+**Round 18 looked like progress and round 19 priced it.** B3's implementer self-caught
+three instances, including a test whose NAME asserted a completeness its body did not
+have — real progress. It then reported "28 mutations, 28 killed, 0 survivors". The
+independent reviewer ran **55 mutations and found 9 survivors** plus 17 confirmed
+findings. So self-catching does not substitute for the review round; it just moves where
+the round's findings come from. **Never accept an agent's own mutation score as
+coverage** — the number that matters is what a reviewer who did not write the code can
+still break.
+
+The single sharpest recurrence: `testAConnectExceptionIsTransient` passes through the
+`TransferException` fallback, so replacing its named clause
+(`$link instanceof NetworkExceptionInterface`) with `if (false)` survived 2863 tests. The
+round before had the identical shape. **A test named after a clause is not a test of that
+clause.**
 
 Its companion, found repeatedly since: **tests pin the PRESENCE of a clause and not
 its TRUTH.** One review ran 18 mutations — 13 died, and **all 5 survivors made a
@@ -145,6 +154,17 @@ a run. Judge a mutation by whether the **targeted test file** flips green→red 
   is a data provider over every `src/*.php` file — so **adding a source file changes
   the suite total by more than the tests you wrote**, and both censuses plus their
   prose copies need updating in the same diff.
+- **`vendor/bin/phpunit tests/Cli` HANGS at baseline** — over 4 minutes, killed at 250s —
+  while the full configured run passes in ~2m26s and every `tests/Cli/*.php` file passes
+  individually in under a second. A cross-test leak that `defaultTimeLimit=60` does not
+  abort. Measured 2026-08-19 by B3's reviewer, pre-existing and not from that bundle. The
+  consequence for every future round: **do not judge green from a directory-scoped run.**
+  Judge from the full configured run, or from a single targeted FILE. Mutation work in
+  particular has to use file-scoped or curated multi-directory sets.
+- **`BASE_BACKOFF_MICROSECONDS = 500_000` → `1` survives 3188 tests**, because every backoff
+  assertion is relational rather than literal. That is the "derive, don't hardcode" rule
+  working as intended — but it means the prose figures ("500ms doubling, ~1.5s total") have
+  no reader and will rot silently if the constant moves.
 
 ## 9. The plan lies about its own state — verify, don't trust
 
@@ -182,6 +202,53 @@ settings key plus a multi-root `PathJail` (backlog E26). · `MemoryScope::Local`
 normalises to the on-disk scope **`agent`**, so the enum values are not the directory
 names.
 
+**Phase 2 measured 2026-08-19 (supervisor, read-only probes) — two queue items were
+already done and one names a class that does not exist:**
+
+- **Item 3 (`WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`) is DONE.**
+  `src/Cli/Bootstrap.php:374` passes `workflowEngine: self::workflowEngine($root, $permissionGate)`,
+  and that factory (~390) deliberately uses `trustedConfigDirPath()` rather than
+  `configDirPath()` because `WorkflowRegistry::load()` reaches a `.php` workflow through
+  `require` — a directory whose contents get EXECUTED. Nothing to do.
+- **Item 5 (`HookManager::loadFromFile()` in `Bootstrap::hooks()`) is DONE, and better
+  than the plan's instruction.** `Bootstrap::hooks()` (1569-1599) calls
+  `registerBuiltIns()` and then `loadEntries(self::hookFileEntries($path), $path)` per
+  candidate file, fail-closed into `PermissionConfigException`, deduplicated by realpath,
+  with an unreachable-ancestor refusal and a per-project trust opt-in. It does NOT call
+  `HookManager::loadFromFile()` directly, on purpose: entries are read ONCE PER PROCESS
+  so a session cannot install hooks into itself mid-session (a `>> ~/.sugar-crush/hooks.yaml`
+  plus a Ctrl+P provider switch used to do exactly that). The plan's literal instruction
+  would re-read the file on every hook-manager build and reopen that hole.
+  Its stated prerequisite is also genuinely satisfied: `df0a563b` really is Phase 1
+  item 2, and `ScriptHook::EXIT_ASK = 3` / `EXIT_MODIFY = 4` exist.
+- **Item 7 names `LspTool`, which does not exist.** There is no `src/Tools/LspTool.php`.
+  What exists is `src/LSP/` — `LspClient`, `LspConnection(Interface)`, `LspCache(Interface)`,
+  `LspResponse`, and two exception types. So item 7 is "write the tool", not "add
+  `implements Tool`" to something.
+- **Item 4's own source confirms it is unwired**, so the queue entry is right for once:
+  `src/Commands/CommandLoader.php`'s class docblock says "NOT YET REACHABLE FROM
+  bin/sugarcrush: nothing constructs a CommandLoader in production yet" and defers the
+  `$ARGUMENTS`/`$1`/`` !`cmd` ``/`@file` substitution. That docblock also claims
+  `src/Chat.php` "is owned by a concurrent track" — stale prose to fix when item 4 lands.
+- **Item 8 (`CommandBackend` → `StreamingCommandBackend`) is HARMFUL AS WRITTEN.** Full
+  measurement in `/tmp/…/scratchpad/c1-measured.md`; the short form: both classes take
+  `string|array` and receive the identical stdin payload, but `StreamingCommandBackend::complete()`
+  does `rtrim($line, "\r\n")`, drops empty lines, and `implode('', $tokens)` — so the
+  wrapper `CommandBackend`'s own docblock recommends (`curl … | jq -r '.content[0].text'`)
+  comes back as one run-on line with every newline and blank line deleted. It also carries
+  a blanket `$timeout = 120` total-request cap (against the standing directive) whose
+  expiry message reports ITERATIONS where the user configured SECONDS, and a no-op
+  ternary `is_array($this->command) ? $this->command : $this->command`. The two output
+  protocols are mutually exclusive; wire the dormant seam behind its own opt-in instead of
+  swapping the existing one.
+- **Item 1's "duplicate `McpClient`" is a BASENAME collision, not a PSR-4 one.**
+  `SugarCraft\Crush\McpClient` (stdio/JSON-RPC to Claude Code) and
+  `SugarCraft\Crush\MCP\McpClient` (Guzzle HTTP) coexist legally. The rename is still
+  worth doing — it is what disambiguates `tests/McpClientTest.php` from
+  `tests/MCP/McpClientTest.php`, which has already caused one mis-citation of the single
+  legitimate skip. The root class has **no `src/`, `bin/` or `examples/` call sites**; it is
+  a dormant seam reached only from its own test.
+
 ## 10. Current state and the queue
 
 **Current state: see the "Execution status" block at the top of `crush_code.md`** for
@@ -189,12 +256,31 @@ what is complete, and §11 below for what is next. Verify the suite yourself bef
 believing any number written anywhere.
 
 **As of 2026-08-19 the working tree carries UNCOMMITTED Bundle B3 work** (Phase 5 items
-8, 9, 10a) that has passed implementation and the supervisor's own suite run —
-**7190/75900/1, exit 0** — and was in its adversarial review round. Recovery if that
-review's result was lost: **do not commit unreviewed.** Re-spawn a review against the
-uncommitted diff, using the worklog's B3 section for the claims to verify and
-`/tmp/…/scratchpad/b3-brief.md` for the ground truth the implementer was given. Then
-fix → verify → commit as usual. The file list is in the worklog's B3 heading.
+8, 9, 10a). Implementation done; suite verified by the supervisor at **7190/75900/1, exit 0**,
+and reproduced independently by the reviewer. **The adversarial review has RETURNED and the
+FIX round is in flight.**
+
+The review ran **55 mutations: 46 killed, 9 SURVIVED**, against an implementer who reported
+"28 mutations, 28 killed, 0 survivors" — the report did not hold at that depth. 17 confirmed
+findings; the fix brief is `/tmp/…/scratchpad/b3-fix.md` (310 lines) and carries all of them.
+The six that needed real tests rather than prose: `CustomProvider`/`VertexProvider` never
+pinned to actually SET `errorTransient` (three sites, one of which the code's own comment
+calls "THE case this classification exists for"); `Runtime`'s `$emitted` guard unpinned on
+the error-RESPONSE channel while pinned on the throw channel (and the error channel is the
+one Vertex uses); `Bootstrap::backendFor()`'s memory-store wiring covered only via the echo
+fallback arm; `NetworkExceptionInterface` dead to its own test (passes via
+`TransferException`, since `ConnectException extends` it — **verbatim last round's defect
+recurring**); `statusCode()`'s `$status > 0` guard; and `MemoryBlock`'s id tie-break, which
+its test could not distinguish from `glob()`'s sort plus PHP 8's stable `usort`.
+One real code bug: `MemoryBlock::MAX_BYTES` is not a ceiling — `$rendered !== []` admits the
+FIRST note whole however large, and `clip()` bounds only `content()`, leaving `type` and
+`tags` unbounded. Measured 11,119 bytes against a 4,096 budget, with the false promise in
+the **model-facing header sentence** itself.
+
+**Recovery if the fix round's result was lost: do not commit unreviewed-and-unfixed.**
+Re-spawn a fix agent against `/tmp/…/scratchpad/b3-fix.md`; it is self-contained. Then the
+supervisor verifies the full suite personally and commits. The file list is in the worklog's
+B3 heading.
 
 If instead the tree is clean and `git log` shows a B3 commit, the round finished — move
 to C1 in §11.
@@ -213,32 +299,50 @@ to C1 in §11.
   `list(MemoryScope::Project)`, not `search()` (which is a substring match and would
   never fire); the additional-dirs line was **not** emitted for want of any data source
   (backlog E26).
-- **E21 — finish Phase 5.** The automatic 85% compaction tier still uses the heuristic
+- **E21 — finish Phase 5.** Brief written and ready: `/tmp/…/scratchpad/e21-brief.md`
+  (327 lines, measured against the tree; includes the four traps and the recommended
+  park-the-submission design). The automatic 85% compaction tier still uses the heuristic
   and never the model, so Phase 5 item 6 is 🟡 not ✅. Wiring it means parking a
   submitted draft behind a compaction round-trip and re-siting the 95% blocking check
   into that continuation. The seam is already built and tested. Do this before calling
   Phase 5 done.
-- **C1** Phase 2 items 1,8 — rename the duplicate `src/McpClient.php`
-  (→ `ClaudeCodeMcpClient`); swap `CommandBackend`→`StreamingCommandBackend` when
-  `$SUGARCRUSH_BACKEND_CMD` is set.
-- **C2** Phase 2 item 3 — construct `WorkflowEngine`/`WorkflowRegistry` in
-  `Bootstrap::chat()`, thread `workflowEngine:` into `Chat`.
+- **C1** Phase 2 items 1,8 — rename `src/McpClient.php` → `ClaudeCodeMcpClient` (a
+  BASENAME collision, not a PSR-4 one; no production call sites) and wire the dormant
+  `StreamingCommandBackend`. **Item 8 is harmful as written** — swapping it onto
+  `$SUGARCRUSH_BACKEND_CMD` deletes every newline and blank line from the reply and adds a
+  blanket 120s cap. Ground truth measured and written up:
+  `/tmp/…/scratchpad/c1-measured.md`, summarised in §9. Wire it behind its own opt-in and
+  fix the timeout + its wrong-unit message either way.
+- ~~**C2** Phase 2 item 3 — `WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`.~~
+  **ALREADY DONE** — `Bootstrap.php:374` passes it. Measured 2026-08-19, see §9. No work.
 - **C3** Phase 2 item 2 — `Bootstrap::mcpClient($root)` reading `.mcp.json`, MCP tools
   wrapped as `Tools\Tool` adapters into `Bootstrap::tools()`.
 - **C4** Phase 2 item 4 — **the biggest remaining item.** Wire `CommandLoader::loadAll()`
   AND build the missing template-substitution engine (`$ARGUMENTS`, `$1`, backtick-cmd,
   `@file` — none exist). Shell-out must use ReactPHP `Process`, never blocking
   `shell_exec`. This is what makes the README's "loadable, not loaded" note obsolete.
-- **C5** Phase 2 item 5 — `HookManager::loadFromFile()` in `Bootstrap::hooks()` after
-  `registerBuiltIns()`. **VERIFY the prerequisite first:** the plan sequences this
-  after Phase 1 item 2's `ask`/`modify` exit-code extension; item 2 is marked done at
-  `df0a563b` ("permission-system consolidation"), which is not obviously the same
-  thing. Probe before briefing.
-- **C6** Phase 2 item 7 — `LspTool implements Tool` over the existing `LspClient`.
+- ~~**C5** Phase 2 item 5 — `HookManager::loadFromFile()` in `Bootstrap::hooks()`.~~
+  **ALREADY DONE, and deliberately not by the route the plan names** — `Bootstrap::hooks()`
+  loads entries once per process so a session cannot install hooks into itself mid-session.
+  The prerequisite checks out too (`df0a563b` is Phase 1 item 2; `ScriptHook::EXIT_ASK = 3`).
+  Measured 2026-08-19, see §9. No work.
+- **C6** Phase 2 item 7 — **write** `LspTool implements Tool` over `src/LSP/LspClient.php`.
+  The plan says "add `implements Tool`"; there is no `src/Tools/LspTool.php` at all.
+  Measured 2026-08-19.
 - **D** Phase 3 items 2-5 — `candy-focus\FocusRing` in `Tui\Pane`; `sugar-veil`
   `withClickOutsideDismiss()`; `candy-sprinkles\Table`; `strlen()` padding fixes.
-- **E** Phase 6 items 1-6 — `WorktreeConfig`'s `__DIR__`-relative bug (cheap, do
-  first); layered settings files; `tools.allow`/`deny`; permission block;
+- **E** Phase 6 items 1-6 — **item 1's `__DIR__` bug is largely already fixed**, so do
+  not brief it as the cheap opener. Measured 2026-08-19: `WorktreeConfig`'s old
+  `__DIR__ . '/../../../.sugar-crush/config.json'` read is now the named seam
+  `defaultConfigDir()` (`\dirname(__DIR__, 3)`) with `ContainedPath` gating in three
+  places, and its docblock records the measured escape it closed (a `.worktreeinclude`
+  line of `../secret/id_rsa` read AND wrote outside the checkout). What is genuinely left
+  is the half that file explicitly defers: `dirname(__DIR__, 3)` is the directory
+  CONTAINING the package, which under a composer install is `vendor/sugarcraft/` and not
+  where anyone's config lives — point it at the project root / user config dir the way
+  `Bootstrap` does. Also still true: nothing in `src/` constructs a `WorktreeManager`, so
+  wiring it is part of the item ("DORMANT IS NOT UNGATED" is that file's own doctrine).
+  Then: layered settings files; `tools.allow`/`deny`; permission block;
   keybindings + statusLine; `--model`/`--permission-mode` flags.
 - **F** Phase 7 items 3-6 — the authoring/reference docs. Also fix README's stale
   built-in-hooks list (omits `BashEscapeDenyHook`).
