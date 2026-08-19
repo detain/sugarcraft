@@ -388,6 +388,84 @@ tool-calling turn. `finishToolCalls()` keeping `inFlight` true is what makes tha
 
 Brief: `/tmp/…/scratchpad/w2-brief.md` (184 lines) + `w2-measured.md` (128 lines), both self-contained.
 
+## 🤖 THE WORKFLOW — how the rest of the plan gets executed (requested by the user 2026-08-19)
+
+The user asked for a **workflow** to finish the remaining plan, and started it. The script is persisted
+under the session directory and its path is printed in the `Workflow` tool result; a copy of the intent
+lives here so it can be rebuilt from scratch.
+
+### The shape, and why it is this shape
+
+**One bundle at a time, strictly sequential, committing between bundles.** Not because parallelism is
+hard, but because it is measurably wrong here: two uncommitted tracks in one working tree make every
+reviewer flag the other track's diff, and a *suite run* that loads a file another lane is editing shifts
+`file(__FILE__)` ranges against already-loaded reflection and produces phantom failures. Parallelism
+inside a bundle is fine (independent review lenses); parallelism across bundles is not.
+
+Per bundle, the workflow runs the §2 loop as separate agents, because the whole value is that the
+reviewer did not write the code:
+
+1. **measure** — read-only, produces the ground truth the brief will carry. Never trust the plan's line
+   numbers (§9); they are stale by construction and C3 moved `Bootstrap.php` by ~486 lines.
+2. **implement** — against the measured brief only.
+3. **review** — adversarial, on the diff, with a mutation budget. **Separate agent, never skipped.**
+4. **fix** — given the findings.
+5. **re-verify** — a *fresh* agent that re-runs the review's mutations **from their verbatim
+   definitions** and reports which still survive. This step exists because of W1: see the LESSON
+   section above. Three "it's dead" reports in one bundle were false.
+6. **commit** — only after the full suite is green, only that bundle's paths.
+
+### The one honest compromise
+
+Up to now **the supervisor ran the full suite personally at every gate** and that is what caught four
+false kills in W1. A workflow cannot do that — step 5 is the substitute, and it is weaker: it is another
+agent, not me. **So after each workflow run returns, re-run the suite yourself and spot-check the
+bundle's mutations before trusting the commit.** If a workflow run reports green and a personal run
+disagrees, believe the personal run and treat the whole batch as suspect.
+
+### Bundle order (28 plan items left, grouped)
+
+Docs go LAST among features so they describe what actually got built, and the plugin system is last of
+all per the existing queue note.
+
+| # | bundle | plan items |
+|---|---|---|
+| 0 | **W2** | *not a plan item* — finish its loop first, it is in flight |
+| 1 | **B4** | Phase 5 item **10b** — differentiate the five `AgentDefinition` preset prompts. Small; closes Phase 5 |
+| 2 | **C5** | Phase 4 item **6** — real subcommands, `--config`, exit-code convention, `--output-format` warning |
+| 3 | **C4a** | Phase 2 item 4 part 1 — wire `CommandLoader` as an instance into `Chat`; `$ARGUMENTS`/`$1..$9` |
+| 4 | **C4b** | Phase 2 item 4 part 2 — `` !`cmd` `` (ReactPHP `Process`) + `@file` |
+| 5 | **C6** | Phase 2 item **7** — WRITE `LspTool implements Tool` over the existing `src/LSP/LspClient.php` |
+| 6 | **D** | Phase 3 items **2-5** — `candy-focus\FocusRing` in `Tui\Pane`; `sugar-veil` |
+| 7 | **E** | Phase 6 items **1-6** — item 1's `__DIR__` bug is largely already fixed; verify before writing |
+| 8 | **G1/G2** | Phase 8 items **3, 4, 6, 8, 9, 10, 11, 13, 15** — split into two bundles |
+| 9 | **F** | Phase 7 items **3-6** — authoring/reference docs |
+| 10 | **C7** | Phase 2 item **9** — unified `crush-plugin.json` + `PluginLoader`. Explicitly last |
+| 11 | **#88** | the stale README suite figure — standalone, nothing else in flight |
+| 12 | **hardening** | `crush_code_hardening_backlog.md` E1-E50. LAST, per the user's standing directive |
+
+### Non-negotiables every workflow agent must be handed
+
+These are not style preferences; each one is a bug this project already had.
+
+- **Never** `git stash`/`checkout`/`reset`/`commit`/`clean` in a non-commit step. **Never**
+  `composer install`/`update` (it silently replaces `vendor/sugarcraft/*` symlinks with Packagist copies
+  — the only signal is the skip count going 1 → 2). **Never** a global `pkill`. **Never** `caliber`.
+- **Skips must be exactly 1.** A 2-skip run is not testing the monorepo and its figures are void.
+- Judge by `$?`, never the banner; **redirect, never pipe** (`phpunit | tail` reports `tail`'s code);
+  never run `tests/Cli` as a DIRECTORY (hangs >4 min), single FILES are ~0.05s; full suite needs a
+  **600000ms** timeout.
+- **Defer the FIX, never the FINDING** — every deferred security item goes in the backlog with its probe.
+- **Never delete dormant code** — wire it or document it as an intentional seam.
+- **Write mutation definitions as the exact edit, verbatim.** "MU11" is not a definition.
+- Adding a `src/*.php` file moves **five** censuses; update all five in the same diff.
+
+### Chaining
+
+The size guideline here is ~15 agents per run, and a full bundle is 6, so a run covers **2-3 bundles**.
+Invoke with the next batch, read the result, re-verify personally, then invoke again. Do not try to put
+all twelve bundles in one run.
+
 ## ORDER: W1 → W2 → `#88` → the audit queue
 
 `#88` is the stale README suite figure. **Moved to AFTER the live-bug bundles, not straight after W1**,

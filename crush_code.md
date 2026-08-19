@@ -29,6 +29,24 @@ hardcoded `AgentDefinition` preset prompts) is untouched, and a note in
 also outstanding and had fallen out of the RESUME queue entirely; the arithmetic is what
 caught it.
 
+**TWO USER-REPORTED BUGS JUMPED THIS QUEUE and are NOT plan items — do not add them to the
+count.** Both were reported while daily-driving the binary, and both are functionality rather than
+hardening, so §3's sequencing rule promotes them ahead of the audit work:
+
+- **W1 — long assistant replies were cut off at the pane edge. DONE, `47ee2c86`.** The renderer
+  emitted rows wider than the pane and candy-sprinkles' `Style::width()` truncated them, so a
+  paragraph lost its tail and the next paragraph read as unrelated. Fixed in two halves: thread the
+  pane width into candy-shine at both Markdown sites (its word wrap is opt-in and was defaulted OFF),
+  and add a frame-level `fitToPane()` invariant that wraps over-wide body rows content-preservingly.
+  Four rounds; suite 7387 → **7577 / 87648 / 1, exit 0**. Twelve of twelve mutations killed, each
+  re-verified by the supervisor rather than accepted from a report — which is what caught four false
+  "it's dead" claims. Backlog gained **E46**-**E50**.
+- **W2 — typing and Ctrl+P are dead while a turn is processing. IN FLIGHT.** Not an async defect: the
+  provider call already runs in a forked child, and keystrokes are already delivered mid-turn. It is
+  one policy `return` — `Chat.php:1141`'s blanket `if ($this->inFlight)` swallow — plus a hidden input
+  cursor. Enter must ENQUEUE rather than dispatch, and the drain has exactly one real site because
+  `finishToolCalls()` keeps `inFlight` true.
+
 **Phase 2 items 3 and 5 needed no code** — both were already wired and the plan's
 premise was measured false. Item 3 is live at `Cli/Bootstrap.php:374`. Item 5 is
 live in `Bootstrap::hooks()` and deliberately NOT routed through

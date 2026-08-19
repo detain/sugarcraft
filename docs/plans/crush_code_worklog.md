@@ -8210,3 +8210,42 @@ caught round A's four false kills.
 "all 11 dead" became 4 alive under my own re-run. The gate that caught each was the *next* gate, never
 self-assessment. This is now written into the resume file as a standing rule, together with the practical
 half: **a mutation name is not a definition — write the exact edit.**
+
+---
+
+## Session state at the user's `/compact` request, 2026-08-19
+
+**Last CODE commit: `47ee2c86`** (bundle W1). Supervisor-verified **7577 / 87648 / 1, exit 0** against
+LOCAL sibling symlinks; `check-path-repos --no-lib-path-repos` rc=0; `.sugar-crush/config.json` md5
+`05480c743aff302fd6c06c5a4a4c2210`; `git stash list` 9 entries; `vendor/sugarcraft/` holds 16 symlinks.
+
+**Bundle W2 is IN FLIGHT** — implementation round running, nothing committed. Its two briefs
+(`w2-brief.md`, `w2-measured.md`) are self-contained; re-spawn against them if the round is lost.
+
+**Counted state: 47 of 75 plan items, 28 left.** W1 and W2 are user-reported bugs, NOT plan items — do
+not add them to the count, and do not sum the plan against the E1-E50 backlog. They are different series.
+
+**The user has asked for a workflow to finish the remaining plan**, and its design, bundle order and the
+non-negotiables every agent must be handed are recorded in `crush_code_RESUME.md` under "🤖 THE
+WORKFLOW". The one honest compromise is written down there too: until now the supervisor ran the full
+suite personally at every gate, and that is precisely what caught four false mutation kills in W1. A
+workflow cannot do that, so it carries a dedicated re-verify agent instead — a weaker substitute, and the
+resume file says so plainly. **After each workflow run, re-run the suite personally before trusting its
+commits.**
+
+### What this session actually established, beyond the two bundles
+
+Three things worth carrying forward that are not in any diff:
+
+1. **A number or a claim must never travel without its domain** — twenty-eight rounds running, and this
+   session produced four fresh instances, three of them mine: a 204-column measurement taken against
+   standalone `Chat::view()` and written next to the hosted path; "all eleven mutations dead" true of
+   reconstructions and false of the mutations; a `#88` note that would have destroyed a deliberate
+   historical citation; and a C4 brief asserting the menu bar *cannot* list file commands when the route
+   already exists.
+2. **A fix can make its neighbours' tests vacuous.** W1's `hardFit()` safety net made three `$labelRoom`
+   mutations unkillable by every width assertion in a 10,000-assertion file. When a bundle adds a net,
+   re-ask what the older assertions still prove.
+3. **The user was right and I overrode them.** They wrote "not wrapped but cut off". Cut off IS
+   truncation, and that was the mechanism; I replaced an accurate description with a soft-wrap theory and
+   carried it into a brief as ground truth. Read the report as evidence, not as a symptom to reinterpret.
