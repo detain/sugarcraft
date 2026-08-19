@@ -159,6 +159,29 @@ final class ContextCompactor
      * threshold (70% by default). This is a soft warning surfaced to the
      * lead agent before the harder 85%/95% compaction tiers kick in.
      *
+     * PURE AND STATELESS — a bare `$tokenCount >= $threshold`, no latch, no
+     * timestamp, nothing remembered between calls. So this is NOT "should a
+     * reminder be sent for the first time": it answers true on EVERY call once
+     * the estimate is over the line, and the caller is what decides how many
+     * reminders that turns into. {@see \SugarCraft\Crush\Chat::dispatchTurn()}
+     * commits the reminder into `history`, so before it deduplicated
+     * ({@see \SugarCraft\Crush\Chat::withoutContextReminders()}) a session
+     * twenty turns past the threshold accumulated twenty copies. Any new caller
+     * inherits the same obligation.
+     *
+     * $tokenCount is an ESTIMATE — {@see countTokens()}'s chars/4 + 10 per
+     * message. $tokenLimit is the provider's real window only on the one path
+     * where there is one to have: callers reach it through
+     * {@see \SugarCraft\Crush\Context\ContextWindow::ofBackend()}, which
+     * returns the hardcoded
+     * {@see \SugarCraft\Crush\Context\ContextWindow::FALLBACK_TOKENS}
+     * (100,000 ESTIMATED tokens) on the other two — a backend that does not
+     * implement {@see \SugarCraft\Crush\Backend\ReportsContextWindow}, and
+     * one that reports a non-positive window. So on the reported path the
+     * comparison deliberately mixes two units, and on the fallback path both
+     * sides are the same estimate; it is a heuristic tier either way, never a
+     * measured one.
+     *
      * Mirrors charmbracelet/bubbletea ContextCompactor.shouldSendReminder.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
@@ -457,6 +480,38 @@ final class ContextCompactor
      * i.e. it would have silently disabled model-written summaries on precisely
      * the histories the automatic tier fires on, since a session past the 70%
      * reminder tier is every session that ever reaches 85%.
+     *
+     * THAT 10-TO-0 FIGURE IS THE WORST CASE, AND IT IS STILL REACHABLE. It is
+     * measured on a reminder after EVERY prompt, which is what a history
+     * looked like before
+     * {@see \SugarCraft\Crush\Chat::withoutContextReminders()} deduplicated
+     * them — so it is the shape every pre-dedup session and every checkpoint
+     * written by one still holds, and the shape the closing variant would turn
+     * back into 0 offered exchanges.
+     *
+     * ON A DEDUPED HISTORY THE RESIDUAL HARM IS REAL BUT HAS THE OPPOSITE SIGN,
+     * which an earlier draft of this paragraph got backwards by calling it
+     * "loses one pair". Measured on the same 20-pair fixture, reminders =
+     * none / one-after-the-newest-prompt / after-every-prompt:
+     *
+     *     CURRENT (interleaved rider)      10   10   10 exchanges offered
+     *     CLOSING VARIANT (rejected fix)   10   12    0
+     *
+     * The single surviving reminder does not cost an exchange, it INFLATES the
+     * entry count: closing the pair turns one prompt into three entries (an
+     * unanswered pair, a standalone reminder, a standalone assistant turn), so
+     * the last-`recentPreserveCount`-ENTRIES window slides off two pairs that
+     * should have been preserved verbatim and hands them to the summarizer
+     * instead. Fewer exchanges offered is the harm in one direction; more
+     * offered is the same harm in the other.
+     *
+     * NONE OF WHICH MAKES THIS FIX LESS NECESSARY, because the reminder is one
+     * of the three victims listed above and the only deduplicated one. The
+     * automatic tier's own report and `_Request cancelled._` are per-event
+     * records — one per event, never collapsed, never bounded at one copy — and
+     * `_Request cancelled._` in particular is the ONLY record that a turn was
+     * aborted. For those two the drop was total and the fix is the whole of
+     * what saves them; nothing about this method changes for them.
      *
      * @param array<array{role:string,content:string}> $messages
      * @return array<array{user:string,assistant:?string,standalone?:bool,role?:string,interleaved?:list<array{role:string,content:string}>}>

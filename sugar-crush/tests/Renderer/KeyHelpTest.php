@@ -346,9 +346,11 @@ final class KeyHelpTest extends TestCase
      *     `KeyType::Char 'l'` with `ctrl`, so Ctrl+L types the letter `l` and
      *     never a form feed (all three asserted below). A tab-bearing USER message
      *     is not typeable either — `submit()` trims — but
-     *     `Chat::reviveCheckpointMessage()` maps every non-`assistant` checkpoint
-     *     row to a `user` message with its content unchanged, and a `tool` row's
-     *     content is full of tabs. Driven end to end below.
+     *     `Chat::reviveCheckpointMessage()` maps a checkpoint row whose role is
+     *     neither `assistant` nor `system` to a `user` message with its content
+     *     unchanged, and a `tool` row's content is full of tabs. (`system` landed
+     *     there too until E33's review round; that was a bug, and this route never
+     *     depended on it.) Driven end to end below.
      *   There is still no paste route in. The decoder DOES emit
      *   `PasteMsg{content: "a\tb"}` for bracketed paste and `Chat::update()`
      *   returns the very same object when handed one — both asserted below, which
@@ -650,8 +652,8 @@ final class KeyHelpTest extends TestCase
             $this->assertSame(
                 'User',
                 $revived->role->name,
-                'fixture: reviveCheckpointMessage() maps a non-assistant row to a USER message, which is '
-                . 'what puts untypeable content where the Up arm can reach it',
+                'fixture: reviveCheckpointMessage() maps a row that is neither assistant nor system '
+                . 'to a USER message, which is what puts untypeable content where the Up arm can reach it',
             );
 
             $chat = (new Chat(

@@ -903,12 +903,22 @@ final class ContextCompactorTest extends TestCase
      * {@see ContextCompactor::exchangesToSummarize()} offers a model only pairs
      * holding both halves.
      *
-     * Pinned on a history with a reminder after every prompt, because that is the
-     * state of every session that ever reaches the 85% tier (the 70% reminder
-     * fires first and is appended per turn). The obvious alternative fix — close
-     * the open pair and push the standalone as its own entry — preserves the
-     * message and takes this number from 10 to 0, i.e. silently disables
-     * model-written summaries on exactly the histories the automatic tier runs on.
+     * Pinned on a history with a reminder after every prompt: the WORST case, not
+     * the typical one. It is the state of every session written before
+     * {@see \SugarCraft\Crush\Chat::withoutContextReminders()} deduplicated
+     * the reminder — the 70% tier fires first, its predicate is stateless, and
+     * every answer was appended — so it is what pre-dedup sessions and the
+     * checkpoints they wrote still hold. A deduped history carries at most one.
+     *
+     * The obvious alternative fix — close the open pair and push the standalone
+     * as its own entry — preserves the message and takes this number from 10 to
+     * 0, i.e. silently disables model-written summaries on that history. On a
+     * deduped one it takes it from 10 to 12 instead, which is the same harm with
+     * the opposite sign: the extra entries slide the
+     * last-`recentPreserveCount`-ENTRIES window off two pairs that should have
+     * been preserved verbatim. See
+     * {@see ContextCompactor::groupIntoPairs()}'s docblock for the measured
+     * table and for the two victims that are never deduplicated at all.
      */
     public function testAReminderAfterEveryPromptDoesNotDestroyTheOfferedExchangeSet(): void
     {

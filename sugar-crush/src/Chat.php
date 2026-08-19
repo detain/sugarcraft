@@ -323,6 +323,41 @@ final class Chat implements Model
     private const TOOL_EVENT_POLL_SECONDS = 0.1;
 
     /**
+     * Stable head of the context-usage reminder {@see contextReminderMessage()}
+     * builds, and the ONLY thing {@see isContextReminder()} matches on.
+     *
+     * A PREFIX RATHER THAN THE WHOLE MESSAGE BECAUSE THE WHOLE MESSAGE IS NOT A
+     * CONSTANT: everything after this point embeds the current estimated token
+     * count, so two copies written on two different turns are never byte-equal.
+     * A full-text equality check would therefore never match, the
+     * deduplication in {@see dispatchTurn()} would look correct in review, and
+     * every copy would still pile up — while a test that only asserts "a
+     * reminder is present" passed either way. The count of copies is the only
+     * thing that discriminates the fix from the bug, which is why
+     * `tests/Chat/ContextReminderDedupTest.php` asserts a quantity.
+     *
+     * Carried in the message CONTENT rather than as a new `Message` field on
+     * purpose: content is one of the few things {@see Message::toWire()} emits,
+     * so a reminder that has been through a checkpoint save/restore or a wire
+     * round-trip is still recognisable. A dedicated field has no
+     * representation in either, so the dedup would silently stop working on a
+     * resumed session — the same lossiness documented on
+     * {@see messagesFromWire()}.
+     *
+     * THAT COVERS ONLY THE CONTENT HALF OF THE PREDICATE, and
+     * {@see isContextReminder()} needs both halves: the marker AND
+     * `Role::System`. The wire half was always sound —
+     * {@see messagesFromWire()} rebuilds the role with `Role::from()` — but the
+     * checkpoint half was not, until E33's review round: with no `'system'` arm
+     * in {@see reviveCheckpointMessage()} the ROW survived a checkpoint intact
+     * while the restored message came back as `Role::User`, so one `/rewind`
+     * put a copy beyond this predicate's reach forever. Both halves round-trip
+     * now; changing either method's role handling breaks the dedup silently,
+     * not loudly.
+     */
+    private const CONTEXT_REMINDER_PREFIX = 'Heads up: this conversation has grown to ~';
+
+    /**
      * @param list<Message> $history
      * @param array<string, callable> $tools Map of tool name => callable(array $arguments): mixed
      * @param callable|null $onToolCall Optional callback called when tools are invoked
@@ -1226,9 +1261,11 @@ final class Chat implements Model
             //
             // Untypeable is not unreachable. The Up arm above copies
             // lastUserMessageContent() in VERBATIM, and
-            // Chat::reviveCheckpointMessage() turns every non-'assistant'
-            // checkpoint row -- a 'tool' row, whose output is full of tabs -- into
-            // a user message with its content unchanged. Driven end to end in that
+            // Chat::reviveCheckpointMessage() turns a checkpoint row whose role is
+            // neither 'assistant' nor 'system' -- a 'tool' row, whose output is full
+            // of tabs -- into a user message with its content unchanged. ('system'
+            // used to land here too; that was a bug, fixed in E33's review round,
+            // and this route never depended on it.) Driven end to end in that
             // test: a revived tool row plus one Up puts "\t/keys" (or "\t", or
             // " \t ") in the box. These are drafts a user can hold; they are just
             // not drafts a user can type. Same for "\u{000C}", which is in the
@@ -4008,6 +4045,28 @@ final class Chat implements Model
      * value after "🔧 tool:", and the alternative (the opaque call id) would
      * put a wire identifier in front of the user.
      *
+     * THE ROLE IS PRESERVED FOR ALL THREE {@see Role} CASES, and until E33's
+     * review round it was not: the match below read
+     * `default => Message::user($content)` with no `'system'` arm, so every
+     * app-authored system row came back as a USER message. Measured, one
+     * `/rewind` turned the context-usage reminder into "the user said 'Heads
+     * up: this conversation has grown to ~70109 estimated tokens… Consider
+     * running /compact soon'" on the provider wire, and did the same to
+     * `_Request cancelled._`, the compaction notice and the automatic tier's
+     * report. It also defeated {@see withoutContextReminders()} permanently:
+     * {@see isContextReminder()} requires `Role::System` — deliberately, so a
+     * user QUOTING the reminder is never deleted — so a mis-roled copy could
+     * never be stripped again and one more accrued per rewind.
+     *
+     * A row whose role is NEITHER of the three ('tool' is the one a fixture
+     * constructs; nothing in this app serialises it, because {@see Role} has no
+     * such case and {@see Message::toolRunning()} uses `Role::System` plus a
+     * `pendingToolCallId` that the arm above intercepts) still becomes a user
+     * message with its content unchanged. That is a coercion, not a contract —
+     * see the Up-arrow comment in {@see update()}, which depends on it only for
+     * REACHABILITY of untypeable drafts, and would need a real `Role` case to
+     * fix rather than an arm here.
+     *
      * @param array<string, mixed> $row one raw checkpoint message, as
      *                                  {@see \SugarCraft\Crush\Session\EnhancedSessionStore::saveCheckpoint()}
      *                                  serialised it
@@ -4028,6 +4087,7 @@ final class Chat implements Model
 
         return match ($row['role'] ?? '') {
             'assistant' => Message::assistant($content),
+            'system'    => Message::system($content),
             default     => Message::user($content),
         };
     }
@@ -4418,6 +4478,17 @@ final class Chat implements Model
      * count it used to pass in was already `estimateTokenCount($baseHistory)` in
      * every one.
      *
+     * Every dispatch drops any reminder $baseHistory already carries, whether
+     * or not the tier fires this turn, and only the firing appends a fresh one.
+     * So the committed history holds EXACTLY ONE while the estimate is over the
+     * tier — always the one carrying the current figure — and NONE once it falls
+     * back under, which is what makes `/compact` clear the warning it was run in
+     * answer to. That is a rewrite of $baseHistory, not an append — see
+     * {@see withoutContextReminders()} for the pile-up it prevents, and for why
+     * a fire-once latch and a render-from-state reminder were both rejected.
+     * The checkpoint written further down serialises `$next->history`, so it
+     * inherits the dedup with no second site to keep in step.
+     *
      * `$pendingCompactionId` is deliberately untouched. A `/compact`
      * summarization outstanding across a turn is a supported state (see
      * {@see HistoryCompactedMsg}), and on the parked route the landing
@@ -4441,8 +4512,55 @@ final class Chat implements Model
             static fn(Message $msg): array => $msg->toWire(),
             $baseHistory
         );
-        if ($this->compactor->shouldSendReminder($baseWire, $tokenLimit)) {
-            $newTurnMessages[] = $this->contextReminderMessage($this->estimateTokenCount($baseHistory));
+        $dueForReminder = $this->compactor->shouldSendReminder($baseWire, $tokenLimit);
+
+        // Order is load-bearing, twice over.
+        //
+        // (1) STRIP UNCONDITIONALLY, APPEND CONDITIONALLY. Scoping the strip
+        // inside the `if` — which is what this arm did when the dedup first
+        // landed — leaves the last copy a session was ever sent in history
+        // forever once the estimate falls back UNDER the tier, which is
+        // precisely what /compact is for. It stays on the provider wire every
+        // turn thereafter, quoting a figure from before the compaction: at 22%
+        // of the window the transcript still read "grown to ~70440 estimated
+        // tokens, past the ... threshold" immediately after a /compact. Pinned
+        // by ContextReminderDedupTest::
+        // testABelowThresholdDispatchRemovesAStalePreExistingReminder().
+        //
+        // (2) THE FIGURE IS COUNTED BEFORE THE STRIP — $preStrip, not the
+        // rewritten $baseHistory — so the number the message quotes is the same
+        // number the predicate above just compared against the threshold, and
+        // the sentence "grown to ~N estimated tokens, past the ... threshold"
+        // cannot contradict itself. Counting after the strip would quote a
+        // figure 53 estimated tokens per dropped copy BELOW the threshold it
+        // claims to be past; on a history sized exactly to the threshold with
+        // one stale copy present that is 69,947 against a threshold of 70,000.
+        // Pinned by ContextReminderDedupTest::
+        // testTheQuotedFigureIsNeverBelowTheThresholdItSaysItIsPast().
+        //
+        // WHAT N DOES NOT DO IS OVERSTATE THE HISTORY COMMITTED BELOW, which an
+        // earlier draft of this comment claimed. It overstates post-strip
+        // $baseHistory IN ISOLATION, by 53 estimated tokens per dropped copy —
+        // but that array is never committed on its own, and the copy appended
+        // here weighs the same 53 as each one just dropped, so the two cancel.
+        // Measured over four turns of a one-line prompt, est(committed) less N:
+        // +65 on the FIRST fire (nothing to drop, so the prompt's ~12 plus the
+        // reminder's 53) and +12 on every turn after it (drop and append
+        // cancel, leaving just the prompt). Never negative.
+        //
+        // 53 is estimateTokenCount()'s own chars/4 + 10 over this message's
+        // 169-172 content chars, and its domain is the QUOTED FIGURE, not the
+        // window: it holds for every figure from 100 to 999,999, is 52 only
+        // below 100, and reaches 54 only once the figure passes 1,000,000.
+        // Since the figure is at least the 70% threshold, that covers every
+        // window from ~143 tokens up to ~1.43 million — i.e. every real
+        // provider window, 54 arriving only on a 2M-context model (or on a
+        // history run absurdly far past a small window). Both units here are
+        // the estimate, never a provider count.
+        $preStrip = $baseHistory;
+        $baseHistory = self::withoutContextReminders($baseHistory);
+        if ($dueForReminder) {
+            $newTurnMessages[] = $this->contextReminderMessage($this->estimateTokenCount($preStrip));
         }
 
         $generation = $this->generation + 1;
@@ -8759,7 +8877,8 @@ final class Chat implements Model
     }
 
     /**
-     * Build the soft, non-blocking reminder message surfaced once
+     * Build the soft, non-blocking reminder message
+     * {@see dispatchTurn()} appends whenever
      * {@see ContextCompactor::shouldSendReminder()} reports the conversation
      * has crossed its share of the budget ({@see CompactorConfig::$reminderThreshold},
      * 70% by default — which is why neither this docblock nor the message names
@@ -8768,14 +8887,115 @@ final class Chat implements Model
      * than the `Role::Assistant` bubble used for the hard idle-compaction
      * prompt, so the two are visually distinguishable and this one never
      * blocks the turn it rides along with.
+     *
+     * "WHENEVER", NOT "ONCE", WHICH IS WHAT AN EARLIER DRAFT OF THIS DOCBLOCK
+     * SAID. The predicate is stateless, so it answers true on every turn past
+     * the threshold and this is built afresh each time. What keeps history to
+     * one copy is not this method and not a latch, but
+     * {@see withoutContextReminders()} dropping the previous copy on every
+     * dispatch — read that docblock before changing anything here, because the
+     * $tokenCount interpolated below is exactly what makes two copies
+     * unequal byte-for-byte.
      */
     private function contextReminderMessage(int $tokenCount): Message
     {
         return Message::system(
-            "Heads up: this conversation has grown to ~{$tokenCount} estimated "
+            self::CONTEXT_REMINDER_PREFIX
+            . "{$tokenCount} estimated "
             . "tokens, past the context-usage reminder threshold. Consider "
             . "running /compact soon to keep the session responsive."
         );
+    }
+
+    /**
+     * Drop every context-usage reminder from a history.
+     *
+     * {@see dispatchTurn()} calls this on EVERY dispatch and appends a fresh
+     * copy only when the tier fires, so history carries exactly one reminder
+     * while the estimate is over the tier and none once it drops back under.
+     * The unconditional call is the load-bearing half: gated on the tier
+     * instead, a session that compacts back under the line keeps the last
+     * reminder it was sent forever.
+     *
+     * The bug this exists for: {@see ContextCompactor::shouldSendReminder()} is
+     * pure and stateless — a bare `$tokenCount >= $threshold` with no latch and
+     * no timestamp — so it answers true on EVERY turn once the estimate crosses
+     * the threshold, and {@see dispatchTurn()} commits its answer into
+     * `history` rather than rendering it from state. A session driven twenty
+     * turns past the threshold therefore carried twenty near-identical system
+     * messages, each one 53 ESTIMATED tokens (see the arm in
+     * {@see dispatchTurn()} for that figure's derivation), each one also
+     * checkpointed and re-sent on the wire every subsequent turn. Their own
+     * bytes count toward the estimate that made the predicate true, so it
+     * compounds; deduplication bounds it at one copy.
+     *
+     * NOT A REGRESSION, to be precise about the history. The waste was always
+     * there, but {@see ContextCompactor::groupIntoPairs()} used to silently DROP a
+     * non-user/non-assistant message sitting directly after a user turn — the
+     * reminder's exact shape — so every compaction deleted every copy and the
+     * pile-up was self-limiting by accident. Fixing that drop (it was also
+     * eating `_Request cancelled._` and the automatic tier's own report) is
+     * what made the accumulation observable. That fix did not cause this.
+     *
+     * Deduplication rather than a fire-once latch, and rather than keeping the
+     * reminder out of `history` and rendering it from state:
+     *
+     *  - a latch would leave a figure from twenty turns ago on screen and would
+     *    never take it down again. Dedup shows the current figure while the
+     *    estimate is over the tier — the surviving copy is the one just built —
+     *    and shows nothing once it is back under, because the strip above runs
+     *    on every dispatch and only the append is conditional;
+     *  - rendering from state needs a NEW render path for a user-facing message
+     *    that {@see Renderer} currently gets for free by walking `Role::System`
+     *    entries in history. Dedup keeps the visible transcript line at no
+     *    render cost.
+     *
+     * Rewriting `history` here is not a new class of operation: this class
+     * already replaces the array wholesale for the tool-result splice, for
+     * `/clear`, for every compaction tier and for `/rewind`. And because
+     * {@see dispatchTurn()} checkpoints `$next->history` itself, the persisted
+     * copy inherits the fix with no second serialisation site to keep in step.
+     *
+     * Only reminders still carried VERBATIM are matched, which is the intended
+     * scope: a reminder that a compaction folded into a summary line is no
+     * longer a copy of anything, and its content no longer starts with the
+     * marker.
+     *
+     * `array_values()` serves the `@return list<Message>` annotation and
+     * nothing else — do not write a test for it. The sole consumer spreads the
+     * result into a new array, which re-indexes anyway, so dropping it changes
+     * no observable behaviour. The two things here that ARE observable are the
+     * call being unconditional and the filter removing EVERY match rather than
+     * the first (a session predating the dedup carries several copies and must
+     * collapse to one in a single dispatch, not one copy per turn); both are
+     * pinned in `tests/Chat/ContextReminderDedupTest.php`.
+     *
+     * @param list<Message> $history
+     * @return list<Message>
+     */
+    private static function withoutContextReminders(array $history): array
+    {
+        return array_values(array_filter(
+            $history,
+            static fn(Message $msg): bool => !self::isContextReminder($msg),
+        ));
+    }
+
+    /**
+     * Whether $msg is one of {@see contextReminderMessage()}'s own products.
+     *
+     * Role AND marker, both required, and the role half is the one that matters
+     * for safety: a user is entitled to paste the reminder's text back into a
+     * prompt (quoting it to ask what it meant is the obvious way that happens),
+     * and deleting their message would be data loss well beyond anything the
+     * dedup is for. `Role::User` can never match here. See
+     * {@see self::CONTEXT_REMINDER_PREFIX} for why the marker is a prefix and
+     * not the whole string.
+     */
+    private static function isContextReminder(Message $msg): bool
+    {
+        return $msg->role === Role::System
+            && str_starts_with($msg->content, self::CONTEXT_REMINDER_PREFIX);
     }
 
     /**

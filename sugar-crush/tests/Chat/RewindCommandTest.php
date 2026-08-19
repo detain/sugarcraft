@@ -345,4 +345,142 @@ final class RewindCommandTest extends TestCase
         $this->assertFalse($next->inFlight);
         $this->assertCount(4, $next->history);
     }
+
+    // =========================================================================
+    // A checkpointed role survives the round trip (E33 review round, finding 2)
+    // =========================================================================
+
+    /**
+     * A `system` checkpoint row must come back as a `Role::System` message.
+     *
+     * {@see Chat::reviveCheckpointMessage()} had no `'system'` arm — its match
+     * read `default => Message::user($content)` — so every app-authored system
+     * row came back as a USER message and the provider was told the user had
+     * said it. `_Request cancelled._`, the compaction notice, the automatic
+     * tier's report and the 70% context reminder all land there.
+     *
+     * The `user` and unknown-role rows are asserted alongside because the fix is
+     * an added arm, not a changed default: a `tool` row (nothing this app
+     * serialises — {@see Role} has no such case) must still coerce to `user`, or
+     * the untypeable-draft reachability route
+     * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest} drives goes away
+     * silently.
+     */
+    public function testRewindRestoresASystemRowAsASystemMessage(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+        $this->sessionStore->saveCheckpoint('test-session', [
+            'messages' => [
+                ['role' => 'user', 'content' => 'do the thing'],
+                ['role' => 'system', 'content' => '_Request cancelled._'],
+                ['role' => 'assistant', 'content' => 'ok'],
+                ['role' => 'tool', 'content' => "col1\tcol2"],
+                ['content' => 'no role at all'],
+            ],
+            'inputBuf' => '',
+            'agentContext' => ['currentSessionId' => 'test-session'],
+        ]);
+
+        $chat = new Chat(
+            history: [Message::user('do the thing')],
+            inputBuf: '/rewind',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(
+            [Role::User, Role::System, Role::Assistant, Role::User, Role::User],
+            array_map(
+                static fn(Message $m): Role => $m->role,
+                array_slice($next->history, 0, 5),
+            ),
+            'a system row must not come back as a user message: the app would be manufacturing '
+            . 'user turns out of its own notices and putting them on the provider wire',
+        );
+        $this->assertSame(
+            '_Request cancelled._',
+            $next->history[1]->content,
+            'and the content is untouched either way',
+        );
+    }
+
+    /**
+     * E33's guarantee — history carries at most ONE context-usage reminder —
+     * must survive a `/rewind`, which is the only path that reads a checkpoint
+     * back.
+     *
+     * With the reminder revived as `Role::User` it could never be stripped
+     * again: {@see Chat::isContextReminder()} requires `Role::System` on
+     * purpose, so that a user quoting the reminder in a prompt is never deleted.
+     * So the mis-roled copy was permanent, a fresh system copy was appended
+     * beside it on the next turn, and one more accrued per rewind — measured,
+     * marker-carrying roles went `["system"]` -> `["user"]` -> `["user",
+     * "system"]`.
+     *
+     * The count here is deliberately ROLE-BLIND, which is only sound because
+     * this fixture contains no user message that quotes the reminder. That case
+     * is the one
+     * {@see \SugarCraft\Crush\Tests\Chat\ContextReminderDedupTest::testAUserMessageQuotingTheReminderIsNeverRemoved()}
+     * pins, and the two assertions must not be merged.
+     */
+    public function testARewoundContextReminderIsStillDeduplicated(): void
+    {
+        $marker = 'Heads up: this conversation has grown to ~';
+        $stale = $marker . '70123 estimated tokens, past the context-usage reminder threshold. '
+            . 'Consider running /compact soon to keep the session responsive.';
+
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+        $this->sessionStore->saveCheckpoint('test-session', [
+            // 280,000 chars is ~70,010 estimated tokens, over the 70% tier of
+            // the 100,000-token fallback window EchoBackend gets and well under
+            // the 85% automatic-compaction tier.
+            'messages' => [
+                ['role' => 'user', 'content' => str_repeat('x', 280_000)],
+                ['role' => 'system', 'content' => $stale],
+            ],
+            'inputBuf' => '',
+            'agentContext' => ['currentSessionId' => 'test-session'],
+        ]);
+
+        $chat = new Chat(
+            history: [Message::user('placeholder')],
+            inputBuf: '/rewind',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+
+        [$rewound, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $carriers = static fn(Chat $c): array => array_values(array_map(
+            static fn(Message $m): string => $m->role->value,
+            array_filter(
+                $c->history,
+                static fn(Message $m): bool => str_starts_with($m->content, $marker),
+            ),
+        ));
+        $this->assertSame(
+            ['system'],
+            $carriers($rewound),
+            'the rewound reminder must still be a system message, or nothing below can strip it',
+        );
+
+        // One real turn on top of the rewound history. The tier fires again
+        // (the history is still over 70%), so the fresh copy is appended - and
+        // the rewound one has to go.
+        foreach (['h', 'i'] as $char) {
+            [$rewound] = $rewound->update(new KeyMsg(KeyType::Char, $char));
+        }
+        [$next, $cmd] = $rewound->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd, 'fixture: the turn must dispatch');
+
+        $this->assertSame(
+            ['system'],
+            $carriers($next),
+            'exactly one message may carry the marker after a rewind plus a turn - a second, '
+            . 'mis-roled as `user`, is E33 finding 2 and accrues one more copy per rewind',
+        );
+    }
 }
