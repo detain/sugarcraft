@@ -6622,3 +6622,176 @@ presence check.
   delta usage per chunk, which would make `runStreaming()`'s sum double-count.
 - **No row for the unvalidated constructor param** — both halves of C were fixed, so
   there is nothing left to file.
+
+---
+
+## Bundle B3 — implementation round (2026-08-19) — **UNCOMMITTED, MID-REVIEW**
+
+**State when this was written:** Phase 5 items 8, 9 and 10a are implemented in the
+working tree on top of `752c356f` and **not committed**. Suite verified by the
+supervisor: **7190 tests, 75900 assertions, 1 skipped, exit 0** (from 7089/75695).
+Config md5 unchanged, `check-path-repos --no-lib-path-repos` exits 0. The adversarial
+review round was in flight. **If that review's result was lost, re-spawn a review
+against the uncommitted diff — do not commit unreviewed.** The change-set:
+
+    M crush_code.md · docs/plans/crush_code_hardening_backlog.md · sugar-crush/README.md
+    M src/Agents/AgentManager.php · src/App/App.php · src/Backend/EngineBackend.php
+    M src/Cli/Bootstrap.php · src/Cli/NonInteractive.php · src/Context/EnvironmentBlock.php
+    M src/Providers/{CompleteResponse,CustomProvider,VertexProvider}.php · src/Runtime.php
+    M tests/Context/EnvironmentBlockTest.php · tests/Tools/BuiltInToolCorpusTest.php
+    ?? src/Context/MemoryBlock.php · src/Providers/TransientFailure.php
+    ?? tests/Context/MemoryBlockTest.php · tests/Integration/MemoryPromptWiringTest.php
+    ?? tests/Integration/ProviderRetryWiringTest.php · tests/Providers/TransientFailureTest.php
+
+28 mutations run, 28 killed, 0 survivors — a claim the review was asked to break
+rather than accept.
+
+### Item 8: the plan named a location that replays tool calls
+
+`crush_code.md` Phase 5 item 8 says to retry *"inside
+`EngineBackend::runCompleteInChild()`"*. That method (`:929`) calls `complete()`
+(`:391`), which **is** the bounded agentic loop — `for ($step; $step < $maxSteps)` at
+`:441` with tool dispatch inside it. A retry wrapped there re-runs every tool call the
+failed attempt already executed: a `Bash` that already ran `rm`, an `Edit` that already
+wrote. It is a replay, not a retry. It is also only the **forked async** path, so the
+synchronous `complete()` path and both `AgentManager` sites would have had no retry at
+all — the same 5xx recoverable or fatal by entry point.
+
+The retry went to the **four single-provider call sites** instead: `Runtime::runBatch`,
+`Runtime::runStreaming`, and `AgentManager::executeSubAgent`'s two branches. All four
+rather than `Runtime`'s two, deliberately, for the asymmetry reason above.
+`ProviderRetryWiringTest::testARetriedTurnDoesNotReRunToolCallsThatAlreadySucceeded()`
+pins the distinction by **tool-execution count**, and mutation M24 (run each tool
+segment twice) confirms that assertion is live rather than decorative.
+
+**§10 recommendations 5 and 8 carry the same harmful instruction and are now marked
+⚠ SUPERSEDED in `crush_code.md`.** Rejected alternative: a shared
+`attempt(callable, reset)` wrapper — `AgentManager`'s loop body `yield`s, so it cannot
+live in a closure.
+
+### Item 8: three failure channels, not one, and my brief implied one
+
+I asked the agent to "find out whether failures arrive as thrown exceptions or as
+`isError` responses" — a question whose framing presumes a single answer. Measured,
+there are **three** channels:
+
+- Five providers throw: Bedrock/Sglang/ClaudeCode wrapped, OpenAI as SDK exceptions.
+- **`CustomProvider` and `VertexProvider` return `isError` and discard the exception.**
+  A retry layer catching only throws would silently skip the two providers a user of
+  this repo is most likely running.
+- **An overloaded Anthropic-on-Vertex backend answers HTTP 200** with an SSE `error`
+  event carrying `overloaded_error`. Status-code classification alone misses Vertex's
+  most common transient failure.
+
+Fixed by adding `CompleteResponse::$errorTransient`, classified **at the catch site
+while the live exception still exists**, rather than re-derived later by
+pattern-matching `$e->getMessage()` prose. `null` means UNCLASSIFIED and is treated as
+permanent — `TransientFailure::responseIsTransient()` requires an explicit `true`, so
+the allow-list rule that governs unrecognised exceptions governs unrecognised error
+responses too.
+
+### Item 8: the streaming gate is sharper than the one I specified
+
+My brief offered "only retry when the stream failed before its first delta". The agent
+gated on **whether an `$onToken` sink is attached**, because that is the precise safety
+condition: a byte that reached an append-only sink is what cannot be un-painted. With a
+sink (every interactive turn) only pre-first-delta failures retry; with
+`$onToken === null` everything is local, so a mid-stream failure retries in full.
+
+Rejected: a blanket "never retry after any chunk", which would make **Vertex
+un-retryable** — its `message_start` usage chunk always arrives first, so there is
+always a chunk before the failure.
+
+**All four accumulators reset per attempt, not just `$buffer`** — `$usages` most
+importantly, because B2 made `runStreaming()` sum usage across chunks and made those
+numbers drive a spend cap. A retry re-entering the loop without clearing it would
+double-charge a session against its own ceiling. ("All four" is exactly the kind of
+figure this chain gets wrong; the review was asked to count them independently.)
+
+Standing constraint honoured: nothing re-enables a provider SDK's own retry, and no
+blanket total-request timeout was introduced. `VertexProvider.php:1190-1230` documents
+that **both** `RetrySettings` timeout fields were deliberately zeroed to stop
+`RetryMiddleware` imposing an RPC deadline; that block is load-bearing and untouched.
+
+### Item 9: the plan's recall route is permanently empty
+
+`MemoryStore::search(string $query)` (`src/Memory/MemoryStore.php:113`) is a
+**case-insensitive SUBSTRING match** over `content()`, `type()` and tags, globbing
+`{memoryPath}/*/*.md` across every scope. So the plan's "run `search()` against the
+current turn" asks whether an entire user sentence appears verbatim inside a note —
+essentially never true. Recall built that way fires zero times while looking correctly
+wired, which is worse than an unwired feature because nothing appears broken.
+
+Chosen instead: `list(MemoryScope::Project)`. The deciding argument was **placement,
+not cost** — the system prompt is where standing instructions live, and project-scope
+notes are standing convention; a query-matched subset is a different feature. Own
+`<project-memory>` fence rather than reusing `<project-instructions>`. Bounded to 12
+entries / 4096 bytes of note text / 512 bytes per note, with the prompt's stated limits
+interpolated from the constants that enforce them (the B2 technique: one number, so
+instruction and enforcement cannot drift). Rejected: per-term tokenised ranking.
+
+`MemoryScope::Local` normalises to the on-disk scope **`agent`** — the enum's values
+(`user`/`project`/`local`) are not the directory names. My brief asserted they were.
+
+### Item 10a: the second line has no data source, and was correctly not faked
+
+Zero hits across `src/` for any multi-root concept
+(`additionalDir|additionalWorking|extraDirs|workingDirs`). There is `App::$root` and
+the process cwd, and nothing else. A permanently-blank `Additional working
+directories:` line would be a decorative surface, so it was **not emitted**, and the
+prerequisite is filed as **E26** (a settings key, then a multi-root `PathJail` — Phase
+6 item 2's territory). The OS-version line is
+`php_uname('s') . ' ' . php_uname('r')`, because bare `('r')` under an "OS version"
+label reads as the macOS product version when it is in fact Darwin's kernel release.
+
+**Already fixed, do not re-fix:** the audit's §6 finding that
+`EnvironmentBlock::capture()` uses bare `getcwd()` instead of `$root` is stale —
+`Runtime::projectRoot($app)` and `App::withRoot()` landed in Bundle A.
+
+### Three instances of the recurring defect, self-caught by the implementer
+
+Worth recording because this is new: the agent that *introduced* the defect found all
+three itself, which was not happening ten rounds ago.
+
+1. Its own backlog entry **E26** claimed a grep returned "zero hits across
+   `src/ bin/ tests/`" — **its own new test had already falsified that**. Corrected to
+   name the scope and the two self-referential hits.
+2. Its `MemoryBlock` docblock argued prompt-prefix caching as a reason to avoid
+   query-dependent recall. `tests/Providers/PromptStabilityTest` **already pins that the
+   prefix is voided on every file write** by the env block's live git polling, which
+   sits *ahead* of the memory block. The caching argument was void before it was
+   written; rewritten to the narrower true claim.
+3. A test named `testEveryBuilderMethodPreservesTheMemoryStore` covered **9 of 12**
+   builders (`withHooks` and `withWorktreeRoot` uncovered) — the name asserting a
+   completeness the body did not have, which is this chain's companion defect exactly.
+   Rewritten to derive the set by reflection with a completeness assertion; M26/M27/M28
+   confirm both gaps closed and that a *new* builder reds the test.
+
+### Corrections to my own brief, beyond the two above
+
+- I wrote that `capture()` "has five call sites" and then listed four. Four are calls;
+  two of the greps were docblock mentions.
+- The one legitimate skip is in **`tests/MCP/McpClientTest.php`**, not
+  `tests/McpClientTest.php` — two files share that class basename. RESUME §8 now cites
+  the path rather than the class.
+
+### Filed, not fixed
+
+- **E25** — memory entries are unreviewed user-authored text entering the system
+  prompt (fence-breaking, and imported-entry provenance via `ForeignMemoryImporter`).
+  Not frame corruption: the prompt is never painted.
+- **E26** — additional-directories prerequisites (settings key → multi-root `PathJail`).
+- **E27** — `ClaudeCodeProvider`'s prose-only exceptions and Vertex's
+  truncated-tool-call chunk are left unclassified, i.e. permanent by the allow-list rule.
+- **E28** — `executeSubAgent()` has no production caller, so the retry added to its two
+  branches is reachable only from tests and embedders. Flagged deliberately rather than
+  skipped, per the never-remove-dormant-code rule; the review was asked whether
+  covering it is dead code and which direction the rule cuts.
+
+### Also swept
+
+`crush_code.md` items 8/9/10 status entries and §12's finding text and proposed code
+block · `NonInteractive::EXIT_FAILURE`'s docblock and the README exit table (a `1` has
+now already had its retries, which changes what the exit code means) · both
+`BuiltInToolCorpusTest` censuses and their prose copies (273→275 files, 292→294
+declarations, concrete 224→226).

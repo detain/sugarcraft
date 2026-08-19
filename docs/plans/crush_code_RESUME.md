@@ -72,12 +72,18 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — seventeen rounds running
+## 5. THE recurring defect — eighteen rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
 It has appeared in *every single round*, including inside the work of the agent
 fixing the previous round's instance of it, and in the supervisor's own notes.
+
+**New as of round 18, and worth knowing:** the defect is now routinely caught by the
+same agent that introduced it — B3's implementer self-caught three, including a test
+whose NAME asserted a completeness its body did not have. That is progress, not a
+reason to skip the review round: every round's review has still found something the
+implementer did not.
 
 Its companion, found repeatedly since: **tests pin the PRESENCE of a clause and not
 its TRUTH.** One review ran 18 mutations — 13 died, and **all 5 survivors made a
@@ -118,7 +124,8 @@ a run. Judge a mutation by whether the **targeted test file** flips green→red 
 ## 8. Known-stable test facts
 
 - The **1 legitimate skip** is `McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`
-  ("Would require mocking built-in functions"). Leave it.
+  ("Would require mocking built-in functions"), in **`tests/MCP/McpClientTest.php`** —
+  two files share that class basename, so cite the path, not the class. Leave it.
 - `SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves` is a
   **pre-existing timing flake**. Don't skip it, don't weaken its assertion, don't
   report it as a finding.
@@ -160,13 +167,37 @@ Three providers compute an input/output split, not one: Bedrock, Vertex, **and**
 `OpenAIProvider::calculateCost()`, which prices both halves and then reports only the
 total. · `VertexProvider`'s *stream* emits the two halves as separate responses, so
 streamed usage must be **summed**, not read off the last chunk — and that file's own
-`completeStream()` docblock said the opposite.
+`completeStream()` docblock said the opposite. · **Phase 5 item 8 names a harmful
+location**: `EngineBackend::runCompleteInChild()` wraps the whole agentic loop, so a
+retry there replays every tool call the failed attempt already executed. The seam is
+the four single-provider call sites (`Runtime::runBatch`/`runStreaming`,
+`AgentManager::executeSubAgent`'s two branches). §10 recommendations 5 and 8 carry the
+same instruction and are now marked ⚠ SUPERSEDED. · **Phase 5 item 9's
+`MemoryStore::search()` route does not work**: `search()` is a case-insensitive
+SUBSTRING match over content/type/tags across every scope, so a whole turn as the query
+matches essentially nothing — recall built that way is permanently empty while looking
+wired. · **Phase 5 item 10a's "additional working directories" line has no data
+source** — zero hits for any multi-root concept in `src/`; the prerequisite is a
+settings key plus a multi-root `PathJail` (backlog E26). · `MemoryScope::Local`
+normalises to the on-disk scope **`agent`**, so the enum values are not the directory
+names.
 
 ## 10. Current state and the queue
 
 **Current state: see the "Execution status" block at the top of `crush_code.md`** for
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
+
+**As of 2026-08-19 the working tree carries UNCOMMITTED Bundle B3 work** (Phase 5 items
+8, 9, 10a) that has passed implementation and the supervisor's own suite run —
+**7190/75900/1, exit 0** — and was in its adversarial review round. Recovery if that
+review's result was lost: **do not commit unreviewed.** Re-spawn a review against the
+uncommitted diff, using the worklog's B3 section for the claims to verify and
+`/tmp/…/scratchpad/b3-brief.md` for the ground truth the implementer was given. Then
+fix → verify → commit as usual. The file list is in the worklog's B3 heading.
+
+If instead the tree is clean and `git log` shows a B3 commit, the round finished — move
+to C1 in §11.
 
 ## 11. QUEUE — in order
 
@@ -176,9 +207,17 @@ believing any number written anywhere.
   complete; **item 6 is 🟡 partial** — `/compact` asks the model, the automatic 85% tier
   still uses the heuristic (backlog E21), which is the lossier path and where most real
   compactions happen. Pick E21 up before calling Phase 5 finished.
-- **B3** Phase 5 items 8,9,10a — provider retry with backoff in
-  `EngineBackend::runCompleteInChild()`; `MemoryStore` folded into
-  `buildSystemPrompt()`; `EnvironmentBlock` OS-version + additional-dirs lines.
+- **B3** Phase 5 items 8,9,10a — **implemented, uncommitted, mid-review** as of
+  2026-08-19 (see §10). Retry went to the **four provider call sites**, NOT the
+  `runCompleteInChild()` location the plan names (which replays tool calls); recall uses
+  `list(MemoryScope::Project)`, not `search()` (which is a substring match and would
+  never fire); the additional-dirs line was **not** emitted for want of any data source
+  (backlog E26).
+- **E21 — finish Phase 5.** The automatic 85% compaction tier still uses the heuristic
+  and never the model, so Phase 5 item 6 is 🟡 not ✅. Wiring it means parking a
+  submitted draft behind a compaction round-trip and re-siting the 95% blocking check
+  into that continuation. The seam is already built and tested. Do this before calling
+  Phase 5 done.
 - **C1** Phase 2 items 1,8 — rename the duplicate `src/McpClient.php`
   (→ `ClaudeCodeMcpClient`); swap `CommandBackend`→`StreamingCommandBackend` when
   `$SUGARCRUSH_BACKEND_CMD` is set.
