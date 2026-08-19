@@ -18,8 +18,13 @@ labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 item 6 ·
-Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 7 items 1-2 ·
-Phase 8 items 1, 2, 5, 7, 12, 14.
+Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-3 + 10's preset half ·
+Phase 7 items 1-2 · Phase 8 items 1, 2, 5, 7, 12, 14.
+
+**START HERE WHEN RESUMING: `docs/plans/crush_code_RESUME.md`.** It carries the
+standing directive, the review loop, the sequencing rules, the environment facts, the
+recurring-defect warning, and the full ordered queue of remaining work. This status
+block only says *what* is done; that file says *how* to continue.
 
 **Sequencing decision (2026-08-17, user):** remaining items are picked
 **functionality first**; security-hardening and audit-instrument work is deferred to
@@ -28,12 +33,12 @@ tightening, and mutation-register/census correctness — anything of that shape 
 surfaces mid-flight gets recorded in the worklog with its probes and picked up in a
 final hardening pass, rather than interrupting the wiring work.
 
-**Now in flight:** **Phase 5 "Bundle A"** — items 1 (base system prompt), 2 (the
-five tool descriptions), 3 (`dispatchSkill()` environment orientation), plus item
-10's preset-differentiation half. Chosen as the sub-bundle that is file-disjoint
-from Phase 4's area. Then **Phase 5 "Bundle B"** (items 4-7, which all need
-`src/Chat.php`/`src/Renderer.php`), then Phase 6, then Phase 7 docs, then the
-hardening backlog.
+**Now in flight:** **Phase 5 "Bundle B1"** — items 4 (threshold tied to the
+provider's real `contextWindow()`) and 5 (the two dead `ContextCompactor` predicates
+made live at 85%/95%, no idle gate). Implemented and in its fix round. Then **B2**
+(items 6-7), **B3** (items 8-10a), then Phase 2's six wiring bundles, Phase 3
+items 2-5, Phase 6, Phase 7 docs, Phase 8's remainder, Phase 2 item 9, and the
+hardening backlog last. Full ordered queue in `docs/plans/crush_code_RESUME.md` §11.
 
 **Do not parallelise Phase 5 Bundle B against anything touching `src/Chat.php` or
 `src/Renderer.php`.** The rule learned the hard way in this chain: a *suite run*
@@ -64,6 +69,7 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
 
 | SHA | Plan item |
 |---|---|
+| `bf3495f5` | Phase 5 items 1-3 + 10's preset half — a real system prompt, honest tool descriptions, forks that know where they are |
 | `abb80cf1` | *(not a plan item)* Phase 4 worklog + the 50-item deferred-hardening ledger |
 | `38614fa9` | Phase 4 items 1, 2, 5, 7 — `/model`, `/help` becomes a command listing, `/clear`, popup hints, parser-keyed dispatch |
 | `939f8ada` | Phase 3 item 1 — draft cursor via `TextArea`; fixed `Ctrl+Backspace`/`Ctrl+Space` dying silently |

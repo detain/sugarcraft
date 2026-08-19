@@ -6060,3 +6060,180 @@ was committed with a plain `git commit`.
 The tracked `<!-- caliber:managed:pre-commit -->` blocks in `CLAUDE.md`/`AGENTS.md`
 were deliberately **left in place**: they are correct for machines that do have
 Caliber, and encoding a local-machine fact into shared repo docs is the worse trade.
+
+---
+
+### Phase 5 Bundle A — items 1, 2, 3 + item 10's preset half — `bf3495f5`
+
+Base system prompt, five tool descriptions, `dispatchSkill()` environment
+orientation, six differentiated `AgentDefinition` presets. Suite 6831/70640 →
+**6887/70900**, exit 0, verified by the supervisor.
+
+**§12's drafted text could not be applied as written, in four ways.** Every line
+number is stale (the base prompt is at `src/Runtime.php:1101`, not `:318`). Its
+"before" text for `Grep` and `Glob` is wrong — Phase 8 item 7 had already expanded
+both, and `Glob`'s is *computed at runtime*, so **applying §12 verbatim would have
+deleted the gitignore/prune guidance**. Its `dispatchSkill()` fix does not compile:
+`App` has no `environmentBlock` property. And its central factual claim about `Grep`
+is false.
+
+**`Grep` is BRE, not the POSIX ERE §12 asserts.** Probed rather than transcribed:
+`execute()` builds `grep -rn` with no `-E`/`-P`, so `alpha|beta` matches only a
+literal line while `alpha\|beta` matches all three, and `a+lpha`, `alph(a)`, `x{2}`
+match nothing. Telling the model it had ERE would have made every alternation and
+grouping pattern it wrote silently wrong. Later refined to **GNU** basic rather than
+POSIX basic, because `\|`, `\+`, `\?` are GNU extensions — strict POSIX BRE has no
+alternation operator at all. Now consistent across `description()`, `inputSchema()`
+and a behavioural test; adding `-E` reds three tests. Environment note: an
+interactive shell here may alias `grep` to `ugrep`, so `grep --version` misreports —
+probe via `sh -c 'command -v grep'`.
+
+**Three clauses §12 drafted were dropped as unsubstantiated**, with a
+`// Deliberately NOT claimed here:` note recording why. The important one: advice to
+"use the permission-gated path". `HookResult::ask()`/`settleAsk()` are applied *to* a
+call by the runtime, and **no tool exists for the model to request confirmation** — no
+`AskUser`/`RequestPermission`/`ConfirmTool` anywhere in `src/`. That would have been
+advice about nothing. Also dropped: the Bash-is-not-jailed asymmetry (true, but framed
+positively instead of advertised), and "Read must precede Edit" as a *requirement* —
+`Edit` does not enforce a prior read, so it is worded as advice.
+
+`dispatchSkill()`'s fix attaches the environment to the **Agent** before the
+`SubAgent` is built, not to the `CompleteRequest`. `ProcessExecutor` sends the
+request's `systemPrompt` (`:466`) *and* `$agent->agent->systemPrompt()` (`:459`) as
+separate fields — §12's proposed fix would have oriented one consumer and not the
+other.
+
+#### The review's three findings were one defect wearing three hats
+
+Each was a fact true of one branch, object, or code path, written as an unconditional
+property of a different thing — and all three landed in text the model reads and acts on:
+
+- **`Bash` claimed stdout and stderr are merged.** They merge only when the command
+  *failed* or stdout was *empty*; a succeeding command's stderr was silently
+  discarded. A model told otherwise reads a green `phpunit` run as warning-free when
+  the warnings were dropped. Now described by its actual three branches, and the drop
+  is **marked** rather than invisible (contained: 3 failures in 2 files).
+  **Deliberately no byte count** — the only available figure is unstable across the
+  cap, because `runCaptured()` rtrims retained text so an uncapped capture loses a
+  trailing newline a capped one keeps (73892 vs 73893 on one input). A number whose
+  domain shifts with the cap would also have broken the cap-invariance test.
+- **`Edit` promised the model a unified diff it never receives.** The diff is built
+  but kept off `content()` so a renderer can hand it to `DiffViewer`, and
+  `Runtime::settle()` passes only `content()`. Replaced with a real `(+N -M lines)`
+  tally counted off the same diff the renderer gets, so summary and diff cannot
+  disagree. One test updated.
+- **The `architect` preset claimed "you have read-only tools".** It has none:
+  `defaultTools` never filters anything and `AgentManager::executeSubAgent()` builds
+  its request with no `tools` field. Reworded to state its method. **Correction to the
+  supervisor's own brief:** `defaultTools` is not merely copied and serialised —
+  `AgentsCommand.php:132` **prints the roster to the operator**, so it displays a
+  containment the runtime does not provide. Worse than "inert"; filed as ledger §C7.
+
+#### The structural finding that changed how tests get written here
+
+Of 18 review mutations, 13 died and **every one of the 5 survivors made a clause
+FALSE while keeping its keywords.** The suite had power over whether a clause was
+present and none over whether it was true — which is exactly why a green 6872 said
+nothing about the three defects above.
+
+Factual clauses are now pinned behaviourally in both directions. The `Grep`
+skip-annotation depth is **not written down at all**: the test plants `vendor/` at
+five depths, measures the deepest level still announced (3) and the shallowest that
+goes silent (4), then requires the prompt's stated figure to equal the measurement —
+so it reds on prompt drift *and* on code drift. `canFork()`'s negative branch is
+driven in a child with `disable_functions=pcntl_fork`, since `function_exists()`
+cannot be made to lie in-process.
+
+Three gaps named rather than papered over: the architect tool-grant claim cannot be
+pinned while `defaultTools` is inert, and `dispatchSkill()`'s payload cannot be pinned
+end-to-end while its executor is a hardcoded simulation that reads neither prompt
+field. Both ledger entries (§C7, §C8) require the assertion to land **with** the wiring.
+
+`dispatchSkill()`'s comment had been written in the present tense about an outcome
+that does not occur — it has no production caller, and `ProcessExecutor`'s worker is a
+simulation. The mechanism is correct and stays; the tense is fixed and the seam named.
+
+---
+
+### Phase 5 Bundle B1 — items 4 and 5 — implemented, in the fix round
+
+Provider `contextWindow()` wiring + the two dead compaction predicates made live at
+85%/95% with no idle gate. Suite 6887/70900 → **6918/70996**, exit 0, verified by the
+supervisor. Fix round in flight as of 2026-08-19.
+
+**The agent declined the supervisor's wiring recommendation, and was right to.** The
+recommendation was to add `contextWindow(): int` to the `Backend` interface. It built
+a capability interface `Backend\ReportsContextWindow` instead, consumed through one
+`instanceof` in `Context\ContextWindow::ofBackend()`. The decisive reason: three of
+the four backends — `EchoBackend`, `CommandBackend`, `StreamingCommandBackend` — have
+no knowable window, so a required method forces each to **fabricate a number that
+then silently becomes the compaction denominator**. That is the defect this item
+exists to remove, reintroduced by the fix. One named fallback in one auditable place
+beats three authoritative-looking inventions. Supporting reasons, both verified:
+`Backend`'s docblock advertises it as a third-party extension point (so a required
+method is a class-load fatal for outside implementors, and would have meant editing 12
+`implements Backend` classes across 5 test files — of which 10 are anonymous, not all
+12 as first reported), and `Tools\ParallelSafe`/`CarriesSessionState` already establish
+this exact shape, `instanceof`-consumed by `Runtime`.
+
+**A pre-existing bug that would have quietly defeated the whole item.**
+`Chat::mutate()` passed `'compactorConfig' => null`, so a `Chat` built with custom
+thresholds reverted to defaults on the first keystroke. Wiring three tiers to a config
+that cannot survive a keystroke would have been wiring them to the defaults — done and
+measured wrong. Fix verified complete by reflection audit: all 46 constructor params
+carried, none hardcoded null, and `new self(…)` appears once.
+
+**Three false claim sites the plan never listed**, each falsified by this change:
+`Renderer.php:1240` ("the limit is this app's fixed compaction threshold, **not** the
+provider's advertised window"), `contextTokenLimit()`'s "Deliberately NOT the live
+model's advertised context window", and `SglangProvider.php:155` ("nothing in
+sugar-crush reads `contextWindow()` today"). Changing a fact repo-wide falsifies every
+place that described the old one — the domain-less-claim defect at scale.
+
+All eight real `100000` sites reconciled; the octal `0o100000` in
+`Support/ToolIpcFiles.php:79` untouched. The `Chat`/`Runtime` idle-compaction
+duplication was collapsed into `Context\IdleCompactionPolicy` **without** making
+`Chat` reach for a `Runtime` it deliberately does not hold.
+
+#### The review found two real bugs the round had shipped
+
+- **The live offline and provider-failure-degrade path had all four tiers effectively
+  switched off — and three new docblocks claimed the opposite.** The prose said a
+  backend with no model gets the 100,000 fallback "so the offline path acts exactly as
+  it did before". But the CLI never builds a bare `EchoBackend`:
+  `Cli/Bootstrap.php:1161` builds `EngineBackend(new EchoProvider(), 'echo')`, which
+  implements the new capability, and `EchoProvider::contextWindow()` returns
+  `1_000_000`. Measured tiers on that path: 700k/850k/950k/1M instead of
+  70k/85k/95k/100k. `EchoBackend` is reachable only through `Chat`'s constructor
+  default — tests and embedders.
+- **The newly-automatic 85% tier silently destroys metadata on messages it claims to
+  preserve in full.** `messagesFromWire()` rebuilds only `role` + `content`, so a
+  preserved assistant turn loses `toolCalls`, `reasoning`, image attachments and its
+  `createdAt` (re-stamped to now). `Renderer` paints every one of those. Before this
+  diff the loss happened only on an explicit `/compact`; it is now automatic and
+  per-turn — which makes it functionality, not hardening. The disclosure was false
+  too: `Message::toWire()` **does** emit `attachments` and `tool_calls`;
+  `messagesFromWire()` simply ignores them.
+
+Also found: the 95% path adopts the compacted history **silently** while the 85% path
+suppresses its notice to avoid "noise" — the asymmetry runs the wrong way, since the
+destructive path is the silent one. The idle prompt still invites "send another
+message to proceed anyway", which the new blocking tier now always refuses. And
+`tests/RendererTest.php:797` still carries verbatim the sentence the round correctly
+rewrote in `src/` — **the repo-wide sweep did not cover `tests/`.**
+
+**A full-suite mutation survivor the round did not choose:** reverting
+`contextUsagePercent()` to divide by the old fixed 100,000 leaves the suite
+byte-identical at 6918/70996/1/exit 0. Nothing in 6,918 tests notices that the
+user-visible percentage still uses the wrong denominator — half of item 4's
+observable effect. The refusal message and the compaction notice also have no content
+coverage at all; three mutations survived, including a **unit flip** that swaps
+"estimated" and "provider-counted" labels, which is precisely the class prior rounds
+keep finding alive.
+
+Two ledger entries were overstated and are being corrected: §E18's "the refusal stands
+no matter how many times the turn is retried" is false (driven: turns 1-7 refused,
+**turn 8 dispatched**, as each refusal evicts an enormous exchange from the preserve
+window — the real dead end is a *single* exchange over 95%), and §E17's claim that
+`$tokensUsed` is 0 on every streaming path is false for two of six providers —
+`VertexProvider::parseAnthropicChunk()` emits the prompt half, split, on the stream.
