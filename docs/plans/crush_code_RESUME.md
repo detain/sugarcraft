@@ -72,7 +72,7 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — twenty rounds running
+## 5. THE recurring defect — twenty-one rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
@@ -263,50 +263,24 @@ measured against a 4,096 budget, with the false promise in the model-facing head
 five corrections the fix agent made to the supervisor's brief, and the two review findings
 that were against the supervisor's own backlog rather than the code.
 
-**As of 2026-08-19 the working tree carries UNCOMMITTED Bundle E21 work** (Phase 5 item 6
-finished: the automatic 85% tier now asks the model). Implementation supervisor-verified at
-**7221 / 76068 / 1, exit 0**. The adversarial review has RETURNED — **55 mutations, 40 killed,
-15 SURVIVED** (8 survivors re-checked against the full suite; 7 survived there too) — and the
-**FIX round is in flight** against `/tmp/…/scratchpad/e21-fix.md` (234 lines, self-contained).
-**Do not commit unfixed.**
+**PHASE 5 IS COMPLETE as of 2026-08-19.** E21 committed as `261ac59d`, supervisor-verified at
+**7237 / 76136 / 1, exit 0**. **In flight: C1** (Phase 2 items 1 and 8), implementation round,
+brief at `/tmp/…/scratchpad/c1-brief.md` — self-contained, so re-spawn against it if that round
+was lost. Then review → fix → verify → commit as usual.
 
-Dirty set: `src/Chat.php` · `src/HistoryCompactedMsg.php` ·
-`tests/Chat/AutomaticCompactionModelSummaryTest.php` (new) · `crush_code.md` (status only). The
-fix round also edits `src/Context/ContextCompactor.php` and the backlog.
+**Two lessons from E21 that apply to every round from here:**
 
-**The two findings that matter beyond this bundle:**
-
-1. **A spend-cap BYPASS this bundle introduced.** The summarization's own cost can cross
-   `maxCostUsd`, and the landing path then calls `dispatchTurn()` with no `spendCapRefusal()`
-   anywhere on it. Measured: spend 0.5, cap 1.0, summary costs 0.6 → spend 1.1 → **turn
-   dispatched**, one conversation backend call, while a fresh submit at that same spend is
-   correctly refused. Not covered by the documented "the turn that crosses the cap runs to
-   completion" allowance: there the crossing happens inside a turn already under way, here it
-   happens in a PREVIOUS `update()` and the app then elects to start a fresh chargeable turn.
-2. **`ContextCompactor::groupIntoPairs()`'s silent drop is worse than the implementation round
-   reported, and free to fix.** It reported one victim (the 70% reminder) and predicted the fix
-   would shift pair counts and move fixtures. **Both wrong, both measured.** There are three
-   victims, and the worst is **`_Request cancelled._`** — cancel a turn, keep working, next
-   compaction fires, and the record that the turn was aborted is gone while the wire carries a
-   bare user prompt with no answer, fed back to the model as an unanswered turn. Reachable on
-   the plainest path in the app, no tier and no summary backend needed. And the fix (push
-   `$currentPair` when non-null, then always push the standalone) **survives the full
-   7221-test suite** — no test pins the bug, so there is no fixture churn.
-
-**Also confirmed and now recorded for every future round:
-`BedrockProvider::formatMessages()` maps `SystemMessage => 'user'`.** Measured role sequences
-for one history: `Bedrock: user assistant user user user` · `OpenAI: user assistant system user
-system` · `Vertex: system hoisted out of messages entirely, ends on user`. So any
-system-role message adjacent to a user turn becomes **consecutive same-role turns on Bedrock**,
-which Converse rejects. Pre-existing for the 70% reminder; E21 adds a case that fires with no
-reminder present. Mapping CONFIRMED, the 400 SUSPECTED (the reviewer could not call Bedrock).
-**Prefer message shapes that emit the fewest adjacent non-user messages.**
-
-**The review corrected the supervisor's brief seven times**, including that "all 24
-`'inFlight' => false` sites" was a grep LINE count (21 state writes + 1 checkpoint-payload key
-+ 2 comments) and that the parked window's live-key set is not just Ctrl+C and Escape —
-`PageUp`/`PageDown` sit above the `inFlight` swallow and are observably live, they simply cannot
-abandon anything.
+1. **"Survives the full suite" is not "is correct" — it is only "nothing measures this".** The
+   `groupIntoPairs()` fix the supervisor prescribed came from a reviewer's mutation that
+   survived all 7221 tests. Measured, it took `exchangesToSummarize()` from 10 exchanges to 0
+   on any history with a reminder after each prompt — i.e. **every session that reaches 85%,
+   since 70% fires first** — which would have made E21 fall back to the heuristic forever,
+   silently, while looking wired. A fix prescribed from a mutation is still a mutation: chosen
+   to probe coverage, not to be right.
+2. **`ContextCompactor` had four victims, not the one the implementation round reported.** The
+   unreported one: two consecutive assistant turns, where the second **overwrote** the first —
+   and `/compact`'s landing report, the spend-cap refusal and the 95% refusal all append an
+   assistant message onto a history already ending in one. All four fixed in `261ac59d`.
 
 **`crush_code.md`'s status block still needs Phase 2 items 3 and 5 marked complete** (see
 §9 — measured already-done, no code needed) and item 6 promoted from 🟡 to ✅ once E21
@@ -322,13 +296,14 @@ file.
   still uses the heuristic (backlog E21), which is the lossier path and where most real
   compactions happen. Pick E21 up before calling Phase 5 finished.
 - ~~**B3** Phase 5 items 8,9,10a.~~ **DONE `a72c5b0a`** (7204/75944/1, exit 0).
-- **E21 — finish Phase 5.** Brief written and ready: `/tmp/…/scratchpad/e21-brief.md`
-  (327 lines, measured against the tree; includes the four traps and the recommended
-  park-the-submission design). The automatic 85% compaction tier still uses the heuristic
-  and never the model, so Phase 5 item 6 is 🟡 not ✅. Wiring it means parking a
-  submitted draft behind a compaction round-trip and re-siting the 95% blocking check
-  into that continuation. The seam is already built and tested. Do this before calling
-  Phase 5 done.
+- ~~**E21** — finish Phase 5 (wire the automatic 85% tier to the model).~~ **DONE `261ac59d`**
+  (7237/76136/1, exit 0). **PHASE 5 IS COMPLETE.** It also fixed four silent-loss bugs in
+  `ContextCompactor::groupIntoPairs()` and one spend-cap bypass it had itself introduced.
+- **NEW QUEUE ENTRY, cheap and worth doing early — the 70% reminder is committed to permanent
+  history every turn** (backlog E33). Newly *visible* rather than newly broken: compaction used
+  to erase the copies, and as of `261ac59d` it no longer does, so a long session now accumulates
+  one reminder message per turn in the transcript it sends. Measured over 20 turns. Decide
+  whether the reminder should be ephemeral (rendered, not committed) or deduplicated.
 - **C1** Phase 2 items 1,8 — rename `src/McpClient.php` → `ClaudeCodeMcpClient` (a
   BASENAME collision, not a PSR-4 one; no production call sites) and wire the dormant
   `StreamingCommandBackend`. **Item 8 is harmful as written** — swapping it onto

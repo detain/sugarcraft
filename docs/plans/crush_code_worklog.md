@@ -7060,3 +7060,107 @@ in the fix round.
   Deliberately **not** "fixed": clearing `inFlight` in the drop path would let a stale parked
   message kill a live turn. The invariant belongs beside the property docblock — if a fifth
   latch-releasing site is ever added, it must clear `inFlight` in the same `mutate()`.
+
+### E21 — review + fix rounds, COMMITTED `261ac59d`. **Phase 5 is complete.**
+
+Suite verified by the supervisor personally: **7237 tests / 76136 assertions / 1 skipped,
+exit 0** (2m25s), baseline 7221/76068/1. +16 tests, all new. The two pre-existing test files
+touched (`tests/Chat/CompactModelSummaryTest.php`, `tests/Context/ContextCompactorTest.php`)
+take **240 lines of pure addition with zero deletions** — checked with `git diff --numstat`
+and a deletion count, because "no existing expectation changed" is exactly the claim a
+regression hides behind. md5 unchanged; `check-path-repos` exit 0.
+
+The review ran **55 mutations: 40 killed, 15 survived**; 8 survivors were re-checked against
+the full 7221-test suite and 7 survived there too.
+
+#### The near-miss: the fix the supervisor prescribed would have silently disabled the bundle
+
+This is the most important thing in the round. For the `groupIntoPairs()` drop I prescribed
+the obvious fix — flush the open pair, then always push the standalone — which the reviewer
+had already applied as mutation M44 and found to survive the full suite. The fix agent
+measured what it actually does:
+
+On a 20-turn history with a reminder after every prompt — **the state of every session that
+reaches 85%, because 70% fires first and appends per turn** — M44 takes
+`exchangesToSummarize()` from **10 exchanges to 0**. So `buildSummarizationRequest()` returns
+null, `scheduleParkedCompaction()` returns null, and the tier falls back to the heuristic
+**forever**. The entire point of the bundle, off, silently, while looking perfectly wired.
+
+It survived the suite because **nothing pinned the offered-set size**. That is now
+`testAReminderAfterEveryPromptDoesNotDestroyTheOfferedExchangeSet`.
+
+The shipped fix instead carries such a message on the open pair (`interleaved`), re-emitted in
+position by `flattenPairs()` and as its own truncated line by `summarizeExchanges()`. Pair
+counts unchanged (10 → 10); all three positions survive in both the preserved and the
+summarized region.
+
+Two lessons, both general: **"survives the full suite" is not "is correct"** — it is only
+"nothing measures this", and on a suite this size that is a weak statement. And a fix
+prescribed from a reviewer's mutation is still a *mutation*, chosen to probe coverage rather
+than to be right.
+
+#### Four victims of the drop, not three
+
+The unreported one: **two consecutive assistant turns — the second overwrites the first.**
+Measured, `REPLY4` erased and replaced by `REPORT`. Produced by the app itself: `/compact`'s
+landing report, the spend-cap refusal and the 95% refusal all append `Message::assistant()`
+onto a history that already ends in an assistant reply. `messagesFromWire()`'s docblock had
+listed both losses as permanent facts about the compactor; it now records them as fixed.
+
+#### The spend-cap bypass this bundle introduced — fixed
+
+`applyModelCompaction()` re-checks `spendCapReached()` before the 95% tier and refuses through
+a new shared `spendCapTurnRefusal(string $crossing)` (extracted from `spendCapRefusal()`) that
+names the summarization as what reached the cap, releases `inFlight`, and keeps the
+already-echoed prompt without duplicating it. Pinned by the review's own probe: spend 0.5 →
+summary 0.6 → cap 1.0 ⇒ **zero conversation-backend calls**, plus an under-cap control.
+
+#### Eleven mutation survivors, all killed
+
+`M19`/`M20` (the parked 95%-refusal message could quote `0` for the token figure, or swap
+estimate with window — §6's unit trap, in the one message this bundle newly routes through) ·
+`M28` (`dispatchTurn()`'s checkpoint save was deletable outright; now pinned against a real
+`EnhancedSessionStore` on a temp db, `listCheckpoints` 0→1 across the landing) · `M35` (the
+null-backend-before-cap ordering) · `M41` (the tier report could claim compaction GREW the
+history) · `M42` (the `''`-means-already-echoed convention, whose comment also misdescribed
+the failure as "two copies of one prompt" when it is a stray empty user line) · `M47`
+("still billed because usage is accounted ahead of the latch check" was asserted in prose
+only) · `M12`/`M13`/`M30` (belt-and-braces keys with no reader). `M08`, the dormant spend-cap
+gate, is now labelled unasserted defence in words, with backlog E31 for its shape.
+
+#### Six more corrections to the supervisor's brief
+
+1. M44 was the wrong fix (above).
+2. Four victims, not three (above).
+3. The Bedrock `SystemMessage => 'user'` mapping I asked to be filed as new **was already
+   E19**, with the same mapping and the same "position has no bite" conclusion. A reachability
+   note went on E19 instead of a duplicate entry.
+4. **"the park notice is now the longest app-authored message" is false.** Measured: 95%
+   refusal **423** chars, idle-compaction advisory **391**, spend-cap refusal **306**, park
+   notice **220**. Fourth, not first. Trimmed to 193 anyway.
+5. **"prefer the shape that emits the fewest adjacent non-user messages" describes no
+   available shape.** Measured dispatched tail: `system user system system` as-is,
+   `system system user system` with the report moved — four consecutive Bedrock `user`
+   entries either way, because the park notice and the reminder already bracket the prompt.
+   Only E19's own fix changes that number.
+6. The byte-identity proof **needs a qualifier now**: still true of `Chat.php`'s routing, but
+   the offline 85% path is deliberately no longer byte-identical to `916a4ed7` for a history
+   carrying an app notice directly after a user turn — because the compactor no longer erases
+   it. Intended, and the bundle's own offline test still passes unchanged.
+
+Also: my fix brief told the agent to report on C1–C11 while only labelling some of them, so
+two labels (C5, C8) appeared in the instruction and nowhere in the content. Number the
+findings once and keep the numbering.
+
+#### Backlog: 1837 → 1978 lines
+
+New **E31** (the dormant cap gate answers null where `/compact` answers with a notice, so a
+future ordering change would silently pick the lossier path) · **E32** (a parked summarization
+cannot be cancelled at the provider — `completeAsync()` takes no `CancellationToken` and
+`inFlightCancellation?->cancel()` is a no-op on null, so a cancelled parked turn pays for the
+summary in full; policy attached: short `connect_timeout` only, never a total-request timeout)
+· **E33** (the 70% reminder is committed to permanent history every turn — newly *visible*
+because compaction no longer erases the copies; 20-turn measurement included). Amended
+**E19**, **E20** (now recording this bundle's bypass and that it is NOT the documented
+overshoot allowance), **E22** (second caller waiting, corrected length table), and **E21**
+closed.
