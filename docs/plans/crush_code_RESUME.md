@@ -72,7 +72,7 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — twenty-three rounds running
+## 5. THE recurring defect — twenty-four rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
@@ -269,14 +269,60 @@ already done and one names a class that does not exist:**
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
 
-**CURRENT STATE, 2026-08-19.** `HEAD` is **`7ed551b6`** — bundle E33 (the reminder pile-up),
-supervisor-verified at **7285 / 76294 / 1, exit 0**, config md5
-`05480c743aff302fd6c06c5a4a4c2210`, `check-path-repos --no-lib-path-repos` rc 0, `src/` still
-275 `.php` files. Bundle C1 is `6bc5218b` (7276/76239/1). **Phase 5 is complete. Phase 2 items
-1, 3, 5, 6 and 8 are complete** — 3 and 5 needed no code and the plan's premise about both was
-measured false (see §9).
+**CURRENT STATE, 2026-08-19.** Last CODE commit is **`7ed551b6`** (bundle E33, the reminder
+pile-up), supervisor-verified at 7285 / 76294 / 1, exit 0. Bundle C1 is `6bc5218b`
+(7276/76239/1). **Phase 5 is complete. Phase 2 items 1, 3, 5, 6 and 8 are complete** — 3 and 5
+needed no code and the plan's premise about both was measured false (see §9).
 
-**NEXT: C3** (Phase 2 item 2, MCP). Nothing in flight.
+## ⚠️ BUNDLE C3 IS IN THE WORKING TREE, UNCOMMITTED, AND MUST NOT SHIP AS-IS
+
+**Phase 2 item 2 (MCP) is implemented and reviewed but NOT committed**, and it carries a HIGH
+SECURITY defect the review found. Do not commit it until fix round A lands.
+
+State: implementation done, adversarial review done (17 findings, 5 surviving mutations), **fix
+round A brief WRITTEN AND READY BUT NOT LAUNCHED** at
+`/tmp/claude-1000/-home-sites-sugarcraft/ee99e40f-1cef-4bc4-8c0a-90ae8bc11daf/scratchpad/c3-fixA.md`
+— it is self-contained, so re-spawn against it. Suite on the uncommitted tree, verified by me:
+**7321 / 76412 / 1, exit 0**; `src/` is **276** files (one new: `src/Tools/McpToolBridge.php`).
+
+**THE SECURITY DEFECT.** `.mcp.json` executes arbitrary repository-supplied commands **at launch,
+in every permission mode including `plan`**, with no trust check and no user-visible output.
+Measured: a payload that is not even a valid MCP server (`initialize` fails, server discarded,
+`tools=10`) still ran its command. **Starting IS the execution.** `README.md:441` already
+documents this exact threat model for `.sugar-crush/hooks.yaml` — off by default, "No permission
+mode protects you from it (`plan` included)", grant only via the user's own
+`~/.sugar-crush/config.json` under `trustedProjectHooks`. C3 introduced a second instance of the
+hole this project already closed.
+
+Fix round A gates it behind a **NEW sibling key `trustedProjectMcp`** — new rather than reusing
+`trustedProjectHooks`, because reusing it would retroactively grant MCP execution to every root a
+user already trusted for hooks, which is a silent widening of a security grant.
+
+**NOT deferred under the security-later rule.** That rule covers PRE-EXISTING issues; this one is
+introduced by the bundle in flight, the mechanism to fix it already exists, and shipping it would
+make daily-driving actively dangerous.
+
+**Fix round A** (brief ready): findings 1 (trust gate), 2 (every bridge call routes to the FIRST
+server advertising that tool name), 3 (a nested `properties: []` 400s the ENTIRE request), 4 (a
+forked child that starts its own servers can never stop them), 5 (`stop()` kills the `sh -c`
+wrapper, not the server — fix by using `proc_open()`'s ARRAY form), 8 (memo key is the raw
+spelling, so four spellings of one root gave four clients and eight processes), 9 (the launch hang
+— and a read timeout is NOT sufficient, see below), the four surviving mutations, and deleting one
+dead branch.
+
+**Fix round B** (brief NOT yet written): findings 6 ("gated exactly as `Bash`" is false in `plan`,
+the one mode the headline test uses — `evaluatePlan()` allows `Bash` and denies any `mcp__`), 7
+("a broken config is reported on stderr" is true for ONE of five broken shapes), 10, 11
+(non-array `required` silently discarded), 12 (`isError` strict `=== true` reads `"true"`/`1` as
+success), 13 (empty `content[]` reads as success with no output), 14 (the `DYNAMIC_TOOL_CLASSES`
+exemption's discipline is prose only — the deliberate one-line case is unguarded). Backlog
+E40/E41/E42 already carry findings 16, 17 and the rest.
+
+**The launch hang needs a WALL-CLOCK DEADLINE, not a read timeout.** `start()` makes TWO unbounded
+reads, and `readResponse()` is `while (true) { … if isNotification() continue; }` — a server
+emitting valid JSON-RPC notifications forever starves it while every individual `fgets()` returns
+promptly (`timeout 20 php probe.php -> rc=124`). Three categories, not two: dead, slow, and
+**live-chatty-never-answering**.
 
 **MEASURE YOUR OWN INVARIANTS FROM THE REPO ROOT WITH ABSOLUTE PATHS.** I got this wrong once:
 after `cd sugar-crush`, `md5sum .sugar-crush/config.json` reads a DIFFERENT, untracked file
@@ -285,7 +331,14 @@ not on that path. The invariant is `/home/sites/sugarcraft/.sugar-crush/config.j
 
 **The two lessons this session added, both from C1:**
 
-0. **Do not edit `docs/plans/*` while a round is live.** Two agents in a row have reported
+0. **A carefully verified argument can answer the wrong question.** For C3 I reasoned that
+   `unrestricted: true` was safe because every main-agent tool call rides the PreToolUse chain
+   exactly as `Bash` does, wrote the reasoning down, and asked the implementer to verify it end to
+   end. It verified. It was also irrelevant: that gate sees tool CALLS and never sees
+   `proc_open()`. Before trusting a safety argument, ask what it does NOT cover — and check
+   whether the project already has a boundary for this threat class rather than reasoning a new
+   one from scratch.
+0b. **Do not edit `docs/plans/*` while a round is live.** Two agents in a row have reported
    `git status` moving under them because I committed backlog edits mid-round. Either hold docs
    edits until the round returns, or tell the agent up front that `docs/plans/*` will move and
    is not part of its bundle.

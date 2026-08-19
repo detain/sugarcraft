@@ -2081,6 +2081,102 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
+### E40 — `.mcp.json` TOCTOU, and a hard link escapes containment
+
+- **What** Two limits on the `.mcp.json` containment check, both low-severity but
+  both attached to the one `ContainedPath` caller whose granted file causes
+  `proc_open()`. (a) `Bootstrap::mcpClient()` resolves the path three times —
+  `is_file()`, `ContainedPath::within()`, then `McpClient::loadConfig()`'s
+  `file_exists` + `file_get_contents` — and neither narrows the window nor says so,
+  against `ContainedPath`'s own documented house rule ("Callers that grant a path
+  and read it later must say so where they grant it — see
+  `WorkflowRegistry::readableProjectDir()`, which narrows its own window rather
+  than pretending it has none"). (b) A `.mcp.json` that is a HARD LINK to a file
+  outside the tree passes containment.
+- **Where** `sugar-crush/src/Cli/Bootstrap.php` (`mcpClient()`),
+  `sugar-crush/src/Support/ContainedPath.php`.
+- **Severity** Low. (a) needs a co-resident writer. (b) needs someone who can
+  already hard-link, and who could therefore just write the file — so it is not an
+  escalation.
+- **Evidence** Bundle C3's reviewer ran the full containment battery; five of six
+  shapes behave correctly (symlinked root, config→file inside root, config→symlink
+  outside REFUSED, root spelled with `..`, config is a directory). The sixth,
+  `cfg = hardlink outside`, was accepted.
+- **Step** For (a), narrow the window or state it at the grant site the way
+  `WorkflowRegistry` does. For (b), do NOT try to defeat hard links — instead
+  qualify `ContainedPath`'s threat-model paragraph, which argues hard links are out
+  of scope because "git cannot represent or commit a hard link, so no `git clone`
+  produces one". That argument is sound for a clone and NOT for `.mcp.json`, whose
+  threat model includes a prior session's own `Write`/`Bash` and any co-resident
+  process — the result being a repo-local config whose bytes live outside the repo
+  and which `git status` cannot see. The paragraph should say so for this caller
+  rather than being inherited.
+- **Related** The trust gate added in C3's fix round A is the primary control; this
+  is about the secondary one.
+
+---
+
+### E41 — `McpClient` config-loading gaps: a lost config tail, and four silent broken shapes
+
+- **What** Three defects in `McpClient`'s config handling, all pre-existing and all
+  newly reachable now that something constructs the client. (a) `startServers()`
+  loses the TAIL of the config on a bad entry: an unknown `type` throws out of
+  `startServer()`'s `match` default, which is OUTSIDE the
+  `try/catch(\RuntimeException)` that protects a failing `start()` — so servers
+  listed before the bad entry are up and every server after it is never reached,
+  and which capability you lose depends on file order. (b) `$denyPatterns` are
+  **inert** on the path C3 wired: they are consulted only through `router()`, which
+  is reached only from the `$agentPreset !== null` arm, so with `unrestricted: true`
+  and no preset `listTools()` merges every server directly and deny patterns
+  enforce nothing. (c) Four of five broken-config shapes are SILENT.
+- **Where** `sugar-crush/src/MCP/McpClient.php` — `startServers()`, `startServer()`,
+  `loadConfig()`, `listTools()`.
+- **Severity** Not security (the trust gate is upstream of all of it). Silent
+  capability loss on a file the user wrote on purpose.
+- **Evidence** Measured by bundle C3's reviewer across five shapes:
+
+      A) server that cannot start (bogus binary)    stderr = []            <- the common case
+      B) unknown type                               stderr = [reported]
+      C) malformed JSON                             stderr = []
+      D) valid JSON, wrong top-level key            stderr = []
+      E) unknown type first + working server after  stderr = [reported], tail lost
+
+  Only (B) reports, because `startServer()` swallows a failing `start()` with
+  `catch (\RuntimeException) { return; }` and never reaches `Bootstrap`'s catch,
+  which only ever sees the `default => throw`.
+- **Step** Collect per-server failures and report them all rather than throwing out
+  of the loop; report a malformed or wrong-shaped config file explicitly. For (b),
+  either enforce deny patterns on the unrestricted arm too or state plainly in the
+  docblock that they are preset-only — do not leave a security-shaped option that
+  silently does nothing on the live path.
+- **Related** C3's fix round B is correcting the docblock that currently asserts the
+  opposite of (c).
+
+---
+
+### E42 — `mcp__` wire names: `__` is both delimiter and legal character, and user permission rules cannot match
+
+- **What** Two naming defects in `McpToolBridge`'s `mcp__<server>__<tool>` scheme.
+  (a) `__` is the delimiter AND a legal character, so server `a__b` + tool `c` and
+  server `a` + tool `b__c` both yield `mcp__a__b__c` with no substitution at all —
+  the docblock attributes collisions solely to "two servers whose keys differ only
+  in a substituted character". (b) A user writing a permission rule against the REAL
+  name — `mcp__github.com/foo__*` for the `.mcp.json` key `github.com/foo` — never
+  matches the sanitised wire name `mcp__github_com_foo__…`, so the tool stays behind
+  an Ask forever, and nothing surfaces the sanitised name to the user.
+- **Where** `sugar-crush/src/Tools/McpToolBridge.php` (`sanitize()`, `name()`).
+- **Severity** Low. (b) is the more annoying half in daily use.
+- **Evidence** Bundle C3's reviewer, by construction for (a) and by rule-matching
+  for (b).
+- **Step** For (a), escape or reject `__` inside a segment. For (b), surface the
+  wire name where a user would look — `/mcp`, `--help`, or the tool listing — so a
+  permission rule can be written against something that exists.
+- **Related** E41(b); C3's mis-routing fix (a bridge now calls
+  `callTool($serverName, …)` rather than `callToolByName()`, so a wire-name
+  collision no longer mis-routes, it only makes the second tool unaddressable).
+
+---
+
 ## Contradictions found between sources
 
 1. **The worklog contradicts itself about lane D F3–F7.** The queue at
