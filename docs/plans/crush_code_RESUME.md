@@ -269,10 +269,61 @@ already done and one names a class that does not exist:**
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
 
-**CURRENT STATE, 2026-08-19.** Last CODE commit is **`7ed551b6`** (bundle E33, the reminder
-pile-up), supervisor-verified at 7285 / 76294 / 1, exit 0. Bundle C1 is `6bc5218b`
-(7276/76239/1). **Phase 5 is complete. Phase 2 items 1, 3, 5, 6 and 8 are complete** — 3 and 5
-needed no code and the plan's premise about both was measured false (see §9).
+**CURRENT STATE, 2026-08-19, end of session.** Last CODE commit is **`3b0ba8fe`** (bundle C3, MCP
+tools reachable behind a trust gate), docs at **`72429690`** then **`17ee44d7`**. Supervisor-verified
+**7387 / 76813 / 1, exit 0** against LOCAL sibling symlinks — and 7387 / 76811 / 2 against Packagist
+copies, which is the same code and why the vendor check below exists.
+
+**Phase 2 items 1, 2, 3, 5, 6, 8 complete. Phases 0, 1 complete. Phase 5 is items 1-9 + 10a.**
+**47 of 75 plan items, 28 left.** See the `#N`-tracker section below before answering any question
+about totals — the answer is not the sum of the series.
+
+## ⚠️ BUNDLE W1 IS IN FLIGHT, UNCOMMITTED — the user's live render bug
+
+**A user bug report that jumps the audit queue**, because frame corruption counts as functionality
+under §3. Reported while daily-driving: long assistant lines "not wrapped but cut off", then a blank
+line, then unrelated content.
+
+**State as of this note:** implementation round running or just finished. Working tree carries
+`sugar-crush/src/Renderer.php` (+152/-4) and a new untracked
+`sugar-crush/tests/Renderer/PaneWidthInvariantTest.php` (518 lines). **Nothing committed.** Brief at
+`/tmp/…/scratchpad/w1-brief.md` is self-contained — re-spawn against it if the round was lost.
+
+**The diagnosis, measured, because it is not what the report sounds like.** Nothing is truncated: at
+`cols=100` the renderer emits a **204-column row**, the terminal soft-wraps it, and candy-core's
+absolute `cursorTo()` then paints later rows at stale coordinates. The tail is present in the frame
+bytes. **The broken invariant is one-logical-line-per-row** — the same one `renderDiff()` guards with
+`Width::truncate` and the status bar guards by never wrapping.
+
+**Root cause: one argument computed correctly and never passed.** `renderView()` (`:907-910`) computes
+`max(20, cols - SHELL_CHROME_COLS)` and `renderHistory()` forwards it to tool results and diffs, but
+builds the markdown renderer as `new Markdown($theme->markdown)` (`:1713`) — and candy-shine's word
+wrap is **opt-in, default OFF** (`candy-shine/src/Renderer.php:105`). `renderStreamingTurn()` (`:1781`,
+called `:932`) has the same defect and receives no width at all.
+
+**Half 1 is not the fix.** candy-shine deliberately never wraps code blocks or tables
+(`candy-shine/src/Renderer.php:175-176`); measured, a fenced block with a 150-char line still emits a
+150-wide row at wrap=94. Half 2 is a frame-level width invariant, preferring `Width::wrapAnsi()`
+(content-preserving) over `Width::truncate` (which deletes) for reply body text.
+
+**Four hazards, each already the cause of a bug here:** zone sentinels come in pairs and an unmatched
+open marker makes `Scan::parse()` THROW, costing the whole frame its click zones; image markers share
+U+E000 with those sentinels; `mb_substr()` cannot see an SGR escape; and wrapping makes the transcript
+taller, which touches the height clip and the scroll arithmetic.
+
+**WHAT IS STILL OWED ON W1:** supervisor suite verification (never trust the agent's totals), an
+adversarial review round on the diff, a fix round if it finds anything, then commit. Baseline to beat
+is **7387 / 76813 / 1, exit 0**.
+
+**The absence that let it ship: no test among 7,387 measured row width against the terminal.** Every
+renderer assertion checked content, not geometry. The invariant test is the real deliverable.
+
+## AFTER W1: `#88`, then the queue
+
+`#88` is the stale README figure — `sugar-crush/README.md:531` advertises "7,276 tests / 76,239
+assertions" (bundle C1's number) against a tree at 7,387 / 76,813, and `:551` carries a separate
+`4,337/12,587`. **Standalone commit, after W1 lands and nothing else is in flight** — a suite figure
+committed mid-bundle is stale before it is pushed.
 
 ## BUNDLE C3 IS COMMITTED — `3b0ba8fe`. Phase 2 item 2 done.
 

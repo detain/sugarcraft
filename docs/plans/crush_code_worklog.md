@@ -7791,3 +7791,91 @@ And one the agent caught in its own first draft, which is this chain's signature
 inside the work of fixing it: it wrote an `array_values()` plus a paragraph arguing it was
 load-bearing against index gaps — and it was a **no-op**, because the result is accumulated into a
 fresh array and can never have a gap. Both removed.
+
+
+---
+
+## Bundle W1 — the user's live render bug. **IN FLIGHT at the time of writing.**
+
+**A user bug report, not an audit item, and it jumps the queue** because the plan's own sequencing
+rule classes frame corruption as functionality rather than polish. Reported while daily-driving:
+
+> long response lines in the response output are not wrapped but cut off … at the end its clearly
+> got more to say but the next line is blank and the line unrelated
+
+### The symptom is not truncation, and that distinction is the whole diagnosis
+
+Measured, `cols=100`, one assistant message of ~200 characters of prose:
+
+    frame row 5 width = 204        <- in a 100-column terminal
+    "beefy workstation"  PRESENT
+    "load average"       PRESENT
+    "real pressure at all" PRESENT   <- the tail is NOT lost
+
+Nothing is cut. The renderer **emits a row wider than the terminal**, the terminal soft-wraps it,
+the frame becomes physically taller than the row count it reports, and candy-core's diff renderer —
+which addresses rows with an absolute `cursorTo()` — then paints everything after it at stale
+coordinates. That is why the user sees the tail vanish and an unrelated line follow: the continuation
+is on screen for one frame and then overwritten. **The broken invariant is one-logical-line-per-row**,
+the same one `renderDiff()` guards with `Width::truncate` and the status bar guards by never
+wrapping (`src/Renderer.php:1236-1245` names both).
+
+### Root cause: one argument that was computed correctly and never passed
+
+`Renderer::renderView()` (`:907-910`) computes the content width right —
+`max(20, $chat->cols() - self::SHELL_CHROME_COLS)`, chrome being 1 border + 1 padding each side —
+and `renderHistory()` forwards it to `renderToolResults()` and `renderDiff()`. But it builds the
+markdown renderer as `new Markdown($theme->markdown)` (`:1713`), and `Markdown` is
+`SugarCraft\Shine\Renderer` (aliased at `:20`) whose **word wrap is opt-in and defaults to OFF**
+(`candy-shine/src/Renderer.php:105`). Measured against the local candy-shine:
+
+    wrap=off   rows=1  widths=[198]         max=198
+    wrap=94    rows=3  widths=[92,92,16]    max=92
+
+`renderStreamingTurn()` (`:1781`, called at `:932`) has the identical defect and **receives no width
+at all** — so the bug is on screen for the entire duration of every reply and then appears to fix
+itself when the turn settles, which is precisely what that method's own docblock promises does not
+happen ("the moment the turn lands, the text does not visibly re-flow into a different shape").
+
+### Half 1 is not the fix, and asking what it does not cover is why
+
+candy-shine deliberately never wraps code blocks or tables — *"they have their own width semantics"*
+(`candy-shine/src/Renderer.php:175-176`). Measured with wrap ON at 94:
+
+    fenced code block containing a 150-char line  ->  row width 150, unwrapped
+
+A long line inside a fenced block is ordinary in a coding agent's replies, so passing the width alone
+leaves the user's bug fully reproducible. Half 2 is a frame-level width invariant, preferring
+`Width::wrapAnsi()` (content-preserving, and what candy-shine itself uses at `:645`/`:755`) over
+`Width::truncate` (which deletes) for reply BODY text. This check was made deliberately: the session's
+own lesson is that a carefully verified argument can answer the wrong question, so half 1 verifying
+cleanly was treated as a reason to look harder rather than to stop.
+
+### Four hazards handed to the implementer, each already the cause of a bug here
+
+1. **Zone sentinels come in PAIRS.** An unmatched open marker makes `Scan::parse()` **throw** and
+   costs the WHOLE frame its click zones — the failure mode `src/Renderer.php:1258-1264` documents as
+   the reason the status bar is "fitted, never truncated". Measuring with sentinels stripped and then
+   cutting the unstripped string is its own off-by-N.
+2. **Image markers share U+E000 with zone sentinels**, so identifying marker rows by that prefix
+   catches both.
+3. **`mb_substr()` cannot see an SGR escape** (`:2495` documents this for an existing helper). A cut
+   mid-escape bleeds styling into the rest of the frame.
+4. **Wrapping makes the transcript TALLER**, which interacts with the existing height clip and the
+   scroll-offset arithmetic. A transcript that scrolls by logical lines while rendering physical rows
+   is the same bug in a second costume.
+
+### The absence that let it ship
+
+**No test among 7,387 measured row width against the terminal.** Every existing renderer assertion
+checks content, not geometry. That is the gap, and the invariant test is the deliverable that closes
+it — more than the wrap call itself, which is one argument.
+
+### In-flight state, for recovery
+
+Brief at `/tmp/…/scratchpad/w1-brief.md`, self-contained — re-spawn against it if the round was lost.
+As of this note the working tree carries `sugar-crush/src/Renderer.php` (+152/-4) and a new untracked
+`sugar-crush/tests/Renderer/PaneWidthInvariantTest.php` (518 lines). Nothing committed.
+**Baseline to beat: 7387 / 76813 / 1, exit 0**, measured by me against LOCAL sibling symlinks. Still
+owed after the round returns: supervisor suite verification, an adversarial review round on the diff,
+then commit — and only then `#88`, the stale README figures.
