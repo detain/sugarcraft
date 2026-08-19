@@ -39,9 +39,9 @@ also outstanding and had fallen out of the RESUME queue entirely; the arithmetic
 caught it.
 
 **FIVE USER-REPORTED BUGS JUMPED THIS QUEUE and are NOT plan items — do not add them to the
-count.** All five were reported while daily-driving the binary, and all five are functionality
-rather than hardening, so §3's sequencing rule promotes them ahead of the audit work. Two are
-committed, one crashed the app outright, and two are in flight under a workflow:
+count. ALL FIVE ARE NOW DONE AND COMMITTED.** All five were reported while daily-driving the binary,
+and all five are functionality rather than hardening, so §3's sequencing rule promoted them ahead of
+the audit work:
 
 - **W1 — long assistant replies were cut off at the pane edge. DONE, `47ee2c86`.** The renderer
   emitted rows wider than the pane and candy-sprinkles' `Style::width()` truncated them, so a
@@ -57,7 +57,7 @@ committed, one crashed the app outright, and two are in flight under a workflow:
   cursor. Enter must ENQUEUE rather than dispatch, and the drain has exactly one real site because
   `finishToolCalls()` keeps `inFlight` true.
 
-- **W3 — the shell chrome is invisible on a light terminal. QUEUED, measured.** Reported as "the
+- **W3 — the shell chrome is invisible. DONE, `6c1e51c8` + review round `fe7ce954`.** Reported as "the
   menus up top have no borders", then corrected by the user to "there are borders.. just foreground
   matchs background color so invis" — and the correction is the real diagnosis. `MenuBar` already
   draws a complete box (probed: 12 rows, every one 18 cells, matched corners), spliced in after the
@@ -68,7 +68,7 @@ committed, one crashed the app outright, and two are in flight under a workflow:
   `Theme`-has-no-background/muted/accent-token constraint that has to be settled first, are in
   `docs/plans/crush_code_RESUME.md`.
 
-- **W4 — Tab does not complete a partial `/command`. QUEUED, measured.** Reported: Tab "should expand
+- **W4 — Tab does not complete a partial `/command`. DONE, `3bc51735`.** Reported: Tab "should expand
   your typed command to the full command currently highlighted .. currntly it switches your active
   other window ... which is fine normally but when typing a /command and its showing matching command
   results the bhavior should chang". Measured as a PRECEDENCE bug, not a missing feature: bare Tab

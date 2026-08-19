@@ -6,6 +6,79 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## 0. STATE AS OF THE 2026-08-19 COMPACT — read this first
+
+**HEAD is `3bc51735`. Working tree CLEAN at the moment this was written.**
+**Suite baseline: `7637 tests / 89596 assertions / 1 skipped / rc 0`** (sugar-crush, against local
+sibling symlinks — skips MUST stay 1; a 2 means `vendor/sugarcraft/*` got replaced by Packagist copies
+and every figure is void).
+
+### ALL FIVE USER-REPORTED BUGS ARE DONE
+
+These were reported while daily-driving the binary and jumped the audit queue under §3. **They are NOT
+plan items — never add them to the 75.**
+
+| bug | what it was | commit |
+|---|---|---|
+| W1 | long replies cut off at the pane edge | `47ee2c86` |
+| W2 | typing / Ctrl+P dead while a turn runs; Enter now queues | `a8d8ec75` |
+| W5 | `/websearch`, `/share`, `/agents` killed the app on any non-zero exit | `f8fd9cfa` |
+| W3 | the whole `src/Tui/` shell ignored `Theme`; + retain the real terminal background; + the `ansi` theme was silently up-converted to absolute RGB | `6c1e51c8`, review round `fe7ce954` |
+| W4 | Tab switched panes instead of completing a partial `/command` | `3bc51735` |
+
+### PLAN ITEMS: 48 of 75 done, 27 left
+
+Phase 5 is COMPLETE (item 10b was found already done — see the B4 section below; verify before
+re-planning anything). Phases 0, 1 complete. Phase 2 items 1, 2, 3, 5, 6, 8 complete.
+
+### WHAT IS RUNNING RIGHT NOW
+
+**Workflow `wi86qgl13` (run id `wf_85ae4115-4fe`)**, launched 2026-08-19, three bundles:
+- **C5a** — validate an unrecognised `--output-format` (today it silently degrades to text at exit 0)
+  and add `--config <path>`. implement → review → fix.
+- **C5b** — real CLI subcommands (`doctor`, `models`, `session list`/`delete`, `mcp list`,
+  `completion`). implement → review → fix.
+- **C4a** — Phase 2 item 4 part 1: wire `CommandLoader` as an instance into `Chat` + `$ARGUMENTS`/`$1..$9`
+  substitution. measure → implement → review → fix.
+
+**If that workflow's result is lost, its work is still in the working tree** — agents never commit, so
+`git status` plus `git diff` is the recoverable state. Re-run the suite, verify, and commit. That is
+exactly how W3 was salvaged after its agent was stopped mid-run.
+
+### THE COMMIT GATE IS MINE, NOT AN AGENT'S
+
+Workflows run implement/review/fix/re-verify. **The supervisor runs the full suite personally and
+commits.** This is not ceremony: it caught four false mutation kills in W1, and in W3 it caught that
+the agent's headline "0 collapses" was measured over six backgrounds and written as a property of all
+of them.
+
+### AGENT CONTEXT BUDGET — a standing user instruction
+
+**The user asked that per-agent context finish around 200k, not 360k.** A single W3 agent hit 360k. The
+four causes and their fixes, all now in force:
+1. A ~6,000-word preamble inlined into every prompt → **`docs/plans/crush_agent_rules.md`**, which
+   agents read instead. Workflow scripts must point at that path (an earlier run pointed at a
+   session-scoped `/tmp/claude-*` copy that does not survive a compact).
+2. Each stage inheriting the previous stages' full reports → commit the bundle first where possible and
+   have reviewers read `git show <sha>`.
+3. One agent owning several parts across several libs → **split into narrow parallel reviewers**, one
+   lens each.
+4. Many mutations each triggering a 3-minute full suite → cap ~5-8 mutations, run ONE test file while
+   iterating, full suite at most twice.
+
+### W3'S TWO KNOWN-OPEN ITEMS (deliberate, recorded, not defects of omission)
+
+1. **A mid-grey crossover band.** Over all 256 greys × 5 palettes, backgrounds around
+   `#6c6c6c`-`#797979` can project two different shell tokens to the SAME colour (14/256 greys on
+   `ansi`, 7/256 on `dracula`). **Legibility is unaffected** — 5 palettes × 24 backgrounds, zero
+   sub-4.5 — so the user's bug stays fixed; what degrades is role DISTINCTION. `project()`'s docblock
+   still claims distinctness as a universal when it was measured on fourteen backgrounds.
+2. **The frame walk ignores SGR 2 (faint)**, which `src/Renderer.php` emits at 17 sites. Dracula's
+   `shellMuted` measures 6.31:1 but is painted at roughly 2.70:1. Left open on purpose: modelling
+   "half-way to the background" would pin a terminal-by-terminal guess as fact.
+
+---
+
 ## 1. The standing directive
 
 **Run the plan to 100% without pausing.** Do not stop at phase boundaries to report
@@ -727,12 +800,12 @@ all per the existing queue note.
 | # | bundle | plan items |
 |---|---|---|
 | ~~0~~ | ~~**W2**~~ | **COMMITTED `a8d8ec75`** — 7602/88074/1, 29/29 mutations |
-| 0b | **W3** | *not a plan item* — shell ignores `Theme` + retain bg RGB + ansi profile. **RUNNING** under workflow `wf_3ae98739-893` |
-| 0c | **W4** | *not a plan item* — Tab completes a partial `/command`. **RUNNING** in the same workflow |
+| ~~0b~~ | ~~**W3**~~ | **COMMITTED `6c1e51c8` + `fe7ce954`** — shell themed, bg RGB retained, ansi emits ansi |
+| ~~0c~~ | ~~**W4**~~ | **COMMITTED `3bc51735`** — Tab completes the highlighted `/` command |
 | ~~0d~~ | ~~**W5**~~ | **COMMITTED `f8fd9cfa`** — the `print`-returns-int fatal in three commands |
 | ~~1~~ | ~~**B4**~~ | **DROPPED — already done** by Bundle A (`bf3495f5`), measured 2026-08-19. No code. Phase 5 is closed |
-| 2 | **C5** | Phase 4 item **6** — real subcommands, `--config`, exit-code convention, `--output-format` warning |
-| 3 | **C4a** | Phase 2 item 4 part 1 — wire `CommandLoader` as an instance into `Chat`; `$ARGUMENTS`/`$1..$9` |
+| 2 | **C5** | Phase 4 item **6** — split into **C5a** (`--output-format` validation + `--config`) and **C5b** (real subcommands). **RUNNING** under `wf_85ae4115-4fe`. The exit-code convention part is ALREADY DONE |
+| 3 | **C4a** | Phase 2 item 4 part 1 — wire `CommandLoader` as an instance into `Chat`; `$ARGUMENTS`/`$1..$9`. **RUNNING** under `wf_85ae4115-4fe` |
 | 4 | **C4b** | Phase 2 item 4 part 2 — `` !`cmd` `` (ReactPHP `Process`) + `@file` |
 | 5 | **C6** | Phase 2 item **7** — WRITE `LspTool implements Tool` over the existing `src/LSP/LspClient.php` |
 | 6 | **D** | Phase 3 items **2-5** — `candy-focus\FocusRing` in `Tui\Pane`; `sugar-veil` |
@@ -765,7 +838,7 @@ The size guideline here is ~15 agents per run, and a full bundle is 6, so a run 
 Invoke with the next batch, read the result, re-verify personally, then invoke again. Do not try to put
 all twelve bundles in one run.
 
-## ORDER: W1 ✅ → W2 ✅ → W5 ✅ → W3 → W4 → `#88` → the audit queue
+## ORDER: W1 ✅ → W2 ✅ → W5 ✅ → W3 ✅ → W4 ✅ → C5 → C4a → … → `#88` → hardening
 
 `#88` is the stale README suite figure. **Moved to AFTER the live-bug bundles, not straight after W1**,
 and for a measurable reason: the figure has now been invalidated three times in one session (7,276 →
