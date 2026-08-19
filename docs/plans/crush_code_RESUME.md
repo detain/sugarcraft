@@ -297,7 +297,8 @@ file.
   `$SUGARCRUSH_BACKEND_CMD` deletes every newline and blank line from the reply and adds a
   blanket 120s cap. Ground truth measured and written up:
   `/tmp/…/scratchpad/c1-measured.md`, summarised in §9. Wire it behind its own opt-in and
-  fix the timeout + its wrong-unit message either way.
+  fix the timeout + its wrong-unit message either way. **BRIEF IS WRITTEN AND READY:**
+  `/tmp/…/scratchpad/c1-brief.md` (195 lines).
 - ~~**C2** Phase 2 item 3 — `WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`.~~
   **ALREADY DONE** — `Bootstrap.php:374` passes it. Measured 2026-08-19, see §9. No work.
 - **C3** Phase 2 item 2 — `Bootstrap::mcpClient($root)` reading `.mcp.json`, MCP tools
@@ -312,8 +313,17 @@ file.
   The prerequisite checks out too (`df0a563b` is Phase 1 item 2; `ScriptHook::EXIT_ASK = 3`).
   Measured 2026-08-19, see §9. No work.
 - **C6** Phase 2 item 7 — **write** `LspTool implements Tool` over `src/LSP/LspClient.php`.
-  The plan says "add `implements Tool`"; there is no `src/Tools/LspTool.php` at all.
-  Measured 2026-08-19.
+  The plan says "add `implements Tool`"; there is no `src/Tools/LspTool.php` at all, and
+  measured 2026-08-19 the **whole `src/LSP/` subsystem has zero production users** — the grep
+  for `LspConnection`/`new LspClient` outside `src/LSP/` is empty. So the item is four pieces
+  of work, not one: write the tool; choose its surface over `LspClient`'s
+  definitions/references/hover/symbols/codeActions/diagnostics API; construct a connection
+  (`LspConnection::connect()` **spawns the server with `proc_open`**, so this needs server
+  discovery/config); and degrade when no language server is installed, which is the common
+  case and the real design work. **Its own bundle — do not fold it into C1.** Note
+  `connect()`'s `float $timeout = 30.0` is a language-server request timeout, NOT an LLM
+  completion timeout, so the no-blanket-timeout directive does not apply to it — say that in
+  the brief so nobody "fixes" it. Full measurement in `/tmp/…/scratchpad/c1-measured.md`.
 - **D** Phase 3 items 2-5 — `candy-focus\FocusRing` in `Tui\Pane`; `sugar-veil`
   `withClickOutsideDismiss()`; `candy-sprinkles\Table`; `strlen()` padding fixes.
 - **E** Phase 6 items 1-6 — **item 1's `__DIR__` bug is largely already fixed**, so do
