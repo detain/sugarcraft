@@ -72,7 +72,7 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — nineteen rounds running
+## 5. THE recurring defect — twenty rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
@@ -264,30 +264,49 @@ five corrections the fix agent made to the supervisor's brief, and the two revie
 that were against the supervisor's own backlog rather than the code.
 
 **As of 2026-08-19 the working tree carries UNCOMMITTED Bundle E21 work** (Phase 5 item 6
-finished: the automatic 85% tier now asks the model). Implementation done and
-supervisor-verified at **7221 / 76068 / 1, exit 0** (baseline 7204/75944/1 at `916a4ed7`).
-**It is in its adversarial review round — do not commit unreviewed.** Recovery if that review
-was lost: the review brief is self-contained at `/tmp/…/scratchpad/e21-review.md` (180 lines);
-re-spawn against it, using the worklog's E21 section for the claims to verify. Then fix →
-verify → commit.
+finished: the automatic 85% tier now asks the model). Implementation supervisor-verified at
+**7221 / 76068 / 1, exit 0**. The adversarial review has RETURNED — **55 mutations, 40 killed,
+15 SURVIVED** (8 survivors re-checked against the full suite; 7 survived there too) — and the
+**FIX round is in flight** against `/tmp/…/scratchpad/e21-fix.md` (234 lines, self-contained).
+**Do not commit unfixed.**
 
 Dirty set: `src/Chat.php` · `src/HistoryCompactedMsg.php` ·
-`tests/Chat/AutomaticCompactionModelSummaryTest.php` (new) · `crush_code.md` (status only).
+`tests/Chat/AutomaticCompactionModelSummaryTest.php` (new) · `crush_code.md` (status only). The
+fix round also edits `src/Context/ContextCompactor.php` and the backlog.
 
-**Two things from E21 that outlive the bundle.** First, **the supervisor's recommended design
-shipped a real bug** and the implementer was right to refuse it: an assistant-role notice
-after the parked prompt makes the dispatched history END on an assistant turn, which is a
-prefill the model continues — the turn would answer the compaction notice instead of the user.
-The fix is a `Role::System` notice BEFORE the prompt, pinned on the wire rather than the
-transcript. Second, and independent of this bundle: **`ContextCompactor::groupIntoPairs()`
-(`src/Context/ContextCompactor.php:421`) silently DROPS a non-user/non-assistant message that
-directly follows a user turn**, because the `else` branch pushes a standalone only when
-`$currentPair === null` and a user turn leaves it non-null. `submit()` appends
-`[system(notice), user(text), system(reminder)]`, so **the live 70% context reminder is erased
-by the next compaction, in production, today.** Silent permanent loss in a compaction
-primitive; pre-existing. It needs its own bundle — the fix shifts pair counts and several
-`tests/Context/` and `tests/Chat/` fixtures move with it. **Add it to §11 as its own queue
-entry when E21 commits.**
+**The two findings that matter beyond this bundle:**
+
+1. **A spend-cap BYPASS this bundle introduced.** The summarization's own cost can cross
+   `maxCostUsd`, and the landing path then calls `dispatchTurn()` with no `spendCapRefusal()`
+   anywhere on it. Measured: spend 0.5, cap 1.0, summary costs 0.6 → spend 1.1 → **turn
+   dispatched**, one conversation backend call, while a fresh submit at that same spend is
+   correctly refused. Not covered by the documented "the turn that crosses the cap runs to
+   completion" allowance: there the crossing happens inside a turn already under way, here it
+   happens in a PREVIOUS `update()` and the app then elects to start a fresh chargeable turn.
+2. **`ContextCompactor::groupIntoPairs()`'s silent drop is worse than the implementation round
+   reported, and free to fix.** It reported one victim (the 70% reminder) and predicted the fix
+   would shift pair counts and move fixtures. **Both wrong, both measured.** There are three
+   victims, and the worst is **`_Request cancelled._`** — cancel a turn, keep working, next
+   compaction fires, and the record that the turn was aborted is gone while the wire carries a
+   bare user prompt with no answer, fed back to the model as an unanswered turn. Reachable on
+   the plainest path in the app, no tier and no summary backend needed. And the fix (push
+   `$currentPair` when non-null, then always push the standalone) **survives the full
+   7221-test suite** — no test pins the bug, so there is no fixture churn.
+
+**Also confirmed and now recorded for every future round:
+`BedrockProvider::formatMessages()` maps `SystemMessage => 'user'`.** Measured role sequences
+for one history: `Bedrock: user assistant user user user` · `OpenAI: user assistant system user
+system` · `Vertex: system hoisted out of messages entirely, ends on user`. So any
+system-role message adjacent to a user turn becomes **consecutive same-role turns on Bedrock**,
+which Converse rejects. Pre-existing for the 70% reminder; E21 adds a case that fires with no
+reminder present. Mapping CONFIRMED, the 400 SUSPECTED (the reviewer could not call Bedrock).
+**Prefer message shapes that emit the fewest adjacent non-user messages.**
+
+**The review corrected the supervisor's brief seven times**, including that "all 24
+`'inFlight' => false` sites" was a grep LINE count (21 state writes + 1 checkpoint-payload key
++ 2 comments) and that the parked window's live-key set is not just Ctrl+C and Escape —
+`PageUp`/`PageDown` sit above the `inFlight` swallow and are observably live, they simply cannot
+abandon anything.
 
 **`crush_code.md`'s status block still needs Phase 2 items 3 and 5 marked complete** (see
 §9 — measured already-done, no code needed) and item 6 promoted from 🟡 to ✅ once E21
