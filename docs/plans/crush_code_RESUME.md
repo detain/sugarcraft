@@ -255,35 +255,25 @@ already done and one names a class that does not exist:**
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
 
-**As of 2026-08-19 the working tree carries UNCOMMITTED Bundle B3 work** (Phase 5 items
-8, 9, 10a). Implementation done; suite verified by the supervisor at **7190/75900/1, exit 0**,
-and reproduced independently by the reviewer. **The adversarial review has RETURNED and the
-FIX round is in flight.**
+**As of 2026-08-19 Bundle B3 is COMMITTED as `a72c5b0a`** (Phase 5 items 8, 9, 10a), with
+its review and fix rounds done. Supervisor-verified on a clean tree: **7204 / 75944 / 1,
+exit 0**. Worklog section "Bundle B3 — review + fix rounds" carries the nine mutation
+survivors, the one real code bug (`MemoryBlock::MAX_BYTES` was not a ceiling — 11,119 bytes
+measured against a 4,096 budget, with the false promise in the model-facing header), the
+five corrections the fix agent made to the supervisor's brief, and the two review findings
+that were against the supervisor's own backlog rather than the code.
 
-The review ran **55 mutations: 46 killed, 9 SURVIVED**, against an implementer who reported
-"28 mutations, 28 killed, 0 survivors" — the report did not hold at that depth. 17 confirmed
-findings; the fix brief is `/tmp/…/scratchpad/b3-fix.md` (310 lines) and carries all of them.
-The six that needed real tests rather than prose: `CustomProvider`/`VertexProvider` never
-pinned to actually SET `errorTransient` (three sites, one of which the code's own comment
-calls "THE case this classification exists for"); `Runtime`'s `$emitted` guard unpinned on
-the error-RESPONSE channel while pinned on the throw channel (and the error channel is the
-one Vertex uses); `Bootstrap::backendFor()`'s memory-store wiring covered only via the echo
-fallback arm; `NetworkExceptionInterface` dead to its own test (passes via
-`TransferException`, since `ConnectException extends` it — **verbatim last round's defect
-recurring**); `statusCode()`'s `$status > 0` guard; and `MemoryBlock`'s id tie-break, which
-its test could not distinguish from `glob()`'s sort plus PHP 8's stable `usort`.
-One real code bug: `MemoryBlock::MAX_BYTES` is not a ceiling — `$rendered !== []` admits the
-FIRST note whole however large, and `clip()` bounds only `content()`, leaving `type` and
-`tags` unbounded. Measured 11,119 bytes against a 4,096 budget, with the false promise in
-the **model-facing header sentence** itself.
+**In flight: E21** — the implementation round of "wire the automatic 85% compaction tier to
+the model", brief at `/tmp/…/scratchpad/e21-brief.md` (330 lines, measured at `a72c5b0a`,
+baseline 7204/75944/1). Recovery if that round's result was lost: the brief is
+self-contained, so re-spawn against it. **Then review → fix → verify → commit as usual —
+E21 has NOT been reviewed yet.** If the tree is clean and `git log` shows an E21/Phase 5
+item 6 commit, that round finished; move to C1 in §11.
 
-**Recovery if the fix round's result was lost: do not commit unreviewed-and-unfixed.**
-Re-spawn a fix agent against `/tmp/…/scratchpad/b3-fix.md`; it is self-contained. Then the
-supervisor verifies the full suite personally and commits. The file list is in the worklog's
-B3 heading.
-
-If instead the tree is clean and `git log` shows a B3 commit, the round finished — move
-to C1 in §11.
+**`crush_code.md`'s status block still needs Phase 2 items 3 and 5 marked complete** (see
+§9 — measured already-done, no code needed) and item 6 promoted from 🟡 to ✅ once E21
+lands. Held back deliberately while E21's agent is running, to avoid two writers on that
+file.
 
 ## 11. QUEUE — in order
 
@@ -293,12 +283,7 @@ to C1 in §11.
   complete; **item 6 is 🟡 partial** — `/compact` asks the model, the automatic 85% tier
   still uses the heuristic (backlog E21), which is the lossier path and where most real
   compactions happen. Pick E21 up before calling Phase 5 finished.
-- **B3** Phase 5 items 8,9,10a — **implemented, uncommitted, mid-review** as of
-  2026-08-19 (see §10). Retry went to the **four provider call sites**, NOT the
-  `runCompleteInChild()` location the plan names (which replays tool calls); recall uses
-  `list(MemoryScope::Project)`, not `search()` (which is a substring match and would
-  never fire); the additional-dirs line was **not** emitted for want of any data source
-  (backlog E26).
+- ~~**B3** Phase 5 items 8,9,10a.~~ **DONE `a72c5b0a`** (7204/75944/1, exit 0).
 - **E21 — finish Phase 5.** Brief written and ready: `/tmp/…/scratchpad/e21-brief.md`
   (327 lines, measured against the tree; includes the four traps and the recommended
   park-the-submission design). The automatic 85% compaction tier still uses the heuristic

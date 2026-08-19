@@ -6795,3 +6795,138 @@ block · `NonInteractive::EXIT_FAILURE`'s docblock and the README exit table (a 
 now already had its retries, which changes what the exit code means) · both
 `BuiltInToolCorpusTest` censuses and their prose copies (273→275 files, 292→294
 declarations, concrete 224→226).
+
+---
+
+## Bundle B3 — review + fix rounds, COMMITTED `a72c5b0a`
+
+Suite verified by the supervisor personally on a clean tree: **7204 tests / 75944
+assertions / 1 skipped / exit 0**, 2m49s. Baseline into the fix round was 7190/75900/1;
+the fix round added exactly the 14 tests it claimed and no source file, so neither
+`BuiltInToolCorpusTest` census moved. `.sugar-crush/config.json` md5 still
+`05480c743aff302fd6c06c5a4a4c2210`; `check-path-repos --no-lib-path-repos` exit 0; the one
+skip re-confirmed by running `tests/MCP/McpClientTest.php` alone (40 tests, 1 skipped).
+
+### The review round is why this section exists
+
+The implementer reported **"28 mutations, 28 killed, 0 survivors."** The independent
+reviewer ran **55 mutations and found 9 survivors**, plus 17 confirmed findings. Both
+statements can be true at once — the implementer's 28 were the mutations it thought to
+write — which is exactly why the loop has a separate review round and why a
+self-reported mutation score is not coverage. **Recorded in RESUME §5 as round 19's
+lesson.**
+
+Six survivors were the companion defect, *a test pinning the PRESENCE of a clause and
+not its TRUTH*:
+
+| survivor | what it exposed |
+|---|---|
+| delete `errorTransient:` at `CustomProvider.php:169` | nothing asserted the provider SETS the flag |
+| `errorTransient: null` at `VertexProvider.php:943` | the 200-SSE `overloaded_error` case — the one the code's own comment calls "THE case this classification exists for" |
+| `errorTransient: null` at `VertexProvider.php:716` | the rawPredict error object |
+| drop `\|\| $emitted` from `Runtime.php`'s **error-chunk** gate | pinned on the throw channel, unpinned on the error-response channel — and the error channel is the one Vertex uses, so a retried stream would show the user the reply twice |
+| delete `withMemoryStore()` from `Bootstrap.php:1227` only | `backendFor()` unasserted; the passing test reached only `backend()`'s echo-fallback arm, i.e. covered nobody with a provider configured |
+| `$link instanceof NetworkExceptionInterface` → `if (false)` | **survived 2863 tests.** `testAConnectExceptionIsTransient` answers through the `TransferException` fallback, because `ConnectException extends TransferException` |
+
+The last one is verbatim the previous round's defect. It is now killed by a local
+`PsrNetworkFailure` double implementing *only* `NetworkExceptionInterface`, and that test
+**asserts its own premise** (not a `TransferException`, no `getStatusCode`, not
+Aws/Transporter) so it cannot silently start passing through another clause later.
+
+Two more survivors were guards nothing read back: `statusCode()`'s `&& $status > 0` (load
+bearing — without it a `getStatusCode() === 0` short-circuits the walk before
+`AwsException::isConnectionError()` is consulted), and **both** of `MemoryBlock`'s
+id-tie-break mutations — reversing it and deleting it. See the mechanism note below.
+
+### The one real code bug: `MemoryBlock::MAX_BYTES` was not a ceiling
+
+`$rendered !== []` exempted the **first** entry from the budget gate, and `clip()` bounded
+`content()` while leaving `type` and `tags` unbounded. Measured with one project note
+carrying 400 tags: **11,119 bytes against a 4,096 budget, in 1 line.** The false promise
+was in three places, the worst being the **model-facing header sentence** — a promise made
+to the model inside the prompt it is reading.
+
+`renderEntry()` now clips the **assembled line**, so whichever field carries the bytes is
+bounded; `clip()` pays for its truncation marker out of `MAX_ENTRY_BYTES` so a cut line
+lands *on* the ceiling rather than at ceiling+13; the first-entry exemption is gone.
+
+**The fix agent flagged its own honest gap rather than claiming coverage:** removing the
+exemption is now behaviourally unobservable, because the per-line clip plus
+`MAX_ENTRY_BYTES ≤ MAX_BYTES` means the first note always fits. It pinned the inequality
+that makes that safe instead of writing a test that pretends to cover the exemption. That
+is the right answer and the right way to report it.
+
+### The tie-break mechanism, worth keeping
+
+In the normal case the id tie-break is a **no-op**: files are named for their ids, `glob()`
+returns sorted paths, and PHP 8's `usort` is stable, so ascending-id order *is* discovery
+order. That is why both mutations survived — and why `capture()`'s docblock crediting the
+tie-break with the block's determinism was wrong. Determinism comes from glob + stable
+sort; the tie-break's real job is pinning order to the entry's **identity** rather than to
+its filename, which is what the new test measures (equal timestamps, filenames `01.md` and
+`99.md` whose order opposes their frontmatter ids).
+
+### Five corrections the fix agent made to the supervisor's brief
+
+1. **"off by one, in two files"** — only one file carried a `MAX_ATTEMPTS` count
+   (`NonInteractive.php:73`); `grep -rn MAX_ATTEMPTS README.md` is empty. The README's
+   error was the *other* one, the retry's domain.
+2. **"`Bootstrap::backend()` can return `CommandBackend` or `EchoBackend`"** — it cannot
+   return `EchoBackend`. Its default arm is `new EngineBackend(new EchoProvider(), 'echo')`,
+   which *does* retry. `EchoBackend` reaches `NonInteractive` only by injection.
+3. **"`/memory add` never sets tags, so F1 needs a hand-edited entry"** —
+   `MemoryStore::add()` takes `array $tags` as its third parameter, so the 400-tag fixture
+   uses the public API. The hand-edited-markdown route was needed for the **tie-break**
+   test instead.
+4. The tie-break no-op mechanism above, which the brief asked about but did not know.
+5. Re-measured and confirmed the `ConnectException extends TransferException` premise
+   rather than taking it from the review report.
+
+### Two of the review's findings were against the SUPERVISOR's backlog, not the code
+
+- **E28** claimed the sub-agent retry "is correct, it is just not on a user-reachable path
+  yet." It is **not correct.** An attempt also invokes `$permissionApprover` — a
+  user-facing prompt — and mutates `PermissionGate`'s Auto circuit-breaker counters, since
+  `evaluate()` is `decide($call, commitAutoStrikes: true)`. Neither is rolled back and
+  neither *can* be, which is the same "append-only, no un-emit" argument the very same
+  comment uses to explain why `Runtime` may not retry mid-stream. Measured: one `Write`
+  call plus a 503 mid-stream → **2 approval prompts for the same tool call.** E28 raised to
+  Medium-on-wiring with that probe and a two-part Step. The retry stays — dormant code gets
+  completed or documented, never deleted.
+- **E25**'s severity argument was false. "Rises the moment memory is shared or imported —
+  `ForeignMemoryImporter` exists precisely to ingest another tool's memory files": both
+  importer paths write `MemoryScope::Local` → on-disk `agent/`, which `MemoryBlock`
+  excludes and `MemoryBlockTest::testUserAndAgentScopeNotesAreNotRendered` pins. Imported
+  entries **never** reach `<project-memory>`. The only writer that does is
+  `/memory add --scope project`.
+
+### New backlog entries
+
+- **E29** — `vendor/bin/phpunit tests/Cli` **hangs at baseline**: over 4 minutes, killed at
+  250s, while the full configured run passes in ~2m26s and every `tests/Cli/*.php` file
+  passes individually in under a second. A cross-test leak that `defaultTimeLimit=60` does
+  not abort. Pre-existing. Consequence for every future round, now in RESUME §8: **do not
+  judge green from a directory-scoped run.**
+- **E30** — `BASE_BACKOFF_MICROSECONDS = 500_000` → `1` survives 3188 tests, because every
+  backoff assertion is relational. The "derive, don't hardcode" rule working as designed —
+  but the prose figures ("500ms doubling, ~1.5s total") have no reader and rot silently the
+  day the constant moves. `src/` now cites `totalBackoffMicroseconds()` instead of quoting
+  1.5s; the surviving literals are in `crush_code.md`, marked "at the constants of the
+  time".
+
+### Prose corrections that shipped with the fix round
+
+`MemoryBlock`'s budget domain (the budget covers rendered **lines**, not note text — the
+test docblock had asserted the false version while its assertion agreed with the code) ·
+`AgentManager`'s rollback claim · README + `EXIT_FAILURE` (retries are true of the engine
+only) · `CompleteResponse::$errorTransient`'s "only the two catch sites" (six sites, four
+of them catch sites) · **four** providers surface failures as exceptions, not five (the 5
+was 7−2 with Echo silently folded in) · "two channels, three classifier inputs", now
+worded identically in `TransientFailure` and `crush_code.md` · "**two** providers wrap"
+(`TransporterException` is an openai-php class matched on the first link, not a provider) ·
+`EnvironmentBlock` swept whole — class docblock, `capture()`, `render()`,
+`gitStatusSnapshot()` **and** `isGitRepo()`, two of which still claimed the snapshot was
+never re-polled mid-session while `PromptStabilityTest` pins the opposite, and while the
+bundle's own new `MemoryBlock` docblock builds its prompt-caching argument on the true
+version · the backoff figure's domain (1.5s per provider call; ~12s per turn at `maxSteps`
+8) · `App::$memoryStore`'s docblock naming the wrong object.
