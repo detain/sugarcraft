@@ -278,8 +278,10 @@ the vendor section below.
 **Bundle W2 is IN FLIGHT** (input blocked while a turn runs, user-reported). Nothing of it is
 committed.
 
-**Phase 2 items 1, 2, 3, 5, 6, 8 complete. Phases 0, 1 complete. Phase 5 is items 1-9 + 10a.**
-**47 of 75 plan items, 28 left.** See the `#N`-tracker section below before answering any question
+**Phase 2 items 1, 2, 3, 5, 6, 8 complete. Phases 0, 1 complete. PHASE 5 IS COMPLETE** —
+item 10b was measured 2026-08-19 and found already done by Bundle A (`bf3495f5`); see
+"BUNDLE B4 NEEDED NO CODE" below before re-planning it.
+**48 of 75 plan items, 27 left.** See the `#N`-tracker section below before answering any question
 about totals — the answer is not the sum of the series.
 
 ## BUNDLE W1 IS COMMITTED — `47ee2c86`. The user's live render bug is fixed.
@@ -388,6 +390,110 @@ tool-calling turn. `finishToolCalls()` keeping `inFlight` true is what makes tha
 
 Brief: `/tmp/…/scratchpad/w2-brief.md` (184 lines) + `w2-measured.md` (128 lines), both self-contained.
 
+## ⚠️ BUNDLE W3 IS QUEUED — the shell chrome ignores the theme. USER-REPORTED.
+
+**Third live bug report, 2026-08-19, same priority class as W1/W2.** Reported as *"when showing the
+menus up top none of them have borderes making where the menu listing txt starts/ends difficult to
+tell at a glance ... (no the menu names the menu items list)"*, then corrected by the user a minute
+later: *"i stand corrrectd.. there are borderes.. just foreground matchs background color so invis"*.
+
+**The user's correction is the right diagnosis and it is sharper than the original report.** Do not
+implement the first version of this bug — there is nothing to add. Measured:
+`MenuBar::dropdownLines()` (`src/Tui/Components/MenuBar.php:431-440`) already draws a full box, and a
+probe of `renderDropdown()` with menu 1 open returns 12 rows, every one exactly 18 cells wide, with
+matched `┌─…─┐` / `│ … │` / `└─…─┘`. `Tui/Renderer.php:400` splices it in AFTER `clipWidth`/`clipTail`
+specifically so it cannot be trimmed. Nothing is missing and nothing is clipped.
+
+**The root cause is that `src/Tui/` is theme-blind, and it is the whole directory, not the menu.**
+
+| | measured |
+|---|---|
+| `src/Tui/` files with hardcoded `Color::hex('#…')` | **10** (~37 distinct colors) |
+| `src/Tui/` files that consult `Theme` | **0** — `SettingsPane`'s single `Theme` hit only *lists* theme names |
+| `src/Renderer.php`, the transcript | fully themed: `$theme->border`, `$theme->userLabel`, `$theme->systemLabel` |
+
+`MenuBar` does not import `Theme` at all (`grep -c Theme` → **0**) and hardcodes `#00ffaa` (active),
+`#fde68a` (title), `#6b7280` (border), `#e5e7eb` (item text), `#7d6e98` (inactive tab).
+
+**Why that produces "foreground matches background":** `Theme::adaptive()` DETECTS the terminal
+background — `TerminalBackground::isDark()` over an OSC 11 query plus `COLORFGBG` — and returns a dark
+or a light palette accordingly. So on a light terminal the transcript repaints for light and the shell
+chrome stays painted for dark: a mid-gray `#6b7280` border and near-white `#e5e7eb` item text, both of
+which disappear against a light background. The same applies to any `/theme` switch: it moves the
+transcript and leaves the shell behind.
+
+**A design constraint to settle BEFORE any agent starts editing, because there is no obviously right
+answer and inventing one silently is how this goes wrong:** `Theme` exposes only `name`, `markdown`,
+`border`, `userLabel`, `assistantLabel`, `systemLabel`. There is **no background token, no muted/dim
+token and no selected/accent token** — and the shell needs all three (the dim border, the `(empty)`
+and inactive-tab gray, the `#00ffaa` selected row). So this bundle must either add tokens to `Theme`
+(and then every `Theme` factory, `byName()`, `adaptive()`, `default()` and `pair()` must set them) or
+map the shell onto the four that exist and accept losing a distinction. **Measure which before
+choosing** — and whichever it is, the fix is not complete until a light-background run is driven, since
+that is the only configuration in which the reported symptom appears at all.
+
+**Ordering:** W3 goes after W2 (it touches `src/Tui/` and `src/Theme.php`, W2 owns `src/Chat.php` and
+`src/Renderer.php` — no file overlap, but the strictly-sequential rule is about suite runs, not files).
+It is a live-bug bundle, so it precedes the audit queue, and `#88` moves behind it for the same reason
+it moved behind W2: W3 will change the suite figure again.
+
+## ✅ BUNDLE B4 NEEDED NO CODE — Phase 5 item 10b was already done
+
+**Measured 2026-08-19 while the W2 agent was still running, read-only, off the files W2 owns.**
+Item 10b asks to differentiate the hardcoded `AgentDefinition` preset prompts, "currently generic
+one-liners that don't even mention the skills they're granted". They are not one-liners.
+`git show bf3495f5 -- src/Agents/AgentDefinition.php` shows the generic one-liners as the `-` side
+of the diff, and that commit's own message says **"Phase 5 items 1, 2, 3 and item 10's preset half."**
+
+Three errors in the plan's own tracking of this item, all in the same direction:
+
+1. **"10b (the preset prompts) untouched"** — written during Bundle B3, which closed 10a, asserting
+   an absence nobody re-measured after Bundle A had closed the other half. `crush_code.md:25` then
+   went further and called the earlier "Phase 5 is finished" note *wrong*; **the earlier note was
+   right and the correction was the error.** §5 in the item tracker rather than in a code comment.
+2. **"the five hardcoded presets"** — there are **six**. `fromType()` builds `coder`, `reviewer`,
+   `debugger`, `architect`, `tester`, `devops`.
+3. The parenthetical is now pinned in **both** directions, which is more than the item asked for:
+   `AgentDefinitionTest::testEveryPresetNamesEverySkillItIsGranted` (a granted skill the prompt
+   forgets) and `::testNoPresetPromptNamesASkillItIsNotGranted` (a prompt that tells a sub-agent to
+   consult a skill it was never handed). The second reads the skill universe off
+   `SkillLoader::loadBuiltInSkills()` instead of a literal list, so a skill added under
+   `src/Skills/BuiltIn/` is covered the moment it exists.
+
+**The transferable rule, and it is the workflow's step 1 for a reason:** a queue row is not evidence.
+This is the second time in this plan that "verify before writing" turned a bundle into a no-op — the
+other is Phase 6 item 1's `__DIR__` bug, flagged the same way in the bundle table. **Every bundle's
+measure step must re-derive the defect from the source, and a bundle whose defect has evaporated
+must be reported as closed rather than re-implemented.** An agent handed "differentiate the prompts"
+with no measure step would have rewritten six perfectly good prompts and called it progress.
+
+## 📏 C5 IS MEASURED — Phase 4 item 6, and one of its four parts is already done
+
+**Read-only inventory, 2026-08-19.** The item bundles four unrelated changes; they are not equally
+real.
+
+| part | measured state |
+|---|---|
+| subcommands `mcp list`, `session list`/`delete`, `models`, `doctor`, `completion bash\|zsh\|fish` | **absent.** `run` is the ONLY subcommand — `ArgvParser.php:140`, `if ($arg === 'run' && !$promptRequested)`, an alias for `-p` |
+| `--config <path>` | **absent** from the parser entirely; no `--config` token in `ArgvParser.php` |
+| a 0/1/2 exit-code convention | **ALREADY DONE**, and thoroughly — `bin/sugarcrush` documents 2 = "nothing was attempted and a retry cannot help" at five separate exits, with 1 reserved for "ran and failed" |
+| warn-not-silently-drop on unrecognised `--output-format` | **REAL DEFECT.** `NonInteractive.php:507` states it in its own docblock: *"Any value other than `self::FORMAT_JSON` falls back to plain text."* `--output-format xml` gets text, silently, exit 0 |
+
+So C5 is three parts of work, not four. The `--output-format` half is the sharpest and the smallest:
+the value is accepted verbatim by `ArgvParser` (`:208` `substr($arg, 16)`, `:215` `$argv[++$i]`) and
+then compared for equality against `FORMAT_JSON` in three places (`:388` `emitErrorDocument`, `:524`
+`format`), so an unrecognised value is not merely unvalidated — it is *indistinguishable from `text`*
+at every consumer. Validation belongs in the parser (one place, before any dispatch), which is also
+where `usageError` already lives, so it can reuse the exit-2 usage path rather than inventing a
+warning channel.
+
+**A trap for whoever implements the subcommands:** `bin/sugarcrush` parses argv and dispatches
+`--help`/`--version` **before** touching `Bootstrap` or `Program`, deliberately, so they answer on a
+machine with no provider, no config and no TTY. Every new subcommand is in that same class and must
+dispatch in the same place — `mcp list` and `doctor` that open the alt-screen would be Phase 0
+item 3's bug all over again. `doctor` in particular must stay distinct from the model-invoked
+`doctor` tool, which is the wording the item chose on purpose.
+
 ## 🤖 THE WORKFLOW — how the rest of the plan gets executed (requested by the user 2026-08-19)
 
 The user asked for a **workflow** to finish the remaining plan, and started it. The script is persisted
@@ -431,7 +537,8 @@ all per the existing queue note.
 | # | bundle | plan items |
 |---|---|---|
 | 0 | **W2** | *not a plan item* — finish its loop first, it is in flight |
-| 1 | **B4** | Phase 5 item **10b** — differentiate the five `AgentDefinition` preset prompts. Small; closes Phase 5 |
+| 0b | **W3** | *not a plan item* — shell chrome ignores `Theme`; measured, see its section above |
+| ~~1~~ | ~~**B4**~~ | **DROPPED — already done** by Bundle A (`bf3495f5`), measured 2026-08-19. No code. Phase 5 is closed |
 | 2 | **C5** | Phase 4 item **6** — real subcommands, `--config`, exit-code convention, `--output-format` warning |
 | 3 | **C4a** | Phase 2 item 4 part 1 — wire `CommandLoader` as an instance into `Chat`; `$ARGUMENTS`/`$1..$9` |
 | 4 | **C4b** | Phase 2 item 4 part 2 — `` !`cmd` `` (ReactPHP `Process`) + `@file` |
@@ -466,7 +573,7 @@ The size guideline here is ~15 agents per run, and a full bundle is 6, so a run 
 Invoke with the next batch, read the result, re-verify personally, then invoke again. Do not try to put
 all twelve bundles in one run.
 
-## ORDER: W1 → W2 → `#88` → the audit queue
+## ORDER: W1 → W2 → W3 → `#88` → the audit queue
 
 `#88` is the stale README suite figure. **Moved to AFTER the live-bug bundles, not straight after W1**,
 and for a measurable reason: the figure has now been invalidated three times in one session (7,276 →
@@ -738,8 +845,8 @@ inside those two files were renamed too before assuming the item is half-done.
   (`dispatchTurn()` has two callers and its docblock warns a third copy loses the generation stamp, the
   cancellation token, the checkpoint or the title Cmd); `scheduleParkedCompaction()` already implements
   hold-then-dispatch for the 85% tier. **One real drain site, not 21** — see the W2 section above.
-- **Phase 5 item 10b** — differentiate the five hardcoded `AgentDefinition` preset prompts. Small,
-  and it is what stops Phase 5 being finished.
+- ~~**Phase 5 item 10b**~~ — **ALREADY DONE, no code written.** Closed by Bundle A (`bf3495f5`),
+  measured 2026-08-19. The row said "it is what stops Phase 5 being finished"; nothing did.
 - **Phase 4 item 6** — real subcommands (`mcp list`, `session list`/`delete`, `models`, `doctor`
   health-check distinct from the model-invoked tool, `completion bash|zsh|fish`), `--config <path>`,
   a 0/1/2 exit-code convention, warn-not-silently-drop on an unrecognised `--output-format`. **This
