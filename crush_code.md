@@ -38,9 +38,10 @@ off `SkillLoader::loadBuiltInSkills()` so a skill added later is covered the mom
 also outstanding and had fallen out of the RESUME queue entirely; the arithmetic is what
 caught it.
 
-**THREE USER-REPORTED BUGS JUMPED THIS QUEUE and are NOT plan items — do not add them to the
-count.** All three were reported while daily-driving the binary, and all three are functionality
-rather than hardening, so §3's sequencing rule promotes them ahead of the audit work:
+**FIVE USER-REPORTED BUGS JUMPED THIS QUEUE and are NOT plan items — do not add them to the
+count.** All five were reported while daily-driving the binary, and all five are functionality
+rather than hardening, so §3's sequencing rule promotes them ahead of the audit work. Two are
+committed, one crashed the app outright, and two are in flight under a workflow:
 
 - **W1 — long assistant replies were cut off at the pane edge. DONE, `47ee2c86`.** The renderer
   emitted rows wider than the pane and candy-sprinkles' `Style::width()` truncated them, so a
@@ -50,7 +51,7 @@ rather than hardening, so §3's sequencing rule promotes them ahead of the audit
   Four rounds; suite 7387 → **7577 / 87648 / 1, exit 0**. Twelve of twelve mutations killed, each
   re-verified by the supervisor rather than accepted from a report — which is what caught four false
   "it's dead" claims. Backlog gained **E46**-**E50**.
-- **W2 — typing and Ctrl+P are dead while a turn is processing. IN FLIGHT.** Not an async defect: the
+- **W2 — typing and Ctrl+P are dead while a turn is processing. DONE, `a8d8ec75`.** Not an async defect: the
   provider call already runs in a forked child, and keystrokes are already delivered mid-turn. It is
   one policy `return` — `Chat.php:1141`'s blanket `if ($this->inFlight)` swallow — plus a hidden input
   cursor. Enter must ENQUEUE rather than dispatch, and the drain has exactly one real site because
@@ -66,6 +67,23 @@ rather than hardening, so §3's sequencing rule promotes them ahead of the audit
   transcript for light and leaves the shell painted for dark. Full measurement, and the
   `Theme`-has-no-background/muted/accent-token constraint that has to be settled first, are in
   `docs/plans/crush_code_RESUME.md`.
+
+- **W4 — Tab does not complete a partial `/command`. QUEUED, measured.** Reported: Tab "should expand
+  your typed command to the full command currently highlighted .. currntly it switches your active
+  other window ... which is fine normally but when typing a /command and its showing matching command
+  results the bhavior should chang". Measured as a PRECEDENCE bug, not a missing feature: bare Tab
+  never reaches `Chat` at all, because `Tui/KeyboardHandler.php:174` claims it unconditionally for
+  pane cycling, and `Chat` has no bare-Tab arm (its three `KeyType::Tab` hits are a comment and two
+  Ctrl+Tab arms). The conditional-claim idiom already exists two lines below, in the `Escape` arm.
+
+- **W5 — `/websearch`, `/share` and `/agents` killed the app whenever they failed. DONE, `f8fd9cfa`.**
+  Reported with the trace: a bare `/websearch` printed its usage line and died with *"Argument #1
+  ($msg) must be of type SugarCraft\Core\Msg, int given"*. Three sites ended their failure branch
+  with `return [$this, static fn() => print $output];` — and `print` is an expression evaluating to
+  `int 1`, so the closure was a `Cmd` returning an int, which `Program::dispatch()` rejects. `/agents`
+  is one Ctrl+A away. All three now report in the transcript as `Role::System` and return no `Cmd`.
+  Nothing caught it because the suite covered these three commands only on their SUCCESS paths, where
+  the `Cmd` is null — and one test pinned the crash AS the proof of dispatch.
 
 **Phase 2 items 3 and 5 needed no code** — both were already wired and the plan's
 premise was measured false. Item 3 is live at `Cli/Bootstrap.php:374`. Item 5 is

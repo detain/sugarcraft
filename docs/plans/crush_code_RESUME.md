@@ -337,7 +337,85 @@ prove — often the answer is "nothing they used to".
 Practical rule now in force: **write mutation definitions as the exact edit, verbatim, in the report.**
 "MU11" is not a definition. `$labelRoom = … - Width::of($status) - 1;` → drop the `- 1` is.
 
-## ⚠️ BUNDLE W2 IS IN FLIGHT — input blocked while a turn runs. USER-REPORTED.
+## ✅ BUNDLE W2 IS COMMITTED — `a8d8ec75`. Input works mid-turn and Enter queues.
+
+**Suite verified by me personally, not taken from the agent's report: 7602 / 88074 / 1, exit 0**
+(entry baseline 7577 / 87648 / 1). 29 mutations defined as verbatim edits, all 29 killed by the new
+`tests/Chat/InFlightInputQueueTest.php` (25 tests, 390 assertions). Invariants re-checked at the
+gate: config md5 unchanged, stash list 9, 16 vendor symlinks so the skip count stayed 1,
+`phpunit.xml` untouched, `check-path-repos --no-lib-path-repos` rc=0.
+
+**The measured finding that shrank the bundle:** the async half was already done, so the user's
+framing ("it shoudl be doing these requests asynchronously") was the one thing measurement
+contradicted — nothing was blocking. It was one policy `return` plus a hidden caret.
+
+**Six existing tests changed, and every one had pinned the OLD policy** —
+`testKeystrokesIgnoredWhileInFlight` became `testTypingReachesTheDraftWhileATurnIsInFlight`: same
+property, opposite value. That is the category to scrutinise hardest in any review, and it is why the
+review brief pointed at those six diffs by name.
+
+**Two drain decisions worth remembering:** the double-Escape cancel deliberately HOLDS the queue
+(not dispatched, since it may be what the user was stopping; not dropped), and a spend-cap-refused
+prompt goes back at the queue HEAD because `spendCapTurnRefusal()` keeps the draft and writes no
+echo, so it would otherwise vanish with the restored draft.
+
+## ✅ BUNDLE W5 IS COMMITTED — `f8fd9cfa`. Three commands no longer kill the app.
+
+**A USER-REPORTED FATAL, and the most severe report so far.** A bare `/websearch` printed its usage
+line and then died: *"Argument #1 ($msg) must be of type SugarCraft\Core\Msg, int given"*.
+
+Three sites — `/share`, `/websearch`, `/agents` — ended their failure branch with
+`return [$this, static fn() => print $output];`. **`print` is an EXPRESSION evaluating to `int 1`**,
+so the closure is a `Cmd` returning an int; `Program::scheduleCmd()` dispatches whatever non-null a
+Cmd returns and `dispatch()` requires a `Msg`. Any non-zero exit from those three took the app down,
+and `/agents` is one Ctrl+A away.
+
+Writing to stdout was the wrong shape even before the TypeError — the screen belongs to candy-core's
+frame renderer. The `/agents` site's own comment said "output error but don't add to history", which
+is why the failure had nowhere to appear. All three now route through one
+`commandFailureResponse()`: the command is echoed, the output lands as **`Role::System`** (not
+assistant — history is replayed to the provider, so a failure notice filed as a model turn becomes
+something the model believes it said), and the Cmd is null.
+
+**Why nothing caught it, which is the transferable part:** the suite covered these three commands
+only on their SUCCESS paths, where the Cmd is null. The failure branch was the one line of each
+handler no test entered — and it is the line that runs when a user gets an argument wrong, the
+ordinary case rather than the exotic one. **Worse, one test pinned the bug AS the feature:**
+`ChatTest::testPaletteEnterOnShareSessionDispatchesRealHandlerAndCloses` asserted
+`assertNotNull($cmd)` and its comment named "the print-closure path" as its proof that dispatch
+reached the real handler. Its claim was right and was kept; the evidence it cited was the crash.
+
+**Proven against the unfixed code rather than asserted:** with the three call sites reverted, 6 of
+the 7 new tests fail. That exercise also caught a vacuous pass in my own new test —
+`testTheFailureNoticeIsNeverAnAssistantTurn` indexed `$added[1]` without counting first, so against
+the unfixed build (which appended nothing) it compared a role against an undefined key and passed
+with a warning. Suite: **7609 / 88105 / 1, exit 0.**
+
+## ⚠️ BUNDLE W4 IS QUEUED — Tab does not complete a partial `/command`. USER-REPORTED.
+
+Reported: Tab *"should expand your typed command to the full command currently highlighted .. currntly
+it switches your active other window (like between skills/tools/agents/etc) which is fine normally but
+when typing a /command and its showing matching command results the bhavior should chang"*.
+
+**Measured as a PRECEDENCE problem, not a missing feature.** Bare Tab never reaches `Chat`:
+`src/Tui/KeyboardHandler.php:174` claims it **unconditionally** inside the shell's "does the shell own
+this key" predicate and cycles panes. `Chat` has no bare-Tab arm at all — its three `KeyType::Tab`
+hits are a comment at 1343 and two Ctrl+Tab arms (1475, 4787) — so bare Tab falls to the match
+default and leaves the buffer alone. The slash-menu state is already public
+(`slashMenuMatches()`/`slashMenuMatchResults()`/`slashMenuIndex()`, ~8290-8343) and "the popup is
+showing" is exactly `slashMenuMatches() !== []`.
+
+**The idiom to follow already exists two lines below the Tab claim:** the `Escape` arm is conditional
+on `$app->pane !== Pane::Chat`, and `shellOwnsKeyboard($app)` above it is the established
+modal-owns-the-keyboard predicate. So a conditional Tab claim is the existing pattern.
+
+**The test that matters** drives a real keystroke sequence through the shell — type `/comp`, then bare
+Tab — because a test that calls Chat's Tab arm directly cannot see the precedence bug and would pass
+on the broken build. The negative must be pinned too: with no slash menu open, bare Tab must still
+cycle panes, which is the behaviour the user called "fine normally". And no keystroke may put a
+literal `\t` in the buffer (`KeyHelpTest`'s byte map, asserted both ways).
+
+## ⚠️ THE ORIGINAL W2 BRIEF (kept for its measurements)
 
 **Second live bug report, same priority class as W1.** Verbatim: *"when i send a chat message and its
 processing the request im unable to type new text into the chat . im alaso unable to use things like
@@ -648,8 +726,10 @@ all per the existing queue note.
 
 | # | bundle | plan items |
 |---|---|---|
-| 0 | **W2** | *not a plan item* — finish its loop first, it is in flight |
-| 0b | **W3** | *not a plan item* — shell chrome ignores `Theme`; measured, see its section above |
+| ~~0~~ | ~~**W2**~~ | **COMMITTED `a8d8ec75`** — 7602/88074/1, 29/29 mutations |
+| 0b | **W3** | *not a plan item* — shell ignores `Theme` + retain bg RGB + ansi profile. **RUNNING** under workflow `wf_3ae98739-893` |
+| 0c | **W4** | *not a plan item* — Tab completes a partial `/command`. **RUNNING** in the same workflow |
+| ~~0d~~ | ~~**W5**~~ | **COMMITTED `f8fd9cfa`** — the `print`-returns-int fatal in three commands |
 | ~~1~~ | ~~**B4**~~ | **DROPPED — already done** by Bundle A (`bf3495f5`), measured 2026-08-19. No code. Phase 5 is closed |
 | 2 | **C5** | Phase 4 item **6** — real subcommands, `--config`, exit-code convention, `--output-format` warning |
 | 3 | **C4a** | Phase 2 item 4 part 1 — wire `CommandLoader` as an instance into `Chat`; `$ARGUMENTS`/`$1..$9` |
@@ -685,7 +765,7 @@ The size guideline here is ~15 agents per run, and a full bundle is 6, so a run 
 Invoke with the next batch, read the result, re-verify personally, then invoke again. Do not try to put
 all twelve bundles in one run.
 
-## ORDER: W1 → W2 → W3 → `#88` → the audit queue
+## ORDER: W1 ✅ → W2 ✅ → W5 ✅ → W3 → W4 → `#88` → the audit queue
 
 `#88` is the stale README suite figure. **Moved to AFTER the live-bug bundles, not straight after W1**,
 and for a measurable reason: the figure has now been invalidated three times in one session (7,276 →
