@@ -282,6 +282,37 @@ final class ColorTest extends TestCase
         $this->assertSame("\x1b[90m", Color::ansi256(8)->toFg(ColorProfile::TrueColor));
     }
 
+    /**
+     * BOTH regions of the 256-colour space remember their slot: the 6x6x6 cube
+     * (16-231) and the greyscale ramp (232-255).
+     *
+     * The test above covers cube slot 202 only, and that gap was measured, not
+     * guessed: dropping the index from the greyscale branch alone —
+     * `new self($g, $g, $g, $index)` -> `new self($g, $g, $g)` — left
+     * candy-core, candy-kit and sugar-dash all green while
+     * `Color::ansi256(244)->toFg(TrueColor)` silently changed from
+     * `\x1b[38;5;244m` to `\x1b[38;2;128;128;128m`, i.e. from deferring to the
+     * user's palette to overriding it. Both ends of the ramp are asserted
+     * because the branch computes its RGB from the index (`8 + (i - 232) * 10`)
+     * and an off-by-one there is invisible at one sample.
+     */
+    public function testTheGreyscaleRampRemembersItsSlotToo(): void
+    {
+        foreach ([232, 244, 255] as $index) {
+            $c = Color::ansi256($index);
+
+            $this->assertSame($index, $c->ansiIndex, "slot {$index}");
+            $this->assertSame("\x1b[38;5;{$index}m", $c->toFg(ColorProfile::TrueColor), "slot {$index} fg");
+            $this->assertSame("\x1b[48;5;{$index}m", $c->toBg(ColorProfile::TrueColor), "slot {$index} bg");
+        }
+
+        // The RGB behind the ramp is still the ramp's own, so every
+        // colour-space question keeps answering from it.
+        $this->assertSame('#080808', Color::ansi256(232)->toHex());
+        $this->assertSame('#808080', Color::ansi256(244)->toHex());
+        $this->assertSame('#eeeeee', Color::ansi256(255)->toHex());
+    }
+
     /** A profile with no ANSI at all still emits nothing, slot or not. */
     public function testAPaletteSlotStillEmitsNothingWithoutAnsiSupport(): void
     {

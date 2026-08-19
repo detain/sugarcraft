@@ -212,6 +212,18 @@ final class CsiHandlerImpl implements CsiHandler
             $p === 39 => [$this->theme->defaultFg, $this->bg, $this->attrs, $i + 1],
             $p === 49 => [$this->fg, $this->theme->defaultBg, $this->attrs, $i + 1],
 
+            // The BRIGHT halves, palette slots 8-15. Missing until now, and
+            // silently: an unhandled parameter falls through to `default`, which
+            // keeps the PREVIOUS colour, so `\e[31mX\e[90mB` put both cells at
+            // fg 1 and every assertion about a bright colour in this emulator
+            // was measuring the colour before it. That reaches further than the
+            // cell grid — candy-vcr's TapeToGif renders through this handler, so
+            // a GIF painted the wrong colour too. Sibling
+            // {@see \SugarCraft\Vt\Handler\SgrHandler} has always had these two
+            // arms; the two SGR tables had simply diverged.
+            $p >= 90 && $p <= 97 => [$p - 90 + 8, $this->bg, $this->attrs, $i + 1],
+            $p >= 100 && $p <= 107 => [$this->fg, $p - 100 + 8, $this->attrs, $i + 1],
+
             $p === 38 => $this->sgrExtended($params, $i, fg: true),
             $p === 48 => $this->sgrExtended($params, $i, fg: false),
 

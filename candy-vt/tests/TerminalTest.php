@@ -59,6 +59,37 @@ final class TerminalTest extends TestCase
         $this->assertSame(1, $cell->fg);
     }
 
+    /**
+     * The BRIGHT halves of the 4-bit palette, SGR 90-97 and 100-107.
+     *
+     * A regression test for a silent drop: this parser had arms for 30-37 and
+     * 40-47 only, and an unhandled SGR parameter falls through to `default`,
+     * which keeps the PREVIOUS colour rather than erroring. MEASURED before the
+     * fix: `\e[31mX\e[90mB` left BOTH cells at fg 1, so every cell-grid
+     * assertion about a bright colour was really re-asserting the colour before
+     * it — and candy-vcr renders GIFs through this same handler, so a rendered
+     * frame painted the wrong colour too. The preceding red is deliberate: it is
+     * what makes an inherited colour distinguishable from a correct one.
+     */
+    public function testFeedCSIBrightPaletteHalves(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[31mX\x1b[90mB\x1b[97mW");
+
+        $this->assertSame(1, $t->grid()->get(0, 0)->fg, 'red, the control');
+        $this->assertSame(8, $t->grid()->get(0, 1)->fg, 'SGR 90 is palette slot 8');
+        $this->assertSame(15, $t->grid()->get(0, 2)->fg, 'SGR 97 is palette slot 15');
+
+        $t = Terminal::new();
+
+        $t->feed("\x1b[41mX\x1b[100mB\x1b[107mW");
+
+        $this->assertSame(1, $t->grid()->get(0, 0)->bg, 'red background, the control');
+        $this->assertSame(8, $t->grid()->get(0, 1)->bg, 'SGR 100 is palette slot 8');
+        $this->assertSame(15, $t->grid()->get(0, 2)->bg, 'SGR 107 is palette slot 15');
+    }
+
     public function testFeedCSIBold(): void
     {
         $t = Terminal::new();

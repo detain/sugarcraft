@@ -315,4 +315,45 @@ final class TerminalBackgroundTest extends TestCase
             );
         }
     }
+
+    /**
+     * ...and the same agreement on the tier that carries REAL rgb, which is the
+     * only tier where the two can differ at all.
+     *
+     * The fallback test above is trivially satisfiable: there `color()` returns
+     * `Color::ansi(0)`/`ansi(15)` and both rules call #000000 dark and #ffffff
+     * light. The OSC 11 tier is where the split lived —
+     * {@see BackgroundColorMsg::isDark()} averages the sRGB bytes while
+     * {@see Color::isDark()} linearises first, so #808080 is 0.5019 (light) by
+     * the message's rule and 0.2158 (dark) by WCAG's. MEASURED before
+     * `observe()` was changed to derive the bit from the colour it keeps:
+     * `detect(['COLORFGBG' => '0;244'])` said dark and `observe()` on the same
+     * #808080 said light, so a terminal confirming by OSC 11 what COLORFGBG had
+     * already reported FLIPPED the answer. The whole #808080-#b4b4b4 band
+     * splits; three samples across it, plus the two ends as controls.
+     */
+    public function testTheObservedBitAgreesWithTheObservedColourOnRealRgb(): void
+    {
+        foreach ([[0, 0, 0], [0x28, 0x2a, 0x36], [128, 128, 128], [0xb4, 0xb4, 0xb4], [255, 255, 255]] as [$r, $g, $b]) {
+            TerminalBackground::forget();
+            TerminalBackground::observe(new BackgroundColorMsg($r, $g, $b));
+
+            $colour = TerminalBackground::observedColor();
+            self::assertNotNull($colour);
+            $this->assertSame(
+                $colour->isDark(),
+                TerminalBackground::observed(),
+                sprintf('#%02x%02x%02x: the bit and the colour must answer with one rule', $r, $g, $b),
+            );
+            $this->assertSame($colour->isDark(), TerminalBackground::isDark([]));
+        }
+
+        // The rule that is NOT used, pinned so the difference stays visible: a
+        // #808080 terminal is dark to this shell and light to the message's own
+        // gamma-naive test.
+        TerminalBackground::forget();
+        TerminalBackground::observe(new BackgroundColorMsg(128, 128, 128));
+        $this->assertTrue(TerminalBackground::observed());
+        $this->assertFalse((new BackgroundColorMsg(128, 128, 128))->isDark());
+    }
 }

@@ -45,6 +45,27 @@ require __DIR__ . '/../vendor/autoload.php';
 Loop::set(new StreamSelectLoop());
 
 /*
+ * The suite is hermetic against the terminal it happens to be run from.
+ *
+ * `SUGARCRUSH_BACKGROUND` is a supported escape hatch that outranks every other
+ * source of the background colour, and `COLORFGBG` is the pre-OSC-11 inference
+ * below it — so a developer whose shell exports either was running a DIFFERENT
+ * suite from CI's. MEASURED on this tree at the commit that added
+ * tests/Tui/ShellContrastTest.php: `SUGARCRUSH_BACKGROUND=dark` turned 10 of its
+ * 12 tests red and `=light` another 10, plus 2 in TerminalBackgroundTest, and
+ * every message blamed the shell's colours rather than the environment.
+ *
+ * Unset here rather than defended per-test: the tests that exercise the two
+ * variables set them explicitly and restore them (including back to unset, which
+ * `putenv()` only does when handed a bare name), so clearing the inherited value
+ * is the one thing that makes both the pinned and the ambient case reachable.
+ * ShellContrastTest asserts they are absent, so deleting these two lines fails
+ * loudly instead of quietly re-tiering every background in the suite.
+ */
+putenv('SUGARCRUSH_BACKGROUND');
+putenv('COLORFGBG');
+
+/*
  * A temp directory for the suite's own throwaway files, and the two things that
  * keep `vendor/bin/phpunit` from garbage-collecting the developer's real /tmp.
  *

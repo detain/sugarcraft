@@ -108,12 +108,22 @@ final class TerminalBackground
      */
     public static function observe(BackgroundColorMsg $msg): void
     {
-        self::$observed = $msg->isDark();
         // The message carries r/g/b; reducing it to one bit here and throwing
         // the rest away is what left the shell resolving its chrome against a
         // background token nothing paints. Both are recorded, from the one
         // message, so they can never disagree about which terminal answered.
         self::$observedColor = Color::rgb($msg->r, $msg->g, $msg->b);
+        // The BIT is derived from the retained colour, not from
+        // {@see BackgroundColorMsg::isDark()}, so that this tier and the
+        // COLORFGBG tier answer with the same rule. The message's own test is
+        // gamma-NAIVE (it averages the sRGB bytes, mirroring lipgloss v2's
+        // HasDarkBackground) while {@see Color::isDark()} linearises first, and
+        // the two split across the whole grey band: MEASURED, #808080 is dark by
+        // WCAG (luminance 0.2158) and light by the naive rule (0.5019), so
+        // `detect(['COLORFGBG' => '0;244'])` said dark for the same #808080 that
+        // `observe()` called light. One rule, so `isDark()` cannot change answer
+        // when OSC 11 confirms what COLORFGBG already said.
+        self::$observed = self::$observedColor->isDark();
     }
 
     /** The observed OSC 11 answer, or null if the terminal hasn't told us. */

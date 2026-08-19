@@ -18,6 +18,7 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
+use SugarCraft\Sprinkles\Theme as SprinklesTheme;
 
 /**
  * The shell's legibility contract, asserted as a RATIO on the bytes that reach
@@ -30,8 +31,11 @@ use SugarCraft\Crush\Tui\TerminalBackground;
  * complete box, and {@see Renderer::renderView()} splices it in after both
  * clips precisely so it cannot be trimmed. The box was simply painted #6b7280,
  * a literal, which measures 2.95:1 against a dracula background and 4.34:1
- * against pure black — and the shell had 84 such literals across 14 files, none
- * of which consulted a Theme at all.
+ * against pure black — and the shell had 100 such literals (15 distinct values,
+ * 74 of them inside a `Color::hex()` call) across 14 files, none of which
+ * consulted a Theme at all. Re-MEASURED at 6c1e51c8^ with
+ * `git grep -oE "'#[0-9a-fA-F]{3,8}'" -- sugar-crush/src/Tui`; the 84/14 this
+ * comment used to quote was a different, unrecorded count.
  *
  * So the assertion here is deliberately NOT "MenuBar uses $theme->border". That
  * would pin the presence of a clause, say nothing about legibility, and pass
@@ -72,6 +76,12 @@ final class ShellContrastTest extends TestCase
      *   - #808080  the crossover-ish mid grey no palette token survives, and the
      *              one that catches a direction computed with the wrong rule.
      *   - #333f58  a mid-dark blue: "dark" is not one colour.
+     *   - #666666  the grey the ROLE-COLLAPSE was reported on, added because the
+     *              list above did not contain it: MEASURED on the version of
+     *              `Theme::pair()` this file was written against, `dark` on
+     *              #666666 projected 7 of its 8 shell tokens onto one #ffffff
+     *              while every ratio here stayed green, so the domain the
+     *              distinctness assertion holds over has to include it.
      *
      * @return list<string>
      */
@@ -84,7 +94,36 @@ final class ShellContrastTest extends TestCase
         '#fafafa',
         '#808080',
         '#333f58',
+        '#666666',
     ];
+
+    /**
+     * Every ratio in this file is measured against a background the test itself
+     * observes, so an inherited `SUGARCRUSH_BACKGROUND` — which outranks the
+     * observed reply — silently replaces all nine of them with #000000 or
+     * #ffffff. MEASURED: `SUGARCRUSH_BACKGROUND=dark` turns 10 of these 12 tests
+     * red, `=light` another 10, and every message blames a colour. Cleared once
+     * in `tests/bootstrap.php`; asserted here so that line cannot be deleted
+     * silently.
+     */
+    /**
+     * The one file under `src/Tui/` allowed to construct a Color, and why: it is
+     * the file that RESOLVES the background, so it necessarily builds one from
+     * the OSC 11 reply's r/g/b and one from a palette slot for each nominal
+     * pre-reply floor. It names no colour of the shell's own.
+     *
+     * @var list<string>
+     */
+    private const COLOUR_CONSTRUCTORS_ALLOWED = ['TerminalBackground.php'];
+
+    protected function setUp(): void
+    {
+        $this->assertFalse(
+            getenv(TerminalBackground::ENV_OVERRIDE),
+            TerminalBackground::ENV_OVERRIDE . ' must be unset for this suite to measure what it claims',
+        );
+        $this->assertFalse(getenv('COLORFGBG'), 'COLORFGBG must be unset for this suite');
+    }
 
     protected function tearDown(): void
     {
@@ -236,6 +275,20 @@ final class ShellContrastTest extends TestCase
                 if (preg_match("/'#[0-9a-fA-F]{3,8}'/", $line) === 1) {
                     $offenders[] = $file->getFilename() . ':' . ($number + 1) . ' ' . trim($line);
                 }
+                // A hex literal is only the FORM the reported bug took.
+                // `Color::rgb(107, 114, 128)` is the same #6b7280 and used to
+                // walk straight past this guard: MEASURED, that exact
+                // substitution at src/Tui/SessionPicker.php survived this test
+                // 12/12 AND SessionPickerTest 34/34, because the picker is not
+                // in a 120x40 frame with no sessions. Constructing a Color at
+                // all is the thing to catch, so the pattern is the constructor,
+                // not the notation.
+                if (
+                    preg_match('/\bColor::(rgb|hex|hsl|hsv|ansi|ansi256|parse)\s*\(|new\s+Color\s*\(/', $line) === 1
+                    && !in_array($file->getFilename(), self::COLOUR_CONSTRUCTORS_ALLOWED, true)
+                ) {
+                    $offenders[] = $file->getFilename() . ':' . ($number + 1) . ' ' . trim($line);
+                }
             }
         }
 
@@ -246,12 +299,27 @@ final class ShellContrastTest extends TestCase
      * Split a rendered frame into `[foreground, background, text]` runs by
      * replaying its SGR stream.
      *
-     * Only the four things this shell emits are tracked: `38;2;r;g;b`,
-     * `48;2;r;g;b`, and the resets `0`/`39`/`49`. `38;5;n` and the 4-bit
-     * `30-37`/`90-97` forms are decoded too, because the `ansi` palette is built
+     * COLOUR is what is tracked: `38;2;r;g;b`, `48;2;r;g;b`, `38;5;n`/`48;5;n`,
+     * the 4-bit `30-37`/`90-97`/`40-47`/`100-107` forms, and the resets
+     * `0`/`39`/`49`. The palette forms matter because the `ansi` theme is built
      * from {@see Color::ansi()} and W3(c) makes those slots survive to the wire;
      * their RGB is xterm's DEFAULT palette, so for a terminal that has remapped
      * its 16 colours these numbers are nominal and the terminal owns the result.
+     *
+     * INTENSITY is not, and that is a real hole rather than a tidy exclusion.
+     * `src/Renderer.php` has 17 `->faint()` call sites (system rows, tool rows,
+     * the thinking spinner, the gutter), and SGR 2 is rendered by most terminals
+     * as roughly half-way toward the background — which halves the ratio this
+     * walker measured. MEASURED at that assumption on a #282a36 terminal:
+     * dracula's projected `shellMuted` #a3acc9 reads 6.31:1 here and 2.70:1 as
+     * painted (#666b80), and #abaebf 6.47:1 becomes 2.74:1. Both are inside this
+     * test's claimed domain and both fail the threshold. It is NOT modelled,
+     * because the fix is in the renderer (a token that has already been chosen
+     * for legibility must not then be dimmed) and not in the measurement, and
+     * because "half-way" is a terminal-by-terminal guess this suite would then
+     * be pinning as fact. Recorded as a known gap, the same way the CandyShine
+     * markdown palette is. SGR 7 (inverse) genuinely does not occur: 0
+     * occurrences in a 120x40 frame in any palette.
      *
      * @return list<array{0: ?Color, 1: ?Color, 2: string}>
      */
@@ -411,8 +479,9 @@ final class ShellContrastTest extends TestCase
      * it renders as the absolute colour it now is. Asserted so the trade is
      * recorded rather than discovered.
      *
-     * On a white terminal `ansi`'s foreground is `Color::ansi(7)` at 1.16:1, so
-     * it must move; on black it is 16.67:1 and must not.
+     * On a white terminal `ansi`'s foreground is `Color::ansi(7)` — #e5e5e5,
+     * MEASURED at 1.26:1 — so it must move; on black it is 16.67:1 and must
+     * not.
      */
     public function testAnAnsiTokenNudgedForLegibilityStopsBeingAPaletteSlot(): void
     {
@@ -525,6 +594,172 @@ final class ShellContrastTest extends TestCase
                     );
                 }
             }
+        }
+    }
+
+    /**
+     * Two palette colours that DIFFER must still differ after the projection.
+     *
+     * The companion property to the ratio assertions, and the one they cannot
+     * see: legibility is satisfied by painting the entire shell one colour, so a
+     * suite that only measures ratios passes a theme that has lost every
+     * distinction it has. MEASURED on the version of `Theme::pair()` this test
+     * was written against: replacing all eleven token sources with the terminal
+     * background itself — a twelve-token palette collapsed to one colour — left
+     * all ten contrast tests in this file green. And unmutated, an `ansi` theme
+     * on a #ffffff terminal projected `border`/`muted` (`Color::ansi(8)`) and
+     * `foreground` (`ansi(7)`) onto one byte-identical #666666, so the dropdown's
+     * box lines were exactly its item text: the user's first report.
+     *
+     * Distinctness is checked as BYTES, deliberately. A contrast ratio between
+     * two tokens is the wrong instrument — {@see Theme::contrast()} is
+     * luminance-only, and `dark`'s projected `error` #f5a0a0 and `info` #87c0d0
+     * measure 1.006:1 against each other while being obviously different
+     * colours.
+     *
+     * Sources that are EQUAL are expected to stay equal and are not asserted on:
+     * `ansi` writes `border` and `muted` as the same `Color::ansi(8)`, and
+     * inventing a difference its author did not is not the projection's job.
+     * That is why the expectation is derived from the SprinklesTheme rather than
+     * from the Theme under test.
+     *
+     * `adaptive` is not iterated: it IS `dark` or `light` (whichever
+     * {@see TerminalBackground::isDark()} calls for) run through the same
+     * `pair()`, so it adds a third resolution of an already-covered palette.
+     */
+    public function testTwoPaletteColoursThatDifferStillDifferAfterTheProjection(): void
+    {
+        // token => the SprinklesTheme colour it is projected FROM.
+        $sources = [
+            'border' => 'border',
+            'userLabel' => 'primary',
+            'assistantLabel' => 'secondary',
+            'systemLabel' => 'muted',
+            'shellForeground' => 'foreground',
+            'shellMuted' => 'muted',
+            'shellPrimary' => 'primary',
+            'shellSuccess' => 'success',
+            'shellWarning' => 'warning',
+            'shellError' => 'error',
+            'shellInfo' => 'info',
+        ];
+
+        $palettes = [
+            'dark' => SprinklesTheme::dark(),
+            'light' => SprinklesTheme::light(),
+            'dracula' => SprinklesTheme::dracula(),
+            'tokyoNight' => SprinklesTheme::tokyoNight(),
+            'ansi' => SprinklesTheme::ansi(),
+        ];
+
+        $violations = [];
+        foreach (self::BACKGROUNDS as $hex) {
+            $background = Color::hex($hex);
+            TerminalBackground::forget();
+            TerminalBackground::observe(new BackgroundColorMsg($background->r, $background->g, $background->b));
+
+            foreach ($palettes as $name => $sprinkles) {
+                $theme = Theme::byName($name);
+
+                // projected hex => the source hex that got there first.
+                $claimed = [];
+                foreach ($sources as $token => $source) {
+                    /** @var Color $projected */
+                    $projected = $theme->$token;
+                    /** @var Color $from */
+                    $from = $sprinkles->$source;
+
+                    $key = $projected->toHex();
+                    $owner = $claimed[$key] ?? null;
+                    if ($owner !== null && $owner[0] !== $from->toHex()) {
+                        $violations[] = sprintf(
+                            '%s on %s: %s (from %s) and %s (from %s) both project to %s',
+                            $name,
+                            $hex,
+                            $token,
+                            $from->toHex(),
+                            $owner[1],
+                            $owner[0],
+                            $key,
+                        );
+
+                        continue;
+                    }
+                    $claimed[$key] = [$from->toHex(), $token];
+                }
+            }
+        }
+
+        $this->assertSame([], $violations);
+    }
+
+    /**
+     * The threshold is 4.5, and 4.5 is what MOVES the colour that was reported.
+     *
+     * Every other assertion in this file compares against
+     * {@see Theme::CONTRAST_MIN}, which makes them all silent about the constant
+     * itself: MEASURED, setting it to 1.0 left 11 of the 12 tests here green
+     * while the shell rendered its raw palette values — dracula's border at
+     * 1.56:1 on its own background. So this test writes 4.5 out as a literal and
+     * pins two pre-projection measurements that the constant has to be strictly
+     * above to do its job.
+     *
+     * The figures are hardcoded on purpose. #6b7280 is the literal the shell
+     * actually painted the dropdown box with, and 2.95:1 / 4.34:1 are what it
+     * measured on the two backgrounds the user reported it on — facts about a
+     * colour, not about this code, so nothing in `Theme` can move them.
+     */
+    public function testTheThresholdIsFourPointFiveAndIsWhatMovesTheReportedColour(): void
+    {
+        $this->assertSame(4.5, Theme::CONTRAST_MIN);
+
+        // The reported literal, pre-projection, on dracula's background and on
+        // pure black (where it scored its best result and still failed).
+        $this->assertEqualsWithDelta(
+            2.9456,
+            Theme::contrast(Color::hex('#6b7280'), Color::hex('#282a36')),
+            0.0005,
+        );
+        $this->assertEqualsWithDelta(
+            4.3438,
+            Theme::contrast(Color::hex('#6b7280'), Color::hex('#000000')),
+            0.0005,
+        );
+
+        // And the same class of failure inside the palettes themselves, which is
+        // what the projection has to correct. Each row: theme, terminal
+        // background, token, the palette's raw colour for it, and that raw
+        // colour's ratio against that background.
+        $cases = [
+            ['dracula', '#282a36', 'border', '#44475a', 1.5561],
+            ['ansi', '#ffffff', 'shellForeground', '#e5e5e5', 1.2597],
+            ['light', '#fafafa', 'shellWarning', '#f59e0b', 2.0576],
+        ];
+
+        foreach ($cases as [$name, $hex, $token, $raw, $rawRatio]) {
+            $background = Color::hex($hex);
+            $this->assertEqualsWithDelta(
+                $rawRatio,
+                Theme::contrast(Color::hex($raw), $background),
+                0.0005,
+                "{$name} {$token}: the raw palette colour's ratio is a fact about #{$raw}",
+            );
+
+            TerminalBackground::forget();
+            TerminalBackground::observe(new BackgroundColorMsg($background->r, $background->g, $background->b));
+            /** @var Color $projected */
+            $projected = Theme::byName($name)->$token;
+
+            $this->assertNotSame(
+                $raw,
+                $projected->toHex(),
+                "{$name} on {$hex}: {$token} reached the terminal as the raw {$raw} at {$rawRatio}:1",
+            );
+            $this->assertGreaterThanOrEqual(
+                4.5,
+                Theme::contrast($projected, $background),
+                "{$name} on {$hex}: {$token} must clear 4.5:1 — the literal, not the constant",
+            );
         }
     }
 }

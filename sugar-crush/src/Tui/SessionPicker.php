@@ -222,7 +222,12 @@ final class SessionPicker
             ->foreground($theme->shellMuted)
             ->render('esc close');
 
-        $separator = str_repeat('─', max(0, $width - 2));
+        // Themed, like its twin in renderFooter(): an unstyled run is the
+        // terminal's own default foreground, which is the one colour this shell
+        // is not entitled to choose for a rule it drew itself.
+        $separator = Style::new()
+            ->foreground($theme->border)
+            ->render(str_repeat('─', max(0, $width - 2)));
 
         return $title . $filterText . "\n" . $separator . "\n" . $controls;
     }
@@ -253,7 +258,9 @@ final class SessionPicker
         }
 
         $branch = $session['gitBranch'] ?? null;
-        $branchStr = $branch !== null ? ' @' . $branch : '';
+        $branchStr = $branch !== null
+            ? Style::new()->foreground($theme->shellMuted)->render(' @' . $branch)
+            : '';
 
         $displayLine = sprintf(
             '%s %s%s %s',

@@ -51,7 +51,12 @@ final class Color
     /**
      * @param ?int $ansiIndex The palette slot this colour WAS named as (0-255),
      *                        or null for a colour named as RGB. See the class
-     *                        docblock; {@see toSgr()} is the only reader.
+     *                        docblock. {@see toSgr()} is the only reader INSIDE
+     *                        this class; the property is `public readonly`, so
+     *                        it is new public API and callers read it directly
+     *                        (candy-core's own ColorTest does, and sugar-crush's
+     *                        contrast suite asserts on it to tell a palette
+     *                        slot from a nudged absolute colour).
      */
     private function __construct(
         public readonly int $r,
@@ -117,10 +122,19 @@ final class Color
     /**
      * Construct from an xterm-256 palette index (0-255).
      *
-     * Records the slot for the same reason {@see ansi()} does — a 256-colour
-     * index is the terminal's to resolve, and re-deriving it from RGB on the way
-     * out can land on a different index (the round trip is not the identity for
-     * every slot, since the cube and the greyscale ramp overlap).
+     * Records the slot for the same reason {@see ansi()} does: a 256-colour index
+     * is the terminal's to resolve, and its RGB here is only xterm's default for
+     * the slot.
+     *
+     * What that buys, precisely, is the TrueColor profile. {@see toSgr()} emits
+     * `38;5;n` for a remembered slot instead of up-converting to `38;2;r;g;b`,
+     * which is the difference between deferring to the user's palette and
+     * overriding it. It is NOT about the RGB round trip being lossy: MEASURED
+     * over all 240 slots 16-255 through this class's own {@see nearest256()},
+     * `nearest256(ansi256(i)) === i` for every one of them — zero non-identity
+     * round trips, cube/greyscale overlap included. An earlier version of this
+     * docblock claimed the opposite; it was a justification measured on a path
+     * that does not exist.
      */
     public static function ansi256(int $index): self
     {
