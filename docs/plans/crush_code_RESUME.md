@@ -282,10 +282,21 @@ was lost. Then review → fix → verify → commit as usual.
    and `/compact`'s landing report, the spend-cap refusal and the 95% refusal all append an
    assistant message onto a history already ending in one. All four fixed in `261ac59d`.
 
-**`crush_code.md`'s status block still needs Phase 2 items 3 and 5 marked complete** (see
-§9 — measured already-done, no code needed) and item 6 promoted from 🟡 to ✅ once E21
-lands. Held back deliberately while E21's agent is running, to avoid two writers on that
-file.
+**PENDING EDIT TO `crush_code.md`, deliberately not yet made.** Its status block's
+`**Complete:**` line reads "Phase 2 item 6" and must also list **Phase 2 items 3 and 5**,
+which §9 records as measured already-done with no code required. E21's agent already updated
+the Phase 5 half of that block, so item 6 and "Phase 5 items 1-7" are correct as they stand.
+The edit is held back only because **C1's agent is live in `crush_code.md`** (it will mark
+items 1 and 8) and a second writer there loses one of the two edits. Make it once C1 commits.
+
+**C1's in-flight state, for recovery.** As of this note the working tree carries two
+completed renames and nothing else: `sugar-crush/src/McpClient.php` →
+`src/ClaudeCodeMcpClient.php` and `tests/McpClientTest.php` → `tests/ClaudeCodeMcpClientTest.php`
+(both showing as `RM` in `git status`). If that round was lost mid-flight, the brief at
+`/tmp/…/scratchpad/c1-brief.md` is self-contained — re-spawn against it; it is safe to re-run
+over a tree where the renames already happened, but check whether the class and namespace
+inside those two files were renamed too before assuming the item is half-done.
+
 
 ## 11. QUEUE — in order
 
