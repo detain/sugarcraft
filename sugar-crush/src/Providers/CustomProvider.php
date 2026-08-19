@@ -161,6 +161,12 @@ final readonly class CustomProvider implements ProviderInterface
                 content: '',
                 isError: true,
                 errorMessage: $e->getMessage(),
+                // Classified here, where the exception still exists: this
+                // provider reports a failure as a response rather than by
+                // throwing, so the verdict has to be carried rather than
+                // re-derived from the message downstream. See
+                // CompleteResponse::$errorTransient.
+                errorTransient: TransientFailure::isTransient($e),
             );
         }
     }
@@ -237,6 +243,11 @@ final readonly class CustomProvider implements ProviderInterface
                 content: '',
                 isError: true,
                 errorMessage: $e->getMessage(),
+                // See complete()'s catch: same reason, and this one can fire
+                // after real content chunks have already been yielded, which is
+                // what makes the retry decision at the consumer conditional
+                // rather than automatic.
+                errorTransient: TransientFailure::isTransient($e),
             );
         }
     }

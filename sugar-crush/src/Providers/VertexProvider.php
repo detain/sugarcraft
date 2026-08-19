@@ -250,6 +250,16 @@ final readonly class VertexProvider implements ProviderInterface
                 content: '',
                 isError: true,
                 errorMessage: $e->getMessage(),
+                // Classified here, where the exception still exists: this
+                // provider reports a failure as a response rather than by
+                // throwing, so the verdict has to be carried rather than
+                // re-derived from the message downstream. Note the catch is
+                // \Throwable, so it also sees endpointFor()/anthropicBody()'s
+                // own \InvalidArgumentException for locally-bad input -
+                // TransientFailure's allow-list classifies that as permanent,
+                // which is what stops a malformed request being retried three
+                // times. See CompleteResponse::$errorTransient.
+                errorTransient: TransientFailure::isTransient($e),
             );
         }
     }
@@ -319,6 +329,11 @@ final readonly class VertexProvider implements ProviderInterface
                 content: '',
                 isError: true,
                 errorMessage: $e->getMessage(),
+                // See complete()'s catch. This catch sits OUTSIDE the chunk
+                // loop, so it can fire after real deltas have already been
+                // yielded - which is precisely the case
+                // Runtime::runStreaming() must not blindly retry.
+                errorTransient: TransientFailure::isTransient($e),
             );
         }
     }
@@ -694,6 +709,11 @@ final readonly class VertexProvider implements ProviderInterface
                 content: '',
                 isError: true,
                 errorMessage: is_string($message) ? $message : 'Vertex rawPredict returned an error',
+                // A rawPredict error arrives as a 200 carrying an error object,
+                // not as an HTTP status, so this is the only place its
+                // transience is visible. See
+                // TransientFailure::TRANSIENT_ANTHROPIC_ERROR_TYPES.
+                errorTransient: TransientFailure::anthropicErrorIsTransient($data['error']),
             );
         }
 
@@ -914,6 +934,13 @@ final readonly class VertexProvider implements ProviderInterface
                 content: '',
                 isError: true,
                 errorMessage: is_string($message) ? $message : 'Vertex streamRawPredict returned an error',
+                // THE case this classification exists for: an overloaded
+                // Anthropic-on-Vertex backend does not answer 503, it opens a
+                // successful 200 SSE stream and puts
+                // `{"type":"overloaded_error"}` in an `error` event. Reading
+                // only HTTP statuses and exceptions would leave the provider's
+                // most common transient failure unretried.
+                errorTransient: TransientFailure::anthropicErrorIsTransient($event['error'] ?? null),
             );
         }
 

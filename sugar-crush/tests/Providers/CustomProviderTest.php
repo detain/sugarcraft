@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Providers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
@@ -356,6 +357,71 @@ final class CustomProviderTest extends TestCase
         $this->assertSame('', $response->content);
         $this->assertTrue($response->isError ?? true);
         $this->assertSame('Connection failed', $response->errorMessage);
+    }
+
+    /**
+     * The catch site classifies the LIVE exception (crush_code.md Phase 5 item 8).
+     *
+     * This provider reports failure as a response rather than by throwing, so
+     * the exception is gone by the time anything above it can look — the verdict
+     * has to be recorded here or the retry layer would be left pattern-matching
+     * `errorMessage` prose. `TransientFailure` itself is unit-tested; what this
+     * pins is that CustomProvider CALLS it: dropping the `errorTransient:`
+     * argument leaves the flag null, which `TransientFailure::responseIsTransient()`
+     * treats as permanent, and this provider silently stops being retryable.
+     *
+     * Both verdicts asserted, so neither a dropped line nor a hardcoded `true`
+     * survives.
+     */
+    public function testCompleteRecordsTheTransientVerdictOnTheErrorResponse(): void
+    {
+        $transient = $this->providerWithFailure(new ConnectException(
+            'Connection failed',
+            new Request('POST', 'https://api.example.com/chat/completions'),
+        ));
+        $permanent = $this->providerWithFailure(new ClientException(
+            '401 Unauthorized',
+            new Request('POST', 'https://api.example.com/chat/completions'),
+            new Response(401),
+        ));
+
+        $request = new CompleteRequest(model: 'gpt-4', messages: [new UserMessage('Hello')]);
+
+        $this->assertTrue(
+            $transient->complete($request)->errorTransient,
+            'a connect failure must arrive at the retry seam classified as transient',
+        );
+        $this->assertFalse(
+            $permanent->complete($request)->errorTransient,
+            'and a 401 must arrive classified as permanent, not merely unclassified',
+        );
+    }
+
+    /** The same, on the streaming seam, which fails through its own catch site. */
+    public function testCompleteStreamRecordsTheTransientVerdictOnTheErrorChunk(): void
+    {
+        $provider = $this->providerWithFailure(new ConnectException(
+            'Connection failed',
+            new Request('POST', 'https://api.example.com/chat/completions'),
+        ));
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+        )), false);
+
+        $this->assertTrue($chunks[0]->isError);
+        $this->assertTrue($chunks[0]->errorTransient);
+    }
+
+    private function providerWithFailure(\Throwable $failure): CustomProvider
+    {
+        $client = new Client([
+            'handler' => HandlerStack::create(new MockHandler([$failure])),
+            'base_uri' => 'https://api.example.com',
+        ]);
+
+        return new CustomProvider('custom', 'https://api.example.com', 'gpt-4', null, $client, true, true);
     }
 
     // -------------------------------------------------------------------------

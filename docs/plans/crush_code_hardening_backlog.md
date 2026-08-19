@@ -1473,6 +1473,234 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
+### E25 — project-scope memory entries are user-authored text folded into the system prompt
+
+- **What** Since crush_code.md Phase 5 item 9, `Context/MemoryBlock` renders every
+  PROJECT-scope `MemoryStore` entry into a `<project-memory>` fence inside the
+  system prompt of every turn. Entry content is arbitrary text, so the block is a
+  standing instruction channel whose contents nobody reviews: a note reading
+  "ignore the Security section above" is, mechanically, in the same document as
+  the Security section.
+  **CORRECTED (fix round).** The first draft of this entry said the text is
+  "written through `/memory add` (and by `Memory/ForeignMemoryImporter`)". The
+  parenthetical is false, and it was the entry's whole reason for expecting the
+  severity to rise — see Severity. `/memory add --scope project` is the ONLY
+  writer that reaches this block.
+- **Where** `sugar-crush/src/Context/MemoryBlock.php` — `render()`/`renderEntry()`;
+  folded in at `sugar-crush/src/Runtime.php` `buildSystemPrompt()`, after the
+  `<project-instructions>` documents and before the skill listing.
+- **Severity** Low for the target operator (own `$HOME`, own notes: the content is
+  their own, and this is no worse than their own `AGENTS.md`, which is also
+  unreviewed text in the same prompt), and it does NOT currently rise on import.
+  Measured: both of `ForeignMemoryImporter`'s write paths pass
+  `scope: MemoryScope::Local` (`src/Memory/ForeignMemoryImporter.php:183, 244`),
+  which `MemoryStore::normalizeScope()` maps to the on-disk string `agent`
+  (`src/Memory/MemoryStore.php:441`) — a scope `MemoryBlock` excludes and
+  `MemoryBlockTest::testUserAndAgentScopeNotesAreNotRendered()` pins. So an
+  imported entry never reaches `<project-memory>` at all. The severity rises only
+  if a future importer, sync feature or shared checkout can write PROJECT scope;
+  until then the author and the operator are always the same person.
+- **Evidence** No sanitisation of any kind is applied to entry content beyond
+  whitespace collapsing and a byte clip: `renderEntry()` interpolates
+  `$entry->content()` directly. The fence is a plain string, so an entry
+  containing `</project-memory>` closes the block early — confirmed by reading
+  `render()`; not currently exploited by anything, and NOT a frame-corruption
+  issue because the system prompt is never painted to the terminal (nothing in
+  `src/` renders it; `Runtime::buildSystemPrompt()` is private and its output
+  leaves the object only inside a `CompleteRequest`).
+- **Step** Two separable pieces. (1) Neutralise fence-breaking: strip or escape
+  `</project-memory>` and `<project-memory>` in `renderEntry()`, the same way an
+  instruction document would need it. (2) Decide whether an IMPORTED entry
+  (`ForeignMemoryImporter`) should be marked as such in the rendered line so the
+  model can weigh it below a note the operator wrote themselves. Neither changes
+  behaviour for a solo operator, which is why both are deferred.
+- **Blocked on** Nothing technical. Deferred under the functionality-first rule.
+
+---
+
+### E26 — `EnvironmentBlock` has no "additional working directories" line because there is no multi-root concept to describe
+
+- **What** crush_code.md Phase 5 item 10a asks for an "additional working
+  directories" line in the `<env>` block. It was deliberately NOT added. This
+  records the prerequisite so the item is a decision rather than an oversight.
+- **Where** `sugar-crush/src/Context/EnvironmentBlock.php` — `render()`'s line
+  array, which now carries seven lines (the OS-version line from the same item
+  WAS added). The absence is pinned by
+  `tests/Context/EnvironmentBlockTest::testNoAdditionalWorkingDirectoriesLineIsEmitted()`.
+- **Severity** None — this is a missing prompt line, not a defect.
+- **Evidence** `grep -rniE 'additionalDir|additionalWorking|extraDirs|workingDirs|additionalDirectories' src/ bin/` returns
+  **zero hits** at the time of writing. Extending that grep to `tests/` returns
+  exactly **two** hits, both inside
+  `tests/Context/EnvironmentBlockTest::testNoAdditionalWorkingDirectoriesLineIsEmitted()` —
+  i.e. the test that asserts the absence, and nothing else. (Noted precisely
+  because the first draft of this entry claimed zero hits across all three
+  directories, which that very test had already falsified: the same
+  number-without-its-domain slip this document opens by describing.) The only
+  directories that exist are
+  `App::$root` (`--root`'s value, nullable) and the process cwd, resolved together
+  by `Runtime::projectRoot()`. A line fed from those two would either duplicate
+  the `Working directory:` line above it or be permanently empty, and a
+  permanently-empty line is a decorative surface.
+- **Step** The line becomes meaningful only once a second root can exist. The
+  natural source is a settings key (`additionalDirectories`) plus a `PathJail`
+  that accepts more than one root — Phase 6 item 2's territory. Order: settings
+  key → `PathJail` multi-root → `App` field → this line. Adding the line first
+  would ship a promise the tools do not keep, which is worse than the omission:
+  the model would be told it may work in a directory `Grep`/`Read`/`Edit`/`Write`
+  still refuse.
+- **Blocked on** Phase 6 item 2 (a settings surface), and a multi-root `PathJail`.
+
+---
+
+### E27 — two provider failure shapes are deliberately left unclassified by the transient-failure retry
+
+- **What** crush_code.md Phase 5 item 8's retry classifies on an ALLOW-LIST
+  (`Providers/TransientFailure`), so anything unrecognised is treated as
+  permanent and not retried. Two shapes in-tree are unrecognised on purpose, and
+  both are arguably transient:
+  (a) **`ClaudeCodeProvider`** throws bare `\RuntimeException`s carrying only
+  prose — `'Failed to start Claude Code process'` and
+  `"Claude Code exited with code $exitCode: $errors"` — so there is nothing
+  structured to classify. It is not retried, and its message is deliberately NOT
+  pattern-matched.
+  (b) **`VertexProvider::parseAnthropicChunk()`**'s truncated-tool-call branch
+  returns an error `CompleteResponse` when a streamed tool call's argument JSON
+  does not decode to an object. A truncated stream is a plausible transport
+  failure, but the same branch also fires for a model that emitted genuinely
+  malformed JSON, which retrying cannot fix and would cost 3x.
+- **Where** `sugar-crush/src/Providers/ClaudeCodeProvider.php` (its two throws);
+  `sugar-crush/src/Providers/VertexProvider.php` — the truncated-arguments
+  `CompleteResponse` in `parseAnthropicChunk()`, which leaves `errorTransient`
+  null. (a) is pinned by
+  `tests/Providers/TransientFailureTest::testAClaudeCodeSubprocessFailureIsNotTransientAndThatIsAKnownGap()`.
+- **Severity** None security-wise; a missed recovery opportunity only. The
+  user-visible effect is the pre-item-8 behaviour for those two shapes.
+- **Evidence** Read all seven providers' failure paths. Classified and retried:
+  `OpenAI` (`ErrorException::getStatusCode()`/`TransporterException`), `Sglang`
+  and `Bedrock` (informative exception preserved as `getPrevious()`), `Custom` and
+  `Vertex` (classified at the catch site into
+  `CompleteResponse::$errorTransient`). `Echo` cannot fail. That leaves exactly
+  the two above.
+- **Step** For (a): give `ClaudeCodeProvider` a typed exception carrying the exit
+  code, then decide per code — a spawn failure is transient, a non-zero exit
+  usually is not. For (b): distinguish "stream ended mid-tool-call" from "decoded
+  but was not an object" at the point the buffer is inspected; only the former is
+  transient.
+- **Blocked on** Nothing. Both are small and both are deferred as scope.
+
+---
+
+### E28 — the sub-agent retry is only reachable through tests and embedders
+
+- **What** `AgentManager::executeSubAgent()` carries the same transient-failure
+  retry as `Runtime`'s two seams, including a mid-stream rollback the `Runtime`
+  path deliberately cannot do. Nothing in `src/` or `bin/` calls
+  `executeSubAgent()`, so that retry — and the rollback — is exercised only by
+  this repo's tests and by an embedder driving the manager directly.
+- **Where** `sugar-crush/src/Agents/AgentManager.php` — `executeSubAgent()`'s
+  streaming and non-streaming branches. The reachability fact is already recorded
+  in `src/Renderer.php`'s class docblock.
+- **Severity** **Raised (fix round): Medium the day the seam is wired.** The
+  original wording — "the retry is correct, it is just not on a user-reachable
+  path yet" — was wrong on the first half. The retry rolls back the three fields
+  it names (`$output`, `$tokensUsed`, `$costUsd`) and nothing else, but an
+  attempt also runs `evaluateToolCalls()`, which calls
+  `PermissionGate::evaluate()` — i.e. `decide($call, commitAutoStrikes: true)`,
+  which advances the Auto-mode circuit-breaker counters
+  (`src/Permissions/PermissionGate.php:96-99`, counters `:290-302`) — and then
+  the `$permissionApprover`, a blocking user-facing prompt. Neither is rolled
+  back and neither CAN be: it is the same append-only argument that stops
+  `Runtime::runStreaming()` from retrying after a byte has reached `$onToken`,
+  reaching the opposite answer on a different channel.
+  **Measured:** one `Write` tool call plus a 503 mid-stream produces **2 approval
+  prompts for the same tool call** and double-commits its gate strikes. Harmless
+  only because nothing calls the seam; it surfaces the day something does, which
+  is exactly when a reader would trust the old "is correct".
+- **Evidence** `grep -rn executeSubAgent src/ bin/` finds only docblock
+  cross-references plus the definition itself. The route that would populate it is
+  crush_code.md #45 (a Task tool that delegates to a registered agent) or #13
+  (constructing `WorkflowEngine`).
+- **Step** Two, both due before the seam gains a caller, not after. (1) Make the
+  retried region free of user-visible and gate-visible side effects: hoist
+  `evaluateToolCalls()` out of the retry loop, or make approval idempotent per
+  tool-call id so a second attempt reuses the first attempt's verdict and commits
+  no second strike. (2) Then re-read the OUTPUT rollback's premise: it holds
+  because consumers PULL `SubAgent::$output` as a whole-value snapshot
+  (`AgentManager::liveOutput()` documents exactly that); a future consumer that
+  treats each `yield` as a delta invalidates it and the gate has to become
+  `Runtime::runStreaming()`'s emitted-bytes gate. The retry itself stays — a
+  dormant seam gets completed or documented, never deleted; what is deferred is
+  the fix, not the finding.
+- **Blocked on** crush_code.md #45 / #13.
+
+---
+
+### E29 — `vendor/bin/phpunit tests/Cli` hangs, while the full configured run passes
+
+- **What** A directory-scoped run of `tests/Cli` does not finish. Measured over 4
+  minutes and killed at 250s, while the full configured suite passes in ~2m26s and
+  every single file under `tests/Cli/` passes on its own in ≤1s. Something leaks
+  across tests in a way that only bites when that directory runs as its own suite
+  and without the rest of the suite's ordering, and `defaultTimeLimit=60` in
+  `phpunit.xml` does not abort it — so whatever blocks is not interruptible by the
+  time-limit signal.
+- **Where** `sugar-crush/tests/Cli/` as a selection. Not attributable to one file:
+  each passes individually. Candidate mechanism (unverified): a test that leaves an
+  env var, a `getcwd()`, a latched static (`ToolIpcFiles::sweepOnce()`,
+  `Bootstrap`'s config-dir latch) or a child process behind, which a later file in
+  the same process then waits on.
+- **Severity** None to shipped behaviour — CI runs the configured suite, which is
+  green. Real cost to DEVELOPMENT: it makes directory-scoped runs untrustworthy, so
+  every verification round has to pay the full ~2m20s, and an agent that judges
+  green from `vendor/bin/phpunit tests/Cli` gets a hang it may read as a failure of
+  whatever it just changed.
+- **Evidence** **Pre-existing — not introduced by Bundle B3.** Reproduced on the
+  B3 tree at baseline by the independent reviewer, then again during the fix round.
+  Full configured run: 7190 tests, RC 0, ~2m26s. `tests/Cli` alone: no completion,
+  killed at 250s. Per-file: all green, ≤1s each.
+- **Step** Bisect by halving the file list (PHPUnit accepts repeated positional
+  paths) until a pair reproduces it, then diff what the first leaves behind:
+  `getenv()` snapshot, `getcwd()`, open handles, `pcntl` children, and the two
+  latching statics named above. The fix is almost certainly a `tearDown()` in one
+  file, not a suite-wide change.
+- **Blocked on** Nothing. Deferred as out of scope for a bundle that did not cause
+  it and must not be judged by it.
+
+---
+
+### E30 — three backoff figures are literals with no test reading them back
+
+- **What** `TransientFailure::BASE_BACKOFF_MICROSECONDS`, `MAX_ATTEMPTS` and the
+  derived total are described in prose in three places, and no test asserts any of
+  those descriptions. Mutating `BASE_BACKOFF_MICROSECONDS = 500_000` to `1`
+  survives 3188 tests, because every backoff assertion is deliberately RELATIONAL
+  (`totalBackoffMicroseconds()` derived from the constants, compared against
+  `EngineBackend::COMPLETE_TIMEOUT_SECONDS`). That is the "derive, don't literal"
+  rule working exactly as intended for the CODE — the rot risk is in the PROSE.
+- **Where** `crush_code.md` Phase 5 item 8's status entry ("500ms doubling, ~1.5s
+  of backoff per provider call"), and `sugar-crush/src/Providers/TransientFailure.php`'s
+  class docblock, which after the fix round names `totalBackoffMicroseconds()`
+  instead of quoting 1.5s — so the surviving literals are in `crush_code.md` only,
+  now marked "at the constants of the time".
+- **Severity** None operationally. Documentation-rot risk: the day someone raises
+  `BASE_BACKOFF_MICROSECONDS`, the suite stays green and the prose silently starts
+  lying, which is the exact defect class this project keeps re-finding.
+- **Evidence** The surviving mutation above, measured by the independent reviewer
+  across 3188 tests. Confirmed intentional: `testTheTotalBackoffIsTheSumOfEveryWaitItWouldPerform()`
+  and `testTheWholeBackoffSequenceFitsFarInsideTheIdleTimeout()` both recompute
+  from the constants rather than naming a duration.
+- **Step** Either (a) add one test that asserts the human-readable figures the
+  prose quotes — `BASE_BACKOFF_MICROSECONDS === 500_000` and
+  `totalBackoffMicroseconds() === 1_500_000` — accepting that it is a literal test
+  whose only job is to fail when the prose goes stale, or (b) delete the durations
+  from the prose and cite the constants and `totalBackoffMicroseconds()` by name.
+  (b) is preferred and is what was done inside `src/`; (a) would be needed to
+  protect `crush_code.md`, which no test reads.
+- **Blocked on** Nothing. A choice about which of two rot-protection styles this
+  repo wants for planning documents.
+
+---
+
 ## F. Known dormant seams — documented, NOT work
 
 These are features intentionally left unwired. **They are not bugs and none of

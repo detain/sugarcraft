@@ -1173,7 +1173,11 @@ final class Bootstrap
             ->withPermissionGate($gate ?? self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
-            ->withRoot($root);
+            ->withRoot($root)
+            // Without this the Phase 5 item 9 memory block is unreachable from a
+            // real run: the store would exist, /memory would still write to it,
+            // and nothing the user recorded would ever reach the model.
+            ->withMemoryStore(self::memoryStoreOrNull());
     }
 
     /**
@@ -1216,7 +1220,11 @@ final class Bootstrap
             ->withPermissionGate($gate ?? self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
-            ->withRoot($root);
+            ->withRoot($root)
+            // Without this the Phase 5 item 9 memory block is unreachable from a
+            // real run: the store would exist, /memory would still write to it,
+            // and nothing the user recorded would ever reach the model.
+            ->withMemoryStore(self::memoryStoreOrNull());
     }
 
     /**
@@ -3026,6 +3034,31 @@ final class Bootstrap
         self::ensureDir($dir);
 
         return new MemoryStore($dir);
+    }
+
+    /**
+     * {@see memoryStore()}, or null if it cannot be opened.
+     *
+     * The prompt-side consumer (crush_code.md Phase 5 item 9) must never be
+     * able to stop a session starting. `memoryStore()` throws when
+     * `~/.sugar-crush/memory` cannot be created or is not writable — a
+     * read-only home, a tmpfs quota, an existing file where the directory
+     * belongs — and while that is a real reason for `/memory` to report a
+     * failure when the user invokes it, it is not a reason to refuse to launch.
+     * So the *store* keeps throwing for `/memory` to surface, and the prompt
+     * route degrades to "no memory block", which is exactly the prompt every
+     * session had before this item.
+     *
+     * Same shape as {@see \SugarCraft\Crush\Backend\EngineBackend::userConfig()}'s
+     * guard: a broken optional input costs the feature, never the turn.
+     */
+    private static function memoryStoreOrNull(): ?MemoryStore
+    {
+        try {
+            return self::memoryStore();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

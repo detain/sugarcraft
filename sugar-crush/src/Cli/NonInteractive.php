@@ -66,6 +66,28 @@ final class NonInteractive
      *
      * Everything under this code has the same operational meaning: something
      * was attempted, and attempting it again might produce a different result.
+     *
+     * Since crush_code.md Phase 5 item 8 that is a weaker statement than it
+     * used to be FOR ONE OF THE BACKENDS, and both halves of that matter to
+     * whoever wires a CI gate on this code.
+     *
+     * When the run's backend is the engine — which is every provider-selected
+     * run and the offline default — the transient shapes
+     * ({@see \SugarCraft\Crush\Providers\TransientFailure}) have already been
+     * attempted `TransientFailure::MAX_ATTEMPTS` times inside the provider call
+     * before this code is returned. That is TOTAL attempts, not retries: at the
+     * current value, one call and up to two retries. So a 1 from the engine
+     * means "every attempt this run was willing to make failed", an outer retry
+     * is still worth having for an outage longer than the seconds of backoff
+     * that policy spends, and a gate that retries instantly is duplicating work
+     * that just happened.
+     *
+     * When `$SUGARCRUSH_BACKEND_CMD` selects {@see \SugarCraft\Crush\Backend\CommandBackend}
+     * — or an embedder injects its own {@see \SugarCraft\Crush\Backend} — nothing
+     * has been retried at all: `grep -rn TransientFailure src/` reaches only
+     * `Runtime`, `AgentManager` and the providers, so a delegating backend's
+     * failure arrives here on its first attempt. For those runs a 1 still means
+     * "one attempt failed", exactly as it did before item 8.
      */
     public const EXIT_FAILURE = 1;
 

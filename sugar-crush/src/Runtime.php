@@ -8,10 +8,12 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
+use SugarCraft\Crush\Context\MemoryBlock;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -88,6 +90,14 @@ final class Runtime
      *                                config key, validated in
      *                                {@see \SugarCraft\Crush\Backend\EngineBackend::parallelToolDeadlineSeconds()}
      */
+    /**
+     * Memoized project-memory block — see {@see memorySnapshot()}. Not a
+     * constructor parameter the way {@see $environmentBlock} is: the store it
+     * is captured from arrives on the {@see App}, so there is no caller holding
+     * a session-wide block to inject.
+     */
+    private ?MemoryBlock $memoryBlock = null;
+
     public function __construct(
         private ProviderInterface $provider,
         private HookManager $hookManager,
@@ -168,6 +178,50 @@ final class Runtime
         }
     }
 
+    /**
+     * The streaming provider call, with a retry that is deliberately NOT
+     * unconditional (crush_code.md Phase 5 item 8).
+     *
+     * WHY A STREAM RETRY IS NOT A BATCH RETRY
+     * ---------------------------------------
+     * A stream that fails after emitting deltas has already handed those bytes
+     * to `$onToken`, which paints them into the transcript. That channel is
+     * append-only: there is no un-emit. Restarting the stream re-sends the
+     * whole reply, so the user would read the same text twice and - because the
+     * `$buffer` below is what becomes the {@see AssistantMessage} the agentic
+     * loop feeds back to the model - the transcript would carry it twice too.
+     *
+     * So the retry is gated on `$emitted`, which is set at the ONE point where
+     * a byte leaves this method: the `$onToken($response->content)` call. That
+     * is the precise safety condition, and it has a useful consequence worth
+     * stating exactly rather than rounding off:
+     *
+     *   - With a token sink attached (every interactive turn - {@see
+     *     \SugarCraft\Crush\Backend\EngineBackend::runCompleteInChild()}
+     *     always passes one), only a failure BEFORE the first non-empty delta
+     *     is retried. A mid-stream failure after visible text is NOT retried;
+     *     it propagates exactly as it did before this retry existed.
+     *   - With no sink (`$onToken === null`), nothing outside this method has
+     *     observed anything - `$buffer`, `$toolCalls`, `$reasoning` and
+     *     `$usages` are all local, and the tool calls are not dispatched until
+     *     after the loop - so a mid-stream failure IS retried in full.
+     *
+     * EVERY ACCUMULATOR IS RESET PER ATTEMPT, AND `$usages` IS THE ONE THAT BITES
+     * -------------------------------------------------------------------------
+     * All four are re-initialised at the top of each attempt rather than only
+     * `$buffer`. `$usages` is the dangerous one: it SUMS across chunks (see the
+     * note on the yield below - Vertex reports input and output tokens as two
+     * separate responses), and those figures now drive a spend cap, so an
+     * attempt whose partial usage survived into the next attempt would
+     * over-bill the turn. A Vertex `message_start` carrying only input tokens
+     * is also exactly the kind of chunk that can arrive before a stream dies,
+     * and it does not set `$emitted` - so this is a reachable case, not a
+     * theoretical one.
+     *
+     * On exhaustion nothing about the outcome changes: the last throw
+     * propagates, or the accumulated (possibly error-bearing) stream is yielded
+     * onward. Only the number of attempts is new.
+     */
     private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
     {
         $buffer = '';
@@ -176,32 +230,86 @@ final class Runtime
         /** @var list<?Usage> $usages */
         $usages = [];
 
-        // Accumulate the whole stream and emit one assistant message when the
-        // generator is exhausted. We deliberately do NOT use a tokensUsed>0
-        // sentinel to detect completion — real providers stream content with
-        // tokensUsed=0 and only report totals at the end (if at all), so a
-        // sentinel drops the entire message in production.
-        //
-        // The buffer stays even now that $onToken forwards each chunk live:
-        // the AssistantMessage below is what the agentic loop feeds back to
-        // the model on the next step and what lands in the transcript, and
-        // that has to be the WHOLE turn. $onToken is an additional live
-        // observer of the same bytes, not a replacement for assembling them.
-        foreach ($this->provider->completeStream($request) as $response) {
-            $buffer .= $response->content;
-            // Forwarded before the tool-call/reasoning bookkeeping below so a
-            // chunk carrying both text and the start of a tool call still
-            // reaches the screen as text first, in wire order.
-            if ($onToken !== null && $response->content !== '') {
-                $onToken($response->content);
+        for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
+            $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+
+            // Per-attempt, not per-call: a retry must start from an empty
+            // accumulator set or it concatenates the failed attempt's partial
+            // reply onto the new one. See the docblock on $usages in
+            // particular.
+            $buffer = '';
+            $toolCalls = [];
+            $reasoning = null;
+            $usages = [];
+
+            // True once a byte has been handed to $onToken - the only channel
+            // out of this loop, and therefore the only thing a retry cannot
+            // undo.
+            $emitted = false;
+            // The last error-bearing chunk, for providers that report failure
+            // as a response instead of by throwing (Vertex, Custom).
+            $errorChunk = null;
+            $thrown = null;
+
+            try {
+                // Accumulate the whole stream and emit one assistant message when the
+                // generator is exhausted. We deliberately do NOT use a tokensUsed>0
+                // sentinel to detect completion — real providers stream content with
+                // tokensUsed=0 and only report totals at the end (if at all), so a
+                // sentinel drops the entire message in production.
+                //
+                // The buffer stays even now that $onToken forwards each chunk live:
+                // the AssistantMessage below is what the agentic loop feeds back to
+                // the model on the next step and what lands in the transcript, and
+                // that has to be the WHOLE turn. $onToken is an additional live
+                // observer of the same bytes, not a replacement for assembling them.
+                foreach ($this->provider->completeStream($request) as $response) {
+                    $buffer .= $response->content;
+                    // Forwarded before the tool-call/reasoning bookkeeping below so a
+                    // chunk carrying both text and the start of a tool call still
+                    // reaches the screen as text first, in wire order.
+                    if ($onToken !== null && $response->content !== '') {
+                        $emitted = true;
+                        $onToken($response->content);
+                    }
+                    if ($response->toolCalls !== null) {
+                        $toolCalls = array_merge($toolCalls, $response->toolCalls);
+                    }
+                    if ($response->reasoning !== null && $response->reasoning !== '') {
+                        $reasoning = ($reasoning ?? '') . $response->reasoning;
+                    }
+                    $usages[] = Usage::reported($response->tokensUsed, $response->costUsd);
+
+                    // Folded in above BEFORE being noted as a failure, so that
+                    // when it is not retried the accumulated result is
+                    // byte-identical to what this loop produced before the
+                    // retry existed.
+                    if ($response->isError) {
+                        $errorChunk = $response;
+                    }
+                }
+            } catch (\Throwable $e) {
+                $thrown = $e;
             }
-            if ($response->toolCalls !== null) {
-                $toolCalls = array_merge($toolCalls, $response->toolCalls);
+
+            if ($thrown !== null) {
+                if ($lastAttempt || $emitted || !TransientFailure::isTransient($thrown)) {
+                    throw $thrown;
+                }
+                TransientFailure::backoff($attempt);
+
+                continue;
             }
-            if ($response->reasoning !== null && $response->reasoning !== '') {
-                $reasoning = ($reasoning ?? '') . $response->reasoning;
+
+            if ($errorChunk === null
+                || $lastAttempt
+                || $emitted
+                || !TransientFailure::responseIsTransient($errorChunk)
+            ) {
+                break;
             }
-            $usages[] = Usage::reported($response->tokensUsed, $response->costUsd);
+
+            TransientFailure::backoff($attempt);
         }
 
         // Summed across chunks, not taken from the last one. Measured:
@@ -222,9 +330,54 @@ final class Runtime
         }
     }
 
+    /**
+     * The non-streaming provider call, with the transient-failure retry
+     * (crush_code.md Phase 5 item 8).
+     *
+     * This is the easy half of the retry: `complete()` is a single request that
+     * either returns a whole response or fails, and NOTHING observable has
+     * happened when it fails - `$onToken` is not called until after it returns,
+     * and no accumulator has been touched. So every transient failure here is
+     * retryable unconditionally, with nothing to roll back. Compare
+     * {@see runStreaming()}, where that is emphatically not true.
+     *
+     * Both failure shapes are handled because providers use both: {@see
+     * \SugarCraft\Crush\Providers\SglangProvider} and {@see
+     * \SugarCraft\Crush\Providers\BedrockProvider} throw, while {@see
+     * \SugarCraft\Crush\Providers\VertexProvider} and {@see
+     * \SugarCraft\Crush\Providers\CustomProvider} return `isError: true`.
+     * A retry layer that checked only one of the two would silently not cover
+     * half the providers in this library.
+     *
+     * On exhaustion the behaviour is exactly what it was before this retry
+     * existed: the final throw propagates, or the final error response is
+     * yielded onward as an assistant message. Retrying is added; the terminal
+     * outcome is unchanged.
+     */
     private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
     {
-        $response = $this->provider->complete($request);
+        $response = null;
+
+        for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
+            $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+
+            try {
+                $response = $this->provider->complete($request);
+            } catch (\Throwable $e) {
+                if ($lastAttempt || !TransientFailure::isTransient($e)) {
+                    throw $e;
+                }
+                TransientFailure::backoff($attempt);
+
+                continue;
+            }
+
+            if ($lastAttempt || !TransientFailure::responseIsTransient($response)) {
+                break;
+            }
+
+            TransientFailure::backoff($attempt);
+        }
 
         // One delta carrying the whole reply. A non-streaming provider has no
         // incremental bytes to offer, but the $onToken contract is uniform on
@@ -1220,6 +1373,17 @@ final class Runtime
             }
         }
 
+        // After the instruction documents and before the skills, because it is
+        // the same KIND of thing as an instruction document - standing project
+        // context - and is deliberately fenced separately from them so the
+        // model can weigh a checked-in convention differently from a note a
+        // previous session wrote down. See MemoryBlock's docblock for why this
+        // is scope-selected rather than searched, and for what it costs.
+        $memory = $this->memorySnapshot($app)->render();
+        if ($memory !== '') {
+            $base .= "\n\n" . $memory;
+        }
+
         if (!empty($app->enabledSkills)) {
             foreach ($app->enabledSkills as $skill) {
                 if ($skill instanceof \SugarCraft\Crush\Skills\Skill) {
@@ -1258,6 +1422,26 @@ final class Runtime
     private function environmentSnapshot(App $app): EnvironmentBlock
     {
         return $this->environmentBlock ??= EnvironmentBlock::capture(self::projectRoot($app), $app->model);
+    }
+
+    /**
+     * Resolve the project-memory block folded into every system prompt.
+     *
+     * Memoized for the same reason {@see environmentSnapshot()} is, and it
+     * matters slightly more here: {@see buildSystemPrompt()} runs once per step
+     * of the agentic loop, and capturing per call would re-read and YAML-parse
+     * the whole project memory directory up to `maxSteps` times per turn. A
+     * snapshot is also the honest contract — a note added mid-turn does not
+     * retroactively join the prompt of a turn already in flight.
+     *
+     * An App with no store renders nothing, which is byte-for-byte the prompt
+     * every caller got before Phase 5 item 9.
+     */
+    private function memorySnapshot(App $app): MemoryBlock
+    {
+        return $this->memoryBlock ??= $app->memoryStore === null
+            ? MemoryBlock::empty()
+            : MemoryBlock::capture($app->memoryStore);
     }
 
     /**

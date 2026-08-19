@@ -14,5 +14,46 @@ final readonly class CompleteResponse
         public float $costUsd = 0.0,
         public bool $isError = false,
         public ?string $errorMessage = null,
+        /**
+         * Whether the failure behind {@see $isError} is worth another attempt
+         * — {@see TransientFailure::isTransient()}'s verdict on the live
+         * exception, recorded at the catch site while that exception still
+         * exists (crush_code.md Phase 5 item 8).
+         *
+         * This field exists because {@see CustomProvider} and
+         * {@see VertexProvider} report a failed call as an error RESPONSE
+         * rather than by throwing, and both used to keep only
+         * `$e->getMessage()`. Without somewhere to put the verdict, a retry
+         * layer above them would have had to re-derive transience by
+         * pattern-matching that prose — so the two providers a user is most
+         * likely to be running would either never retry or would retry on a
+         * substring. Classifying where the exception is still in hand is the
+         * same information from its real source.
+         *
+         * Null means UNCLASSIFIED, which is not the same claim as "permanent"
+         * but is treated the same way: {@see
+         * TransientFailure::responseIsTransient()} requires an explicit true,
+         * because the allow-list rule that governs unrecognised exceptions has
+         * to govern unrecognised error responses too.
+         *
+         * SIX sites set it, and only four of them are catch sites — stated
+         * precisely because an earlier version of this docblock said "the two
+         * catch sites above", which was wrong on both the count and the
+         * mechanism. {@see CustomProvider}'s `complete()` and `completeStream()`
+         * catches and {@see VertexProvider}'s two exception catches classify a
+         * live `\Throwable` with {@see TransientFailure::isTransient()}. The
+         * other two hold no exception at all: `VertexProvider`'s rawPredict
+         * error object and its 200-SSE `error` event are structured error
+         * payloads on a SUCCESSFUL HTTP response, classified on their Anthropic
+         * error `type` by {@see TransientFailure::anthropicErrorIsTransient()}.
+         * That second mechanism is the one this field exists for most — an
+         * overloaded Anthropic-on-Vertex backend answers 200, so no status and
+         * no exception ever exist to carry the verdict.
+         *
+         * Nothing stops a future provider passing it on a non-error response;
+         * `responseIsTransient()`'s `isError` gate is what makes that harmless,
+         * not this field's default.
+         */
+        public ?bool $errorTransient = null,
     ) {}
 }

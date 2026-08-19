@@ -8,6 +8,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
@@ -146,6 +147,16 @@ final class EngineBackend implements Backend, ReportsContextWindow
          * @see withPermissionApprover()
          */
         private readonly ?\Closure $permissionApprover = null,
+        /**
+         * The cross-session memory store whose PROJECT-scope notes are folded
+         * into every system prompt this backend builds (crush_code.md Phase 5
+         * item 9). Forwarded straight onto {@see App::$memoryStore}, which is
+         * where {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} reads it.
+         *
+         * Null means no memory block at all, which is what every caller got
+         * before this. @see withMemoryStore()
+         */
+        private readonly ?MemoryStore $memoryStore = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -176,7 +187,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -184,7 +195,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -199,7 +210,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withSkillRegistry(SkillRegistry $skillRegistry): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -211,13 +222,13 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withInstructionLoader(InstructionFileLoader $instructionLoader): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -245,7 +256,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withPermissionGate(PermissionGate $permissionGate): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -302,7 +313,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withPermissionApprover(\Closure $approver): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $approver);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $approver, $this->memoryStore);
     }
 
     /**
@@ -312,7 +323,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -326,12 +337,21 @@ final class EngineBackend implements Backend, ReportsContextWindow
      */
     public function withRoot(?string $root): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+    }
+
+    /**
+     * The memory store whose project-scope notes reach the model's system
+     * prompt. @see App::$memoryStore
+     */
+    public function withMemoryStore(?MemoryStore $memoryStore): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $memoryStore);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -355,7 +375,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
     }
 
     /**
@@ -407,6 +427,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
             ->withAvailableSkills($this->skillRegistry ?? new SkillRegistry())
             ->withInstructionLoader($this->instructionLoader)
             ->withRoot($this->root)
+            ->withMemoryStore($this->memoryStore)
             ->withMessages($this->toTypedMessages($history));
 
         $lastAssistant = null;

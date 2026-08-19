@@ -96,6 +96,19 @@ one.
 the invocation is malformed, no backend is ever selected, and a CI gate that
 retries on `1` would otherwise retry it forever.
 
+A `1` from the engine already had its retries. Transient provider failures — a
+connect failure, a 5xx, a 408/429, an Anthropic `overloaded_error` — are retried
+inside the provider call with exponential backoff before the run gives up, so
+for a provider-selected run (and for the offline default, which is the engine
+too) `1` means "every attempt failed", not "one attempt failed". An outer retry
+still helps for an outage longer than the couple of seconds of backoff that
+spends; it is just not the first one.
+
+The retry lives in the provider call, so it covers the engine and nothing else.
+A run whose backend is `$SUGARCRUSH_BACKEND_CMD`'s external command delegates
+instead of calling a provider, and its `1` is a first attempt — retrying it from
+outside is the only retry it gets.
+
 With `--output-format json`, stdout is always exactly one JSON object: either
 `{"result": "..."}` or `{"result": null, "error": {"type": "usage" |
 "provider_configuration" | "backend" | "encoding", "message": "...",

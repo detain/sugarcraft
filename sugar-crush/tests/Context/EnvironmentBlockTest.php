@@ -92,6 +92,80 @@ final class EnvironmentBlockTest extends TestCase
         $this->assertStringContainsString('Platform: ' . strtolower(PHP_OS_FAMILY), $output);
     }
 
+    /**
+     * The crush_code.md Phase 5 item 10a OS-version line.
+     *
+     * Pinned to the expression that produces it rather than to a literal string,
+     * because the literal would be a fact about THIS machine's kernel and this
+     * assertion has to hold on every runner.
+     *
+     * DOMAIN: `php_uname('s') . ' ' . php_uname('r')` is the OS/kernel RELEASE,
+     * which on Linux is the kernel version ("Linux 6.8.0-137-generic"), on macOS
+     * the Darwin version ("Darwin 23.5.0") and NOT the macOS product version, and
+     * on Windows "Windows NT 10.0". The `php_uname('s')` prefix is what makes the
+     * value name its own domain instead of leaving a bare number under a label
+     * that does not own it.
+     */
+    public function testRenderContainsTheOsVersionAndItIsNotJustThePlatformFamily(): void
+    {
+        $output = EnvironmentBlock::capture($this->tempDir, 'test-model')->render();
+
+        $this->assertStringContainsString(
+            'OS version: ' . php_uname('s') . ' ' . php_uname('r'),
+            $output,
+        );
+        $this->assertNotSame(
+            strtolower(PHP_OS_FAMILY),
+            strtolower(php_uname('s') . ' ' . php_uname('r')),
+            'if this ever became equal to the Platform line, the second line would be redundant',
+        );
+    }
+
+    /**
+     * crush_code.md Phase 5 item 10a also asks for an "additional working
+     * directories" line. It is deliberately NOT emitted, and this pins that as a
+     * decision rather than an omission.
+     *
+     * There is no multi-root concept in this application to describe: `App::$root`
+     * (`--root`'s value) and the process cwd are the only directories that exist,
+     * and a grep for additionalDir/additionalWorking/extraDirs/workingDirs across
+     * src/ finds nothing. A permanently-blank line would be a decorative surface,
+     * and inventing directories to fill it would be worse. The prerequisite is
+     * recorded in docs/plans/crush_code_hardening_backlog.md.
+     */
+    public function testNoAdditionalWorkingDirectoriesLineIsEmitted(): void
+    {
+        $output = EnvironmentBlock::capture($this->tempDir, 'test-model')->render();
+
+        $this->assertStringNotContainsString('dditional working director', $output);
+        $this->assertStringNotContainsString('dditional director', $output);
+    }
+
+    /**
+     * The WHOLE line set, in order.
+     *
+     * Every other assertion in this class is a `assertStringContainsString` on one
+     * line, which cannot notice a line being added, removed or reordered — that is
+     * how the OS-version line could be added without reddening anything. This one
+     * pins the set, so any future change to the block has to come here and say so.
+     */
+    public function testTheCompleteLineSetAndItsOrder(): void
+    {
+        $output = EnvironmentBlock::capture($this->tempDir, 'test-model')->render();
+
+        $body = substr($output, strlen("<env>\n"), -strlen("\n</env>"));
+
+        $this->assertSame([
+            'Working directory: ' . $this->tempDir,
+            'Is directory a git repo: No',
+            'Platform: ' . strtolower(PHP_OS_FAMILY),
+            'OS version: ' . php_uname('s') . ' ' . php_uname('r'),
+            'PHP version: ' . PHP_VERSION,
+            'Model: test-model',
+            'Current date: ' . (new \DateTimeImmutable())->format('Y-m-d'),
+        ], explode("\n", $body));
+    }
+
     public function testRenderContainsPhpVersion(): void
     {
         $block = EnvironmentBlock::capture($this->tempDir, 'test-model');

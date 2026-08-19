@@ -651,6 +651,33 @@ final class VertexProviderTest extends TestCase
         $this->assertSame('max_tokens is required', $response->errorMessage);
     }
 
+    /**
+     * A rawPredict failure arrives as a 200 carrying an error OBJECT, so the
+     * decoded `type` is the only place its transience is visible — no HTTP
+     * status, no exception (crush_code.md Phase 5 item 8).
+     *
+     * `TransientFailure::anthropicErrorIsTransient()` is unit-tested on its own;
+     * what this pins is that `parseAnthropicResponse()` calls it. With the
+     * argument dropped the flag stays null, `responseIsTransient()` reads null as
+     * permanent, and an overloaded backend stops being retried through this seam
+     * without a single other test noticing. Both verdicts asserted so a
+     * hardcoded `true` dies here too.
+     */
+    public function testARawPredictErrorObjectCarriesItsTransientVerdict(): void
+    {
+        $overloaded = $this->providerWithPredictor([
+            'error' => ['type' => 'overloaded_error', 'message' => 'overloaded'],
+        ]);
+        $malformed = $this->providerWithPredictor([
+            'error' => ['type' => 'invalid_request_error', 'message' => 'max_tokens is required'],
+        ]);
+
+        $request = new CompleteRequest(model: self::ANTHROPIC_MODEL, messages: [new UserMessage('Hi')]);
+
+        $this->assertTrue($overloaded->complete($request)->errorTransient);
+        $this->assertFalse($malformed->complete($request)->errorTransient);
+    }
+
     public function testCompleteRejectsAnEmptyTranscriptLocally(): void
     {
         $captured = null;
@@ -1027,6 +1054,39 @@ final class VertexProviderTest extends TestCase
 
         $this->assertTrue($chunks[0]->isError);
         $this->assertSame('overloaded', $chunks[0]->errorMessage);
+    }
+
+    /**
+     * THE case the Anthropic-error-type classification exists for, asserted at
+     * the site that produces it.
+     *
+     * An overloaded Anthropic-on-Vertex backend does not answer 503: it opens a
+     * successful 200 SSE stream and puts `{"type":"overloaded_error"}` in an
+     * `error` event. So this chunk's `errorTransient` is the ONLY signal the
+     * retry seam has for this provider's most common transient failure, and
+     * `testCompleteStreamYieldsAnErrorEvent()` above passes with the flag left
+     * null. Setting `errorTransient: null` here was measured green across
+     * `tests/Providers` and `tests/Integration` before this test existed.
+     */
+    public function testAStreamedErrorEventCarriesItsTransientVerdict(): void
+    {
+        $overloaded = $this->providerWithStreamer([
+            ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'overloaded']],
+        ]);
+        $permanent = $this->providerWithStreamer([
+            ['type' => 'error', 'error' => ['type' => 'authentication_error', 'message' => 'bad key']],
+        ]);
+
+        $request = new CompleteRequest(model: self::ANTHROPIC_MODEL, messages: [new UserMessage('Hi')]);
+
+        $this->assertTrue(
+            iterator_to_array($overloaded->completeStream($request), false)[0]->errorTransient,
+            'a 200-SSE overloaded_error must reach the retry seam classified as transient',
+        );
+        $this->assertFalse(
+            iterator_to_array($permanent->completeStream($request), false)[0]->errorTransient,
+            'and an auth failure in the same channel must not be',
+        );
     }
 
     public function testCompleteStreamReturnsErrorChunkOnException(): void

@@ -8,6 +8,7 @@ use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\ToolCall;
 
@@ -391,23 +392,124 @@ final class AgentManager
             if ($this->provider->supportsStreaming()) {
                 $subAgent->status = SubAgent::STATUS_STREAMING;
 
-                foreach ($this->provider->completeStream($request) as $response) {
-                    // Evaluate tool calls through the permission gate if set
-                    if ($response->toolCalls !== null && $subAgent->permissionGate !== null) {
-                        $this->evaluateToolCalls($response->toolCalls, $subAgent);
+                // Transient-failure retry (crush_code.md Phase 5 item 8), on
+                // the same policy as Runtime's two provider seams so the same
+                // 5xx is not recoverable on the main turn and fatal for a
+                // sub-agent. This loop is INSIDE the outer try, so only a
+                // failure that survives every attempt reaches the catch that
+                // marks the sub-agent FAILED.
+                //
+                // Unlike Runtime::runStreaming(), a mid-stream failure IS
+                // retried here even after real output, because this seam's
+                // observation channel for the OUTPUT is a PULL of a whole field
+                // rather than a push of deltas: consumers read SubAgent::$output
+                // as a snapshot ({@see liveOutput()} says so explicitly), and
+                // the three fields below are restored to their pre-attempt
+                // values. Runtime cannot do that because its $onToken sink is
+                // append-only and there is no un-emit.
+                //
+                // WHAT DOES NOT ROLL BACK, stated because a rollback claim that
+                // over-reaches is worse than none. An attempt also runs
+                // evaluateToolCalls(), which is not a read: it calls
+                // PermissionGate::evaluate() — `decide($call, commitAutoStrikes:
+                // true)`, which advances the Auto-mode circuit-breaker counters
+                // — and then the $permissionApprover, which is a BLOCKING
+                // USER-FACING PROMPT. Neither is undoable, and neither is
+                // undone. Measured: one Write call plus a 503 mid-stream shows
+                // the user 2 approval prompts for the same tool call and
+                // double-commits its strikes.
+                //
+                // So this is the same append-only argument that stops Runtime
+                // from retrying mid-stream, applied to a different channel and
+                // reaching the opposite answer — which is defensible only
+                // because the seam has no production caller yet (backlog E28
+                // carries the measurement and the severity). The fix, when the
+                // seam is wired, is to hoist tool evaluation out of the retried
+                // region or make it idempotent per call id; it is NOT to widen
+                // this comment.
+                for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
+                    $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+
+                    // Snapshot rather than zero: a SubAgent may already carry
+                    // output and usage from before this call, and a retry must
+                    // rewind to where THIS attempt started, not to empty.
+                    $outputBefore = $subAgent->output;
+                    $tokensBefore = $subAgent->tokensUsed;
+                    $costBefore = $subAgent->costUsd;
+
+                    $errorChunk = null;
+                    $thrown = null;
+
+                    try {
+                        foreach ($this->provider->completeStream($request) as $response) {
+                            // Evaluate tool calls through the permission gate if set.
+                            // A denial throws from in here, and is classified
+                            // permanent by TransientFailure's allow-list - which is
+                            // the whole reason that classifier is an allow-list and
+                            // not a deny-list.
+                            if ($response->toolCalls !== null && $subAgent->permissionGate !== null) {
+                                $this->evaluateToolCalls($response->toolCalls, $subAgent);
+                            }
+
+                            // Accumulated per chunk so a mid-flight sub-agent already
+                            // reports real usage; providers report per-chunk deltas,
+                            // hence += rather than assignment.
+                            $subAgent->tokensUsed += $response->tokensUsed;
+                            $subAgent->costUsd += $response->costUsd;
+
+                            $subAgent->output .= $response->content;
+
+                            if ($response->isError) {
+                                $errorChunk = $response;
+                            }
+
+                            yield $subAgent;
+                        }
+                    } catch (\Throwable $e) {
+                        $thrown = $e;
                     }
 
-                    // Accumulated per chunk so a mid-flight sub-agent already
-                    // reports real usage; providers report per-chunk deltas,
-                    // hence += rather than assignment.
-                    $subAgent->tokensUsed += $response->tokensUsed;
-                    $subAgent->costUsd += $response->costUsd;
+                    if ($thrown !== null) {
+                        if ($lastAttempt || !TransientFailure::isTransient($thrown)) {
+                            throw $thrown;
+                        }
+                    } elseif ($errorChunk === null
+                        || $lastAttempt
+                        || !TransientFailure::responseIsTransient($errorChunk)
+                    ) {
+                        break;
+                    }
 
-                    $subAgent->output .= $response->content;
-                    yield $subAgent;
+                    $subAgent->output = $outputBefore;
+                    $subAgent->tokensUsed = $tokensBefore;
+                    $subAgent->costUsd = $costBefore;
+                    TransientFailure::backoff($attempt);
                 }
             } else {
-                $response = $this->provider->complete($request);
+                $response = null;
+
+                // See the streaming branch. Nothing is observable until
+                // complete() returns, so this half has nothing to roll back.
+                for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
+                    $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+
+                    try {
+                        $response = $this->provider->complete($request);
+                    } catch (\Throwable $e) {
+                        if ($lastAttempt || !TransientFailure::isTransient($e)) {
+                            throw $e;
+                        }
+                        TransientFailure::backoff($attempt);
+
+                        continue;
+                    }
+
+                    if ($lastAttempt || !TransientFailure::responseIsTransient($response)) {
+                        break;
+                    }
+
+                    TransientFailure::backoff($attempt);
+                }
 
                 // Evaluate tool calls through the permission gate if set
                 if ($response->toolCalls !== null && $subAgent->permissionGate !== null) {

@@ -25,6 +25,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
@@ -130,6 +131,30 @@ final class App implements Model
          * item 6).
          */
         public readonly ?string $root = null,
+        /**
+         * The cross-session memory store THIS App's project-scope notes are
+         * folded into the system prompt from (crush_code.md Phase 5 item 9).
+         *
+         * "This App", not "this session": the App a session's TUI holds
+         * ({@see \SugarCraft\Crush\Cli\Bootstrap::app()}) never sets this and
+         * does not need to, because it does not build prompts. The object that
+         * carries a store in a real run is the per-turn App
+         * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()} builds, which
+         * is where {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} reads it.
+         *
+         * Carried here for the same reason {@see $instructionLoader} is:
+         * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} assembles the
+         * prompt off this object and nothing else, so a collaborator that
+         * contributes to the prompt has to arrive on it. Before this the store
+         * was constructed by {@see \SugarCraft\Crush\Cli\Bootstrap::memoryStore()}
+         * and reached {@see \SugarCraft\Crush\Chat} only, where `/memory` used
+         * it as a CRUD surface — so a note the user had deliberately recorded
+         * was never shown to the model that was supposed to act on it.
+         *
+         * Null leaves the prompt exactly as it was, which is what an App built
+         * by a test or an embedder gets.
+         */
+        public readonly ?MemoryStore $memoryStore = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -157,6 +182,7 @@ final class App implements Model
             rows: null,
             cols: null,
             root: null,
+            memoryStore: null,
         );
     }
 
@@ -294,6 +320,11 @@ final class App implements Model
     public function withRoot(?string $v): self
     {
         return $this->mutate(root: $v);
+    }
+
+    public function withMemoryStore(?MemoryStore $v): self
+    {
+        return $this->mutate(memoryStore: $v);
     }
 
     /**
@@ -1163,6 +1194,7 @@ final class App implements Model
             rows: array_key_exists('rows', $changes) ? $changes['rows'] : $this->rows,
             cols: array_key_exists('cols', $changes) ? $changes['cols'] : $this->cols,
             root: array_key_exists('root', $changes) ? $changes['root'] : $this->root,
+            memoryStore: array_key_exists('memoryStore', $changes) ? $changes['memoryStore'] : $this->memoryStore,
         );
     }
 }
