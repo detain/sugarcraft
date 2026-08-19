@@ -2362,9 +2362,27 @@ inherits it. For 40 `🇺🇸` on a 40-column pane the real terminal overflow wa
 
 **Evidence.** W1's review, probe `/tmp/…/scratchpad/w1r/p2.php` and `p9.php`.
 
-**Step.** Make `wrapAnsi()` measure with the same code path `compute()` uses, and treat a
-regional-indicator pair and an emoji-modifier sequence as single unbreakable clusters. Add a shared
-fixture set both functions are tested against, so the two can never drift again.
+**ROOT CAUSE, corrected — my first framing of this entry blamed `wrapAnsi()` and that is not where it
+starts.** There are **two cluster accountings**, and *either* can be the wrong one:
+
+- `Width::of()`/`compute()` wants `grapheme_str_split()`, and **that function does not exist on PHP
+  8.3** — it is 8.4+. Verified on this machine: `extension_loaded('intl')` is **true** while
+  `function_exists('grapheme_str_split')` is **false** on PHP 8.3.6. So `of()` falls back to
+  one-codepoint-per-cluster.
+- `wrapAnsi()`/`truncateAnsi()` share a `nextCluster()` scanner that clusters properly.
+
+Hence the asymmetry: a **flag under-counts in the scanner** (2 codepoints read as 1 cluster of 1 cell
+where `of()` says 2), and a **skin-tone sequence over-counts in `of()`** (4 where the scanner says 2).
+This also means **the obvious fix does not work**: falling back to `truncateAnsi` when a wrapped piece
+still overflows is useless, because `truncateAnsi` uses the *same* scanner — measured,
+`Width::of(truncateAnsi(flags×10, 10)) == 20`. W1's fix round found this after the review round had
+recommended exactly that fallback, and both my brief and the review carried the wrong remedy.
+
+**Step.** Give `compute()` a real grapheme splitter on PHP 8.3 (the `nextCluster()` scanner is already
+in the file), so both paths measure with one instrument. Add a shared fixture set both functions are
+tested against — skin-tone modifier, regional-indicator pair, ZWJ family, combining mark — so the two
+can never drift again. Until then, any caller that wraps with one and measures with the other must
+re-measure and retry, which is what `Renderer::wrapToPane()` now does locally.
 
 **Blocked on.** Nothing, but it is a **candy-core** change and W1 defended locally instead (re-measure
 each wrapped piece and truncate any that still overflows). Fixing upstream lets that local fallback be

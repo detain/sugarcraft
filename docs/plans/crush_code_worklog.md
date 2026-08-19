@@ -8085,3 +8085,56 @@ model-forged tool-row prefixes.
 New backlog entries from this round: **E46** (candy-core `Width` disagreement), **E47** (overlay path has
 no width discipline), **E48** (2-row frame at `rows=1`), **E49** (candy-shine table borders unbounded),
 **E50** (`SgrState` tracks neither OSC 8 nor SGR 58). Backlog is now E1-E50.
+
+### W1 fix round A, and the verification that caught it: a mutation table can be wrong about its own mutations
+
+Round A closed all ten findings and moved the suite to **7574 / 87586 / 1, rc=0** (2m58s → 3m01s;
+balancing every row costs about 1.7% and nothing else). I verified that myself. `+425/-7` on
+`Renderer.php`, the test file 125 → 187 tests.
+
+**It also corrected the remedy that both my brief and the reviewer had prescribed for F1, and it was
+right to.** We both said: when a wrapped piece still overflows, fall back to `Width::truncateAnsi()`.
+**That does nothing** — `truncateAnsi` uses the *same* `nextCluster()` scanner as `wrapAnsi`, so
+`Width::of(truncateAnsi(flags×10, 10))` is still 20. The actual root cause is that `Width::of()` wants
+`grapheme_str_split()`, **which does not exist on PHP 8.3** (it is 8.4+), so it falls back to
+one-codepoint-per-cluster while the scanner clusters properly. I verified that on this machine directly:
+`extension_loaded('intl')` **true**, `function_exists('grapheme_str_split')` **false**, PHP 8.3.6. Flags
+under-count in the scanner; skin tones over-count in `of()`. E46 is corrected accordingly.
+
+Round A's fix is a `wrapToPane()` that wraps, **measures with `Width::of()`**, and re-asks for a
+narrower wrap while it still overflows — bounded, target strictly decreasing, `WRAP_RETRY_MAX = 8` —
+with a `hardFit()` truncate loop measured by the same instrument as the backstop. Measured:
+`flags x40 @ cols=40: widest 74 → 40`, `skin tone x80 @ cols=100: 194 → 98`, and the retry means the
+bound costs no content (60 flags in → 60 rendered; 80 thumbs in → 80 rendered).
+
+#### THE VERIFICATION THAT MATTERED, and it is the same defect again
+
+Round A reported **"all eleven named mutations now die"** — and disclosed, unprompted, that **five of the
+eleven definitions were its own reconstructions**, because the reviewer's harness took them as argv and
+never recorded them. That disclosure is the only reason the gap was cheap to find.
+
+I compared the reconstructions against the reviewer's finding table. **Four of the five were different
+mutations entirely** — round A's MU11 was "renderHistory wrapWidth halved" where the reviewer's MU11 is
+"`$labelRoom` loses its `- 1`". So I ran the reviewer's real definitions myself, each judged by `$?` on
+`PaneWidthInvariantTest.php` and `RendererTest.php`, restoring the file between runs:
+
+| the reviewer's ACTUAL definition | verdict |
+|---|---|
+| MU11 `:2296` drop the `- 1` from `$labelRoom` | **SURVIVED** |
+| MU12 `:2297` `max(1, $labelRoom)` → `max(0, …)` | **SURVIVED** |
+| MU25 fast path `$out[] = $row;` → `$out[] = Width::truncateAnsi($row, $width);` | **SURVIVED** |
+| MU29 `:2296` drop `- Width::of($status)` | **SURVIVED** |
+| MU28 `:2495` `max(8, min(IMAGE_COLS, $width))` → `max(8, IMAGE_COLS)` | KILLED |
+
+**"All eleven die" was true of round A's reconstructions and false of the reviewer's mutations.** A claim
+that travelled without its domain — here the domain being *which edit the name denotes* — in a report
+whose entire purpose was to certify that the mutations were dead. Twenty-eighth round.
+
+**And the reason those four resist is itself worth recording, because it is not laziness.** All of
+MU11/MU12/MU29 sit on the tool-label bound, and **round A's own `hardFit()` is what made them unkillable
+by any width assertion**: an over-wide tool row is now truncated at the fitter regardless of what
+`$labelRoom` computed, so the width invariant holds with the arithmetic wrong. A fix can make its
+neighbours' tests vacuous. The property left to pin is not the width but what the bound is FOR — that
+the row arrives already fitting, status word and click zone intact, so `hardFit()` never fires.
+
+Fix round B is briefed with the exact edits and that diagnosis.
