@@ -480,6 +480,70 @@ resolved background, in BOTH palettes, require ≥3:1 for chrome/glyphs and ≥4
 way the assertion covers all ten `src/Tui/` files and every theme added later, and it would have
 failed on the build the user is running — the table above is that test's output.
 
+### W3 CORRECTED BY THE USER AGAIN — the contrast table above measures a background NOTHING PAINTS
+
+**The user reported using the `ansi` theme, where the menu border is invisible — and asked whether
+that contradicts the measurement. It does, and finding out why widened the bundle.**
+
+All six themes, each shell colour against **that theme's own background token**:
+
+| theme | bg token | selected `#00ffaa` | title `#fde68a` | item `#e5e7eb` | border `#6b7280` | inactive `#7d6e98` |
+|---|---|---|---|---|---|---|
+| dark | `#0e0e14` | 14.55 | 15.45 | 15.54 | 3.98 | 4.17 |
+| light | `#fafafa` | **1.27** | **1.19** | **1.19** | 4.63 | 4.42 |
+| dracula | `#282a36` | 10.77 | 11.43 | 11.50 | **2.95 FAILS** | 3.09 |
+| tokyoNight | `#1a1b26` | 12.93 | 13.72 | 13.80 | 3.54 | 3.71 |
+| ansi | `#000000` | 15.88 | 16.86 | 16.96 | 4.34 | 4.56 |
+| adaptive | — | resolves to the `dark` or the `light` row at runtime via `TerminalBackground::isDark()` | | | | |
+
+**Under `ansi` every shell colour PASSES against the token, and the user sees an invisible border. The
+table is wrong, not the user — and the reason is a discarded measurement.**
+
+`BackgroundColorMsg` (candy-core) carries the terminal's real background as `public readonly int $r`,
+`$g`, `$b` plus a `hex()`. `TerminalBackground::observe()` (`src/Tui/TerminalBackground.php:89`) does:
+
+    self::$observed = $msg->isDark();
+
+**The app sends an OSC 11 query, receives the terminal's true background RGB, and reduces it to one
+bit.** So no contrast decision anywhere in this app — including every number in the table above — is
+taken against the real background. Each theme substitutes its own ASSUMED background token, and
+`ansi`'s assumption is pure `#000000`. That assumption is what scores `#6b7280` at 4.34:1.
+
+**The corroborating number is dracula's row: `#6b7280` on `#282a36` is 2.95:1 and already fails.** A
+mid-dark terminal background — the ordinary case — puts that border under 3:1. The user's terminal is
+in that range, which is precisely the reported symptom, and no theme token describes it.
+
+**Consequence for the fix, and it is a prerequisite rather than a nicety:** the contrast assertion
+prescribed above must be evaluated against the RETAINED background, so `observe()` has to keep the RGB
+it is already handed (the `hex()` is right there) instead of collapsing to a bool. Without that the
+test validates the shell against `#000000`/`#0e0e14` fictions and passes on exactly the build the user
+is looking at. **Keep `isDark()` — the boolean has real callers and `adaptive()` needs it — and ADD the
+retained colour beside it.** This is a widening of a live seam, not a rewrite, and it is dormant-code
+wiring of the kind the standing directive protects: the RGB is already arriving.
+
+**A SECOND, INDEPENDENT DEFECT the user's theme choice uncovered.** `Color::ansi(8)` emits
+`\e[90m` — the palette entry the user's terminal actually controls — **only at `ColorProfile::Ansi`**.
+Measured emissions: `Ansi` → `\e[90m`; `Ansi256` → `\e[38;5;244m`; `TrueColor` →
+`\e[38;2;127;127;127m` (`toHex()` `#7f7f7f`). `ColorProfile::detect()` in this environment
+(`TERM=screen-256color`) returns **`Ansi256`**. So the `ansi` theme — whose entire purpose is deferring
+to the terminal's own 16 colours, and which `SprinklesTheme::ansi()` builds exclusively from
+`Color::ansi(0..8)` — is silently up-converted to absolute 256-cube values on any terminal that
+advertises more than 16 colours. **A user selecting `ansi` to make the app match their terminal does
+not get that**, which is why this user's theme choice could not rescue the hardcoded shell. Whether
+that belongs in W3 or in the ledger is an open call; it is a candy-core/profile-policy question, not a
+`src/Tui/` one, so it is probably a separate item — but it must not be lost, because it makes the one
+theme that would otherwise be immune to this whole bug class behave like the others.
+
+**Two lessons, both instances of the chain's dominant defect:**
+
+1. **I measured against the wrong background and reported ratios as if they described the screen.** The
+   domain of every number in the first table is "this theme's declared background token", not "the
+   user's terminal" — and the two differ by exactly the amount that makes the bug visible. §5, and it
+   is the third time this session that a number of mine travelled without its domain.
+2. **A test asserting contrast against a theme token would have inherited the same defect** and shipped
+   green. The prescription "pin the ratio, not the presence" was right and insufficient: pin the ratio
+   **against the retained real background**.
+
 **Ordering:** W3 goes after W2 (it touches `src/Tui/` and `src/Theme.php`, W2 owns `src/Chat.php` and
 `src/Renderer.php` — no file overlap, but the strictly-sequential rule is about suite runs, not files).
 It is a live-bug bundle, so it precedes the audit queue, and `#88` moves behind it for the same reason
