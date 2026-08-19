@@ -326,6 +326,66 @@ versions do not move:
 `vendor/` is gitignored, so reverting the manifests keeps the symlinks AND a clean tree. **Tell
 every agent not to run `composer install`/`update`** — it silently undoes this.
 
+## THE `#N` TRACKER IS crush_code.md RENUMBERED — it adds nothing to the count
+
+**Settled by the user, then verified in the worklog. Do not re-run this archaeology.**
+
+The worklog is full of `#11`-`#90` references, and I mistook them for a second plan with a lost
+defining document (I even inferred `crush_feat_plan.md:81`'s uncommitted `crush_code_update.md` as
+the source). **Wrong.** There was never a plan beyond `crush_code.md` and this worklog. The `#N`
+numbers are a FLAT TRACKER over `crush_code.md`'s own items, extended with new numbers as problems
+were discovered — and the mapping is written down in the worklog itself:
+
+    :195   #12 (`McpClient` rename)  -> P2.1 + the Bootstrap::mcpClient() half
+    :194   #31 (P6.2 layered settings)
+    :3417  "#17 / P2.7"              -> LspTool over the built LspClient
+    :~194  #13 (P2.3 workflow wiring)
+           "#14/#16/#17 — the rest of Phase 2 wiring"
+
+So `#12`/`#13` are CLOSED (C1, C2, C3), `#14`/`#16` are Phase 2 items already inside the 28, and
+`#17` is Phase 2 item 7. **The `#N` tail I reported as "unrecoverable" was Phase 2 wiring I was
+already executing.** Discovered items went on to become the `E1`-`E45` backlog, which is the live
+second series.
+
+**Two lessons, both mine, both in this section's own history:**
+
+- **I answered "how far along is the plan" by counting one series and calling it "the plan".** The
+  user knew the number was wrong (~88-90) before I did.
+- **I then explained the discrepancy with a missing-file theory built from an absence**, when the
+  mapping was in the file I was already reading. An inference from "I cannot find X" is not
+  evidence about X. Check for the notation before positing the document.
+
+### The one genuine straggler, and it is not a plan item
+
+**`#88` — the README whole-suite figure, OPEN.** `sugar-crush/README.md:531` says
+"7,276 tests / 76,239 assertions" (bundle C1's number, `6bc5218b`); the tree is at 7,387 / 76,813.
+`:551` carries a separate `4,337/12,587`. Update it AFTER W1 lands, in a standalone commit, once
+nothing else is in flight — a figure committed mid-bundle is stale before it is pushed.
+
+**`#63` `enforceTimeLimit` — CLOSED, and the worklog's "still waiting for a window" note is stale.**
+I recorded it OPEN here from the worklog rather than the file and corrected it minutes later.
+`phpunit.xml` already carries `enforceTimeLimit="true"` + `defaultTimeLimit="60"` with `php-invoker`
+installed, plus 55 lines of measured reasoning: 60s sits ~6x above the slowest real test (9.321s,
+`WebSearchToolTest::testHandlesRedirectResponse`); `memory_limit` is set because the limit bounds
+TIME SPENT COMPUTING and not a thrashing process (a real `tokenize()` mutant ran past 600s at >4GB
+RSS emitting one progress character in ten minutes); `failOnRisky` is what makes it bite, since a
+timed-out test is recorded RISKY and risky alone exits 0. Accepted gap:
+`tests/Agents/AgentWorkerPoolTest.php` arms and cancels `pcntl_alarm()` itself, and its
+`pcntl_alarm(0)` clears the enforcing alarm. **Verify a "waiting" note against the file before
+repeating it.**
+
+`#89` (InstructionFileLoader containment — five escapes, not one) and `#90` (`BuiltInToolCorpus`
+blindness, whose closure unblocked `#17`) are both CLOSED per worklog `:4646` and `:4769`.
+
+### THE LIVE SERIES ARE TWO
+
+1. **`crush_code.md`** — 75 numbered items across 9 phases, unchanged since `418c0888`. **47 done,
+   28 left.** Verified by counting the plan section bounded at its `## Appendix` heading; an unbounded
+   awk attributes every numbered line in the 2,000-line appendix to Phase 8 and reports 202.
+2. **`crush_code_hardening_backlog.md`** — `E1`-`E45`, deferred to the end by the user's own rule.
+   Note `crush_code.md:129` claims "50 items across 6 groups" against 45 actual entries — an
+   unreconciled count that needs its domain like everything else.
+
 ## THE COUNT, and two items that had fallen out of the queue
 
 **47 of 75 plan items complete (63%), 28 left.** Counted by item from `crush_code.md`'s phase
