@@ -127,6 +127,17 @@ a run. Judge a mutation by whether the **targeted test file** flips green→red 
 - `Chat::shouldPromptIdleCompaction()` **deliberately** duplicates `Runtime`'s
   version ("where Runtime instance is not directly available"). Don't collapse it by
   making `Chat` reach for a `Runtime` it deliberately does not hold.
+- **The suite baseline moves every round, including between a bundle's implement and
+  fix rounds. MEASURE `HEAD`'s total before briefing; never quote a remembered
+  figure.** Bundle B2's brief quoted 6918/70996 when B1's fix round had already moved
+  it to 6931/71073, and the implementing agent had to stash, run, and pop to find out.
+  That is the supervisor committing the same defect §5 describes — a number written
+  next to the wrong domain, here "the baseline" meaning two different commits.
+- Two numbers in `tests/Tools/BuiltInToolCorpusTest.php` are censuses over `src/`
+  (file count and declaration count) and `BinSugarcrushWiringTest::crushSourceFiles`
+  is a data provider over every `src/*.php` file — so **adding a source file changes
+  the suite total by more than the tests you wrote**, and both censuses plus their
+  prose copies need updating in the same diff.
 
 ## 9. The plan lies about its own state — verify, don't trust
 
@@ -143,7 +154,13 @@ measurements, so re-measure it *after* a round lands, never before. · Phase 5 i
 is false — usage dies at two seams: `Runtime::runBatch()` yields
 `new AssistantMessage($content, $toolCalls, $reasoning)` and `Backend::complete()`
 returns a `Message`, neither of which has any usage field, and
-`grep tokensUsed src/Backend/EngineBackend.php` is empty.
+`grep tokensUsed src/Backend/EngineBackend.php` is empty. There are **three** seams,
+not two — `completeAsync()`'s fork unserializes with `allowed_classes => false`. ·
+Three providers compute an input/output split, not one: Bedrock, Vertex, **and**
+`OpenAIProvider::calculateCost()`, which prices both halves and then reports only the
+total. · `VertexProvider`'s *stream* emits the two halves as separate responses, so
+streamed usage must be **summed**, not read off the last chunk — and that file's own
+`completeStream()` docblock said the opposite.
 
 ## 10. Current state and the queue
 
@@ -155,10 +172,10 @@ believing any number written anywhere.
 
 - ~~**B1** Phase 5 items 4,5 — provider `contextWindow()` wiring + live 85%/95%
   compaction tiers.~~ **DONE `08cc1b6a`** (6931/71073/1, exit 0).
-- **B2** Phase 5 items 6,7 — model-driven `generateExchangeSummary()`; instantiate
-  `TokenTracker`, cost readout in the status bar, spend cap (`SUGARCRUSH_MAX_COST` or
-  `/budget $N`). Adds a slash command, so it must satisfy Phase 4's arm→registry
-  inventory.
+- ~~**B2** Phase 5 items 6,7~~ **DONE `738c586c`** (7089/75695/1, exit 0). Item 7
+  complete; **item 6 is 🟡 partial** — `/compact` asks the model, the automatic 85% tier
+  still uses the heuristic (backlog E21), which is the lossier path and where most real
+  compactions happen. Pick E21 up before calling Phase 5 finished.
 - **B3** Phase 5 items 8,9,10a — provider retry with backoff in
   `EngineBackend::runCompleteInChild()`; `MemoryStore` folded into
   `buildSystemPrompt()`; `EnvironmentBlock` OS-version + additional-dirs lines.

@@ -1294,6 +1294,183 @@ fixture. What is left after the correction is a narrower but real dead end.
   it cannot be a regression from the context-tier work, since the reminder tier
   already produced it.
 
+### E20 — the spend cap can be overshot by one whole agentic turn, and the turn cannot be aborted
+
+- **What** `Chat::spendCapRefusal()` (Phase 5 item 7) refuses to START a turn once
+  the reported spend has reached `$SUGARCRUSH_MAX_COST` / `/budget <n>`. It cannot
+  abort a turn already in flight, so the turn that crosses the cap runs to
+  completion and the session's final total overshoots by that turn's whole cost.
+  A turn is up to `maxSteps` (default 8) provider calls, so the overshoot is not
+  bounded by one call's price.
+- **Where** `sugar-crush/src/Chat.php` — `spendCapRefusal()`, whose docblock states
+  this — and `sugar-crush/src/Backend/EngineBackend.php:441` (the
+  `for ($step = 0; $step < $this->maxSteps; $step++)` loop) plus
+  `completeAsync()`'s fork.
+- **Severity** Cost exposure on unattended use (workflows, `/bg`, background
+  sessions). Not security.
+- **Evidence** The per-step figures are produced inside the pcntl-forked child and
+  only reach the parent in the final result frame
+  (`runCompleteInChild()`'s `'usage'` key), so at the moment a step would need to
+  be refused there is nothing in the parent's process holding the running total.
+  The parent's `CancellationToken` machinery CAN kill the child mid-turn — that is
+  how double-Escape works — but nothing computes a cap breach to trigger it with.
+- **Step** Carry the cap into `EngineBackend` and check it between steps of the
+  agentic loop, reporting the breach through the same frame channel the tool
+  events use so the transcript can say which step was refused. Alternatively feed
+  a running total forward over the socket and have the parent trip the existing
+  cancellation path. The message must distinguish "refused to start" from "aborted
+  mid-turn" — they are different guarantees, and today only the first exists.
+- **Blocked on** Nothing. Deliberately out of scope for the bundle that added the
+  cap: the pre-flight refusal is the half that needs no new IPC.
+- **Amended 2026-08-19 (B2 fix round).** The original row described only the
+  submitted-turn path, and there were two other provider calls the cap did not see
+  at all. **Both are now closed**, so this amendment records what was fixed rather
+  than adding work:
+  - **`/compact`'s summarization call is now gated AND counted.** It is dispatched
+    past `spendCapRefusal()` (the cap is deliberately checked after
+    `dispatchCommand()` so `/budget` still works while capped, and `/compact`
+    dispatches there too). Probed on the old code: spend $5.00 against a $1.00
+    cap, `/compact` returned a Cmd and invoking it made **1** provider call — a
+    full-conversation completion on the provider's DEFAULT model — and the
+    resulting `Message`'s `usage` was discarded by the `HistoryCompactedMsg`
+    handler, so the cap and the readout never saw it. Now
+    `scheduleModelCompaction()` asks the shared `spendCapReached()` predicate and
+    falls back to the local heuristic with a notice naming `/budget`; the
+    compaction itself is never refused, so the "compaction is what frees context"
+    objection does not apply.
+  - **The session titler's call is now counted, and deliberately NOT gated.**
+    Measured: `scheduleTitleGeneration()` is only ever called from `submit()`'s
+    turn-dispatch tail, which sits AFTER `spendCapRefusal()`, so a session already
+    at its cap has its turn refused and never reaches it. A gate there could only
+    refuse a call the turn-level gate had already let through. Its usage now rides
+    out on `SessionTitledMsg` — including on the empty-title and failed-rename
+    exits, which used to dispatch nothing and so made the call free in the readout.
+  - **Still open, and this row's actual remaining work:** the mid-turn abort. The
+    overshoot described above is unchanged.
+
+### E21 — the automatic 85% compaction tier uses the heuristic summarizer, never the model
+
+- **What** Phase 5 item 6 gave `/compact` model-written exchange summaries. The
+  AUTOMATIC 85% tier still uses the truncate-and-`[exchanged information]`
+  heuristic, so the compaction that happens without the user asking is the lossier
+  of the two.
+- **Where** `sugar-crush/src/Chat.php` — the `shouldCompact()` branch in `submit()`
+  (the automatic tier) versus `scheduleModelCompaction()` (the `/compact` route).
+- **Severity** Information loss on the unattended path. Not security.
+- **Evidence** The automatic tier fires INLINE, inside `submit()`, as the turn it
+  gates is dispatched. A provider round-trip there would freeze the render loop
+  for the length of a completion — the exact freeze `scheduleModelCompaction()`
+  exists to avoid — and this codebase deliberately puts no total-request timeout
+  on a completion. Making it model-driven therefore means deferring the user's
+  turn behind a compaction round-trip: a new pending state, a new Msg, and a
+  re-entry into `submit()`'s tail, plus moving the 95% blocking tier's decision
+  (which reads the compaction RESULT) into the async path.
+- **Step** Give the automatic tier the same `Cmd` treatment: park the submitted
+  draft, schedule the summarization, and on `HistoryCompactedMsg` apply the
+  compaction and then dispatch the parked turn. Re-site the foreground-blocking
+  check inside that continuation so it still tests the already-compacted history.
+- **Blocked on** Nothing, but it is a real TEA restructure of the busiest method
+  in `Chat`, and the seam it needs
+  (`ContextCompactor::exchangesToSummarize()`/`withExchangeSummaries()`) is
+  already built and tested.
+- **Note 2026-08-19.** `crush_code.md`'s Phase 5 item 6 marker was changed from ✅
+  to partially-done for exactly this reason. The item says model summaries "when a
+  provider is available", and on the automatic tier a provider IS available; the
+  automatic tier is also where most real compactions happen and it is the lossier
+  path. The scope boundary is legitimate in engineering terms — see the Evidence
+  above — but it was filed under the wrong marker.
+
+### E22 — the transcript box is not wrapped to `cols()`, so a long message paints an over-wide row
+
+- **What** `Chat::view()` composes the transcript without bounding any message's
+  rendered line to the terminal width. The diff renderer paints **one line per
+  row**, so an over-wide line pushes the frame's remaining rows down and collides
+  with the absolute-`cursorTo()` positioning `render()`'s tail clip exists to
+  protect. This is **frame corruption, i.e. functionality, not hardening** — filed
+  here only so it is not lost, and it needs its own bundle rather than the
+  end-of-plan security pass.
+- **Where** `sugar-crush/src/Chat.php` — `view()` and the transcript composition it
+  drives. Contrast `Renderer::renderStatusBar()`, which DOES select a form against
+  a measured `$room`, and `handleHelpCommand()`, which clips every listing row.
+- **Severity** Functionality. Every app state that can produce a long line is
+  affected: a long assistant reply, a long user prompt, and a `[summary]` line.
+- **Evidence** Measured at `cols=80`, `rows=24`, widest row of `Chat::view()` with
+  `Width::string()` after stripping SGR:
+
+      assistant  210 chars -> 216 cols   <-- over-wide
+      assistant  300 chars -> 306 cols   <-- over-wide
+      user       210 chars -> 222 cols   <-- over-wide  (a wider prefix)
+      [summary]  210 chars -> 216 cols   <-- over-wide
+      [summary]   90 chars ->  96 cols   <-- over-wide
+
+  **NOT caused by Bundle B2**, and the last line is why: a 90-character message
+  already overflows an 80-column terminal, so the hole was fully open before this
+  round. B2 does raise the `/compact` summary ceiling, from **193** characters
+  (heuristic: `summaryUserMaxChars` 80 + `' → '` 3 + `summaryAssistantMaxChars`
+  100, plus the `'[summary] '` prefix 10) to **210** (model line
+  `SUMMARY_LINE_MAX_CHARS` 200 + the same 10-char prefix). A hostile model reply
+  cannot exceed 210: `Chat::sanitizeSummaryLine()` flattens all control bytes and
+  whitespace and `mb_substr`s to 200 characters. So B2 widens the worst case by 17
+  columns in a place that was already 16 columns over at 90 characters.
+- **Step** Wrap (not truncate) each transcript line to `cols()` before it enters
+  the frame, following the widest-first-form pattern `Renderer::contextIndicator()`
+  uses and measuring with `Width::of(self::stripZoneMarkers(...))`. Never cut a
+  line between a `markPane()` sentinel PAIR — `Scan::parse()` throws and the frame
+  loses all its click zones. Assert the widest row's width in a test at several
+  `cols` values rather than writing a width table in prose.
+- **Blocked on** Nothing. It is its own bundle because the wrap has to be
+  reconciled with the scroll offset (a wrapped message occupies more rows than one)
+  and with `expanded` tool bodies.
+
+### E23 — `ContextCompactor::exchangeKey()` collapses byte-identical exchanges, and the "harmless" clause is a judgement
+
+- **What** `exchangeKey()` keys an exchange by its CONTENT, so N byte-identical
+  exchanges collapse onto one key. `Chat::parseExchangeSummaries()`'s `isset()`
+  guard keeps the FIRST model line for that key and discards the rest, and stage 3
+  then groups all N into one message. The docblock calls this *"harmless — they
+  would receive the same summary either way"*, which is a **judgement, not a
+  measurement**, and `testTwoIdenticalExchangesShareOneKey` asserts the COLLISION,
+  not the harmlessness.
+- **Where** `sugar-crush/src/Context/ContextCompactor.php` — `exchangeKey()` and
+  the stage-3 grouping; `sugar-crush/src/Chat.php` —
+  `parseExchangeSummaries()`'s `isset()` guard.
+- **Severity** Low. Correctness of a docblock claim, and possibly of the summary
+  count the `/compact` notice reports.
+- **Evidence** Not measured this round — the claim is what is unasserted, and
+  asserting it is the work. The specific thing to measure: with 21 byte-identical
+  exchanges, does the compacted transcript carry one `[summary]` line or 21, and
+  does the "Summarising N earlier exchanges" notice's N match what the model was
+  actually asked for? If the model returns DIFFERENT lines for the duplicated
+  positions, 20 of them are silently discarded.
+- **Step** Either measure the harmlessness and assert it (a test driving N
+  identical exchanges through `/compact` and pinning the resulting line count and
+  notice), or delete the "harmless" adjective from the docblock and record the
+  clause as unasserted. Do not leave a judgement standing as if it were measured.
+- **Blocked on** Nothing.
+
+### E24 — summing streamed usage is safe only because no current provider reports a running total
+
+- **What** `Runtime::runStreaming()` SUMS `Usage::reported()` across chunks
+  (`Usage::sum($usages)`), which is correct for a provider that reports per-chunk
+  DELTAS — and every one of the seven does. A future provider that reported a
+  CUMULATIVE total on each chunk would be over-counted, quadratically in the worst
+  case, with no guard to notice.
+- **Where** `sugar-crush/src/Runtime.php` — `runStreaming()`'s `$usages[]`
+  accumulation and the `Usage::sum()` at the yield.
+- **Severity** Low today, and purely a cost-readout error rather than a behaviour
+  change — except that the spend cap reads the same total, so an over-count would
+  refuse turns early.
+- **Evidence** Read all seven providers' streaming paths at HEAD: `Bedrock` and
+  `Vertex` report on terminal/`message_start` events only, and
+  `ClaudeCode`/`Custom`/`OpenAI`/`Sglang`/`Echo` report `tokensUsed: 0` on every
+  chunk. So the sum equals the total for all seven, today.
+- **Step** State the delta assumption in `runStreaming()`'s docblock as a
+  REQUIREMENT on `ProviderInterface::completeStream()` rather than as an
+  observation, and consider a cheap guard: if a chunk's `tokensUsed` is
+  monotonically non-decreasing across three or more chunks, take the last rather
+  than the sum. Do not add the guard without a provider that needs it.
+- **Blocked on** A provider that reports cumulatively. None exists in-tree.
+
 ---
 
 ## F. Known dormant seams — documented, NOT work

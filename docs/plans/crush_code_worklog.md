@@ -6398,3 +6398,227 @@ Filed with its fix (hoist into Converse's own `system` field). `VertexProvider` 
 every `SystemMessage` into the top-level `system` field so position is irrelevant
 there, and `OpenAIProvider` emits `role: system` in place, which Chat Completions
 accepts anywhere.
+
+---
+
+## Bundle B2 — `738c586c` (2026-08-19)
+
+Phase 5 item 7 done, **item 6 partially** (marked 🟡, not ✅ — see E21). Suite verified
+by the supervisor: **7089 tests, 75695 assertions, 1 skipped, exit 0**, up from
+6931/71073. Across the review and fix rounds, **56 mutations, 55 killed**. Guardrails:
+config md5 unchanged, `check-path-repos --no-lib-path-repos` exits 0, no per-lib lock.
+
+### The plan's item-7 instruction was false, and the correction cost the round its shape
+
+The plan says to feed `TokenTracker` from "`AssistantMsg` usage data already flowing
+through `EngineBackend`/`Runtime`". Nothing flowed. `Providers\CompleteResponse` does
+carry `tokensUsed`/`costUsd`; `Runtime::runBatch()` dropped both,
+`Messages\AssistantMessage` had three ctor params, `Message` had no usage field, and
+`grep tokensUsed src/Backend/EngineBackend.php` was empty. My own brief measured **two**
+seams to cross; the implementing agent found **three** — I had missed
+`completeAsync()`'s fork frame, where the parent unserializes with
+`allowed_classes => false` so no object can make the trip at all.
+
+**The seam decision came out the opposite way from B1's, for a reason worth keeping.**
+B1 used a capability interface for `contextWindow()`. B2 rejected `Backend\ReportsUsage`
+with `lastTurnUsage()`: it is mutable per-instance state, racy across concurrent turns,
+and decisively, `completeAsync()` runs the turn in a forked child so the parent's
+`EngineBackend` would never see it. The value-on-the-message route is the documented
+precedent (`$reasoning`, `$imageBytes`) and the only one that survives the fork. Two
+adjacent items, two opposite answers, both correct — the deciding fact is whether the
+value is per-turn state or a static property of the provider.
+
+### Five brief claims false on measurement, one of which changed the implementation
+
+I wrote that only `BedrockProvider` computes an input/output split. **Three providers
+do**: `VertexProvider` also does, and `OpenAIProvider::calculateCost()` reads
+`prompt_tokens`/`completion_tokens` and prices each side separately before reporting
+only `total_tokens`. That last one is the whole stated justification for
+`addTotalUsage()` and the `unsplitTokens` bucket, so the enumeration is now **derived**
+rather than written: `testTheDocblocksSplitEnumerationMatchesTheProviderSources` reads
+the split-capable set off the seven provider sources (matching quoted usage keys, so a
+local `$inputTokens` cannot masquerade), derives the total via reflection over
+`ProviderInterface`, and requires each docblock to name each provider on the correct
+side of its own sentence.
+
+**And `VertexProvider`'s stream forced a real design change.** It emits the input half
+on `message_start` and the output half on a terminal `message_delta` as **two separate
+`CompleteResponse`s**, each priced on its own side of the rate table. So
+`Runtime::runStreaming()` had to **sum** across chunks; reading the last chunk — the
+obvious implementation, and what Bedrock's contract would suggest — silently discards
+the entire prompt half of every streamed Vertex turn. All seven providers' streaming
+paths were read to confirm none reports a running cumulative total that summing would
+double-count (E24 records that nothing guards a future one that does).
+
+**My brief's baseline was stale**, and this is the supervisor committing §5's defect:
+I quoted 6918/70996 when B1's fix round had already moved HEAD to 6931/71073. The agent
+stashed, ran the suite at HEAD, and popped to find out. Now a standing rule in
+RESUME §8. Related trap it surfaced: two `BuiltInToolCorpusTest` censuses count `src/`
+files and declarations and `BinSugarcrushWiringTest::crushSourceFiles` is a data
+provider over every source file, so **adding a source file moves the suite total by
+more than the tests you wrote** — 2 of B2's tests are that.
+
+I also mis-attributed a docblock (the clause I cited as `spendCapRefusal()`'s is
+`handleClearCommand()`'s) and called the `EnhancedSessionStore` checkpoint fixture
+possibly disproportionate when `tests/Chat/RewindCommandTest.php` already builds one in
+four lines. That second error nearly buried the round's most serious finding.
+
+### Two HIGH bugs, one root cause: a method factored for two callers with opposite preconditions
+
+`compactNow()` unconditionally wrote `inputBuf => ''` and `inFlight => false`. Correct
+for the synchronous `/compact`, which consumed the draft and starts no turn. Wrong for
+`applyModelCompaction()`, which lands asynchronously — and `HistoryCompactedMsg`'s own
+docblock advertises exactly the situation that breaks it ("nothing blocks on it, the
+user can keep typing…").
+
+- **The draft was destroyed.** Probed: `'a long half-typed prompt I am still writing'`
+  → `''`, gone from `view()`.
+- **`inFlight` was cleared mid-turn**, and the consequence chain is the expensive one:
+  the spinner and `Esc Esc to cancel` vanish while the turn runs · `update()`'s
+  Enter-swallow guard lifts · a **second concurrent turn** is accepted · `$generation`
+  bumps · the first turn's reply is dropped by the staleness guard at `Chat.php:808`
+  — **billed and thrown away.**
+
+Fixed at the seam: `compactionChanges()` returns only what a compaction does to the
+transcript, and the synchronous caller adds its own two field writes. Mutations putting
+either field back into the shared set both killed. After the fix,
+`handleClearCommand()`'s "unreachable mid-turn" clause is true again and now *measured*
+rather than assumed — `submit()` has exactly two callers (Enter, and Ctrl+A's
+`/agents`), both below the blanket `inFlight` swallow.
+
+### `/rewind` was worse than the review suspected, and the fixture was four lines away
+
+The review flagged `/rewind` as SUSPECTED and did not probe it, guessing a landing
+summary would compact a freshly-rewound transcript. It does — and because the summaries
+were keyed by content hash to the **discarded** content, none of them applied:
+
+    after /rewind: history=14 latch=STILL SET
+    after the summary landed: history=10
+      [summary] checkpointed question 1 → [exchanged information]   ×5
+
+So five exchanges the user had just *recovered* came back as the exact placeholder item
+6 exists to remove. Automatic data loss layered on top of a recovery command. `/rewind`
+and `handlePaletteNewSession()` both release the latch now, and the
+`pendingCompactionId` docblock names the complete release set.
+
+### The cap: what it governs, stated as arithmetic rather than asserted
+
+The review found `/compact` bypassed the cap — it dispatches before the check
+(deliberately, so `/budget` still works while capped) and now makes a provider call, so
+a session $5.00 into a $1.00 cap fired a full-conversation completion on the provider's
+**default** model, and the usage was discarded so neither the readout nor the cap ever
+saw it.
+
+Counting was non-negotiable and both side-channel calls are counted now
+(`HistoryCompactedMsg` and `SessionTitledMsg` carry a `?Usage`; the titler's
+empty-title and failed-rename exits dispatch `title: ''` rather than `null`, because
+the Msg is also what carries the money). The gating question I left open, and the
+agent's answer dissolved my framing of the trade-off:
+
+- **`/compact` gated.** My "refusing compaction corners the user" objection argues
+  against refusing the *command*, and the gate refuses no command — `scheduleModelCompaction()`
+  returning early is already the offline path, so the fallback is the local heuristic.
+  The gate costs summary *quality* only; context relief is unaffected.
+- **Titler not gated, and that is not an omission.** `scheduleTitleGeneration()` has
+  one caller, in `submit()`'s turn-dispatch tail, downstream of `spendCapRefusal()`. A
+  capped session's turn is refused and never reaches it. The only window is the turn
+  that *crosses* the cap, whose cost is unknown until after the call went out.
+
+**The review's own instruction turned out to be unsatisfiable**, and the agent said so
+instead of complying. C asked to make the surviving `!hasReportedSpend()` guard fail
+without it — but `!hasReportedSpend()` implies `spentUsd() === 0.0`, so once a cap is
+guaranteed positive, `0.0 < cap` gives the same answer. The guard can only be made
+load-bearing by *keeping* `cap <= 0` reachable, i.e. by not fixing the real bug. Fixed
+the real bug instead: `isUsableSpendCap()` (`is_finite && > 0.0`) at all three entry
+points, the constructor throws so `mutate()` re-validates every clone, and the docblock
+states the fail-open as arithmetic. `/budget 1e309` is refused —
+`is_numeric('1e309')` is true, the cast is `INF`, and `INF > 0.0` passed the old check,
+rendering as `$inf`: silently no cap, from a command whose docblock insists that
+guessing "no cap" from ambiguous input is the wrong direction.
+
+`SUGARCRUSH_MAX_COST` now **fails closed** on the `SUGARCRUSH_PERMISSION_MODE`
+convention that sits beside it (whose docblock argues precisely this: "silently
+discarding a mode the user set on purpose is a fail-open"). The prior justification —
+"matching the refusal `/budget 0` gives" — elided that `/budget 0` is *visible* and the
+env path is silent.
+
+### The status bar held, and this is the first round its width claims were measured rather than described
+
+The highest-risk part of the bundle survived every probe. `spendIndicator()` is fitted
+widest-first against measured room and is the only one of the three segments that may
+vanish entirely, so every offline run's bar is byte-identical. The review's differential
+sweep: **5 app states × 33 widths × 36 cap/cost combinations = 5940 samples**, each
+compared against the same state with the segment patched to `return ''` — 1663 bars
+changed, **0 overflows**. Zone survival over cols 1..200 × 4 spend states: **0 lost
+`pane:menu` zones, 0 `Scan::parse()` throws.** Narrowest non-cue bar across the whole
+sweep is still **36**, so `KEY_HELP_TOO_SMALL`'s 3 columns and
+`KEY_HELP_OVER_PROMPT`'s 1 column of margin are intact.
+
+And the comment that had carried a wrong bar width in **three** consecutive rounds
+carried a fourth: "~62 columns". The idle bar takes exactly four widths over cols
+1..400 — **54 / 62 / 65 / 75** — and 62 is the value over a three-column band. The
+number is gone from the comment, which now points at the three tests that assert it.
+That is the right shape for this file: a range in prose has nothing reading it back.
+
+### Prose corrected, and one sentence made true rather than reworded
+
+`Usage.php` claimed Bedrock and Vertex collapse their split "before their response
+leaves them" — true of the unary path, false of Vertex's stream, which
+`Runtime.php:207-215` documented correctly ten lines away.
+`VertexProvider::completeStream()`'s docblock claimed "usage lands once… the same
+contract as `BedrockProvider`" — false in the same file at `:877-887`, pre-existing but
+inside the sweep this round should have reached. `Bootstrap::summaryBackend()` opened
+with "a deliberately **cheap** Backend" and then explained in the same docblock that it
+deliberately uses the provider's default model *rather than* the cheap title model.
+
+The "no tools, no hooks, no skill registry, no instruction loader" safety property was
+asserted at four sites and one quarter of it was untrue —
+`resolveHookManager()` registers three built-ins when `hooksDisabled` is false. The
+agent passed `hooksDisabled: true` to **make the sentence true**, rather than
+reweakening it to a two-step argument resting on "nothing can fire because no tools are
+attached". Right call: a safety property that holds only via a second fact is one
+`withTools()` away from being false.
+
+### Two changes nobody asked for, both correct
+
+`KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods` asserted
+all four guard bodies are byte-identical. Fixing B2 made `applyBackendToolEvent()`'s
+different (it now accounts before dropping), so the test asserts **which three** remain
+mutually indistinguishable — the real hazard — and that it is the accounting, not
+incidental drift, that separates the fourth.
+`ChatTest::testAnEmptyGeneratedTitleIsNeverPersisted` would after this change have been
+asserting that the money is dropped; renamed and rewritten to assert no title, no
+persistence, and no in-memory latch.
+
+### One honest gap, named rather than faked
+
+The titler's failed-rename exit has no test. Both session-store classes are `final` so
+a throwing store cannot be substituted, and provoking a real PDO write failure
+mid-suite is not deterministic across CI users. It is the same construction as the
+empty-title exit, which *is* pinned. Recorded in the code rather than covered with a
+presence check.
+
+### Filed, not fixed
+
+- **E20 amended** — the cap can still be overshot by one whole agentic turn (up to
+  `maxSteps` = 8 provider calls) and cannot be aborted mid-flight: the per-step figures
+  live in the forked child until the turn settles. Both halves of the `/compact`/titler
+  finding recorded with what was fixed.
+- **E21** — the automatic 85% tier still uses the heuristic. This is why item 6 is 🟡.
+  Wiring it means parking a submitted draft behind a compaction round-trip and re-siting
+  the 95% blocking check into that continuation. The seam is built and tested.
+- **E22 (new), functionality not hardening** — `Chat::view()` does not wrap the
+  transcript to `cols()`. At cols=80: assistant 210 → **216**, 300 → **306**, user
+  210 → **222** (a wider prefix than the review measured), `[summary]` 210 → **216**.
+  The line that proves B2 did not open it: a `[summary]` at **90** chars already paints
+  **96**. B2 moves the summary ceiling 193 → 210, i.e. 17 columns wider in a place
+  already 16 columns over. Needs its own bundle; filed as functionality precisely so
+  the end-of-plan security pass does not swallow it.
+- **E23 (new)** — `exchangeKey()`'s "harmless" clause about duplicate-content
+  exchanges is a judgement standing where a measurement should be. 21 byte-identical
+  exchanges collapse onto one key and 20 summary lines are discarded;
+  `testTwoIdenticalExchangesShareOneKey` asserts the collision, not the harmlessness.
+- **E24 (new)** — nothing guards a future provider that reports cumulative rather than
+  delta usage per chunk, which would make `runStreaming()`'s sum double-count.
+- **No row for the unvalidated constructor param** — both halves of C were fixed, so
+  there is nothing left to file.
