@@ -72,7 +72,7 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — twenty-two rounds running
+## 5. THE recurring defect — twenty-three rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
@@ -269,17 +269,26 @@ already done and one names a class that does not exist:**
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
 
-**CURRENT STATE, 2026-08-19.** `HEAD` is **`6bc5218b`** — bundle C1 (Phase 2 items 1 and 8),
-supervisor-verified at **7276 / 76239 / 1, exit 0**, config md5
+**CURRENT STATE, 2026-08-19.** `HEAD` is **`7ed551b6`** — bundle E33 (the reminder pile-up),
+supervisor-verified at **7285 / 76294 / 1, exit 0**, config md5
 `05480c743aff302fd6c06c5a4a4c2210`, `check-path-repos --no-lib-path-repos` rc 0, `src/` still
-275 `.php` files. **Phase 5 is complete. Phase 2 items 1, 3, 5, 6 and 8 are complete** — 3 and
-5 needed no code and the plan's premise about both was measured false (see §9).
+275 `.php` files. Bundle C1 is `6bc5218b` (7276/76239/1). **Phase 5 is complete. Phase 2 items
+1, 3, 5, 6 and 8 are complete** — 3 and 5 needed no code and the plan's premise about both was
+measured false (see §9).
 
-**IN FLIGHT: E33**, implementation round. See §11's E33 entry for the decision that is already
-made and must not be re-opened.
+**NEXT: C3** (Phase 2 item 2, MCP). Nothing in flight.
+
+**MEASURE YOUR OWN INVARIANTS FROM THE REPO ROOT WITH ABSOLUTE PATHS.** I got this wrong once:
+after `cd sugar-crush`, `md5sum .sugar-crush/config.json` reads a DIFFERENT, untracked file
+(`dfbee969ef3987bc183247d97bfdf73c`) and `check-path-repos` exits 1 purely because `tools/` is
+not on that path. The invariant is `/home/sites/sugarcraft/.sugar-crush/config.json`.
 
 **The two lessons this session added, both from C1:**
 
+0. **Do not edit `docs/plans/*` while a round is live.** Two agents in a row have reported
+   `git status` moving under them because I committed backlog edits mid-round. Either hold docs
+   edits until the round returns, or tell the agent up front that `docs/plans/*` will move and
+   is not part of its bundle.
 1. **A reproduction fixture can fail to reproduce, and then the test passes on the broken
    code.** My SIGTERM fixture (`trap '' TERM; sleep 8`) put the trap in a script file, so
    `proc_open`'s direct child was the `sh -c <script>` wrapper — which does NOT ignore SIGTERM.
@@ -349,25 +358,16 @@ inside those two files were renamed too before assuming the item is half-done.
 - ~~**E21** — finish Phase 5 (wire the automatic 85% tier to the model).~~ **DONE `261ac59d`**
   (7237/76136/1, exit 0). **PHASE 5 IS COMPLETE.** It also fixed four silent-loss bugs in
   `ContextCompactor::groupIntoPairs()` and one spend-cap bypass it had itself introduced.
-- **E33 — the 70% reminder piling up in permanent history. IN FLIGHT as of 2026-08-19**,
-  implementation round, brief at `/tmp/…/scratchpad/e33-brief.md` (self-contained — re-spawn
-  against it if that round was lost). Then review → fix → verify → commit as usual.
-  **The decision is MADE and must not be re-opened: deduplicate.** Backlog E33's own Step
-  prefers the other shape (keep it out of `history`, render from state); I overrode that
-  because render-from-state needs a NEW render path for a message `Renderer` gets for free by
-  walking `Role::System` history entries, and the standing priority is working functionality
-  now. Dedup also beats a fire-once latch on a point that only surfaces on reflection: the
-  surviving copy carries the CURRENT figure, not a stale one from twenty turns back.
-  Measured and settled so nobody re-derives them: `shouldSendReminder()` is **pure and
-  stateless** (`ContextCompactor.php:167-177`), which is why it fires per turn; history is
-  **not append-only** (`src/Chat.php` rewrites it wholesale on the tool-result splice twice,
-  `/clear`, every compaction tier, and `/rewind`), so dedup is the same operation the
-  compactor already performs; and `dispatchTurn()` checkpoints `'messages' => $next->history`,
-  so checkpoints inherit whatever shape wins with no second serialisation site. The message is
-  **172 chars ≈ 53 ESTIMATED tokens** — estimated, never provider-counted; those two units are
-  never summed in this codebase. **Do not match stale copies on full text** — the message
-  embeds a token figure, so two copies are never byte-equal and an equality check would
-  silently never fire.
+- ~~**E33** — the 70% reminder piling up in permanent history.~~ **DONE `7ed551b6`**
+  (7285/76294/1, exit 0). Deduplicated: strip unconditionally, append only when the tier fires.
+  Also fixed a bug the review found and I had not thought to look for — **`/rewind` was
+  reconstructing every non-`assistant` checkpoint row as a USER message**, so a rewound reminder
+  came back as the user's own words on the provider wire, and the dedup's own role guard made it
+  permanent. Same coercion mis-roled `_Request cancelled._`, the tier report and
+  `_Permission denied_`. Fixed with a `'system'` arm, zero fixture churn. The `tool` case stays
+  coerced **by necessity** — `Role` has three cases and no `tool`, and nothing serialises one.
+  Residual: **E38** (a compaction folds the reminder's full text into a `[summary] ` line the
+  dedup cannot match, so the pile-up changes shape rather than ending).
 - ~~**C1** Phase 2 items 1,8 — the `ClaudeCodeMcpClient` rename and the streaming tier.~~
   **DONE `6bc5218b`** (7276/76239/1, exit 0). Item 8 carried far more than the plan said: the
   dormant class **could not return a newline from any command whatsoever**, so five doc sites
@@ -381,8 +381,26 @@ inside those two files were renamed too before assuming the item is half-done.
   deliberate.
 - ~~**C2** Phase 2 item 3 — `WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`.~~
   **ALREADY DONE** — `Bootstrap.php:374` passes it. Measured 2026-08-19, see §9. No work.
-- **C3** Phase 2 item 2 — MCP. **The plan's framing is wrong in two ways and it is far bigger
-  than "read `.mcp.json`".** Measured 2026-08-19, full write-up at
+- **C3** Phase 2 item 2 — MCP. **NEXT UP.** The plan's framing is wrong in two ways, and my own
+  first measurement of it was ALSO wrong in the direction that matters — corrected in full at
+  `/tmp/…/scratchpad/c3-measured.md`, read that before briefing. **The gating already exists and
+  is better built than I assumed:** `MCP\McpClient` already reads `$config['mcpServers']` (the
+  exact `.mcp.json` key, so the convention is implemented and only the PATH is unchosen),
+  already dispatches `stdio`/`http`/`git` server types, already **fails CLOSED** (with no
+  `AgentPreset` and `$unrestricted = false`, `listTools()`/`callTool()` "see and reach nothing at
+  all"), and already routes through `McpRouter` with deny patterns. Its Guzzle `timeout => 30` is
+  an MCP HTTP bound, NOT an LLM bound, so the no-total-request-timeout rule does not touch it.
+  **So three things are missing, and one is a DECISION:** the config path choice; lifecycle
+  (`startServers()`/`stopServers()` — these SPAWN PROCESSES, so reuse C1's bounded
+  SIGTERM→signal-9 `terminateAndReap()` rather than inventing a third escalation); and the `Tool`
+  adapter. The decision: the client fails closed and the MAIN chat agent has no `AgentPreset`, so
+  as things stand it would see ZERO MCP tools. Options are a synthetic preset, `unrestricted:
+  true` on the main path (**bypasses `McpRouter` entirely — a security posture change, not a
+  wiring detail**), or routing MCP calls through `PermissionGate`. **Proceeding with
+  `PermissionGate`** unless the user says otherwise: MCP tools are arbitrary external process and
+  HTTP execution, that gate is what this app already uses to put a human in front of exactly
+  that, and it is the reversible choice. Raised with the user 2026-08-19; no objection received.
+  Original (partly wrong) framing follows for the record. Measured 2026-08-19, full write-up at
   `/tmp/…/scratchpad/c3-measured.md`: (a) `.mcp.json` appears **nowhere** in `src/` or `bin/` —
   it is README prose, and `MCP\McpClient` takes an injected `$configPath`; (b) the MCP **auth**
   path IS already wired (`McpAuthStore` at `Chat.php:9112`, `Commands/McpAuthCommand.php`) while

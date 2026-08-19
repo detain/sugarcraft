@@ -7359,3 +7359,156 @@ cross-cut — the exact mis-attribution the rename exists to fix, left standing 
 reader would consult. And `README.md` still reported **6,424 tests / 51,767 assertions /
 1m52s** against a measured 7,276 / 76,239 / 2m38s, in a file the bundle had already edited in
 four places.
+
+---
+
+## Bundle E33 — the reminder pile-up, COMMITTED `7ed551b6`
+
+Implement → adversarial review → one fix round → supervisor verification → commit.
+**7276 → 7285 / 76294 / 1, exit 0**, verified personally without a pipe. Config md5
+`05480c743aff302fd6c06c5a4a4c2210`, `check-path-repos --no-lib-path-repos` rc 0, `src/` still
+275 `.php` files.
+
+### The bug
+
+`ContextCompactor::shouldSendReminder()` (`:167-177`) is a bare `$tokenCount >= $threshold` —
+pure, stateless, no latch, no timestamp — so it answers true on EVERY turn past the line, and
+`dispatchTurn()` committed a fresh reminder to permanent history each time. Twenty turns past
+70% meant twenty near-identical `Role::System` messages, ~53 estimated tokens each, whose
+subject is that the context is filling up. Their own bytes count toward the estimate that made
+the predicate true.
+
+Pre-existing, and **E21 did not cause it — E21 uncovered it.** `groupIntoPairs()` used to drop a
+non-user/non-assistant message following a user turn, which is exactly the reminder's shape, so
+compaction ate every copy and the waste was self-limiting by accident.
+
+### The decision, made at supervisor level
+
+**Deduplicate**, over the backlog entry's own stated preference for rendering it from state.
+Render-from-state needs a NEW render path for a message `Renderer` gets free by walking
+`Role::System` entries (`Renderer.php:1737`). Dedup also beats a fire-once latch on a point that
+only surfaces on reflection: the surviving copy carries the CURRENT figure, not a stale one from
+twenty turns back. Recorded so a later round does not re-litigate it.
+
+Two things settled by measurement before briefing, so no agent had to re-derive them: history is
+**not append-only** (`Chat.php` rewrites it wholesale on the tool-result splice twice, `/clear`,
+every compaction tier, and `/rewind`), and `dispatchTurn()` checkpoints
+`'messages' => $next->history`, so checkpoints inherit whatever shape wins with no second
+serialisation site.
+
+### What the review found that I had not thought to look for
+
+**`/rewind` was putting words in the user's mouth.** `reviveCheckpointMessage()`'s
+`default => Message::user($content)` reconstructed every non-`assistant` checkpoint row as a
+USER message, so a rewound reminder came back as the user's own words and the provider was told
+the user had said "Heads up: this conversation has grown to ~70109 estimated tokens… Consider
+running /compact soon." One more copy accrued per rewind.
+
+What makes it worse than a mis-role: **the dedup's role guard — the thing protecting a message
+the user really typed — is what made the fake turn permanent.** The app manufactured words and
+then defended them as genuine. The same coercion mis-roled `_Request cancelled._`, the tier
+report and `_Permission denied_` — precisely the E21 victims.
+
+Fixed with a `'system'` arm. **Zero existing test expectations moved**, so the stop condition I
+attached (stop if more than ~5 fixtures move; the split is my call) never engaged — I
+over-forecast the blast radius. The `tool` case stays coerced **by necessity, not by choice**:
+`Role` is a three-case enum with no `tool` case and nothing in the app serialises one, so such a
+row exists only as a hand-built fixture. My brief had told the fixer "if reviving `tool` rows
+properly blows the budget, report it as still open" — that instruction assumed an option that
+does not exist.
+
+**The survivor was never cleaned below the threshold.** The dedup sat inside the
+`shouldSendReminder()` check, so once a compaction dropped the estimate back under 70% nothing
+touched the stale copy. Measured at 22% of the window, **immediately after the user ran
+`/compact`**: the transcript still read "grown to ~70440 estimated tokens, past the
+context-usage reminder threshold. Consider running /compact soon", on the provider wire every
+turn thereafter. That is the exact failure the docblock cited as its reason for rejecting a
+latch. Now the strip is unconditional and only the append is gated.
+
+### Two mutations survived all 7,280 tests
+
+Neither an equivalent mutant:
+
+- **Counting the figure AFTER the strip** instead of before. Reachable contradiction at the
+  threshold boundary: the message quotes 69,947 while asserting it is past 70,000. Now pinned by
+  a test whose fixture is 279,748 chars + one stale copy = exactly the threshold.
+- **Stripping only the FIRST match.** The real code collapses a legacy multi-copy history in one
+  dispatch; the mutant takes one turn per copy — which is the migration path every session and
+  checkpoint predating this bundle takes. Now pinned.
+
+Dropping `array_values()` IS a genuine equivalent mutant — the only consumer spreads the result
+into a new array, which re-indexes anyway — so no test was written and the docblock says so
+explicitly, to stop a later reviewer re-raising it.
+
+### Three numbers corrected — all of them this chain's signature defect, inside the bundle fixing an instance of it
+
+- The comment claimed the quoted figure **overstates** the committed history by the dropped
+  copy's 53 tokens. Measured: committed is **N+65** on the first fire and **N+12** after, because
+  the dropped copy is cancelled by the fresh one appended in the same breath. Magnitude right,
+  verb and referent wrong — 53 is true only of post-strip `$baseHistory` in isolation, an array
+  never committed on its own.
+- `groupIntoPairs()`'s docblock had downgraded E21's 10-exchanges-to-0 measurement to "loses one
+  pair". Re-derived: with the deduped shape the count goes **UP to 12**, because the surviving
+  copy inflates the entry count and slides the `recentPreserveCount` window off two pairs that
+  should have been preserved verbatim. Different harm, **opposite sign**. 10→0 restored as the
+  reachable worst case, since pre-dedup sessions and their checkpoints still reach it.
+- "`$tokenLimit` is the provider's real window" holds on **one of three** paths; the other two
+  return the hardcoded `FALLBACK_TOKENS`.
+
+### Corrections to my own briefs
+
+1. **My top-billed suspicion was a non-issue.** I called the parked-summarization interaction
+   "the highest-value thing in this list" — whether dedup could invalidate an `exchangeKey()` and
+   silently discard a summary the user paid for. It cannot: `exchangeKey()` hashes only
+   user+assistant content, a reminder is an `interleaved` rider that changes neither a key nor a
+   pair count (measured: 5 keys with and without, identical), and `applyModelCompaction()` applies
+   summaries strictly BEFORE calling `dispatchTurn()`, so the orders cannot diverge. Driven end to
+   end: 5 summary lines applied, 5 model-written, one reminder on the wire.
+2. **I accepted the wrong direction on the token accounting.** My brief granted the docblock's
+   "N overstates the history actually committed" and asked only whether the magnitude 53 survived.
+   The magnitude was right and the sign was not.
+3. **My digit-width framing overstated the fragility**, and then my own restatement of the fix
+   inherited a bad derivation: the est=53 band covers 3–6 digits (figures 100–999,999), and the
+   window range I quoted was derived from 4–6. No window-only statement can be complete anyway,
+   since a history driven far past a small window still reaches seven digits. The comment is now
+   keyed to the FIGURE, which is what the formula reads.
+4. **All four of my safety attacks on the predicate failed safely** — assistant carrying the
+   marker, user carrying it, `[summary]`-prefixed, leading whitespace: all survive; only the
+   verbatim system form is removed. The reviewer additionally enumerated all 11 `Role::System`
+   producers in `src/` and confirmed none can begin with the marker, and that tool results ride a
+   `tool_results` wire key rather than system content. No security finding.
+5. **My `array_values()` suspicion was not "untested" but unkillable** — its removal is
+   unobservable, which is a different thing and needed saying in the code.
+6. **I guessed the wrong risk on the right command.** I flagged `/rewind` for "reintroducing
+   superseded reminders" (harmless — the next dispatch dedups them) and missed the role coercion
+   sitting in the same method.
+7. **My SHAs were self-inconsistent** — I called `d3bd610a` HEAD and then described its parent
+   `6bc5218b` as HEAD one sentence later. Both figures were right; the label was not.
+8. **My finding-5 instruction would have attributed two victims to the wrong branch.** I asked
+   for the `groupIntoPairs()` paragraph to justify E21 on "two consecutive assistant turns" and
+   the compaction notice. Neither belongs to that branch: the consecutive-assistant case is a
+   separate defect with its own mechanism and its own test, and the compaction notice is
+   PREPENDED before the user prompt so it never sits after an unanswered user turn.
+9. **I ran my own invariant checks from the wrong directory once** — `md5sum
+   .sugar-crush/config.json` after `cd sugar-crush` reads a DIFFERENT, untracked file
+   (`dfbee969ef3987bc183247d97bfdf73c`), and `check-path-repos` exited 1 purely because
+   `tools/` was not there. Both re-run with absolute paths. Exactly the claim-without-its-domain
+   failure, in the supervisor's own verification step.
+10. **The tree was not the fixed thing my brief described.** I committed backlog edits while the
+    fixer was live, so `git status` moved under it. Two agents in a row have now reported this.
+    Either freeze docs edits during a round or say up front that `docs/plans/*` will move.
+
+### New backlog entries
+
+**E38** — a compaction folds the reminder's full 171-char text into a `[summary] ` line the dedup
+can never match, so the pile-up changes shape rather than being eliminated (one per compaction
+instead of one per turn). Scoping the predicate to the verbatim form is CORRECT — a summary is a
+record and must not be silently deleted, which is the class of bug E21 removed — so the fix
+belongs in the summarizer, not the predicate.
+
+**E39** — a full-suite run has now stalled for **two independent agents in different bundles**,
+around the `tests/Cli` region, on trees that then ran clean twice. **Not E29** (that is the
+directory-scoped invocation, and it is reproducible). Suspected a test row making a real connect
+to `localhost:30000`. Recorded because the shape reads as "my change broke the suite" and is not
+— and because the 10-minute Bash ceiling has no headroom to survive one, so a stall presents as
+a timeout kill.

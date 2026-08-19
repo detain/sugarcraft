@@ -1933,10 +1933,12 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E37 — `--help` documents 5 of the 20 `SUGARCRUSH_*` variables the code reads
+### E37 — `--help` documents 6 of the 20 `SUGARCRUSH_*` variables the code reads
 
-- **What** `src/Cli/Help.php` names five environment variables; `src/` and `bin/`
-  read twenty. Missing include `SUGARCRUSH_MAX_COST`,
+- **What** `src/Cli/Help.php` names six environment variables; `src/` and `bin/` read
+  twenty. (Five before bundle C1, which added the streaming variable — the heading said
+  five until this was re-measured. And the twenty is right only after discarding
+  `SUGARCRUSH_DISABLE_`, a prefix fragment, from a 21-name raw grep.) Missing include `SUGARCRUSH_MAX_COST`,
   `SUGARCRUSH_PERMISSION_MODE`, `SUGARCRUSH_TITLE_MODEL`,
   `SUGARCRUSH_SUMMARY_MODEL` and `SUGARCRUSH_SEARCH_ENDPOINT` — i.e. the spend cap
   and the permission mode, both of which change what the agent is allowed to do.
@@ -1955,6 +1957,72 @@ fixture. What is left after the correction is a narrower but real dead end.
   hand-written list — a written list is exactly as blind to the twenty-first
   variable as the current assertion was to the sixth.
 ---
+
+### E38 — a compaction folds the reminder's full text into a `[summary]` line the dedup can never match
+
+- **What** Bundle E33 bounds the 70% reminder at one VERBATIM copy. It does not
+  bound the summarized ones. `ContextCompactor`'s summarizer folds a rider into
+  `'[summary] ' . $riderContent`, so after a compaction the reminder's entire
+  171-character text survives as a `Role::System` line whose content no longer
+  STARTS with `Chat::CONTEXT_REMINDER_PREFIX` — which is exactly what
+  `Chat::isContextReminder()` matches on. One such line can accrue per compaction,
+  so the pile-up changes shape rather than being eliminated.
+- **Where** `sugar-crush/src/Context/ContextCompactor.php` (the `[summary] ` rider
+  path) against `sugar-crush/src/Chat.php`'s `isContextReminder()` /
+  `withoutContextReminders()`.
+- **Severity** Not security. Wasted context and transcript noise, at one line per
+  compaction rather than one per turn — a large improvement on the original bug, but
+  not the "bounded at one copy" the fix's docblock implies without qualification.
+- **Evidence** Measured by bundle E33's reviewer after a compaction:
+
+      lines still containing the reminder text after compaction: 2
+        role=system content=[summary] Heads up: this conversation has grown to ~70123 estimated tokens, past the context-usage r
+        role=system content=Heads up: this conversation has grown to ~70123 estimated tokens, past the context-usage reminder th
+
+  The stripper's docblock claim that a folded reminder's "content no longer starts
+  with the marker" is TRUE, and scoping the predicate to the verbatim form is
+  correct — a summary line is a record of what happened and should not be silently
+  deleted. What is false is the accompanying framing that a folded reminder is "no
+  longer a copy of anything": 100% of the text survives, merely prefixed.
+- **Step** Decide whether an app-authored notice should be summarized at all. The
+  cheapest correct answer is probably that the summarizer should not carry a
+  reminder's body into a summary line — it is a notice about the transcript rather
+  than content of it, so a summary that names it ("a context reminder fired here")
+  costs a few tokens instead of 171. Do NOT fix this by widening
+  `isContextReminder()` to match the `[summary] ` form and delete those lines: that
+  would let a compaction's own record be erased, which is the class of bug bundle
+  E21 spent a round removing.
+- **Related** E33 (the verbatim copies), E21 (`groupIntoPairs()`'s silent drops).
+
+---
+
+### E39 — a full-suite run stalls in the `tests/Cli` region, rarely, on an unchanged tree
+
+- **What** Two independent agents, in different bundles, hit a full
+  `vendor/bin/phpunit` run that stopped making progress around the `tests/Cli`
+  region on a tree that then ran clean twice. **This is NOT E29.** E29 is
+  `vendor/bin/phpunit tests/Cli` invoked as a DIRECTORY, which hangs
+  reproducibly; this is the full configured run, and it is intermittent.
+- **Where** Unknown. Suspected: a test row that makes a real network connect.
+  Bundle C1's reviewer observed the stall with two `[sh] <defunct>` children aged
+  2m22s and named `tests/Cli/NonInteractiveProviderFailureTest.php`, whose
+  `dev-sglang` row connects to `localhost:30000`. Bundle E33's fixer observed a run
+  reach only 1,891/7,283 before a 10-minute wall, with what looked like `R`
+  (risky) progress markers in the same region, and found no orphan `php`/`phpunit`
+  processes afterwards.
+- **Severity** Not security. It is a **trap for future rounds**, which is the
+  reason to record it: the shape reads as "my change broke the suite" and is not.
+- **Evidence** Neither observer could reproduce it. In both cases the IDENTICAL
+  tree then completed in ~2m38s at rc 0 with zero risky, and the individual
+  `tests/Cli` files run in ~0.06s each.
+- **Step** Before diagnosing, re-run. If it recurs, capture `ss -tnp` / `lsof` for
+  a connection to `localhost:30000` and the `php` process's `wchan`, and check
+  whether any provider row in the suite makes a live connect that is not gated on
+  reachability. A test that dials a port nothing is listening on should be gated,
+  not left to a connect timeout.
+- **Operational note** 600,000 ms (the 10-minute Bash ceiling used for suite runs)
+  is enough for a normal 2m40s run but NOT enough headroom to survive one of these
+  stalls, so a stall presents as a timeout kill. Re-run before believing it.
 
 ## F. Known dormant seams — documented, NOT work
 
