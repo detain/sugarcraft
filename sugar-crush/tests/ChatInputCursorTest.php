@@ -520,14 +520,35 @@ final class ChatInputCursorTest extends TestCase
         ];
     }
 
-    public function testWhileATurnIsInFlightNothingReachesTheDraft(): void
+    /**
+     * The INVERSION of `testWhileATurnIsInFlightNothingReachesTheDraft()`, which
+     * asserted object identity after each of these three keys and was correct
+     * only while `Chat::update()` opened its mid-turn block with a blanket
+     * `return [$this, null];`. That blanket was the user-reported bug; editing
+     * the draft mid-turn is now the requirement, so the same three keys are
+     * driven against the same fixture with the opposite expectation.
+     *
+     * Asserted on the RESULTING VALUE and CURSOR, not on `assertNotSame($chat,
+     * $next)`: a non-identical clone that dropped the edit would satisfy
+     * "something happened" while leaving the bug in place.
+     */
+    public function testEveryDraftKeyReachesTheDraftWhileATurnIsInFlight(): void
     {
         $chat = new Chat(inputBuf: 'sent', inFlight: true);
+        $this->assertSame(4, $chat->inputCursorOffset(), 'fixture: the cursor seeds at the end');
 
-        foreach ([new KeyMsg(KeyType::Char, 'z'), new KeyMsg(KeyType::Left), new KeyMsg(KeyType::Delete)] as $key) {
-            [$next] = $chat->update($key);
-            $this->assertSame($chat, $next, 'in-flight keystrokes are dropped, object identity and all');
-        }
+        [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'z'));
+        $this->assertSame('sentz', $typed->inputBuf, 'Char types mid-turn');
+        $this->assertSame(5, $typed->inputCursorOffset());
+
+        [$left] = $chat->update(new KeyMsg(KeyType::Left));
+        $this->assertSame('sent', $left->inputBuf, 'Left moves without editing');
+        $this->assertSame(3, $left->inputCursorOffset(), 'and it really moved');
+
+        [$deleted] = $left->update(new KeyMsg(KeyType::Delete));
+        $this->assertSame('sen', $deleted->inputBuf, 'Delete removes the character under the cursor mid-turn');
+
+        $this->assertTrue($deleted->inFlight, 'and none of the three ended the turn that is running');
     }
 
     // -------------------------------------------------------------------------

@@ -263,11 +263,32 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('█', $out);
     }
 
-    public function testInputCursorHiddenWhileInFlight(): void
+    /**
+     * The INVERSION of `testInputCursorHiddenWhileInFlight()`, which asserted
+     * `assertStringNotContainsString('█', …)` and was correct only while
+     * `Chat::update()` swallowed every mid-turn keystroke: a box that cannot be
+     * typed into should not claim a caret. Typing mid-turn now works, so the
+     * hidden caret became the second half of the same bug report — the box looked
+     * dead while it was live. Same property, opposite expected value.
+     *
+     * Asserted on the INPUT ROW rather than on the whole frame: `█` anywhere in
+     * 1,281 bytes of frame would also be satisfied by a caret drawn in some other
+     * pane, which is not the claim.
+     */
+    public function testInputCursorIsDrawnWhileInFlight(): void
     {
         $out = Renderer::render($this->chat(buf: 'partial', inFlight: true));
-        $this->assertStringNotContainsString('█', $out);
-        $this->assertStringContainsString('thinking', $out);
+        $inputRow = null;
+        foreach (explode("\n", $out) as $row) {
+            if (str_contains($row, 'partial')) {
+                $inputRow = $row;
+                break;
+            }
+        }
+
+        $this->assertNotNull($inputRow, 'the draft must be painted at all');
+        $this->assertStringContainsString('partial█', $inputRow, 'the caret sits at the end of the draft');
+        $this->assertStringContainsString('thinking', $out, 'and the turn is still visibly running');
     }
 
     public function testIdleStatusMentionsKeys(): void

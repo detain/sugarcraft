@@ -234,11 +234,30 @@ final class ChatTest extends TestCase
         $this->assertFalse($next->inFlight);
     }
 
-    public function testKeystrokesIgnoredWhileInFlight(): void
+    /**
+     * The INVERSION of a test that used to stand here.
+     * `testKeystrokesIgnoredWhileInFlight()` asserted `''` after a mid-turn
+     * keystroke, and it passed for as long as `update()` opened its mid-turn
+     * block with a blanket `return [$this, null];`. That swallow was a
+     * user-reported bug ("when i send a chat message and its processing the
+     * request im unable to type new text into the chat"), so the test that pinned
+     * it is replaced by one that pins the fix rather than deleted: the assertion
+     * is on the same property, with the opposite expected value.
+     *
+     * Driven through the real `update()` entry point with a real `KeyMsg`, not by
+     * calling the widget: the defect was in ROUTING, so a test that reached
+     * `TextArea` directly would have passed against the bug.
+     */
+    public function testTypingReachesTheDraftWhileATurnIsInFlight(): void
     {
         $chat = new Chat(inputBuf: '', inFlight: true);
+
         [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
-        $this->assertSame('', $next->inputBuf);
+        $this->assertSame('a', $next->inputBuf, 'a mid-turn keystroke must reach the draft');
+
+        [$more] = $next->update(new KeyMsg(KeyType::Char, 'b'));
+        $this->assertSame('ab', $more->inputBuf, 'and keep reaching it');
+        $this->assertTrue($more->inFlight, 'without ending the turn that is running');
     }
 
     public function testEscDoesNotQuitWhenIdle(): void

@@ -1251,6 +1251,44 @@ final class Renderer
         $processing = $chat->inFlight
             ? '⠴ thinking… · Esc Esc to cancel'
             : 'Enter to send · ' . self::markPane(Pane::Menu, 'Ctrl+P menu') . ' · /exit or ^C to quit';
+        // Messages the user sent while this turn was running
+        // ({@see Chat::enqueuePrompt()}). The transcript notice each one wrote
+        // scrolls away; this does not, which is what stops a queued message from
+        // being one the user cannot see.
+        //
+        // Appended to $processing rather than added as a fourth competing segment
+        // BECAUSE of the fitting order documented above: $processing is the one
+        // mandatory piece that is reserved before the context and spend readouts
+        // are sized, so a queue count here can never crowd out a readout that
+        // was already sized against it. Emitted only when the queue is non-empty,
+        // so every bar width the cue-fitting comment above measures is unchanged
+        // in every state that has no queue — which is every state that existed
+        // before this bundle.
+        //
+        // AND ONLY WHEN IT FITS, which is a measured constraint rather than
+        // caution. The in-flight bar is ALREADY over-wide below 36 columns — the
+        // too-small cue only replaces it at `rows <= 4` or `cols <= 4`, so
+        // between 5 and 35 columns this row over-runs the frame today, and that
+        // is a pre-existing defect this segment must not deepen. Measured on a
+        // two-message in-flight fixture: 36 columns with no queue, 47 with one,
+        // i.e. an unconditional append widens the over-run range from `cols <= 35`
+        // to `cols <= 46`. So the segment is dropped when the row cannot hold it,
+        // and the queue stays visible in the transcript notice
+        // {@see Chat::enqueuePrompt()} wrote either way.
+        //
+        // The reserve is the separator plus 2 columns for the context readout's
+        // own floor — `contextIndicator()`'s last resort is `"{$percent}%"`, which
+        // can never be empty — so a fitting queue segment cannot be the piece that
+        // pushes the mandatory readout off the row. Swept over widths by
+        // {@see \SugarCraft\Crush\Tests\Chat\InFlightInputQueueTest::testTheQueueSegmentNeverWidensTheBarPastTheTerminal()}.
+        $queued = count($chat->queuedPrompts());
+        if ($queued > 0) {
+            $segment = sprintf(' · %d queued', $queued);
+            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
+            if ($floor <= $chat->cols()) {
+                $processing .= $segment;
+            }
+        }
         // The readout is sized against the room the rest of the row leaves
         // rather than being emitted at full length and hoping it fits: it is
         // the widest variable-length piece of the bar, and the bar is the one
@@ -3534,10 +3572,9 @@ final class Renderer
      * Paint the input box.
      *
      * The box is painted HERE and not by `TextArea::view()`, deliberately:
-     * this styling (theme border, the "> " prompt, the block cursor that
-     * disappears mid-turn) is tuned against the status-bar layout below it and
-     * the frame clip in {@see render()}, and a second render path would fight
-     * it. The widget is read for STATE only — its value and its cursor.
+     * this styling (theme border, the "> " prompt, the block cursor) is tuned
+     * against the status-bar layout below it and the frame clip in
+     * {@see render()}, and a second render path would fight it. The widget is read for STATE only — its value and its cursor.
      *
      * The cursor is drawn where the widget says it is, which is what makes
      * cursor motion visible at all; before {@see Chat::$input} existed the
@@ -3547,7 +3584,15 @@ final class Renderer
      */
     private static function renderInput(Chat $chat, Theme $theme): string
     {
-        $cursor = $chat->inFlight ? '' : '█';
+        // The cursor is drawn in EVERY state, in-flight included, and that is the
+        // second half of a user-reported bug rather than a cosmetic change. This
+        // line read `$chat->inFlight ? '' : '█'`, which was honest while
+        // {@see Chat::update()} swallowed every keystroke for the length of a
+        // turn — a box that cannot be typed into should not claim a caret. Typing
+        // mid-turn now works ({@see Chat::enqueuePrompt()} queues what is sent),
+        // so hiding the caret would leave the box looking dead while it is live,
+        // and the report would stand with the block fixed.
+        $cursor = '█';
         // The in-progress input buffer is untrusted keystroke data (e.g. a
         // bracketed-paste dump can smuggle ESC/C0/DEL). Strip it before it hits
         // the terminal so a paste can't inject control sequences at draw time.

@@ -796,6 +796,40 @@ final class Chat implements Model
          * through and is sent to the model as an ordinary prompt.
          */
         private readonly ?string $pendingCompactionId = null,
+        /**
+         * Prompts the user pressed Enter on WHILE a turn was in flight, oldest
+         * first — the queue the user asked for ("new messages should be typable
+         * and sendable (well really queued for processing if its mid processing
+         * the previous message)").
+         *
+         * FIFO and unbounded rather than a single slot: two follow-up thoughts
+         * typed during one long turn are two messages, and silently replacing
+         * the first with the second is the "queued message the user cannot see"
+         * failure in another form.
+         *
+         * ORDINARY PROMPTS ONLY. A draft that starts with `/` is REFUSED
+         * mid-turn rather than queued ({@see refuseInFlightCommand()}), so
+         * nothing in here can reach {@see dispatchCommand()} when
+         * {@see releaseQueuedPrompts()} drains it — which is also why the drain
+         * cannot rewrite history under a turn that is still settling.
+         *
+         * Drained by {@see releaseQueuedPrompts()} at the four sites a backend
+         * turn can END (see that method); deliberately NOT drained by the
+         * double-Escape cancel arm in {@see update()}, which held these
+         * deliberately — cancelling the running turn says nothing about the next
+         * one.
+         *
+         * IN-MEMORY FOR THE LIFE OF THE PROCESS, like {@see $paletteMru}, and
+         * deliberately absent from {@see dispatchTurn()}'s checkpoint payload: a
+         * queued prompt is a message the user is watching the status bar for, and
+         * a session revived hours later dispatching one they have forgotten about
+         * is worse than losing it. Recorded rather than fixed, because the notice
+         * {@see enqueuePrompt()} writes IS checkpointed, so a revived session still
+         * shows what was queued even though it will not send it.
+         *
+         * @var list<string>
+         */
+        private readonly array $queuedPrompts = [],
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -902,11 +936,21 @@ final class Chat implements Model
                 return $settled->beginToolCalls($message);
             }
 
-            return [$settled->mutate([
+            // THE ordinary end of a turn, and so the drain point that matters:
+            // {@see finishToolCalls()} writes `'inFlight' => true`, which means a
+            // turn that called tools keeps running and settles at a LATER
+            // AssistantMsg — this one, once the model answers without asking for
+            // another call. Draining on ANY AssistantMsg would fire mid-turn,
+            // between two tool steps; the tool-call branch a few lines above
+            // returns before this point, which is what keeps it from happening.
+            //
+            // The null Cmd this used to return is where the drained turn's Cmd
+            // goes.
+            return self::releaseQueuedPrompts([$settled->mutate([
                 'history' => [...$this->history, $message],
                 'inFlight' => false,
                 'inFlightCancellation' => null,
-            ]), null];
+            ]), null]);
         }
         if ($msg instanceof ToolResultsMsg) {
             return $this->finishToolCalls($msg);
@@ -1136,13 +1180,56 @@ final class Chat implements Model
                 // the request leaves - and the call is still billed, because
                 // update() accounts usage ahead of the latch check.
                 'pendingCompactionId' => null,
+                // `queuedPrompts` is deliberately ABSENT, which is a decision and
+                // not an omission. This arm clears `inFlight`, so it is the one
+                // turn-ending site that does NOT call
+                // {@see releaseQueuedPrompts()}: the user just asked to stop the
+                // RUNNING turn, which says nothing about a message they typed
+                // deliberately while it ran, and dispatching it here would send
+                // the one thing they may have been trying to stop. Nor is it
+                // dropped — that would silently destroy the user's text. It stays
+                // queued and stays visible ({@see Renderer::renderStatusBar()}
+                // counts it), and goes out when the next turn settles.
             ]), null];
         }
+        // MID-TURN KEY POLICY. This used to be
+        //
+        //     if ($this->inFlight) {
+        //         // Ignore keystrokes while waiting for the backend
+        //         // (avoids the user racing ahead and queuing another
+        //         // turn into a half-formed history).
+        //         return [$this, null];
+        //     }
+        //
+        // a blanket swallow, and it was the whole of a user-reported bug: for the
+        // length of a turn the input box, the Ctrl+P palette, the session picker,
+        // Up-recall and Ctrl+O were all dead, because every one of them is
+        // lexically BELOW this point. It was NOT an async defect — the completion
+        // already runs in a forked child ({@see Backend\EngineBackend::completeAsync()})
+        // and the loop was delivering the keystrokes; they arrived here and were
+        // dropped on purpose.
+        //
+        // The swallow's stated reason is real, so it is SPLIT rather than deleted.
+        // The hazard was never "a key reached the input box"; it was "a key
+        // STARTED A TURN, or rewrote the history a running turn is about to append
+        // to". So the policy now lives at the three places that can actually do
+        // that, and everything else runs mid-turn exactly as it does when idle:
+        //
+        //   * {@see submit()} — Enter ENQUEUES ({@see enqueuePrompt()}) instead of
+        //     dispatching, and a draft that starts with `/` is refused
+        //     ({@see refuseInFlightCommand()}) rather than queued;
+        //   * {@see handlePaletteKey()} — the palette opens and browses, but Enter
+        //     on an action other than Exit is refused;
+        //   * {@see handleSessionPickerKey()} — the picker opens and browses, but
+        //     `resume` is refused.
+        //
+        // Plus the three keys below, which reach a turn-starting or
+        // history-replacing arm without passing any of those three.
         if ($this->inFlight) {
-            // Ignore keystrokes while waiting for the backend
-            // (avoids the user racing ahead and queuing another
-            // turn into a half-formed history).
-            return [$this, null];
+            $refused = $this->refuseWhileInFlight($msg);
+            if ($refused !== null) {
+                return $refused;
+            }
         }
 
         // While the Ctrl+P command palette is open, every keystroke feeds
@@ -1772,12 +1859,23 @@ final class Chat implements Model
         //
         // Domains: "trio" is tests/RendererTest.php +
         // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
-        // the three files that CONSTRUCT a PermissionRequestMsg -- asserted, not
-        // narrated, and by a token scan for `new …PermissionRequestMsg` rather than
-        // by the `grep -rl PermissionRequestMsg tests/` this line used to cite,
-        // which also matches files that merely mention the class in a comment:
+        // the three files that CONSTRUCTED a PermissionRequestMsg when the rows
+        // below were measured -- asserted, not narrated, and by a token scan for
+        // `new …PermissionRequestMsg` rather than by the
+        // `grep -rl PermissionRequestMsg tests/` this line used to cite, which also
+        // matches files that merely mention the class in a comment:
         // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(),
         // whose docblock states what that instrument can and cannot see. PHP 8.3.6.
+        //
+        // A FOURTH file now builds one and the name "trio" is kept anyway, because
+        // it names the domain the rows below were measured over and that domain did
+        // not change: W2's tests/Chat/InFlightInputQueueTest.php raises an
+        // UNSTAMPED ask (to reach answerPermission()'s denial path, which is one of
+        // the four places a queued prompt is released), and no row of this table
+        // touches an unstamped ask -- the same reason two of the original three
+        // contribute nothing. Re-measuring is due only when a file joins the set
+        // with a STAMPED ask.
+        //
         // ChatTest is measured separately BECAUSE rows 3 and 4 show the trio's
         // silence does not cover it -- and note that the trio's reds in all four
         // rows come from KeyHelpTest ALONE: RendererTest and KeyBindingDriftTest
@@ -1861,8 +1959,13 @@ final class Chat implements Model
         // Program waiting on a decision that has already been made.
         $this->permissionDeferred?->resolve(null);
 
+        // A denial ENDS the turn, with no AssistantMsg to follow it, so a queue
+        // released only at update()'s settle arm would strand here — the
+        // permission prompt is a mid-turn state by definition, which makes it one
+        // of the likelier places for a queue to have accumulated. The permitting
+        // path below keeps the turn running and deliberately does not drain.
         if (!$reply->permits()) {
-            return [$this->mutate([
+            return self::releaseQueuedPrompts([$this->mutate([
                 ...$cleared,
                 'inFlight' => false,
                 'inFlightCancellation' => null,
@@ -1888,7 +1991,7 @@ final class Chat implements Model
                         $request->toolCall->id,
                     )]),
                 ],
-            ]), null];
+            ]), null]);
         }
 
         $grants = $this->permissionGrants;
@@ -2472,6 +2575,22 @@ final class Chat implements Model
     public function streamingText(): string
     {
         return $this->streamingText;
+    }
+
+    /**
+     * Prompts typed and sent while a turn was in flight, oldest first — see the
+     * constructor param's docblock.
+     *
+     * {@see Renderer::renderStatusBar()} reads this so the count sits beside the
+     * "thinking…" spinner: a queued message the user cannot see is a lost
+     * message, and the transcript notice {@see enqueuePrompt()} writes scrolls
+     * away while the status bar does not.
+     *
+     * @return list<string>
+     */
+    public function queuedPrompts(): array
+    {
+        return $this->queuedPrompts;
     }
 
     /**
@@ -4236,6 +4355,7 @@ final class Chat implements Model
             'maxCostUsd' => $this->maxCostUsd,
             'summaryBackend' => $this->summaryBackend,
             'pendingCompactionId' => $this->pendingCompactionId,
+            'queuedPrompts' => $this->queuedPrompts,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -4331,6 +4451,34 @@ final class Chat implements Model
         $text = trim($this->inputBuf);
         if ($text === '') {
             return [$this, null];
+        }
+
+        // MID-TURN, Enter QUEUES instead of dispatching. This is the arm the
+        // user's report asked for ("new messages should be typable and sendable
+        // (well really queued for processing if its mid processing the previous
+        // message)"), and it is checked ahead of everything below because the
+        // whole point is that none of it runs yet: a second dispatchTurn() while
+        // one is in flight is exactly the "racing ahead and queuing another turn
+        // into a half-formed history" the blanket swallow in {@see update()} was
+        // there to prevent.
+        //
+        // The `/` test is the whole classifier — see
+        // {@see refuseInFlightCommand()} for why a per-command list was rejected.
+        // `/exit` and `/quit` are the two that still go through mid-turn: they end
+        // the process, so there is no state left for them to corrupt, and Ctrl+C
+        // (checked above the mid-turn block) already quits mid-turn anyway. The
+        // bare-name test mirrors {@see dispatchCommand()}'s own — `/exit now` is a
+        // prompt there and must stay one here.
+        if ($this->inFlight) {
+            if ($text === '/exit' || $text === '/quit') {
+                return [$this, Cmd::quit()];
+            }
+
+            if (str_starts_with($text, '/') || str_starts_with($text, 'mcp auth')) {
+                return $this->refuseInFlightCommand($text);
+            }
+
+            return $this->enqueuePrompt($text);
         }
 
         $dispatched = $this->dispatchCommand($text);
@@ -4447,6 +4595,289 @@ final class Chat implements Model
         $newTurnMessages[] = Message::user($text);
 
         return $this->dispatchTurn($baseHistory, $newTurnMessages, $tokenLimit);
+    }
+
+    /**
+     * Longest excerpt of the user's own text a mid-turn notice quotes back.
+     *
+     * Bounded because these notices are transcript messages and the transcript
+     * is a fixed-width pane: {@see Renderer::fitToPane()} wraps rather than
+     * cuts, so an unbounded quote costs ROWS rather than correctness, and a
+     * pasted 4KB draft would push the turn it is about to follow off the frame.
+     * Short enough to identify the message, which is the whole job — the full
+     * text is what eventually goes out, and until it does it is on
+     * {@see $queuedPrompts}.
+     */
+    private const IN_FLIGHT_QUOTE_MAX_CHARS = 60;
+
+    /**
+     * One bounded, control-byte-free excerpt of untrusted draft text, for a
+     * notice that is about to be painted.
+     *
+     * {@see sanitizeSummaryLine()} does the flattening and the ESC-stripping —
+     * the same treatment model-authored text gets, and for the same reason: this
+     * is keystroke data, so a bracketed-paste dump can carry ESC/C0/DEL, and it
+     * is bound for a frame.
+     */
+    private static function quoteDraftForNotice(string $text): string
+    {
+        $clean = self::sanitizeSummaryLine($text);
+        if (mb_strlen($clean, 'UTF-8') > self::IN_FLIGHT_QUOTE_MAX_CHARS) {
+            $clean = mb_substr($clean, 0, self::IN_FLIGHT_QUOTE_MAX_CHARS - 1, 'UTF-8') . '…';
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Hold a prompt the user sent while a turn was running, to be dispatched by
+     * {@see releaseQueuedPrompts()} when that turn ends.
+     *
+     * The draft is CONSUMED (the box empties, exactly as a real send empties it)
+     * because from the user's point of view the message has been sent — it is
+     * simply waiting its turn. That is what the report asked for; a send that
+     * left the text in the box would read as a send that failed.
+     *
+     * Role::System for the notice, and that is a measured constraint rather than
+     * a style choice: {@see Backend\EngineBackend::toTypedMessages()} maps
+     * Role::Assistant to an AssistantMessage and {@see Providers\VertexProvider}'s
+     * Anthropic path renders it as an `assistant` turn, i.e. a PREFILL the
+     * provider continues instead of an instruction it reads. This notice lands
+     * AFTER the running turn's user message, so an assistant role here would
+     * prefill the very reply that is in flight. Same rule
+     * {@see scheduleParkedCompaction()} follows for the same reason.
+     *
+     * NOT echoed as a Message::user(): a second user turn appended before the
+     * first one's reply would leave the reply attached to the wrong prompt in the
+     * pair grouping {@see Context\ContextCompactor} builds. The quoted excerpt in
+     * the notice is what makes the message visible in the transcript, and
+     * {@see Renderer::renderStatusBar()} carries the live count.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function enqueuePrompt(string $text): array
+    {
+        $queue = [...$this->queuedPrompts, $text];
+
+        return [$this->mutate([
+            'queuedPrompts' => $queue,
+            'inputBuf' => '',
+            'history' => [...$this->history, Message::system(sprintf(
+                'Queued (%d waiting) — sent as soon as this turn finishes: %s',
+                count($queue),
+                self::quoteDraftForNotice($text),
+            ))],
+        ]), null];
+    }
+
+    /**
+     * Refuse, VISIBLY, a slash command submitted while a turn is running.
+     *
+     * WHY REFUSED AND NOT QUEUED, since an ordinary prompt is queued: a queued
+     * command would run minutes later against a transcript the user is no longer
+     * looking at, and the commands most likely to be typed in the dead time are
+     * exactly the destructive ones — `/clear` and `/rewind` would delete the
+     * reply the user had just started reading. "Not now" is the honest answer;
+     * "later, silently" is not.
+     *
+     * WHICH DRAFTS THIS CLAIMS, stated as the mechanical rule it is: every draft
+     * whose first character is `/`, plus the leading-slash-less `mcp auth …`
+     * spelling {@see dispatchCommand()} also accepts. NOT a per-command
+     * classification, and that is deliberate — a list of unsafe names would be a
+     * second copy of {@see dispatchCommand()}'s arms to keep in step, and the
+     * classification is not close: measured over the arms there, every handler
+     * either rewrites `history`, writes `inFlight`, or swaps `backend` /
+     * `currentSessionId`, i.e. every one of them touches state the running turn
+     * is about to write. The rule therefore over-claims by exactly one class —
+     * `/notacommand`, which when idle is sent to the model as prose — and that
+     * cost is one refusal notice on a draft nothing advertises.
+     *
+     * THE TWO EXCEPTIONS ARE HANDLED BY THE CALLER, not here: bare `/exit` and
+     * `/quit` still quit mid-turn ({@see submit()}), because they end the process
+     * and so have no state left to corrupt — and because Ctrl+C, which is checked
+     * above the whole key-policy block, already quits mid-turn, so refusing their
+     * typed spellings would be an inconsistency rather than a safeguard.
+     *
+     * THE DRAFT IS KEPT. Nothing is lost: the line is still in the box, so Enter
+     * once the turn settles runs it, and the notice says so.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function refuseInFlightCommand(string $text): array
+    {
+        return [$this->mutate([
+            'history' => [...$this->history, Message::system(sprintf(
+                '%s is a command, and commands do not run while a turn is in flight — it would rewrite '
+                . 'history this turn is about to append to. Your draft is still in the box: press Enter '
+                . 'again once the turn finishes, or Esc Esc to cancel the turn now.',
+                self::quoteDraftForNotice($text),
+            ))],
+        ]), null];
+    }
+
+    /**
+     * Refuse, VISIBLY, an OVERLAY action chosen while a turn is running — a
+     * Ctrl+P palette row or the session picker's `resume`.
+     *
+     * Same rule and same reason as {@see refuseInFlightCommand()}: the overlays
+     * now OPEN and BROWSE mid-turn (that is half the bug report), but their
+     * dispatch arms delegate to the very command handlers that write `inFlight`
+     * and rewrite `history`. Opening a palette to look at it is free; pressing
+     * Enter on `New session` while a reply is streaming is not.
+     *
+     * $what is the row label, or the picker's action, so the notice names what
+     * was refused rather than announcing that something was.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function refuseInFlightAction(string $what): array
+    {
+        return [$this->mutate([
+            // The overlay is closed as part of refusing: leaving it up over a
+            // notice the user cannot see is how the original bug felt.
+            'palette' => null,
+            'sessionPicker' => null,
+            'history' => [...$this->history, Message::system(sprintf(
+                '"%s" does not run while a turn is in flight — it would change state this turn is about '
+                . 'to write. Wait for the turn to finish, or Esc Esc to cancel it now.',
+                self::quoteDraftForNotice($what),
+            ))],
+        ]), null];
+    }
+
+    /**
+     * The three keys that reach a turn-starting or history-replacing arm without
+     * passing {@see submit()}, {@see handlePaletteKey()} or
+     * {@see handleSessionPickerKey()} — so they are policed here, at the head of
+     * the mid-turn block in {@see update()}. Null means "no policy applies, run
+     * the arm exactly as an idle turn would".
+     *
+     * ENUMERATED, not pattern-matched, and each one has its own reason:
+     *
+     *   * Ctrl+A. Its arm is `withInputBuf('/agents')->submit()`, so it both
+     *     DESTROYS the draft and submits a command. Routed to the same refusal a
+     *     typed `/agents` gets, from `$this` — the draft never moves.
+     *   * Ctrl+Tab / Ctrl+Shift+Tab. {@see cycleSessionTab()} adopts another
+     *     session's history and id wholesale, which is the running turn's
+     *     transcript replaced under it.
+     *   * `?` on a blank draft. This one is SILENT, and deliberately so: it is
+     *     the only member of the three that is not a refusal but a PRESERVED
+     *     invariant. The keybinding reference is documented as opening only from
+     *     an idle turn, and {@see update()}'s modal-precedence comment reasons
+     *     from that — the reference is checked ABOVE the permission prompt, and
+     *     the pair "reference up over a live prompt" is asserted unreachable by
+     *     real input (`KeyHelpTest::testThePromptAndTheReferenceCannotBothBeRaised
+     *     ByRealInput()`). Opening it mid-turn makes that pair reachable, since a
+     *     prompt only ever exists mid-turn. So `?` keeps typing nothing, exactly
+     *     as it did before this split, and widening it is a keymap decision with
+     *     its own modal-precedence work to do. A notice would be wrong here too:
+     *     the user pressed a key that has never done anything in this state.
+     *
+     * `/keys`, the reference's other route, needs no arm of its own: it starts
+     * with `/`, so {@see refuseInFlightCommand()} already claims it.
+     *
+     * @return array{0:self,1:?\Closure}|null
+     */
+    private function refuseWhileInFlight(KeyMsg $msg): ?array
+    {
+        if ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a') {
+            return $this->refuseInFlightCommand('/agents');
+        }
+
+        if ($msg->type === KeyType::Tab && $msg->ctrl) {
+            return $this->refuseInFlightAction('Switch session');
+        }
+
+        if ($msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
+            && $msg->rune === '?' && trim($this->inputBuf) === ''
+        ) {
+            return [$this, null];
+        }
+
+        return null;
+    }
+
+    /**
+     * Dispatch whatever {@see enqueuePrompt()} is holding, now that the turn it
+     * was queued behind has ended.
+     *
+     * INERT unless there is a queue: with `$queuedPrompts` empty — which is every
+     * pre-existing state — this returns its argument's two values unchanged.
+     *
+     * THROUGH {@see submit()}, NOT {@see dispatchTurn()}. dispatchTurn()'s
+     * docblock warns that a third caller is where the generation stamp, the
+     * {@see Backend\CancellationToken}, the checkpoint or the title Cmd goes
+     * missing — and submit() adds four more things a typed prompt gets and a
+     * queued one must not silently lose: the spend cap, the idle-compaction
+     * nudge, and the 85%/95% context tiers. A queued prompt is a typed prompt
+     * that waited, so it goes through the same door: the text is seeded into
+     * `inputBuf` and submit() runs unchanged.
+     *
+     * WHY A LOOP. Draining exactly one entry per settle would strand the rest
+     * whenever the first one does not start a turn — the spend cap refuses and
+     * clears `inFlight`, and then nothing would ever settle again to release
+     * entry two. The loop re-reads `$chat` each pass, so it stops the moment a
+     * turn IS in flight (the ordinary case: entry one dispatches, the rest wait
+     * for its settle) and is bounded by the queue's length either way, since
+     * every pass either shortens the queue or breaks.
+     *
+     * THE USER'S DRAFT IS RESTORED at the end, widget and cursor column both.
+     * Seeding submit() through `inputBuf` is what lets the drain reuse the real
+     * turn-start path, but the box may well hold a NEW draft by the time a turn
+     * settles, and {@see dispatchTurn()} blanks `inputBuf` on its way out. Losing
+     * a half-typed line to a queue release would be the same class of bug this
+     * whole change exists to fix.
+     *
+     * THE ONE REFUSAL THAT KEEPS THE DRAFT is why the loop checks `inputBuf`
+     * after each pass: {@see spendCapTurnRefusal()} deliberately does not consume
+     * the line and writes no `Message::user()` echo, so a capped session would
+     * leave the drained prompt nowhere but the box — and the box is about to be
+     * restored to the user's own draft. Such an entry goes back to the HEAD of
+     * the queue and the loop stops, because whatever refused this one refuses the
+     * next one too. It stays visible in the status bar rather than vanishing.
+     *
+     * @param array{0:self,1:?\Closure} $settled the turn-ending result to augment
+     * @return array{0:self,1:?\Closure}
+     */
+    private static function releaseQueuedPrompts(array $settled): array
+    {
+        [$chat, $cmd] = $settled;
+        if ($chat->queuedPrompts === []) {
+            return $settled;
+        }
+
+        $cmds = $cmd === null ? [] : [$cmd];
+        $draft = $chat->input;
+
+        while (!$chat->inFlight && $chat->queuedPrompts !== []) {
+            $queue = $chat->queuedPrompts;
+            $text = (string) array_shift($queue);
+
+            [$after, $next] = $chat->mutate([
+                'queuedPrompts' => $queue,
+                'inputBuf' => $text,
+            ])->submit();
+
+            if ($next !== null) {
+                $cmds[] = $next;
+            }
+
+            if (trim($after->inputBuf) === $text) {
+                $chat = $after->mutate(['queuedPrompts' => [$text, ...$queue]]);
+                break;
+            }
+
+            $chat = $after;
+        }
+
+        return [
+            $chat->mutate(['input' => $draft]),
+            match (count($cmds)) {
+                0 => null,
+                1 => $cmds[0],
+                default => Cmd::batch(...$cmds),
+            },
+        ];
     }
 
     /**
@@ -4975,15 +5406,24 @@ final class Chat implements Model
      *   model's context" command, not a redaction tool, and destroying
      *   recovery points is not something an undo-less TUI command should do
      *   silently.
-     * - IN-FLIGHT TURN: not cancelled. `update()` swallows Enter while a turn
-     *   is in flight, so this is unreachable mid-turn; Escape is the cancel.
-     *   Measured rather than assumed, because a bug in the `/compact`
-     *   summarization briefly falsified it: {@see submit()} has exactly two
-     *   callers (Enter, and Ctrl+A's `/agents`) and BOTH sit below the blanket
-     *   `if ($this->inFlight)` swallow, so there is no route to this method while
-     *   a turn runs. What broke it was the landing compaction clearing `inFlight`
-     *   out from under a running turn — that is fixed at the source (see
-     *   {@see compactionChanges()}) and the swallow itself is pinned by
+     * - IN-FLIGHT TURN: not cancelled, and still UNREACHABLE mid-turn — but by a
+     *   different mechanism than it once was, and the difference is worth
+     *   stating because the old one was a blanket keystroke swallow that is now
+     *   gone. `update()` used to drop EVERY key while a turn ran, which made this
+     *   method unreachable as a side effect of the input box being dead. Typing
+     *   mid-turn now works; what keeps this method out of reach is
+     *   {@see refuseInFlightCommand()}, which claims every `/`-prefixed draft
+     *   submitted while `inFlight` and answers with a visible notice instead of
+     *   dispatching. Escape is still the cancel.
+     *
+     *   Both of {@see submit()}'s entry points are covered: Enter reaches the
+     *   mid-turn branch at the head of submit(), and Ctrl+A — whose arm would
+     *   otherwise replace the draft with `/agents` and submit it — is intercepted
+     *   ahead of its arm by {@see refuseWhileInFlight()}. Pinned by
+     *   {@see \SugarCraft\Crush\Tests\Commands\SlashDispatchTest::testSlashClearIsUnreachableWhileATurnIsInFlight()}.
+     *   What once falsified the claim was a bug in the `/compact` summarization
+     *   clearing `inFlight` out from under a running turn — fixed at the source
+     *   (see {@see compactionChanges()}) and pinned by
      *   {@see \SugarCraft\Crush\Tests\Chat\CompactModelSummaryTest::testALandingCompactionLeavesARunningTurnInFlightAndItsReplyStillLands()}.
      * - AN OUTSTANDING `/compact` SUMMARIZATION: abandoned. Its
      *   {@see HistoryCompactedMsg} still arrives and is dropped, because the
@@ -6532,11 +6972,18 @@ final class Chat implements Model
         // things about what to do next - the blocking one says "re-send and it
         // will get through after a pass or two", which is false while the cap
         // stands - and because money outranks context.
+        // Both of this route's refusals END a turn — {@see scheduleParkedCompaction()}
+        // held `inFlight` true with nothing running, and these are the writes that
+        // release it — so both drain, for the same reason the permission denial
+        // above does. A parked window is mid-turn from the keyboard's point of
+        // view (measured: the swallow this bundle split left only Ctrl+C and
+        // double-Escape live there), so a queue can absolutely have accumulated
+        // across it.
         if ($compacted->spendCapReached()) {
-            return $compacted->spendCapTurnRefusal(
+            return self::releaseQueuedPrompts($compacted->spendCapTurnRefusal(
                 'The summarization this turn was parked behind is what reached the cap; that call went out '
                 . 'before the cap was met and is billed. Your prompt is in the transcript above, unsent.'
-            );
+            ));
         }
         //
         // The 95% blocking tier is re-tested HERE rather than in {@see submit()}
@@ -6561,12 +7008,12 @@ final class Chat implements Model
             // is left null for the same reason - the rewrite this refusal has to
             // report is ALREADY reported, by the contextCompactedMessage() line
             // compactionChanges() wrote into $compacted->history above.
-            return $compacted->foregroundBlockedResponse(
+            return self::releaseQueuedPrompts($compacted->foregroundBlockedResponse(
                 '',
                 $compacted->history,
                 $compacted->estimateTokenCount($compacted->history),
                 $tokenLimit,
-            );
+            ));
         }
 
         // No new user message: the echo went in at park time. Everything else a
@@ -6725,7 +7172,14 @@ final class Chat implements Model
 
         return match ($action) {
             'browse' => [$this->mutate(['sessionPicker' => $next]), null],
-            'resume' => $this->resumeSelectedSession($next),
+            // Ctrl+R opens the picker mid-turn and ↑/↓/space browse it, but
+            // resuming adopts another session's history and id wholesale — the
+            // running turn's transcript replaced under it — so mid-turn that one
+            // action is refused with a notice naming it. Same rule as the
+            // palette's; see {@see runSelectedPaletteActionWhileInFlight()}.
+            'resume' => $this->inFlight
+                ? $this->refuseInFlightAction('Resume session')
+                : $this->resumeSelectedSession($next),
             'preview' => [$this->mutate(['sessionPicker' => $next]), null],
             'close' => [$this->mutate(['sessionPicker' => null]), null],
             default => [$this, null],
@@ -8084,10 +8538,58 @@ final class Chat implements Model
                 => [$this->withPaletteQuery($this->palette->query . ' '), null],
             $msg->type === KeyType::Backspace
                 => [$this->withPaletteQuery(self::dropLast($this->palette->query)), null],
+            // Mid-turn the palette browses but does not dispatch — see
+            // {@see runSelectedPaletteActionWhileInFlight()}.
             $msg->type === KeyType::Enter
-                => $this->runSelectedPaletteAction(),
+                => $this->inFlight
+                    ? $this->runSelectedPaletteActionWhileInFlight()
+                    : $this->runSelectedPaletteAction(),
             default => [$this, null],
         };
+    }
+
+    /**
+     * The mid-turn half of {@see runSelectedPaletteAction()}: the palette OPENS,
+     * filters and navigates while a turn is in flight (that is half the bug
+     * report — Ctrl+P did nothing at all before this bundle), but Enter on a row
+     * is refused rather than dispatched.
+     *
+     * BLANKET, WITH ONE EXCEPTION, and the reason it is blanket is measured
+     * rather than assumed: every root action other than Exit delegates to a
+     * handler that writes `inFlight` ({@see handleShareCommand()},
+     * {@see handleAgentsCommand()}, {@see handleSessionsCommand()},
+     * {@see handleMcpAuthCommand()}), wipes history
+     * ({@see handlePaletteNewSession()}), or swaps the backend the running
+     * agentic loop is about to make its NEXT provider call on
+     * ({@see selectPaletteProvider()} — {@see finishToolCalls()} re-enters the
+     * backend mid-turn, so this one is not hypothetical). `Exit` is the exception
+     * for exactly the reason bare `/exit` is one in {@see submit()}: it ends the
+     * process, so there is nothing left to corrupt.
+     *
+     * The two submenu transitions (Switch Model, Switch Theme) are refused too,
+     * even though transitioning the palette's own mode is harmless: refusing the
+     * LEAF and allowing the branch would walk the user into a list whose every
+     * row then says no. `Switch Theme` is the one row that would be safe end to
+     * end (it writes `themeName` and appends a line, and touches no turn state);
+     * allowing it is a deliberate follow-up rather than part of this landing,
+     * because the value is cosmetic and the rule's worth is that it is ONE rule.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function runSelectedPaletteActionWhileInFlight(): array
+    {
+        $matches = $this->paletteMatches();
+        if ($matches === []) {
+            return [$this->mutate(['palette' => null]), null];
+        }
+
+        $label = $matches[min($this->palette->selectedIndex, count($matches) - 1)];
+
+        if (PaletteAction::byLabel($label) === PaletteAction::Exit) {
+            return [$this->mutate(['palette' => null]), Cmd::quit()];
+        }
+
+        return $this->refuseInFlightAction($label);
     }
 
     private function withPaletteQuery(string $query): self

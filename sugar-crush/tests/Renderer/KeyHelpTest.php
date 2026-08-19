@@ -2935,10 +2935,15 @@ final class KeyHelpTest extends TestCase
      * asserted instead of narrated — the third thing in that table's neighbourhood
      * to be moved out of prose, after the site count and the owning methods.
      *
-     * The table's first column is "the three files that construct a
-     * `PermissionRequestMsg` at all". A fourth file building one puts a fourth
+     * The table's first column is "the files that construct a
+     * `PermissionRequestMsg` at all" — three when this test was written, FOUR since
+     * W2 added `Chat/InFlightInputQueueTest.php`, which builds one to drive the
+     * permission-DENIAL drain point. A further file building one puts a further
      * file's tests inside the measured universe, so every row of the table becomes
-     * a figure taken over the wrong domain. Stated in prose it had already gone
+     * a figure taken over the wrong domain. (The W2 addition changed no row: like
+     * `RendererTest` and `KeyBindingDriftTest` its ask is UNSTAMPED, and no
+     * mutation in that table touches an unstamped ask — which is why the count
+     * moving from three to four is a domain edit and not a re-measurement.) Stated in prose it had already gone
      * stale once as a test COUNT — 265 written where the trio then held 268, in the
      * same commit that added three tests to it (both figures historical, round 4's
      * trio) — and the file set is the part of that claim a test can hold, so here it
@@ -3003,9 +3008,14 @@ final class KeyHelpTest extends TestCase
         sort($found);
 
         $this->assertSame(
-            ['Commands/KeyBindingDriftTest.php', 'Renderer/KeyHelpTest.php', 'RendererTest.php'],
+            [
+                'Chat/InFlightInputQueueTest.php',
+                'Commands/KeyBindingDriftTest.php',
+                'Renderer/KeyHelpTest.php',
+                'RendererTest.php',
+            ],
             $found,
-            "the trio column in Chat::requestPermission()'s mutation table is exactly these files; a fourth "
+            "the set column in Chat::requestPermission()'s mutation table is exactly these files; a fifth "
             . 'one CONSTRUCTING a PermissionRequestMsg widens the universe every row of that table was '
             . 'measured over. Merely naming the class in a comment does not, which is the half the grep '
             . 'this replaces got wrong',

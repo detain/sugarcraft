@@ -702,10 +702,22 @@ final class SlashDispatchTest extends TestCase
 
     /**
      * The "IN-FLIGHT TURN: not cancelled" clause of `handleClearCommand()`'s
-     * docblock, which is a claim about `update()` rather than about the handler:
-     * Enter is swallowed while a turn is in flight (the `if ($this->inFlight)`
-     * guard precedes the Enter arm), so `/clear` cannot fire mid-turn at all and
-     * has no cancellation to perform. Escape is the cancel.
+     * docblock, re-driven against the mechanism that enforces it TODAY.
+     *
+     * It used to be enforced by accident: `update()` swallowed every keystroke
+     * while a turn ran, so `/clear` was unreachable because the input box was
+     * dead. That swallow was a user-reported bug and is gone. `/clear` is still
+     * unreachable mid-turn, now on purpose — `refuseInFlightCommand()` claims
+     * every `/`-prefixed draft — and the difference this test has to catch is
+     * that the refusal must be VISIBLE. A silent no-op would satisfy "the
+     * transcript survives" while being the exact failure mode the fix exists to
+     * remove.
+     *
+     * So the assertions are: the two original messages survive BYTE FOR BYTE (not
+     * merely "history is unchanged", which a notice would break, and not merely
+     * "history is longer", which a wiped-then-appended transcript would satisfy),
+     * history grows by EXACTLY ONE message, that message is Role::System and NAMES
+     * the command, and the draft is still in the box.
      */
     public function testSlashClearIsUnreachableWhileATurnIsInFlight(): void
     {
@@ -716,9 +728,20 @@ final class SlashDispatchTest extends TestCase
             inFlight: true,
         );
 
-        [$after] = $chat->update(new KeyMsg(KeyType::Enter));
+        [$after, $cmd] = $chat->update(new KeyMsg(KeyType::Enter));
 
-        $this->assertSame($chat->history, $after->history, 'the transcript survives, because Enter never reached dispatch');
+        $this->assertNull($cmd, 'nothing was dispatched');
+        $this->assertCount(3, $after->history, 'the transcript grows by the refusal notice and nothing else');
+        foreach ($chat->history as $i => $original) {
+            $this->assertSame($original->content, $after->history[$i]->content, "history[{$i}] survives byte for byte");
+            $this->assertSame($original->role, $after->history[$i]->role, "history[{$i}] keeps its role");
+        }
+
+        $notice = $after->history[2];
+        $this->assertSame(Role::System, $notice->role, 'a notice after the running turn must not be a prefill');
+        $this->assertStringContainsString('/clear', $notice->content, 'the notice names what was refused');
+        $this->assertStringContainsString('in flight', $notice->content, 'and why');
+
         $this->assertSame('/clear', $after->inputBuf, 'and the draft is still there for when the turn ends');
         $this->assertTrue($after->inFlight, 'the turn is still running');
     }

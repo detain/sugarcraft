@@ -270,31 +270,88 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
     }
 
     /**
-     * Every keystroke except Ctrl+C and Escape is swallowed while the submission
-     * is parked. This is what makes the set of routes that can abandon a parked
-     * turn a closed one — `/clear`, `/rewind` and the palette's New session
-     * action are all typed or Ctrl+P'd, and none of them is reachable here — so
-     * the double-Escape arm is the only one that had to be taught about the
-     * latch.
+     * The CLAIM this test protects is unchanged: the set of routes that can
+     * abandon a parked turn is closed, so the double-Escape arm is the only one
+     * that had to be taught about the `pendingCompactionId` latch. `/clear`,
+     * `/rewind` and the palette's New session action must all be unreachable
+     * across the parked window.
+     *
+     * The MECHANISM changed completely, which is why this replaces
+     * `testTheParkedWindowSwallowsEveryKeystrokeThatCouldReachACommand()`. That
+     * test asserted the blanket keystroke swallow in `Chat::update()` — typing
+     * `/` left the draft empty, Enter did nothing, Ctrl+P did not open. The
+     * swallow was a user-reported bug (the input box was dead for the length of a
+     * turn) and is gone: typing, Enter and Ctrl+P all work mid-turn now. So each
+     * route is re-driven to its NEW refusal, and the assertions are on the
+     * transcript and the LATCH rather than on the keystroke being dropped — which
+     * is the property that actually matters and which the old test only reached
+     * through the swallow.
      */
-    public function testTheParkedWindowSwallowsEveryKeystrokeThatCouldReachACommand(): void
+    public function testTheParkedWindowRefusesEveryRouteThatCouldAbandonIt(): void
     {
         $chat = $this->chat(self::compactablePairs(), $this->generousSummarizer(), $main);
         [$parked] = $this->submit($chat);
+        $latch = $this->latchOf($parked);
+        $this->assertNotNull($latch, 'fixture: the summarization latch is armed');
+        $parkedCount = count($parked->history);
 
+        // Typing now WORKS across the parked window - that is the fix.
         [$typed, $typedCmd] = $parked->update(new KeyMsg(KeyType::Char, '/'));
-        $this->assertSame('', $typed->inputBuf, 'no draft can be started, so no command can be typed');
+        $this->assertSame('/', $typed->inputBuf, 'a draft can be composed while the turn is parked');
         $this->assertNull($typedCmd);
+        $this->assertSame($latch, $this->latchOf($typed), 'and composing one arms nothing');
 
-        [$entered, $enteredCmd] = $parked->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertNull($enteredCmd, 'Enter cannot submit a second turn on top of the parked one');
-        $this->assertSame(count($parked->history), count($entered->history));
+        // ...but submitting a command is refused, VISIBLY, and the latch survives.
+        foreach (['/clear', '/rewind'] as $command) {
+            $draft = (new \ReflectionMethod(Chat::class, 'mutate'))->invoke($parked, ['inputBuf' => $command]);
+            [$refused, $refusedCmd] = $draft->update(new KeyMsg(KeyType::Enter, ''));
 
+            $this->assertNull($refusedCmd, "{$command} dispatched nothing");
+            $this->assertSame($latch, $this->latchOf($refused), "{$command} did not release the latch");
+            $this->assertTrue($refused->inFlight, "{$command} left the parked window intact");
+            $this->assertSame(
+                $parkedCount + 1,
+                count($refused->history),
+                "{$command} added the refusal notice and nothing else - the transcript was not rewritten",
+            );
+            $notice = $refused->history[$parkedCount];
+            $this->assertSame(Role::System, $notice->role, 'the notice must not be a prefill');
+            $this->assertStringContainsString($command, $notice->content, 'and it names what was refused');
+        }
+
+        // An ORDINARY prompt is queued rather than refused, and queueing still
+        // starts no turn: the latch and the generation both stand.
+        $ordinary = (new \ReflectionMethod(Chat::class, 'mutate'))->invoke($parked, ['inputBuf' => 'and one more thing']);
+        [$queued, $queuedCmd] = $ordinary->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($queuedCmd, 'queueing dispatches nothing');
+        $this->assertSame(['and one more thing'], $queued->queuedPrompts());
+        $this->assertSame($latch, $this->latchOf($queued), 'and it does not release the latch either');
+        $this->assertSame(
+            $this->generationOf($parked),
+            $this->generationOf($queued),
+            'no second turn was started on top of the parked one',
+        );
+
+        // Ctrl+P now opens the palette across the parked window, and its FIRST
+        // row is New session - the one action that would wipe the transcript the
+        // parked turn is about to be sent with. Enter on it is refused.
         [$palette, $paletteCmd] = $parked->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         $this->assertNull($paletteCmd);
-        $this->assertNull(
-            (new \ReflectionProperty(Chat::class, 'palette'))->getValue($palette),
-            'Ctrl+P cannot open the palette, so its New session action is unreachable too',
+        $this->assertNotNull($palette->palette(), 'Ctrl+P opens the palette mid-turn now');
+
+        [$acted, $actedCmd] = $palette->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($actedCmd, 'the palette action dispatched nothing');
+        $this->assertSame($latch, $this->latchOf($acted), 'the palette action did not release the latch');
+        $this->assertTrue($acted->inFlight, 'nor did it end the parked window');
+        $this->assertSame(
+            $parkedCount + 1,
+            count($acted->history),
+            'the transcript grew by the refusal notice only - New session did not wipe it',
+        );
+        $this->assertStringContainsString(
+            'New session',
+            $acted->history[$parkedCount]->content,
+            'and the notice names the row that was refused',
         );
     }
 
