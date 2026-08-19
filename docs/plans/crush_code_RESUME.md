@@ -269,34 +269,34 @@ already done and one names a class that does not exist:**
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
 
-**CURRENT STATE, 2026-08-19, end of session.** Last CODE commit is **`3b0ba8fe`** (bundle C3, MCP
-tools reachable behind a trust gate), docs at **`72429690`** then **`17ee44d7`**. Supervisor-verified
-**7387 / 76813 / 1, exit 0** against LOCAL sibling symlinks — and 7387 / 76811 / 2 against Packagist
-copies, which is the same code and why the vendor check below exists.
+**CURRENT STATE, 2026-08-19.** Last CODE commit is **`47ee2c86`** (bundle W1, the user's live render
+bug — long replies wrap instead of being cut, and pane width is now an invariant). Before it,
+**`3b0ba8fe`** (bundle C3, MCP tools behind a trust gate). Supervisor-verified **7577 / 87648 / 1,
+exit 0** against LOCAL sibling symlinks. **A 2-skip run means you are not testing the monorepo** — see
+the vendor section below.
+
+**Bundle W2 is IN FLIGHT** (input blocked while a turn runs, user-reported). Nothing of it is
+committed.
 
 **Phase 2 items 1, 2, 3, 5, 6, 8 complete. Phases 0, 1 complete. Phase 5 is items 1-9 + 10a.**
 **47 of 75 plan items, 28 left.** See the `#N`-tracker section below before answering any question
 about totals — the answer is not the sum of the series.
 
-## ⚠️ BUNDLE W1 — IMPLEMENTED AND SUITE-VERIFIED, REVIEW ROUND RUNNING, UNCOMMITTED
+## BUNDLE W1 IS COMMITTED — `47ee2c86`. The user's live render bug is fixed.
 
 **A user bug report that jumps the audit queue**, because frame corruption counts as functionality
 under §3. Reported while daily-driving: long assistant lines "not wrapped but cut off", then a blank
 line, then unrelated content.
 
-**State:** implementation round returned. Working tree carries `sugar-crush/src/Renderer.php`
-(+191/-7) and a new untracked `sugar-crush/tests/Renderer/PaneWidthInvariantTest.php` (125 tests,
-7370 assertions). **Nothing committed.** The adversarial review round is IN FLIGHT against
-`/tmp/…/scratchpad/w1-review.md` (221 lines, self-contained — re-spawn against it if lost).
+**Four rounds: implement → review → fix A → fix B, then commit.** Supervisor-verified at every
+gate. Final: **`Tests: 7577, Assertions: 87648, Skipped: 1`, rc=0, 3m01s** (entry baseline was
+7387 / 76813 / 1). `Renderer.php` +457/-7 plus `tests/Renderer/PaneWidthInvariantTest.php` (187 tests,
+10,773 assertions). Full round-by-round detail is in the worklog.
 
-**Supervisor-verified myself: `Tests: 7512, Assertions: 84183, Skipped: 1`, rc=0, 2m57.8s.** Baseline
-was 7387 / 76813 / 1, so the delta is exactly the new test file. One skip → vendor kept its symlinks.
-`check-path-repos` rc=0, config md5 unchanged, `git stash list` still 9 entries.
+**Twelve of twelve mutations killed, each RE-VERIFIED BY ME with my own edits** — which is the whole
+reason this bundle is trustworthy, see the next section.
 
-**STILL OWED:** the review round's findings, a fix round if it finds anything, a re-verified suite,
-then commit. Full round detail is in the worklog under "Bundle W1 — implementation round returned".
-
-**MY DIAGNOSIS WAS WRONG ABOUT THE MECHANISM, and it is under review rather than accepted.** I wrote
+**MY DIAGNOSIS WAS WRONG ABOUT THE MECHANISM — now CONFIRMED wrong by the review round.** I wrote
 that the terminal soft-wraps the over-wide row and candy-core's absolute `cursorTo()` paints later
 rows at stale coordinates. The implementer reports the hosted path never emits an over-wide row at
 all: `ChatPane.php` wraps the body in `Style::new()->width($width)` and candy-sprinkles' `width()`
@@ -311,7 +311,31 @@ reason it cost nothing.
 not asserted — with the src change alone and the new file absent, the suite came out byte-identical to
 baseline. Not one test rendered prose long enough to wrap at its fixture width.
 
-## ⚠️ BUNDLE W2 IS QUEUED NEXT — input blocked while a turn runs. USER-REPORTED.
+## ⚠️ THE LESSON FROM W1 THAT MUST SURVIVE INTO EVERY LATER BUNDLE
+
+**Re-verify an agent's mutation table yourself, with your own edits, before believing a bundle.**
+
+W1's chain produced three false "it's dead" reports, each caught only by the next gate:
+
+1. The implementation round reported **8 mutations, 8 killed**. An independent reviewer ran 29 and left
+   **11 surviving**, including that the bundle's headline invariant was provably FALSE for emoji
+   clusters.
+2. Fix round A reported **all 11 now dead** — and disclosed, unprompted, that **5 of the 11 definitions
+   were its own reconstructions** because the reviewer's harness took them as argv and never wrote them
+   down. Comparing against the reviewer's table, **4 of those 5 were different mutations entirely.** I
+   applied the reviewer's real definitions myself: **MU11, MU12, MU25, MU29 all still SURVIVED.**
+3. Fix round B closed all four. I re-ran all four myself with my own edits before committing.
+
+**And the reason those four resisted is the transferable insight:** all three `$labelRoom` mutations
+were unkillable by ANY width assertion **by construction**, because fix round A's own `hardFit()`
+truncates an over-wide tool row regardless of what the label arithmetic computed. **A fix can make its
+neighbours' tests vacuous.** When a bundle adds a safety net, re-ask what the older assertions still
+prove — often the answer is "nothing they used to".
+
+Practical rule now in force: **write mutation definitions as the exact edit, verbatim, in the report.**
+"MU11" is not a definition. `$labelRoom = … - Width::of($status) - 1;` → drop the `- 1` is.
+
+## ⚠️ BUNDLE W2 IS IN FLIGHT — input blocked while a turn runs. USER-REPORTED.
 
 **Second live bug report, same priority class as W1.** Verbatim: *"when i send a chat message and its
 processing the request im unable to type new text into the chat . im alaso unable to use things like
@@ -344,7 +368,25 @@ one (`:4586`) is a serialized checkpoint payload, not a state transition. **21 a
 queue draining at only one strands the user's message. One of the two that settle a real turn is the
 CANCEL path, where draining would send a message the user just tried to stop.
 
-**W2 must land AFTER W1** — showing a queued message touches `Renderer.php`, which W1 owns right now.
+**Two more seams I measured after writing that brief, both load-bearing:**
+
+1. **`Renderer.php`'s `$cursor = $chat->inFlight ? '' : '█';` HIDES the input cursor while a turn
+   runs.** So even with typing unblocked the box still looks dead — this is the second half of the
+   user's complaint and the feature is invisible without it. (Re-grep the line; `Renderer.php` was
+   rewritten by W1.)
+2. **The 21-site census collapses to ONE real drain point.** `finishToolCalls()` sets
+   `'inFlight' => true` (`:2333`), so a tool-calling turn keeps running and settles at a LATER
+   `AssistantMsg`. The only place an ordinary turn ends is `update()`'s AssistantMsg no-tool-calls exit
+   (`:905-910`), which returns a **null Cmd** — and that null is exactly where the drained turn's Cmd
+   goes. `:1106` is the cancel path and draining there is WRONG. The rest are command responses that
+   set and clear `inFlight` inside their own response; the ones needing an individual decision are the
+   compaction paths and `backgroundDispatch()`, because a PARKED submission deliberately holds
+   `inFlight` true with no turn running.
+
+**The subtle test this bundle can fail:** a queue that drains on any `AssistantMsg` fires MID-TURN on a
+tool-calling turn. `finishToolCalls()` keeping `inFlight` true is what makes that a live hazard.
+
+Brief: `/tmp/…/scratchpad/w2-brief.md` (184 lines) + `w2-measured.md` (128 lines), both self-contained.
 
 ## ORDER: W1 → W2 → `#88` → the audit queue
 
@@ -605,24 +647,19 @@ inside those two files were renamed too before assuming the item is half-done.
   headline is not the wiring but the gate — see §10. `trustedProjectMcp` is a NEW key, verified by
   me in all three directions including the positive control. E40/E41/E42 carry the deferred
   remainder.
-- **W1 — REVIEW ROUND IN FLIGHT. Implemented, suite-verified at 7512/84183/1 rc=0, uncommitted.**
-  The user's live render bug: long assistant lines "not wrapped but cut off", then a blank line, then
-  unrelated content. Landed as two halves — thread `wrapWidth:` into candy-shine at both Markdown
-  sites, plus a frame-level `fitToPane()` invariant at `Renderer.php:957` that wraps over-wide body
-  rows (`Width::wrapAnsi`, content-preserving) and truncates tool rows. See §"BUNDLE W1" above and the
-  worklog for the full round, including **the four corrections the implementer made to my brief and my
-  own wrong diagnosis of the mechanism**. Still owed: review findings, fix round, re-verify, commit.
-- **W2 — NEXT, ahead of the audit queue: input is blocked while a turn runs. USER-REPORTED.**
-  Typing and Ctrl+P are both dead mid-turn. **Not an async problem — the async work is already done**
-  (`scheduleBackendCompletion()` returns `Cmd::promise(fn() => $backend->completeAsync(…))`, which
-  forks a child; a driven `Escape` mutates state mid-turn, proving the loop delivers keys). The defect
-  is one policy return, `Chat.php:1141-1146`'s blanket `if ($this->inFlight)` swallow. Do NOT delete
-  it — split it, and make **Enter enqueue** rather than dispatch. The drain must call `dispatchTurn()`
-  (two callers today; its docblock warns a third copy loses the generation stamp, the cancellation
-  token, the checkpoint or the title Cmd), and `scheduleParkedCompaction()` already implements
-  hold-then-dispatch for the 85% tier. Census trap: 26 grep hits for `'inFlight' => false`, of which 4
-  are comment prose and one is a checkpoint payload — **21 real writes**, and one of the two that
-  settle a real turn is the CANCEL path. Brief at `/tmp/…/scratchpad/w2-measured.md`, self-contained.
+- ~~**W1** — the user's live render bug: long replies cut off at the pane edge.~~ **DONE `47ee2c86`**
+  (7577 / 87648 / 1, exit 0). Four rounds. Twelve of twelve mutations killed, re-verified by me.
+  **Read the "LESSON FROM W1" section above before running any later bundle** — three separate "it's
+  dead" reports in this one chain were false, and a fix round made its neighbours' assertions vacuous.
+- **W2 — IN FLIGHT: input is blocked while a turn runs. USER-REPORTED, ahead of the audit queue.**
+  Typing and Ctrl+P are both dead mid-turn, and the input cursor is hidden as well. **Not an async
+  problem — the async work is already done** (`completeAsync()` forks a child; a driven `Escape`
+  mutates state mid-turn, proving the loop delivers keys). The defect is one policy return,
+  `Chat.php:1141-1146`'s blanket `if ($this->inFlight)` swallow. Do NOT delete it — split it, and make
+  **Enter enqueue** rather than dispatch. The drain must go through the existing turn-start path
+  (`dispatchTurn()` has two callers and its docblock warns a third copy loses the generation stamp, the
+  cancellation token, the checkpoint or the title Cmd); `scheduleParkedCompaction()` already implements
+  hold-then-dispatch for the 85% tier. **One real drain site, not 21** — see the W2 section above.
 - **Phase 5 item 10b** — differentiate the five hardcoded `AgentDefinition` preset prompts. Small,
   and it is what stops Phase 5 being finished.
 - **Phase 4 item 6** — real subcommands (`mcp list`, `session list`/`delete`, `models`, `doctor`

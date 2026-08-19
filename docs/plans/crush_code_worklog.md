@@ -8138,3 +8138,75 @@ neighbours' tests vacuous. The property left to pin is not the width but what th
 the row arrives already fitting, status word and click zone intact, so `hardFit()` never fires.
 
 Fix round B is briefed with the exact edits and that diagnosis.
+
+### W1 fix round B, and W1 COMMITTED as `47ee2c86`
+
+Round B closed all four surviving mutations, and its `src/Renderer.php` change was **comment-only** —
+verified independently: `diff` against the pre-round file has 34 changed lines and **0** that are not a
+comment. The kills came entirely from three new tests. That is the right shape for a round whose finding
+was "the code is correct and nothing observes it".
+
+**I re-ran all four myself, with my own edits, before believing any of it:**
+
+| the reviewer's definition | before | after |
+|---|---|---|
+| MU11 drop the `- 1` from `$labelRoom` | SURVIVED | **KILLED** |
+| MU12 `max(1, $labelRoom)` → `max(0, …)` | SURVIVED | **KILLED** |
+| MU25 fast path `$out[] = $row;` → `$out[] = Width::truncateAnsi($row, $width);` | SURVIVED | **KILLED** |
+| MU29 drop `- Width::of($status)` from `$labelRoom` | SURVIVED | **KILLED** |
+
+Tree restored byte-identical after each. Final suite, my own run: **7577 / 87648 / 1, rc=0, 3m01.280s.**
+`check-path-repos --no-lib-path-repos` rc=0, config md5 `05480c74…` unchanged, stash list still 9.
+
+#### The three `$labelRoom` kills are a lesson about safety nets, not about effort
+
+Round B did not attack them with a width bound, because the brief established they cannot be killed that
+way: `hardFit()` truncates an over-wide tool row regardless of the arithmetic. Instead it drove
+`renderToolResults()` directly and observed the row **before** `fitToPane()` — the only place the bound
+is observable at all. Measured, with a name longer than any budget:
+
+                  w=26  w=40  w=94      (prefix 9 cells, "⊘ interrupted" 13)
+    pristine        26    40    94      row == width exactly, status word whole
+    MU11 (-1)       27    41    95      one cell over → hardFit shaves the status word's last cell
+    MU29 (-status)  39    53   107      13 cells over → hardFit eats "⊘ interrupted" whole
+
+and it asserts the **exact predicted row** (`prefix . mb_substr($name, 0, $labelRoom) . ' ' . $status`)
+rather than a bound. MU12's reachable range was **derived, not guessed**:
+`Width::of(TOOL_ROW_PREFIX) + Width::of($status) + 1 = 23` is where the bound runs out, and
+`renderView()`'s content floor is `max(20, cols-6)`, so the clamped reachable range is exactly widths
+**20-23** — where `max(0, …)` renders the row **one cell NARROWER**, which is precisely why every
+`assertLessThanOrEqual` in the file missed it.
+
+#### MU25 found a THIRD accounting disagreement in candy-core, and it is not about clusters
+
+The observable composition exists: `Width::of()` measures `Ansi::strip($row)`, and `strip()` consumes a
+two-byte escape whose second byte is an ECMA-48 Fe final (0x40-0x5f: `ESC \`, `ESC P`, `ESC M`) as
+**zero** cells, while `truncateAnsi()`'s scanner passes through `ESC [` and `ESC ]` only and reads that
+second byte as **one visible** cell. Measured on `"a" + ESC + "\"` × 10:
+
+    Width::of($row)                = 10   → the fast path accepts the row
+    Width::truncateAnsi($row, 10)  →  5 cells, 15 of 30 bytes
+    fitToPane($row, 10) pristine   → byte-identical;  under MU25 → half the row deleted
+
+So the mutant deletes visible cells from a row that already fit, on the one branch whose contract is to
+touch nothing. **Unlike the flag/skin-tone disagreements, this one survives PHP 8.4's
+`grapheme_str_split()`** — it is not a cluster problem. Filed as a third instance under E46.
+
+Round B also swept reachability honestly and reported the inconvenient answer: **no path delivers such a
+row today** — assistant prose, a fenced block, inline code, a user message and a diff body each carrying
+twelve `ESC \` pairs all produce a frame with zero of them. So the test pins the branch where the
+decision is made rather than claiming an end-to-end repro, and both the measurement and the
+non-reachability are written into the docblock. That is the honest version of "we fixed it": the claim is
+now observable somewhere, and where it is not reachable is stated.
+
+#### What W1 cost, and what it bought
+
+Four rounds — implement, review, fix A, fix B. Entry 7387 / 76813 / 1; exit **7577 / 87648 / 1**. The src
+diff is +457/-7 in one file; the test file is 187 tests / 10,773 assertions. Twelve of twelve mutations
+dead, every one re-verified by me rather than accepted from a report — and that re-verification is what
+caught round A's four false kills.
+
+**Three separate "it's dead" reports in one bundle were wrong.** 8/8 became 11 survivors under review;
+"all 11 dead" became 4 alive under my own re-run. The gate that caught each was the *next* gate, never
+self-assessment. This is now written into the resume file as a standing rule, together with the practical
+half: **a mutation name is not a definition — write the exact edit.**
