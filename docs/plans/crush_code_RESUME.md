@@ -79,6 +79,35 @@ four causes and their fixes, all now in force:
 
 ---
 
+## 0b. RUNNING MORE THAN ONE AGENT AT A TIME
+
+**`docs/plans/crush_code_concurrency.md` is the authority.** Read its §0 and §1 and
+nothing else unless you are changing the map. It carries the mode switch (ON, OFF, and
+draining a lane that is mid-flight), the lane table for all 27 remaining items, the
+directory recipe, and the collision rules.
+
+The four things worth knowing without opening it:
+
+1. **The ceiling is `src/Cli/Bootstrap.php`, not the machine.** 11 of the 27 remaining
+   items (41%) must edit it, including the two largest. That is one strictly-serial
+   lane; no lane design shortens it. 5 lanes defined, sustainable N = 3, hard cap 4.
+   Concurrency buys the other 16 items running alongside — it does NOT give 3× throughput.
+2. **Isolation = `cp -a` of the WHOLE repo**, never `sugar-crush/` alone. Measured: in a
+   whole-repo copy all 16 `vendor/sugarcraft/*` symlinks resolve INSIDE the copy with
+   zero repointing, the copy is a real git repo that can push, and a lane can safely edit
+   a sibling lib. **This supersedes §7 below for full-repo lanes** — repointing there is
+   not merely unnecessary, it IS the isolation bug. §7 remains correct for the lib-only
+   sandbox it was written about. `git worktree` is ruled out: git refuses the same branch
+   in two worktrees, and every lane must be on `master`.
+3. **The census token.** The one collision that merges CLEANLY and is silently wrong: two
+   lanes each adding a `src/*.php` file both edit `assertSame(277, …)` → `278`; git sees
+   identical text, auto-merges, and leaves 278 when the truth is 279. One holder at a
+   time. 5 of the 27 items add a source file.
+4. **No lane ever commits a `.vhs/*.gif`.** CI regenerates and pushes them after every
+   batch of changes, so master drift is guaranteed, not occasional. Since GIFs are binary
+   a rebase conflict there is not hand-mergeable — and since no lane writes them, it can
+   never happen. `git pull --rebase` before every push is routine, not defensive.
+
 ## 1. The standing directive
 
 **Run the plan to 100% without pausing.** Do not stop at phase boundaries to report
@@ -186,8 +215,11 @@ clause false while keeping its keywords intact.** So:
 
 `sugar-crush/phpunit.xml` (the supervisor's) · `/home/sites/sugarcraft/.sugar-crush/config.json`
 (git-tracked; md5 must stay `05480c743aff302fd6c06c5a4a4c2210`) ·
-`docs/plans/plans_cleaning.md` and `sugar-crush/python_port/` (the user's own
-untracked work) · `docs/plans/crush_code_worklog.md` and this file (supervisor-owned).
+`docs/plans/plans_cleaning.md` and `sugar-crush/python_port/` (the user's own work —
+both are **git-TRACKED**, 18 files under `python_port/`; an earlier revision of this
+line said "untracked", which was a wrong reason for a right rule and invited the
+reading that edits there are invisible) · `docs/plans/crush_code_worklog.md` and this
+file (supervisor-owned).
 
 `crush_code.md` is the plan — edit its status block inline as items land; it IS
 tracked, contrary to an earlier belief.
