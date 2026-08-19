@@ -6014,7 +6014,7 @@ final class Chat implements Model
 
         // ShareCommand returns 0 for success, non-zero for errors
         if ($exitCode !== 0) {
-            return [$this, static fn() => print $output];
+            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
         }
 
         return $this->shareResponse($inputBuf, $output);
@@ -6036,7 +6036,7 @@ final class Chat implements Model
         $output = ob_get_clean();
 
         if ($exitCode !== 0) {
-            return [$this, static fn() => print $output];
+            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
         }
 
         return $this->webSearchResponse($inputBuf, $output);
@@ -6054,6 +6054,53 @@ final class Chat implements Model
             'inputBuf' => '',
             'inFlight' => false,
         ]);
+        return [$next, null];
+    }
+
+    /**
+     * A slash command that exited non-zero, reported IN the transcript.
+     *
+     * USER-REPORTED CRASH. The three callers each did
+     * `return [$this, static fn() => print $output];`, and that is a fatal
+     * rather than a diagnostic: `print` is an EXPRESSION whose value is
+     * `int 1`, so the closure is a `Cmd` returning an int.
+     * {@see \SugarCraft\Core\Program::scheduleCmd()} dispatches whatever
+     * non-null a Cmd returns, and {@see \SugarCraft\Core\Program::dispatch()}
+     * requires a `Msg` — so the app died with
+     * "Argument #1 ($msg) must be of type Msg, int given" on the first
+     * `/websearch` with no query. `/share` and `/agents` carried the identical
+     * line, and `/agents` is one Ctrl+A away.
+     *
+     * Writing to stdout was the wrong shape even before the TypeError: the
+     * screen belongs to candy-core's frame renderer, so a bare `print` during
+     * a TUI run paints over a frame it did not compose and is erased by the
+     * next one. The old comment at the `/agents` site said "output error but
+     * don't add to history", which is why the failure had nowhere to appear.
+     *
+     * Both messages are added, unlike before: the command ECHO so the
+     * transcript shows what was typed, and the output as `Role::System`
+     * rather than `assistant` because an app-generated failure notice is not
+     * a model reply and must not be replayed to the provider as one.
+     *
+     * `$exitCode` is named in the fallback only — a command that fails
+     * silently would otherwise produce an empty transcript line, which reads
+     * as "nothing happened" for the one case where something did.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function commandFailureResponse(string $inputBuf, string $output, int $exitCode): array
+    {
+        $trimmed = trim($output);
+        $notice = $trimmed !== ''
+            ? $trimmed
+            : sprintf('Command failed with exit code %d and produced no output.', $exitCode);
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::system($notice)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
         return [$next, null];
     }
 
@@ -6112,9 +6159,8 @@ final class Chat implements Model
         $exitCode = $agentsCommand->execute($this, $args);
         $output = ob_get_clean();
 
-        // If command failed (non-zero exit code), output error but don't add to history
         if ($exitCode !== 0) {
-            return [$this, static fn() => print $output];
+            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
         }
 
         return $this->agentsResponse($inputBuf, $output);
