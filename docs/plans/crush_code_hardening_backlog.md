@@ -2342,6 +2342,112 @@ Recorded so they are not lost when the worklog stops being read.
 - **`#63`'s follow-up** — *"the timer bounds computing, not thrashing"*
   (worklog `:4863`). `enforceTimeLimit` landed in `4dbf5074`; the follow-up
   section was not read in full for this compilation.
+### E46 — candy-core: `Width::of()` and `Width::wrapAnsi()` disagree on grapheme clusters
+
+**What.** The two measure the same string differently, so any caller that DECIDES with one and FITS with
+the other has a bound that is false. `Width::of()` counts `👍🏽` (emoji + skin-tone modifier) as **4**
+cells while `wrapAnsi()` counts it as 2; `wrapAnsi()` counts a regional-indicator codepoint as **0**
+while `Width::of()` counts the pair as 2. Measured by W1's reviewer:
+
+    flag    Width::of=2  wrapAnsi(x10,@10) rows=1 widths=[20]
+    skin    Width::of=4  wrapAnsi(x10,@10) rows=2 widths=[20,20]
+
+`wrapAnsi()` also splits regional-indicator **pairs**, so a flag renders as two letter-boxes. No cluster
+is deleted — every case round-tripped byte-identically.
+
+**Where.** `candy-core/src/Util/Width.php:57-89` (`compute()`) vs `:264+` (`wrapAnsi()`).
+
+**Severity.** Medium, and wider than sugar-crush — every candy-* consumer that wraps user or model text
+inherits it. For 40 `🇺🇸` on a 40-column pane the real terminal overflow was measured at 80 columns.
+
+**Evidence.** W1's review, probe `/tmp/…/scratchpad/w1r/p2.php` and `p9.php`.
+
+**Step.** Make `wrapAnsi()` measure with the same code path `compute()` uses, and treat a
+regional-indicator pair and an emoji-modifier sequence as single unbreakable clusters. Add a shared
+fixture set both functions are tested against, so the two can never drift again.
+
+**Blocked on.** Nothing, but it is a **candy-core** change and W1 defended locally instead (re-measure
+each wrapped piece and truncate any that still overflows). Fixing upstream lets that local fallback be
+simplified, not removed — the fallback is also what protects against the NEXT such disagreement.
+
+### E47 — the overlay composite path has no width discipline
+
+**What.** W1's `fitToPane()` choke point covers `$body` only. The Veil composite that draws the palette,
+the session picker and the permission prompt emits rows wider than the terminal: measured
+**`palette open, cols=40 → widest=56, over rows 1..21 and 23`**.
+
+**Where.** `sugar-crush/src/Renderer.php:1099-1114` (the Veil composite).
+
+**Severity.** Medium. Pre-existing, not introduced by W1 — but W1 established the invariant for the
+transcript, and this is the remaining hole in it. On the hosted path
+`Tui/Renderer.php:394`'s `clipWidth()` still catches it, so the visible symptom is a cut overlay rather
+than a corrupted frame; on the standalone `Chat::view()` path there is no such net.
+
+**Evidence.** W1's review, probe `/tmp/…/scratchpad/w1r/p7.php`.
+
+**Step.** Route the composite through the same fitter, or clip each overlay row to the pane. Then extend
+`PaneWidthInvariantTest`'s sweep to overlay states — W1 added an honest out-of-scope note there rather
+than a silent gap.
+
+### E48 — the frame is 2 rows tall at `rows=1`
+
+**What.** `$available = max(1, $rows - 1)` plus the always-present status bar means a 1-row terminal gets
+a 2-line frame. Pre-existing.
+
+**Where.** `sugar-crush/src/Renderer.php:1019` and `:1032`.
+
+**Severity.** Low — a 1-row terminal is not a real configuration. Recorded because
+`PaneWidthInvariantTest`'s class docblock asserted the height invariant unconditionally, and W1 bounded
+that prose rather than leaving a claim its own sweep (8/20/40) would have refuted at 1.
+
+**Evidence.** W1's review, probe `/tmp/…/scratchpad/w1r/p7.php`: `plain rows=1 → frame rows=2`.
+
+**Step.** Either reserve the bar out of `$available` so the frame can be 1 row, or decide 2 is the floor
+and say so in `renderStatusBar()`'s docblock.
+
+### E49 — candy-shine's `withTableWrap(true)` cannot bound a table's width, and reads as if it can
+
+**What.** `withTableWrap(true)` wraps each **cell** at the full `wrapWidth`, so a three-column table
+still renders roughly three times the pane wide. Measured at `wrapWidth: 60`: cells wrap to 67/49/56/23
+while the box borders stay **195** columns. The option name and its docblock read as though it solves
+"table too wide", and it does not.
+
+**Where.** `candy-shine/src/Renderer.php:916-917`.
+
+**Severity.** Medium for readability of a coding agent's output — tables are common in replies. This is
+the mechanism behind **E43**: with W1's invariant in force a wide table keeps all its data but its
+border rows wrap, so glyphs land mid-row. W1 chose wrap over truncation deliberately (the user's
+complaint was lost content, and truncating a table drops whole columns silently).
+
+**Correction on the record:** the implementation round called that trade "strictly better than today".
+The reviewer measured it and it is **not** — at cols=100 the header loses its right `│`, the separator
+is cut mid-run, and the 195-column border rows wrap into several rows of dashes. Better on the reported
+axis, **visually worse**. A trade, not an improvement.
+
+**Step.** A per-column width budget in candy-shine's table renderer, sized to `wrapWidth`. Pairs with
+E43's horizontal-scroll answer: budget the columns, and let a genuinely wide table scroll rather than
+reflow.
+
+**Blocked on.** It is a **candy-shine** change; W1 was scoped to sugar-crush.
+
+### E50 — `SgrState` does not track SGR 58 (underline colour) or OSC 8 hyperlinks
+
+**What.** `SgrState` handles only `Token::CSI` with `final === 'm'`, and `Ansi::reset()` (CSI 0 m) does
+not close an OSC 8 hyperlink. Any row-wise re-emission of style state therefore loses underline colour
+and can leave a link open.
+
+**Where.** `candy-core/src/SgrState.php:50-53`.
+
+**Severity.** Low for SGR 58 (rarely emitted). The OSC 8 half was **medium and live** — a wrapped link
+label left a row that opens a hyperlink and never closes it, so every later cell joined the link in
+iTerm2/WezTerm/VTE/Kitty. W1 fixed that **locally** in `Renderer::balanceSgr()` by tracking the open URI
+itself; the general fix belongs in `SgrState`.
+
+**Evidence.** W1's review, probe `/tmp/…/scratchpad/w1r/p10.php`.
+
+**Step.** Extend `SgrState` to carry OSC 8 and SGR 58, then let `balanceSgr()` delegate instead of
+keeping its own URI tracking.
+
 - **The `.claude/settings.json` mystery** (worklog `:4526-4532`). The file is
   modified and uncommitted with every Caliber hook stripped out; *"Neither I nor
   any agent wrote it — lane E's reviewer independently reported the same."* Not a

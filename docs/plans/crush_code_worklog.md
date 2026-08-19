@@ -7985,3 +7985,103 @@ file, not the src diff, is the real deliverable.
   the pane wide. The option reads as though it solves this. Not edited.
 - `renderPendingToolCall()` (`:2450`) has no width discipline of its own and now relies entirely on the
   net at `:957`. Covered, so no longer a defect, but the one body producer with no bound of its own.
+
+### W1's review round: 11 surviving mutations against a self-reported 8-for-8
+
+**This is the round that justifies the rule.** The implementation agent ran 8 mutations, killed 8, and
+reported "eight for eight killed by the new file, zero by 42,841 pre-existing assertions" — accurate, and
+not coverage. An independent reviewer judged **29 mutations, killed 18, discarded 1 as an equivalent
+mutant, and left 11 SURVIVING**: MU2, MU4, MU8, MU11, MU12, MU18, MU21, MU25, MU26, MU28, MU29. Twenty-
+seventh consecutive round in which the reviewer found what the implementer's own score said was not
+there.
+
+Tree restored byte-exactly afterwards (`diff -q` identical, `git status` unchanged, config md5 intact,
+stash list still 9), verified by me.
+
+#### The two that matter
+
+**F1 (HIGH) — the bundle's headline invariant is provably FALSE for emoji clusters.** `fitToPane()`
+decides with `Width::of()` and fits with `Width::wrapAnsi()`, **and the two disagree**: `Width::of()`
+counts `👍🏽` as 4 cells and `wrapAnsi()` as 2; `wrapAnsi()` counts a regional-indicator codepoint as 0
+where `Width::of()` counts the pair as 2. Nothing re-measures the wrapped pieces, so an over-wide row is
+emitted anyway — end to end, `flags x40 at cols=40 → widest 74 (OVER by 9 rows)` and
+`skin tone x80 at cols=100 → widest 194`. The fixture set never saw it because `contentClasses()['emoji']`
+uses only plain 2-cell emoji (`🎉🚀✨`). **A test suite of 7,370 assertions asserting a bound that is
+false, because its fixtures were all drawn from the easy case.** Root cause is a candy-core disagreement
+— filed **E46**, defended locally.
+
+**F3 (MEDIUM-HIGH) — a regression this bundle introduced.** `balanceSgr()` is applied only to pieces
+`fitToPane()` produced. Half 1 turned candy-shine's paragraph wrap ON, so most wrapping now happens
+*inside candy-shine* and arrives as rows that already fit — taking the byte-identical fast path and
+never being balanced. Measured at cols=60, `\x1b[1m` opens on one row and never closes: the border glyph
+inherits bold and the continuation row renders plain. Pre-W1 the clause was on one row and balanced. The
+test that names this exact defect passes because it uses a fenced code block — the other path. **A test
+named after the property, exercising the one route where the property already held.**
+
+#### The rest
+
+**F2 (HIGH, test-only)** — the byte-identity fast path is load-bearing for image markers and completely
+unasserted. `markerBlock()` rows are sized `max(8, min(IMAGE_COLS=40, $width))`, so **for every terminal
+at `cols <= 46` the marker row is exactly `$contentWidth`, sitting on the `<=` boundary**, and
+`wrapAnsi()` `rtrim()`s. Four independent single-token mutations each corrupt the marker block and **all
+four leave 125 tests / 7370 assertions green**, because the only test that puts a marker on screen runs
+solely at cols=100, where `min(40, 94) = 40` and the boundary is never reached.
+
+**F4 (MEDIUM)** — a wrapped OSC 8 hyperlink leaves the link open, so every later cell joins it in
+iTerm2/WezTerm/VTE/Kitty. Newly reachable: pre-W1 the label never wrapped. Fixed locally; general fix
+filed **E50**.
+
+**F5 (MEDIUM)** — `isToolCallRow()` *does* disagree with `markToolCalls()`, and the docblock said it
+"cannot". Not via model text (candy-shine escapes raw ESC, so the styled head is unforgeable — the
+reviewer checked and cleared that route) but **via the zone registry**: with clicks disabled, or a
+model-supplied id failing `ZONE_ID_CHARSET`, the registry is empty, so the row is wrapped instead of
+truncated — producing the lookalike second row the narrow-terminal test documents as unacceptable.
+
+**F6 (MEDIUM)** — the test's status-bar exemption `array_pop()`s by POSITION, and with the palette open
+at `rows <= ~12` the last row is a composited overlay, not the bar. Also: **no test among the 125 drives
+an overlay at all**, and the overlay path is over-wide (`cols=40 → widest 56`). Pre-existing; filed
+**E47**.
+
+**F7 (MEDIUM, coverage)** — the addendum's suspicion, half right. The code is CORRECT:
+`$maxScrollOffset` is computed from `$contentLines` after `fitToPane()`, both extremes reachable. But
+**nothing asserts it** — MU18 makes the oldest three rendered rows permanently unreachable and survives,
+because the scroll test only asserts `maxScrollOffset() > 0` and offsets 1 and 3. I asked for this one
+specifically and it was worth asking.
+
+**F8 (LOW)** — every geometry assertion is `assertLessThanOrEqual`, so **only the upper bound is
+asserted and the pane width is never asserted to be USED.** Five mutations survive on that alone; a fix
+that wrapped at half the pane width would pass. Also establishes that the `max(20, …)` floor's value is
+load-bearing (it must be ≥ 8 to keep the image arithmetic sound) and unpinned.
+
+**F9 (LOW)** — MU8 (drop `balanceSgr()`'s trailing reset) survives, and the test's own docblock concedes
+the border already closes every row. **Decision: keep the clause**, same reasoning as C3's unreachable
+fail-closed arm — but resolve the docblock rather than leaving it implying coverage MU8 proves absent.
+
+**F10 (LOW, pre-existing)** — `rows=1` yields a 2-row frame; the class docblock claimed the height
+invariant unconditionally while sweeping only 8/20/40. Filed **E48**.
+
+#### Claims checked, including mine
+
+- **My soft-wrap diagnosis: the implementer's correction HOLDS.** `ChatPane.php:129` `->width($width)`,
+  candy-sprinkles `Style.php:1000-1004` `Width::truncateAnsi`, `Tui/Renderer.php:394` `clipWidth`. And
+  usefully: `ChatPane.php:112` routes through `LiveRenderer::renderView($a->chat->withSize(...))`, so
+  W1's fix does apply on the hosted path. My diagnosis was wrong and the fix location was right.
+- **The highest-severity hazard I named does not arise.** No sentinel pairs exist in the fitted string —
+  established by instrumenting `fitToPane()` and dumping the block on a frame carrying a fence, a tool
+  row, an image and an open palette: `OPEN=1 CLOSE=0 wellformedPairs=0`, the single U+E000 being the
+  image marker. Both the implementer and the reviewer reached that independently.
+- **Out-of-scope 1 was overstated by the implementer and I repeated it.** The wide-table trade is NOT
+  "strictly better": at cols=100 the header loses its right `│`, the separator is cut mid-run, and the
+  195-column border rows wrap into several rows of dashes. Better on the reported axis, visually worse.
+  A trade. Corrected in **E49**, which also records that `withTableWrap(true)` cannot bound a table's
+  width at all (cells wrap to 67/49/56/23 while borders stay 195).
+
+**Categories the reviewer established as clean, with the probes named** so "nothing found" is
+distinguishable from "nothing tried": sentinel-pair splitting · cluster DELETION by `wrapAnsi` (five
+cluster classes × three widths, all byte-identical round-trip — clusters are split, never dropped) ·
+`mb_substr`/`mb_strlen` in width arithmetic (zero hits in `src/`) · scroll-window arithmetic · and
+model-forged tool-row prefixes.
+
+New backlog entries from this round: **E46** (candy-core `Width` disagreement), **E47** (overlay path has
+no width discipline), **E48** (2-row frame at `rows=1`), **E49** (candy-shine table borders unbounded),
+**E50** (`SgrState` tracks neither OSC 8 nor SGR 58). Backlog is now E1-E50.
