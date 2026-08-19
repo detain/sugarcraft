@@ -216,11 +216,11 @@ final class KeyBindingRegistryTest extends TestCase
 
     /**
      * The shape of the table, stated as numbers because prose elsewhere states
-     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "62 live rows
+     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "63 live rows
      * across 9 contexts", the sweep counts in
      * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}, and
      * {@see \SugarCraft\Crush\Tests\Commands\KeyBindingDriftTest}'s KEYISH
-     * docblock ("all 66 declared rows"). A prose number nobody measures is how
+     * docblock ("all 67 declared rows"). A prose number nobody measures is how
      * a reference goes stale; this is the measurement. Those three files are
      * the domain of that list: it is where `grep -rn` for the figures found
      * them, not a claim that no other file could grow one.
@@ -234,11 +234,15 @@ final class KeyBindingRegistryTest extends TestCase
      * the draft moved into `candy-forms`' TextArea: forward Delete, ←/→,
      * Home/End, ↑/↓ on a multi-line draft, word motion, and the three ctrl
      * forms (Ctrl+Space, Ctrl+Backspace, Ctrl+Delete).
+     *
+     * 62 -> 63 live when `chat.slash-complete` was declared (W4): bare Tab
+     * completes the highlighted "/" row, and `shell.pane-next` had been
+     * promising that same Tab focuses the next pane with no exception stated.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(66, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(62, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(67, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(63, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

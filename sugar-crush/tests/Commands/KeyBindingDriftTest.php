@@ -248,8 +248,8 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 66 declared rows — and THAT is the domain
-     * of the zero. It says nothing about prose not yet written; it says those 66
+     * Zero false positives across all 67 declared rows — and THAT is the domain
+     * of the zero. It says nothing about prose not yet written; it says those 67
      * rows are clean under this pattern.
      *
      * The eight rows the draft's editing keyboard added are what it cost to keep
@@ -673,6 +673,23 @@ final class KeyBindingDriftTest extends TestCase
                 [$down] = $chat->update($k[1]);
                 $this->assertSame($rows - 1, $up->slashMenuIndex(), 'the first key must move UP');
                 $this->assertSame(1, $down->slashMenuIndex(), 'the second key must move DOWN');
+            },
+            // Driven at the Chat level like every other `chat.*` row. The
+            // half that row cannot show — that the App shell YIELDS the Tab
+            // instead of cycling a pane, which is where the reported bug
+            // actually lived — is driven through `App::update()` in
+            // `App\SlashMenuTabCompletionTest`.
+            'chat.slash-complete' => function (array $k): void {
+                $chat = $this->chat([], '/comp');
+                $this->assertSame(
+                    ['compact'],
+                    array_map(static fn (object $spec): string => $spec->name, $chat->slashMenuMatches()),
+                    'fixture: one unambiguous match to complete to',
+                );
+
+                [$next] = $chat->update($k[0]);
+
+                $this->assertSame('/compact ', $next->inputBuf);
             },
             'chat.recall' => function (array $k): void {
                 [$next] = $this->chat([Message::user('earlier')])->update($k[0]);

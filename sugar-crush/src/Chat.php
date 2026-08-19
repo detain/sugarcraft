@@ -1273,6 +1273,39 @@ final class Chat implements Model
                 => [$this->moveSlashMenuSelection(-1), null],
             $msg->type === KeyType::Down && $this->slashMenuMatches() !== []
                 => [$this->moveSlashMenuSelection(1), null],
+            // Bare Tab completes the HIGHLIGHTED "/" popup row into the draft
+            // (the row slashMenuIndex() points at, which Up/Down above move —
+            // not "the first match"), and does nothing else: it never submits.
+            //
+            // Reaching this arm at all is half a fix. Tab is the pane-cycling
+            // key of the shell that HOSTS this model, and
+            // Tui\KeyboardHandler::claims() used to take it unconditionally,
+            // so no keystroke ever arrived here — which is precisely the bug
+            // reported ("it switches your active other window"). That claim is
+            // now conditional on the same `slashMenuMatches() !== []` test
+            // this arm makes, and the two conditions have to stay identical:
+            // if the shell yields on a broader condition than this arm answers,
+            // Tab becomes a dead key instead of a completion.
+            //
+            // Two deliberate differences from the Enter path
+            // (completeSlashMenuSelection() via slashMenuShouldIntercept()):
+            //   - ONE match is not special-cased, and neither is an already-
+            //     exact name. Enter needs that exception because Enter's other
+            //     job is submitting, and "/agents" + Enter must run the command
+            //     rather than re-fill the same text. Tab has no other job here,
+            //     so "/compact" + Tab simply re-completes to "/compact " — a
+            //     visible no-op, and the alternative (falling through to cycle
+            //     panes on an exact name only) would make Tab's meaning depend
+            //     on a distinction the popup does not draw on screen.
+            //   - The trailing space IS appended, same as Enter's completion,
+            //     because several commands take arguments (/rename <name>) and
+            //     the space is what closes the popup: slashMenuPrefix() returns
+            //     null once inputBuf holds a space, so the very next Tab is a
+            //     pane cycle again.
+            $msg->type === KeyType::Tab
+                && !$msg->ctrl && !$msg->alt && !$msg->shift
+                && $this->slashMenuOwnsTab()
+                => $this->completeSlashMenuSelection(),
             // Shell-history-style recall: Up on an empty input box (and no
             // "/" popup showing - the arm above already claimed that case)
             // fills inputBuf with the last message the user actually sent.
@@ -2201,7 +2234,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 62 live rows across 9 contexts — 66 in all, four of them
+     * declares 63 live rows across 9 contexts — 67 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -8343,6 +8376,47 @@ final class Chat implements Model
     public function slashMenuIndex(): int
     {
         return $this->slashMenuIndex;
+    }
+
+    /**
+     * Whether a bare Tab completes the "/" popup's highlighted row RIGHT NOW.
+     *
+     * The ONE predicate both halves of that binding read: {@see update()}'s
+     * bare-Tab arm, which performs the completion, and
+     * {@see \SugarCraft\Crush\Tui\KeyboardHandler::claims()}, which drops its
+     * pane-cycling claim so the key can reach that arm at all. Dropping the
+     * shell's claim does not BIND Tab anywhere — it only lets it fall through
+     * — so a shell that yielded on a condition this class does not answer
+     * would turn Tab into a DEAD keystroke. That is not hypothetical: while
+     * the predicate was `slashMenuMatches() !== []` on both sides, Ctrl+P then
+     * Tab (measured through App::update()) cycled no pane and completed
+     * nothing, because update() returns to handlePaletteKey() BEFORE its Tab
+     * arm. Matching arms is not enough; the two must match on REACHABILITY,
+     * which is why the modal guards are named here rather than at either
+     * call site.
+     *
+     * The four conjuncts are exactly update()'s own early returns that can
+     * swallow a bare Tab, in its order:
+     *   - {@see $keyHelp} — {@see handleKeyHelpKey()} ends in `default =>
+     *     [$this, null]`. Not reachable from real input WITH a slash draft
+     *     (measured: both openers require an empty/cleared inputBuf — the "?"
+     *     arm guards on `trim($this->inputBuf) === ''` and /keys clears it),
+     *     but the public constructor builds the pair, the same API-surface
+     *     hole the $pendingPermission ordering comment above records;
+     *   - {@see $pendingPermission} — {@see handlePermissionKey()};
+     *   - {@see $palette} — {@see handlePaletteKey()};
+     *   - {@see $sessionPicker} — {@see handleSessionPickerKey()}.
+     * $inFlight is NOT among them: {@see refuseWhileInFlight()} has no bare-Tab
+     * arm and returns null for it, so completion works mid-turn (driven in
+     * SlashMenuTabCompletionTest).
+     */
+    public function slashMenuOwnsTab(): bool
+    {
+        return $this->keyHelp === null
+            && $this->pendingPermission === null
+            && $this->palette === null
+            && $this->sessionPicker === null
+            && $this->slashMenuMatches() !== [];
     }
 
     /**

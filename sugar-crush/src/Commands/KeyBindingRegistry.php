@@ -378,6 +378,11 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.send', 'Enter', 'Send, or accept the highlighted "/" command', $c),
             KeyBinding::new('chat.newline', 'Alt+Enter', 'Insert a newline instead of sending', $c),
             KeyBinding::new('chat.slash-menu', '↑ / ↓', 'Move through the "/" command popup', $c),
+            // Declared in the SAME round the keystroke went live (W4), unlike
+            // the editing rows below: without it the reference said Tab
+            // "focuses the next pane" full stop, and the completion the user
+            // asked for was invisible to the only in-app key list there is.
+            KeyBinding::new('chat.slash-complete', 'Tab', 'Complete the highlighted "/" command', $c),
             KeyBinding::new('chat.recall', '↑', 'Recall your last message (empty input box)', $c),
             // ── the draft's own editing keyboard ─────────────────────────
             //
@@ -444,7 +449,12 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_SHELL;
 
         return [
-            KeyBinding::new('shell.pane-next', 'Tab', 'Focus the next pane', $c),
+            KeyBinding::new(
+                'shell.pane-next',
+                'Tab',
+                'Focus the next pane, unless a "/" popup is open',
+                $c,
+            ),
             KeyBinding::new('shell.menu', 'F10', 'Open the menu bar', $c),
             KeyBinding::new('shell.pane-chat', 'Esc', 'Leave the pane, back to the chat', $c),
             KeyBinding::new('shell.new-session', 'Ctrl+N', 'Start a fresh session', $c),

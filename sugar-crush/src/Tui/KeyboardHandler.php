@@ -118,8 +118,10 @@ final class KeyboardHandler
      *    agent view (where c/r/s/q are commands, not text, and `q` is how the
      *    user leaves), or an OPEN skill picker.
      * 3. F10 opens the menu, from any pane.
-     * 4. Unmodified Tab cycles panes. Ctrl+Tab is excluded by rule 1 — that
-     *    is Chat's session cycling (§5 E2).
+     * 4. Unmodified Tab cycles panes, but only while the hosted chat's "/"
+     *    popup is NOT showing matches — there it is that popup's completion
+     *    key and falls through. Ctrl+Tab is excluded by rule 1 — that is
+     *    Chat's session cycling (§5 E2).
      * 5. Escape returns to the chat pane, but only when the shell has
      *    somewhere to return FROM. In `Pane::Chat` it belongs to Chat, whose
      *    Escape cancels an in-flight turn and closes the palette.
@@ -171,8 +173,42 @@ final class KeyboardHandler
             return true;
         }
 
+        // Unmodified Tab cycles panes -- EXCEPT while the hosted chat's "/"
+        // popup is showing matches, where it is the completion key instead
+        // (the user report: "hitting tab while typing a partial /command ...
+        // should expand your typed command to the full command currently
+        // highlighted ... currently it switches your active other window").
+        // Conditional exactly the way the Escape rule below already is: the
+        // key belongs to whichever surface is modal for it, and a menu of
+        // candidate completions is that surface for Tab.
+        //
+        // The predicate is Chat::slashMenuOwnsTab(), and it is that ONE
+        // method rather than a copy of its body, because dropping the claim
+        // here does not BIND the key anywhere -- it only lets it fall
+        // through. A shell that yields on a condition Chat does not answer
+        // turns Tab into a dead keystroke rather than a completion, and a
+        // matching ARM is not enough for that: this rule first shipped with
+        // `slashMenuMatches() !== []` written out on both sides, and Tab was
+        // dead with the palette, the session picker or a permission prompt
+        // up, because Chat::update() returns to those handlers BEFORE its Tab
+        // arm. The reachability guards therefore live in slashMenuOwnsTab().
+        //
+        // Ordered after shellOwnsKeyboard() on purpose: with the F10 menu,
+        // the Agents dashboard or the skill picker up, the popup is buried
+        // and undrivable, so Tab stays the shell's there. Pinned per state by
+        // SlashMenuTabCompletionTest::testTheShellKeepsTabWhileOneOfItsOwnViews
+        // OwnsTheKeyboard() -- reordering this block above that call is a real
+        // behaviour change, and used to go unnoticed.
+        //
+        // NOT ordered on $app->pane, though, and that is the deliberate half:
+        // from Pane::Files or Pane::Tools the chat and its popup are still on
+        // screen (those panes are a quarter-width SIDEBAR -- see
+        // Renderer::leftSidebar()) and typing still reaches inputBuf, so the
+        // completion is drivable and wins there too, even though Tab is that
+        // pane's only navigation key. Pinned by
+        // testTabCompletesFromASidebarPaneToo().
         if ($msg->type === KeyType::Tab && !$msg->ctrl && !$msg->alt && !$msg->shift) {
-            return true;
+            return !self::chatIsCompletingSlashCommand($app);
         }
 
         if ($msg->type === KeyType::Escape && $app->pane !== Pane::Chat) {
@@ -182,6 +218,25 @@ final class KeyboardHandler
         return $msg->type === KeyType::Char
             && $msg->ctrl
             && in_array($msg->rune, self::shellCtrlRunes(), true);
+    }
+
+    /**
+     * Whether the hosted chat will bind a bare Tab to its "/" completion.
+     *
+     * False when no chat is hosted at all: the pane shell can be driven
+     * without one (`App::new()` leaves `$chat` null and several shell tests
+     * run that way), and with no popup on screen Tab has nothing to complete.
+     *
+     * Everything else is delegated, deliberately: this must answer "will Chat
+     * ACT on the Tab", not "is the popup non-empty", and only Chat knows
+     * which of its modal states return before the arm.
+     *
+     * @see \SugarCraft\Crush\Chat::slashMenuOwnsTab() the one source of truth,
+     *      read by Chat's own arm as well.
+     */
+    private static function chatIsCompletingSlashCommand(App $app): bool
+    {
+        return $app->chat !== null && $app->chat->slashMenuOwnsTab();
     }
 
     /**
