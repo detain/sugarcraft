@@ -72,7 +72,7 @@ unless you cannot proceed further without a decision from me or i told you to pa
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
-## 5. THE recurring defect — twenty-one rounds running
+## 5. THE recurring defect — twenty-two rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
 or behavioural claim that is true of one thing, written next to a different thing.
@@ -140,6 +140,20 @@ a run. Judge a mutation by whether the **targeted test file** flips green→red 
   report it as a finding.
 - `src/Support/ToolIpcFiles.php:79` `private const STAT_REGULAR_FILE = 0o100000;` is
   an **octal file mode** — a false positive for any `100000` grep-and-replace.
+- **The `tests/Cli` hang is DIRECTORY-scoped only, and this matters a lot.**
+  `vendor/bin/phpunit tests/Cli` hangs (>4min, backlog E29) — but a single FILE inside it
+  runs in **0.054s at rc 0**, and `--filter` against a single file is ~0.02s. Corrected
+  2026-08-19: the old blanket "never judge green from a directory-scoped run" was
+  discouraging the only affordable mutation harness in this suite. Use single-file runs
+  freely for mutation loops; only the FINAL green/red judgement needs the full configured run.
+- `tests/Cli/BootstrapSkillSkipsTest.php` run **alone** is rc=1 (`OK, but there were issues!
+  Risky: 2`) on a clean tree and contributes 0 risky in the full suite — order-dependent,
+  pre-existing, backlog **E36**. Do not chase it as a regression.
+- **Six test files did not clear the backend-selection env chain** until `6bc5218b`; with
+  either shell-out variable ambient the suite showed 1 error + 10 failures. Now handled by
+  `tests/Support/BackendSelectionEnvSandboxTrait.php`, which holds the chain ONCE. If you add
+  a `SUGARCRUSH_*` variable to backend selection, add it to that trait's `CHAIN`, not to a
+  tenth hand-written list.
 - `Chat::shouldPromptIdleCompaction()` **deliberately** duplicates `Runtime`'s
   version ("where Runtime instance is not directly available"). Don't collapse it by
   making `Chat` reach for a `Runtime` it deliberately does not hold.
@@ -255,7 +269,32 @@ already done and one names a class that does not exist:**
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
 
-**As of 2026-08-19 Bundle B3 is COMMITTED as `a72c5b0a`** (Phase 5 items 8, 9, 10a), with
+**CURRENT STATE, 2026-08-19.** `HEAD` is **`6bc5218b`** — bundle C1 (Phase 2 items 1 and 8),
+supervisor-verified at **7276 / 76239 / 1, exit 0**, config md5
+`05480c743aff302fd6c06c5a4a4c2210`, `check-path-repos --no-lib-path-repos` rc 0, `src/` still
+275 `.php` files. **Phase 5 is complete. Phase 2 items 1, 3, 5, 6 and 8 are complete** — 3 and
+5 needed no code and the plan's premise about both was measured false (see §9).
+
+**IN FLIGHT: E33**, implementation round. See §11's E33 entry for the decision that is already
+made and must not be re-opened.
+
+**The two lessons this session added, both from C1:**
+
+1. **A reproduction fixture can fail to reproduce, and then the test passes on the broken
+   code.** My SIGTERM fixture (`trap '' TERM; sleep 8`) put the trap in a script file, so
+   `proc_open`'s direct child was the `sh -c <script>` wrapper — which does NOT ignore SIGTERM.
+   It died in ~50ms, orphaned the trapping shell, and the bug became invisible. Always confirm
+   the fixture reproduces the defect BEFORE writing the assertion against it.
+2. **An overstatement passed along is indistinguishable from one invented.** I forwarded a
+   reviewer's "no newline AND no carriage return, for any command whatsoever" without checking
+   the CR half, which was false and which the reviewer's own next finding contradicted. Reading
+   a finding is not verifying it.
+
+Older but still live: **"survives the full suite" is not "is correct" — it is only "nothing
+measures this"**, and **a fix lifted from a reviewer's mutation is still a mutation**, chosen
+to probe coverage rather than to be right.
+
+**Historical: Bundle B3 was COMMITTED as `a72c5b0a`** (Phase 5 items 8, 9, 10a), with
 its review and fix rounds done. Supervisor-verified on a clean tree: **7204 / 75944 / 1,
 exit 0**. Worklog section "Bundle B3 — review + fix rounds" carries the nine mutation
 survivors, the one real code bug (`MemoryBlock::MAX_BYTES` was not a ceiling — 11,119 bytes
@@ -310,27 +349,75 @@ inside those two files were renamed too before assuming the item is half-done.
 - ~~**E21** — finish Phase 5 (wire the automatic 85% tier to the model).~~ **DONE `261ac59d`**
   (7237/76136/1, exit 0). **PHASE 5 IS COMPLETE.** It also fixed four silent-loss bugs in
   `ContextCompactor::groupIntoPairs()` and one spend-cap bypass it had itself introduced.
-- **NEW QUEUE ENTRY, cheap and worth doing early — the 70% reminder is committed to permanent
-  history every turn** (backlog E33). Newly *visible* rather than newly broken: compaction used
-  to erase the copies, and as of `261ac59d` it no longer does, so a long session now accumulates
-  one reminder message per turn in the transcript it sends. Measured over 20 turns. Decide
-  whether the reminder should be ephemeral (rendered, not committed) or deduplicated.
-- **C1** Phase 2 items 1,8 — rename `src/McpClient.php` → `ClaudeCodeMcpClient` (a
-  BASENAME collision, not a PSR-4 one; no production call sites) and wire the dormant
-  `StreamingCommandBackend`. **Item 8 is harmful as written** — swapping it onto
-  `$SUGARCRUSH_BACKEND_CMD` deletes every newline and blank line from the reply and adds a
-  blanket 120s cap. Ground truth measured and written up:
-  `/tmp/…/scratchpad/c1-measured.md`, summarised in §9. Wire it behind its own opt-in and
-  fix the timeout + its wrong-unit message either way. **BRIEF IS WRITTEN AND READY:**
-  `/tmp/…/scratchpad/c1-brief.md` (195 lines).
+- **E33 — the 70% reminder piling up in permanent history. IN FLIGHT as of 2026-08-19**,
+  implementation round, brief at `/tmp/…/scratchpad/e33-brief.md` (self-contained — re-spawn
+  against it if that round was lost). Then review → fix → verify → commit as usual.
+  **The decision is MADE and must not be re-opened: deduplicate.** Backlog E33's own Step
+  prefers the other shape (keep it out of `history`, render from state); I overrode that
+  because render-from-state needs a NEW render path for a message `Renderer` gets for free by
+  walking `Role::System` history entries, and the standing priority is working functionality
+  now. Dedup also beats a fire-once latch on a point that only surfaces on reflection: the
+  surviving copy carries the CURRENT figure, not a stale one from twenty turns back.
+  Measured and settled so nobody re-derives them: `shouldSendReminder()` is **pure and
+  stateless** (`ContextCompactor.php:167-177`), which is why it fires per turn; history is
+  **not append-only** (`src/Chat.php` rewrites it wholesale on the tool-result splice twice,
+  `/clear`, every compaction tier, and `/rewind`), so dedup is the same operation the
+  compactor already performs; and `dispatchTurn()` checkpoints `'messages' => $next->history`,
+  so checkpoints inherit whatever shape wins with no second serialisation site. The message is
+  **172 chars ≈ 53 ESTIMATED tokens** — estimated, never provider-counted; those two units are
+  never summed in this codebase. **Do not match stale copies on full text** — the message
+  embeds a token figure, so two copies are never byte-equal and an equality check would
+  silently never fire.
+- ~~**C1** Phase 2 items 1,8 — the `ClaudeCodeMcpClient` rename and the streaming tier.~~
+  **DONE `6bc5218b`** (7276/76239/1, exit 0). Item 8 carried far more than the plan said: the
+  dormant class **could not return a newline from any command whatsoever**, so five doc sites
+  were recommending a wrapper that cannot exist. Resolved by making a terminated blank line
+  mean a literal newline. Also fixed an unbounded 100%-CPU spin, an escape hatch a
+  `trap '' TERM` child held for 8s against a 1s deadline, and `CommandBackend` returning an
+  EMPTY answer whenever the whole reply was `0` (`?: ''`). **Two claims withdrawn, not
+  delivered:** `$onToken` fires but the blocked loop means nothing paints it — measured six
+  callbacks, ZERO render ticks. Backlog **E34** (non-blocking rewrite) and **E35**
+  (cancellation) carry the remainder. That is the bundle's one FUNCTIONAL deferral and it is
+  deliberate.
 - ~~**C2** Phase 2 item 3 — `WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`.~~
   **ALREADY DONE** — `Bootstrap.php:374` passes it. Measured 2026-08-19, see §9. No work.
-- **C3** Phase 2 item 2 — `Bootstrap::mcpClient($root)` reading `.mcp.json`, MCP tools
-  wrapped as `Tools\Tool` adapters into `Bootstrap::tools()`.
+- **C3** Phase 2 item 2 — MCP. **The plan's framing is wrong in two ways and it is far bigger
+  than "read `.mcp.json`".** Measured 2026-08-19, full write-up at
+  `/tmp/…/scratchpad/c3-measured.md`: (a) `.mcp.json` appears **nowhere** in `src/` or `bin/` —
+  it is README prose, and `MCP\McpClient` takes an injected `$configPath`; (b) the MCP **auth**
+  path IS already wired (`McpAuthStore` at `Chat.php:9112`, `Commands/McpAuthCommand.php`) while
+  the MCP **tool** path has ZERO production users — `McpClient`, `McpRouter`, the `McpServer`
+  interface and all three implementations (`GitMcpServer`, `HttpMcpServer`, `StdioMcpServer`)
+  plus the 41KB `GitCommandHandlers`. So `/mcp auth` works and the model has no MCP tools at
+  all. Five pieces: config loading, client construction + process lifecycle, the `Tool` bridge
+  (the real work), `ContainedPath`/`PermissionGate` gating, and `McpRouter`'s per-`AgentPreset`
+  allow/deny lists. **NAMING HAZARD:** `src/MCP/McpTool.php` already exists as a DTO with no
+  `execute()` — do not name an adapter `McpTool` and recreate exactly the basename collision
+  C1's item 1 just renamed away from. Probably two bundles.
 - **C4** Phase 2 item 4 — **the biggest remaining item.** Wire `CommandLoader::loadAll()`
   AND build the missing template-substitution engine (`$ARGUMENTS`, `$1`, backtick-cmd,
-  `@file` — none exist). Shell-out must use ReactPHP `Process`, never blocking
-  `shell_exec`. This is what makes the README's "loadable, not loaded" note obsolete.
+  `@file` — none exist; a `grep -rn ARGUMENTS src/` returns three hits, all unrelated prose).
+  Shell-out must use ReactPHP `Process`, never blocking `shell_exec`. This is what makes the
+  README's "loadable, not loaded" note obsolete.
+  **THE STRUCTURAL BLOCKER THE PLAN DOES NOT MENTION**, measured 2026-08-19, full write-up at
+  `/tmp/…/scratchpad/c4-measured.md`: `CommandRegistry` is **entirely static** — no
+  constructor, no instance state, `all()` returns a hardcoded literal, and
+  `grep -rn 'new CommandRegistry'` returns ZERO. There is no instance for loaded commands to be
+  injected into, so the bundle's FIRST decision is static-merge-point vs instance registry (the
+  latter touches `Renderer::renderSlashMenu()`, the palette, and the two tests below), not
+  template syntax.
+  **AND TWO INVENTORY TESTS WILL RED IN A MISLEADING WAY**, both in
+  `tests/Commands/SlashDispatchTest.php`. `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`
+  (:98) asserts **`$next->inFlight === false`** for every slash-visible row — but a file-based
+  command MUST set `inFlight = true`, because sending its template to the model IS its
+  behaviour. Its failure message will tell the implementer to add a dispatch arm, which is the
+  wrong remedy. `testEveryDispatchArmIsAdvertisedOrDeliberatelyUnadvertised()` (:158) derives
+  arm names from `dispatchCommand()`'s own SOURCE and needs the same third case. **Do not let
+  either be relaxed** — both are load-bearing completeness inventories; teach them that a
+  file-based row dispatches to the model by design and assert that positively.
+  `CommandSpec::isFileBased()` already exists to express it. Also: `CommandLoader`'s class
+  docblock defers this work because "`src/Chat.php` is owned by a concurrent track" — **that is
+  now STALE** and should be corrected as part of the bundle.
 - ~~**C5** Phase 2 item 5 — `HookManager::loadFromFile()` in `Bootstrap::hooks()`.~~
   **ALREADY DONE, and deliberately not by the route the plan names** — `Bootstrap::hooks()`
   loads entries once per process so a session cannot install hooks into itself mid-session.

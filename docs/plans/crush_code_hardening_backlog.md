@@ -1840,6 +1840,120 @@ fixture. What is left after the correction is a narrower but real dead end.
   over 70%, so it wants its own bundle and its own fixture diff rather than riding
   along with a tier change.
 
+- **Amended 2026-08-19 (bundle C1's round).** Two things the entry left open are
+  now measured. First, the "keep it out of `history`" step is not blocked by an
+  append-only invariant, because there is none: `src/Chat.php` rewrites `history`
+  wholesale on several established paths — `'history' => $newHistory` (tool-result
+  splice, twice), `'history' => []` (`/clear`), `[...$compactedHistory, ...]`
+  (every compaction tier), and `[...$messages, ...]` (`/rewind` truncating). So
+  dropping a previous copy while adding a new one is the same class of operation
+  the compactor already performs, and either shape is available. Second,
+  `dispatchTurn()` persists `'messages' => $next->history` into the checkpoint, so
+  whichever shape wins is inherited by checkpoints for free — there is no second
+  serialisation site to keep in step. Third, `ContextCompactor::shouldSendReminder()`
+  is confirmed PURE and stateless (`src/Context/ContextCompactor.php:167-177`: a
+  bare `$tokenCount >= $threshold`) — no latch, no timestamp, nothing to make it
+  fire once, which is the mechanical reason it fires per turn.
+- **Test the fix must carry** the pile-up as a QUANTITY, not a presence: drive N
+  turns past the threshold and assert the NUMBER of reminder messages in history.
+  A test asserting only that "a reminder is present" passes under all three
+  candidate shapes AND under the bug.
+
+---
+
+### E34 — a shell-out completion blocks the event loop, so `$onToken` fires and nothing can paint it
+
+- **What** Both shell-out tiers run the whole completion synchronously inside a
+  `Loop::futureTick`, so the ReactPHP loop is blocked for its entire duration. The
+  streaming tier's `$onToken` callback genuinely fires per token — but the
+  `withTick` subscription in `Chat` that turns `TokenDelta`s into `$streamingText`
+  cannot run until the completion has already resolved. The user sees a silent
+  spinner and then the whole answer, which is precisely the behaviour the streaming
+  tier was added to remove.
+- **Where** `sugar-crush/src/Backend/StreamingCommandBackend.php` —
+  `completeAsync()` wrapping the synchronous `complete()`;
+  `sugar-crush/src/Backend/CommandBackend.php` does the same. The render side is
+  `sugar-crush/src/Chat.php` (`withTick` → `$streamingText`).
+- **Severity** Not security. It is the defect that the wiring of Phase 2 item 8
+  was justified by removing, so it matters to whether that item is really done.
+- **Evidence** Measured by bundle C1's reviewer on a six-token/1.81s fixture:
+  callback times `[0.006, 0.306, 0.606, 0.906, 1.211, 1.511]`, and render ticks
+  that fired during the stream: **`[]`** — zero, out of zero total. Separately, on
+  the `-p` path `NonInteractive::run()` passes no `$onToken` at all, so tier 3 there
+  streams to nobody by construction.
+- **Step** Implement `completeAsync()` natively: drive the pipes with
+  `Loop::addReadStream` and resolve a promise on child exit, instead of wrapping a
+  blocking read. Deliberately NOT done in C1's fix rounds — it is an architectural
+  change to an optional tier, the same blocking defect affects tier 2, and letting a
+  fix round grow a new subsystem is how these rounds get lost. C1's round B instead
+  withdrew the false display claim and left the callback claim standing with its
+  domain stated. **Do not "fix" this by adding a total request deadline** — an LLM
+  completion legitimately runs tens of minutes.
+
+---
+
+### E35 — cancellation cannot interrupt a shell-out completion
+
+- **What** `StreamingCommandBackend::completeAsync()` checks
+  `$cancellation?->isCancelled()` exactly once, at `futureTick` entry, and never
+  again. `complete()` then blocks the loop, so no keystroke is even read — double
+  Escape and Ctrl+C are unobservable until the command finishes on its own.
+- **Where** `sugar-crush/src/Backend/StreamingCommandBackend.php`, the
+  `completeAsync()` cancellation check. Identical on `CommandBackend`.
+- **Severity** Not security. A user cannot abandon a wedged or wrong turn.
+- **Evidence** Bundle C1's reviewer traced the single check and confirmed the
+  blocking read behind it. Sharpened by the same round's finding that a wrapper
+  which backgrounds anything can hold the pipes open long after the child exits —
+  C1 bounded that at a 2-second post-exit grace, but a well-behaved long-running
+  wrapper is still uninterruptible for its whole run.
+- **Step** Falls out of E34: once the read loop is driven off the event loop, the
+  cancellation token can be honoured between reads and the child terminated with
+  the bounded SIGTERM→SIGKILL escalation C1 already added
+  (`terminateAndReap()`). Do these together; doing E35 alone is not possible while
+  the loop is blocked.
+
+---
+
+### E36 — `tests/Cli/BootstrapSkillSkipsTest.php` is rc=1 alone and green in the full suite
+
+- **What** Run on its own against a clean tree the file exits 1 with
+  `OK, but there were issues! Risky: 2`; in the full configured run it contributes
+  no risky tests and the suite is exit 0 with 0 risky. Order-dependent.
+- **Where** `sugar-crush/tests/Cli/BootstrapSkillSkipsTest.php`.
+- **Severity** Not security. It is a trap for any future round that tries to
+  judge this file in isolation — and `failOnRisky` is ON, so the exit code is red
+  while the banner says OK.
+- **Evidence** Measured by bundle C1's reviewer on the clean tree, both ways.
+- **Step** Find which other test establishes the state that makes these two
+  non-risky and either make the file self-sufficient or mark the dependency
+  explicitly. Companion to **E29** (`vendor/bin/phpunit tests/Cli` hanging) — but
+  note the two are different failures, and C1's round A established that
+  single-FILE runs inside `tests/Cli` are fine and fast (0.054s), so E29's warning
+  should not be read as covering this.
+
+---
+
+### E37 — `--help` documents 5 of the 20 `SUGARCRUSH_*` variables the code reads
+
+- **What** `src/Cli/Help.php` names five environment variables; `src/` and `bin/`
+  read twenty. Missing include `SUGARCRUSH_MAX_COST`,
+  `SUGARCRUSH_PERMISSION_MODE`, `SUGARCRUSH_TITLE_MODEL`,
+  `SUGARCRUSH_SUMMARY_MODEL` and `SUGARCRUSH_SEARCH_ENDPOINT` — i.e. the spend cap
+  and the permission mode, both of which change what the agent is allowed to do.
+- **Where** `sugar-crush/src/Cli/Help.php`; the inventory gap is why bundle C1's
+  finding 7 existed (a nine-line block for a brand-new variable that no test
+  pinned, because the only assertion was a substring the OLD variable's name
+  already satisfied).
+- **Severity** Not security in itself, though two of the undocumented variables
+  govern permission and spend.
+- **Evidence** Counted by bundle C1's reviewer across `src/` and `bin/`.
+  `docs/ENVIRONMENT.md` is missing only one (`SUGARCRUSH_DEBUG_SKILLS`), so the
+  reference doc is nearly complete and the help screen is not.
+- **Step** Extend the env-var scrape C1's round B added for the backend-selection
+  subset to cover all twenty, the way `HelpTest` already scrapes `ArgvParser` so a
+  new FLAG cannot ship undocumented. Derive the names from source, never from a
+  hand-written list — a written list is exactly as blind to the twenty-first
+  variable as the current assertion was to the sixth.
 ---
 
 ## F. Known dormant seams — documented, NOT work

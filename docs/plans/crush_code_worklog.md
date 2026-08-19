@@ -7164,3 +7164,198 @@ because compaction no longer erases the copies; 20-turn measurement included). A
 **E19**, **E20** (now recording this bundle's bypass and that it is NOT the documented
 overshoot allowance), **E22** (second caller waiting, corrected length table), and **E21**
 closed.
+
+---
+
+## Bundle C1 — Phase 2 items 1 and 8, COMMITTED `6bc5218b`
+
+Implement → adversarial review → two fix rounds → supervisor verification → commit.
+Suite `7237` (at `261ac59d`) → **`7276` / `76239` / 1, exit 0**, verified personally on the
+final tree, not taken from any agent's report. Config md5 `05480c743aff302fd6c06c5a4a4c2210`
+unchanged, `check-path-repos --no-lib-path-repos` rc 0, `src/` still 275 `.php` files so
+neither `BuiltInToolCorpusTest` census nor `BinSugarcrushWiringTest::crushSourceFiles` moved.
+
+### Item 1 — the rename
+
+`SugarCraft\Crush\McpClient` → `ClaudeCodeMcpClient`, so it stops sharing a basename with
+`SugarCraft\Crush\MCP\McpClient`. Both stay dormant. The plan's premise that "`MCP\McpClient`
+is the live one" is FALSE: measured, `grep -rn McpClient src/ bin/ examples/` returns exactly
+one hit outside the two class files and it is a doc comment
+(`src/Providers/Concerns/HttpClientDefaults.php:33`). Neither client is constructed by a real
+run. `.mcp.json` appears nowhere in `src/` — that string is README prose, and `MCP\McpClient`
+takes an injected `$configPath`.
+
+The dormancy test needed a second pass. Its first version grepped for the class name and so
+matched DOC COMMENTS, which means a plain `{@see}` from any src file would have failed it with
+a message claiming the class was "reached from" there. It now discriminates code from prose
+with `token_get_all()` and says in its docblock why.
+
+**A docblock quoted a grep that does not reproduce.** It claimed "MEASURED: … reports
+nothing". It reports one line. The conclusion survived, the sentence did not — the signature
+defect of this chain, committed inside the bundle that was fixing an instance of it.
+
+### Item 8 — the streaming tier, which carried far more than the plan described
+
+Wired as tier 3 behind `$SUGARCRUSH_BACKEND_CMD_STREAM`, below `$SUGARCRUSH_BACKEND_CMD` and
+above the persisted provider. **Three readers had to learn it, not the one the plan names:**
+`backend()` chooses, and `selectedProviderName()` decides whether `NonInteractive` HARD-FAILS,
+so teaching only `selectedProviderLabel()` would have silenced the offline notice while a
+stale persisted name outranked the shell-out the run actually selected. One private helper now
+answers for all three.
+
+**The dormant class could not return a newline from ANY command whatsoever.** `fgets` splits
+on `\n`, `rtrim` strips the `\r`, the join separator is `''`. So tier 3 was single-line-only:
+no list, no paragraph break, no code fence. Five doc sites framed this as a WRAPPER-CHOICE
+problem and recommended a "correct" wrapper; none can exist. The recommended Ollama wrapper
+could not escape it either — a model newline arrives as its own chunk, `jq -r` prints an empty
+line, and the code dropped empty lines as framing, so the canonical wrapper silently lost
+every line break.
+
+Resolution, decided at supervisor level rather than left to an agent: **a terminated blank
+line means a literal newline.** An empty line already carried information and the code
+destroyed it; giving it that meaning lets the token protocol express any string at the cost of
+nothing that worked before, and makes the canonical wrapper start working. Explicitly NOT
+attempted: making tier 3 byte-identical to tier 2. A word-per-line stream and a prose stream
+are genuinely different protocols, which is why they have separate variables, and the docs now
+say so instead of implying either can serve the other.
+
+Re-measured table, on this tree:
+
+    CommandBackend          "Para one line one.\nPara one line two.\n\nPara two."
+    StreamingCommandBackend "Para one line one.Para one line two.\nPara two."
+
+### Three defects the removed `$timeout = 120` had been masking
+
+- **Unbounded 100%-CPU spin.** When the direct child exits but a DESCENDANT still holds
+  stdout, `proc_get_status()` says not-running, `feof()` stays false, so the `break` cannot
+  fire — and the `usleep` was guarded on `&& $running`, so it was skipped. Measured **5.00s
+  wall at 100% of a core** against `CommandBackend`'s **0%** on the same command, with the
+  ReactPHP loop blocked and signals unserviced. Now 2.01s at 0.01s CPU, bounded by a grace
+  armed off the child's EXIT. That is a different clock from "how long an answer may take",
+  which is why no total request deadline was introduced — a completion legitimately runs tens
+  of minutes and a blanket deadline on one is forbidden here.
+- **The escape hatch was itself unbounded**, because `proc_close()` waits. A
+  `trap '' TERM` child held a 1-second deadline for **8.00s**. Now bounded SIGTERM → poll →
+  signal **9 as an integer literal**, which keeps the `SIGKILL` constant off an error path that
+  must not itself fatal — the same reason the bundle had just removed `SIGTERM` from that path.
+- **`CommandBackend` returned an EMPTY answer whenever the whole reply was `0`.**
+  `stream_get_contents(...) ?: ''` treats `"0"` as falsy. Pre-existing; in scope because the
+  bundle newly promoted the surrounding behaviour to a documented absolute ("STDOUT IS
+  RETURNED VERBATIM", which `trim()` also falsifies for an indented first line).
+
+Plus: tokens are emitted per LINE rather than per read, which fixed a correctness bug and not
+only granularity — identical stdout bytes `a\rb\n` returned `a\rb` read whole and `ab` when a
+read boundary landed on the `\r`. The implementer's report had called this
+"display-granularity only"; the reviewer disproved it.
+
+The `bypass_shell` ternary whose two arms were identical (`is_array($c) ? $c : $c`) is gone
+from BOTH backends. Its replacement had justified a list-only branch with a Windows story that
+contradicted `CommandBackend`'s identical promise, in a diff whose own docblock insisted "the
+shell-out tier's two halves must not disagree" — and both the new behaviour AND its exact
+inverse survived the targeted test file. Settled by measurement: `["printf","a;b"]` prints
+`a;b`, so the array form bypasses the shell BY CONSTRUCTION and the option is redundant, not
+load-bearing. Note relative to the previous HEAD, neither shape gets it now.
+
+Whitespace-only values count as absent on both variables instead of spawning `sh -c '   '` and
+labelling the run `command` so nothing warns. Deliberate change to tier 2, whose brief said
+"keep tier 2 byte-identical" — the invariant meant its protocol and stdin payload, not its
+degenerate selection edge case.
+
+### Two claims withdrawn rather than delivered
+
+`$onToken` genuinely fires per token. What is false is that the user SEES it: `completeAsync()`
+wraps the synchronous `complete()` in a `futureTick`, so the loop is blocked and the `withTick`
+subscription that turns deltas into `$streamingText` cannot run until the completion has
+already resolved. Measured **six callbacks and ZERO render ticks**. On the `-p` path
+`NonInteractive::run()` passes no callback at all. The plumbing stays; the false half of the
+claim goes; the non-blocking rewrite is **E34** and cancellation-during-shell-out is **E35**.
+
+This is the one FUNCTIONAL deferral in the bundle, and it is deliberate: it is an
+architectural change to an optional tier, the same blocking defect affects tier 2, and letting
+a fix round grow a new subsystem is how these rounds get lost.
+
+### The inventory gap the review exposed
+
+Nine env-guard lists had been widened for the new variable and six had not, so:
+`--help`'s nine-line block for the new variable **survived deletion by the whole suite** (the
+only assertion was `assertStringContainsString('SUGARCRUSH_BACKEND_CMD', …)`, which the OLD
+variable's name already satisfies); and six test files failed whenever either shell-out
+variable was ambient — **11 failures, identical under either variable**, so pre-existing, but
+the README now tells users to export one. One of those files even carried a comment asserting
+a precondition ("No SUGARCRUSH_PROVIDER/SUGARCRUSH_BACKEND_CMD env set") with no `putenv`
+behind it.
+
+Both guards are now derived FROM SOURCE rather than hand-written, and the six files share one
+trait holding the chain once. A written list is exactly as blind to the next variable as the
+old assertion was to this one.
+
+### Mutation results worth keeping
+
+Sixteen mutations run by the reviewer; **three survived**, all for the same reason — the test
+pinned the PRESENCE of a clause and not its TRUTH:
+
+- `bypass_shell` dropped for lists, AND restored for both shapes: both rc 0. The test named
+  for the change admitted in its own docblock "this test does not assert a platform
+  difference."
+- The entire `--help` block deleted: rc 0.
+- Bootstrap constructing the tier with `idleTimeout: 1` — installing a live 1-second cap:
+  rc 0. The class test pinned the DEFAULT by reflection; nothing pinned the CALL SITE.
+
+All are now dead or deliberately moot (the `bypass_shell` pair mutate a branch that no longer
+exists).
+
+### Corrections to my own briefs, from three agents
+
+1. **My reproduction fixture for the SIGTERM bug does not reproduce.** I specified
+   `trap '' TERM; sleep 8`. If that trap lives in a SCRIPT FILE named by the env var,
+   `proc_open`'s direct child is the `sh -c <script>` wrapper, which does NOT ignore SIGTERM —
+   it dies in ~50ms and orphans the trapping shell, so the expiry path returns in ~1.0s and the
+   bug is invisible. **A test built from my brief as written would have passed on the broken
+   code.** The 8.00s figure is real only when the trap is in the direct child.
+2. **I repeated an overstatement without checking it.** The review claimed the body "provably
+   contains no newline AND NO CARRIAGE RETURN, for any command whatsoever". The CR half is
+   false — `rtrim($line, "\r\n")` strips only TRAILING CRs, so `a\rb\n` read whole always
+   returned `a\rb`, which the review's own finding 13 states correctly two paragraphs later. I
+   passed the wrong version along.
+3. **My finding-18 scope named two call sites; there are three.** Fixing only tier 2 and tier 3
+   selection would have left `backendCommandTierIsSelected()` still calling `'   '` a configured
+   shell-out, so `selectedProviderName()`, `selectedProviderLabel()` and the offline notice
+   would disagree with the tier `backend()` chose — the precise drift those methods' docblocks
+   forbid.
+4. **My M11 instruction contradicted itself** across two sections and never defined the
+   mutation string. Round A correctly refused to guess and substituted the clock mutation,
+   reporting it as such.
+5. **My "never judge green from a directory-scoped run" over-generalised.** The DIRECTORY
+   `vendor/bin/phpunit tests/Cli` hangs (>4min); a single FILE inside it runs in 0.054s at
+   rc 0, and `--filter` against a single file is ~0.02s. The blanket warning was discouraging
+   the only affordable mutation harness in this suite. Recorded in RESUME §8.
+6. **My finding-17 table enumerated eleven failures and summed to ten** — one file has two, not
+   one. A table short by one, in a finding about lists that are short by one.
+7. **"5 of the 20 variables" was the pre-bundle figure**; on the tree the fixer inherited it is
+   6 of 20, so the remainder is 14, not 15. And the 20 is right only after discarding
+   `SUGARCRUSH_DISABLE_`, a prefix fragment, from a 21-name raw grep.
+8. **My addendum told an agent to repair a sentence that does not exist.** There was no
+   absence-semantics claim about either shell-out variable on `docs/ENVIRONMENT.md` — not a
+   false one, not an accidentally-true one. The page was silent, so the rule was documented
+   from scratch.
+9. **My repo_map line list was incomplete in one file and mis-targeted a line in the other.**
+   One line's `final class McpClient {` is a proposal sketch for a general-purpose PHP MCP
+   client — which is precisely the class that KEPT the name — so renaming it would have made a
+   true line false. Annotated instead of renamed.
+10. **My config-md5 invariant named a file ambiguously.** It is the MONOREPO-ROOT
+    `.sugar-crush/config.json`; `sugar-crush/.sugar-crush/config.json` is a different file with
+    a different md5 and is not tracked by git at all.
+
+And one prediction of mine that was simply wrong in the bundle's favour: I expected the
+"Measured on this tree" table in the class docblock to be a figure copied from a reasoned
+expectation. The reviewer re-ran both rows and confirmed them byte for byte. It was the one
+place in the bundle where a table had actually been measured.
+
+### What the review found that I had not thought to ask about
+
+The reviewer went beyond the brief on two things worth carrying: `docs/repo_map/` still named
+the old class and file in thirteen places, and `AGENTS.md` lists that tree as a source-of-truth
+cross-cut — the exact mis-attribution the rename exists to fix, left standing in the map a
+reader would consult. And `README.md` still reported **6,424 tests / 51,767 assertions /
+1m52s** against a measured 7,276 / 76,239 / 2m38s, in a file the bundle had already edited in
+four places.
