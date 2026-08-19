@@ -432,6 +432,54 @@ map the shell onto the four that exist and accept losing a distinction. **Measur
 choosing** — and whichever it is, the fix is not complete until a light-background run is driven, since
 that is the only configuration in which the reported symptom appears at all.
 
+**QUANTIFIED, and it moves the surface one step from where BOTH of us put it.** `Color::luminance()`
+is a proper WCAG relative luminance, so the contrast ratio against each palette's own background is
+computable. Measured for all five of `MenuBar`'s hardcoded colours:
+
+| hardcoded colour | role | on dark `#0e0e14` | on light `#fafafa` |
+|---|---|---|---|
+| `#00ffaa` | selected dropdown row | 14.55:1 | **1.27:1 — invisible** |
+| `#fde68a` | menu title | 15.45:1 | **1.19:1 — invisible** |
+| `#e5e7eb` | dropdown item text | 15.54:1 | **1.19:1 — invisible** |
+| `#6b7280` | dropdown border | 3.98:1 | 4.63:1 — visible |
+| `#7d6e98` | inactive pane tab | 4.17:1 | 4.42:1 — visible |
+
+**All five pass on dark; three of five are invisible on light — and the two that SURVIVE are the
+borders.** So the border glyphs are not the casualty: the item text, the titles and the selected-row
+highlight are. The user's first report ("where the menu listing txt starts/ends difficult to tell")
+described the text washing out, which makes a box with visible edges read as edgeless; the user's own
+correction then named the border, and the measurement says the border is fine. **Both readings had the
+mechanism right and the surface wrong, and only the ratio settles it.** Note the practical
+consequence, which is worse than cosmetic: at 1.27:1 the user cannot see which row Enter would run.
+
+**A coincidence worth naming, because it says where these colours came from:** `#6b7280` is exactly
+the LIGHT palette's `muted` and `#e5e7eb` is exactly its `border` — the light palette's own tokens,
+frozen into the wrong roles. These were eyeballed against one background and then rendered against
+whatever the terminal is.
+
+**This also confirms the detection half is working, which narrows the fix.** With the transcript
+themed and the shell not, a light terminal produces exactly one broken surface — the shell — which is
+what was reported. Had `TerminalBackground::isDark()` been wrong, the transcript would look wrong too.
+So do NOT go looking at the detector.
+
+**THE DESIGN QUESTION IS SETTLED, and cheaply — do not add new colours.** `Crush\Theme::pair()`
+(`src/Theme.php:115`) is the ONLY construction site of `Crush\Theme` in the entire codebase (one
+`new self(`), and it already receives a `SugarCraft\Sprinkles\Theme` carrying **13** tokens:
+`foreground`, `background`, `primary`, `secondary`, `accent`, `muted`, `error`, `warning`, `success`,
+`info`, `border`, `separator`, `cursor`. It projects **four** of them and discards nine. So the shell's
+missing background/muted/accent tokens **already exist upstream in both palettes** —
+`SprinklesTheme::dark()` and `::light()` — and widening `Crush\Theme` costs one constructor plus one
+`pair()` body, with correct light AND dark values for free. Inventing hex values, or mapping the shell
+onto the four existing fields and losing a distinction, are both the wrong answer now.
+
+**THE TEST MUST PIN CONTRAST, NOT PRESENCE — this is the whole point of the bundle.** A test asserting
+"`MenuBar` uses `$theme->border`" is the recurring defect in its purest form: it pins that a clause is
+present and says nothing about whether the result is legible, and it would pass against a theme whose
+border equals its background. Assert the RATIO: for every colour the shell paints, against the
+resolved background, in BOTH palettes, require ≥3:1 for chrome/glyphs and ≥4.5:1 for text. Written that
+way the assertion covers all ten `src/Tui/` files and every theme added later, and it would have
+failed on the build the user is running — the table above is that test's output.
+
 **Ordering:** W3 goes after W2 (it touches `src/Tui/` and `src/Theme.php`, W2 owns `src/Chat.php` and
 `src/Renderer.php` — no file overlap, but the strictly-sequential rule is about suite runs, not files).
 It is a live-bug bundle, so it precedes the audit queue, and `#88` moves behind it for the same reason
