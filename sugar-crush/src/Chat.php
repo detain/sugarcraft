@@ -64,6 +64,7 @@ use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
+use SugarCraft\Crush\Util\TokenTracker;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -178,6 +179,20 @@ final class Chat implements Model
 
     /** @var ContextCompactor Context compactor for /compact command and automatic compaction */
     private readonly ContextCompactor $compactor;
+
+    /**
+     * This session's running PROVIDER-COUNTED spend, fed one entry per settled
+     * turn by {@see update()} and read by the status bar's spend readout and by
+     * `/budget` (crush_code.md Phase 5 item 7).
+     *
+     * Mutable and shared by object identity across every {@see mutate()} clone,
+     * exactly like {@see $liveToolEvents} and for the same reason: a fresh
+     * instance per keystroke would reset the total to zero on the next frame.
+     * That is why it is resolved in the constructor body and passed through
+     * `mutate()`'s property list rather than rebuilt there the way
+     * {@see $compactor} is.
+     */
+    private readonly TokenTracker $tokenTracker;
 
     /** @var AgentManager|null Agent manager for /agents command */
     private ?AgentManager $agentManager = null;
@@ -666,6 +681,80 @@ final class Chat implements Model
          * across a clone — see the reseed guard there.
          */
         ?TextArea $input = null,
+        /**
+         * The session's spend accumulator — see the {@see $tokenTracker}
+         * property docblock for why the SAME instance has to reach every
+         * clone. Null allocates a fresh one, which keeps every existing
+         * embedder/test constructor call working unchanged and means an
+         * offline run tracks a real (empty) total rather than none at all.
+         */
+        ?TokenTracker $tokenTracker = null,
+        /**
+         * Hard ceiling on this session's provider spend in US dollars, or null
+         * for no cap (crush_code.md Phase 5 item 7). Set from
+         * `$SUGARCRUSH_MAX_COST` at launch and from `/budget <n>` at runtime.
+         *
+         * Enforced on the way IN to a turn, not on the way out: see
+         * {@see spendCapRefusal()} for exactly which side of the cap the check
+         * lands on and what that means for the final total.
+         *
+         * VALIDATED IN THE CONSTRUCTOR BODY: a non-null value that is not a
+         * positive finite number of dollars ({@see isUsableSpendCap()}) throws
+         * rather than being silently coerced or ignored. `/budget` and
+         * `$SUGARCRUSH_MAX_COST` both refuse such values at their own edge with
+         * a message, and this closes the third door — the public constructor,
+         * through which `0.0`, a negative, `NAN` and `INF` all used to reach the
+         * field. That is not pedantry about an unreachable case: `NAN` and `INF`
+         * compare false against everything, so either one installed a cap that
+         * refused nothing while the status bar advertised `$nan` / `$inf`, and
+         * `INF` was reachable from `/budget 1e309`. Because `mutate()` goes back
+         * through here, the invariant holds for every clone, which is what lets
+         * {@see spendCapReached()} be one comparison.
+         */
+        private readonly ?float $maxCostUsd = null,
+        /**
+         * Dedicated tool-less Backend for `/compact`'s model-written exchange
+         * summaries (crush_code.md Phase 5 item 6), built by
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::summaryBackend()}.
+         *
+         * Separate from {@see $backend} for a reason that is not tidiness:
+         * `Backend::complete()` on the main backend runs the whole agentic
+         * loop — tools, hooks, permission gate, up to `maxSteps` provider
+         * calls — so routing a summarization request through it lets the model
+         * call `Bash` and raise a permission prompt DURING a compaction. This
+         * backend carries no tools, no hooks, no skills and no instruction
+         * preamble, so a summarization is one plain completion and can be
+         * nothing else.
+         *
+         * Null is the ordinary offline/unit-test answer, and it is not an
+         * error path: `/compact` then uses the heuristic summarizer it always
+         * used ({@see ContextCompactor::generateExchangeSummary()}).
+         */
+        private readonly ?Backend $summaryBackend = null,
+        /**
+         * Identifies the `/compact` summarization currently out at the model,
+         * or null when none is (crush_code.md Phase 5 item 6).
+         *
+         * A plain id rather than the generation counter: `/compact` does not
+         * start a turn, so it does not bump `$generation`, and the four sites
+         * that guard on generation are a closed set
+         * ({@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}
+         * asserts exactly that) which this must not silently join. A
+         * {@see HistoryCompactedMsg} whose id does not match this is dropped —
+         * which is also how a second `/compact` supersedes the first.
+         *
+         * THREE COMMANDS RELEASE IT, and they are named individually because
+         * they are the complete set of routes that put a transcript on screen
+         * the user did not just ask to compact: `/clear`
+         * ({@see handleClearCommand()}), `/rewind`
+         * ({@see handleRewindCommand()}) and the Ctrl+P palette's New session
+         * action ({@see handlePaletteNewSession()}). Note the last of those is
+         * NOT reachable as `/new`: the registry row is `slashVisible: false`
+         * ({@see \SugarCraft\Crush\Commands\CommandRegistry}) and
+         * {@see dispatchCommand()} has no `new` arm, so a typed `/new` falls
+         * through and is sent to the model as an ordinary prompt.
+         */
+        private readonly ?string $pendingCompactionId = null,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -689,7 +778,18 @@ final class Chat implements Model
         ) {
             $workflowEngine->setAgentManager($agentManager);
         }
+        if ($maxCostUsd !== null && !self::isUsableSpendCap($maxCostUsd)) {
+            throw new \InvalidArgumentException(sprintf(
+                'A spend cap must be a positive finite number of US dollars, or null for no cap; got %s. '
+                . 'Zero and negative are refused rather than read as "no cap" because they are the opposite '
+                . 'request, and a non-finite cap compares false against every spend so it would silently '
+                . 'enforce nothing.',
+                var_export($maxCostUsd, true),
+            ));
+        }
+
         $this->compactor = new ContextCompactor($this->compactorConfig ?? CompactorConfig::new());
+        $this->tokenTracker = $tokenTracker ?? new TokenTracker();
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
         $this->currentSessionId = $currentSessionId;
@@ -703,6 +803,39 @@ final class Chat implements Model
     public function update(Msg $msg): array
     {
         if ($msg instanceof AssistantMsg) {
+            // Account the turn FIRST - before the staleness guard, before the
+            // tool-call routing, before anything that can return early. Three
+            // reasons, and each of them is a way the most expensive turns would
+            // have gone unbilled:
+            //
+            //  - The tool-call branch below returns through beginToolCalls(),
+            //    and a turn that called tools is a turn of several provider
+            //    calls, i.e. the expensive kind.
+            //  - A SUPERSEDED reply (the guard immediately below) was completed
+            //    and charged for whether or not the user still wanted it.
+            //    Dropping it from the transcript is right; forgetting the money
+            //    is not.
+            //  - This arm is reached exactly ONCE per settled turn WHOSE
+            //    GENERATION STILL MATCHES, including on the tool-event path,
+            //    which re-sends the same reply here after draining its queue
+            //    (see applyBackendToolEvent()) - so accounting here cannot
+            //    double-count. The domain matters: a tool turn superseded
+            //    MID-QUEUE never reaches this arm at all, because
+            //    applyBackendToolEvent()'s own staleness guard breaks the chain
+            //    before the queue drains and no AssistantMsg is ever
+            //    synthesised. Measured, that lost the whole turn's usage - "the
+            //    expensive kind" above, unbilled - so that guard accounts too,
+            //    and the two are mutually exclusive by construction: once it
+            //    fires it returns a null Cmd, so the chain stops there.
+            //
+            // A null $usage is the provider having reported nothing, which is the
+            // ordinary streamed-turn answer and must not become a zero-dollar
+            // call - see {@see Usage}. addTotalUsage(), not addUsage(): the figure
+            // crossing this seam is a TOTAL with no input/output split, and
+            // TokenTracker keeps those in their own bucket rather than pretending
+            // the whole turn was input.
+            $this->accountUsage($msg->message->usage);
+
             // A reply for a turn that was aborted (double-Escape) or
             // otherwise superseded arrives after inFlight/generation have
             // already moved on - drop it rather than appending it after
@@ -749,7 +882,32 @@ final class Chat implements Model
         if ($msg instanceof ToolEventPumpMsg) {
             return $this->pumpLiveToolEvents();
         }
+        if ($msg instanceof HistoryCompactedMsg) {
+            // Accounted BEFORE the latch check, and for the same reason the
+            // AssistantMsg arm accounts before its staleness guard: the
+            // summarization call went out on the user's key and was billed
+            // whether or not its answer is still wanted. Dropping the summaries
+            // is right; forgetting the money is not.
+            $this->accountUsage($msg->usage);
+
+            // Superseded: a second /compact was issued, or /clear, /rewind or
+            // the palette's New session action abandoned this one. Dropped
+            // rather than applied - see HistoryCompactedMsg's $compactionId
+            // docblock for why this is its own latch and not the generation
+            // counter.
+            if ($msg->compactionId !== $this->pendingCompactionId) {
+                return [$this, null];
+            }
+
+            return $this->applyModelCompaction($msg);
+        }
         if ($msg instanceof SessionTitledMsg) {
+            // Accounted before either guard below, on the same rule the other
+            // three provider-call arms follow: the titler is a real call on the
+            // user's key, and a session that was switched away from or a title
+            // that came back unusable cost exactly as much as one that did not.
+            $this->accountUsage($msg->usage);
+
             // The title call is fire-and-forget: by the time it lands the
             // user may have switched sessions, and a title belonging to a
             // session we are no longer on must not overwrite this one's.
@@ -1382,18 +1540,22 @@ final class Chat implements Model
         //
         // FIND THE RIGHT SITE BEFORE MUTATING. This exact predicate --
         // `$msg->generation !== null && $msg->generation !== $this->generation`
-        // -- appears FOUR times in this file, in four byte-identical three-line
-        // blocks that differ only in indentation: update()'s AssistantMsg arm,
-        // this method, finishToolCalls() and applyBackendToolEvent(). A
-        // replace-first sed lands on the AssistantMsg arm, not here, and the
-        // previous revision of this table did exactly that and then recorded the
-        // wrong site's numbers as a refutation of the right ones. So the table
-        // below is anchored by SITE, and the mis-site's figures are kept beside
-        // it as the tell. Reproduce with
+        // -- appears FOUR times in this file: update()'s AssistantMsg arm, this
+        // method, finishToolCalls() and applyBackendToolEvent(). THREE of the
+        // four bodies are byte-identical apart from indentation -- the first
+        // three named. applyBackendToolEvent()'s is not: its arm bills the
+        // superseded turn's usage before dropping its events, because the chain
+        // it breaks means no AssistantMsg is ever synthesised for that turn and
+        // update()'s accounting arm is never reached. So a replace-first sed
+        // lands on the AssistantMsg arm, not here; the previous revision of this
+        // table did exactly that and then recorded the wrong site's numbers as a
+        // refutation of the right ones. The table below is therefore anchored by
+        // SITE, and the mis-site's figures are kept beside it as the tell.
+        // Reproduce with
         // `grep -nF 'generation !== null && $msg->generation !== $this->generation' src/Chat.php`.
         //
-        // The four sites, and which method owns each, are asserted rather than
-        // narrated, by
+        // The four sites, which method owns each, and WHICH THREE are mutually
+        // indistinguishable are asserted rather than narrated, by
         // KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods().
         //
         // Mutations of the guard belonging to THIS method -- the block
@@ -2134,6 +2296,16 @@ final class Chat implements Model
     private function applyBackendToolEvent(BackendToolEventsMsg $msg): array
     {
         if ($msg->generation !== null && $msg->generation !== $this->generation) {
+            // Superseded mid-queue: the transcript states this event described
+            // are dropped, but the turn behind it COMPLETED and was charged for,
+            // and this is the last chance to say so. Returning here breaks the
+            // re-dispatch chain, so no AssistantMsg is ever synthesised and
+            // update()'s own accounting arm is never reached - measured, a
+            // superseded tool turn's usage went entirely unbilled while a
+            // superseded plain turn's was recorded. Reached at most once per
+            // turn, for the same reason: the chain stops here.
+            $this->accountUsage($msg->message->usage);
+
             return [$this, null];
         }
 
@@ -3966,6 +4138,13 @@ final class Chat implements Model
             'streamingText' => $this->streamingText,
             'keyHelp' => $this->keyHelp,
             'input' => $this->input,
+            // Passed by object identity, for the reason 'liveToolEvents' above
+            // is: it is the session's running spend, and a clone that allocated
+            // a fresh tracker would zero the total on the next keystroke.
+            'tokenTracker' => $this->tokenTracker,
+            'maxCostUsd' => $this->maxCostUsd,
+            'summaryBackend' => $this->summaryBackend,
+            'pendingCompactionId' => $this->pendingCompactionId,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -4066,6 +4245,15 @@ final class Chat implements Model
         $dispatched = $this->dispatchCommand($text);
         if ($dispatched !== null) {
             return $dispatched;
+        }
+
+        // Spend cap, evaluated AFTER dispatchCommand() on purpose: a capped
+        // session must still be able to type `/budget 10` to raise the cap or
+        // `/budget off` to clear it, and a check ahead of dispatch would lock
+        // the user out of the only control that unlocks it.
+        $refusal = $this->spendCapRefusal();
+        if ($refusal !== null) {
+            return $refusal;
         }
 
         // Idle-compaction check, once per turn, before dispatching a real
@@ -4289,6 +4477,7 @@ final class Chat implements Model
         // keep in step with theirs.
         return match ($parsed->name) {
             'compact' => $this->handleCompactCommand($text),
+            'budget' => $this->handleBudgetCommand($text),
             'workflow' => $this->handleWorkflowCommand($text),
             'share' => $this->handleShareCommand($text),
             // Both spellings: the registry row is `agents`, and `/agent` was
@@ -4582,6 +4771,23 @@ final class Chat implements Model
      *   silently.
      * - IN-FLIGHT TURN: not cancelled. `update()` swallows Enter while a turn
      *   is in flight, so this is unreachable mid-turn; Escape is the cancel.
+     *   Measured rather than assumed, because a bug in the `/compact`
+     *   summarization briefly falsified it: {@see submit()} has exactly two
+     *   callers (Enter, and Ctrl+A's `/agents`) and BOTH sit below the blanket
+     *   `if ($this->inFlight)` swallow, so there is no route to this method while
+     *   a turn runs. What broke it was the landing compaction clearing `inFlight`
+     *   out from under a running turn — that is fixed at the source (see
+     *   {@see compactionChanges()}) and the swallow itself is pinned by
+     *   {@see \SugarCraft\Crush\Tests\Chat\CompactModelSummaryTest::testALandingCompactionLeavesARunningTurnInFlightAndItsReplyStillLands()}.
+     * - AN OUTSTANDING `/compact` SUMMARIZATION: abandoned. Its
+     *   {@see HistoryCompactedMsg} still arrives and is dropped, because the
+     *   exchanges it summarised are the ones this command just deleted -
+     *   applying it would resurrect them as summaries above an emptied
+     *   transcript.
+     * - SPEND TOTAL AND CAP: untouched, and deliberately so. Both belong to the
+     *   LAUNCH rather than to the transcript ({@see $tokenTracker} is carried by
+     *   object identity through every clone), and money already spent does not
+     *   become unspent because the screen was cleared.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -4593,6 +4799,7 @@ final class Chat implements Model
             'streamingText' => '',
             'scrollOffset' => 0,
             'expanded' => [],
+            'pendingCompactionId' => null,
         ]), null];
     }
 
@@ -4647,9 +4854,24 @@ final class Chat implements Model
      * #20269 was a main-turn parameter leaking into this cheap side-call
      * via a shared builder and silently killing titling.
      *
-     * Failure is silent by design — a session that stays unnamed is a
-     * non-event, and surfacing a title-generation error mid-turn is worse
-     * than no title.
+     * Failure is silent TO THE USER by design — a session that stays unnamed is
+     * a non-event, and surfacing a title-generation error mid-turn is worse than
+     * no title. It is no longer silent to the SPEND TRACKER: an unusable title
+     * and a refused rename both still dispatch a {@see SessionTitledMsg} whose
+     * only remaining job is to carry the call's cost. Only a rejected promise
+     * dispatches nothing, because a rejection carries no figure to report.
+     *
+     * NOT SEPARATELY GATED BY THE SPEND CAP, and that is a measured claim rather
+     * than an omission. This is only ever scheduled from {@see submit()}'s
+     * turn-dispatch tail, which sits AFTER {@see spendCapRefusal()} — so a
+     * session already at its cap has its turn refused and never reaches here.
+     * The one window is the turn that CROSSES the cap, whose own cost is not
+     * known until it settles, i.e. after this call has already gone out. A gate
+     * here could therefore only ever refuse a call the turn-level gate had
+     * already let through, and it fires at most once per session in any case.
+     * `/compact` is different and IS gated — see
+     * {@see scheduleModelCompaction()} — because it is reachable by a user
+     * typing it at a session that is already over.
      */
     private function scheduleTitleGeneration(self $next): ?\Closure
     {
@@ -4675,17 +4897,34 @@ final class Chat implements Model
         return Cmd::promise(static function () use ($backend, $titlePrompt, $sessionId, $store): PromiseInterface {
             return $backend->completeAsync($titlePrompt)->then(
                 static function (Message $msg) use ($store, $sessionId): ?Msg {
+                    // Every exit from here dispatches a Msg, including the two
+                    // that produce no title, because the Msg is also what
+                    // carries the call's COST to the tracker. Silence used to be
+                    // the answer on both, which meant an unusable title or a
+                    // failed rename made the call free in the readout. An empty
+                    // $title is dropped by update()'s arm; the usage is not.
                     $title = self::sanitizeSessionTitle($msg->content);
                     if ($title === '') {
-                        return null;
+                        return new SessionTitledMsg($sessionId, '', $msg->usage);
                     }
                     try {
                         $store->renameSession($sessionId, $title);
                     } catch (\Throwable) {
-                        return null;
+                        // AN HONEST GAP: this exit is the same construction as the
+                        // empty-title one above, which IS pinned
+                        // (ChatTest::testAnEmptyGeneratedTitleIsNeverPersistedButItsCostStillIs),
+                        // but it has no test of its own. Both store classes are
+                        // `final`, so a throwing store cannot be substituted, and
+                        // provoking a real PDO write failure mid-suite (a chmod'd
+                        // sqlite file) is not deterministic across the users CI
+                        // runs as. Named rather than faked with a presence check.
+                        return new SessionTitledMsg($sessionId, '', $msg->usage);
                     }
-                    return new SessionTitledMsg($sessionId, $title);
+                    return new SessionTitledMsg($sessionId, $title, $msg->usage);
                 },
+                // Still nothing on a rejection, and still deliberately silent
+                // (see this method's docblock): there is no Message, so no
+                // figure, and nothing for the user to be told about.
                 static fn(\Throwable $e): ?Msg => null,
             );
         });
@@ -5251,25 +5490,227 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /compact command to manually compact chat history.
+     * `/budget` — show the session's reported spend, or set/clear the cap
+     * {@see spendCapRefusal()} enforces (crush_code.md Phase 5 item 7).
+     *
+     * Three forms, and the bare one is the reason this command is worth having
+     * even to a user who never sets a cap: it is the only place the
+     * input/output/unsplit token breakdown {@see TokenTracker::summary()}
+     * computes is shown at all. The status bar has room for the dollar figure
+     * and nothing else.
+     *
+     * `0` is REFUSED rather than read as "no cap", and so is anything else that
+     * is not a positive finite number — see {@see isUsableSpendCap()}, which is
+     * the same test the constructor and `$SUGARCRUSH_MAX_COST` apply. A cap of
+     * zero and no cap are opposite intentions, and quietly turning the stricter
+     * one into the looser one is the wrong direction to guess in.
+     *
+     * The cap lives for this session only — it is deliberately not written to
+     * `~/.sugar-crush/config.json`. A persisted cap would silently refuse turns
+     * in a later session whose spend the user never looked at, and the env var
+     * is already the way to make one stick across launches.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleBudgetCommand(string $inputText): array
+    {
+        $argument = trim(mb_substr(trim($inputText), mb_strlen('/budget')));
+
+        if ($argument === '') {
+            return $this->budgetResponse($inputText, $this->budgetStatusLine(), null);
+        }
+
+        if (in_array(strtolower($argument), ['off', 'none', 'clear'], true)) {
+            return $this->budgetResponse(
+                $inputText,
+                $this->maxCostUsd === null
+                    ? 'No spend cap was set. ' . $this->budgetStatusLine()
+                    : 'Spend cap cleared. ' . $this->budgetStatusLine(),
+                null,
+                clearCap: true,
+            );
+        }
+
+        // A leading `$` is what a human types; accepted rather than rejected,
+        // and stripped before the numeric test so `$5` and `5` mean the same.
+        $amount = ltrim($argument, '$');
+        // is_numeric() is not enough on its own, and the gap was reachable:
+        // `/budget 1e309` is numeric and casts to INF, which is `> 0.0` and so
+        // used to install a cap that rendered as `$inf` and — every comparison
+        // against INF being false — refused nothing. isUsableSpendCap() is the
+        // one definition of a cap this app will act on; see its docblock.
+        if (!is_numeric($amount) || !self::isUsableSpendCap((float) $amount)) {
+            return $this->budgetResponse(
+                $inputText,
+                'Usage: /budget <amount> to cap this session\'s spend (e.g. /budget 5 or /budget $2.50), '
+                . '/budget off to clear it, /budget on its own to see where you are. '
+                . 'The amount must be a real number greater than zero — a cap of 0 and no cap are opposite '
+                . 'requests, so `0` is refused rather than guessed at, and a figure too large to represent '
+                . '(`1e309`, which is infinity) is refused rather than accepted as a cap that would then '
+                . 'never trigger.',
+                null,
+            );
+        }
+
+        $cap = (float) $amount;
+
+        return $this->budgetResponse(
+            $inputText,
+            sprintf('Spend cap set to $%.4f. ', $cap) . $this->budgetStatusLine($cap),
+            $cap,
+        );
+    }
+
+    /**
+     * Where this session stands, in the two units it can honestly report.
+     *
+     * Says "not reported" rather than `$0.0000` when nothing has arrived: an
+     * offline run, a shell-out backend and a streamed session whose provider
+     * sends no usage block all reach here with an empty tracker, and printing a
+     * zero would claim knowledge of a spend nobody measured. The same
+     * distinction the status bar draws with `$?` — see {@see hasReportedSpend()}.
+     */
+    private function budgetStatusLine(?float $cap = null): string
+    {
+        $cap ??= $this->maxCostUsd;
+        $capText = $cap === null ? 'no cap' : sprintf('cap $%.4f', $cap);
+
+        if (!$this->hasReportedSpend()) {
+            return 'Spend so far: not reported by this provider (' . $capText
+                . '). Streamed turns and self-hosted providers commonly report no usage at all, '
+                . 'and an unreported session is never refused by the cap.';
+        }
+
+        return sprintf('Spend so far: $%.4f (%s). %s', $this->spentUsd(), $capText, $this->usageSummary());
+    }
+
+    /**
+     * One exit for every `/budget` form: append the user's line and the answer,
+     * and carry (or clear) the cap in the same clone.
+     *
+     * $clearCap exists because a null $cap is ambiguous here — "leave it alone"
+     * for the show/usage forms, "remove it" for `off` — and a bool saying which
+     * is cheaper to read than two near-identical exits.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function budgetResponse(string $inputText, string $response, ?float $cap, bool $clearCap = false): array
+    {
+        $changes = [
+            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ];
+        if ($cap !== null) {
+            $changes['maxCostUsd'] = $cap;
+        } elseif ($clearCap) {
+            $changes['maxCostUsd'] = null;
+        }
+
+        return [$this->mutate($changes), null];
+    }
+
+    /**
+     * `/compact` — condense the transcript, either straight away on the local
+     * heuristic or, when there is a model to ask, after its summaries land.
+     *
+     * Which of the two happened is visible to the caller only as the returned
+     * Cmd: a non-null Cmd means NOTHING has been rewritten yet and the
+     * transcript carries a "summarising…" notice instead, and the rewrite
+     * happens in {@see applyModelCompaction()} when the
+     * {@see HistoryCompactedMsg} lands. So this method does not always compact,
+     * and on the model route it returns a Cmd — which the old one-line summary
+     * of it ("manually compact chat history") described neither of.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleCompactCommand(string $inputText): array
     {
-        $originalCount = count($this->history);
+        $scheduled = $this->scheduleModelCompaction($inputText);
+        if ($scheduled !== null) {
+            return $scheduled;
+        }
+
+        return $this->compactNow($inputText, $this->history, []);
+    }
+
+    /**
+     * `/compact` typed and answered in one `update()` — the synchronous route,
+     * taken when there is no model to ask for summaries.
+     *
+     * Thin on purpose. Everything about the transcript is
+     * {@see compactionChanges()}; what this adds is the part that belongs to
+     * the COMMAND rather than to the compaction — the draft was consumed by
+     * submitting it, and no turn was started. Those two facts are true here and
+     * false on the {@see applyModelCompaction()} route, which is exactly why
+     * they live at the call site and not inside the shared part. Before they
+     * were split, the landing compaction inherited both and so wiped a draft
+     * the user was still typing and cleared `inFlight` out from under a turn
+     * that was still running.
+     *
+     * @param list<Message> $baseHistory
+     * @param array<string, string> $summaries
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function compactNow(string $inputText, array $baseHistory, array $summaries, string $prefix = ''): array
+    {
+        return [$this->mutate([
+            ...$this->compactionChanges($inputText, $baseHistory, $summaries, $prefix),
+            // The draft became this command when Enter was pressed, and this
+            // command starts no turn.
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]), null];
+    }
+
+    /**
+     * What compacting $baseHistory does to the TRANSCRIPT and to nothing else,
+     * as a `mutate()` change set: the compacted history plus the answer line,
+     * and the summarization latch released.
+     *
+     * $summaries cover the exchanges the model wrote lines for; the heuristic
+     * covers the rest. One shared definition of what `/compact` did, reached
+     * directly by {@see compactNow()} when there was no model to ask and by
+     * {@see applyModelCompaction()} when there was — the two must not drift
+     * into two answers.
+     *
+     * DELIBERATELY NOT IN HERE: `inputBuf` and `inFlight`. A compaction says
+     * nothing about the user's draft or about whether a turn is running, and on
+     * the asynchronous route both are live state belonging to whatever the user
+     * has done since — see {@see HistoryCompactedMsg}, whose whole contract is
+     * that the user can keep typing and can send another turn while a
+     * summarization is out. {@see compactNow()} sets them because a submitted
+     * command legitimately does.
+     *
+     * $inputText is the draft to echo back as the user's line, or '' when the
+     * transcript already carries it — which is the case on the model route,
+     * where {@see scheduleModelCompaction()} wrote it out before the request
+     * left. Echoing it twice would put a second `/compact` in the transcript
+     * for one command.
+     *
+     * @param list<Message> $baseHistory
+     * @param array<string, string> $summaries
+     * @return array<string, mixed>
+     */
+    private function compactionChanges(string $inputText, array $baseHistory, array $summaries, string $prefix = ''): array
+    {
+        $originalCount = count($baseHistory);
 
         // Convert history to wire format for the compactor
         $wireHistory = array_map(
             static fn(Message $msg): array => $msg->toWire(),
-            $this->history
+            $baseHistory
         );
 
-        // Compact the history using all 5 stages
-        $compactedWire = $this->compactor->compact($wireHistory);
-        $savingsPercentage = $this->compactor->savingsPercentage();
+        // Compact the history using all 5 stages. The summaries ride on a COPY
+        // of the compactor: savingsPercentage() is per-instance state read
+        // straight after compact(), so both calls have to land on the same
+        // object.
+        $compactor = $summaries === [] ? $this->compactor : $this->compactor->withExchangeSummaries($summaries);
+        $compactedWire = $compactor->compact($wireHistory);
+        $savingsPercentage = $compactor->savingsPercentage();
 
-        $compactedHistory = $this->messagesFromWire($compactedWire, $this->history);
+        $compactedHistory = $this->messagesFromWire($compactedWire, $baseHistory);
 
         $newCount = count($compactedHistory);
 
@@ -5280,13 +5721,301 @@ final class Chat implements Model
             $response = "Context compacted: was {$originalCount} messages, now {$newCount} messages (saved {$savingsPercentage}% tokens)";
         }
 
+        $echo = $inputText === '' ? [] : [Message::user($inputText)];
+
+        return [
+            'history' => [...$compactedHistory, ...$echo, Message::assistant($prefix . $response)],
+            // Whatever summarization was outstanding has either just been
+            // consumed or has just been superseded by this compaction; either
+            // way nothing is pending now.
+            'pendingCompactionId' => null,
+        ];
+    }
+
+    /**
+     * The instruction the summarization model is given. Deliberately narrow: one
+     * line per exchange, no prose around them, and a hard ceiling on each line
+     * so a chatty model cannot make a "compaction" larger than what it replaced.
+     */
+    private const COMPACT_SUMMARY_PROMPT = <<<'PROMPT'
+        You are compacting a coding-assistant conversation so it fits in a smaller context window.
+        You will be given numbered exchanges. For each one, write ONE line recording what was asked
+        and what was actually done or decided — file paths, command names, decisions, and outcomes
+        are what matter; pleasantries are not.
+
+        Rules:
+        - Output exactly one line per exchange, in the same order, prefixed with the exchange number
+          and a period, like "1. ...".
+        - No preamble, no blank lines, no markdown, no commentary. Nothing but the numbered lines.
+        - Keep each line under 200 characters. Losing detail is expected; inventing it is not.
+        - If an exchange contains nothing worth keeping, say so plainly on its line.
+        PROMPT;
+
+    /**
+     * Ask the model to summarise the exchanges `/compact` is about to condense,
+     * off the render loop, or null when there is nothing to ask or nobody to ask
+     * (crush_code.md Phase 5 item 6).
+     *
+     * Null is the ordinary answer and it is not a failure: no summary backend
+     * (offline, `$SUGARCRUSH_BACKEND_CMD`, every unit test), or a history with
+     * nothing a model could usefully summarise. The caller then compacts
+     * synchronously on the heuristic exactly as it always did.
+     *
+     * When it is non-null, `/compact` answers IMMEDIATELY with a one-line notice
+     * and rewrites nothing yet. The rewrite happens in
+     * {@see applyModelCompaction()} when the {@see HistoryCompactedMsg} lands.
+     * The alternative — awaiting the completion inside `update()` — would freeze
+     * the whole TUI for the length of a provider call, and this codebase
+     * deliberately puts no total-request timeout on a completion because one can
+     * legitimately run for many minutes.
+     *
+     * The request goes out on {@see $summaryBackend}, which carries no tools: see
+     * that property's docblock for why the tool-capable main backend is the wrong
+     * thing to route a compaction through.
+     *
+     * GATED BY THE SPEND CAP, which needs saying because `/compact` reaches this
+     * point past {@see spendCapRefusal()}: the cap is checked after
+     * {@see dispatchCommand()} so `/budget` still works while capped, and
+     * `/compact` dispatches there too. Measured before this gate existed, a
+     * session $5.00 into a $1.00 cap fired a full-conversation completion on the
+     * provider's DEFAULT model — the biggest single prompt this app sends — and
+     * the reported cost of it was then thrown away as well.
+     *
+     * Gating costs the user nothing but summary QUALITY, which is why gating was
+     * the right answer here and refusing the command would not have been: null
+     * from this method is the offline answer, so `/compact` still compacts, just
+     * on the heuristic. The user is told which one ran and how to get the other
+     * back. The alternative — letting the call through because compaction is what
+     * frees context, so refusing it could corner a user whose only other exit is
+     * `/clear` — argues against refusing the COMMAND, and nothing here refuses
+     * the command.
+     *
+     * @return array{0:Chat,1:?\Closure}|null
+     */
+    private function scheduleModelCompaction(string $inputText): ?array
+    {
+        $backend = $this->summaryBackend;
+        if ($backend === null) {
+            return null;
+        }
+
+        if ($this->spendCapReached()) {
+            // Answered here rather than by returning null, because a silent
+            // downgrade to the heuristic is indistinguishable from having no
+            // provider at all — and the user set the ceiling that caused it, so
+            // they are the one person who can lift it.
+            return $this->compactNow(
+                $inputText,
+                $this->history,
+                [],
+                sprintf(
+                    'Spend cap reached ($%.4f of $%.4f), so the model was not asked to summarise — '
+                    . 'compacted with the local heuristic instead. Raise the cap with /budget %.2f '
+                    . 'and run /compact again for model-written summaries. ',
+                    $this->spentUsd(),
+                    (float) $this->maxCostUsd,
+                    $this->spentUsd() * 2,
+                ),
+            );
+        }
+
+        // The exchanges are derived from the history this command is about to
+        // LEAVE BEHIND — the `/compact` line and the notice included — not from
+        // the one it inherited. Those two messages form a pair, and the
+        // compaction that eventually runs will see them: deriving from the
+        // pre-echo history left the newest condensed exchange outside the offered
+        // set every time, so one exchange per `/compact` silently fell back to
+        // the placeholder however cooperative the model was.
+        //
+        // The notice's own text cannot affect which EARLIER exchanges are
+        // condensed — its pair is the newest, so it is always inside the
+        // preserved tail — which is what makes it safe to size the offer against
+        // a placeholder and then write the real notice with the count in it.
+        $echoed = [...$this->history, Message::user($inputText)];
+        $wireHistory = array_map(
+            static fn(Message $msg): array => $msg->toWire(),
+            [...$echoed, Message::assistant('')],
+        );
+        $exchanges = $this->compactor->exchangesToSummarize($wireHistory);
+        if ($exchanges === []) {
+            return null;
+        }
+
+        $compactionId = bin2hex(random_bytes(8));
+        $prompt = [
+            Message::system(self::COMPACT_SUMMARY_PROMPT),
+            Message::user(self::renderExchangesForSummary($exchanges)),
+        ];
+        $keys = array_map(static fn(array $e): string => $e['key'], $exchanges);
+
         $next = $this->mutate([
-            'history' => [...$compactedHistory, Message::user($inputText), Message::assistant($response)],
+            'history' => [...$echoed, Message::assistant(
+                'Summarising ' . count($exchanges) . ' earlier '
+                . (count($exchanges) === 1 ? 'exchange' : 'exchanges')
+                . ' with the model — the transcript will compact when they arrive.',
+            )],
             'inputBuf' => '',
             'inFlight' => false,
+            'pendingCompactionId' => $compactionId,
         ]);
 
-        return [$next, null];
+        $cmd = Cmd::promise(static function () use ($backend, $prompt, $compactionId, $keys): PromiseInterface {
+            return $backend->completeAsync($prompt)->then(
+                // The usage rides along so update() can bill it. A compaction
+                // asks a model to read the WHOLE earlier conversation, so it is
+                // routinely the largest single prompt this app sends; a readout
+                // that silently omitted it was under-reporting its own biggest
+                // call.
+                static fn(Message $msg): ?Msg => new HistoryCompactedMsg(
+                    $compactionId,
+                    self::parseExchangeSummaries($msg->content, $keys),
+                    null,
+                    $msg->usage,
+                ),
+                // Reported, not swallowed: unlike the session-title call this
+                // rides beside, a failure here changes what the compaction
+                // PRESERVES, and the user is about to lose the originals. No
+                // usage on this path - a rejection hands back a Throwable, not a
+                // Message, so there is no figure to read and inventing a zero
+                // would claim the call was free.
+                static fn(\Throwable $e): ?Msg => new HistoryCompactedMsg($compactionId, [], $e->getMessage()),
+            );
+        });
+
+        return [$next, $cmd];
+    }
+
+    /**
+     * The user-role half of the summarization request: the exchanges, numbered,
+     * in the order {@see Context\ContextCompactor::exchangesToSummarize()}
+     * returned them, so the model's "1." lines map back by position.
+     *
+     * @param list<array{key:string,user:string,assistant:string}> $exchanges
+     */
+    private static function renderExchangesForSummary(array $exchanges): string
+    {
+        $out = [];
+        foreach ($exchanges as $i => $exchange) {
+            $n = $i + 1;
+            $out[] = "### Exchange {$n}\nUser: {$exchange['user']}\nAssistant: {$exchange['assistant']}";
+        }
+
+        return implode("\n\n", $out);
+    }
+
+    /**
+     * Turn the model's numbered reply into the key => summary map
+     * {@see Context\ContextCompactor::withExchangeSummaries()} wants.
+     *
+     * Positional: line "3." belongs to $keys[2], because that is the order
+     * {@see renderExchangesForSummary()} presented them in. A number outside the
+     * range, a duplicate, or a missing line is simply not mapped — the exchange
+     * then falls back to the heuristic, which is why a partially-obeyed
+     * instruction degrades instead of mis-attributing a summary.
+     *
+     * Every line is flattened and bounded before it is kept. This is model-
+     * authored text bound for the transcript AND for the next prompt: a raw ESC
+     * could repaint the chrome around it, embedded newlines would break the
+     * one-summary-per-message shape stage 3's grouping relies on, and an
+     * unbounded line would let a "compaction" be larger than what it replaced.
+     *
+     * @param list<string> $keys
+     * @return array<string, string>
+     */
+    private static function parseExchangeSummaries(string $reply, array $keys): array
+    {
+        $summaries = [];
+        foreach (preg_split('/\R/', $reply) ?: [] as $line) {
+            if (preg_match('/^\s*(\d+)\s*[.)]\s*(.+)$/u', $line, $m) !== 1) {
+                continue;
+            }
+            $index = (int) $m[1] - 1;
+            if ($index < 0 || !isset($keys[$index]) || isset($summaries[$keys[$index]])) {
+                continue;
+            }
+            $text = self::sanitizeSummaryLine($m[2]);
+            if ($text === '') {
+                continue;
+            }
+            $summaries[$keys[$index]] = $text;
+        }
+
+        return $summaries;
+    }
+
+    /**
+     * Longest model-written summary line kept, in characters.
+     *
+     * Matches the ceiling {@see COMPACT_SUMMARY_PROMPT} asks the model for, so
+     * the bound the instruction states and the bound the code enforces are one
+     * number rather than two that can drift apart.
+     */
+    private const SUMMARY_LINE_MAX_CHARS = 200;
+
+    /**
+     * One bounded, control-byte-free line — same treatment
+     * {@see Message::describeToolCall()} gives a model-authored tool label, and
+     * for the same two reasons: the text is untrusted, and it is going somewhere
+     * that assumes one line.
+     */
+    private static function sanitizeSummaryLine(string $text): string
+    {
+        $flattened = preg_replace('/[\p{C}\s]+/u', ' ', $text);
+        if ($flattened === null) {
+            // Invalid UTF-8 makes the /u pattern bail; strip byte-wise instead
+            // so malformed input can never smuggle control bytes into a frame.
+            $flattened = preg_replace('/[[:cntrl:]\s]+/', ' ', $text) ?? '';
+        }
+        $flattened = trim($flattened);
+        if (mb_strlen($flattened) > self::SUMMARY_LINE_MAX_CHARS) {
+            $flattened = mb_substr($flattened, 0, self::SUMMARY_LINE_MAX_CHARS - 1) . '…';
+        }
+
+        return $flattened;
+    }
+
+    /**
+     * Apply the compaction the model's summaries were fetched for.
+     *
+     * Runs against the history as it stands NOW, not as it stood when `/compact`
+     * was typed: the call was fire-and-forget, so the transcript may have GROWN
+     * (a background notice, another whole turn) or SHRUNK (an automatic
+     * compaction tier fired as that turn was dispatched) in the meantime. Growth
+     * is harmless — the new messages are the newest exchanges, which a
+     * compaction preserves in full. Shrinkage is harmless for the same reason
+     * plus one more: summaries are keyed by exchange CONTENT, so a shifted or
+     * shortened history cannot mis-attach them; the ones whose exchange is gone
+     * simply go unused and those exchanges fall back to the heuristic.
+     *
+     * WHOLESALE REPLACEMENT is the case neither of those covers, and it is not
+     * handled here — it is handled by never reaching here. `/rewind` and the
+     * palette's New session action both put a transcript in place that the user
+     * did not just ask to compact, so both release `$pendingCompactionId` and
+     * this message is dropped by {@see update()}'s latch check instead. Measured
+     * before that fix: a `/rewind` with a summarization outstanding compacted
+     * the freshly-restored transcript, replacing five recovered exchanges with
+     * `[exchanged information]` placeholders — the summaries did not even apply,
+     * because they were keyed to the content the rewind had just discarded.
+     *
+     * Nothing about the user's draft or about `inFlight` is touched: see
+     * {@see compactionChanges()} for why that separation is the whole point of
+     * this method not calling {@see compactNow()}.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function applyModelCompaction(HistoryCompactedMsg $msg): array
+    {
+        $prefix = '';
+        if ($msg->error !== null) {
+            $prefix = 'Model summarisation failed (' . self::sanitizeSummaryLine($msg->error)
+                . ') — compacted with the local heuristic instead. ';
+        } elseif ($msg->summaries === []) {
+            $prefix = 'The model returned no usable summaries — compacted with the local heuristic instead. ';
+        }
+
+        // The '/compact' line is already in the transcript from
+        // scheduleModelCompaction(), so this pass must not append a second one.
+        return [$this->mutate($this->compactionChanges('', $this->history, $msg->summaries, $prefix)), null];
     }
 
     /**
@@ -5900,6 +6629,16 @@ final class Chat implements Model
                 'history' => [...$messages, Message::user($inputText), Message::assistant($response)],
                 'inputBuf' => '',
                 'inFlight' => false,
+                // An outstanding `/compact` summarization is ABANDONED, for the
+                // same reason `/clear` abandons one: the transcript it was
+                // fetched for is no longer on screen. This one is the sharper
+                // case of the two — measured, a summary landing after a rewind
+                // compacted the transcript the user had just RECOVERED, and
+                // since the summaries were keyed to the discarded content none
+                // of them applied, so five restored exchanges came back as
+                // `[exchanged information]` placeholders. See
+                // {@see applyModelCompaction()}.
+                'pendingCompactionId' => null,
             ]);
 
             return [$next, null];
@@ -6975,6 +7714,10 @@ final class Chat implements Model
         return [$this->mutate([
             'history' => [...$this->history, Message::assistant("New session created: {$sessionId}")],
             'currentSessionId' => $sessionId,
+            // Released for the same reason `/clear` and `/rewind` release it: a
+            // `/compact` issued against the OLD session's transcript must not
+            // rewrite whatever is in front of the user under a new session id.
+            'pendingCompactionId' => null,
         ]), null];
     }
 
@@ -7322,6 +8065,220 @@ final class Chat implements Model
     public function contextTokenLimit(): int
     {
         return ContextWindow::ofBackend($this->backend);
+    }
+
+    /**
+     * This session's provider-reported spend in US dollars.
+     *
+     * A DIFFERENT unit from everything {@see contextTokens()} and
+     * {@see contextTokenLimit()} deal in: those are a chars/4 estimate of what
+     * was sent, this is what the provider said it billed. {@see Renderer} shows
+     * them as two separate segments of the status bar for that reason and never
+     * combines them - see {@see Usage} for the full statement of the hazard.
+     *
+     * Exactly 0.0 is BOTH "nothing was reported" and "this provider is free",
+     * which is why the readout keys off {@see hasReportedSpend()} rather than
+     * off this being positive.
+     */
+    public function spentUsd(): float
+    {
+        return $this->tokenTracker->totalCost();
+    }
+
+    /**
+     * Put one provider call's reported usage on the session tracker, or do
+     * nothing when the provider reported none.
+     *
+     * The ONE place spend is recorded, and the reason it is a named method
+     * rather than four copies of two lines: this app makes provider calls from
+     * four places — a turn's completion ({@see update()}'s `AssistantMsg` arm),
+     * a tool turn superseded mid-queue ({@see applyBackendToolEvent()}),
+     * `/compact`'s summarization ({@see HistoryCompactedMsg}) and the session
+     * titler ({@see SessionTitledMsg}) — and every one of them is on the user's
+     * key. Three of the four were dropping their figure before this existed, so
+     * the readout was under-reporting exactly the calls the user never asked for
+     * out loud.
+     *
+     * A null $usage is "the provider reported nothing", which is the ordinary
+     * streamed-turn answer and must not become a zero-dollar call — see
+     * {@see Usage} for why zero and unknown are different claims.
+     *
+     * `addTotalUsage()`, not `addUsage()`: the figure crossing every one of
+     * those seams is a TOTAL with no input/output split, and
+     * {@see Util\TokenTracker} keeps those in their own bucket rather than
+     * pretending the whole call was input.
+     *
+     * Mutates the tracker, which every clone of this Chat shares by object
+     * identity — that is the whole reason the tracker is not immutable, and it is
+     * what lets a Cmd's resolved Msg account against the session the user is
+     * still in.
+     */
+    private function accountUsage(?Usage $usage): void
+    {
+        if ($usage === null) {
+            return;
+        }
+
+        $this->tokenTracker->addTotalUsage($usage->totalTokens, $usage->costUsd);
+    }
+
+    /**
+     * Whether any settled turn this session actually reported usage.
+     *
+     * False on every offline run and on a streamed session whose provider
+     * never sent a usage block - {@see Runtime}'s streaming path documents
+     * that chunks carry `tokensUsed=0`, and
+     * {@see Providers\OpenAIProvider::completeStream()} states it outright. The
+     * spend readout needs this because `$0.0000` would otherwise be printed for
+     * "we have no idea" as confidently as for "you have spent nothing".
+     *
+     * A READOUT concern only. The cap DECISION does not consult it — see
+     * {@see spendCapReached()}, where the same fail-open falls out of the
+     * arithmetic (an unreported session's spend is `0.0`, and a cap is always
+     * positive) rather than from a second clause. It used to be a clause there,
+     * and it was one nothing could make load-bearing: a mutation deleting it
+     * survived, because the test named after it passed through the comparison.
+     */
+    public function hasReportedSpend(): bool
+    {
+        return $this->tokenTracker->totalTokens() > 0 || $this->tokenTracker->totalCost() > 0.0;
+    }
+
+    /**
+     * The spend ceiling `/budget` and `$SUGARCRUSH_MAX_COST` set, or null when
+     * this session has none. Always a positive finite number when non-null —
+     * {@see isUsableSpendCap()}, enforced in the constructor.
+     *
+     * Two sites enforce it, and they are not interchangeable:
+     * {@see spendCapRefusal()} refuses a turn the user submitted, and
+     * {@see scheduleModelCompaction()} declines to ask the model for `/compact`'s
+     * summaries (the compaction still runs, on the heuristic). Both decide with
+     * {@see spendCapReached()}.
+     */
+    public function maxCostUsd(): ?float
+    {
+        return $this->maxCostUsd;
+    }
+
+    /**
+     * The token/cost line `/budget` prints — {@see TokenTracker::summary()}, so
+     * the wording lives with the buckets it describes rather than being
+     * re-spelled here.
+     */
+    public function usageSummary(): string
+    {
+        return $this->tokenTracker->summary();
+    }
+
+    /**
+     * Whether this session has reached its spend cap, i.e. whether the app
+     * should stop making provider calls on the user's key
+     * (crush_code.md Phase 5 item 7).
+     *
+     * The one definition of "over budget", asked by BOTH enforcement sites:
+     * {@see spendCapRefusal()} for a turn the user submitted, and
+     * {@see scheduleModelCompaction()} for the summarization call `/compact`
+     * makes on its own initiative. They differ in what they DO about it, not in
+     * how they decide it.
+     *
+     * FALSE WHENEVER THERE IS NO CAP, which is the ordinary case. False with a
+     * cap too whenever the reported spend is still below it — and since a cap is
+     * a positive finite number by construction ({@see isUsableSpendCap()},
+     * enforced in the constructor, so `/budget`, `$SUGARCRUSH_MAX_COST` and a
+     * direct `new Chat(...)` cannot get around it), a session no provider has
+     * reported anything for has a spend of `0.0` and is therefore never over.
+     * That is the deliberate fail-OPEN, and it is arithmetic rather than a
+     * separate clause: a streamed session whose provider sends no usage block
+     * would otherwise be refused from its first turn on the strength of a figure
+     * nobody supplied, which is why a cap here is a budget guard and not a
+     * security control. `$0.0000` and "unknown" stay distinguishable for the
+     * READOUT via {@see hasReportedSpend()}; for the decision they agree.
+     */
+    private function spendCapReached(): bool
+    {
+        $cap = $this->maxCostUsd;
+
+        return $cap !== null && $this->spentUsd() >= $cap;
+    }
+
+    /**
+     * Whether $cap is a spend ceiling this app will act on: a positive, finite
+     * number of dollars.
+     *
+     * The single definition, because three entry points reach for it and they
+     * disagreed. `0` and a negative are REFUSED rather than read as "no cap" —
+     * a cap of zero and no cap are opposite intentions and quietly turning the
+     * stricter one into the looser one is the wrong direction to guess in.
+     * Non-finite is refused for a blunter reason, and it was reachable from user
+     * input: `is_numeric('1e309')` is true and `(float) '1e309'` is `INF`, which
+     * is `> 0.0`, so `/budget 1e309` used to install a cap that rendered as
+     * `$inf` on the status bar and — since every comparison against `INF` is
+     * false — silently meant no cap at all. `NAN` is worse still: every
+     * comparison against it is false in BOTH directions.
+     */
+    public static function isUsableSpendCap(float $cap): bool
+    {
+        return is_finite($cap) && $cap > 0.0;
+    }
+
+    /**
+     * Refuse this turn when the session has already reached its spend cap, or
+     * null when it has not (crush_code.md Phase 5 item 7).
+     *
+     * WHICH SIDE OF THE CAP THIS IS, stated exactly, because the two possible
+     * behaviours have different messages and only one of them is implemented:
+     * this refuses to START the turn once the accumulated spend has reached the
+     * cap. It does NOT abort a turn that is already running, and it cannot —
+     * {@see Backend\EngineBackend::completeAsync()} runs the turn in a forked
+     * child, so the child's per-step figures do not reach this process until the
+     * turn settles and there is nothing here to interrupt mid-flight. The
+     * consequence is concrete and the message says it: the turn that crosses
+     * the cap runs to completion, so the final total overshoots by that one
+     * turn's cost, and the cap then refuses every turn after it.
+     *
+     * WHAT IT GOVERNS is the turn a user submitted, and only that. It is not the
+     * app's only provider call: `/compact`'s summarization has its own check at
+     * its own site ({@see scheduleModelCompaction()}), because it is dispatched
+     * past this point — the cap is deliberately evaluated AFTER
+     * {@see dispatchCommand()} so that `/budget` still works while capped, and
+     * `/compact` dispatches there too. The session titler needs no check of its
+     * own; see {@see scheduleTitleGeneration()} for the measurement.
+     *
+     * Refusal is VISIBLE — the draft is kept and an assistant line explains
+     * both the state and the way out. Silently truncating the history or
+     * silently continuing are the two failure modes a cap exists to prevent, so
+     * neither is on the table. There is no `Message::user()` echo of the draft
+     * either, which is why this takes no draft argument: every other command exit
+     * echoes the line it consumed, and this one did not consume it.
+     *
+     * @return array{0:self,1:?\Closure}|null
+     */
+    private function spendCapRefusal(): ?array
+    {
+        if (!$this->spendCapReached()) {
+            return null;
+        }
+
+        $spent = $this->spentUsd();
+        $cap = (float) $this->maxCostUsd;
+
+        $notice = sprintf(
+            'Spend cap reached — this turn was not sent. $%.4f of the $%.4f cap has been reported spent. '
+            . 'The turn that crossed the cap ran to completion; the cap refuses the NEXT turn rather than '
+            . 'aborting one in flight. Raise it with /budget %.2f, clear it with /budget off, or restart '
+            . 'without $SUGARCRUSH_MAX_COST.',
+            $spent,
+            $cap,
+            $spent * 2,
+        );
+
+        return [$this->mutate([
+            // The draft is KEPT: the user's prompt was never sent, and clearing
+            // the box would lose it to a refusal they may well answer by
+            // raising the cap.
+            'history' => [...$this->history, Message::assistant($notice)],
+            'inFlight' => false,
+        ]), null];
     }
 
     /**

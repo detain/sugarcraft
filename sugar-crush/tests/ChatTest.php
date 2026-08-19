@@ -1006,7 +1006,12 @@ final class ChatTest extends TestCase
 
         [$narrowed] = $chat->update(new KeyMsg(KeyType::Char, 'b'));
         $names = array_map(static fn($spec) => $spec->name, $narrowed->slashMenuMatches());
-        $this->assertSame(['bg', 'branch'], $names);
+        // Every slash-visible row whose name contains a `b`, fuzzy-ranked. `budget`
+        // joined the registry in crush_code.md Phase 5 item 7; the list is spelled
+        // out rather than derived on purpose, because the thing under test is that
+        // the popup NARROWS as characters arrive, and a derived expectation would
+        // pass against a popup that never filtered at all.
+        $this->assertSame(['bg', 'branch', 'budget'], $names);
     }
 
     public function testSlashMenuHiddenOnceArgumentsStart(): void
@@ -3632,7 +3637,16 @@ final class ChatTest extends TestCase
         $this->assertNull($store->getSession('sess-fail')['name']);
     }
 
-    public function testAnEmptyGeneratedTitleIsNeverPersisted(): void
+    /**
+     * An unusable title is not persisted, and the Msg is still dispatched.
+     *
+     * It used to resolve to null, which also threw away what the call COST. The
+     * titler is a real provider call on the user's key, so the empty-title exit
+     * now hands back a `SessionTitledMsg` whose only job is to carry the usage —
+     * `update()` drops the empty title and keeps the money. Asserting "null" here
+     * would be asserting that the money is dropped.
+     */
+    public function testAnEmptyGeneratedTitleIsNeverPersistedButItsCostStillIs(): void
     {
         $store = $this->titleStore('sess-empty');
         $chat = new Chat(
@@ -3643,12 +3657,17 @@ final class ChatTest extends TestCase
             titleBackend: $this->titleBackend("<think>thinking hard</think>\n   \n"),
         );
 
-        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        [$sent, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
         $batch = $cmd();
         $this->assertInstanceOf(BatchMsg::class, $batch);
 
-        $this->assertNull($this->resolveAsyncCmd($batch->cmds[1]));
-        $this->assertNull($store->getSession('sess-empty')['name']);
+        $titled = $this->resolveAsyncCmd($batch->cmds[1]);
+        $this->assertInstanceOf(\SugarCraft\Crush\SessionTitledMsg::class, $titled);
+        $this->assertSame('', $titled->title, 'an unusable answer yields no title');
+        $this->assertNull($store->getSession('sess-empty')['name'], 'and nothing is persisted');
+
+        [$after] = $sent->update($titled);
+        $this->assertNull($after->currentSessionName(), 'nor latched in memory');
     }
 
     public function testGeneratedTitleDropsReasoningBlocksAndIsTruncated(): void

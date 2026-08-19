@@ -216,4 +216,103 @@ final class TokenTrackerTest extends TestCase
         $this->assertSame(2450, $tracker->totalTokens());
         $this->assertEqualsWithDelta(0.0226, $tracker->totalCost(), 0.0001);
     }
+
+    // =====================================================================
+    // The unsplit bucket (crush_code.md Phase 5 item 7)
+    // =====================================================================
+
+    /**
+     * The reason {@see TokenTracker::addTotalUsage()} exists at all. Every
+     * provider on this codebase's live paths reports one `usage.total_tokens`
+     * figure with no input/output breakdown, and routing it through
+     * `addUsage($total, 0, $cost)` would have made `outputTokens()` report zero
+     * for a real completion while `inputTokens()` claimed the whole turn.
+     *
+     * So the halves stay empty and say so, and the total still counts.
+     */
+    public function testATotalOnlyReportKeepsTheHalvesEmptyAndStillCounts(): void
+    {
+        $tracker = new TokenTracker();
+
+        $tracker->addTotalUsage(1500, 0.0300);
+
+        $this->assertSame(0, $tracker->inputTokens(), 'no provider named an input half, so none is claimed');
+        $this->assertSame(0, $tracker->outputTokens(), 'and none is claimed for output either');
+        $this->assertSame(1500, $tracker->unsplitTokens());
+        $this->assertSame(1500, $tracker->totalTokens(), 'the session total must still see them');
+        $this->assertEqualsWithDelta(0.0300, $tracker->totalCost(), 0.0001);
+    }
+
+    /**
+     * A tracker fed both shapes keeps them apart and totals them together — the
+     * three-bucket rule the class docblock states, read back.
+     */
+    public function testTheThreeBucketsStayApartAndTotalTogether(): void
+    {
+        $tracker = new TokenTracker();
+
+        $tracker->addUsage(100, 40, 0.01);
+        $tracker->addTotalUsage(500, 0.02);
+
+        $this->assertSame(100, $tracker->inputTokens());
+        $this->assertSame(40, $tracker->outputTokens());
+        $this->assertSame(500, $tracker->unsplitTokens());
+        $this->assertSame(640, $tracker->totalTokens());
+        $this->assertEqualsWithDelta(0.03, $tracker->totalCost(), 0.0001);
+    }
+
+    /**
+     * `reset()` has to clear all three or a `/new` would carry the unsplit half
+     * of the previous session forward invisibly.
+     */
+    public function testResetClearsTheUnsplitBucketToo(): void
+    {
+        $tracker = new TokenTracker();
+        $tracker->addUsage(1, 2, 0.5);
+        $tracker->addTotalUsage(300, 0.5);
+
+        $tracker->reset();
+
+        $this->assertSame(0, $tracker->unsplitTokens());
+        $this->assertSame(0, $tracker->totalTokens());
+        $this->assertSame(0.0, $tracker->totalCost());
+    }
+
+    /**
+     * The summary's wording is unchanged, byte for byte, for a tracker that only
+     * ever saw split reports — so the extension cannot have moved the goalposts
+     * for a caller that was already happy.
+     */
+    public function testTheSummaryIsUnchangedWhenNothingUnsplitWasRecorded(): void
+    {
+        $tracker = new TokenTracker();
+        $tracker->addUsage(1500, 500, 0.0225);
+
+        $this->assertSame('Tokens: 1500 in / 500 out | Cost: $0.0225', $tracker->summary());
+    }
+
+    /**
+     * And when there IS an unsplit bucket it is named rather than folded in. The
+     * two-figure form alone would have reported `0 in / 0 out` for a session that
+     * really did spend 1,500 tokens, which is the exact shape of every real
+     * provider run here.
+     */
+    public function testTheSummaryNamesTheUnsplitBucketRatherThanHidingIt(): void
+    {
+        $tracker = new TokenTracker();
+        $tracker->addTotalUsage(1500, 0.0225);
+
+        $this->assertSame('Tokens: 0 in / 0 out + 1500 unsplit | Cost: $0.0225', $tracker->summary());
+    }
+
+    /** Both shapes at once, so the summary accounts for every token it holds. */
+    public function testTheSummaryAccountsForEveryTokenWhenBothShapesArePresent(): void
+    {
+        $tracker = new TokenTracker();
+        $tracker->addUsage(10, 4, 0.001);
+        $tracker->addTotalUsage(86, 0.002);
+
+        $this->assertSame('Tokens: 10 in / 4 out + 86 unsplit | Cost: $0.0030', $tracker->summary());
+        $this->assertSame(100, $tracker->totalTokens(), 'and the figures in it sum to the total');
+    }
 }

@@ -62,6 +62,24 @@ final class Message
          * $imageBytes was captured. Null whenever $imageBytes is null.
          */
         public readonly ?string $imageProtocol = null,
+        /**
+         * What this assistant turn cost in PROVIDER-COUNTED tokens and
+         * dollars, summed over every step of the agentic loop that produced
+         * it, or null when nothing was reported (crush_code.md Phase 5 item
+         * 7). Carried across the {@see
+         * \SugarCraft\Crush\Backend\EngineBackend} conversion boundary for
+         * the same reason $reasoning and $imageBytes are: every provider
+         * already returned it on
+         * {@see \SugarCraft\Crush\Providers\CompleteResponse}, and this DTO
+         * was where it stopped, so {@see \SugarCraft\Crush\Util\TokenTracker}
+         * had nothing to accumulate and could not be constructed anywhere.
+         *
+         * Null on every non-assistant turn, and on any assistant turn whose
+         * provider reported neither a token count nor a cost - which is the
+         * usual answer for a streamed turn. Null is NOT "$0.00 spent"; see
+         * {@see Usage}.
+         */
+        public readonly ?Usage $usage = null,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -186,6 +204,7 @@ final class Message
             reasoning: $this->reasoning,
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
         );
     }
 
@@ -202,6 +221,7 @@ final class Message
             reasoning: $this->reasoning,
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
         );
     }
 
@@ -223,6 +243,7 @@ final class Message
             reasoning: $this->reasoning,
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
         );
     }
 
@@ -247,6 +268,7 @@ final class Message
             reasoning: $this->reasoning,
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
         );
     }
 
@@ -271,6 +293,7 @@ final class Message
             reasoning: $reasoning,
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
         );
     }
 
@@ -294,6 +317,32 @@ final class Message
             reasoning: $this->reasoning,
             imageBytes: $imageBytes,
             imageProtocol: $imageProtocol,
+            usage: $this->usage,
+        );
+    }
+
+    /**
+     * Attach (or clear, via null) what the turn cost - see $usage's docblock.
+     * Used at the {@see \SugarCraft\Crush\Backend\EngineBackend} conversion
+     * seam, where the per-step figures {@see
+     * \SugarCraft\Crush\Messages\AssistantMessage::usage()} carries have just
+     * been summed over the whole bounded loop, mirroring {@see
+     * withReasoning()}'s role for the parallel `reasoning` field.
+     */
+    public function withUsage(?Usage $usage): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
+            usage: $usage,
         );
     }
 

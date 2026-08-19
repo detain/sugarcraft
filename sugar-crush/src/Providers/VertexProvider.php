@@ -258,9 +258,18 @@ final readonly class VertexProvider implements ProviderInterface
      * Streams an Anthropic-on-Vertex turn through `:streamRawPredict`.
      *
      * Each yielded CompleteResponse carries only that event's delta; callers
-     * accumulate. Usage lands once, on the terminal `message_delta`, so every
-     * earlier chunk genuinely reports zero - the same contract as
-     * {@see BedrockProvider::completeStream()}.
+     * accumulate.
+     *
+     * USAGE LANDS TWICE HERE, and that is NOT the contract
+     * {@see BedrockProvider::completeStream()} has: Anthropic-on-Vertex reports
+     * input tokens on `message_start` and output tokens on the terminal
+     * `message_delta`, so {@see parseAnthropicChunk()} emits two usage-bearing
+     * responses per turn — `tokensUsed: $inputTokens` on the first and
+     * `tokensUsed: $outputTokens` on the last, each priced on its own side of
+     * the rate table. A consumer that read only the final chunk would bill the
+     * turn for its output and none of its input; {@see \SugarCraft\Crush\Runtime}
+     * therefore SUMS across chunks rather than taking the last, and says so.
+     * Bedrock really does land its usage once, on the terminal metadata event.
      *
      * @return \Generator<int, CompleteResponse>
      */

@@ -305,6 +305,15 @@ final class Bootstrap
             currentSessionId: $sessionId,
             currentSessionName: $sessionName,
             titleBackend: self::titleBackend(),
+            // crush_code.md Phase 5 item 6. Without this argument `/compact`
+            // reaches only the heuristic summarizer, whose stage-2 output for a
+            // long exchange was the literal string "[exchanged information]" —
+            // a compaction that preserved nothing of what a compaction exists to
+            // preserve.
+            summaryBackend: self::summaryBackend(),
+            // crush_code.md Phase 5 item 7. Null unless the launch set a cap;
+            // `/budget` can set one at runtime either way.
+            maxCostUsd: self::maxCostUsd(),
             themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
             onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
             mosaic: ToolResult::mosaic(),
@@ -2862,6 +2871,68 @@ final class Bootstrap
      */
     public static function titleBackend(): ?Backend
     {
+        return self::toollessBackend('SUGARCRUSH_TITLE_MODEL', 'titleModel');
+    }
+
+    /**
+     * A deliberately TOOL-LESS Backend for `/compact`'s model-written exchange
+     * summaries (crush_code.md Phase 5 item 6), or null when this run has no
+     * provider to build one from.
+     *
+     * Tool-less, not cheap — the distinction matters in a build whose other half
+     * is a spend cap, and the next paragraph is why: this one deliberately runs
+     * on the provider's DEFAULT model, which is the expensive one. Its prompt is
+     * the whole earlier conversation, so it is routinely the largest single call
+     * this app makes. {@see titleBackend()} is the cheap one.
+     *
+     * Separate from {@see titleBackend()} because the two calls want different
+     * models for different reasons and one variable could not serve both: a
+     * session title is a handful of words and the smallest model will do, while
+     * a compaction summary is what the model will be shown of the whole earlier
+     * conversation from then on, and a bad one is permanent context loss. So
+     * this defaults to the PROVIDER's default model rather than to the title
+     * model, and `$SUGARCRUSH_SUMMARY_MODEL` / `summaryModel` exist for a user
+     * who would rather trade quality for cost here.
+     *
+     * What it shares with titleBackend() is the part that matters for
+     * correctness: no tools, no hooks, no skill registry, no instruction
+     * preamble. {@see \SugarCraft\Crush\Chat}'s $summaryBackend docblock spells
+     * out why routing a summarization through the tool-capable main backend
+     * would let a compaction raise a permission prompt.
+     *
+     * Null on any construction failure, and that is not an error path: `/compact`
+     * falls back to the heuristic summarizer it has always used.
+     */
+    public static function summaryBackend(): ?Backend
+    {
+        return self::toollessBackend('SUGARCRUSH_SUMMARY_MODEL', 'summaryModel');
+    }
+
+    /**
+     * The construction {@see titleBackend()} and {@see summaryBackend()} share:
+     * this run's selected provider with NOTHING attached — no tools, no hooks,
+     * no skill registry, no instruction loader — under whichever model
+     * $modelEnvVar, then the $modelConfigKey key of ~/.sugar-crush/config.json,
+     * then the provider's own default names.
+     *
+     * One builder rather than two near-copies, because the tool-less part is
+     * the load-bearing part: a second copy is a second place for a `withTools()`
+     * to be added by mistake, and on the summarization path that would mean a
+     * compaction that can run Bash.
+     *
+     * `hooksDisabled: true` is passed EXPLICITLY, and the reason is that the
+     * "no hooks" half of the sentence above was otherwise false. Left at its
+     * default, {@see EngineBackend::resolveHookManager()} calls
+     * `registerBuiltIns()` and the backend carries `ProtectFilesHook`,
+     * `ConfirmRemoveHook` and `AuditHook`. All three are `PreToolUse`/
+     * `PostToolUse` only, so with no tools attached none of them could ever
+     * fire and the safety conclusion held anyway — but it held as a
+     * TWO-STEP argument resting on a second fact, and this is asserted as a
+     * safety property at four sites. One flag makes the sentence true on its
+     * own terms.
+     */
+    private static function toollessBackend(string $modelEnvVar, string $modelConfigKey): ?Backend
+    {
         $providerName = self::selectedProviderName();
         if ($providerName === null) {
             return null;
@@ -2871,9 +2942,9 @@ final class Bootstrap
             $factory = new ProviderFactory();
             $config = $factory->defaultConfig($providerName);
 
-            $model = getenv('SUGARCRUSH_TITLE_MODEL');
+            $model = getenv($modelEnvVar);
             if ($model === false || $model === '') {
-                $configured = self::readUserConfig()['titleModel'] ?? null;
+                $configured = self::readUserConfig()[$modelConfigKey] ?? null;
                 $model = is_string($configured) && $configured !== ''
                     ? $configured
                     : (string) ($config['model'] ?? '');
@@ -2883,10 +2954,65 @@ final class Bootstrap
             }
             $config['model'] = $model;
 
-            return new EngineBackend($factory->create($config), $model);
+            return new EngineBackend($factory->create($config), $model, hooksDisabled: true);
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * The spend ceiling `$SUGARCRUSH_MAX_COST` sets, in US dollars, or null for
+     * no cap (crush_code.md Phase 5 item 7).
+     *
+     * ABSENCE AND A BAD VALUE ARE DIFFERENT ANSWERS, exactly as they are for
+     * `$SUGARCRUSH_PERMISSION_MODE` (see {@see permissionGate()}), and for the
+     * same reason spelled out there: every fallback in this chain ends somewhere
+     * MORE PERMISSIVE, so silently discarding a value the user set on purpose is
+     * a fail-open.
+     *
+     * - Unset, or empty/whitespace — absence. No cap, like every other variable
+     *   this class reads.
+     * - A positive finite number, optionally with a leading `$` and surrounding
+     *   whitespace — the cap. `$5` is what a human types and `/budget $5` already
+     *   accepts it, so refusing it here would be an inconsistency, not a
+     *   safeguard.
+     * - Anything else present — {@see PermissionConfigException}, which
+     *   `bin/sugarcrush` turns into an exit-2 usage report. That covers `5USD`,
+     *   `five dollars`, `0`, `-5` and `1e309`.
+     *
+     * The previous behaviour — read a bad value as unset, "matching the refusal
+     * `/budget 0` gives" — conflated two things that are not alike. `/budget 0`
+     * answers IN THE TRANSCRIPT, so the user learns immediately that no cap was
+     * set; this path is read once at launch and said nothing, so a user who typed
+     * `SUGARCRUSH_MAX_COST=5USD` got an uncapped session and no hint of it. The
+     * argument for tolerance applies to a theme or a persisted provider, where
+     * guessing wrong costs nothing.
+     *
+     * @throws PermissionConfigException when the variable is present and unusable
+     */
+    public static function maxCostUsd(): ?float
+    {
+        $raw = getenv('SUGARCRUSH_MAX_COST');
+        if ($raw === false || trim($raw) === '') {
+            return null;
+        }
+
+        $trimmed = trim($raw);
+        $amount = ltrim($trimmed, '$');
+        $value = is_numeric($amount) ? (float) $amount : null;
+
+        if ($value === null || !Chat::isUsableSpendCap($value)) {
+            throw new PermissionConfigException(
+                "\$SUGARCRUSH_MAX_COST is '{$trimmed}', which is not a spend ceiling. Expected a positive "
+                . 'number of US dollars (fractional allowed, a leading $ accepted), for example 5 or $2.50. '
+                . 'Zero and negative are refused rather than read as "no cap" because they are the opposite '
+                . 'request; a figure too large to represent (1e309, i.e. infinity) is refused because it '
+                . 'would install a cap that never triggers. Unset the variable for no cap. Refusing to '
+                . 'start rather than run uncapped with a ceiling you asked for.',
+            );
+        }
+
+        return $value;
     }
 
     /**

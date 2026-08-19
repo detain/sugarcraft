@@ -27,6 +27,7 @@ use SugarCraft\Crush\Skills\SkillMatcher;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Usage;
 
 final class Runtime
 {
@@ -172,6 +173,8 @@ final class Runtime
         $buffer = '';
         $toolCalls = [];
         $reasoning = null;
+        /** @var list<?Usage> $usages */
+        $usages = [];
 
         // Accumulate the whole stream and emit one assistant message when the
         // generator is exhausted. We deliberately do NOT use a tokensUsed>0
@@ -198,9 +201,19 @@ final class Runtime
             if ($response->reasoning !== null && $response->reasoning !== '') {
                 $reasoning = ($reasoning ?? '') . $response->reasoning;
             }
+            $usages[] = Usage::reported($response->tokensUsed, $response->costUsd);
         }
 
-        yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning);
+        // Summed across chunks, not taken from the last one. Measured:
+        // VertexProvider's SSE decoder emits usage as TWO separate
+        // CompleteResponses - input tokens on `message_start`, output tokens on
+        // the terminal `message_delta`, each priced on its own side of the
+        // rate table - so reading only the final chunk would bill the turn for
+        // its output and none of its input. Usage::sum() returns null when
+        // every chunk reported nothing, which is the common case on this path
+        // (see the note above) and is NOT the same answer as zero; {@see Usage}
+        // spells out why that distinction is load-bearing.
+        yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages));
 
         if ($toolCalls !== []) {
             foreach ($this->executeToolCalls($toolCalls, $app, $onEvent, $onPermissionRequest) as $msg) {
@@ -226,6 +239,11 @@ final class Runtime
             $response->content,
             $response->toolCalls,
             $response->reasoning,
+            // The provider-counted figures this response already carried and
+            // that were dropped here until crush_code.md Phase 5 item 7. Null
+            // when the provider reported neither, which is not the same claim
+            // as "$0.00 spent" - see {@see Usage}.
+            Usage::reported($response->tokensUsed, $response->costUsd),
         );
 
         if ($response->toolCalls !== null && $response->toolCalls !== []) {

@@ -39,7 +39,11 @@ final readonly class CompactorConfig
      *                                      Default: 80.
      * @param int $summaryAssistantMaxChars Assistant content longer than this is
      *                                      replaced with "[exchanged information]"
-     *                                      in exchange summaries (stage 2).
+     *                                      in exchange summaries (stage 2) — by the
+     *                                      HEURISTIC summarizer. An exchange the
+     *                                      caller supplied a model-written summary
+     *                                      for never reaches either bound; see
+     *                                      {@see ContextCompactor::withExchangeSummaries()}.
      *                                      Default: 100.
      */
     public function __construct(

@@ -11,7 +11,21 @@ namespace SugarCraft\Crush\Context;
  * (default 10 from CompactorConfig::recentPreserveCount).
  *
  * Stage 2 condenses older exchanges into single-line summaries capturing
- * "what happened and any key decisions made."
+ * "what happened and any key decisions made." TWO summarizers can produce those
+ * lines: a MODEL-written one, when the caller has supplied summaries through
+ * {@see withExchangeSummaries()} (crush_code.md Phase 5 item 6), and the local
+ * heuristic otherwise — per exchange, so a partially-answered set degrades
+ * rather than failing. The heuristic truncates the user's message and either
+ * appends a short assistant reply verbatim or writes
+ * `[exchanged information]`; nothing about the caller having no model to ask is
+ * an error, which is why it remains.
+ *
+ * {@see exchangesToSummarize()} is the other half of that seam: it answers
+ * "which exchanges would you condense, and with what text?" so a caller can go
+ * and get the summaries before calling {@see compact()}. That split is what
+ * keeps `compact()` synchronous and side-effect-free — it runs inside
+ * {@see \SugarCraft\Crush\Chat}'s TEA `update()`, where a provider call would
+ * freeze the render loop.
  *
  * The compaction trigger uses tiered thresholds — percentages of the token
  * limit its caller passes in, configurable on {@see CompactorConfig} and shown
@@ -32,7 +46,57 @@ final class ContextCompactor
 
     public function __construct(
         private readonly CompactorConfig $config,
+        /**
+         * Model-written one-line summaries for stage 2, keyed by
+         * {@see exchangeKey()}. Empty is the ordinary state and means "use the
+         * heuristic", which is what every caller without a provider gets — pure
+         * unit tests, the echo provider, and a `$SUGARCRUSH_BACKEND_CMD`
+         * shell-out all legitimately have no model to ask
+         * (crush_code.md Phase 5 item 6).
+         *
+         * Supplied rather than fetched, so {@see compact()} stays synchronous
+         * and side-effect-free: it runs inside {@see \SugarCraft\Crush\Chat}'s
+         * TEA `update()`, where a blocking provider call would freeze every
+         * keystroke for the duration of a completion. `Chat` asks the model in a
+         * `Cmd`, off the render loop, and hands the answers back through
+         * {@see withExchangeSummaries()}.
+         *
+         * @var array<string, string>
+         */
+        private readonly array $exchangeSummaries = [],
     ) {}
+
+    /**
+     * A copy of this compactor that will use $summaries for the exchanges they
+     * cover, and the heuristic for the rest — see the constructor's
+     * $exchangeSummaries docblock.
+     *
+     * Keyed by CONTENT ({@see exchangeKey()}) rather than by position, because
+     * the summaries make a round trip to a provider and the history can have
+     * moved on by the time they land: a background message appended in between
+     * would shift every index, silently attaching each summary to the wrong
+     * exchange. A key that no longer occurs simply goes unused, which degrades
+     * to the heuristic instead of to a lie.
+     *
+     * @param array<string, string> $summaries
+     */
+    public function withExchangeSummaries(array $summaries): self
+    {
+        return new self($this->config, $summaries);
+    }
+
+    /**
+     * The content key a model-written summary is filed under: the exact
+     * user/assistant text of the exchange it summarises, hashed.
+     *
+     * Hashed rather than stored whole so the map does not carry a second copy of
+     * the conversation. Two byte-identical exchanges collide onto one key, which
+     * is harmless — they would receive the same summary either way.
+     */
+    public static function exchangeKey(string $userMsg, string $assistantMsg): string
+    {
+        return hash('sha256', $userMsg . "\0" . $assistantMsg);
+    }
 
     /**
      * Factory creating a compactor with default config.
@@ -189,6 +253,56 @@ final class ContextCompactor
             return [];
         }
 
+        $staged = $this->stagePairs($messages);
+        if ($staged === null) {
+            $this->lastSavingsPercentage = 0;
+
+            // The stage-0 output, not the caller's array: removeToolResults()
+            // has already run inside stagePairs() and its result is what the
+            // no-compaction path has always returned.
+            return $this->removeToolResults($messages);
+        }
+
+        [$messages, $preservePairs, $toSummarizePairs] = $staged;
+
+        // Stage 2: condense older pairs into summaries (one summary per pair)
+        $summarized = $this->summarizeExchanges($toSummarizePairs);
+
+        // Stage 3: group similar consecutive exchanges
+        $summarized = $this->groupSimilarExchanges($summarized);
+
+        // Flatten preserved pairs back into individual messages
+        $preserved = $this->flattenPairs($preservePairs);
+
+        $this->lastSavingsPercentage = $this->calculateSavingsPercentage($messages, [...$summarized, ...$preserved]);
+
+        return [...$summarized, ...$preserved];
+    }
+
+    /**
+     * Stages 0, 1, 4 and 5 of {@see compact()} — everything that decides WHICH
+     * exchanges get condensed and what their content looks like by the time they
+     * do, with stage 2's summarization deliberately left out.
+     *
+     * Extracted so {@see exchangesToSummarize()} can answer "what would you
+     * summarise?" through the identical pipeline rather than a re-implementation
+     * of it. A second copy of this ordering would drift, and the ordering is not
+     * incidental: stages 4/5 must see the RAW content (see {@see compact()}'s
+     * docblock), so an exchange handed to a model for summarising is the
+     * post-stage-4/5 text and not the original.
+     *
+     * Null means "nothing to compact" — an empty history, or at most
+     * recentPreserveCount pairs however large they are.
+     *
+     * @param array<array{role:string,content:string}> $messages
+     * @return array{0: array<array{role:string,content:string}>, 1: array<mixed>, 2: array<mixed>}|null
+     */
+    private function stagePairs(array $messages): ?array
+    {
+        if ($messages === []) {
+            return null;
+        }
+
         $preserveCount = $this->config->recentPreserveCount;
 
         // Stage 0: strip tool-result system messages before pairing
@@ -201,8 +315,7 @@ final class ContextCompactor
 
         // Stage 1: if we have <= preserveCount pairs, no compaction needed
         if (count($pairs) <= $preserveCount) {
-            $this->lastSavingsPercentage = 0;
-            return $messages;
+            return null;
         }
 
         // Split: last preserveCount pairs are preserved, earlier pairs go to summary
@@ -223,18 +336,57 @@ final class ContextCompactor
         // Re-pair whatever survived stages 4/5 for summarization
         $toSummarizePairs = $this->groupIntoPairs($rawToSummarize);
 
-        // Stage 2: condense older pairs into summaries (one summary per pair)
-        $summarized = $this->summarizeExchanges($toSummarizePairs);
+        return [$messages, $preservePairs, $toSummarizePairs];
+    }
 
-        // Stage 3: group similar consecutive exchanges
-        $summarized = $this->groupSimilarExchanges($summarized);
+    /**
+     * The user/assistant exchanges a {@see compact()} of $messages would replace
+     * with one-line summaries, in the order it would replace them and with the
+     * exact text it would hand stage 2.
+     *
+     * This is the question a caller has to answer BEFORE it can ask a model for
+     * summaries, and it has to be answered by the same pipeline that will
+     * consume them — hence {@see stagePairs()}. Each entry carries its
+     * {@see exchangeKey()} already computed, so the caller never has to know how
+     * the keying works to build the map {@see withExchangeSummaries()} wants.
+     *
+     * Standalone messages (an unpaired system/assistant turn) are NOT included:
+     * stage 2 truncates those to 120 characters rather than summarising them,
+     * and offering them to a model would produce summaries nothing consumes.
+     * Neither are pairs with no assistant reply, which have no exchange to
+     * summarise yet.
+     *
+     * Empty means there is nothing a model could usefully be asked — either
+     * nothing to compact at all, or nothing but standalone/unanswered turns.
+     *
+     * @param array<array{role:string,content:string}> $messages Wire-format messages.
+     * @return list<array{key:string,user:string,assistant:string}>
+     */
+    public function exchangesToSummarize(array $messages): array
+    {
+        $staged = $this->stagePairs($messages);
+        if ($staged === null) {
+            return [];
+        }
 
-        // Flatten preserved pairs back into individual messages
-        $preserved = $this->flattenPairs($preservePairs);
+        $out = [];
+        foreach ($staged[2] as $pair) {
+            if (isset($pair['standalone']) && $pair['standalone'] === true) {
+                continue;
+            }
+            $user = (string) ($pair['user'] ?? '');
+            $assistant = $pair['assistant'] ?? null;
+            if (!is_string($assistant) || $assistant === '') {
+                continue;
+            }
+            $out[] = [
+                'key' => self::exchangeKey($user, $assistant),
+                'user' => $user,
+                'assistant' => $assistant,
+            ];
+        }
 
-        $this->lastSavingsPercentage = $this->calculateSavingsPercentage($messages, [...$summarized, ...$preserved]);
-
-        return [...$summarized, ...$preserved];
+        return $out;
     }
 
     /**
@@ -689,9 +841,27 @@ final class ContextCompactor
 
     /**
      * Generate a one-line summary for a user/assistant exchange.
+     *
+     * A model-written summary wins when one was supplied for this exact
+     * exchange (see the constructor's $exchangeSummaries docblock). Otherwise
+     * the heuristic below runs, unchanged: it truncates the user's message and
+     * appends either the assistant's reply verbatim, when it is short enough to
+     * fit, or the placeholder `[exchanged information]` when it is not.
+     *
+     * That placeholder is what crush_code.md Phase 5 item 6 exists to remove,
+     * and it is worth being exact about what "remove" means here: the heuristic
+     * is NOT deleted, because it is the only thing available when there is no
+     * model to ask, and a compaction that refused to run without a provider
+     * would be a worse outcome than a lossy one. What changed is that a session
+     * with a provider no longer gets it.
      */
     private function generateExchangeSummary(string $userMsg, string $assistantMsg): string
     {
+        $supplied = $this->exchangeSummaries[self::exchangeKey($userMsg, $assistantMsg)] ?? null;
+        if (is_string($supplied) && $supplied !== '') {
+            return $supplied;
+        }
+
         // Extract the essence: what was asked and what was done
         $userMax = $this->config->summaryUserMaxChars;
         $userTruncated = mb_strlen($userMsg) > $userMax

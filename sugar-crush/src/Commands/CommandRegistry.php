@@ -133,6 +133,16 @@ final class CommandRegistry
             // same conversation's checkpoints. `Chat::handleClearCommand()`
             // enumerates exactly what it does and does not touch.
             CommandSpec::new('clear', 'Clear the transcript, keeping this session', 'Session'),
+            // Category 'App', not 'Session': the cap and the tracker behind it are
+            // per-LAUNCH, carried by object identity through Chat::mutate() and
+            // untouched by /new, /clear or a session switch. Filing it under
+            // Session would advertise a scope it does not have.
+            CommandSpec::new(
+                'budget',
+                'Show this session\'s reported spend, or cap it',
+                'App',
+                argumentHint: '[amount|off]',
+            ),
             CommandSpec::new('workflow', 'Run, pause, resume, or inspect a workflow', 'Workflow'),
             CommandSpec::new('memory', 'Add, list, search, edit, or clear memory entries', 'Memory'),
             CommandSpec::new('branch', 'Fork the current session into a new branch', 'Session'),

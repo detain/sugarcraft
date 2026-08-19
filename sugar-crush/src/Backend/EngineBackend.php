@@ -23,6 +23,7 @@ use SugarCraft\Crush\Messages\Message as TypedMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Usage;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
@@ -411,6 +412,13 @@ final class EngineBackend implements Backend, ReportsContextWindow
         $lastAssistant = null;
         $lastImageBytes = null;
         $lastImageProtocol = null;
+        // EVERY step's usage, not the last one's. This loop makes up to
+        // $maxSteps provider calls per turn and each reports its own figure,
+        // so the turn's cost is the SUM: a readout fed from $lastAssistant
+        // alone would bill a five-tool turn as if it were the one final call
+        // that answered without tools (crush_code.md Phase 5 item 7).
+        /** @var list<?Usage> $stepUsages */
+        $stepUsages = [];
 
         // Whether the runtime managed to emit anything incrementally, so the
         // end-of-turn fallback below stays a FALLBACK rather than a duplicate:
@@ -452,6 +460,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
 
             if ($assistant !== null) {
                 $lastAssistant = $assistant;
+                $stepUsages[] = $assistant->usage();
             }
 
             if ($toolResults === []) {
@@ -481,7 +490,8 @@ final class EngineBackend implements Backend, ReportsContextWindow
         // survives back to Chat/Renderer. withImage() does the same for an
         // image-bearing tool result (W1.G2 reachability fix).
         return Message::assistant($content, reasoning: $lastAssistant?->reasoning())
-            ->withImage($lastImageBytes, $lastImageProtocol);
+            ->withImage($lastImageBytes, $lastImageProtocol)
+            ->withUsage(Usage::sum($stepUsages));
     }
 
     /**
@@ -956,6 +966,11 @@ final class EngineBackend implements Backend, ReportsContextWindow
                 'reasoning' => $message->reasoning,
                 'imageBytes' => $message->imageBytes,
                 'imageProtocol' => $message->imageProtocol,
+                // As a plain array, not the object: the parent unserializes
+                // with `allowed_classes => false` (see encodeEvent()), so an
+                // object here would arrive as __PHP_Incomplete_Class and the
+                // turn would lose its accounting silently.
+                'usage' => $message->usage?->toArray(),
             ];
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
@@ -1078,6 +1093,10 @@ final class EngineBackend implements Backend, ReportsContextWindow
                     is_string($imageBytes) ? $imageBytes : null,
                     is_string($imageProtocol) ? $imageProtocol : null,
                 )
+                // Usage::fromArray() rejects anything that is not the shape
+                // toArray() wrote, so a corrupt frame costs the turn its
+                // accounting rather than resolving with a fabricated bill.
+                ->withUsage(Usage::fromArray($data['usage'] ?? null))
         );
     }
 

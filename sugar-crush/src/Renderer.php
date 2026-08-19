@@ -1192,19 +1192,46 @@ final class Renderer
         // the widest variable-length piece of the bar, and the bar is the one
         // line that must never wrap (see below).
         //
-        // The scroll readout's WIDEST form is reserved up front even though
-        // it is prepended afterwards, so that adding the token count can only
-        // ever shrink the context readout — never crowd the scroll position
-        // off the row. Scroll position is transient and only shown when the
-        // newest output is off-screen, which makes it the more urgent of the
-        // two; context usage still reports its percentage at any width.
+        // Three variable-length pieces compete for the row, and the order they
+        // are FITTED in is their priority order, lowest priority last:
+        //
+        //   1. the scroll readout — its WIDEST form is reserved up front even
+        //      though it is prepended afterwards. Scroll position is transient
+        //      and shown only while the newest output is off-screen, which makes
+        //      it the most urgent thing on the bar when it appears at all.
+        //   2. the context readout — always emits something, down to a bare
+        //      percentage, because a session with no context signal at all is
+        //      worse than a narrow one.
+        //   3. the spend readout — the only one that may vanish entirely.
+        //
+        // Reserving (1) before sizing (2) and (3) is what stops a later piece
+        // crowding an earlier one off the row: each one is measured against what
+        // its seniors have already claimed, never the reverse.
         $separator = ' · ';
         $indicators = self::scrollIndicators($chat);
+        $scrollReserve = $indicators === [] ? 0 : Width::of($indicators[0]);
         $room = $chat->cols()
             - Width::of(self::stripZoneMarkers($processing))
             - Width::of($separator)
-            - ($indicators === [] ? 0 : Width::of($indicators[0]));
-        $bar = self::contextIndicator($chat, $room) . $separator . $processing;
+            - $scrollReserve;
+        $context = self::contextIndicator($chat, $room);
+        $bar = $context . $separator . $processing;
+
+        // The spend readout goes in third, against whatever the two mandatory
+        // pieces and the scroll reservation have left. Third because it is the
+        // only one of the three that may be dropped ENTIRELY: the context
+        // percentage always prints something (see contextIndicator()) and the
+        // processing hint is the bar's reason for existing, while a session with
+        // no cap and nothing reported has no spend to say anything about and
+        // gets no segment at all. It is measured and fitted rather than appended,
+        // for the reason stated below: the bar may not wrap.
+        $spend = self::spendIndicator(
+            $chat,
+            $chat->cols() - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
+        );
+        if ($spend !== '') {
+            $bar = $context . $separator . $spend . $separator . $processing;
+        }
 
         // The bar is the frame's LAST line, so it is the one line that must
         // never wrap: a wrapped bar makes the frame rows+1 physical rows tall,
@@ -1212,9 +1239,22 @@ final class Renderer
         // tail clip exists to prevent (renderDiff() guards the same
         // one-logical-line-per-row invariant with Width::truncate). The scroll
         // readout is therefore fitted to whatever room the bar leaves instead
-        // of being prepended unconditionally — the bar is already ~62 columns,
-        // and any transcript tall enough to scroll produces 2-3 digit offsets,
-        // so the long form alone pushes it past 80 columns.
+        // of being prepended unconditionally: any transcript tall enough to
+        // scroll produces 2-3 digit offsets, and the long form alone pushes the
+        // row past the terminal on the widths people actually use.
+        //
+        // No figure for "how wide the bar already is" is written here. It is a
+        // FUNCTION of the terminal width and the app state, not a constant, and
+        // a single number standing in for it has gone stale in this comment in
+        // three consecutive rounds (see the KEY_HELP note above for the three
+        // wrong values). The widths are swept and asserted instead, in
+        // `tests/Renderer/StatusBarSpendTest.php`:
+        // testTheIdleBarTakesExactlyTheseWidthsAtEveryTerminalWidth() pins the bar
+        // itself, testTheSpendSegmentNeverWidensTheBarBeyondTheTerminalAtAnyWidth()
+        // pins the invariant that matters (no state at any width may make the
+        // assembled bar wider than the terminal by more than it already was), and
+        // testACappedSessionStillCannotProduceABarNarrowerThanTheKeybindingCues()
+        // pins that the two cues above keep their margins.
         //
         // "Fitted" means picking a narrower form or dropping it — never
         // truncating the assembled string. $bar carries markPane(Pane::Menu)'s
@@ -1230,6 +1270,64 @@ final class Renderer
         }
 
         return $bar;
+    }
+
+    /**
+     * The status bar's spend readout: what this session has cost in dollars,
+     * and the cap if one is set (crush_code.md Phase 5 item 7).
+     *
+     * Empty string — no segment at all — when the session has neither a cap nor
+     * a reported spend, which is every offline run, every
+     * `$SUGARCRUSH_BACKEND_CMD` run and every streamed session whose provider
+     * sends no usage block. A `$0.0000` on those would cost columns to say
+     * nothing, and worse, would say the wrong thing: see
+     * {@see \SugarCraft\Crush\Chat::hasReportedSpend()}.
+     *
+     * `$?` is how an UNREPORTED spend prints when a cap IS set. That case needs
+     * saying out loud rather than being hidden, because the cap is then inert —
+     * {@see \SugarCraft\Crush\Chat::spendCapRefusal()} fails open on an
+     * unreported session — and a user who typed `/budget 5` is entitled to know
+     * the guard they asked for is not measuring anything. `$0.0000 of $5.0000`
+     * would have claimed the opposite.
+     *
+     * Both figures use the same four-decimal spelling
+     * {@see \SugarCraft\Crush\Util\TokenTracker::summary()} uses, so the pair
+     * is comparable digit for digit and the bar agrees with `/budget`'s own
+     * output rather than rounding differently from it.
+     *
+     * These are DOLLARS against PROVIDER-COUNTED tokens. The segment to the left
+     * is a chars/4 estimate wearing a `~`. The two are never combined, and the
+     * `$` is what keeps them distinguishable at a glance — see {@see \SugarCraft\Crush\Usage}.
+     *
+     * $room is the columns left after the two mandatory segments and the scroll
+     * reservation. Forms are tried widest-first exactly as
+     * {@see contextIndicator()} does, but with NO last-resort form: this one
+     * returns '' rather than overflow the one line the renderer never truncates.
+     */
+    private static function spendIndicator(Chat $chat, int $room): string
+    {
+        $cap = $chat->maxCostUsd();
+        $reported = $chat->hasReportedSpend();
+        if ($cap === null && !$reported) {
+            return '';
+        }
+
+        $spent = $reported ? '$' . number_format($chat->spentUsd(), 4, '.', '') : '$?';
+        $forms = $cap === null
+            ? [$spent]
+            : [
+                $spent . ' of $' . number_format($cap, 4, '.', '') . ' cap',
+                $spent . '/$' . number_format($cap, 4, '.', ''),
+                $spent,
+            ];
+
+        foreach ($forms as $form) {
+            if (Width::of($form) <= $room) {
+                return $form;
+            }
+        }
+
+        return '';
     }
 
     /**

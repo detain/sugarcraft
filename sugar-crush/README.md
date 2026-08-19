@@ -206,9 +206,10 @@ discriminated so a text-selection drag does not fire the zone underneath it.
 
 ### Slash commands
 
-`/agents` (`/agent`) `/bg` (`/background`) `/clear` `/compact` `/fork`
-`/branch` `/help` `/keys` `/mcp` `/memory` `/model` `/rename` `/rewind`
-`/sessions` `/share` `/theme` `/websearch` `/workflow` `/exit` (`/quit`).
+`/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
+`/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/rename`
+`/rewind` `/sessions` `/share` `/theme` `/websearch` `/workflow` `/exit`
+(`/quit`).
 
 The parenthesised spellings are aliases: they dispatch, but they have no
 `CommandRegistry` row of their own, so no surface advertises them.
@@ -246,6 +247,31 @@ nothing dispatches one — a dormant seam, not a shipped feature.
 that `bin/sugarcrush` constructs per launch, and the result comes back into
 the transcript. `/fork` branches the current session.
 
+`/budget` reports what this launch has spent, as the **provider** counted it,
+and optionally caps it. `/budget 5` sets a $5 ceiling, `/budget off` clears one,
+and `/budget` on its own prints the running total plus the token breakdown that
+does not fit on the status bar. `$SUGARCRUSH_MAX_COST` sets the same ceiling at
+launch, and refuses to start at all if what you set is not a ceiling (`5USD`,
+`0`, `1e309`) rather than running uncapped without saying so. Four things about
+it are worth knowing before you rely on it:
+
+- It refuses the **next** turn once the reported spend has reached the cap; it
+  does not abort a turn in flight (the work happens in a forked child, whose
+  figures only reach the parent when the turn settles). So the final total
+  overshoots by at most the one turn that crossed the line, and the refusal
+  message says so.
+- It only ever refuses on numbers a provider actually reported. A streamed turn
+  commonly reports **no** usage at all, and a self-hosted provider genuinely
+  costs nothing — so a session nothing has been reported for is never refused.
+  That is a budget guard, not a spending control.
+- It governs every provider call this app makes on your key, not only the turns
+  you type. `/compact`'s model-written summaries are the other one — a capped
+  session still compacts, on the local heuristic, and the transcript says the cap
+  is why. The session titler needs no separate gate: it only ever rides along
+  with a turn the cap already let through.
+- The cap lives for the launch. It is deliberately not persisted, so it cannot
+  silently refuse turns in a later session whose spend you never looked at.
+
 ### What you see while a turn runs
 
 Tool calls stream into the transcript **as they happen** — the forked child
@@ -265,6 +291,30 @@ summarized first and the rewrite is reported in the transcript, and at 95% the
 turn is refused rather than spent on a request the provider would reject. A
 refusal is not a dead end — each attempt drops the oldest preserved exchange,
 and `/clear` frees the whole context at once.
+
+Beside the context readout, a **spend** readout appears once the provider has
+reported something to show — dollars, and the cap if one is set. It is a
+separate segment from the context figure on purpose: the context number is a
+chars/4 **estimate** and wears a `~`, while the spend is the provider's own
+**count** and wears a `$`. They are never summed. A session under a cap that
+nothing has been reported for reads `$?` rather than `$0.0000`, because the two
+are different claims and the cap is inert in that state.
+
+When you type `/compact` and a provider is configured, the older exchanges are
+summarized **by a model** rather than by the local truncate-and-placeholder
+heuristic — on the same kind of tool-less backend the session titler uses, so a
+compaction can never call a tool or raise a permission prompt. Tool-less is where
+the resemblance ends: the titler runs on a deliberately cheap small model, while
+the summarizer defaults to the provider's own default model, because a bad
+compaction summary is permanent context loss. It is the largest single call this
+app makes, which is why the spend cap gates it. The request
+goes out off the render loop, so nothing freezes: `/compact` answers immediately
+that it is summarizing and the transcript compacts when the summaries arrive. If
+the call fails, or the model answers with something unusable, the compaction
+still happens on the heuristic and the transcript says which one did it. The
+automatic 85% tier is the heuristic's, not the model's — it fires inline as a
+turn is dispatched, where waiting on a completion would stall the keystroke that
+triggered it.
 
 Sessions get a name automatically: after the first exchange a **cheap
 small-model backend** (supplied separately from the conversation backend, so
@@ -344,7 +394,7 @@ A permission setting that is **present but unusable stops the launch** (exit 2 �
 - **Workflows** — `Workflows\*`: `WorkflowBuilder`/`WorkflowRegistry`/`WorkflowEngine` run multi-stage agent pipelines — sequential `stage()`, fan-out `parallel()`, chained `pipeline()`, and task-then-verifier `withVerification()` — defined as PHP DSL files or YAML (`WorkflowRegistry::loadYaml()`). SIGINT/SIGTERM during `run()` captures a real pause file for later resumption at stage granularity. Discovered from `~/.sugar-crush/workflows` and `<project>/.sugar-crush/workflows` (project wins), and driven from the chat with `/workflow run|pause|resume|status|list`. The two tiers are **not** equally capable: a `.php` workflow is loaded by `require`ing it, so only the user tier honours one — a `.php` file in a project's directory is neither listed nor loaded, because a workflow you cloned should not be able to run its own code the moment you name it. Symlinks in a project's workflow directory are **confined** to it: a committed `deploy.yaml -> ~/.ssh/id_rsa` is neither listed nor loaded, so a repo cannot ship a link that reads your files — not even into an error message (a rejected file used to be reported with the YAML parser's message, which quotes the line it choked on). That confinement is enforced on the *directory* as well as on each entry in it, and the two are separate checks for a reason worth knowing: an entry is judged against the workflows directory's real path, which is an answer that moves with the directory, so committing `.sugar-crush/workflows` **itself** as a link used to relocate the boundary rather than trip it — every `*.yaml` basename in the target was listed and every one that parsed was loaded. The directory is therefore held inside the checkout it came from, which is the one path in the pair a repository cannot have forged. A link that stays inside the checkout (`.sugar-crush/workflows -> tools/workflows`) is still honoured: that is repo content pointing at repo content, the same trust as a committed `.yaml`. A link inside your own `~/.sugar-crush/workflows` is still followed; that directory is yours. A *dangling* link is refused rather than granted — it names no workflows, and a committed link to a path that does not exist yet is a request to read whatever appears there later — while a directory you simply have not created is still named in the "not found" message. And note the boundary is the checkout, not the workflows directory, for the directory-level check, which has a residual worth stating: a checkout also holds untracked, gitignored, developer-local files, so a repo committing `.sugar-crush/workflows -> <some other directory in the checkout>` can still disclose that directory's `*.yaml` basenames and descriptions. What the check refuses is the version of that worth having — a link resolving **onto the checkout root**, which is where local files like `local-secrets.yaml` actually sit and which `-> ..` reached in one committed line. Reduction, not elimination. Whichever tier refuses a directory, the launch says so on stderr, naming the path and where it resolved to. The same boundary and the same predicate (`Support\ContainedPath`) hold a cloned repository's `.claude` / `.opencode` / `.sugar-crush` **skills** directories — see the Skills bullet above; the two tiers ran separate copies of the idiom until the skills one turned out to be missing the directory-level half entirely. A project's `.yaml` workflow is declarative and does run: its tasks are dispatched as sub-agents carrying the launch's `PermissionGate`, and a stage that **declares** a tool the session's permission mode denies (`tools: [Bash]` under `dont-ask`, say) is refused before the workflow's *first* stage is dispatched, not when that stage is reached. Be precise about the limit of that, though, because "denied tools are refused" reads as more than it is. Which modes can refuse a *declaration* is a per-mode answer: `dont-ask` refuses every non-read-only tool; `plan` refuses `Edit`/`Write`/`mcp__*` but **not** `Bash`, because what makes a Bash call a write under Plan is a redirection in its arguments and a declaration has none; `auto` refuses **nothing** through its mode logic, since its judgement is `SafetyClassifier`'s and the classifier reads the command out of the arguments too — under `auto` only an explicit `Deny` rule refuses a declaration. `default`/`accept-edits` *ask*, and an `Ask` is deliberately not a refusal (settling one needs the blocking prompt, which the engine has no channel to). Nor is the declared list a capability *boundary*: a parallel stage's agents are all handed the first task's `tools`, so the list is a request that gets permission-checked, not a sandbox. And per-*call* gating — a gate deciding one tool call at the moment a model asks for it — does not happen on the workflow path at all, because nothing there issues a tool call yet. `ProcessExecutor`'s worker is still the P1.S5 simulation, so a workflow stage makes no provider request; what the gate protects today is the declared capability, not each use of it. (`/workflow run` also blocks the TUI while it runs, and its stages do not reach a live model yet — both under *Limitations* below.) See [`examples/workflows/lint-then-fix.yaml`](examples/workflows/lint-then-fix.yaml) for a runnable YAML example and [`workflows/deep-research.php`](workflows/deep-research.php) for the PHP DSL form.
 - **MCP** — `MCP\*`: multi-server client (stdio + HTTP, `.mcp.json`, `${VAR}` interpolation) and stdio/HTTP servers to host your own tools. Per-agent-preset `mcpServers` allowlists are enforced by `McpClient` against `McpRouter`, not just decorative config.
 - **Sessions** — `Session\SessionStore`: SQLite (WAL) persistence of sessions/messages/tool-calls with FK-enforced cascade. **Retention is opt-in and off by default**: set `$SUGARCRUSH_SESSION_RETENTION_DAYS` to a positive number of days and each launch drops sessions untouched for that long, reporting on stderr exactly what it removed. **A session you have named is never pruned, whatever its age** — a name is the signal you meant to keep it — and neither is the session the launch is about to resume. `Session\EnhancedSessionStore` adds the per-turn `/rewind` checkpoints on top; message bodies are content-addressed and stored once each, so the conversation itself costs storage proportional to its length rather than to its length squared (the per-checkpoint list of message references is still proportional to the length).
-- **Tokens & export** — `Util\TokenTracker` (token + cost accumulation) and `Util\Exporter` (Markdown / JSON / text transcripts).
+- **Tokens & export** — `Util\TokenTracker` (token + cost accumulation, fed one entry per settled turn from the provider-counted figures on `Usage`, and read by `/budget` and the status bar's spend readout) and `Util\Exporter` (Markdown / JSON / text transcripts).
 - **Messages** — typed `Messages\{System,User,Assistant,ToolResult}Message`; `UserMessage` carries file/image attachments; `AssistantMessage` carries tool calls + reasoning.
 - **Context files** — `CLAUDE.md`/`AGENTS.md` at the project root are loaded into the system prompt, with `@import` expansion (cycle- and traversal-guarded, and de-duplicated so an imported doc is not injected twice). `Forced` instructions come from user config. An `EnvironmentBlock` (cwd, platform, git state, date) is prepended so the model is not guessing at its surroundings.
 - **Permission prompts** — the blocking request/reply flow is wired end to end: `Chat` runs the whole batch of a turn's tool calls through the `PreToolUse` chain *before* forking any of them, and a `HookResult::ask()` suspends the turn on a `PermissionRequestMsg` rendered as a Veil modal over the transcript. `y`/`n`/`a` settles the paused call rather than being advisory, and `a` — once its confirm is answered with a second `y` — records a session-scoped grant so that tool stops asking. The prompt is *armed* when it goes up and any non-answer keystroke disarms it (`Enter` re-arms), so an ordinary slash command typed at a live prompt is swallowed instead of answering it. Because the shipped default mode is `bypass-permissions`, you will not see a prompt until you select a mode that asks (`default`, `accept-edits`, `auto`) or register a hook that returns `ask()`. Note that on the **engine** path an ASK currently fails closed, so an asking mode refuses those calls rather than prompting — see the known gap below for why.

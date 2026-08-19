@@ -2737,7 +2737,18 @@ final class KeyHelpTest extends TestCase
      * App states the status bar is measured over, each built fresh per size so a
      * state cannot leak into the next render.
      *
-     * Nine, and the two that matter are the last two: the idle bar carries the
+     * Nine, and NONE of them has a spend cap set or a reported spend, so the
+     * status bar's spend segment (crush_code.md Phase 5 item 7) never renders in
+     * this corpus and the floor below is measured without it. That band is covered
+     * next door instead, by
+     * `Renderer\StatusBarSpendTest::testACappedSessionStillCannotProduceABarNarrowerThanTheKeybindingCues()`,
+     * which sweeps the capped and billed states and asserts the SAME 36-column
+     * floor — the segment is dropped at narrow widths rather than squeezed in, so
+     * both cues keep the margins asserted below. Named here rather than left
+     * implicit: a reader would otherwise take "any app state" for a wider domain
+     * than these nine fixtures can reach.
+     *
+     * The two that matter are the last two: the idle bar carries the
      * context readout and is wide, while an in-flight turn replaces the whole bar
      * with the cancel hint and is narrow. `prompt pending` is in-flight too —
      * `requestPermission()` sets `inFlight` — which is why it is the state
@@ -3255,17 +3266,27 @@ final class KeyHelpTest extends TestCase
      *
      * That predicate —
      * `$msg->generation !== null && $msg->generation !== $this->generation` —
-     * appears four times in `Chat.php`, in four blocks that are byte-identical
-     * apart from indentation. A replace-first `sed` therefore lands in
+     * appears four times in `Chat.php`. A replace-first `sed` therefore lands in
      * `update()`'s `AssistantMsg` arm, not in `requestPermission()`, and one
      * review round published the wrong site's mutation figures as a refutation of
      * the right site's: at the `AssistantMsg` arm the "drop the second conjunct"
      * mutation leaves the trio GREEN, which reads as "the trio does not cover
      * this" when it means "you mutated the wrong line".
      *
-     * So this pins the hazard itself: how many copies there are, and which method
-     * owns each. A fifth copy, or a copy moving to another method, changes what
-     * "the guard" means in that table and must force it to be re-read.
+     * THREE of the four bodies are byte-identical apart from indentation, not all
+     * four. `applyBackendToolEvent()`'s is now distinguishable, because its arm
+     * has to bill the superseded turn's usage before it drops the events: a tool
+     * turn superseded mid-queue never reaches `update()`'s accounting arm at all,
+     * since this guard breaks the re-dispatch chain and no `AssistantMsg` is ever
+     * synthesised. So the hazard is narrower than it was — a `sed` can no longer
+     * hit that one by accident — and the count that matters for the table is the
+     * three that remain ambiguous.
+     *
+     * So this pins the hazard itself: how many copies there are, which method
+     * owns each, and which of them are still mutually indistinguishable. A fifth
+     * copy, a copy moving to another method, or one of the three growing a body
+     * of its own changes what "the guard" means in that table and must force it
+     * to be re-read.
      */
     public function testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(): void
     {
@@ -3317,17 +3338,34 @@ final class KeyHelpTest extends TestCase
             $this->assertCount(1, $at, "one copy per method ({$method} has " . \count($at) . ')');
         }
 
-        // And the copies really are indistinguishable by text, which is the whole
-        // hazard: a table that named only the predicate would be ambiguous.
+        // And WHICH of the copies are indistinguishable by text, which is the
+        // actual hazard: a table that named only the predicate would be ambiguous
+        // between exactly those.
+        $bare = $needle . '|return [$this, null];|}';
         $bodies = [];
-        foreach ($byMethod as $at) {
-            $bodies[] = implode('|', array_map('trim', array_slice($lines, $at[0] - 1, 3)));
+        foreach ($byMethod as $method => $at) {
+            $bodies[$method] = implode('|', array_map('trim', array_slice($lines, $at[0] - 1, 3)));
         }
-        $this->assertCount(1, array_unique($bodies), 'the four blocks differ only in indentation');
+
+        $ambiguous = array_keys(array_filter($bodies, static fn(string $body): bool => $body === $bare));
         $this->assertSame(
-            $needle . '|return [$this, null];|}',
-            $bodies[0],
-            'and each is the same three lines, which is why a mutation must be anchored by line number',
+            ['finishToolCalls', 'requestPermission', 'update'],
+            $ambiguous,
+            'these are the guard sites a mutation cannot tell apart by text, so a mutation aimed at one of '
+            . 'them must be anchored by line number. If this set changed, re-read the table in '
+            . 'Chat::requestPermission()',
+        );
+        $this->assertNotSame(
+            $bare,
+            $bodies['applyBackendToolEvent'],
+            "applyBackendToolEvent()'s arm bills the superseded turn's usage before dropping its events - a "
+            . 'tool turn superseded mid-queue never reaches update()\'s accounting arm, because this guard '
+            . 'breaks the re-dispatch chain. If that accounting is gone, the money is going missing again',
+        );
+        $this->assertStringContainsString(
+            'accountUsage($msg->message->usage)',
+            implode("\n", array_slice($lines, $byMethod['applyBackendToolEvent'][0] - 1, 12)),
+            'and it must be the accounting that makes it different, not incidental drift',
         );
     }
 

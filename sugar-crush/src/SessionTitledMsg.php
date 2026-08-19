@@ -22,8 +22,22 @@ use SugarCraft\Core\Msg;
  */
 final class SessionTitledMsg implements Msg
 {
+    /**
+     * @param string $title The title to latch, or '' when there is none to
+     *                      latch but there IS usage to account — an empty or
+     *                      unusable model answer, or a store that refused the
+     *                      rename. {@see Chat::update()} drops an empty title
+     *                      and keeps the money, which is why the failure paths
+     *                      dispatch one of these rather than nothing.
+     * @param ?Usage $usage What the title call cost, or null when the provider
+     *                      reported nothing. Same rule the compaction call
+     *                      follows ({@see HistoryCompactedMsg}): every provider
+     *                      call this app makes on the user's key reaches the
+     *                      tracker, whatever becomes of its answer.
+     */
     public function __construct(
         public readonly string $sessionId,
         public readonly string $title,
+        public readonly ?Usage $usage = null,
     ) {}
 }
