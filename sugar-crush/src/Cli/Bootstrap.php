@@ -21,6 +21,7 @@ use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionGate;
@@ -37,6 +38,7 @@ use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\ToolResult;
@@ -50,6 +52,7 @@ use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\BuiltIn\Write;
+use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowRegistry;
@@ -92,6 +95,22 @@ final class Bootstrap
      */
     private const TRUSTED_PROJECT_HOOKS_CONFIG_KEY = 'trustedProjectHooks';
 
+    /**
+     * The SIBLING opt-in that makes a PROJECT `.mcp.json` eligible to start its
+     * servers — same file, same shape, same parser as
+     * {@see TRUSTED_PROJECT_HOOKS_CONFIG_KEY}. See {@see mcpClient()} for why
+     * starting an MCP server is code execution and therefore needs a gate at all.
+     *
+     * A SEPARATE KEY, and reusing the hooks one was considered and refused:
+     * every root a user has already listed under `trustedProjectHooks` would
+     * silently acquire the right to spawn arbitrary long-lived processes, which
+     * is a security grant being widened by an upgrade rather than by the user.
+     * The two decisions are also genuinely different — "run the shell commands
+     * this repo checked into `hooks.yaml`" is not "let this repo start whatever
+     * servers it names and keep them running for the session".
+     */
+    private const TRUSTED_PROJECT_MCP_CONFIG_KEY = 'trustedProjectMcp';
+
     private const DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
 
     /**
@@ -121,6 +140,17 @@ final class Bootstrap
      * @var array<string, list<string>>
      */
     private static array $trustedRoots = [];
+
+    /**
+     * The same, for {@see TRUSTED_PROJECT_MCP_CONFIG_KEY} — a SEPARATE map
+     * because it holds a separate key's answer, frozen for the same reason
+     * {@see trustedRootsForThisProcess()} gives: a session that prompt-injects a
+     * line into the user's config must not be able to make that line take effect
+     * in the session that wrote it.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedMcpRoots = [];
 
     /**
      * The hook entries this process read, keyed by file path — see
@@ -206,6 +236,24 @@ final class Bootstrap
      * One collector rather than four because the user does not care which class
      * noticed that their repository's directory was rejected.
      *
+     * FIVE WRITERS NOW, not four feeders: {@see mcpClient()} writes here DIRECTLY
+     * rather than through a `refusedDirectories()`-style seam, because `.mcp.json`
+     * is a FILE and there is no registry class between the read and this
+     * collector. It is the only entry that is not a directory, which is worth
+     * knowing when reading a refusal message from here — and it is also the only
+     * one INVISIBLE to the derivation that produces the counts in
+     * {@see projectTierRefusals()}, which sees `.<dir>/<segment>` literals and so
+     * cannot see a bare dot-file. That doc-block says so where the numbers are;
+     * the two writers `mcpClient()` registers here are "outside the tree" and
+     * "not trusted", and both are gated before any `proc_open()`.
+     *
+     * WHAT IT DOES NOT COLLECT, so the absence is a decision: a `.mcp.json` that
+     * was granted and then failed to START does not land here. That is a
+     * different subject — a file read and honoured, not one declined — and it
+     * would collide on this map's key with the two refusals above. See
+     * {@see mcpClient()}'s catch for where that diagnostic goes and for the four
+     * broken shapes that currently produce none at all.
+     *
      * @var array<string, string>
      */
     private static array $projectTierRefusals = [];
@@ -216,6 +264,69 @@ final class Bootstrap
      * @var array<string, true>
      */
     private static array $reportedProjectTierRefusals = [];
+
+    /**
+     * The MCP clients whose servers are running, keyed FIRST by the pid that
+     * started them and then by the `.mcp.json` path they were built from.
+     *
+     * MEMOIZED BECAUSE STARTING IS A SIDE EFFECT. One launch calls
+     * {@see tools()} at least twice — {@see app()} once for the shell's tool
+     * list and once more through {@see chat()} -> {@see backend()} — and a
+     * Ctrl+P provider switch calls {@see backendFor()} again. Building a fresh
+     * client each time would `proc_open()` every configured stdio server once
+     * per call, so a session would accumulate duplicate third-party processes
+     * for as long as it ran, and {@see stopMcpServers()} would only ever reach
+     * the last set.
+     *
+     * KEYED BY PATH rather than a single slot: `chat($repoA)` followed by
+     * `chat($repoB)` in one process is a supported shape (the tests do it), and
+     * a single slot would hand repo B repo A's servers. The path is the
+     * CANONICAL one — see {@see mcpClient()}, where four spellings of one root
+     * used to make four clients and eight server processes.
+     *
+     * KEYED BY PID FIRST, because a `pcntl_fork()`ed child inherits this whole
+     * map along with the rest of the parent's memory while the PROCESSES in it
+     * remain the PARENT's. Two failures came out of a single flat map:
+     *
+     *  - a child exiting through PHP's normal shutdown ran the inherited hook and
+     *    stopped the LIVE session's servers;
+     *  - a child that started servers of its OWN — which
+     *    {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::executeTask()}
+     *    does, via `chdir()` -> {@see backend()} -> {@see tools()} — had them in
+     *    a map the parent's {@see stopMcpServers()} never iterates, so they
+     *    outlived the worker with nothing left to stop them.
+     *
+     * Both are the same bug: ownership was recorded once for the process that
+     * happened to register first, not per client. The pid key IS the ownership
+     * record, and {@see stopMcpServers()} stops exactly this pid's bucket.
+     *
+     * A SIDE EFFECT WORTH NAMING: a child that asks for the root its PARENT
+     * already has a client for gets a MISS and starts its own servers. That is
+     * correct rather than wasteful — the inherited client's pipes and process
+     * handles are the parent's, and two processes taking turns reading one pipe is
+     * a corrupted protocol stream, not a shared connection.
+     *
+     * @var array<int, array<string, McpClient>>
+     */
+    private static array $mcpClients = [];
+
+    /**
+     * Whether this process IMAGE has registered the shutdown hook that stops the
+     * servers in {@see $mcpClients}.
+     *
+     * A PLAIN BOOLEAN IS ENOUGH, and it is worth saying why, because it used to be
+     * paired with a `$mcpOwnerPid` guard that made the hook a NO-OP in any forked
+     * child — which is what left a worker's own servers with nothing to stop them.
+     * The hook is inherited across `pcntl_fork()` along with the rest of memory,
+     * and {@see stopMcpServers()} acts on `getmypid()`'s bucket of
+     * {@see $mcpClients} and no other. So the inherited hook does exactly the
+     * right thing in a child — stops what the CHILD started, cannot touch the
+     * parent's — and the pid discrimination belongs on the map key, where the
+     * ownership actually is, not on the registration.
+     *
+     * @see registerMcpShutdown() for why there is no other seam.
+     */
+    private static bool $mcpShutdownRegistered = false;
 
     /**
      * Build the fully-wired Chat model the CLI binary hands to Program.
@@ -501,10 +612,27 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * TEN repository-chosen paths exist in `src/`. This list said FOUR, then
-     * FIVE, and both figures were hand-written; it is now DERIVED from `src/` by
+     * TEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * qualifier is the number's domain rather than decoration. What the
+     * derivation counts is a string literal of the shape `.<dir>/<segment>`:
+     * twenty distinct ones on this tree, ten of them classified
+     * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
+     * now DERIVED from `src/` by
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
-     * reds when an eleventh appears. The SEVEN whose refusals reach THIS map:
+     * reds when an eleventh appears.
+     *
+     * THE SHAPE EXCLUDES A BARE DOT-FILE, and one of those is in this map. A
+     * literal with no directory component — `src/` holds exactly two,
+     * `.mcp.json` in {@see mcpClient()} and `.phpunit.cache` in `IgnoreRules` —
+     * cannot match, so `.mcp.json` is repository-chosen, feeds this collector, and
+     * is not one of the ten. EIGHT repository-chosen paths therefore produce
+     * entries here: the seven below plus `.mcp.json`, which
+     * {@see $projectTierRefusals} records as the only entry that is not a
+     * directory. Stating the two figures without their domain is how the count
+     * that this whole enumeration exists to prevent gets made in the sentence
+     * describing it.
+     *
+     * The SEVEN of the ten whose refusals reach THIS map:
      *
      *   `.sugar-crush/workflows`  `.sugar-crush/skills`  `.claude/skills`
      *   `.opencode/skills`        `.sugar-crush/agents`  `.claude/agents`
@@ -2000,7 +2128,11 @@ final class Bootstrap
     }
 
     /**
-     * The project roots listed under `trustedProjectHooks`, canonicalised.
+     * The project roots listed under `trustedProjectHooks`, canonicalised —
+     * {@see trustedProjectRoots()} with this class's HOOK key. Kept as a named
+     * method of its own arity because it is what {@see hookFiles()}'s trust chain
+     * reads and what two tests invoke by reflection to assert the parsing rules
+     * below.
      *
      * Item-wise tolerance copied from {@see permissionRules()}: one malformed
      * entry is skipped and reported rather than silently widening or narrowing
@@ -2023,15 +2155,70 @@ final class Bootstrap
      */
     private static function trustedProjectHookRoots(array $config): array
     {
-        $raw = $config[self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY] ?? null;
+        return self::trustedProjectRoots(
+            $config,
+            self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY,
+            'no project hook file was trusted',
+        );
+    }
+
+    /**
+     * Whether the user has opted this project root's `.mcp.json` in — the
+     * {@see projectHooksAreTrusted()} of {@see TRUSTED_PROJECT_MCP_CONFIG_KEY},
+     * with the same fail-closed-on-every-uncertainty behaviour and the same
+     * once-per-process freeze. See {@see mcpClient()} for why starting a server
+     * needs the gate.
+     *
+     * @throws PermissionConfigException when the user config exists and is unusable
+     */
+    private static function projectMcpIsTrusted(string $root): bool
+    {
+        $canonical = realpath($root);
+        if ($canonical === false) {
+            return false;
+        }
+
+        $path = self::trustedConfigDirPath() . '/config.json';
+
+        if (!\array_key_exists($path, self::$trustedMcpRoots)) {
+            self::$trustedMcpRoots[$path] = self::trustedProjectRoots(
+                self::permissionConfig(),
+                self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
+                'no project MCP config was trusted',
+            );
+        }
+
+        return in_array($canonical, self::$trustedMcpRoots[$path], true);
+    }
+
+    /**
+     * The project roots listed under $key in the user config, canonicalised.
+     *
+     * ONE PARSER FOR BOTH TRUST KEYS, parameterised by the key name rather than
+     * copied: `trustedProjectHooks` and `trustedProjectMcp` are two separate
+     * GRANTS ({@see TRUSTED_PROJECT_MCP_CONFIG_KEY} says why they may not be one)
+     * but they are the same DATA SHAPE, and every rule below — the relative-entry
+     * refusal, the `~` expansion, the item-wise tolerance, the once-per-process
+     * warning — is a property of "a list of project roots in the user's config",
+     * not of what the list authorises. A second copy would be a second place for
+     * the `"."`-is-a-global-bypass refusal to be forgotten.
+     *
+     * @param array<string, mixed> $config the already-read user config
+     * @param string $key which trust list to read
+     * @param string $nothingTrusted what a wrong-shaped value costs, for the
+     *        warning — the only sentence that differs between the two keys
+     * @return list<string>
+     */
+    private static function trustedProjectRoots(array $config, string $key, string $nothingTrusted): array
+    {
+        $raw = $config[$key] ?? null;
         if ($raw === null) {
             return [];
         }
 
         if (!is_array($raw)) {
             self::warnPermissionConfigOnce(
-                self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY . ' is not a list of project paths; '
-                . 'no project hook file was trusted',
+                $key . ' is not a list of project paths; ' . $nothingTrusted,
             );
 
             return [];
@@ -2041,7 +2228,7 @@ final class Bootstrap
         foreach ($raw as $index => $entry) {
             if (!is_string($entry) || trim($entry) === '') {
                 self::warnPermissionConfigOnce(
-                    self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY . "[{$index}] is not a project path; entry skipped",
+                    $key . "[{$index}] is not a project path; entry skipped",
                 );
                 continue;
             }
@@ -2069,7 +2256,7 @@ final class Bootstrap
             // believing they opted in.
             if (!self::isAbsolutePath($expanded)) {
                 self::warnPermissionConfigOnce(
-                    self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY . "[{$index}] is '{$entry}', which is relative to "
+                    $key . "[{$index}] is '{$entry}', which is relative to "
                     . 'whatever directory sugarcrush was started in — it would trust EVERY repository you '
                     . 'run it from, not one. Write the absolute path (or a ~/-rooted one); entry skipped',
                 );
@@ -2489,15 +2676,383 @@ final class Bootstrap
     }
 
     /**
+     * The project's MCP config file name — the SAME file Claude Code reads, and
+     * the same `mcpServers` key {@see McpClient::loadConfig()} already parsed
+     * before anything built one.
+     */
+    public const MCP_CONFIG_FILENAME = '.mcp.json';
+
+    /**
+     * The launch's MCP client, with its configured servers STARTED, or null when
+     * this project has no usable `.mcp.json`.
+     *
+     * ONE LOCATION, `$root/.mcp.json`, and no user-level fallback. Adding one
+     * would mean choosing a precedence between a file the repository chooses and
+     * a file the user chooses, for a config whose entries `proc_open()` arbitrary
+     * commands; a second tier is a decision to make deliberately with its own
+     * tests, not a convenience to slip in beside the first. Stated here so its
+     * absence is a decision rather than an oversight.
+     *
+     * CONTAINMENT. `.mcp.json` is a REPOSITORY-CHOSEN path whose contents name
+     * commands to execute, so it is confined the way every other
+     * repository-chosen read in this package is: {@see ContainedPath::within()},
+     * both sides `realpath()`d, so a committed `.mcp.json -> /elsewhere/evil.json`
+     * is refused rather than followed. It is ONE compare rather than the
+     * anchor-plus-entry PAIR {@see \SugarCraft\Crush\Commands\CommandLoader}
+     * uses, and the difference is structural rather than a weaker rule: that
+     * class walks a DIRECTORY, so it has a boundary directory of its own to
+     * anchor (`.sugar-crush/commands` may itself be a symlink out of the tree,
+     * and then every entry under it passes an entry-level check). Here the
+     * "directory" IS $root — the value the user named on `--root` or the process
+     * working directory — and a tree cannot be confined to itself. The same
+     * shape as {@see \SugarCraft\Crush\Agents\WorktreeManager}'s two
+     * entry-level compares, for the same reason.
+     *
+     * STARTING A SERVER IS CODE EXECUTION, so the file is TRUST-GATED by the same
+     * MECHANISM `.sugar-crush/hooks.yaml` is — same config file, same parser, same
+     * once-per-process freeze, separate key; see
+     * {@see TRUSTED_PROJECT_MCP_CONFIG_KEY} and {@see hookFiles()} for the threat
+     * model this reuses wholesale. The same gate is not the same FAILURE MODE, and
+     * the two are worth keeping apart: an unusable hook file refuses the launch,
+     * an unusable `.mcp.json` degrades it (see FAILS OPEN below). The
+     * measurement that put the gate here, taken against a version of this method
+     * that had none, with the root NOT trusted and the mode `plan`:
+     *
+     *     .mcp.json = {"mcpServers":{"evil":{"command":"/bin/sh",
+     *                  "args":["-c","echo PWNED-AT-LAUNCH > …/pwned.txt"]}}}
+     *     Bootstrap::tools($repo)  ->  tools=10  elapsed=0.02s
+     *     cat pwned.txt            ->  PWNED-AT-LAUNCH
+     *
+     * `tools=10` is the part that matters: the payload was not even a working MCP
+     * server, `initialize` failed, the server was discarded — AND THE COMMAND
+     * STILL RAN. Starting IS the execution, so nothing downstream of `proc_open()`
+     * can be the boundary. In particular the PreToolUse chain is not: that gate
+     * sees tool CALLS, and this happens at construction, before any call and in
+     * every permission mode including `plan`. An earlier revision of this
+     * doc-block claimed "FAILS OPEN ON CAPABILITY, NEVER ON POLICY … a server
+     * that will not start costs the model some TOOLS; it cannot loosen anything",
+     * which was false in precisely the load-bearing direction.
+     *
+     * FAILS OPEN ON CAPABILITY ONLY. A missing file, a file outside the tree, an
+     * untrusted root, or a server that will not start costs the model some TOOLS.
+     * So unlike {@see hooks()} — where a present but unusable file refuses the
+     * LAUNCH, because a hook chain is the launch's gating policy — this degrades.
+     *
+     * THE TWO REFUSALS THIS METHOD MAKES ITSELF are recorded in
+     * {@see $projectTierRefusals} and printed by
+     * {@see reportProjectTierRefusals()}: out of the tree, and not trusted.
+     * "Present and ignored" is worse than silent when the user wrote the file on
+     * purpose, and the invisibility of the ungated version is half of why it went
+     * unnoticed. A config that is simply absent says nothing at all, which is the
+     * common case.
+     *
+     * A BROKEN CONFIG IS A DIFFERENT QUESTION AND MOSTLY DEGRADES SILENTLY. An
+     * earlier revision of this doc-block said "a broken config is reported on
+     * stderr", which is true of one of the five shapes a broken one takes.
+     * Measured on this tree, with the root trusted so the trust gate is not what
+     * is being observed:
+     *
+     *     A) a server whose command does not exist   SILENT  <- the common case
+     *     B) an unknown `type`                       reported: "could not be
+     *                                                fully started (…Unknown MCP
+     *                                                server type: weird)"
+     *     C) malformed JSON                          SILENT
+     *     D) valid JSON, wrong top-level key         SILENT
+     *     E) unknown `type`, then a good server      reported, and the servers
+     *                                                after the bad entry are
+     *                                                never reached
+     *
+     * Only the `default => throw` arm of {@see McpClient::startServer()} reaches
+     * the `catch` below at all; a server whose own `start()` fails is swallowed in
+     * there by `catch (\RuntimeException) { return; }`, and C and D are an empty
+     * config as far as {@see McpClient::loadConfig()} is concerned. So (A) — a
+     * `command` that is misspelled or not installed, overwhelmingly the way a real
+     * `.mcp.json` is broken — costs the user every tool on that server with
+     * nothing said anywhere. The repair belongs in `McpClient`, which owns both
+     * the swallow and the JSON parse, and is on the hardening backlog as E41;
+     * widening this method to reach around it would put the diagnostic in the
+     * wrong class and leave the swallow in place.
+     *
+     * @throws \RuntimeException when neither $root nor a working directory exists
+     *         ({@see requireRoot()}) — the same refusal every other rooted
+     *         accessor here makes.
+     * @throws PermissionConfigException when a `.mcp.json` IS present and the
+     *         user config that would grant it cannot be read or parsed — the same
+     *         hard line {@see permissionConfig()} draws, reached only for a
+     *         project that ships the file.
+     */
+    public static function mcpClient(?string $root = null): ?McpClient
+    {
+        $root = self::requireRoot($root);
+
+        // CANONICAL, not as spelled, for the reason {@see hookFiles()} gives at
+        // its own `realpath()`: the trust decision below is made on the resolved
+        // root, so keying the memo off the raw string would leave two names for
+        // one decision. MEASURED against the raw-string version, four spellings
+        // of ONE root — `$W/repo`, `$W/repo/`, `$W/repo/sub/..`, `$W/repo/./` —
+        // produced 4 cached clients and EIGHT live server processes, which is
+        // exactly the accumulation {@see $mcpClients} says memoization prevents.
+        $canonicalRoot = realpath($root);
+        $path = rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/')
+            . '/' . self::MCP_CONFIG_FILENAME;
+
+        $pid = getmypid() ?: 0;
+        if (array_key_exists($path, self::$mcpClients[$pid] ?? [])) {
+            return self::$mcpClients[$pid][$path];
+        }
+
+        // is_file() FIRST, so the overwhelmingly common "no MCP config" case
+        // costs one stat and reaches neither the containment compare, the trust
+        // gate, nor the refusal report. A dangling symlink is not a file, so it
+        // lands here.
+        if (!is_file($path)) {
+            return null;
+        }
+
+        if (!ContainedPath::within($path, $root)) {
+            // A REASON, NOT A SENTENCE, and it does not name the configured path:
+            // the one notice that prints this composes `ignoring <path> — <reason>`
+            // and already holds it, so naming it here put it in that line TWICE.
+            // Same mid-clause "resolves to …" shape as every sibling feeder — see
+            // {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()},
+            // whose doc-block records making this identical correction.
+            self::$projectTierRefusals[$path] = sprintf(
+                'resolves to %s, outside the project tree it was read from (%s); '
+                . 'refusing to start servers named by a file outside the checkout.',
+                realpath($path) === false ? 'nothing readable' : (string) realpath($path),
+                $root,
+            );
+
+            return null;
+        }
+
+        // THE TRUST GATE, and it is checked AFTER containment so that an
+        // out-of-tree config is reported as out-of-tree rather than as untrusted:
+        // the two have different fixes and only one of them is "opt in".
+        if ($canonicalRoot === false || !self::projectMcpIsTrusted($canonicalRoot)) {
+            self::$projectTierRefusals[$path] = sprintf(
+                'starting the MCP servers it names means running programs this repository chose, '
+                . 'every time you open it, before any tool call and in every permission mode. '
+                . 'Add "%s" to "%s" in %s to opt in',
+                rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/'),
+                self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
+                self::userConfigPath(),
+            );
+
+            return null;
+        }
+
+        $client = new McpClient(
+            $path,
+            // $unrestricted, and it is the opposite of what it looks like. The
+            // client fails CLOSED without an AgentPreset, and the MAIN agent has
+            // no preset — that mechanism scopes SUB-agents. So the alternatives
+            // were "the main agent gets zero MCP tools" or "synthesize a fake
+            // preset for it". What this actually bypasses is
+            // {@see \SugarCraft\Crush\MCP\McpRouter}'s per-preset allowlist,
+            // which is sub-agent SCOPING and not the user's safety boundary: the
+            // main agent is not preset-scoped for `Bash` either. That comparison
+            // is about SCOPING and is the only thing it is good for; see below.
+            //
+            // TWO CONTROLS, TWO JOBS, and stating them as one is the error this
+            // change-set was corrected for. LAUNCHING a server is gated by the
+            // trust list above — a repository-chosen command reaching
+            // `proc_open()` cannot be gated by anything downstream of it, because
+            // starting IS the execution. CALLING a bridge is gated by the
+            // PreToolUse chain, which sees tool calls and never sees
+            // `proc_open()`. Neither control substitutes for the other, and an
+            // earlier revision of this reasoning offered the PreToolUse chain as
+            // the answer to both.
+            //
+            // NOT "GATED EXACTLY AS `Bash`", which is how that revision put the
+            // second half. The CHAIN is shared; the DECISION coincides in five of
+            // the six permission modes and diverges under `plan`, where `Bash` is
+            // allowed for exploration and every `mcp__*` name is denied as a write
+            // tool — i.e. in the conservative direction. The measured table, and
+            // why the divergence is not a hole, are in
+            // {@see \SugarCraft\Crush\Tools\McpToolBridge}; the end-to-end
+            // measurements are in
+            // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest}.
+            //
+            // NO $denyPatterns ARGUMENT, deliberately: `McpClient` consults them
+            // only through `router()`, which only the AgentPreset arm reaches, so
+            // on this path they are inert. Passing a list that cannot be enforced
+            // would be a clause with no truth behind it. Deny patterns belong to
+            // the sub-agent path, which this bundle does not wire.
+            unrestricted: true,
+        );
+
+        // Registered BEFORE start, and the order matters: startServers() adds
+        // each server to the client as it comes up, so a client that throws
+        // part-way through still owns live processes that stopMcpServers() has to
+        // reach.
+        self::$mcpClients[$pid][$path] = $client;
+        self::registerMcpShutdown();
+
+        try {
+            $client->startServers();
+        } catch (\Throwable $e) {
+            // An unknown `type` in the config is the throwing case
+            // ({@see McpClient::startServer()}); a server whose own start() fails
+            // is already skipped in there. Reported rather than swallowed, and
+            // not rethrown: this is on {@see tools()}, which every launch and
+            // every provider switch reaches, and a PHP fatal over a live TUI is
+            // strictly worse than a session with fewer tools.
+            //
+            // WHAT IS LOST, precisely: the throw happens on the offending entry,
+            // so servers EARLIER in the file are up and servers AFTER it were
+            // never reached. Ordering-dependent, and a defect in the client
+            // rather than here — recorded in this bundle's report for the backlog.
+            //
+            // error_log() RATHER THAN warnPermissionConfig(), which is this class's
+            // other stderr seam, and the reason is that it is the only one a test
+            // can OBSERVE: `error_log()` honours the `error_log` ini setting, so
+            // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()}
+            // points it at a file and asserts this text, where a
+            // `fwrite(STDERR, …)` would be unassertable and would additionally
+            // print into the suite's own output. Same destination in production —
+            // an unset `error_log` ini means stderr — and same construction-time
+            // window every other launch notice here uses. It is NOT routed into
+            // {@see $projectTierRefusals}: that collector's subject is a path this
+            // launch declined to READ, and this file was read, granted and partly
+            // started. Its key is the path, which the two refusals above already
+            // own, so an entry here would collide with them.
+            error_log(sprintf(
+                'sugarcrush: MCP config %s could not be fully started (%s: %s); continuing without it.',
+                $path,
+                $e::class,
+                $e->getMessage(),
+            ));
+        }
+
+        return $client;
+    }
+
+    /**
+     * The model-facing {@see McpToolBridge} for every tool the launch's MCP
+     * servers advertise — empty when there is no config, which is the common case.
+     *
+     * @return list<McpToolBridge>
+     */
+    public static function mcpTools(?string $root = null): array
+    {
+        $client = self::mcpClient($root);
+        if ($client === null) {
+            return [];
+        }
+
+        $tools = [];
+        foreach ($client->listTools() as $descriptor) {
+            $tools[] = new McpToolBridge($client, $descriptor);
+        }
+
+        return $tools;
+    }
+
+    /**
+     * Stop every MCP server THIS PID started.
+     *
+     * PUBLIC because it is BOTH the shutdown hook's callback and the only way a
+     * caller that owns a process lifetime (a test, an embedder) can hand the
+     * servers back before exit. Idempotent: the client empties its own map, and
+     * this empties this pid's bucket of ours.
+     *
+     * THIS PID'S BUCKET AND NO OTHER — see {@see $mcpClients}. A
+     * `pcntl_fork()`ed child inherits the parent's whole map, so anything wider
+     * than one bucket means a worker's ordinary exit SIGTERMs the live session's
+     * servers. Other pids' buckets are left in place rather than dropped: the
+     * child's copy of them is a copy, and dropping it in the child would say
+     * something untrue about the parent's.
+     */
+    public static function stopMcpServers(): void
+    {
+        $pid = getmypid() ?: 0;
+        $clients = self::$mcpClients[$pid] ?? [];
+        unset(self::$mcpClients[$pid]);
+
+        foreach ($clients as $client) {
+            // Bounded by StdioMcpServer::stop()'s SIGTERM-then-9 escalation.
+            // Wrapped anyway: this runs during shutdown, and a throw from the
+            // first server would leave the rest running.
+            try {
+                $client->stopServers();
+            } catch (\Throwable) {
+                // Nothing to report to — stderr may already be gone at shutdown,
+                // and there is no remedy left to offer.
+            }
+        }
+    }
+
+    /**
+     * THE SHUTDOWN SEAM, and it had to be created: `bin/sugarcrush` runs
+     * `Program::run()` (or {@see NonInteractive::run()}) and then falls off the
+     * end of the script, and a `grep` for `register_shutdown_function` across
+     * `src/` and `bin/` found nothing at all. A `stopServers()` that is never
+     * called leaves an orphaned third-party process per configured server after
+     * every session, which is worse than never starting them.
+     *
+     * REGISTERED HERE rather than in `bin/sugarcrush` on purpose: this is the one
+     * function that STARTS the servers, so start and stop cannot be wired apart.
+     * Every entry point — the TUI, `-p` one-shot, an embedder calling
+     * {@see tools()} directly, a test — gets the stop for free, and nothing can
+     * acquire the servers without it.
+     *
+     * ONCE PER PROCESS IMAGE, and a `pcntl_fork()`ed child needs no registration
+     * of its own: it inherits this one, and the inherited hook is CORRECT in the
+     * child because {@see stopMcpServers()} acts only on `getmypid()`'s bucket of
+     * {@see $mcpClients}. So a child that starts servers of its own —
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::executeTask()}
+     * reaches {@see tools()} after a `chdir()` — has them stopped when it exits,
+     * while the live session's servers are untouched. Both halves of that are
+     * measured in
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAForkedWorkerStopsItsOwnServersAndLeavesTheParentsAlone()}.
+     *
+     * WHAT IT COVERS: a normal return, any `exit()`, and an uncaught exception.
+     * WHAT IT DOES NOT: `SIGKILL`, and any signal for which no PHP handler is
+     * installed — a bare `SIGINT`/`SIGTERM` at the shell terminates the process
+     * without running shutdown functions. That residue is not closed here because
+     * closing it means installing signal handlers on the CLI's main path, which
+     * is a decision about the TUI's own Ctrl+C handling and not about MCP. Nor
+     * does it cover {@see \SugarCraft\Crush\Support\ForkedChild::exitNow()},
+     * which deliberately bypasses PHP's shutdown sequence — a child that took
+     * that route and had started its own servers leaks them, and that is the
+     * fork helper's contract rather than something this seam can override.
+     */
+    private static function registerMcpShutdown(): void
+    {
+        if (self::$mcpShutdownRegistered) {
+            return;
+        }
+
+        self::$mcpShutdownRegistered = true;
+
+        register_shutdown_function(static function (): void {
+            self::stopMcpServers();
+        });
+    }
+
+    /**
      * Build the built-in coding tools, with a shared InstructionFileLoader
      * wired into every tool that surfaces nested CLAUDE.md/AGENTS.md content
      * (Read/Edit/Glob/Write) so those files are actually reachable when a user
      * runs the real CLI binary.
      *
-     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET — ten entries as of this
-     * writing, and that count is the domain for every "N built-in tools" figure in
-     * `README.md`. `src/Tools/BuiltIn/` holds exactly these ten concrete `Tool`
-     * classes.
+     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET. Its BUILT-IN half is ten
+     * entries as of this writing, and THAT count — not this array's length — is
+     * the domain for every "N built-in tools" figure in `README.md`.
+     * `src/Tools/BuiltIn/` holds exactly those ten concrete `Tool` classes.
+     *
+     * The array is longer than ten only when the project ships a `.mcp.json` AND
+     * the user has listed this root under `trustedProjectMcp` — both conditions,
+     * see {@see mcpClient()} for why the second one exists. Then one
+     * {@see McpToolBridge} per tool the configured MCP servers advertise is
+     * appended at the end (see {@see mcpTools()}). That is a per-PROJECT number
+     * nothing in `src/` can know, which is why every count stated here and every
+     * scanned assertion about this method is about the built-in half. The one
+     * concrete `Tool` implementor under `src/` that is NOT in the literal below is
+     * `McpToolBridge`, for exactly that reason —
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES}
+     * is where that exemption is recorded and asserted.
      *
      * NOT "BY CONSTRUCTION", which is what this doc-block used to say. Nothing
      * derives this array from that directory or that directory from this array;
@@ -2564,6 +3119,18 @@ final class Bootstrap
             // a full SKILL.md body through this tool only when it decides one
             // is relevant (crush_feat.md section 7 E1/E2).
             new SkillTool($skills, new SkillLoader()),
+            // APPENDED, so the ten built-ins keep the wire order the model has
+            // learned and an MCP config can only ever ADD names. Empty unless
+            // this project ships a `.mcp.json` AND the user trusted this root —
+            // see {@see mcpTools()} and {@see mcpClient()}.
+            //
+            // The doc-block above deliberately still says TEN: that count is the
+            // BUILT-IN set, which is what `README.md`'s figure and
+            // `BinSugarcrushWiringTest`'s scanned assertion are both about. What
+            // this array returns is that set PLUS whatever the project's MCP
+            // servers advertise, which is a per-project number nothing in `src/`
+            // can know.
+            ...self::mcpTools($root),
         ];
     }
 

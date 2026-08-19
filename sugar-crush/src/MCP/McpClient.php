@@ -103,11 +103,23 @@ final class McpClient
         $type = $config['type'] ?? 'stdio';
 
         $server = match ($type) {
+            // `startTimeout` (seconds) is OPTIONAL and per-server: a locally
+            // installed binary answers the handshake in milliseconds, while a
+            // cold `npx -y @modelcontextprotocol/server-…` first has to fetch a
+            // package tree. Only a positive number is honoured — anything else
+            // (a string, 0, a negative) falls back to
+            // {@see StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS}, because a
+            // hand-edited config must not be able to turn the bound OFF by
+            // accident. It bounds the HANDSHAKE only; `tools/call` stays
+            // unbounded, see {@see StdioMcpServer::callTool()}.
             'stdio' => new StdioMcpServer(
                 name: $name,
                 command: $config['command'] ?? '',
                 args: $config['args'] ?? [],
                 env: $this->resolveEnv($config['env'] ?? []),
+                startTimeoutSeconds: is_numeric($config['startTimeout'] ?? null)
+                    ? (float) $config['startTimeout']
+                    : null,
             ),
             'http' => new HttpMcpServer(
                 name: $name,

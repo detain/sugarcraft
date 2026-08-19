@@ -218,9 +218,16 @@ final class ReadPathCensusTest extends TestCase
         'LSP/LspClient.php|file' => [
             'CALLER_SUPPLIED — the URI came from the editor request this client is answering',
         ],
+        // WAS `CALLER_SUPPLIED — nothing in src/ builds one yet, so the first caller
+        // owns the boundary`, and the first caller has now arrived:
+        // Cli\Bootstrap::mcpClient() resolves `$root/.mcp.json` and refuses it
+        // through ContainedPath::within() before constructing the client. A row
+        // whose rationale is "nobody calls this" expires the moment somebody does,
+        // which is the transition this ledger exists to make visible.
         'MCP/McpClient.php|file_get_contents' => [
-            'CALLER_SUPPLIED — the MCP config path is a constructor argument; nothing in `src/` '
-                . 'builds one yet, so the first caller owns the boundary',
+            'CONTAINED_UPSTREAM:Cli/Bootstrap.php — `$root/.mcp.json`, bounded against the root '
+                . 'that named it before this class is constructed. Still a constructor argument, so an '
+                . 'EMBEDDER building one directly owns its own boundary; the launch path has one',
         ],
         'MCP/OAuthClientRegistration.php|file_get_contents' => [
             'SELF_LOCATED — `~/.local/share/sugar-crush/mcp-auth.json`, written by this class',

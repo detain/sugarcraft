@@ -26,18 +26,25 @@ use RuntimeException;
  * file's behaviour to the other over it. That is the whole of what the rename
  * fixes, and no call site moved, because there are none.
  *
- * DORMANT IS NOT UNGATED, and dormant is also not deleted. MEASURED, and quoted
- * as it actually returns: outside the two class files themselves,
- * `grep -rn McpClient src/ bin/ examples/` reports exactly ONE line —
+ * DORMANT IS NOT UNGATED, and dormant is also not deleted. THIS PARAGRAPH USED
+ * TO SAY "NEITHER client is constructed by a real run", over a measurement that
+ * `grep -rn McpClient src/ bin/ examples/` reported exactly one line — a
+ * doc-comment in `src/Providers/Concerns/HttpClientDefaults.php` comparing
+ * timeouts, not a construction. THAT IS NO LONGER TRUE OF THE SIBLING, and the
+ * half that changed is precisely the half a reader of this file would carry
+ * away: crush_code.md Phase 2 item 2 gave {@see \SugarCraft\Crush\MCP\McpClient}
+ * a real caller in {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()}, which
+ * reads `$root/.mcp.json` behind a {@see \SugarCraft\Crush\Support\ContainedPath}
+ * compare AND a per-user trust grant (`trustedProjectMcp`, because starting a
+ * server is code execution from cloned content), and exposes each discovered tool
+ * through {@see \SugarCraft\Crush\Tools\McpToolBridge} — whose CALLS are gated by
+ * the PreToolUse chain like every other tool. So "the other one is the live one"
+ * IS now a thing that
+ * can be said, and it is said about the sibling; THIS class is still constructed
+ * by nothing but its own test. Reading the sentence that used to be here as
+ * covering both is exactly the basename confusion the rename existed to end.
  *
- *   src/Providers/Concerns/HttpClientDefaults.php:33: * to `src/MCP/McpClient.php`'s `timeout => 30`. That value is correct there
- *
- * — which is a DOC COMMENT comparing timeouts, not a construction. (An earlier
- * revision of this paragraph said the command "reports nothing"; it never did.)
- * So the conclusion the grep was cited for stands: NEITHER client is
- * constructed by a real run, and "the other one is the live one" is not a thing
- * that can be said about either. That the one hit names the SIBLING rather than
- * this class is also why the dormancy test for this class
+ * The dormancy test for this class
  * ({@see \SugarCraft\Crush\Tests\ClaudeCodeMcpClientTest::testNothingInSrcBinOrExamplesReachesThisDormantSeam()})
  * separates comments from code with `token_get_all()` rather than grepping
  * bytes: a doc-comment mention reaches nothing, and reporting one as a call site

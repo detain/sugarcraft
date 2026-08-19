@@ -94,6 +94,107 @@ final class ToolSchemaEncodingTest extends TestCase
         $this->assertStringContainsString('"required":[]', $json);
     }
 
+    // =========================================================================
+    // NESTED empty `properties` — the same 400, one level down
+    // =========================================================================
+
+    /**
+     * THE CORRECTION IS RECURSIVE, and it had to become so the moment third-party
+     * JSON Schema reached the wire.
+     *
+     * This normalisation was a single flat `if` on the ROOT `properties` key for
+     * as long as every tool on the wire was a built-in with a hand-written schema.
+     * A NESTED no-argument object — `{"opts": {"type": "object", "properties":
+     * []}}` — is a routine shape in an MCP server's `inputSchema`, and it 400s the
+     * whole `chat/completions` request for exactly the reason the root case did.
+     * Measured through this same provider method before the walk was recursive:
+     *
+     *     ON THE WIRE: …"properties":{"opts":{"type":"object","properties":[]…
+     */
+    public function testANestedEmptyPropertiesIsObjectifiedToo(): void
+    {
+        $json = (string) json_encode($this->buildParams([new NestedEmptyPropsToolStub()]));
+
+        $this->assertStringNotContainsString('"properties":[]', $json);
+        $this->assertStringContainsString('"opts":{"type":"object","properties":{},"required":[]}', $json);
+    }
+
+    /** And it does not stop at one level. */
+    public function testADoublyNestedEmptyPropertiesIsObjectifiedToo(): void
+    {
+        $json = (string) json_encode($this->buildParams([new DoublyNestedEmptyPropsToolStub()]));
+
+        $this->assertStringNotContainsString('"properties":[]', $json);
+        // The INNERMOST object is the only empty one — the middle one's
+        // `properties` holds `inner`, so it is already an object on the wire and
+        // must be left as it is.
+        $this->assertStringContainsString(
+            '"outer":{"type":"object","properties":{"inner":{"type":"object","properties":{}}}}',
+            $json,
+        );
+        $this->assertSame(1, substr_count($json, '"properties":{}'));
+    }
+
+    /**
+     * THE REAL PRODUCER, not a stub: an {@see \SugarCraft\Crush\Tools\McpToolBridge}
+     * over a descriptor in the shape a server sends, through the real provider
+     * method. This is the whole finding — nothing in `src/` put third-party JSON
+     * Schema on the wire before the bridge existed, so no built-in could ever have
+     * exposed it.
+     */
+    public function testAnMcpBridgesNestedNoArgumentObjectSurvivesTheWire(): void
+    {
+        $bridge = new \SugarCraft\Crush\Tools\McpToolBridge(
+            new \SugarCraft\Crush\MCP\McpClient('/nonexistent/.mcp.json', unrestricted: true),
+            new \SugarCraft\Crush\MCP\McpTool(
+                name: 'render',
+                description: 'Render with options.',
+                inputSchema: [
+                    'type' => 'object',
+                    'properties' => ['opts' => ['type' => 'object', 'properties' => [], 'required' => []]],
+                    'required' => [],
+                ],
+                serverName: 'srv',
+            ),
+        );
+
+        $json = (string) json_encode($this->buildParams([$bridge]));
+
+        $this->assertStringNotContainsString('"properties":[]', $json);
+        $this->assertStringContainsString('"name":"mcp__srv__render"', $json);
+    }
+
+    /**
+     * The walk descends into SUB-SCHEMAS only. `enum`, `const`, `default` and
+     * `examples` hold INSTANCE VALUES — the tool's own data — where `[]` is a
+     * legitimate empty JSON array and a key called `properties` is a property of
+     * the user's object, not a JSON Schema keyword. A "recurse into every array"
+     * implementation would corrupt both.
+     */
+    public function testInstanceValuesAreNotWalkedOrObjectified(): void
+    {
+        $json = (string) json_encode($this->buildParams([new InstanceValueToolStub()]));
+
+        $this->assertStringContainsString('"enum":[]', $json);
+        $this->assertStringContainsString('"default":{"properties":[]}', $json);
+        // ...while the schema keyword one level above them still IS corrected.
+        $this->assertStringContainsString('"properties":{}', $json);
+    }
+
+    /**
+     * Normalising an already-normalised schema changes nothing — the shape a
+     * transcript replayed from disk, or a second `buildParams()` on the same tool
+     * list, would hit.
+     */
+    public function testNormalisationIsIdempotent(): void
+    {
+        $once = $this->normalize(['type' => 'object', 'properties' => [
+            'opts' => ['type' => 'object', 'properties' => []],
+        ]]);
+
+        $this->assertSame(json_encode($once), json_encode($this->normalize($once)));
+    }
+
 
     /**
      * Regression guard for the SECOND 400: any turn that actually CALLED a
@@ -280,6 +381,22 @@ final class ToolSchemaEncodingTest extends TestCase
         ));
     }
 
+    /**
+     * The trait's own entry point, reached through a provider instance because
+     * `normalizeToolSchema()` is private to the trait.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private function normalize(array $schema): array
+    {
+        $provider = SglangProvider::openAiCompatible('https://example.invalid/v1', 'test-model');
+        $method = new \ReflectionMethod(SglangProvider::class, 'normalizeToolSchema');
+        $method->setAccessible(true);
+
+        return $method->invoke($provider, $schema);
+    }
+
     /** @param list<Tool> $tools */
     private function buildParams(array $tools): array
     {
@@ -303,6 +420,75 @@ final class EmptyPropsToolStub implements Tool
     public function inputSchema(): array
     {
         return ['type' => 'object', 'properties' => [], 'required' => []];
+    }
+    public function execute(array $args): ToolResult
+    {
+        return new ToolResult(toolCallId: $args['id'] ?? '', content: 'ok');
+    }
+}
+
+/** A no-argument object one level DOWN — the routine MCP shape. */
+final class NestedEmptyPropsToolStub implements Tool
+{
+    public function name(): string { return 'nested'; }
+    public function description(): string { return 'takes an options object that takes nothing'; }
+    public function inputSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => ['opts' => ['type' => 'object', 'properties' => [], 'required' => []]],
+            'required' => [],
+        ];
+    }
+    public function execute(array $args): ToolResult
+    {
+        return new ToolResult(toolCallId: $args['id'] ?? '', content: 'ok');
+    }
+}
+
+/** ...and two levels down, so the fix cannot be a second flat `if`. */
+final class DoublyNestedEmptyPropsToolStub implements Tool
+{
+    public function name(): string { return 'doubly'; }
+    public function description(): string { return 'nests twice'; }
+    public function inputSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => ['outer' => [
+                'type' => 'object',
+                'properties' => ['inner' => ['type' => 'object', 'properties' => []]],
+            ]],
+            'required' => [],
+        ];
+    }
+    public function execute(array $args): ToolResult
+    {
+        return new ToolResult(toolCallId: $args['id'] ?? '', content: 'ok');
+    }
+}
+
+/**
+ * Carries JSON Schema INSTANCE values — an `enum` that is legitimately an empty
+ * list, and a `default` object that happens to have a key spelled `properties`.
+ * Neither may be rewritten.
+ */
+final class InstanceValueToolStub implements Tool
+{
+    public function name(): string { return 'instance'; }
+    public function description(): string { return 'carries instance values'; }
+    public function inputSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => ['cfg' => [
+                'type' => 'object',
+                'properties' => [],
+                'enum' => [],
+                'default' => ['properties' => []],
+            ]],
+            'required' => [],
+        ];
     }
     public function execute(array $args): ToolResult
     {

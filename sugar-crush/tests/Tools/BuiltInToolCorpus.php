@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Tools;
 
+use SugarCraft\Crush\MCP\McpClient;
+use SugarCraft\Crush\MCP\McpTool;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
+use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -50,6 +53,68 @@ final class BuiltInToolCorpus
     private const NAMESPACE_PREFIX = 'SugarCraft\\Crush\\';
 
     /**
+     * Concrete {@see Tool} implementors under `src/` that
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} constructs DYNAMICALLY,
+     * one per runtime-discovered thing, and therefore CANNOT appear as a literal
+     * in that array.
+     *
+     * A RECORDED EXEMPTION, not a hole, and it is deliberately narrow: these
+     * classes stay in {@see classNames()} and {@see instances()} — so every
+     * interface-conformance, naming and schema test still covers them — and are
+     * subtracted only by the ONE assertion whose subject is "the literal in
+     * `Bootstrap::tools()` and the `src/Tools/BuiltIn/` directory agree"
+     * ({@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}).
+     *
+     * WHY IT HAD TO EXIST. That assertion is `assertSame(classNames(), wired)` in
+     * both directions, which is exactly what caught the `Write` defect and must
+     * keep doing so. But {@see McpToolBridge} wraps ONE MCP tool descriptor
+     * discovered from a project's `.mcp.json`: on a tree with no such file there
+     * are zero of them in `Bootstrap::tools()`, and on a tree with one there are as
+     * many as the servers advertise. Neither number is a literal anybody could
+     * write. Without this list the bidirectional assertion would have had to be
+     * weakened to `assertContains`, which loses the direction that matters.
+     *
+     * KEEP IT AT THE SHORTEST LIST THAT IS TRUE. Anything in here is a tool no
+     * scanned assertion can prove is reachable, so each entry needs its own
+     * end-to-end reachability test naming it — for this one,
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest}, which drives
+     * a real call through `Runtime`.
+     *
+     * AND THAT RULE IS NOW THE SHAPE OF THIS CONSTANT RATHER THAN A SENTENCE
+     * ABOVE IT. It was a flat list, and the rule was asserted nowhere: MEASURED,
+     * adding one line here for a `Tool` that nothing wires and nothing can
+     * dispatch made it pass `BuiltInToolCorpusTest`, `BinSugarcrushWiringTest`,
+     * `BuiltInToolTest` and `ToolSchemaEncodingTest`, all rc=0 — an exemption that
+     * granted itself. So each entry is a `class => reachability test method` pair,
+     * and {@see testEveryDynamicToolExemptionNamesAReachabilityTestThatExists()}
+     * resolves the named method by reflection. A new entry cannot be written
+     * without naming the evidence, and naming evidence that does not exist reds.
+     * The flat list every other consumer wants is {@see dynamicToolClasses()}.
+     *
+     * @var array<class-string<Tool>, string> class => `Test\Class::testMethod`
+     *      that drives it end to end
+     */
+    public const DYNAMIC_TOOL_CLASSES = [
+        McpToolBridge::class => \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::class
+            . '::testAModelToolCallReachesTheMcpServerAndItsAnswerReachesTheModel',
+    ];
+
+    /**
+     * The exempted classes alone — {@see DYNAMIC_TOOL_CLASSES}' keys.
+     *
+     * Every consumer that subtracts or compares the exemption wants this and not
+     * the map: `array_diff()` and `assertSame()` against a map would compare the
+     * TEST METHOD NAMES, which is silently the wrong question rather than a type
+     * error.
+     *
+     * @return list<class-string<Tool>>
+     */
+    public static function dynamicToolClasses(): array
+    {
+        return array_keys(self::DYNAMIC_TOOL_CLASSES);
+    }
+
+    /**
      * The directory whose contents MUST every one of them declare their PSR-4
      * symbol: the tools a real run dispatches, where a namespace/directory
      * disagreement is a defect rather than an exemption.
@@ -65,12 +130,18 @@ final class BuiltInToolCorpus
      * all three consumers ({@see \SugarCraft\Crush\Tests\Tools\BuiltInToolTest},
      * {@see \SugarCraft\Crush\Tests\Providers\ToolSchemaEncodingTest},
      * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest}).
-     * MEASURED on this tree: the flat glob and this full-`src/` sweep return the
-     * SAME TEN classes, so nothing is being caught today — 267 `.php` files under
-     * `src/`, 10 concrete `Tool` implementors, all 10 in `src/Tools/BuiltIn/`.
-     * What changes is `src/LSP/LspTool.php`, the next planned tool (plan step
-     * #17): under the flat glob it would arrive unwired and unseen, which is
-     * verbatim the recurrence this corpus was written to prevent.
+     * IT IS NO LONGER LATENT, and that sentence used to say it was: MEASURED on
+     * this tree, 276 `.php` files under `src/` hold ELEVEN concrete `Tool`
+     * implementors, ten in `src/Tools/BuiltIn/` and one — {@see McpToolBridge},
+     * the adapter that makes a project's MCP tools dispatchable — in
+     * `src/Tools/`. Under the flat glob that eleventh would have been invisible to
+     * all four consumers, which is verbatim the recurrence this corpus was written
+     * to prevent. The next planned tool, `src/LSP/LspTool.php` (plan step #17),
+     * lands the same way.
+     *
+     * The counterpart is {@see DYNAMIC_TOOL_CLASSES}: the widening is what puts a
+     * tool outside the wired directory INTO every test, and that list is what
+     * says which of them `Bootstrap::tools()` cannot name as a literal.
      *
      * THE GUARD FIX BELOW IS A PREREQUISITE FOR THAT WIDENING, not a nicety
      * beside it. Symbol kinds measured across the PRIMARY (PSR-4-named) symbol of
@@ -545,6 +616,24 @@ final class BuiltInToolCorpus
                 } else {
                     $built = match ($class) {
                         SkillTool::class => new SkillTool(new SkillRegistry()),
+                        // A bridge over a client with NO config file and therefore
+                        // no servers: every consumer of this corpus asks about
+                        // name/description/schema shape, which come from the
+                        // descriptor, and the one that calls `execute([])`
+                        // ({@see \SugarCraft\Crush\Tests\Tools\BuiltInToolTest})
+                        // gets the error result an unreachable tool must produce
+                        // rather than a spawned process. The descriptor is
+                        // synthetic on purpose: a corpus probe must not depend on
+                        // any MCP server being installed.
+                        McpToolBridge::class => new McpToolBridge(
+                            new McpClient('/nonexistent/corpus-probe/.mcp.json'),
+                            new McpTool(
+                                name: 'ping',
+                                description: 'corpus probe descriptor',
+                                inputSchema: [],
+                                serverName: 'corpus',
+                            ),
+                        ),
                         default => throw new \RuntimeException(sprintf(
                             '%s needs constructor arguments; add it to %s::instances() so every built-in-tool test '
                             . 'covers it rather than silently skipping it.',

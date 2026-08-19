@@ -157,7 +157,15 @@ final class BinSugarcrushWiringTest extends TestCase
 
         $this->assertArrayHasKey(\SugarCraft\Crush\Tools\BuiltIn\Write::class, $byClass);
 
-        $expected = BuiltInToolCorpus::classNames();
+        // MINUS the dynamically-constructed tools, and the subtraction is the
+        // whole of the exemption — see
+        // {@see BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES} for why it had to exist
+        // and how narrow it is kept. `array_values` because `array_diff`
+        // preserves keys and `assertSame` compares them.
+        $expected = array_values(array_diff(
+            BuiltInToolCorpus::classNames(),
+            BuiltInToolCorpus::dynamicToolClasses(),
+        ));
         $wired = array_keys($byClass);
         sort($wired);
 
@@ -167,6 +175,15 @@ final class BinSugarcrushWiringTest extends TestCase
             'every concrete Tool under src/Tools/BuiltIn/ must be wired into Bootstrap::tools(), and nothing '
             . 'else may be: a class in that directory that no run can dispatch is the Write defect again',
         );
+
+        // The exemption may not become a hiding place: this repo has no
+        // `.mcp.json`, so the fixture repo Bootstrap::tools() was called against
+        // has none either, and every exempted class must therefore be ABSENT
+        // here. If one ever appears, it is constructible as a literal after all
+        // and belongs in the array rather than on the list.
+        foreach (BuiltInToolCorpus::dynamicToolClasses() as $dynamic) {
+            $this->assertArrayNotHasKey($dynamic, $byClass);
+        }
 
         $names = array_map(static fn (object $t): string => $t->name(), array_values($byClass));
         sort($names);

@@ -318,6 +318,47 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
+     * THE DERIVATION'S SHAPE IS THE DOMAIN OF BOTH NUMBERS, and this is what says
+     * so — because a number stated without its domain is the defect this whole
+     * file exists to catch, and the enumeration above had made it about itself.
+     *
+     * {@see dotPathsIn()} matches `.<dir>/<segment>`, so a bare dot-FILE is
+     * invisible to it. `.mcp.json` is exactly that: repository-chosen, whose
+     * contents name commands to `proc_open()`, gated by containment AND by
+     * `trustedProjectMcp`, and a direct writer of the collector — and it is not
+     * one of the ten. Both halves are asserted, so neither "TEN" nor the
+     * enumeration under it can quietly start reading as "every repository-chosen
+     * path".
+     */
+    public function testTheDerivationCannotSeeABareDotFileAndTheOneThisCollectorHoldsIsNamedAnyway(): void
+    {
+        $derived = $this->dotPathsIn(\dirname(__DIR__, 2) . '/src');
+
+        foreach (array_keys($derived) as $occurrence) {
+            $this->assertStringNotContainsString(
+                '.mcp.json',
+                $occurrence,
+                'the derivation matches a dot-DIRECTORY path; a bare dot-file appearing here '
+                . 'means the shape widened and both counts need re-deriving',
+            );
+        }
+
+        $this->assertNotContains('.mcp.json', $this->repositoryChosenPaths());
+        $this->assertSame('.mcp.json', Bootstrap::MCP_CONFIG_FILENAME, 'the file the claim below is about');
+
+        // ...and it must still be NAMED where the counts are stated, exactly as
+        // each of the ten is.
+        $bootstrap = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
+        $enumeration = $this->docBlockAbove($bootstrap, 'public static function projectTierRefusals()')
+            . "\n" . $this->docBlockAbove($bootstrap, 'private static array $projectTierRefusals = [];');
+
+        $this->assertStringContainsString('`.mcp.json`', $enumeration);
+        // And the qualifier that makes "TEN" true, rather than the bare number
+        // the last revision of that doc-block carried.
+        $this->assertStringContainsString('DOT-DIRECTORY', $enumeration);
+    }
+
+    /**
      * Which of the ten reach the collector, and which are gated elsewhere. SEVEN
      * and THREE — stated here so "four feeders" cannot quietly stand in for "and
      * three paths nobody drains".

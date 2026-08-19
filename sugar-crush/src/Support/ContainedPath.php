@@ -94,7 +94,15 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - TWENTY-SIX call sites in TEN files ask this class, the tenth being
+ *   - TWENTY-SEVEN call sites in ELEVEN files ask this class. The ELEVENTH is
+ *     {@see \SugarCraft\Crush\Cli\Bootstrap} (1 — `$root/.mcp.json`, the MCP
+ *     server config, against the root that named it), and it is the first entry
+ *     here that arrived WITH its read rather than after it: nothing in `src/`
+ *     constructed an {@see \SugarCraft\Crush\MCP\McpClient} at all, so the
+ *     config path had no producer to bound. It is ONE compare, not the
+ *     anchor-plus-entry pair, because the file sits directly in `$root` and a
+ *     tree cannot be confined to itself — `WorktreeManager`'s two entry-level
+ *     compares are the same shape. The tenth is
  *     {@see \SugarCraft\Crush\Providers\ProviderFactory} (2 — the config DIRECTORY
  *     against the tree containing the package, and `config.dev.json` against that
  *     directory), which held the SAME `__DIR__`-relative, containment-free

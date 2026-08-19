@@ -174,6 +174,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Agents/ForeignAgentPresetRegistry.php' => 2,
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
+        'Cli/Bootstrap.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Context/InstructionFileLoader.php' => 5,
         'Memory/ForeignMemoryImporter.php' => 2,
@@ -190,9 +191,20 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "TWENTY-SIX call sites in TEN files", per file. Each count is one read
+     * "TWENTY-SEVEN call sites in ELEVEN files", per file. Each count is one read
      * decision, so a dropped gate shows up as the file's number falling — which
      * is the half of #89 an instrument like this genuinely covers.
+     *
+     * `Cli/Bootstrap.php` is the eleventh file, and it arrived with the READ it
+     * gates: `mcpClient()` resolves `$root/.mcp.json`, a repository-chosen file
+     * whose entries `proc_open()` arbitrary commands, and nothing in `src/` built
+     * an {@see \SugarCraft\Crush\MCP\McpClient} before it — which is why
+     * {@see ReadPathCensusTest}'s row for `MCP/McpClient.php` read
+     * `CALLER_SUPPLIED — nothing in src/ builds one yet` and now reads
+     * `CONTAINED_UPSTREAM:Cli/Bootstrap.php`. ONE compare rather than the
+     * anchor-plus-entry pair, because the boundary here IS `$root` and a tree
+     * cannot be confined to itself; the same shape as `WorktreeManager`'s two
+     * entry-level compares.
      *
      * `Providers/ProviderFactory.php` is the tenth file and was the same
      * `__DIR__`-relative construction as `WorktreeConfig`'s, closed a round earlier:

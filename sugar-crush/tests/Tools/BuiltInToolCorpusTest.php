@@ -144,13 +144,25 @@ final class BuiltInToolCorpusTest extends TestCase
     // ─── against the real src/ ──────────────────────────────────────
 
     /**
-     * The claim in {@see BuiltInToolCorpus::classNames()}'s doc-block, asserted
-     * rather than stated: widening the scan from `src/Tools/BuiltIn/*.php` to all
-     * of `src/` returns the same set on THIS tree. When it fails, a `Tool`
-     * implementor has been added outside the wired directory — which is the case
-     * the widening exists for, and the failure names it.
+     * What the widening from `src/Tools/BuiltIn/*.php` to all of `src/` actually
+     * finds, DERIVED on both sides.
+     *
+     * THIS TEST USED TO ASSERT THE TWO SETS WERE EQUAL, on the premise that the
+     * widening was purely latent insurance. That premise expired: `src/Tools/`
+     * now holds {@see \SugarCraft\Crush\Tools\McpToolBridge}, the adapter that
+     * makes a project's MCP tools dispatchable, and under the OLD flat glob it
+     * would have been invisible to all four corpus consumers — the exact defect
+     * the widening exists for, landing for real one round after being called
+     * hypothetical.
+     *
+     * So the assertion is now the DIFFERENCE, and it is pinned in both
+     * directions: the wide sweep must be the flat glob plus exactly
+     * {@see BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES}, so neither an unrecorded
+     * tool outside the wired directory nor a recorded one that has quietly
+     * MOVED into it can pass. A plain `assertGreaterThan` or a one-sided
+     * `assertContains` here would let both through.
      */
-    public function testTheWideSweepAndTheOldFlatGlobAgreeOnThisTree(): void
+    public function testTheWideSweepFindsTheFlatGlobPlusExactlyTheRecordedDynamicTools(): void
     {
         $flat = [];
         foreach ((array) glob($this->srcDir . '/Tools/BuiltIn/*.php') as $file) {
@@ -166,8 +178,70 @@ final class BuiltInToolCorpusTest extends TestCase
         }
         sort($flat);
 
-        $this->assertSame($flat, BuiltInToolCorpus::classNames());
+        $expected = [...$flat, ...BuiltInToolCorpus::dynamicToolClasses()];
+        sort($expected);
+
+        $this->assertSame($expected, BuiltInToolCorpus::classNames());
         $this->assertCount(10, $flat, 'ten wired built-in tools on this tree');
+
+        // And the recorded exemptions must genuinely live OUTSIDE the wired
+        // directory: an entry that has moved into `src/Tools/BuiltIn/` would be
+        // counted twice above and is a stale exemption either way.
+        foreach (BuiltInToolCorpus::dynamicToolClasses() as $dynamic) {
+            $this->assertNotContains(
+                $dynamic,
+                $flat,
+                "{$dynamic} is in the wired directory, so it must be listed in Bootstrap::tools() rather than exempted",
+            );
+        }
+    }
+
+    /**
+     * THE EXEMPTION'S OWN DISCIPLINE, WHICH WAS PROSE. The constant says "each
+     * entry needs its own end-to-end reachability test naming it", and that
+     * sentence was asserted nowhere. MEASURED on the flat-list version: adding one
+     * line for a `Tool` that `Bootstrap::tools()` does not wire and `Runtime`
+     * cannot dispatch made it pass
+     * {@see testTheWideSweepFindsTheFlatGlobPlusExactlyTheRecordedDynamicTools()},
+     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()},
+     * `BuiltInToolTest` and `ToolSchemaEncodingTest` — every consumer green, an
+     * exemption that granted itself. The ACCIDENTAL case was already safe (an
+     * unwired tool that is not listed reds two of those and names it); this is the
+     * deliberate one-line case.
+     *
+     * So the entry must NAME the test method that proves reachability, and the
+     * method must resolve. Reflection rather than `method_exists()` because a
+     * PHPUnit test method must also be public and non-static to run at all, and an
+     * entry pointing at a private helper would otherwise satisfy the guard while
+     * proving nothing.
+     *
+     * WHAT THIS CANNOT DO, so it is not read as more than it is: it cannot tell
+     * that the named test actually drives the named class. It closes the
+     * write-one-line-and-pass hole, and the named test is then a thing a reviewer
+     * can open.
+     */
+    public function testEveryDynamicToolExemptionNamesAReachabilityTestThatExists(): void
+    {
+        $this->assertNotSame([], BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES, 'the map may not be empty while a tool is exempt');
+
+        foreach (BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES as $exempt => $evidence) {
+            $this->assertStringContainsString('::', $evidence, "{$exempt}'s evidence must be Class::method");
+            [$class, $method] = explode('::', $evidence, 2);
+
+            $this->assertTrue(
+                class_exists($class),
+                "{$exempt} names reachability test class {$class}, which does not exist",
+            );
+            $this->assertTrue(
+                (new \ReflectionClass($class))->hasMethod($method),
+                "{$exempt} names reachability test {$class}::{$method}, which does not exist",
+            );
+
+            $reflected = new \ReflectionMethod($class, $method);
+            $this->assertTrue($reflected->isPublic(), "{$evidence} is not public, so PHPUnit never runs it");
+            $this->assertFalse($reflected->isStatic(), "{$evidence} is static, so it is not a test method");
+            $this->assertStringStartsWith('test', $method, "{$evidence} is not a test method");
+        }
     }
 
     /**
@@ -176,8 +250,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 17 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 275 files declare
-     * 294 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 276 files declare
+     * 295 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
@@ -220,9 +294,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(275, $files, 'php files under src/');
+        $this->assertSame(276, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 226, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
+            ['concrete' => 227, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -251,8 +325,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 275 `.php`
-     * files, 294 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names: 276 `.php`
+     * files, 295 top-level declarations, 19 of them secondary in 8 files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *
@@ -312,8 +386,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(275, count($files), 'php files under src/');
-        $this->assertSame(294, $declarations, 'top-level declarations in them');
+        $this->assertSame(276, count($files), 'php files under src/');
+        $this->assertSame(295, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),
