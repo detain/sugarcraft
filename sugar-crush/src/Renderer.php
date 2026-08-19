@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\SgrState;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Token;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Mosaic\ImageLayer;
@@ -230,8 +234,27 @@ final class Renderer
      */
     private const SLASH_MENU_CHROME_COLS = 4;
 
+    /**
+     * Fixed head of a finished tool row, ahead of the model-chosen tool name.
+     * Named because {@see renderToolResults()} subtracts its width from the row
+     * budget and a boundary spelled twice is a boundary that drifts.
+     */
+    private const TOOL_ROW_PREFIX = '🔧 tool: ';
+
     /** Below this many columns an argument hint is dropped, not truncated. */
     private const SLASH_MENU_MIN_HINT_COLS = 4;
+
+    /**
+     * How many times {@see wrapToPane()} may re-ask {@see Width::wrapAnsi()} for
+     * a narrower wrap before it gives up and cuts.
+     *
+     * Only ever reached by a row whose grapheme clusters the wrap and the
+     * measure disagree about (see {@see wrapToPane()}); the observed cases —
+     * regional-indicator flags and skin-tone modifiers, a constant factor of two
+     * — converge in four. 8 is that with room, and it is a cap on WORK rather
+     * than on correctness: the cut backstop holds the bound either way.
+     */
+    private const WRAP_RETRY_MAX = 8;
 
     /**
      * Narrowest tail {@see toolCallSuffix()} will draw. Below this the row is
@@ -506,6 +529,26 @@ final class Renderer
      * @var list<array{id: string, label: string}> in document order
      */
     private static array $toolCallZones = [];
+
+    /**
+     * The styled HEAD of every tool row the current frame emitted, in document
+     * order — the classification {@see fitToPane()} keys its
+     * truncate-instead-of-wrap branch off.
+     *
+     * Deliberately a SECOND list rather than a read of {@see $toolCallZones},
+     * because that one is a CLICK registry and is legitimately empty in states
+     * where clicking is impossible: {@see recordToolCallZone()} bails when
+     * {@see Chat::mouseClicksEnabled()} is false and when the model-supplied
+     * id falls outside {@see ZONE_ID_CHARSET}. Keying the LAYOUT decision off
+     * the click registry made a tool row WRAP in exactly those states —
+     * measured at 20 columns with clicks off, the row `🔧 tool: B ⊘` was
+     * followed by a lookalike `interrupted` row, which is the outcome
+     * {@see fitToPane()}'s tool-row branch exists to prevent. Two questions,
+     * two lists; this one is recorded unconditionally.
+     *
+     * @var list<string> in document order
+     */
+    private static array $toolRowHeads = [];
 
     /**
      * Palette rows the current frame wants clickable, as the FULLY rendered
@@ -904,10 +947,27 @@ final class Renderer
         // registered twice, which makes the zone scan throw).
         self::$toolCallZones = [];
         self::$paletteItemZones = [];
+        // Same lifetime, same reason, but NOT the same list - see
+        // $toolRowHeads for why the layout question and the click question are
+        // answered from two registries rather than one.
+        self::$toolRowHeads = [];
+        // One number, named once. Every producer that writes into $body below
+        // is held to it, and fitToPane() is the backstop for the ones whose
+        // own layout rules say otherwise (code blocks, tables, CJK runs).
+        //
+        // The 20 in that floor is load-bearing and its VALUE is, not just its
+        // presence: renderToolImage() reserves an image box of
+        // `max(8, min(IMAGE_COLS, $contentWidth))` cells, so any floor below 8
+        // would size a marker block WIDER than the pane it sits in and
+        // fitToPane() would then rewrite the reserved cells (Width::wrapAnsi()
+        // rtrims, which destroys the padding ImageOverlay::resolve() paints
+        // over). 20 >= 8 with room to spare; a smaller floor is not a cosmetic
+        // change.
+        $contentWidth = max(20, $chat->cols() - self::SHELL_CHROME_COLS);
         $body = self::renderHistory(
             $chat->history,
             $theme,
-            max(20, $chat->cols() - self::SHELL_CHROME_COLS),
+            $contentWidth,
             $chat->expanded(),
             $images,
             $chat->mosaic(),
@@ -929,7 +989,7 @@ final class Renderer
             // why it must not be checkpointed, compacted or re-sent.
             $partial = $chat->streamingText();
             if ($partial !== '') {
-                $stream = self::renderStreamingTurn($partial, $theme);
+                $stream = self::renderStreamingTurn($partial, $theme, $contentWidth);
                 $body = $body === '' ? $stream : $body . "\n\n" . $stream;
             }
             // Visible in the chat window itself, not just the status bar -
@@ -938,6 +998,10 @@ final class Renderer
             $thinking = Style::new()->foreground($theme->assistantLabel)->faint()->render('⠴ assistant is thinking…');
             $body = $body === '' ? $thinking : $body . "\n\n" . $thinking;
         }
+        // Everything above wrote into $body; this is the single choke point
+        // where the pane-width invariant is enforced over all of it.
+        $body = self::fitToPane($body, $contentWidth);
+
         $input = self::renderInput($chat, $theme);
         $slashMenu = self::renderSlashMenu($chat, $theme);
 
@@ -1692,6 +1756,335 @@ final class Renderer
     }
 
     /**
+     * Hold every row of the transcript to $width display cells, wrapping the
+     * ones that overflow.
+     *
+     * This is the invariant half of the width fix, and it exists because
+     * threading the width into CandyShine is NOT sufficient. `withWordWrap()`
+     * wraps paragraphs, blockquotes and list items and deliberately leaves
+     * code blocks and tables alone ("they have their own width semantics" —
+     * `SugarCraft\Shine\Renderer::withWordWrap()`), and a fenced code block
+     * carrying a 150-column line is ordinary output for a coding agent. So the
+     * pane width has to be enforced over the finished bytes as well as
+     * requested of the producer.
+     *
+     * Why this matters is the same reason {@see renderDiff()} truncates and
+     * {@see renderStatusBar()} fits rather than wraps: candy-core's `Renderer`
+     * repaints rows with an ABSOLUTE `cursorTo($row, 1)`, so one logical line
+     * per physical row is a hard invariant. An over-wide row is soft-wrapped
+     * by the TERMINAL, every row after it slides down, and the repaint lands
+     * on stale coordinates — the shape of the "text ends up in the status bar"
+     * class of bug. On the hosted shell path the same over-wide row instead
+     * hits `ChatPane`'s `Style::width()`, which truncates (candy-sprinkles
+     * truncates for `width()`, it does not wrap), so the reply is silently cut
+     * off mid-sentence — the reported symptom.
+     *
+     * WRAP, not truncate. {@see Width::wrapAnsi()} is what CandyShine itself
+     * wraps with, it is ANSI-aware, and it preserves the content. Truncating
+     * the body of a reply deletes the thing the user is trying to read;
+     * {@see renderDiff()} and {@see toolCallSuffix()} truncate because a
+     * horizontal cut reads naturally on a diff row and on a trailing command
+     * echo, which is not true of prose or of a code line. Where the wrap
+     * cannot deliver the bound, {@see hardFit()} is the backstop and the cut
+     * is deliberate — a bound that is provably false is worse than a visible
+     * cut, because the whole frame below an over-wide row is painted at the
+     * wrong coordinates.
+     *
+     * Two rows are exempt, for reasons that are not cosmetic:
+     *
+     * - Rows that already fit keep their VISIBLE bytes untouched (only
+     *   {@see balanceSgr()} may add zero-width SGR/OSC to them, and only when
+     *   the row inherits or leaves an open state). BYTE-identical, and that is
+     *   a real branch rather than a shortcut around
+     *   `Width::truncateAnsi($row, $width)`: `Width::of()` measures
+     *   `Ansi::strip($row)`, which consumes a TWO-BYTE escape ending in an
+     *   ECMA-48 Fe final (0x40-0x5f — ESC-backslash, `ESC P`, `ESC M`) as zero
+     *   cells, while `truncateAnsi()`'s scanner passes through `ESC [` and
+     *   `ESC ]` only and so reads that second byte as one VISIBLE cell. Ten
+     *   `a` + ESC-backslash pairs measure 10 cells here and come back from
+     *   `truncateAnsi(…, 10)` as 5 — half the row deleted on the one path
+     *   whose contract is to touch nothing. Nothing delivers such a row today
+     *   (measured: assistant prose, a fence, inline code, a user message and a
+     *   diff body all arrive with the escape already scrubbed), so the branch
+     *   is pinned where it is decided, by
+     *   PaneWidthInvariantTest::testTheFitterPassesAFittingRowThroughUntouchedWhereTruncateAnsiWouldCutIt().
+     *   That same pass-through is what keeps the pixel-graphics markers safe:
+     *   `ImageOverlay::markerBlock()` emits a marker cell plus padding at
+     *   `max(8, min(IMAGE_COLS, $width))` cells,
+     *   which is `$width` itself on any terminal of 46 columns or fewer — i.e.
+     *   the marker row sits exactly ON this `<=` boundary rather than
+     *   comfortably inside it. Take the wrap branch there and
+     *   `Width::wrapAnsi()`'s `rtrim()` deletes the reserved cells outright
+     *   (measured at cols=46: 92 bytes and 46 cells intact, 72 bytes and 26
+     *   cells once the fast path is lost), so the boundary is a `<=` on
+     *   purpose and is swept at 26/34/46 by
+     *   PaneWidthInvariantTest::testAnImageMarkerRowSurvivesTheFitterAtTheBoundaryWidths().
+     *   Identifying marker rows by their leading Private-Use codepoint would be
+     *   WRONG here — U+E000 is also {@see \SugarCraft\Mouse\Sentinel::OPEN},
+     *   and a model reply can contain any PUA codepoint it likes.
+     * - A tool-call row is TRUNCATED rather than wrapped. Its whole row is a
+     *   single-line click zone that {@see markToolCalls()} locates by
+     *   `str_contains()` on the recorded label; wrapping would split the label
+     *   across two rows (losing the zone) and turn a deliberately single-line
+     *   zone into a multi-row one, which {@see markPaneHeader()} documents as
+     *   the way an unmatched sentinel reaches `Scan::parse()` and costs the
+     *   whole frame its zones.
+     *
+     * No zone sentinel can be split by this: every {@see \SugarCraft\Mouse\Mark}
+     * caller in this class runs LATER than the one call site
+     * ({@see renderView()}), and the untrusted paths strip bare sentinels out
+     * of model text before it ever reaches here.
+     */
+    private static function fitToPane(string $block, int $width): string
+    {
+        if ($width <= 0 || $block === '') {
+            return $block;
+        }
+
+        $out = [];
+        foreach (explode("\n", $block) as $row) {
+            if (Width::of($row) <= $width) {
+                $out[] = $row;
+
+                continue;
+            }
+            if (self::isToolCallRow($row)) {
+                $out[] = self::hardFit($row, $width);
+
+                continue;
+            }
+            foreach (self::wrapToPane($row, $width) as $piece) {
+                $out[] = $piece;
+            }
+        }
+
+        // Over the WHOLE block, not per over-wide row, and this is a fix for a
+        // regression the width thread-through introduced: now that CandyShine
+        // wraps, most wrapping happens inside CandyShine and its rows arrive
+        // here already fitting, so they take the fast path above and used to
+        // reach the terminal exactly as CandyShine left them — unbalanced.
+        // Measured at cols=60, a bold clause spanning a CandyShine wrap opened
+        // `ESC[1m` on its first row and closed it nowhere: the border glyph
+        // inherited the bold and the continuation row rendered plain. Carrying
+        // one SgrState across every row of the block is what fixes both that
+        // and the wrap this method does itself.
+        return implode("\n", self::balanceSgr($out));
+    }
+
+    /**
+     * Wrap one over-wide row into pieces each of which is at most $width cells
+     * AS MEASURED BY {@see Width::of()} — the instrument the invariant is
+     * stated in, and the reason this is not a one-line call to
+     * {@see Width::wrapAnsi()}.
+     *
+     * candy-core measures cell width two different ways and they disagree on
+     * grapheme clusters. `Width::of()` splits with `grapheme_str_split()` when
+     * it exists and falls back to ONE CODEPOINT PER CLUSTER when it does not
+     * (PHP < 8.4 without that intl function — this repo's baseline is 8.3);
+     * `wrapAnsi()`/`truncateAnsi()` walk the string with their own
+     * `nextCluster()` scanner instead, which does join a modifier or a
+     * regional-indicator pair into one cluster. Measured on PHP 8.3:
+     *
+     *     🇺🇸 (flag)      Width::of=2 per glyph, wrapAnsi accounts 1
+     *     👍🏽 (skin tone) Width::of=4 per glyph, wrapAnsi accounts 2
+     *
+     * Both directions of that factor-of-two put a "wrapped" row at twice the
+     * budget: measured end to end, 40 flags at cols=40 produced 9 rows up to
+     * 74 cells wide and 80 skin-tone thumbs at cols=100 produced rows of 194,
+     * with the wrap having run and reported success. `truncateAnsi()` is NOT a
+     * fix for that on its own — it uses the same scanner, so
+     * `truncateAnsi($flags, 10)` measures 20 by `Width::of()`.
+     *
+     * This is a candy-core defect (`Width::of()` vs `nextCluster()` should not
+     * be two accountings) and it is NOT fixed there in this change; it is
+     * defended against here, with the instrument the caller and the test both
+     * use. Recorded for the backlog.
+     *
+     * So: wrap, then MEASURE, and re-ask for a narrower wrap while the answer
+     * still does not fit. Re-asking rather than cutting is what keeps the
+     * CONTENT: 60 flags at cols=100 are accounted as 60 cells by the wrap and
+     * as 120 by the measure, so the first wrap returns the row whole; asking
+     * for 83, then 69, then 57, then 50 cells finally splits it into rows of
+     * exactly 100 measured cells with all 60 flags still on screen, where a cut
+     * at the first disagreement would have deleted 10 of them.
+     *
+     * Bounded, in two independent ways: the requested width strictly decreases
+     * every iteration (the scaled value is always smaller, and `- 1` is the
+     * floor if the arithmetic ever says otherwise), and {@see WRAP_RETRY_MAX}
+     * caps the attempts regardless. Whatever is still over budget after that is
+     * cut by {@see hardFit()} — the bound is never negotiable, only the content
+     * preserved on the way to it. Ordinary rows leave after the first wrap.
+     *
+     * @return list<string>
+     */
+    private static function wrapToPane(string $row, int $width): array
+    {
+        $target = $width;
+        $pieces = explode("\n", Width::wrapAnsi($row, $target));
+        $widest = self::widestOf($pieces);
+
+        for ($attempt = 0; $widest > $width && $target > 1 && $attempt < self::WRAP_RETRY_MAX; $attempt++) {
+            $scaled = intdiv($target * $width, $widest);
+            $target = max(1, $scaled < $target ? $scaled : $target - 1);
+            $pieces = explode("\n", Width::wrapAnsi($row, $target));
+            $widest = self::widestOf($pieces);
+        }
+
+        $out = [];
+        foreach ($pieces as $piece) {
+            $out[] = Width::of($piece) <= $width ? $piece : self::hardFit($piece, $width);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Cut $row down until {@see Width::of()} — not `truncateAnsi()`'s own
+     * accounting — reads it as fitting $width.
+     *
+     * The loop exists because those two disagree (see {@see wrapToPane()} for
+     * the measurements): asking `truncateAnsi()` for $width cells can hand back
+     * 2 × $width of them. Each iteration lowers the request by the measured
+     * overshoot and never by less than one cell, so it terminates in a handful
+     * of steps and at worst at the empty string — a cut row, never an
+     * over-wide one.
+     */
+    private static function hardFit(string $row, int $width): string
+    {
+        if ($width <= 0) {
+            return '';
+        }
+
+        $target = $width;
+        $cut = Width::truncateAnsi($row, $target);
+        while ($target > 0 && Width::of($cut) > $width) {
+            $scaled = intdiv($target * $width, Width::of($cut));
+            $target = $scaled < $target ? $scaled : $target - 1;
+            $cut = Width::truncateAnsi($row, $target);
+        }
+
+        return $cut;
+    }
+
+    /** @param list<string> $rows */
+    private static function widestOf(array $rows): int
+    {
+        $widest = 0;
+        foreach ($rows as $row) {
+            $widest = max($widest, Width::of($row));
+        }
+
+        return $widest;
+    }
+
+    /**
+     * Does $row carry the head of a tool row THIS frame emitted?
+     *
+     * Keyed off {@see $toolRowHeads}, which is recorded unconditionally, and
+     * NOT off {@see $toolCallZones}. An earlier revision of this method read
+     * the click registry and claimed the two "cannot disagree" — they can and
+     * they did: {@see recordToolCallZone()} deliberately records nothing when
+     * {@see Chat::mouseClicksEnabled()} is false or when the model-supplied id
+     * is outside {@see ZONE_ID_CHARSET}, and in those states this returned
+     * false and the tool row was WRAPPED. Measured with clicks off at 20
+     * columns: `🔧 tool: B ⊘` followed by a lookalike `interrupted` row, which
+     * is precisely the outcome {@see fitToPane()}'s tool-row branch exists to
+     * prevent. Matched by `str_contains()` the same way
+     * {@see markToolCalls()} matches, so where a zone IS recorded the row this
+     * truncates and the row that gets marked are the same row.
+     */
+    private static function isToolCallRow(string $row): bool
+    {
+        foreach (self::$toolRowHeads as $head) {
+            if (str_contains($row, $head)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Re-balance the SGR (and OSC 8 hyperlink) state of a block of rows so each
+     * row opens with the styling it inherits and closes what it opened.
+     *
+     * {@see Width::wrapAnsi()} preserves escapes but not their balance: it
+     * documents that "a colour set on line N stays active on line N+1 (no SGR
+     * reset is auto-emitted)", and CandyShine's own paragraph wrap leaves the
+     * same thing behind. That is fine for a stream written top to bottom and
+     * wrong for this renderer, because candy-core repaints only the rows that
+     * CHANGED — a middle line of a wrapped block, repainted alone, would
+     * inherit whatever styling happened to be active on the wire instead of
+     * its own, and a row left with an open SGR bleeds its colour into the
+     * `eraseLine()` of whatever is painted next.
+     *
+     * The state is carried across the whole block, not recomputed per line,
+     * which is why this takes the list rather than one line at a time.
+     * {@see SgrState} is candy-core's own tracker — the one its cell-diff
+     * resumes partial repaints with — so "balanced" here means the same thing
+     * it means there.
+     *
+     * OSC 8 is tracked alongside it because `SgrState` does not: it looks only
+     * at `Token::CSI` with `final === 'm'`, and `Ansi::reset()` does NOT close
+     * a hyperlink. CandyShine renders a markdown link as OSC 8, so once the
+     * label became wrappable (which the width thread-through is what made
+     * happen) a row could open a link and end without closing it — measured at
+     * cols=60, row 3 opened `ESC]8;;https://example.com/x` and only row 4
+     * carried the close. Painted alone by the changed-rows-only diff, that row
+     * makes every later cell part of the link in iTerm2, WezTerm, VTE and
+     * Kitty. So the open URI is re-emitted in the next row's prefix and closed
+     * at the end of any row that ends inside a link.
+     *
+     * Known gap, deliberately not chased here: `SGR 58` (underline colour) is
+     * likewise untracked by `SgrState`, so a row that only sets 58 is not
+     * restored. Nothing in this renderer or in CandyShine emits it today.
+     *
+     * A row that inherits nothing and leaves nothing open is returned
+     * byte-identical — `toPrefix()` is empty in the default state and neither
+     * suffix is emitted — which is what keeps the image-marker rows
+     * {@see fitToPane()} documents intact.
+     *
+     * @param  list<string> $rows
+     * @return list<string>
+     */
+    private static function balanceSgr(array $rows): array
+    {
+        $parser = new Parser();
+        $state = SgrState::initial();
+        $link = '';
+        $out = [];
+        foreach ($rows as $row) {
+            $prefix = $state->toPrefix() . ($link === '' ? '' : self::osc8($link));
+            foreach ($parser->parse($row) as $token) {
+                $state->applyCsi($token);
+                if ($token->type === Token::OSC && str_starts_with($token->data, '8;')) {
+                    // `8;<params>;<uri>`, and an EMPTY uri is the close - which
+                    // is why this reads the third field rather than testing for
+                    // a prefix.
+                    $link = explode(';', $token->data, 3)[2] ?? '';
+                }
+            }
+            $out[] = $prefix . $row
+                . ($state->isDefault() ? '' : Ansi::reset())
+                . ($link === '' ? '' : self::osc8(''));
+        }
+
+        return $out;
+    }
+
+    /**
+     * An OSC 8 hyperlink open (with $uri) or close (with ''), ST-terminated.
+     *
+     * ST (`ESC \`) rather than BEL: both terminate an OSC and candy-core's
+     * {@see Parser} accepts either, but BEL inside a frame is a byte a
+     * terminal may also ring.
+     */
+    private static function osc8(string $uri): string
+    {
+        return "\x1b]8;;" . $uri . "\x1b\\";
+    }
+
+    /**
      * @param list<Message>       $history
      * @param int                 $width     usable columns inside the shell's border +
      *                                       padding, so nested boxes (tool diffs) can
@@ -1710,7 +2103,12 @@ final class Renderer
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
         }
-        $md = new Markdown($theme->markdown);
+        // The one argument this call used to omit, and the whole reason a
+        // 200-column reply rendered as a 200-column ROW in a 100-column
+        // terminal: CandyShine's word wrap is opt-in and off by default
+        // (`SugarCraft\Shine\Renderer::__construct()` nulls a non-positive
+        // width), so with no width every paragraph came out on one line.
+        $md = new Markdown($theme->markdown, wrapWidth: $width);
         $blocks = [];
         foreach ($history as $msg) {
             // Defense-in-depth (candy-buffer #1362): User and System content is
@@ -1777,8 +2175,16 @@ final class Renderer
      * that cannot be parsed yet is shown as plain (sanitized) text until the
      * next chunk completes the construct. Untrusted-stripped in that fallback
      * because CandyShine is what normally neutralises raw model output.
+     *
+     * @param int $width pane columns the partial is word-wrapped to. Threaded in
+     *                   rather than defaulted for the same reason the settled
+     *                   turn's is: without it a streaming reply paints one
+     *                   over-wide row per paragraph for the whole duration of
+     *                   the turn and then silently re-flows the moment the turn
+     *                   lands - precisely the shape change the paragraph above
+     *                   promises does not happen.
      */
-    private static function renderStreamingTurn(string $partial, Theme $theme): string
+    private static function renderStreamingTurn(string $partial, Theme $theme, int $width): string
     {
         $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
         // Sentinels stripped BEFORE the renderer, same order and reason as
@@ -1787,7 +2193,7 @@ final class Renderer
         $raw = self::stripSentinels($partial);
 
         try {
-            $body = rtrim((new Markdown($theme->markdown))->render($raw));
+            $body = rtrim((new Markdown($theme->markdown, wrapWidth: $width))->render($raw));
         } catch (\Throwable) {
             $body = self::untrusted($raw);
         }
@@ -1893,14 +2299,58 @@ final class Renderer
                 $result->isError() => Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error'),
                 default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
             };
-            $label = Style::new()->foreground($theme->systemLabel)->faint()->strikethrough($stopped)->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
+            // The name is model-chosen and arbitrarily long, and this row is a
+            // single-line click zone: {@see markToolCalls()} finds it by
+            // `str_contains()` on the label recorded just below, so a label
+            // wider than the pane would either be wrapped (splitting it across
+            // two rows and losing the zone) or truncated with the recorded
+            // string no longer present in the row. Bounding the NAME keeps the
+            // label a verbatim, in-pane prefix of the rendered row - the same
+            // discipline {@see toolCallSuffix()} applies to the description.
+            //
+            // Every term here is load-bearing and none of them is observable as
+            // a WIDTH, because {@see hardFit()} holds the pane whatever this
+            // computes - the row is simply in-pane because it was CUT. So the
+            // bound's real job is that the cut NEVER HAS TO FIRE: dropping the
+            // `- 1` (the space between head and status) makes the row exactly
+            // one cell too wide and the cut shaves the status word's last cell;
+            // dropping `- Width::of($status)` makes it $status too wide and the
+            // cut eats the whole word the strikethrough is explaining. Both are
+            // pinned by
+            // PaneWidthInvariantTest::testAToolRowArrivesAtTheFitterAlreadyFittingSoTheCutNeverHasToFire().
+            // The `max(1, ...)` clamp matters only over widths 20-23, where the
+            // 9-cell prefix plus a 13-cell "interrupted" plus the space already
+            // exhaust the pane; relaxing it to `max(0, ...)` renders
+            // `🔧 tool:  ⊘ interrupted` - one cell NARROWER, so every width
+            // assertion still passes and the row has lost the only thing on it
+            // naming the tool. Pinned by
+            // PaneWidthInvariantTest::testTheNarrowestToolRowKeepsAtLeastOneCellOfItsName().
+            $labelRoom = $width - Width::of(self::TOOL_ROW_PREFIX) - Width::of($status) - 1;
+            $name = Width::truncate(self::untrusted($result->name), max(1, $labelRoom));
+            $head = Style::new()->foreground($theme->systemLabel)->faint()->strikethrough($stopped)->render(self::TOOL_ROW_PREFIX . $name);
+            $label = $head . ' ' . $status;
+            // Recorded for the LAYOUT question, before and regardless of
+            // whether this row can also become a click zone: fitToPane() has to
+            // know a tool row when it sees one even with the mouse off, or the
+            // row is wrapped into a lookalike second line. See $toolRowHeads.
+            self::$toolRowHeads[] = $head;
             $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
             $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
             $key = $result->id ?? $result->name;
             $isExpanded = ($expanded[$key] ?? false) === true;
             // §8 E5: the same key Ctrl+O toggles, so a click and the keystroke
             // drive one expansion mechanism rather than two.
-            self::recordToolCallZone($key, $label);
+            // The HEAD, not the whole label: the row is located by
+            // `str_contains()` and only the head is guaranteed to survive
+            // {@see fitToPane()}'s truncation. Below ~26 columns the status word
+            // alone ("⊘ interrupted" is 13 cells) leaves the bounded name no
+            // room, so the assembled label overflows the pane even at a
+            // one-character name; recording the head keeps the row clickable
+            // there instead of losing the zone to the cut. It is still a
+            // verbatim PREFIX of the rendered row, which is what keeps
+            // click-to-expand pointing at the right line, and rows are still
+            // matched in emission order (see {@see markToolCalls()}).
+            self::recordToolCallZone($key, $head);
 
             $hasImage = $result->hasImage();
 
