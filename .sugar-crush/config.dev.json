@@ -3,8 +3,9 @@
     "dev-sglang": {
       "type": "sglang",
       "baseUrl": "https://skynet2.interserver.net/v1",
-      "model": "MiniMax-M2.7",
-      "apiKey": null
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "apiKey": null,
+      "reasoningEffort": "max"
     }
   },
   "defaultProvider": "dev-sglang"

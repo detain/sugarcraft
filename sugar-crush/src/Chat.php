@@ -9602,9 +9602,15 @@ final class Chat implements Model
      * and reports a positive one - crush_code.md Phase 5 item 4, which replaced
      * a hardcoded 100,000 that matched no provider in this repo: measured over
      * every `contextWindow()` in `src/Providers/`, the six with a model behind
-     * them report 8,192 / 16,385 / 128,000 / 196,608 / 200,000 depending on
-     * model, and not one of them 100,000. The seventh (Echo) reports 0 for
-     * "unknown".
+     * them report 8,192 / 16,385 / 128,000 / 196,608 / 200,000 / 393,216
+     * depending on model, and not one of them 100,000. The seventh (Echo)
+     * reports 0 for "unknown".
+     *
+     * SIX PROVIDERS, SIX-PLUS FIGURES - the counts are of different things and
+     * were never equal. 393,216 is the newest of them:
+     * {@see \SugarCraft\Crush\Providers\SglangProvider::contextWindow()}
+     * became model-aware and answers that for the DeepSeek-V4 family, keeping
+     * 196,608 for MiniMax.
      *
      * A backend with no model behind it still gets
      * {@see ContextWindow::FALLBACK_TOKENS}, which is that same 100,000, so

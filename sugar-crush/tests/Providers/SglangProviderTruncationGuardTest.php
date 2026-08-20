@@ -278,7 +278,7 @@ final class SglangProviderTruncationGuardTest extends TestCase
     /**
      * @return array{0: SglangProvider, 1: Client&\PHPUnit\Framework\MockObject\MockObject}
      */
-    private function providerWithEmptyCompletion(): array
+    private function providerWithEmptyCompletion(string $model = 'MiniMax-M2.7'): array
     {
         $httpClient = $this->createMock(Client::class);
         $httpClient->method('post')->willReturn(new Response(200, [], (string) json_encode([
@@ -287,7 +287,7 @@ final class SglangProviderTruncationGuardTest extends TestCase
         ])));
 
         return [
-            new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient),
+            new SglangProvider('https://api.example.com', $model, null, $httpClient),
             $httpClient,
         ];
     }
@@ -404,6 +404,132 @@ final class SglangProviderTruncationGuardTest extends TestCase
         $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: []));
 
         $this->assertSame('', $this->capturedLog());
+    }
+
+    // -------------------------------------------------------------------------
+    // The risk PREDICTION is model-gated; the decode DIAGNOSIS is not
+    // -------------------------------------------------------------------------
+
+    /**
+     * The regression this whole block exists for: DeepSeek-V4-Flash became the
+     * default model, and the risk warning was firing for it with text that
+     * asserts a MiniMax bug.
+     *
+     * The gate is not a guess. Measured live against skynet2 on 2026-08-20, a
+     * `write_file` call whose `body` was
+     * `<invoke name="x"><parameter name="y">z</parameter></invoke> DONE`
+     * returned all 64 bytes byte-identical through structured `tool_calls`,
+     * `</parameter>` intact. The model does not have the bug, so predicting it
+     * would be a MiniMax measurement written next to a different model.
+     */
+    public function testTheDeepSeekV4DefaultIsNeverWarnedAboutTheMiniMaxTruncationBug(): void
+    {
+        [$provider] = $this->providerWithEmptyCompletion();
+
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [
+                new UserMessage('read demo.tape'),
+                new ToolResultMessage('call_read', '<parameter name="a">1</parameter>'),
+            ],
+        ));
+
+        // Asserted as a totally empty log rather than as the absence of one
+        // phrase: a substring check would still pass if the warning came back
+        // reworded.
+        $this->assertSame('', $this->capturedLog());
+    }
+
+    /**
+     * The gate is on the REQUEST's model, matching where `buildParams()` reads
+     * every other sampling default from - so a provider configured for one
+     * model and completing against another follows the request. Both halves
+     * are asserted in one test because the pair is the claim; either alone
+     * would pass against a gate keyed on the wrong field.
+     */
+    public function testTheRiskWarningFollowsTheRequestModelNotTheConfiguredOne(): void
+    {
+        $messages = [new ToolResultMessage('call_read', '</parameter>')];
+
+        // Configured DeepSeek, request MiniMax -> warned.
+        [$deepSeekConfigured] = $this->providerWithEmptyCompletion(SglangProvider::DEFAULT_MODEL);
+        $deepSeekConfigured->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: $messages));
+        $this->assertStringContainsString('elevated risk of silent truncation', $this->capturedLog());
+
+        @unlink($this->logFile);
+
+        // Configured MiniMax, request DeepSeek -> silent.
+        [$miniMaxConfigured] = $this->providerWithEmptyCompletion('MiniMax-M2.7');
+        $miniMaxConfigured->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: $messages,
+        ));
+        $this->assertSame('', $this->capturedLog());
+    }
+
+    /**
+     * An UNMEASURED model still gets the warning - not being measured is not
+     * being known safe - but the text has to name the id it fired for, or the
+     * log reads as though the request went to MiniMax.
+     */
+    public function testAnUnmeasuredModelIsStillWarnedAndTheWarningNamesIt(): void
+    {
+        [$provider] = $this->providerWithEmptyCompletion('local-model');
+
+        $provider->complete(new CompleteRequest(
+            model: 'local-model',
+            messages: [new ToolResultMessage('call_read', '</parameter>')],
+        ));
+
+        $log = $this->capturedLog();
+        $this->assertStringContainsString('elevated risk of silent truncation', $log);
+        // The domain, not just the claim: the model the request is addressed to
+        // AND the model the bug was measured on, distinguishable in the line.
+        $this->assertStringContainsString('addressed to model "local-model"', $log);
+        $this->assertStringContainsString('measured on MiniMax-M2.x', $log);
+    }
+
+    /**
+     * The DIAGNOSIS is deliberately NOT gated - a payload that already failed
+     * to decode is worth reporting whatever produced it. What the gate would
+     * have cost is exactly this case: DeepSeek-V4 truncating for some other
+     * reason and nothing being logged at all.
+     */
+    public function testTruncatedArgumentsAreStillDiagnosedOnTheDeepSeekV4Default(): void
+    {
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], (string) json_encode([
+            'choices' => [[
+                'message' => [
+                    'content' => '',
+                    'tool_calls' => [[
+                        'id' => 'call_trunc',
+                        'function' => [
+                            'name' => 'write_file',
+                            'arguments' => '{"path":"a.php","content":"<?php',
+                        ],
+                    ]],
+                ],
+            ]],
+            'usage' => ['total_tokens' => 7],
+        ])));
+        $provider = new SglangProvider(
+            'https://api.example.com',
+            SglangProvider::DEFAULT_MODEL,
+            null,
+            $httpClient,
+        );
+
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('write it')],
+        ));
+
+        $log = $this->capturedLog();
+        $this->assertStringContainsString('possible MiniMax XML-delimiter truncation', $log);
+        // ...but attributed as a SHAPE match, not as a fact about this model.
+        $this->assertStringContainsString('matches the signature of', $log);
+        $this->assertStringNotContainsString('This is the known MiniMax', $log);
     }
 
     // -------------------------------------------------------------------------

@@ -58,7 +58,7 @@ final readonly class ProviderFactory
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey', 'toolCallParser'],
+            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort'],
         ],
         'bedrock' => [
             'required' => ['region'],
@@ -360,8 +360,27 @@ final readonly class ProviderFactory
             'sglang' => [
                 'type' => 'sglang',
                 'baseUrl' => 'http://localhost:30000',
-                'model' => 'MiniMax-M2.7',
+                // The FOURTH place this default lived, and the one
+                // `$SUGARCRUSH_PROVIDER=sglang` actually reaches (this method
+                // is bin/sugarcrush's only hook into the provider system, see
+                // above). It said MiniMax-M2.7 while the confirmed deployment
+                // had already been switched to DeepSeek-V4-Flash, so a default
+                // sglang run 404'd on the model name. Sourced from
+                // {@see SglangProvider::DEFAULT_MODEL} rather than repeated as
+                // a literal, so the id cannot drift between the two files.
+                'model' => SglangProvider::DEFAULT_MODEL,
                 'apiKey' => getenv('SGLANG_API_KEY') ?: null,
+                // Null, NOT the concrete 'max' the provider will actually
+                // send, and the difference is the point: the effective default
+                // is derived from the MODEL
+                // ({@see SglangProvider::defaultReasoningEffort()}), so
+                // stamping a literal here would keep sending 'max' after
+                // someone edits `model` to a MiniMax id - shipping a
+                // DeepSeek-measured setting to a model it was never measured
+                // on. The key is present anyway so the knob is discoverable
+                // from defaultConfig() output, which is what the Ctrl+P
+                // palette's Switch Model listing shows.
+                'reasoningEffort' => null,
                 // §12 D6's documented default. Named explicitly rather than
                 // left implicit so the knob is discoverable from
                 // defaultConfig() output - which is exactly what the Ctrl+P
@@ -639,7 +658,61 @@ final readonly class ProviderFactory
             model: $config['model'],
             apiKey: $config['apiKey'] ?? null,
             toolCallParser: $this->toolCallParser($config['toolCallParser'] ?? null),
+            reasoningEffort: self::configuredReasoningEffort($config['reasoningEffort'] ?? null),
         );
+    }
+
+    /**
+     * Normalises the optional `reasoningEffort` config value.
+     *
+     * Only one thing happens here: the EMPTY STRING becomes null. That is not
+     * a value an operator types - `''` is what {@see resolveEnvVars()} yields
+     * for a `${SUGARCRUSH_REASONING_EFFORT}` placeholder whose variable is
+     * unset, i.e. the key being ABSENT rather than misspelled - so it takes the
+     * same branch as a missing key. This is the identical exception
+     * {@see toolCallParser()} makes for the same mechanism, and choosing a
+     * config key over a bespoke env var is what buys env-var support for free:
+     * the placeholder syntax already works in every config value.
+     *
+     * Every other value is passed through UNCHECKED here on purpose - it is
+     * validated in {@see SglangProvider}'s constructor, so there is exactly
+     * one definition of what the server accepts
+     * ({@see SglangProvider::REASONING_EFFORT_LEVELS}) instead of a copy in
+     * this file that could drift from it.
+     *
+     * THE INT CAST IS NOT COSMETIC, AND ITS RANGE IS NOT VALIDATED ANYWHERE.
+     * `json_decode` gives an int for a JSON whole number, and the DTO field is
+     * `string|float|null`, so `"reasoningEffort": 0` would TypeError without
+     * the cast - and `0.0` is a value the server accepts (measured 200 on
+     * 2026-08-20). The cast therefore has to exist. What it also does is turn
+     * `"reasoningEffort": 1` into `1.0`, which is the ONE float just outside
+     * SGLang's bound: measured the same day, the server answers HTTP 400
+     * `{"object":"error", ...}` naming `le: 0.99`, and it does so on EVERY
+     * completion rather than at build time.
+     *
+     * So the construction-time guarantee {@see SglangProvider}'s constructor
+     * docblock states covers the STRING tier only. That asymmetry is
+     * deliberate: the level names are a closed pydantic literal, where a typo
+     * is unrecoverable garbage worth refusing locally, while the float bound is
+     * a server-side constraint a later SGLang may widen - hardcoding 0.99 here
+     * would refuse whatever it widens to. It is stated rather than left
+     * implicit because "validated at construction" read as covering both, and a
+     * whole-number effort is exactly what an operator would try first.
+     */
+    private static function configuredReasoningEffort(mixed $value): string|float|null
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_string($value) || is_float($value) || is_int($value)) {
+            return is_int($value) ? (float) $value : $value;
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'reasoningEffort must be a level name or a number, got %s',
+            get_debug_type($value),
+        ));
     }
 
     /**

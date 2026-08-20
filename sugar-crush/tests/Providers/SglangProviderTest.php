@@ -36,7 +36,17 @@ final class SglangProviderTest extends TestCase
 
         $this->assertInstanceOf(SglangProvider::class, $provider);
         $this->assertSame('sglang', $provider->name());
-        $this->assertSame('MiniMax-M2.7', $this->getPrivateProperty($provider, 'model'));
+        // The default is the id the confirmed deployment serves; MiniMax-M2.7
+        // is GONE from that server, so a default naming it 404s on the model
+        // name for every request. Both halves asserted: the new id is right AND
+        // the retired one is not still in place.
+        $this->assertSame('deepseek-ai/DeepSeek-V4-Flash-0731', $this->getPrivateProperty($provider, 'model'));
+        $this->assertNotSame('MiniMax-M2.7', $this->getPrivateProperty($provider, 'model'));
+        // The exported constant and the parameter default must be the same
+        // string - ProviderFactory::defaultConfig() reads the constant, while
+        // this factory method reads the default, and a drift between them would
+        // give the two entry points different models.
+        $this->assertSame(SglangProvider::DEFAULT_MODEL, $this->getPrivateProperty($provider, 'model'));
     }
 
     public function testOpenAiCompatibleWithCustomModel(): void
@@ -157,6 +167,58 @@ final class SglangProviderTest extends TestCase
 
         $this->assertSame(196_608, $provider->contextWindow());
         $this->assertNotSame(128_000, $provider->contextWindow());
+    }
+
+    /**
+     * The window is MODEL-AWARE now, and it had to become so: 196,608 is the
+     * MiniMax-M2.7 deployment's `--context-length`, while the DeepSeek-V4-Flash
+     * the server actually runs today reports `max_model_len: 393216` from its
+     * own `GET /v1/models` (read from skynet2 2026-08-20). Answering the
+     * MiniMax figure for it would have put all four of Chat's context tiers at
+     * half the real budget.
+     *
+     * Asserted as the exact figure AND as not-the-other-one, because a
+     * single-arm regression is the whole hazard here: both arms returning
+     * 196,608 (the bug) or both returning 393,216 (silently doubling MiniMax's
+     * budget past what its server will hold) are equally wrong, and only a pair
+     * of assertions distinguishes them.
+     */
+    public function testContextWindowIsTheDeepSeekV4FigureForADeepSeekV4Model(): void
+    {
+        $client = $this->createMock(Client::class);
+        $provider = new SglangProvider('https://api.example.com', 'deepseek-ai/DeepSeek-V4-Flash-0731', null, $client);
+
+        $this->assertSame(393_216, $provider->contextWindow());
+        $this->assertNotSame(196_608, $provider->contextWindow());
+    }
+
+    public function testContextWindowKeepsTheLegacyFigureForANonDeepSeekV4Model(): void
+    {
+        $client = $this->createMock(Client::class);
+
+        // A third model gets the legacy arm too. That is a guess for anything
+        // that is neither MiniMax nor DeepSeek-V4 and is documented as one on
+        // LEGACY_DEFAULT_CONTEXT_WINDOW; what is pinned here is only that the
+        // DeepSeek figure does not leak onto it.
+        foreach (['MiniMax-M2.7', 'deepseek-ai/DeepSeek-V3', 'Qwen3-235B'] as $model) {
+            $provider = new SglangProvider('https://api.example.com', $model, null, $client);
+            $this->assertSame(196_608, $provider->contextWindow(), $model);
+        }
+    }
+
+    /**
+     * The window reads the CONFIGURED model (`$this->model`), which is the only
+     * model this method has - it is handed no request. Stated as a test because
+     * the sampling defaults in buildParams() read `$request->model` instead,
+     * and the asymmetry is deliberate rather than an oversight: the sampling
+     * has to match the id the body is addressed to, the window cannot know it.
+     */
+    public function testContextWindowFollowsTheConfiguredModelNotAnyRequest(): void
+    {
+        $client = $this->createMock(Client::class);
+        $provider = new SglangProvider('https://api.example.com', 'deepseek-ai/DeepSeek-V4-Flash-0731', null, $client);
+
+        $this->assertSame(393_216, $provider->contextWindow());
     }
 
     // -------------------------------------------------------------------------

@@ -136,7 +136,18 @@ final class ProviderFactoryTest extends TestCase
         $this->assertArrayHasKey('model', $config);
         $this->assertSame('sglang', $config['type']);
         $this->assertSame('http://localhost:30000', $config['baseUrl']);
-        $this->assertSame('MiniMax-M2.7', $config['model']);
+        // The built-in `sglang` default model is the id the confirmed skynet2
+        // deployment actually serves. Asserted against SglangProvider's own
+        // constant rather than a repeated literal so the two cannot drift, and
+        // paired with an explicit assertion that it is NOT the retired
+        // MiniMax-M2.7 - that id is gone from the server, so a default naming
+        // it 404s on every request.
+        $this->assertSame(SglangProvider::DEFAULT_MODEL, $config['model']);
+        $this->assertNotSame('MiniMax-M2.7', $config['model']);
+        // Present-but-null: the effective effort is derived from the model, so
+        // a literal here would outlive an edit to `model`.
+        $this->assertArrayHasKey('reasoningEffort', $config);
+        $this->assertNull($config['reasoningEffort']);
     }
 
     public function testDefaultConfigBedrockHasRequiredKeys(): void
@@ -775,7 +786,14 @@ final class ProviderFactoryTest extends TestCase
     {
         $config = $this->factory->defaultConfig('dev-sglang');
 
-        $this->assertSame('MiniMax-M2.7', $config['model']);
+        $this->assertSame('deepseek-ai/DeepSeek-V4-Flash-0731', $config['model']);
+        // The DISCRIMINATOR. `model` alone cannot prove this came from the
+        // project file, because the built-in 'sglang' schema now names the same
+        // id (and named the same MiniMax id before, so this assertion never
+        // distinguished the two sources). `baseUrl` does: the built-in schema
+        // says http://localhost:30000 and only the project config says skynet2.
+        $this->assertSame('https://skynet2.interserver.net/v1', $config['baseUrl']);
+        $this->assertNotSame('http://localhost:30000', $config['baseUrl']);
     }
 
     /**
@@ -1051,5 +1069,188 @@ final class ProviderFactoryTest extends TestCase
         $this->assertInstanceOf(ToolCallParserInterface::class, $parser);
 
         return $parser;
+    }
+
+    // -------------------------------------------------------------------------
+    // The optional `reasoningEffort` provider-block key.
+    //
+    // A CONFIG KEY was chosen over a bespoke env var because the placeholder
+    // syntax already works in every config value - `"${SUGARCRUSH_EFFORT}"` in
+    // this key gets env-var support for free, so a second mechanism would only
+    // add a second thing to keep in sync. The '' case below is exactly the
+    // seam that buys.
+    // -------------------------------------------------------------------------
+
+    public function testConfiguredReasoningEffortReachesTheProvider(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'reasoningEffort' => 'high',
+        ]);
+
+        $this->assertSame('high', $this->sglangPropertyOf($provider, 'reasoningEffort'));
+    }
+
+    public function testAbsentReasoningEffortLeavesTheProviderOnItsModelDerivedDefault(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+        ]);
+
+        // Null on the PROVIDER, not 'max'. The 'max' lives in
+        // SglangProvider::defaultReasoningEffort(), keyed on the model, so an
+        // operator who later edits `model` to a MiniMax id stops sending an
+        // effort instead of shipping a DeepSeek-measured one to MiniMax.
+        $this->assertNull($this->sglangPropertyOf($provider, 'reasoningEffort'));
+    }
+
+    public function testAnUnresolvedEnvPlaceholderForReasoningEffortIsTreatedAsAbsent(): void
+    {
+        putenv('SUGARCRUSH_TEST_EFFORT');
+
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            // resolveEnvVars() yields '' for an unset variable. That is the key
+            // being ABSENT, not misspelled, so it must not throw - the same
+            // exception toolCallParser() makes for the same mechanism.
+            'reasoningEffort' => '${SUGARCRUSH_TEST_EFFORT}',
+        ]);
+
+        $this->assertNull($this->sglangPropertyOf($provider, 'reasoningEffort'));
+    }
+
+    public function testAResolvedEnvPlaceholderForReasoningEffortIsUsed(): void
+    {
+        putenv('SUGARCRUSH_TEST_EFFORT=xhigh');
+
+        try {
+            $provider = $this->factory->create([
+                'type' => 'sglang',
+                'baseUrl' => 'http://localhost:30000',
+                'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+                'reasoningEffort' => '${SUGARCRUSH_TEST_EFFORT}',
+            ]);
+
+            $this->assertSame('xhigh', $this->sglangPropertyOf($provider, 'reasoningEffort'));
+        } finally {
+            putenv('SUGARCRUSH_TEST_EFFORT');
+        }
+    }
+
+    public function testAMisspelledConfiguredReasoningEffortThrowsWhenTheProviderIsBuilt(): void
+    {
+        // Fails at BUILD time, not on the first completion: a typo in a config
+        // file should not survive until someone sends a message.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('provider config');
+
+        $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'reasoningEffort' => 'ultra',
+        ]);
+    }
+
+    public function testANonScalarConfiguredReasoningEffortIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('level name or a number');
+
+        $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'reasoningEffort' => ['max'],
+        ]);
+    }
+
+    /**
+     * WHY THE INT->FLOAT CAST EXISTS: `json_decode` yields an INT for a JSON
+     * whole number, the DTO field is `string|float|null`, and `0.0` is a value
+     * the server accepts (measured 200 on 2026-08-20). Without the cast
+     * `"reasoningEffort": 0` would TypeError before any request went out.
+     *
+     * Asserted with a strict `assertSame(0.0, ...)` so the float-ness is the
+     * claim, not merely the numeric value - `0` would satisfy a loose compare.
+     */
+    public function testAWholeNumberZeroConfiguredEffortBecomesTheFloatTheServerAccepts(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'reasoningEffort' => 0,
+        ]);
+
+        $this->assertSame(0.0, $this->sglangPropertyOf($provider, 'reasoningEffort'));
+    }
+
+    /**
+     * THE COST OF THAT SAME CAST, pinned so it cannot be mistaken for a
+     * guarantee it is not.
+     *
+     * `"reasoningEffort": 1` becomes `1.0`, which is the ONE float just outside
+     * SGLang's bound - measured 2026-08-20, the server answers HTTP 400 naming
+     * `le: 0.99`, and it does so on every completion rather than here. So the
+     * construction-time refusal that a misspelled LEVEL NAME gets (see
+     * testAMisspelledConfiguredReasoningEffortThrowsWhenTheProviderIsBuilt)
+     * does NOT extend to numbers, deliberately: the level names are a closed
+     * pydantic literal, while the float bound is a server-side constraint a
+     * later SGLang may widen, and hardcoding 0.99 here would refuse whatever it
+     * widens to.
+     *
+     * This test therefore asserts a KNOWN-BAD value is accepted locally. That
+     * is the behaviour, and the README documents "write 0.99, not 1" because of
+     * it. If a range check is ever added, this test is where the decision
+     * changes - it fails rather than silently becoming vacuous.
+     */
+    public function testAWholeNumberOneIsAcceptedLocallyEvenThoughTheServerRefusesIt(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'reasoningEffort' => 1,
+        ]);
+
+        $this->assertSame(1.0, $this->sglangPropertyOf($provider, 'reasoningEffort'));
+    }
+
+    /**
+     * The MiniMax XML fallback parser must stay selectable and functional on a
+     * provider whose model is the NEW default.
+     *
+     * This is the "keep both working" constraint expressed as a test: making
+     * DeepSeek-V4 the default must not gate MiniMax handling behind the model
+     * name. Nothing in the parser selection reads the model, and this asserts
+     * that rather than assuming it - a future "optimisation" that skips the
+     * fallback when the model is not MiniMax would fail here.
+     */
+    public function testTheMinimaxXmlFallbackStaysReachableOnADeepSeekModelledProvider(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'toolCallParser' => 'minimax-xml-fallback',
+        ]);
+
+        $calls = $this->toolCallParserOf($provider)->parse([
+            'content' => '<minimax:tool_call><invoke name="read_file">'
+                . '<parameter name="path">/etc/hosts</parameter>'
+                . '</invoke></minimax:tool_call>',
+        ]);
+
+        $this->assertIsArray($calls);
+        $this->assertCount(1, $calls);
+        $this->assertSame('read_file', $calls[0]->name());
+        $this->assertSame(['path' => '/etc/hosts'], $calls[0]->arguments());
     }
 }

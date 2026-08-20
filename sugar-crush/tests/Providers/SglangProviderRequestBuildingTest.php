@@ -46,6 +46,29 @@ final class SglangProviderRequestBuildingTest extends TestCase
         );
     }
 
+    /**
+     * Same mock harness as {@see provider()} but with the model under the
+     * caller's control, because the sampling defaults below are MODEL-KEYED
+     * and a fixed 'MiniMax-M2.7' cannot exercise them.
+     */
+    private function providerForModel(string $model, string|float|null $reasoningEffort = null): SglangProvider
+    {
+        $this->history = [];
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, [], '{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":1}}'),
+        ]));
+        $stack->push(Middleware::history($this->history));
+
+        return new SglangProvider(
+            'https://api.example.com',
+            $model,
+            null,
+            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
+            null,
+            $reasoningEffort,
+        );
+    }
+
     /** @return array<string, mixed> */
     private function sentBody(): array
     {
@@ -398,5 +421,406 @@ final class SglangProviderRequestBuildingTest extends TestCase
         $this->assertSame(['enable_thinking' => false], $sent['chat_template_kwargs']);
         $this->assertTrue($sent['separate_reasoning']);
         $this->assertArrayNotHasKey('extra_body', $sent);
+    }
+
+    // -------------------------------------------------------------------------
+    // Model-aware sampling + reasoning_effort.
+    //
+    // The default model became `deepseek-ai/DeepSeek-V4-Flash-0731` because
+    // the confirmed skynet2 deployment was switched to it and MiniMax-M2.7 is
+    // GONE from that server. DeepSeek-V4-Flash's card prescribes
+    // temperature 1.0 always and top_p 0.95 agentic / 1.0 otherwise, and the
+    // user's instruction is reasoning_effort `max` for this model.
+    //
+    // EVERY assertion in this block is about ONE model family. The MiniMax
+    // tests immediately after it exist to prove the flip did not retune the
+    // other one - which was the explicit constraint on this change, not a
+    // nicety.
+    // -------------------------------------------------------------------------
+
+    private const DEEPSEEK = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+
+    /** @return array<Tool> */
+    private function oneTool(): array
+    {
+        $tool = $this->createMock(Tool::class);
+        $tool->method('name')->willReturn('get_weather');
+        $tool->method('description')->willReturn('Get weather');
+        $tool->method('inputSchema')->willReturn(['type' => 'object']);
+
+        return [$tool];
+    }
+
+    public function testDeepSeekV4WithToolsGetsCardTemperatureAgenticTopPAndMaxEffort(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(
+            model: self::DEEPSEEK,
+            messages: [new UserMessage('Hi')],
+            tools: $this->oneTool(),
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertEqualsWithDelta(1.0, $sent['temperature'], 0.0);
+        // 0.95 is the card's AGENTIC figure, and "agentic" is defined here as
+        // "the request offered tools" - which this one did.
+        $this->assertSame(0.95, $sent['top_p']);
+        $this->assertSame('max', $sent['reasoning_effort']);
+        // Top level, not nested: chat_template_kwargs feeds a server-side Jinja
+        // template and this model ships none, so an effort routed through it
+        // would be silently dropped.
+        $this->assertArrayNotHasKey('chat_template_kwargs', $sent);
+    }
+
+    public function testDeepSeekV4WithoutToolsGetsTheNonAgenticTopP(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK, messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        $this->assertEqualsWithDelta(1.0, $sent['top_p'], 0.0);
+        $this->assertNotEquals(0.95, $sent['top_p']);
+        // Temperature does NOT vary by scenario - the card states 1.0
+        // unconditionally, so only top_p is scenario-split.
+        $this->assertEqualsWithDelta(1.0, $sent['temperature'], 0.0);
+    }
+
+    public function testAnEmptyToolsArrayIsNotAgentic(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        // `tools: []` is what a caller with a tool registry that happens to be
+        // empty sends. It offers the model nothing, so it must not select the
+        // agentic figure - and it must not emit a `tools` key either.
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK, messages: [new UserMessage('Hi')], tools: []));
+
+        $sent = $this->sentBody();
+
+        $this->assertEqualsWithDelta(1.0, $sent['top_p'], 0.0);
+    }
+
+    /**
+     * PHP's `json_encode()` writes the float 1.0 as the JSON integer `1` (no
+     * JSON_PRESERVE_ZERO_FRACTION anywhere in Guzzle's `json` option), so this
+     * is what the DeepSeek-V4 defaults actually put on the wire. Asserted on
+     * the raw body rather than the decoded array because the decode hides it.
+     *
+     * Harmless, and that is MEASURED not assumed: POSTing
+     * `{"temperature":1,"top_p":1}` to skynet2 on 2026-08-20 returned 200 -
+     * SGLang's pydantic model coerces an int into its float fields. It is
+     * pinned here so a future reader who sees `"temperature":1` in a capture
+     * knows it is the encoder, not a lost decimal.
+     */
+    public function testTheOnePointZeroDefaultsGoOnTheWireAsJsonIntegers(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK, messages: [new UserMessage('Hi')]));
+
+        $raw = (string) $this->history[0]['request']->getBody();
+
+        $this->assertStringContainsString('"temperature":1,', $raw);
+        $this->assertStringContainsString('"top_p":1', $raw);
+        $this->assertStringNotContainsString('"temperature":1.0', $raw);
+    }
+
+    public function testTheFamilyTokenMatchesCaseInsensitivelyAndWithoutTheOrgPrefix(): void
+    {
+        $provider = $this->providerForModel('DeepSeek-V4-Flash');
+        $provider->complete(new CompleteRequest(model: 'DeepSeek-V4-Flash', messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        $this->assertEqualsWithDelta(1.0, $sent['temperature'], 0.0);
+        $this->assertSame('max', $sent['reasoning_effort']);
+    }
+
+    public function testADifferentDeepSeekGenerationIsNotTreatedAsV4(): void
+    {
+        // The negative that makes the family token meaningful. DeepSeek-V3 and
+        // R1 publish DIFFERENT recommended temperatures, so matching the bare
+        // vendor name `deepseek` would apply V4's 1.0 / 0.95 / max to models
+        // they were never measured on.
+        $provider = $this->providerForModel('deepseek-ai/DeepSeek-V3');
+        $provider->complete(new CompleteRequest(model: 'deepseek-ai/DeepSeek-V3', messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(0.7, $sent['temperature']);
+        $this->assertArrayNotHasKey('top_p', $sent);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /**
+     * WHERE THE FAMILY TOKEN'S LINE ACTUALLY FALLS, in both directions and in
+     * one test, because the boundary is the claim - either list alone passes
+     * against a token that is too broad or too narrow.
+     *
+     * The OVER-MATCH half is asserted deliberately, not tolerated. The
+     * constant's own docblock argues per-GENERATION ("V3 and R1 publish
+     * DIFFERENT temperatures"), and a substring cannot honour that: `V4.5` and
+     * `V4.1-Flash` were never measured either, yet they take the V4-Flash arm.
+     * That trade is accepted because a MISS costs `reasoning_effort`, measured
+     * on this deployment to put the model's thinking into `content` silently.
+     * Pinning it means replacing the token can never be an accident.
+     *
+     * The UNDER-MATCH half is the aliased-deployment hazard: an SGLang server
+     * launched `--served-model-name default` reports that alias, and an
+     * operator copying it in gets the legacy arm while talking to DeepSeek-V4.
+     *
+     * @dataProvider familyTokenBoundaryProvider
+     */
+    public function testTheFamilyTokenBoundaryIsExactlyThisWideInBothDirections(
+        string $model,
+        bool $expectedV4,
+    ): void {
+        $provider = $this->providerForModel($model);
+        $provider->complete(new CompleteRequest(model: $model, messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        // All four behaviours, so a partial gate cannot pass: a token that
+        // matched for temperature but not for effort would fail here.
+        if ($expectedV4) {
+            $this->assertEqualsWithDelta(1.0, $sent['temperature'], 0.0, $model);
+            $this->assertArrayHasKey('top_p', $sent, $model);
+            $this->assertSame('max', $sent['reasoning_effort'], $model);
+            $this->assertSame(393_216, $provider->contextWindow(), $model);
+
+            return;
+        }
+
+        $this->assertSame(0.7, $sent['temperature'], $model);
+        $this->assertArrayNotHasKey('top_p', $sent, $model);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent, $model);
+        $this->assertSame(196_608, $provider->contextWindow(), $model);
+    }
+
+    /** @return array<string, array{0: string, 1: bool}> */
+    public static function familyTokenBoundaryProvider(): array
+    {
+        return [
+            // IN, as intended.
+            'the deployed id' => ['deepseek-ai/DeepSeek-V4-Flash-0731', true],
+            // IN, beyond anything measured - the accepted over-match.
+            'a future point release' => ['deepseek-ai/DeepSeek-V4.1-Flash', true],
+            'a future minor version' => ['DeepSeek-V4.5', true],
+            'a longer version number' => ['deepseek-v40', true],
+            // OUT, as intended - the reason the token is not bare `deepseek`.
+            'an earlier generation' => ['deepseek-ai/DeepSeek-V3', false],
+            'a reasoning sibling' => ['deepseek-r1', false],
+            'the legacy default' => ['MiniMax-M2.7', false],
+            // OUT, and this is the aliased-deployment under-match.
+            'a served-model-name alias' => ['default', false],
+            'a generic local alias' => ['local-model', false],
+            'an abbreviation' => ['dsv4', false],
+            'an underscored family name' => ['deepseek_v4', false],
+        ];
+    }
+
+    public function testMiniMaxKeepsItsHistoricalSamplingAndGetsNoReasoningEffort(): void
+    {
+        // THE "keep both working" PIN. MiniMax-M2.x was running on 0.7 with no
+        // top_p and no reasoning_effort in any request, and no measurement of
+        // what an effort level does to it exists - so sending one on the
+        // strength of a DeepSeek measurement would change a working deployment
+        // blind. Making DeepSeek the default must not do that.
+        $provider = $this->providerForModel('MiniMax-M2.7');
+        $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hi')],
+            tools: $this->oneTool(),
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(0.7, $sent['temperature']);
+        $this->assertArrayNotHasKey('top_p', $sent);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+        // Everything MiniMax DID get still arrives.
+        $this->assertTrue($sent['separate_reasoning']);
+        $this->assertCount(1, $sent['tools']);
+    }
+
+    public function testCallerSuppliedSamplingBeatsTheModelDefaults(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(
+            model: self::DEEPSEEK,
+            messages: [new UserMessage('Hi')],
+            tools: $this->oneTool(),
+            temperature: 0.2,
+            topP: 0.5,
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(0.2, $sent['temperature']);
+        $this->assertSame(0.5, $sent['top_p']);
+    }
+
+    public function testAnExplicitZeroTopPSurvivesTheModelDefault(): void
+    {
+        // The `??` in `$request->topP ?? self::defaultTopP(...)` must key off
+        // NULL, not falsiness: 0.0 is a meaningful top_p and a `?:` here would
+        // silently replace it with the model default.
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK, messages: [new UserMessage('Hi')], topP: 0.0));
+
+        $this->assertEqualsWithDelta(0.0, $this->sentBody()['top_p'], 0.0);
+    }
+
+    // ---- reasoning_effort: three tiers, request > provider config > model ----
+
+    public function testRequestLevelReasoningEffortBeatsTheModelDefault(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(
+            model: self::DEEPSEEK,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'low',
+        ));
+
+        $this->assertSame('low', $this->sentBody()['reasoning_effort']);
+    }
+
+    public function testProviderConfiguredReasoningEffortIsUsedWhenTheRequestNamesNone(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK, 'medium');
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK, messages: [new UserMessage('Hi')]));
+
+        // 'medium' is one of the four names the DeepSeek-V4-Flash CARD does not
+        // list; it is accepted because the SERVER's own pydantic literal does.
+        $this->assertSame('medium', $this->sentBody()['reasoning_effort']);
+    }
+
+    public function testRequestLevelReasoningEffortBeatsTheProviderConfiguredOne(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK, 'minimal');
+        $provider->complete(new CompleteRequest(
+            model: self::DEEPSEEK,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'xhigh',
+        ));
+
+        $this->assertSame('xhigh', $this->sentBody()['reasoning_effort']);
+    }
+
+    public function testProviderConfiguredEffortReachesAModelWithNoDefaultOfItsOwn(): void
+    {
+        // MiniMax gets no effort by DEFAULT, but an operator who names one in
+        // config must still be able to send it - the model default is a
+        // default, not a veto.
+        $provider = $this->providerForModel('MiniMax-M2.7', 'high');
+        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: [new UserMessage('Hi')]));
+
+        $this->assertSame('high', $this->sentBody()['reasoning_effort']);
+    }
+
+    /**
+     * All seven names the deployed server's pydantic literal accepts. The
+     * DeepSeek-V4-Flash card names only low/high/max; measured 2026-08-20, the
+     * other four return 200 (`minimal` -> 12 reasoning tokens, `medium` -> 22,
+     * `none` -> 0), so narrowing to the card's three would refuse values this
+     * server demonstrably serves.
+     */
+    #[DataProvider('serverAcceptedEffortLevels')]
+    public function testEveryServerAcceptedLevelNameIsForwardedVerbatim(string $level): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(
+            model: self::DEEPSEEK,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: $level,
+        ));
+
+        $this->assertSame($level, $this->sentBody()['reasoning_effort']);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function serverAcceptedEffortLevels(): array
+    {
+        return [
+            'none' => ['none'],
+            'minimal' => ['minimal'],
+            'low' => ['low'],
+            'medium' => ['medium'],
+            'high' => ['high'],
+            'xhigh' => ['xhigh'],
+            'max' => ['max'],
+        ];
+    }
+
+    public function testAFloatEffortIsForwardedAndNotRangeCheckedLocally(): void
+    {
+        // The server also accepts a constrained float, measured 2026-08-20 as
+        // 0.0 through 0.99 inclusive (1.0 is rejected with `le: 0.99`). That
+        // bound is SGLang's, so 5.0 is forwarded and fails at the server rather
+        // than being refused here against a number that will decay.
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK, messages: [new UserMessage('Hi')], reasoningEffort: 5.0));
+
+        // 5 not 5.0 on the decoded body: see
+        // testTheOnePointZeroDefaultsGoOnTheWireAsJsonIntegers() - the encoder
+        // drops a zero fraction. The value still leaves this class unclamped,
+        // which is what this test is about.
+        $this->assertEqualsWithDelta(5.0, $this->sentBody()['reasoning_effort'], 0.0);
+    }
+
+    public function testAZeroFloatEffortSurvivesTheOptionalKnobFilter(): void
+    {
+        // buildParams() drops null/[]/'' from its optional-knob loop. 0.0 is a
+        // valid float effort (accepted 200 by the server) and must not be
+        // mistaken for "unset" by a loose comparison.
+        $provider = $this->providerForModel(self::DEEPSEEK);
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK, messages: [new UserMessage('Hi')], reasoningEffort: 0.0));
+
+        $sent = $this->sentBody();
+        $this->assertArrayHasKey('reasoning_effort', $sent);
+        $this->assertEqualsWithDelta(0.0, $sent['reasoning_effort'], 0.0);
+    }
+
+    public function testAnUnknownEffortLevelThrowsBeforeAnyRequestIsSent(): void
+    {
+        $provider = $this->providerForModel(self::DEEPSEEK);
+
+        try {
+            $provider->complete(new CompleteRequest(
+                model: self::DEEPSEEK,
+                messages: [new UserMessage('Hi')],
+                reasoningEffort: 'maximum',
+            ));
+            $this->fail('an unknown reasoning_effort must not reach the wire');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString("'maximum'", $e->getMessage());
+            $this->assertStringContainsString('xhigh', $e->getMessage());
+            $this->assertStringContainsString('CompleteRequest', $e->getMessage());
+        }
+
+        // The point of throwing locally rather than letting the server 400:
+        // nothing was sent, so there is no request to explain.
+        $this->assertSame([], $this->history);
+    }
+
+    public function testAnUnknownConfiguredEffortThrowsWhenTheProviderIsBuilt(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('provider config');
+
+        $this->providerForModel(self::DEEPSEEK, 'aggressive');
+    }
+
+    public function testTheEmptyStringIsRejectedAtTheRequestLevel(): void
+    {
+        // '' means "env placeholder was unset" only where env placeholders are
+        // resolved, i.e. ProviderFactory. A DTO field set to '' by a caller has
+        // no such origin and is a bug.
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->providerForModel(self::DEEPSEEK)->complete(new CompleteRequest(
+            model: self::DEEPSEEK,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: '',
+        ));
     }
 }

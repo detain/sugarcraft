@@ -45,12 +45,179 @@ final readonly class SglangProvider implements ProviderInterface
     private const WARNING_EXCERPT_LIMIT = 240;
 
     /**
+     * The model id the confirmed skynet2 deployment serves as of 2026-08-20,
+     * read from its own `GET /v1/models` (`data[0].id`). It replaced
+     * `MiniMax-M2.7`, which is GONE from that server - every request naming
+     * the old id now 404s on the model name - so this is the default
+     * {@see openAiCompatible()} hands out when a caller names no model.
+     *
+     * DOMAIN: this is a DEFAULT, not a restriction. MiniMax-M2.x remains fully
+     * supported; naming it explicitly (config `model`, `$SUGARCRUSH_MODEL`, or
+     * this factory's `$model` argument) selects every MiniMax-specific
+     * behaviour in this class unchanged - see {@see XML_PARAM_CLOSE_TAG},
+     * {@see malformedArgumentsWarning()} and
+     * {@see \SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser}.
+     */
+    public const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+
+    /**
+     * Lowercased substring that identifies the DeepSeek-V4 family in a model
+     * id, and therefore the ONE model family whose card-prescribed sampling
+     * this class substitutes for its historical defaults.
+     *
+     * A family token rather than the exact {@see DEFAULT_MODEL} id because the
+     * card's sampling advice is stated for DeepSeek-V4-Flash as a model, and
+     * the deployed id carries an org prefix and a `-0731` date suffix that a
+     * redeploy will change without changing the advice. Deliberately NOT the
+     * broader `deepseek`: DeepSeek-V3 and R1 publish DIFFERENT recommended
+     * temperatures, so matching the whole vendor would apply V4's numbers to
+     * models they were never measured on.
+     *
+     * WHERE THE LINE ACTUALLY FALLS, measured 2026-08-20 by driving
+     * {@see buildParams()} over a list of ids rather than reasoned about,
+     * because the paragraph above states a per-GENERATION principle and a
+     * substring cannot honour it exactly:
+     *
+     * - IN, as intended: `deepseek-ai/DeepSeek-V4-Flash-0731`.
+     * - IN, beyond what any card was measured on: `DeepSeek-V4.5`,
+     *   `deepseek-ai/DeepSeek-V4.1-Flash`, even `deepseek-v40`. This is the
+     *   OVER-MATCH and it is accepted, not overlooked. The alternative is a
+     *   version parser that would also have to guess, and the two failure
+     *   modes are not symmetric: a V4.x point release getting V4-Flash's
+     *   sampling is a wrong number on a probably-similar model, whereas a MISS
+     *   costs `reasoning_effort` - measured on this deployment to mean the
+     *   model's thinking is written into `content` instead of
+     *   `reasoning_content`, silently, with nothing logged
+     *   ({@see defaultReasoningEffort()}). Erring toward the match is
+     *   deliberate. A future V4.x whose card publishes different numbers is the
+     *   point to replace the token, and the boundary is pinned by test so that
+     *   change cannot be silent.
+     * - OUT, as intended: `deepseek-v3`, `deepseek-r1`, `MiniMax-M2.7`.
+     * - OUT, and this is the UNDER-MATCH worth knowing about: any id that does
+     *   not spell the family out. An SGLang server launched with
+     *   `--served-model-name default` (or `local-model`, `dsv4`, `flash`,
+     *   `deepseek_v4` - all measured) reports that alias from `/v1/models`, and
+     *   an operator who copies it into `model` gets 0.7, no `top_p`, no
+     *   `reasoning_effort` and a 196,608 context window while actually talking
+     *   to DeepSeek-V4. There is no signal here to detect that from - the id is
+     *   all this class is given - so the mitigation is documentation: the
+     *   README tells the operator to configure the REAL model id. A one-shot
+     *   log on the non-DeepSeek arm was considered and declined, because it
+     *   cannot tell an aliased V4 from a genuine MiniMax deployment and would
+     *   fire on every legitimate MiniMax run.
+     */
+    private const DEEPSEEK_V4_FAMILY_TOKEN = 'deepseek-v4';
+
+    /**
+     * DeepSeek-V4-Flash's card prescribes `temperature = 1.0` unconditionally.
+     * Applied ONLY to that family; see {@see LEGACY_DEFAULT_TEMPERATURE}.
+     */
+    private const DEEPSEEK_V4_TEMPERATURE = 1.0;
+
+    /**
+     * DeepSeek-V4-Flash's card gives `top_p = 0.95` for AGENTIC scenarios and
+     * `top_p = 1.0` otherwise. "Agentic" is the card's word, not a measurable
+     * one, so {@see defaultTopP()} pins it to something on the request:
+     * whether any `tools` were offered. See that method for the argument.
+     */
+    private const DEEPSEEK_V4_TOP_P_AGENTIC = 0.95;
+
+    private const DEEPSEEK_V4_TOP_P_NON_AGENTIC = 1.0;
+
+    /**
+     * The `reasoning_effort` this class sends for the DeepSeek-V4 family when
+     * neither the request nor the provider config names one. `max` is the
+     * user's explicit instruction for this model, and it is also the level the
+     * card's own recommendation set (`low`/`high`/`max`) tops out at.
+     */
+    private const DEEPSEEK_V4_REASONING_EFFORT = 'max';
+
+    /**
+     * `max_model_len` reported by the deployed server's own `GET /v1/models`
+     * for {@see DEFAULT_MODEL}, read 2026-08-20 and re-confirmed still 393216
+     * on the same day.
+     *
+     * A TRANSCRIBED CONSTANT, NOT A LIVE READ, and the distinction has to be
+     * stated because this provider does talk to that endpoint's server and
+     * could be misread as reading it. Nothing here fetches `/v1/models`:
+     * {@see contextWindow()} is called from render-path code
+     * ({@see \SugarCraft\Crush\Chat}'s four context tiers, recomputed per
+     * frame), so a synchronous HTTP round trip in it would block the TUI on
+     * every redraw. The cost of transcribing is that this figure decays exactly
+     * as the 128,000 it replaced did - a redeploy under a different
+     * `--context-length` makes it wrong with no local symptom. Re-verify with
+     * `curl -s https://skynet2.interserver.net/v1/models`, whose
+     * `data[0].max_model_len` is this number.
+     *
+     * Twice the MiniMax figure
+     * below, which is why {@see contextWindow()} had to become model-aware:
+     * answering 196,608 for this model would have put every one of
+     * {@see \SugarCraft\Crush\Chat}'s four context tiers at half the real
+     * budget.
+     */
+    private const DEEPSEEK_V4_CONTEXT_WINDOW = 393_216;
+
+    /**
+     * The context window this class reports for anything that is NOT the
+     * DeepSeek-V4 family - i.e. the MiniMax-M2.7 figure it has always
+     * reported, kept because that deployment's `--context-length` was exactly
+     * this (§12 D8) and because inventing a different fallback would retune a
+     * model nobody asked us to retune.
+     *
+     * DOMAIN: this is a MiniMax-shaped number serving as the fallback for
+     * every non-DeepSeek-V4 model, which is a guess for any third model. 0
+     * ("unknown", per {@see ProviderInterface::contextWindow()}) would be the
+     * honest answer for a stranger, but it would also newly disable all four
+     * context tiers on any MiniMax deployment reaching this arm, so the
+     * pre-existing behaviour is preserved rather than improved here.
+     */
+    private const LEGACY_DEFAULT_CONTEXT_WINDOW = 196_608;
+
+    /**
+     * The `temperature` this class has sent since it existed, for any model
+     * outside the DeepSeek-V4 family. Kept as the non-DeepSeek default
+     * DELIBERATELY: DeepSeek-V4's card says 1.0, and applying that number
+     * globally would silently retune MiniMax, whose sampling nobody measured.
+     */
+    private const LEGACY_DEFAULT_TEMPERATURE = 0.7;
+
+    /**
+     * The `reasoning_effort` level names the deployed server accepts.
+     *
+     * Measured, not read off a card: POSTing `reasoning_effort: "bogus"` to
+     * skynet2 on 2026-08-20 returns `{"object":"error", ... code:400}` whose
+     * message carries the server's own pydantic literal set,
+     * `literal['none','minimal','low','medium','high','xhigh','max']`, plus a
+     * second `constrained-float` alternative. DeepSeek-V4-Flash's card names
+     * only `low`/`high`/`max`; all seven names were then confirmed to return
+     * 200, so the card is a recommendation and this is the validator.
+     */
+    private const REASONING_EFFORT_LEVELS = [
+        'none',
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'max',
+    ];
+
+    /**
      * @param ToolCallParserInterface|null $toolCallParser W1.A6 (§12 D6): the
      *        client-side mirror of SGLang's own `--tool-call-parser` flag.
      *        Left null the provider uses {@see OpenAiArrayToolCallParser} over
      *        {@see argumentDecoder()}, which is the correct strategy for any
      *        server actually launched with that flag - including the confirmed
-     *        live deployment. A deployment missing it wants
+     *        live deployment, RE-MEASURED 2026-08-20 after it was switched to
+     *        {@see DEFAULT_MODEL}: that model returns structured OpenAI
+     *        `tool_calls` both non-streaming (`finish_reason: "tool_calls"`,
+     *        `function.arguments` a JSON string) and streaming (fragments keyed
+     *        by `index`, two parallel calls at 0 and 1), so no new parser class
+     *        is needed for it. Worth stating because the DeepSeek-V4-Flash card
+     *        ships no Jinja chat template and documents no `--tool-call-parser`,
+     *        which would predict raw-text tool calls - the DEPLOYMENT
+     *        contradicts the card, and the deployment is what this code talks
+     *        to. A deployment missing it wants
      *        {@see \SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser}
      *        instead, which {@see ProviderFactory::createSglang()} selects from
      *        the `toolCallParser` config key.
@@ -61,13 +228,30 @@ final readonly class SglangProvider implements ProviderInterface
         private ?string $apiKey,
         private Client $httpClient,
         private ?ToolCallParserInterface $toolCallParser = null,
-    ) {}
+        /**
+         * Deployment-wide `reasoning_effort` default, from the `sglang`
+         * provider block's optional `reasoningEffort` key
+         * ({@see ProviderFactory::createSglang()}).
+         *
+         * Sits BETWEEN a per-request value and the model-derived one - see
+         * {@see resolveReasoningEffort()} for the full precedence and why the
+         * model default exists at all. Validated at construction, not at send
+         * time, so a typo in a config file fails when the provider is built
+         * rather than on the first completion.
+         */
+        private string|float|null $reasoningEffort = null,
+    ) {
+        if ($this->reasoningEffort !== null) {
+            self::validatedReasoningEffort($this->reasoningEffort, 'provider config');
+        }
+    }
 
     public static function openAiCompatible(
         string $baseUrl,
-        string $model = 'MiniMax-M2.7',
+        string $model = self::DEFAULT_MODEL,
         ?string $apiKey = null,
         ?ToolCallParserInterface $toolCallParser = null,
+        string|float|null $reasoningEffort = null,
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -90,7 +274,7 @@ final readonly class SglangProvider implements ProviderInterface
             'headers' => $headers,
         ]);
 
-        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser);
+        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser, $reasoningEffort);
     }
 
     /**
@@ -138,6 +322,14 @@ final readonly class SglangProvider implements ProviderInterface
      * the skynet2 SGLang v0.5.16 / MiniMax-M2.7 deployment (2026-08-10)
      * confirmed actually binds output to the schema: the same prompt returns
      * free prose without `response_format` and schema-conforming JSON with it.
+     *
+     * Re-verified on the SAME endpoint after it was switched to
+     * `deepseek-ai/DeepSeek-V4-Flash-0731` (2026-08-20): "Describe a cat." with
+     * a one-integer-property schema returned exactly `{"legs": 4}`. Recorded as
+     * a SECOND measurement rather than an edit to the first, because the two
+     * dates were two different models and one `true` covering both is a claim
+     * about the ROUTE - the OpenAI-compatible `response_format` surface - not
+     * about either model.
      */
     public function supportsJsonSchema(): bool
     {
@@ -145,27 +337,47 @@ final readonly class SglangProvider implements ProviderInterface
     }
 
     /**
-     * W1.A6 (§12 D8): 196,608 tokens, not the 128,000 hardcoded here before.
+     * W1.A6 (§12 D8), now MODEL-AWARE - and it had to become so, because the
+     * single figure it used to return was measured on a model this server no
+     * longer runs.
      *
-     * The figure is not a guess at "what MiniMax-M2.7 supports" - it is the
-     * `--context-length 196608` the confirmed skynet2 SGLang launch command
-     * actually pins (§12), i.e. the exact point the server starts rejecting or
-     * evicting. It replaces a hardcoded 128,000 that was ~68k short.
+     * TWO figures, each with its own domain:
      *
-     * That gap is closed as of crush_code.md Phase 5 item 4: this figure is
-     * read. {@see \SugarCraft\Crush\Backend\EngineBackend} exposes it
-     * through {@see \SugarCraft\Crush\Backend\ReportsContextWindow}, and
+     * - {@see DEEPSEEK_V4_CONTEXT_WINDOW} = 393,216 for the DeepSeek-V4
+     *   family. Not a guess and not from a card: it is `max_model_len` in the
+     *   deployed server's own `GET /v1/models` response, read from skynet2 on
+     *   2026-08-20 for `deepseek-ai/DeepSeek-V4-Flash-0731`.
+     * - {@see LEGACY_DEFAULT_CONTEXT_WINDOW} = 196,608 for everything else.
+     *   That is the `--context-length 196608` the MiniMax-M2.7 skynet2 launch
+     *   command pinned (§12), which is what this method returned
+     *   unconditionally before. It is retained EXACTLY, so a MiniMax
+     *   deployment's tiers do not move.
+     *
+     * Judged on `$this->model` - the CONFIGURED model - because this method is
+     * handed no request. {@see buildParams()}'s sampling defaults judge on
+     * `$request->model` instead, since that is the id the request is addressed
+     * to. The two agree whenever the app's model and the provider's model are
+     * the same string, which is the normal case; a caller who deliberately
+     * completes against a second model on one provider gets that model's
+     * sampling and the configured model's window, and that mismatch predates
+     * this method being model-aware at all.
+     *
+     * Read, not decorative (crush_code.md Phase 5 item 4):
+     * {@see \SugarCraft\Crush\Backend\EngineBackend} exposes it through
+     * {@see \SugarCraft\Crush\Backend\ReportsContextWindow}, and
      * {@see \SugarCraft\Crush\Chat} makes it the budget its four context
      * tiers are percentages of - the 70% reminder, 85% automatic compaction,
-     * 95% blocking refusal and the idle-compaction prompt. So on this
-     * provider those now fire at ~137,625 / ~167,116 / ~186,777 estimated
-     * tokens rather than at 70,000 / 85,000 / 95,000, which is what the
-     * hardcoded 100,000 budget they used before produced. {@see
-     * \SugarCraft\Crush\Runtime::shouldPromptIdleCompaction()} reads it too.
+     * 95% blocking refusal and the idle-compaction prompt. On the DeepSeek-V4
+     * arm those fire at ~275,251 / ~334,233 / ~373,555 estimated tokens; on
+     * the legacy arm at ~137,625 / ~167,116 / ~186,777, unchanged.
+     * {@see \SugarCraft\Crush\Runtime::shouldPromptIdleCompaction()} reads
+     * it too.
      */
     public function contextWindow(): int
     {
-        return 196_608;
+        return self::isDeepSeekV4($this->model)
+            ? self::DEEPSEEK_V4_CONTEXT_WINDOW
+            : self::LEGACY_DEFAULT_CONTEXT_WINDOW;
     }
 
     public function costPer1kTokens(string $model, string $direction): float
@@ -302,12 +514,16 @@ final readonly class SglangProvider implements ProviderInterface
      */
     private function buildParams(CompleteRequest $request): array
     {
-        $this->flagTruncationRiskInLatestToolResults($request->messages);
+        $this->flagTruncationRiskInLatestToolResults($request->messages, $request->model);
 
         $params = [
             'model' => $request->model,
             'messages' => $this->formatMessages($request->messages),
-            'temperature' => $request->temperature ?? 0.7,
+            // Model-aware since DeepSeek-V4 became the default: this used to
+            // be a flat `?? 0.7`, which is DeepSeek-V4-Flash's card-prescribed
+            // 1.0 minus 0.3. Keyed on $request->model, the id this body is
+            // addressed to - see defaultTemperature().
+            'temperature' => $request->temperature ?? self::defaultTemperature($request->model),
             'max_tokens' => $request->maxTokens ?? 4096,
 
             // Pin SGLang's reasoning-splitting behavior explicitly rather than
@@ -320,12 +536,25 @@ final readonly class SglangProvider implements ProviderInterface
         ];
 
         foreach ([
-            'top_p' => $request->topP,
+            // The ONE knob in this list with a non-null default, and only for
+            // one model family - see defaultTopP(). Everything else below
+            // still means "defer to the server's launch-time default" when
+            // the caller left it unset.
+            'top_p' => $request->topP ?? self::defaultTopP($request->model, $request->tools),
             'top_k' => $request->topK,
             'min_p' => $request->minP,
             'repetition_penalty' => $request->repetitionPenalty,
             'stop' => $request->stop,
             'chat_template_kwargs' => $request->extraTemplateKwargs,
+            // Top-level, NOT under chat_template_kwargs. Those two are
+            // different mechanisms and the difference matters here:
+            // `chat_template_kwargs` feeds a server-side Jinja chat template,
+            // and DeepSeek-V4-Flash ships none, so routing effort through it
+            // would be silently dropped. `reasoning_effort` is a field on
+            // SGLang's own ChatCompletionRequest - proven by the fact that a
+            // bogus value is REJECTED 400 by its pydantic model rather than
+            // ignored (probed 2026-08-20).
+            'reasoning_effort' => $this->resolveReasoningEffort($request),
         ] as $key => $value) {
             // Strict comparisons throughout: `0` / `0.0` are meaningful
             // top_k/min_p values and must survive, unlike a falsy filter.
@@ -375,6 +604,209 @@ final readonly class SglangProvider implements ProviderInterface
         }
 
         return $params;
+    }
+
+    /**
+     * True when a model id names the DeepSeek-V4 family.
+     *
+     * Case-insensitive substring, not equality: the deployed id is
+     * `deepseek-ai/DeepSeek-V4-Flash-0731` - vendor prefix, mixed case, dated
+     * suffix - and the next redeploy changes the date without changing which
+     * card's sampling applies. See {@see DEEPSEEK_V4_FAMILY_TOKEN} for why the
+     * token is not the broader `deepseek`.
+     */
+    private static function isDeepSeekV4(string $model): bool
+    {
+        return str_contains(strtolower($model), self::DEEPSEEK_V4_FAMILY_TOKEN);
+    }
+
+    /**
+     * The `temperature` to send when the caller named none.
+     *
+     * TWO domains, and that is the whole reason this is a method rather than a
+     * literal: DeepSeek-V4-Flash's card prescribes 1.0 unconditionally, while
+     * 0.7 is what this class has always sent and what MiniMax deployments have
+     * been running on. Making 1.0 global would retune MiniMax on the strength
+     * of a DeepSeek measurement, which is precisely the "a number written next
+     * to the wrong model" defect - so the old value stays the default for
+     * every model outside that one family.
+     */
+    private static function defaultTemperature(string $model): float
+    {
+        return self::isDeepSeekV4($model)
+            ? self::DEEPSEEK_V4_TEMPERATURE
+            : self::LEGACY_DEFAULT_TEMPERATURE;
+    }
+
+    /**
+     * The `top_p` to send when the caller named none, or null to send nothing.
+     *
+     * DeepSeek-V4-Flash's card splits this by scenario: 0.95 for AGENTIC use,
+     * 1.0 otherwise. "Agentic" is prose, so it is pinned here to the only
+     * agentic signal actually present on a `CompleteRequest`: whether the
+     * caller offered the model any TOOLS. A request with tools is a request
+     * where the model may act rather than only answer, which is the
+     * distinction the card is drawing; a request with none cannot be a tool
+     * loop no matter what it asks for. Stated explicitly because 0.95 next to
+     * no definition of "agentic" is a number without its domain.
+     *
+     * That mapping is a JUDGEMENT and is deliberately coarse. Its practical
+     * effect, traced rather than assumed - `src/` holds exactly EIGHT
+     * `new CompleteRequest(` sites, and only ONE of them can reach this
+     * provider at all:
+     *
+     * - AGENTIC (0.95): {@see \SugarCraft\Crush\Runtime}, the only one of the
+     *   eight that builds `messages` out of {@see Message} objects. It passes
+     *   `$app->tools ?: null`, so a chat turn carrying tools lands here.
+     * - NON-AGENTIC (1.0): the SAME `Runtime` site, reached through a backend
+     *   built with no tools. Two exist and both are wired at
+     *   {@see \SugarCraft\Crush\Cli\Bootstrap}: `titleBackend()` (the one-shot
+     *   session-title call) and `summaryBackend()` (`/compact`'s model-written
+     *   exchange summaries). Both come from `Bootstrap::toollessBackend()`,
+     *   whose whole contract is a provider with nothing attached, so
+     *   `$app->tools` is `[]` and `tools` arrives null. Not taken on trust:
+     *   `tests/Cli/BootstrapSpendAndSummaryTest.php` asserts
+     *   `$this->privateProperty($backend, 'tools') === []` on both.
+     * - CANNOT REACH THIS PROVIDER AT ALL, so not a case either way: the other
+     *   seven sites ({@see \SugarCraft\Crush\App\App}'s skill-fork sub-agent
+     *   and every {@see \SugarCraft\Crush\Workflows\WorkflowEngine} request)
+     *   pass raw `['role' => …, 'content' => …]` arrays, and
+     *   {@see formatMessages()} types its callback `Message`, so they
+     *   TypeError before any sampling default is consulted. A pre-existing gap
+     *   (§12 D2), named here only so a reader counting call sites does not
+     *   conclude those are silently classified non-agentic. Note that if it is
+     *   ever closed, `WorkflowTask::$tools` defaults to `[]`, so an autonomous
+     *   workflow agent would classify as NON-agentic - which is a real wrinkle
+     *   in the tools-mean-agentic mapping and the place to revisit it.
+     *
+     * Compaction is easy to miscount here, so: `/compact`'s MODEL-written
+     * summaries go through `summaryBackend()` above and are non-agentic, while
+     * {@see \SugarCraft\Crush\Context\ContextCompactor::summarizeExchanges()}
+     * is pure string work that never calls a provider and so is not a case at
+     * all.
+     *
+     * Null for every non-DeepSeek-V4 model: this class emitted no `top_p` at
+     * all before, and MiniMax has no card figure we measured, so the absent
+     * key (server's launch-time default wins) is preserved there.
+     *
+     * @param ?array<mixed> $tools the request's `tools`, exactly as the DTO
+     *        holds it - null AND the empty array both mean "no tools offered"
+     */
+    private static function defaultTopP(string $model, ?array $tools): ?float
+    {
+        if (!self::isDeepSeekV4($model)) {
+            return null;
+        }
+
+        return ($tools !== null && $tools !== [])
+            ? self::DEEPSEEK_V4_TOP_P_AGENTIC
+            : self::DEEPSEEK_V4_TOP_P_NON_AGENTIC;
+    }
+
+    /**
+     * The `reasoning_effort` for one request, or null to omit the field.
+     *
+     * THREE tiers, most specific first:
+     *
+     * 1. `CompleteRequest::$reasoningEffort` - this one call.
+     * 2. The provider's `$reasoningEffort` - the deployment's config key.
+     * 3. {@see defaultReasoningEffort()} - derived from the model.
+     *
+     * Tier 3 exists because omitting the field is NOT neutral. Measured
+     * against skynet2 on 2026-08-20 with no `reasoning_effort`:
+     * `reasoning_content` came back null, `reasoning_tokens` 0, and the
+     * model's thinking was written straight into `content` - a riddle prompt
+     * answered with "Okay, let's break it down carefully..." as the assistant
+     * text. The same prompt with `max` returned 62 reasoning tokens in
+     * `reasoning_content` and a one-line answer in `content`. So an absent
+     * effort does not mean "server default, no opinion"; on this model it
+     * means the reasoning contaminates the reply the user reads.
+     *
+     * Note the value is validated even though tiers 2 and 3 were already
+     * validated where they were set - tier 1 arrives straight off a
+     * caller-built DTO with no validation anywhere else, and one check at the
+     * single point of use cannot go out of sync with three sources.
+     */
+    private function resolveReasoningEffort(CompleteRequest $request): string|float|null
+    {
+        $effort = $request->reasoningEffort
+            ?? $this->reasoningEffort
+            ?? self::defaultReasoningEffort($request->model);
+
+        if ($effort === null) {
+            return null;
+        }
+
+        return self::validatedReasoningEffort($effort, 'CompleteRequest::$reasoningEffort');
+    }
+
+    /**
+     * The `reasoning_effort` implied by a model id alone.
+     *
+     * `max` for the DeepSeek-V4 family: the user's explicit instruction for
+     * this model, and the top of the card's own recommended set
+     * (`low`/`high`/`max`).
+     *
+     * NULL for every other model, which is the field being omitted entirely -
+     * and that asymmetry is deliberate rather than lazy. Two facts about it,
+     * kept separate because only one of them is measured:
+     *
+     * - MEASURED (by absence): `reasoning_effort` appeared nowhere in `src/`,
+     *   `bin/`, `tests/` or any config file before this change, so no request
+     *   this codebase has ever sent carried one. Omitting it for a
+     *   non-DeepSeek-V4 model is therefore the status quo exactly.
+     * - NOT MEASURED: what an effort level would do to MiniMax-M2.x. That
+     *   deployment is gone from the confirmed server, so there is no way to
+     *   find out here. Sending one anyway, on the strength of a DeepSeek
+     *   measurement, would be changing another model's behaviour blind - which
+     *   is the one thing this change was explicitly not to do.
+     */
+    private static function defaultReasoningEffort(string $model): ?string
+    {
+        return self::isDeepSeekV4($model)
+            ? self::DEEPSEEK_V4_REASONING_EFFORT
+            : null;
+    }
+
+    /**
+     * Returns `$effort` unchanged, or throws if the server would refuse it.
+     *
+     * WHAT IS CHECKED, and what deliberately is not:
+     *
+     * - A STRING must be one of {@see REASONING_EFFORT_LEVELS}. That set is
+     *   closed, was read off the server's own pydantic literal, and a typo
+     *   (`"maximum"`, `"High "`) is a caller bug worth failing on locally
+     *   rather than at HTTP 400 wrapped in a `RuntimeException` from
+     *   {@see complete()} - CONTRIBUTING.md's no-silent-failures rule, and the
+     *   same reasoning {@see ProviderFactory::toolCallParser()} applies to its
+     *   own closed name set.
+     * - A FLOAT is forwarded with NO range check, on purpose. The server also
+     *   accepts a `constrained-float`, measured on 2026-08-20 as `0.0` through
+     *   `0.99` inclusive (`1.0` is rejected with `le: 0.99`). That bound is
+     *   SGLang's, not ours, and hardcoding 0.99 here would refuse whatever a
+     *   later SGLang widens it to - the exact failure mode narrowing the level
+     *   set to the card's three would have been. An out-of-range float still
+     *   fails loudly, just at the server, whose 400 names the live bound.
+     *
+     * $origin names which tier supplied the value, because "unknown
+     * reasoning_effort" with no indication of whether it came from a config
+     * file or a caller's DTO sends the reader to the wrong file.
+     *
+     * @throws \InvalidArgumentException When a string is not a known level.
+     */
+    private static function validatedReasoningEffort(string|float $effort, string $origin): string|float
+    {
+        if (is_float($effort) || in_array($effort, self::REASONING_EFFORT_LEVELS, true)) {
+            return $effort;
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'Unknown reasoning_effort %s from %s; expected one of %s, or a float '
+            . '(SGLang accepted 0.0-0.99 inclusive when measured 2026-08-20).',
+            var_export($effort, true),
+            $origin,
+            implode(', ', self::REASONING_EFFORT_LEVELS),
+        ));
     }
 
     /**
@@ -637,6 +1069,18 @@ final readonly class SglangProvider implements ProviderInterface
      * "possible MiniMax XML-delimiter truncation" warning. A payload that is
      * malformed yet structurally closed is some other bug and is reported as
      * plain invalid JSON, so the two never get confused in a log trawl.
+     *
+     * DELIBERATELY NOT model-gated, unlike
+     * {@see flagTruncationRiskInLatestToolResults()}. That method predicts a
+     * failure from an intact payload and so may only speak about models the
+     * failure was measured on; this one DIAGNOSES a payload that has already
+     * failed to decode, and a broken payload is worth reporting whatever model
+     * produced it. What is gated is the CERTAINTY of the attribution: the text
+     * says the payload MATCHES THE SIGNATURE of the MiniMax bug rather than
+     * asserting it IS that bug, because on any other model - DeepSeek-V4-Flash
+     * included, measured 2026-08-20 as not having it - the same shape has some
+     * other cause and naming MiniMax as fact would send the reader to the
+     * wrong server.
      */
     private static function malformedArgumentsWarning(string $toolName, string $raw): string
     {
@@ -656,8 +1100,10 @@ final readonly class SglangProvider implements ProviderInterface
         return sprintf(
             'SglangProvider: possible MiniMax XML-delimiter truncation in tool call "%s" - '
             . 'arguments are not valid JSON (%s) and end mid-value without a closing structure%s. '
-            . 'This is the known MiniMax-M2.x "%s" tool-call bug (server-side, not fixable '
-            . 'client-side); the call is being executed with no arguments. Raw payload: %s',
+            . 'That matches the signature of the known MiniMax-M2.x "%s" tool-call bug '
+            . '(server-side, not fixable client-side) - the CAUSE is inferred from the shape, not '
+            . 'from the model, so on a non-MiniMax model look for another truncation source; the '
+            . 'call is being executed with no arguments. Raw payload: %s',
             $toolName,
             json_last_error_msg(),
             str_contains($raw, self::XML_PARAM_CLOSE_TAG)
@@ -678,6 +1124,32 @@ final readonly class SglangProvider implements ProviderInterface
      * substring is measurably likelier to produce a truncated follow-up call,
      * and saying so up front turns a later mystery into a predicted one.
      *
+     * MODEL-GATED, and that gate is the whole point of the $model parameter.
+     * This is a PREDICTION, not a detection: it fires on a payload that is
+     * still intact, purely because a NAMED model is known to mishandle it
+     * later. So it may only be asserted about models the mishandling was
+     * measured on.
+     *
+     * - MEASURED on MiniMax-M2.x (§12 D5): the bug this predicts.
+     * - MEASURED on `deepseek-ai/DeepSeek-V4-Flash-0731`, live against
+     *   skynet2 on 2026-08-20: it does NOT have the bug. A `write_file` call
+     *   whose `body` argument was
+     *   `<invoke name="x"><parameter name="y">z</parameter></invoke> DONE`
+     *   came back through structured `tool_calls` at 64 of 64 bytes, byte
+     *   identical, `</parameter>` present, nothing logged. So the DeepSeek-V4
+     *   family is skipped outright - warning about it would be a MiniMax
+     *   measurement written next to a model that was measured not to share it,
+     *   which is exactly the defect this codebase keeps finding.
+     * - NOT MEASURED: every other model id. Those still get the warning,
+     *   because an unmeasured model is not a model known to be safe - but the
+     *   text now NAMES the id it fired for alongside the id the bug was
+     *   measured on, so the log line carries its own domain instead of
+     *   implying the request went to MiniMax.
+     *
+     * Judged on `$model`, the request's model, because that is the id this
+     * body is addressed to - the same choice {@see defaultTemperature()} and
+     * {@see defaultTopP()} make, and for the same reason.
+     *
      * Deliberately only the TRAILING RUN of tool results, not the whole
      * history: the full history is re-serialized on every turn, so flagging
      * every match would re-log the same result for the rest of the session.
@@ -689,9 +1161,15 @@ final readonly class SglangProvider implements ProviderInterface
      * precisely where a risky file body shows up.
      *
      * @param array<mixed> $messages
+     * @param string       $model the request's model id, which decides whether
+     *        this prediction is assertable at all - see above
      */
-    private function flagTruncationRiskInLatestToolResults(array $messages): void
+    private function flagTruncationRiskInLatestToolResults(array $messages, string $model): void
     {
+        if (self::isDeepSeekV4($model)) {
+            return;
+        }
+
         $batch = [];
         foreach (array_reverse($messages) as $message) {
             if (!$message instanceof ToolResultMessage) {
@@ -712,10 +1190,13 @@ final readonly class SglangProvider implements ProviderInterface
                 'SglangProvider: tool result "%s" contains the literal "%s" (%d occurrence(s)) - '
                 . 'MiniMax-M2.x truncates tool-call arguments containing that substring, so any '
                 . 'follow-up call echoing this content (Edit/Write bodies, XML/HTML/PHP/.tape '
-                . 'content) is at elevated risk of silent truncation.',
+                . 'content) is at elevated risk of silent truncation. This request is addressed '
+                . 'to model "%s"; the bug was measured on MiniMax-M2.x, and DeepSeek-V4-Flash was '
+                . 'measured NOT to have it (2026-08-20) and is never warned about.',
                 $result->toolCallId(),
                 self::XML_PARAM_CLOSE_TAG,
                 $occurrences,
+                $model,
             ));
         }
     }

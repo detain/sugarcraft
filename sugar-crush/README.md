@@ -677,6 +677,44 @@ tool-call XML unparsed in the content. Note this currently applies to the batch
 `complete()` path only — the streaming path reassembles tool calls itself and
 does not yet consult the setting.
 
+It also accepts an optional `reasoningEffort` key — SGLang's top-level
+`reasoning_effort` request field. One of `none`, `minimal`, `low`, `medium`,
+`high`, `xhigh`, `max`, or a float. Omit it and the value is derived from the
+model: `max` for the DeepSeek-V4 family, and nothing at all for any other
+model.
+
+A misspelled **level name** is refused when the provider is built, so a typo in
+a config file fails immediately. A **number** is not: the float range is the
+server's (`0.0`–`0.99` inclusive when measured, `le: 0.99`) and is deliberately
+not re-checked locally, since a later SGLang may widen it. The catch is that
+JSON has no float/int distinction to lean on here — a whole number is read as a
+float, so `"reasoningEffort": 1` becomes `1.0`, the one value just outside that
+bound, and every request then fails with an HTTP 400 from the server rather than
+at startup. Write `0.99`, not `1`.
+
+Configure the **real model id**, not a `--served-model-name` alias. The
+DeepSeek-V4 defaults above are selected by matching `deepseek-v4` in the `model`
+string, so a server launched as `--served-model-name default` reports `default`
+from `/v1/models`, and copying that into `model` silently gets you the legacy
+`temperature = 0.7`, no `top_p`, no `reasoning_effort` and a 196,608-token
+context window while you are in fact talking to DeepSeek-V4. There is no way to
+detect that from the id alone.
+
+That default exists because an *absent* `reasoning_effort` is not neutral. On
+DeepSeek-V4-Flash, a request without it comes back with `reasoning_content:
+null` and the model's thinking written straight into `content` — so the
+reasoning ends up in the reply the user reads instead of the collapsible
+thinking pane. Sending a level moves it back to `reasoning_content`, which is
+where `CompleteResponse::$reasoning` reads from.
+
+The default `sglang` model is `deepseek-ai/DeepSeek-V4-Flash-0731`, and it also
+sets `temperature = 1.0` plus `top_p = 0.95` when the request offers tools /
+`1.0` when it does not — the model card's own figures for agentic and
+non-agentic use. MiniMax-M2.x is unaffected by all of the above: name it as the
+`model` and the provider keeps its previous `temperature = 0.7`, sends no
+`top_p`, and sends no `reasoning_effort` unless you set one explicitly. A
+per-request override lives on `CompleteRequest::$reasoningEffort`.
+
 ## The agent loop
 
 `EngineBackend` bridges the chat-shell `Backend` seam to the engine. Each user turn runs a **bounded agentic loop**: call the provider through the `Runtime`, execute any tool calls through the hook gate, feed the results back, and repeat until the model answers without calling tools — or a `maxSteps` ceiling is hit.
