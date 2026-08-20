@@ -424,11 +424,29 @@ supervisor independently re-confirmed the first:
   catches it. Same for the read-only tool list: removing `'Lsp'` survives the gate's own three test
   files and is caught only by `LspToolTest`. Behaviour is safe today because both paths share
   `ruleMatches()` — a refactor that split them would go green.
-- 🟡 **`WorkflowEngine` never resolves an agent.** A stage's `agent: reviewer` becomes
-  `new Agent(name: 'reviewer', prompt: '')` — a label, not the preset. Preset rosters and workflow
-  stages are unrelated objects that happen to share a string. Also `executeStage()` runs
-  `$tasks[0]` only, and `pipeline`/`withVerification` have **no YAML spelling** at all. Phase 2
-  item 3 wired the engine's construction; it did not make stages address the roster.
+- 🟡 **`WorkflowEngine` never resolves an agent** — **RE-MEASURED 2026-08-20, and 3 of this
+  finding's 4 sub-claims have DECAYED. Only the first still stands.** Recorded in full because the
+  decay is the lesson: an open finding is a measurement with a date, and this one was about to be
+  handed to an agent as fact.
+  - ✅ **STILL TRUE — no preset resolution.** `src/Workflows/WorkflowEngine.php` (81,919 B / 1,804
+    lines) has **zero** occurrences of `AgentPreset`. Its `$registry` is a `WorkflowRegistry`
+    (`:199`) — workflow *files*, not an agent roster. A stage's agent becomes
+    `new Agent(name: $task->name ?? $task->agentType, …)` at `:859`, i.e. the YAML string is the
+    name. Preset rosters and workflow stages remain unrelated objects sharing a string.
+  - ⚠️ **MISLEADING as written — `prompt: ''` is deliberate.** The call site carries the inline
+    comment `// system prompt is set via CompleteRequest`. Citing it as evidence of fabrication
+    reads an intentional seam as a bug, which is the thing this plan's own rules forbid.
+  - ❌ **STALE — "`executeStage()` runs `$tasks[0]` only".** `$tasks[0]` has **zero** occurrences in
+    the file.
+  - ❌ **FALSE NOW — "`pipeline`/`withVerification` have no YAML spelling."** Four executors exist:
+    `executeStage()` `:833`, `executePipelineStage()` `:913`, `executeVerificationStage()` `:1046`,
+    `executeParallelStage()` `:1185`; and the `UnsupportedStageTypeException` at `:780` states
+    *"Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented"* — so all four are
+    spellable in YAML. The remaining gap, if any, is what each spelling *does*, not whether it parses.
+
+  **So the actionable residue is one item: make a stage's agent address the preset roster.** Anyone
+  picking this up must re-measure first; the four sub-claims above decayed within days of being
+  written, and two of them would have sent an agent to fix code that already works.
 - 🟡 **Skill frontmatter: 4 of 9 keys are live.** `allowed-tools`, `disallowed-tools` and `effort`
   are read by nothing. `model`/`context` are read only by `App::applySkillsToSystemPrompt()` and
   `App::dispatchSkill()`, **neither of which has a caller in `src/` or `bin/`** — so `context:

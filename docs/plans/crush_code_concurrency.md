@@ -994,3 +994,26 @@ Stated explicitly so nobody reads an estimate as a measurement (RESUME §5).
   suite in the live tree and in one lane back-to-back, same tree state, nothing else running.
 - **Whether the five existing `.vhs` tapes show what P8.6 asks for.** §2.5(b) establishes that the tapes
   and their example drivers exist; it does not establish that their content satisfies the item.
+
+### 5.2e A census literal is a COUNTER, and "stop on conflict" is the wrong rule for it
+
+Measured 2026-08-20, round 31. Several suites carry a number derived from the tree —
+`BuiltInToolCorpusTest`'s tool count (now **279**, bumped 278→279 by `LayeredSettings.php`),
+`ContainedPathInventoryTest`, `ReadPathCensusTest`'s per-occurrence verdict rows.
+
+**The heuristic "a bundle that adds no new `src/` file cannot collide on the census" is FALSE.**
+Round 31's `lane-lsp` bundle added no `src/` file at all — both items were changes inside existing
+classes, deliberately scoped that way — and it still moved `ContainedPathInventoryTest` and added
+seven `ReadPathCensusTest` rows, because those literals track **read sites and contained-path
+call sites**, not files. Any lane touching code that opens a file moves them.
+
+So collisions on these lines are the normal case for two concurrent lanes, not the exception. And
+the standing `COMMIT` rule — *"on a rebase conflict: STOP, do not force, and report"* — is right for
+a semantic conflict and **wrong for a counter**: two lanes each incrementing 278 to 279 produce a
+textual conflict whose correct resolution is neither side's value but the **re-derived** one.
+
+The brief should therefore say, for these files specifically: on a conflict confined to a census
+count or an inventory row, **re-derive the value from the tree and continue** (the count is a
+function of the code, so recomputing it is not a judgement call), and report that you did. STOP
+remains the rule for a conflict anywhere else, including a conflict in the *prose* of those same
+test files, because that is a claim and not a count.

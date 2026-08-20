@@ -70,8 +70,13 @@ script the way the runtime does:** wrap the body in an `async function`, stub
    lane `cmd`** — it is the prerequisite P6.4 needs and the plan did not know about.
 2. 🔴 Prefix matching on the **real-call** path is pinned by no test (only the declaration path).
    Also round 31, same lane.
-3. 🟡 `WorkflowEngine` never resolves `agent:` to a preset — fabricates `new Agent(name, prompt:'')`;
-   `executeStage()` runs `$tasks[0]` only; `pipeline`/`withVerification` have no YAML spelling.
+3. 🟡 `WorkflowEngine` never resolves `agent:` to a preset — **RE-MEASURED 2026-08-20: only this
+   first clause survives.** Zero `AgentPreset` hits in the file; `$registry` is a `WorkflowRegistry`
+   (workflow files, not a roster). The other three clauses of the original finding have decayed:
+   `prompt: ''` is deliberate (inline comment says the system prompt comes from `CompleteRequest`);
+   `$tasks[0]` has zero occurrences; and `pipeline`/`verification` DO have YAML spellings — four
+   executors exist and `UnsupportedStageTypeException` names all four types. **Re-measure any open
+   finding before briefing it** — two of those clauses would have sent an agent to fix working code.
 4. 🟡 5 of 9 skill frontmatter keys inert; `App::dispatchSkill()`/`applySkillsToSystemPrompt()` have
    no caller, so `context: fork` does nothing on the CLI path.
 5. 🟡 `agentRoster()` drops 10 of 16 preset fields incl. `permissionMode`.
