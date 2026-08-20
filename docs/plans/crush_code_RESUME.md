@@ -423,6 +423,72 @@ regressed on the foundation change.
   zone, made while writing up that very lesson. **Check whether a thing is already covered before
   calling it a gap.**
 
+### ROUND 34 IN FLIGHT — P8.9 (fix stage) and P8.4 (fix stage, FOUR BLOCKING)
+
+| lane | bundle | stage |
+|---|---|---|
+| `crush-lane-cmd` | **P8.9** — `InstructionFileLoader` + `skillNudge` into `Grep` | **FIX** (review: COMMIT AFTER FIXES, 0 blocking, 3 comment-only) |
+| `crush-lane-lsp` | **P8.4** — wire the split-pane compositor | **FIX** (review: COMMIT AFTER FIXES, **4 BLOCKING**) |
+| `crush-lane-sglang` | — | idle at master, ready |
+
+🔴 **P8.4 IS WIRED TO A SOURCE THAT NEVER FIRES. This is the round's most important finding and it
+was PROVEN, not argued.** `AgentManager::liveOutputs()` (`:341-352`) iterates `$this->agents`,
+populated **only** by `register()` (`:62-65`). `WorkflowEngine::executeParallelStage()` never calls
+`register()` — it builds ad-hoc `Agent`s named `$task->name ?? $task->agentType`
+(`WorkflowEngine.php:1224`, `:1251`) and wraps them in `SubAgent`s (`AgentManager.php:646`). The
+reviewer registered the real `Bootstrap::agentRoster()`, inserted a SubAgent named `style-fixer`
+exactly as `:646` does, and measured **`liveOutput('style-fixer')` returning text while
+`liveOutputs()` returned `[]`**. Both shipped workflows name their parallel tasks
+(`examples/workflows/lint-then-fix.yaml:41,49`; `workflows/deep-research.php:46,57,68,79`) and **none
+is a roster name** — so neither can activate the split.
+- **It also never DEACTIVATES.** `liveOutput()` (`:313-323`) filters only on `output !== ''`; nothing
+  clears `SubAgent::$output`; `removeSubAgent()` (`:777-780`) has **zero callers** — leave it, per the
+  no-delete rule. **The asymmetry is the tell:** the existing consumers (transcript strip,
+  `AgentDashboardPane`) go through `active()` (`:105-121`), which DOES filter on `isWorking()`. The
+  new consumer is the only one that does not.
+- ⚠️ **AND A THIRD LAYER: no frame renders while the agents talk.** `Chat.php:6212` calls
+  `workflowEngine->run()` **synchronously** inside `handleWorkflowCommand()`, dispatched from the
+  slash `match` at `Chat.php:5480` inside `update()`. The whole workflow completes before `view()` is
+  called again. **So registration + liveness alone may still yield a split that never appears** —
+  during the run nothing renders, and afterwards a correct liveness filter hides it. Making it
+  genuinely visible needs async workflow execution, which is a separate item and explicitly OUT of
+  this bundle. The fix lane is told to settle this by measurement first and to report rather than
+  attempt an async rewrite.
+- 🔴 **FOUR documents assert behaviour that could not be reproduced** — `agentSplitWidth()`'s docblock
+  ("changes shape while a workflow's agents talk and reverts when they fall silent" — **both halves
+  false**), `sugar-crush/docs/ARCHITECTURE.md`, `crush_code_hardening_backlog.md` (**F5 was flipped to
+  "RESOLVED — WIRED" and must NOT be**), and the rewritten `src/Renderer.php:115-127`. That last one
+  is the sharpest lesson available: **its OLD claims were genuinely false** (`WorkflowEngine` IS
+  constructed at `Bootstrap.php:770`; `Chat::executeAgents()` at `Chat.php:4049` still has no caller),
+  **and its NEW conclusion is also unverified** — the strip reads `active()`, the same registered-only
+  map. **A correction installed a fresh falsehood in place of the stale one.**
+- 🔴 **A new docblock states the REVERSE of pre-change behaviour.**
+  `MultiplexerSplitPane.php` now says the bug "made this branch render a 50/50 split while the
+  no-multiplexer branch honoured whatever the caller asked for". **Neither branch honoured caller
+  proportions** — pre-change, `renderForCurrentEnvironment()` was
+  `(string, string, SplitDirection, int $cols = 0, int $rows = 0)`, so no numerator/denominator
+  parameters existed to drop. Both rendered 1/2 because that is `renderWithSplit()`'s default. The
+  real divergence was **size**. Same error in `Tui/Renderer.php`'s "dropped every one of the four" —
+  it dropped **two**. The size fix itself is real and verified (TMUX and iTerm2 runs now agree).
+
+**What IS sound in P8.4, verified by the reviewer's own harness — do not re-litigate:** the render
+invariant holds across **2248 self-generated frames** (cols 20-300 × rows {10,24,30,40}), zero
+over-wide rows, zero over-tall frames; the silent path is **byte-identical** to pre-change
+(md5 `7c114b70d7b472448e836752ce5a3df4` both runs); the census is correct; held files untouched; the
+`+23 / +1488` arithmetic closes exactly.
+
+⚠️ **A SURVIVING MUTATION THE IMPLEMENTER DID NOT REPORT:** `intdiv($cols,3)` → `(int) round($cols/3)`
+**survives all 22 tests**, changing the agent column at every `cols % 3 == 2`. The 281-width sweep
+asserts `band + 1 + column == cols`, which holds for **any** sizing policy — **it pins the SUM, never
+the SIZING.**
+
+📊 **THE ASSERTION COUNT IS NOT MEASURING WHAT IT LOOKS LIKE.** Of the 1482 new assertions, **1344
+(90.7%) come from two loops**, and **PHPUnit 10 counts `assertLessThanOrEqual`/`assertGreaterThanOrEqual`
+as 2** (composite `LogicalOr`) — so the real assert-CALL count is **~880, not 1488**. The 281-width
+sweep buys **four** distinct properties and its band-floor check is monotone, so only the minimum at
+cols=80 is load-bearing. **This matters repo-wide: assertion totals are a headline health metric in
+this plan and they are inflated by the `…OrEqual` family.**
+
 ### ROUND 34 IS ALREADY MEASURED — do not re-run discovery
 
 A read-only agent measured the whole cheap tail against the tree at `7957b2be`. Verdicts, with the
