@@ -34,9 +34,12 @@ and every figure since is void. `sugar-crush/vendor/sugarcraft/` = 18 symlinks.
 
 | lane dir | bundle | stage | owns |
 |---|---|---|---|
-| `crush-lane-cmd` | the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | **FIX** | `src/Permissions/**`, `src/Cli/**`, `bin/sugarcrush`, `src/Config/LayeredSettings.php` |
+| `crush-lane-cmd` | the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `339f512c` | — released, dir reset to `origin/master` |
 | `crush-lane-sglang` | **DSML parser + streaming gap** | **FIX** | `src/Providers/**` — **holds the census token** |
-| `crush-lane-lsp` | **P3.2 FocusRing + P3.3 veil click-outside + P3.5 padding** | implement | `src/Tui/**`, `src/App/**`, `Renderer.php`, `KeyboardHandler.php`, siblings `candy-focus`/`sugar-veil`/`candy-sprinkles` |
+| `crush-lane-lsp` | **P3.2 FocusRing + P3.5 padding** (P3.3 DESCOPED — premise false) | **REVIEW** (uncommitted) | `src/Tui/**`, `src/App/**`, `Renderer.php`, `KeyboardHandler.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
+
+**MASTER IS NOW `c39f1a99`** — CI pushed a `vhs: regenerate demo GIFs` commit on top of `339f512c`.
+The live tree is at `c39f1a99` and clean. Lanes `sglang` and `lsp` are both behind it.
 
 **Pre-fix lane figures** (both predate their fix stage; re-measure):
 `cmd` 8191 / 91682 / 1 / rc 0 · `sglang` 8150 / 91605 / 1 / rc 0.
@@ -63,6 +66,8 @@ Both lanes are instructed to STOP on any non-count conflict. `lsp` is barred fro
 | `e62f6b91` | the brief that said measure-the-bytes did not measure its own bytes |
 | `1b7647a0` | the parser that exists to stop missed tool calls was inventing them |
 | `3e74a716` | the permission gate is, by default, not deciding anything |
+| `2bbe7035` | round-33 state at 3 lanes, written so a compact loses nothing |
+| `339f512c` | **LANE `cmd` — the first lane commit of round 33.** `--permission-mode` / `--model` empty values now exit 2; the `accept-edits` scoped-write gate pinned. Supervisor-verified **8204 / 91728 / 1 / rc 0** in the live tree |
 
 ### THE OPEN FINDINGS EACH LANE IS CLOSING — full detail, so a compact loses nothing
 
@@ -106,6 +111,40 @@ no escape and no feature loss** — that stands and must not be re-litigated.
   `PermissionGate` never references.** Being documented; if that wrapper ever becomes `sh -c` it is a
   live grant escape.
 
+
+**`lsp` (implement done, IN REVIEW — findings the implementer reported, NOT yet independently verified).**
+Its two highest-risk moves are exactly the shapes that hide a destroyed guard, so the reviewer is
+attacking them first; treat everything below as CLAIMED until that report lands.
+- ⚠️ **It edited `candy-core/src/InputReader.php` — a sibling foundation lib, outside its granted
+  set.** Added `'Z' => KeyMsg(Tab, shift: true)` to `decodeCsi()`, arguing `CSI Z` (how every
+  xterm-family terminal spells Shift+Tab) decoded NOWHERE, so a `KeyboardHandler` arm alone would
+  have been correct code no keypress could reach. It ran only candy-core + sugar-crush; **many libs
+  depend on candy-core** and a previously-`null` key now returning a `KeyMsg` can move any consumer.
+- ⚠️ **It INVERTED a pre-existing, deliberately-documented test** —
+  `SlashMenuTabCompletionTest::testShiftTabCyclesNoPaneWithOrWithoutThePopup` asserted Shift+Tab
+  cycles NO pane. Claim: the hazard it guarded was *claim-without-action* and the new `handle()` arm
+  removes that hazard. **If that hazard is now unguarded, inverting the test deleted the only guard.**
+- 🔴 **NEW FINDING — P3.3's premise was FALSE and the truth is worse.** Outside clicks do not
+  "silently no-op": a `pane:files` zone in the backdrop **survives `Veil::composite()` at identical
+  coordinates** (`row=1 col=1..7` before and after), so clicking dimmed chrome **while the permission
+  prompt is up** still fires `selectPane`/`selectSessionTab`/`toggleToolOutput`. Cause given:
+  `Chat::handleMouse()` (~`:1108`) returns before every modal-state guard (~`:1194`/`:1316`/`:1325`).
+  **P3.3's code change was descoped, correctly** — the fix lives in `Chat.php`, outside the grant.
+  It also declined to arm click-outside dismissal on ANY of the three modals, reasoning that
+  dismissal over an unfixed click-through would both dismiss the modal AND fire the backdrop zone,
+  and that dismissal must mean DENY, never "leave pending". **This is now queue-relevant: it is the
+  same modal the engine-path approver would raise.**
+- **NEW FINDING — `AgentViewPane::render($w)` returns rows of `$w + 4` cells**, always (border 2 +
+  padding 2 sit outside `Style::width()`). Both callers compensate, so it is not live breakage, but
+  `max(40, $cols - 4)` means **a terminal under 44 columns gets over-wide rows** — and over-wide
+  lines violate this project's render invariant (the diff renderer assumes one line per row).
+- Reported figures (CLAIMED): sugar-crush **8127 / 91560 / 1 / rc 0**; candy-core **777 / 6961 / 25 /
+  rc 0**, claimed identical to baseline. 8/8 self-applied mutations killed, **M3 only after a second
+  test** — its first test compared three encodings to each other and all three agreed at the wrong
+  column, the "clause present, not true" gap.
+- Plan corrections it measured: `AgentViewPane`'s `strlen()` is at **`:96` and `:115`**, not the
+  plan's `:112`; all four modals share **one** Veil (`Renderer.php:1150`), so per-modal arming needs
+  a conditional, not a second Veil; `Table` is `SugarCraft\Sprinkles\Table\Table`.
 
 ### THE RULES ROUND 33 HAS EARNED SO FAR
 
