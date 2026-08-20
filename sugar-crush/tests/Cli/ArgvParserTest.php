@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\ArgvParser;
 use SugarCraft\Crush\Cli\ParsedArgs;
+use SugarCraft\Crush\Cli\Subcommands;
 
 /**
  * Tests for {@see ArgvParser} — argv parsing for sugarcrush CLI.
@@ -764,5 +765,541 @@ final class ArgvParserTest extends TestCase
         $this->assertNotNull($result->usageError);
         $this->assertStringContainsString('--verbose', $result->usageError);
         $this->assertStringNotContainsString('--quiet', $result->usageError);
+    }
+
+    // -------------------------------------------------------------------------
+    // --output-format validation (crush_code.md Phase 4 item 6)
+    // -------------------------------------------------------------------------
+
+    /**
+     * The measured hole: every consumer of $outputFormat tests
+     * `=== NonInteractive::FORMAT_JSON` and renders text otherwise, so before
+     * this check `--output-format xml` was byte-for-byte identical to
+     * `--output-format text` AND exited 0 — a `| jq` caller got a silent empty
+     * pipe with a success status.
+     */
+    public function testAnUnsupportedOutputFormatIsAUsageError(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', 'hi', '--output-format', 'xml']);
+
+        $this->assertNotNull($result->usageError);
+        $this->assertStringContainsString('--output-format xml', $result->usageError);
+        $this->assertNotNull($result->usageHint);
+        $this->assertStringContainsString('text', $result->usageHint);
+        $this->assertStringContainsString('json', $result->usageHint);
+    }
+
+    /**
+     * The `=`-form takes the same path — a check that only covered the spaced
+     * spelling would leave half the hole open.
+     */
+    public function testAnUnsupportedOutputFormatIsAUsageErrorInTheEqualsForm(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--output-format=jsonl', '-p', 'hi']);
+
+        $this->assertNotNull($result->usageError);
+        $this->assertStringContainsString('jsonl', $result->usageError);
+    }
+
+    /**
+     * The check runs whether or not one-shot mode was asked for, so the TUI
+     * path rejects the same vector the one-shot path does. Without it
+     * `sugarcrush --output-format xml` opened the alt-screen, because the TUI
+     * never looks at $outputFormat at all.
+     */
+    public function testTheOutputFormatCheckAlsoFiresWithoutAPromptRequest(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--output-format', 'xml']);
+
+        $this->assertFalse($result->promptRequested);
+        $this->assertNotNull($result->usageError);
+    }
+
+    /**
+     * CASE-SENSITIVE, decided deliberately: the consumers compare with `===`,
+     * so accepting `JSON` without rewriting the stored value would re-open the
+     * hole (a validated format that still prints text), and rewriting it would
+     * silently change what `--output-format JSON` has always done.
+     */
+    public function testOutputFormatMatchingIsCaseSensitive(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', 'hi', '--output-format', 'JSON']);
+
+        $this->assertNotNull($result->usageError);
+        $this->assertStringContainsString('JSON', $result->usageError);
+    }
+
+    /**
+     * @dataProvider supportedOutputFormats
+     */
+    public function testEverySupportedOutputFormatParsesWithoutAUsageError(string $format): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', 'hi', '--output-format', $format]);
+
+        $this->assertNull($result->usageError);
+        $this->assertSame($format, $result->outputFormat);
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function supportedOutputFormats(): array
+    {
+        // ParsedArgs is declared INSIDE ArgvParser.php, so PSR-4 cannot
+        // autoload it by name — and a data provider runs before any test has
+        // called ArgvParser and pulled the file in. Naming ArgvParser first is
+        // what loads both.
+        \class_exists(ArgvParser::class);
+
+        $cases = [];
+        foreach (ParsedArgs::OUTPUT_FORMATS as $format) {
+            $cases[$format] = [$format];
+        }
+
+        return $cases;
+    }
+
+    /** The absent flag must not trip the new check. */
+    public function testTheDefaultOutputFormatIsNotAUsageError(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', 'hi']);
+
+        $this->assertNull($result->usageError);
+        $this->assertSame(ParsedArgs::DEFAULT_OUTPUT_FORMAT, $result->outputFormat);
+    }
+
+    /**
+     * ParsedArgs restates NonInteractive's two format constants as literals to
+     * stay free of a compile-time dependency on it; this is the seam that
+     * keeps the two copies honest, the same job
+     * {@see self::testOutputFormatDefaultsToText()} does for the default.
+     */
+    public function testOutputFormatsMirrorNonInteractiveConstants(): void
+    {
+        $this->assertSame(
+            [\SugarCraft\Crush\Cli\NonInteractive::FORMAT_TEXT, \SugarCraft\Crush\Cli\NonInteractive::FORMAT_JSON],
+            ParsedArgs::OUTPUT_FORMATS,
+        );
+    }
+
+    /**
+     * Two usage errors with two different remedies now share one field, so the
+     * hint has to travel WITH the error: the binary used to print the
+     * "--prompt=<text>" line under every usage failure.
+     */
+    public function testTheFlagShapedPromptErrorCarriesThePromptHintNotTheFormatHint(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', '--verbose']);
+
+        $this->assertNotNull($result->usageHint);
+        $this->assertStringContainsString('--prompt=', $result->usageHint);
+    }
+
+    /**
+     * A prompt mistake and a format mistake in one vector report the prompt
+     * one, matching the existing "only the first is reported" rule — and the
+     * hint that comes with it is the prompt hint.
+     */
+    public function testAPromptErrorWinsOverAnOutputFormatError(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '-p', '--verbose', '--output-format', 'xml']);
+
+        $this->assertNotNull($result->usageError);
+        $this->assertStringContainsString('--verbose', $result->usageError);
+        $this->assertStringContainsString('--prompt=', (string) $result->usageHint);
+    }
+
+    // -------------------------------------------------------------------------
+    // --config (crush_code.md Phase 4 item 6)
+    // -------------------------------------------------------------------------
+
+    public function testConfigPathIsNullWhenTheFlagIsAbsent(): void
+    {
+        $this->assertNull(ArgvParser::parse(['sugarcrush'])->configPath);
+    }
+
+    public function testConfigFlagWithASeparateValue(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--config', '/etc/sugarcrush.json']);
+
+        $this->assertSame('/etc/sugarcrush.json', $result->configPath);
+    }
+
+    public function testConfigFlagWithAnInlineValue(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--config=/etc/sugarcrush.json']);
+
+        $this->assertSame('/etc/sugarcrush.json', $result->configPath);
+    }
+
+    /**
+     * `--config` is a recognised flag, so it must not also land in
+     * $unknownFlags — which is what would happen if only one of the two
+     * spellings had a branch.
+     */
+    public function testNeitherConfigSpellingIsRecordedAsAnUnknownFlag(): void
+    {
+        $this->assertSame([], ArgvParser::parse(['sugarcrush', '--config', '/x.json'])->unknownFlags);
+        $this->assertSame([], ArgvParser::parse(['sugarcrush', '--config=/x.json'])->unknownFlags);
+    }
+
+    /** After `--` nothing is a flag, `--config` included. */
+    public function testConfigAfterTheEndOfOptionsSeparatorIsPositional(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--', '--config', '/x.json']);
+
+        $this->assertNull($result->configPath);
+    }
+
+    public function testConfigErrorIsNullWhenNoConfigWasNamed(): void
+    {
+        $this->assertNull(ArgvParser::configError(ArgvParser::parse(['sugarcrush'])));
+    }
+
+    public function testConfigErrorNamesAFileThatDoesNotExist(): void
+    {
+        $missing = \sys_get_temp_dir() . '/argv_config_absent_' . \uniqid('', true) . '.json';
+        $error = ArgvParser::configError(ArgvParser::parse(['sugarcrush', '--config', $missing]));
+
+        $this->assertNotNull($error);
+        $this->assertStringContainsString($missing, $error);
+        $this->assertStringContainsString('no such file', $error);
+    }
+
+    /** A directory is the same mistake as an absent path, and reports as one. */
+    public function testConfigErrorRejectsADirectory(): void
+    {
+        $dir = \sys_get_temp_dir() . '/argv_config_dir_' . \uniqid('', true);
+        \mkdir($dir, 0700, true);
+
+        try {
+            $error = ArgvParser::configError(ArgvParser::parse(['sugarcrush', '--config', $dir]));
+            $this->assertNotNull($error);
+            $this->assertStringContainsString('no such file', $error);
+        } finally {
+            @\rmdir($dir);
+        }
+    }
+
+    public function testConfigErrorIsNullForAReadableFile(): void
+    {
+        $file = \sys_get_temp_dir() . '/argv_config_ok_' . \uniqid('', true) . '.json';
+        \file_put_contents($file, '{}');
+
+        try {
+            $this->assertNull(ArgvParser::configError(ArgvParser::parse(['sugarcrush', '--config', $file])));
+        } finally {
+            @\unlink($file);
+        }
+    }
+
+    /**
+     * A present-but-unreadable file is a different message from an absent one,
+     * because it is a different fix. Skipped when the suite runs as a user
+     * that ignores the mode bits (root), where the premise cannot hold.
+     */
+    public function testConfigErrorReportsAnUnreadableFileSeparately(): void
+    {
+        $file = \sys_get_temp_dir() . '/argv_config_unreadable_' . \uniqid('', true) . '.json';
+        \file_put_contents($file, '{}');
+        \chmod($file, 0000);
+
+        try {
+            if (\is_readable($file)) {
+                $this->markTestSkipped('this user can read a 0000 file (root); the premise does not hold');
+            }
+
+            $error = ArgvParser::configError(ArgvParser::parse(['sugarcrush', '--config', $file]));
+            $this->assertNotNull($error);
+            $this->assertStringContainsString('not readable', $error);
+        } finally {
+            @\chmod($file, 0600);
+            @\unlink($file);
+        }
+    }
+
+    /**
+     * `sugarcrush --config` with nothing after it stored null, and null is how
+     * the parser spells "the flag was absent" — so configError() passed it,
+     * Bootstrap kept its own discovery, and the run applied the DEFAULT
+     * permission policy on an invocation that explicitly named a file. On the
+     * TUI path it did that from inside the alt-screen (measured before the
+     * fix: rc 124 under a 15s bound, stdout beginning \e[?1049h).
+     */
+    public function testAConfigWithNoValueIsAUsageError(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--config']);
+
+        $this->assertNotNull($args->usageError);
+        $this->assertStringContainsString('--config', $args->usageError);
+        $this->assertNull($args->configPath, 'a value-less --config must not look like an absent flag');
+    }
+
+    /**
+     * The hint under it is the one this error earns, not the prompt escape
+     * hatch — the defect $usageHint was introduced to fix, one error later.
+     */
+    public function testTheConfigValueErrorCarriesItsOwnHint(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--config']);
+
+        $this->assertNotNull($args->usageHint);
+        $this->assertStringNotContainsString('--prompt=', $args->usageHint);
+        $this->assertStringContainsString('--config=', $args->usageHint);
+    }
+
+    /**
+     * `--config -p hi` consumed `-p` as the file name and lost the prompt with
+     * it — the misreading -p/--prompt/run already refuse, on the option that
+     * takes a path.
+     */
+    public function testAConfigFollowedByAnOptionIsAUsageErrorAndKeepsThePrompt(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--config', '-p', 'hi']);
+
+        $this->assertNotNull($args->usageError);
+        $this->assertStringContainsString('-p', $args->usageError);
+        $this->assertNull($args->configPath);
+        $this->assertSame('hi', $args->prompt, 'the prompt was eaten as the config path');
+    }
+
+    /**
+     * ...and the flag it did not eat is still parsed, so the error it caused
+     * is rendered in the format the caller asked for rather than as text.
+     */
+    public function testAConfigFollowedByAnOptionDoesNotSwallowThatOption(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--config', '--output-format', 'json', '-p', 'hi']);
+
+        $this->assertNotNull($args->usageError);
+        $this->assertSame('json', $args->outputFormat);
+        $this->assertSame([], $args->unknownFlags, '--output-format was consumed as a value and then reported as unknown');
+    }
+
+    /**
+     * The equals form is the one spelling that reaches configError() with a
+     * path that is not a path. It must be an ERROR rather than absence: '' as
+     * an override resolves to no config at all, i.e. an empty policy on a run
+     * that asked for a named one.
+     */
+    public function testAnEmptyConfigValueIsAUsageError(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--config=']);
+
+        $this->assertSame('', $args->configPath);
+
+        $error = ArgvParser::configError($args);
+        $this->assertNotNull($error);
+        $this->assertStringContainsString('empty', $error);
+    }
+
+    // -------------------------------------------------------------------------
+    // crush_code.md Phase 4 item 6: the real subcommands, at the PARSE layer.
+    // The end-to-end routing is exercised against the real binary in
+    // Tests\Integration\BinSugarcrushDispatchTest; these pin the reading
+    // decisions that class cannot see (which token became the verb, which became
+    // its operand, and what did NOT become either).
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: list<string>, 1: string, 2: list<string>}>
+     */
+    public static function subcommandParses(): array
+    {
+        return [
+            'doctor'             => [['doctor'], 'doctor', []],
+            'models'             => [['models'], 'models', []],
+            'session list'       => [['session', 'list'], 'session', ['list']],
+            'session delete id'  => [['session', 'delete', 'abc123'], 'session', ['delete', 'abc123']],
+            'mcp list'           => [['mcp', 'list'], 'mcp', ['list']],
+            'completion zsh'     => [['completion', 'zsh'], 'completion', ['zsh']],
+            // Behind a flag, in both --output-format spellings: pinning the verb
+            // to $argv[1] is what made `run` fall through into the TUI.
+            'behind a flag'      => [['--output-format', 'json', 'doctor'], 'doctor', []],
+            'behind =flag'       => [['--output-format=json', 'mcp', 'list'], 'mcp', ['list']],
+            'behind --root'      => [['--root', '/tmp', 'session', 'list'], 'session', ['list']],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     * @param list<string> $expectedArgs
+     *
+     * @dataProvider subcommandParses
+     */
+    public function testSubcommandsAndTheirOperandsAreParsed(array $argv, string $verb, array $expectedArgs): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', ...$argv]);
+
+        $this->assertSame($verb, $args->subcommand);
+        $this->assertSame($expectedArgs, $args->subcommandArgs);
+        $this->assertSame([], $args->unknownFlags);
+        $this->assertNull($args->usageError);
+        $this->assertFalse($args->promptRequested, 'a subcommand must not look like a one-shot run');
+    }
+
+    /**
+     * A subcommand's OPERANDS must not also be offered to the root heuristic:
+     * one token cannot mean both "the id to delete" and "the project root".
+     * `/tmp` is path-shaped, so before the routing existed it would have become
+     * the root as well.
+     */
+    public function testASubcommandOperandDoesNotAlsoSetTheRoot(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', 'session', 'delete', '/tmp']);
+
+        $this->assertSame('session', $args->subcommand);
+        $this->assertSame(['delete', '/tmp'], $args->subcommandArgs);
+        $this->assertNull($args->root, 'a subcommand operand leaked into the root heuristic');
+    }
+
+    /**
+     * ...while an explicit --root still applies, because it is a flag rather
+     * than an operand. This is what lets `sugarcrush --root <dir> mcp list`
+     * inspect another checkout.
+     */
+    public function testAnExplicitRootStillAppliesBesideASubcommand(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--root', '/tmp', 'mcp', 'list']);
+
+        $this->assertSame('/tmp', $args->root);
+        $this->assertSame('mcp', $args->subcommand);
+        $this->assertSame(['list'], $args->subcommandArgs);
+    }
+
+    /**
+     * A SECOND verb is data, not a re-arm. `completion doctor` asks for a shell
+     * named "doctor" — which Subcommands rejects with a message naming it —
+     * rather than silently becoming a health check.
+     */
+    public function testASecondVerbIsAnOperandOfTheFirst(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', 'completion', 'doctor']);
+
+        $this->assertSame('completion', $args->subcommand);
+        $this->assertSame(['doctor'], $args->subcommandArgs);
+    }
+
+    /**
+     * `run` keeps its own reading: it consumes the next token as a PROMPT
+     * inline, so a subcommand verb after it is prompt text and never reaches
+     * the verb branch. The two features must not fight over the same token.
+     */
+    public function testRunStillClaimsAFollowingVerbAsItsPrompt(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', 'run', 'models']);
+
+        $this->assertNull($args->subcommand);
+        $this->assertTrue($args->promptRequested);
+        $this->assertSame('models', $args->prompt);
+    }
+
+    /**
+     * ...and the reverse: a `run` AFTER a verb is that verb's operand, not a
+     * one-shot prompt. Without the `$subcommand === null` guard on the `run`
+     * branch this parsed to promptRequested=true and lost the subcommand.
+     */
+    public function testRunAfterAVerbIsThatVerbsOperand(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', 'session', 'run']);
+
+        $this->assertSame('session', $args->subcommand);
+        $this->assertSame(['run'], $args->subcommandArgs);
+        $this->assertFalse($args->promptRequested);
+    }
+
+    /**
+     * `--` moves a verb out of subcommand space entirely, exactly as it already
+     * does for `run` — the separator's whole contract is "everything after this
+     * is an operand".
+     */
+    public function testTheSeparatorDemotesAVerbToAPlainOperand(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--', 'doctor']);
+
+        $this->assertNull($args->subcommand);
+        $this->assertSame([], $args->subcommandArgs);
+        $this->assertSame([], $args->unknownFlags);
+    }
+
+    /**
+     * ...but once a verb IS open, `--` protects that verb's own operand: an id
+     * beginning with a dash has no other spelling, and sending it to
+     * $positional would have thrown it away and then complained the id was
+     * missing.
+     */
+    public function testTheSeparatorAfterAVerbProtectsThatVerbsOperand(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', 'session', 'delete', '--', '-dash-id']);
+
+        $this->assertSame('session', $args->subcommand);
+        $this->assertSame(['delete', '-dash-id'], $args->subcommandArgs);
+        $this->assertSame([], $args->unknownFlags, 'the id was judged as a flag');
+    }
+
+    /**
+     * A plain TUI or one-shot run is unchanged: no verb, no operands. This is
+     * the assertion that would fail if a common word were added to
+     * ParsedArgs::SUBCOMMANDS and started swallowing positionals.
+     */
+    public function testAPlainRunHasNoSubcommand(): void
+    {
+        foreach ([['-p', 'hello'], ['/tmp'], []] as $argv) {
+            $args = ArgvParser::parse(['sugarcrush', ...$argv]);
+
+            $this->assertNull($args->subcommand, \implode(' ', $argv));
+            $this->assertSame([], $args->subcommandArgs, \implode(' ', $argv));
+        }
+    }
+
+    /**
+     * A prompt request SWALLOWS a later verb — `sugarcrush -p hi models` is a
+     * one-shot prompt of "hi", not a request for the provider table.
+     *
+     * This is the `!$promptRequested` guard, and only the `run models`
+     * spelling was pinned: `run` consumes its value inline, so its token never
+     * reaches the verb branch at all and the guard is dead for it. The -p and
+     * --prompt= spellings DO reach it. MEASURED with the guard removed:
+     * `sugarcrush -p hi models` prints the provider table at exit 0 and the
+     * prompt is never run.
+     */
+    public function testAPromptRequestSwallowsALaterVerb(): void
+    {
+        foreach ([
+            [['-p', 'hi', 'models'], 'hi'],
+            [['--prompt=hi', 'doctor'], 'hi'],
+            [['-p', 'hi', 'session', 'list'], 'hi'],
+            [['--prompt', 'hi', 'completion', 'bash'], 'hi'],
+        ] as [$argv, $prompt]) {
+            $args = ArgvParser::parse(['sugarcrush', ...$argv]);
+            $label = \implode(' ', $argv);
+
+            $this->assertNull($args->subcommand, $label . ' re-armed as a subcommand');
+            $this->assertSame([], $args->subcommandArgs, $label);
+            $this->assertTrue($args->promptRequested, $label);
+            $this->assertSame($prompt, $args->prompt, $label);
+        }
+    }
+
+    /**
+     * Every verb the parser recognises is one Subcommands can execute, and vice
+     * versa. The two lists live in different classes and nothing else compares
+     * them, so a verb added to one and forgotten in the other would parse and
+     * then hit `dispatch()`'s unreachable default.
+     */
+    public function testEveryRecognisedVerbIsDispatchable(): void
+    {
+        foreach (ParsedArgs::SUBCOMMANDS as $verb) {
+            $args = ArgvParser::parse(['sugarcrush', $verb]);
+            $this->assertSame($verb, $args->subcommand);
+        }
+
+        $reflection = new \ReflectionClass(Subcommands::class);
+        $source = (string) \file_get_contents((string) $reflection->getFileName());
+        foreach (ParsedArgs::SUBCOMMANDS as $verb) {
+            $this->assertStringContainsString(
+                "'" . $verb . "' ",
+                $source,
+                'Subcommands::dispatch() has no arm for ' . $verb,
+            );
+        }
     }
 }

@@ -32,6 +32,40 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 final class CommandRegistry
 {
     /**
+     * The CONTROL-PLANE command names, which a repository-supplied `*.md` file
+     * may NOT take over. {@see CommandLoader::loadAll()} enforces it.
+     *
+     * Every other built-in is overridable on purpose — that is the feature the
+     * tiering exists for, and a project that wants its own `/compact` or
+     * `/review` gets it. These seven are different in kind: they are how the
+     * user drives, inspects, pays for and LEAVES the application, so a clone
+     * that redefined one would be answering a keystroke the user aimed at the
+     * app rather than at the model. `/exit` was measured doing exactly that —
+     * an `exit.md` in a checkout turned the quit key into a prompt while idle,
+     * and left it quitting mid-turn (the mid-turn arm in
+     * {@see \SugarCraft\Crush\Chat::submit()} bypasses expansion), i.e. an
+     * override whose effect depended on whether a reply was streaming.
+     *
+     * WHY A LIST AND NOT A FLAG ON {@see CommandSpec}: the property would live
+     * on the registry rows, and the check has to run against the FILE-BASED row
+     * that is trying to replace one — at which point the built-in it shadows is
+     * already gone from the merged map. The names are the thing being reserved,
+     * so the names are what is written down.
+     *
+     * `permissions` is here although {@see all()} lists no row for it: it is the
+     * trust-prompt spelling the permission layer answers to, and reserving a
+     * name that has no row yet costs nothing while un-reserving it later is a
+     * decision somebody has to make on purpose.
+     */
+    public const CONTROL_PLANE = ['budget', 'clear', 'exit', 'help', 'model', 'permissions', 'quit'];
+
+    /** Whether $name is one of {@see CONTROL_PLANE}. */
+    public static function isControlPlane(string $name): bool
+    {
+        return \in_array($name, self::CONTROL_PLANE, true);
+    }
+
+    /**
      * Every command known to either surface, in display order.
      *
      * @return list<CommandSpec>
@@ -214,23 +248,38 @@ final class CommandRegistry
      * popup pairs a spec with its matched-character indices on every row it
      * paints.
      *
+     * $rows OVERRIDES the registry's own list, and null is not merely a default
+     * spelling of it: a caller that has file-based commands
+     * ({@see CommandLoader::loadAll()}) must filter over the MERGED set, or a
+     * custom command would be dispatchable by typing its full name yet invisible
+     * in the popup that is supposed to teach the name. The rows are a parameter
+     * rather than something this class discovers because discovery needs a
+     * project root and a `$HOME` — state a static registry has no business
+     * holding, and which {@see \SugarCraft\Crush\Chat} already carries.
+     *
+     * @param list<CommandSpec>|null $rows the rows to match against; null uses
+     *        {@see slashCommands()}. Callers pass ALREADY slash-visible rows —
+     *        this method does not re-filter on `slashVisible`, so a palette-only
+     *        row handed in here would be listed.
      * @return list<CommandSpec>
      */
-    public static function filter(string $prefix): array
+    public static function filter(string $prefix, ?array $rows = null): array
     {
         // Keyed on NAME, which is only equivalent to the row list while names
         // are unique: two rows sharing one would return the later spec twice
         // while filterMatchResults() kept both rows, and the row-for-row test
         // could not see it (both sides of that comparison are names). Pinned by
         // `CommandRegistryTest::testCommandNamesAreUniqueBecauseFilterKeysOnThem()`.
+        $rows ??= self::slashCommands();
+
         $byName = [];
-        foreach (self::slashCommands() as $spec) {
+        foreach ($rows as $spec) {
             $byName[$spec->name] = $spec;
         }
 
         return array_values(array_map(
             static fn(MatchResult $result): CommandSpec => $byName[$result->haystack],
-            self::filterMatchResults($prefix),
+            self::filterMatchResults($prefix, $rows),
         ));
     }
 
@@ -246,11 +295,14 @@ final class CommandRegistry
      * those, so bare "/" paints unstyled names rather than fully-highlighted
      * ones.
      *
+     * @param list<CommandSpec>|null $rows see {@see filter()}; the two must be
+     *        given the SAME list or the row-for-row pairing the popup relies on
+     *        breaks, which is why {@see filter()} forwards its own.
      * @return list<MatchResult>
      */
-    public static function filterMatchResults(string $prefix): array
+    public static function filterMatchResults(string $prefix, ?array $rows = null): array
     {
-        $commands = self::slashCommands();
+        $commands = $rows ?? self::slashCommands();
         if ($prefix === '') {
             return array_map(
                 static fn(CommandSpec $spec): MatchResult => new MatchResult('', $spec->name, 0, []),

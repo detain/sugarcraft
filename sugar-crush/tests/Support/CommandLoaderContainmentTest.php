@@ -16,10 +16,14 @@ use SugarCraft\Crush\Commands\CommandLoader;
  * not the loading: the same pair of questions the workflow, skills and
  * agent-preset tiers each answer, asked here of the fourth tier.
  *
- * WHY IT MATTERS FOR A CLASS NOTHING CONSTRUCTS YET. `CommandLoader` is a
- * deliberate dormant seam — no production caller builds one until the step that
- * wires the "/" popup to file-based commands — and it had the per-ENTRY check
- * only. That is the exact shape the agent-preset tier was in when a committed
+ * WHY IT MATTERED FOR A CLASS NOTHING CONSTRUCTED YET — and the wiring has since
+ * arrived, which is the point. `CommandLoader` was a deliberate dormant seam with
+ * the per-ENTRY check only; crush_code.md Phase 2 item 4 gave it its production
+ * caller ({@see \SugarCraft\Crush\Cli\Bootstrap::chat()} builds one for
+ * {@see \SugarCraft\Crush\Chat}), so the anchor added here is a rule the first
+ * consumer INHERITED rather than one somebody had to remember to add at wiring
+ * time. What follows is why it was added early, kept verbatim because the
+ * reasoning is what the next dormant seam needs. That is the exact shape the agent-preset tier was in when a committed
  * `.sugar-crush/agents -> <outside>` was measured relocating the boundary
  * instead of tripping it: `realpath()` on both sides means a boundary directory
  * that is itself a link travels with the link. Anchoring now rather than at

@@ -263,7 +263,11 @@ final class HelpTest extends TestCase
     {
         $screen = Help::screen();
 
-        $this->assertStringContainsString('Exit codes (one-shot mode):', $screen);
+        // The heading widened when the real subcommands landed (crush_code.md
+        // Phase 4 item 6): the same 0/1/2 convention now governs `doctor`,
+        // `models`, `session` and `mcp` as well, so the screen may no longer
+        // claim it applies to one-shot mode alone.
+        $this->assertStringContainsString('Exit codes (one-shot mode and every subcommand):', $screen);
         $this->assertStringContainsString('$SUGARCRUSH_PROVIDER', $screen);
         $this->assertStringContainsString('~/.sugar-crush/config.json', $screen);
         $this->assertStringContainsString('Switch model', $screen);

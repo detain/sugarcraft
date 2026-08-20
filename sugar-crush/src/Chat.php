@@ -37,7 +37,9 @@ use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Crush\Commands\AgentsCommand;
+use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Commands\CommandRegistry;
+use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Commands\WebSearchCommand;
@@ -179,6 +181,24 @@ final class Chat implements Model
 
     /** @var ContextCompactor Context compactor for /compact command and automatic compaction */
     private readonly ContextCompactor $compactor;
+
+    /**
+     * File-based commands discovered at construction, name => spec — the merged
+     * user+project tiers of {@see CommandLoader::loadAll()} with the built-in
+     * rows already dropped back out (see the constructor body).
+     *
+     * RESOLVED ONCE, then carried by {@see mutate()} like any other field, and
+     * that is the whole reason this exists as a property beside
+     * {@see $commandLoader}: `mutate()` runs the constructor on EVERY keystroke,
+     * so a loader consulted there instead would walk two directories per
+     * character typed. The cost of caching is that a command file added while
+     * the session is running is not seen until the next launch — stated rather
+     * than hidden, and the trade is one filesystem walk per process against one
+     * per keypress.
+     *
+     * @var array<string, CommandSpec>
+     */
+    private readonly array $customCommands;
 
     /**
      * This session's running PROVIDER-COUNTED spend, fed one entry per settled
@@ -830,6 +850,30 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $queuedPrompts = [],
+        /**
+         * Discovers `*.md` commands under `~/.sugar-crush/commands` and
+         * `<root>/.sugar-crush/commands` (crush_code.md Phase 2 item 4). Null —
+         * the default — means no file-based commands at all, which is what every
+         * existing embedder and unit test gets, so nothing that does not ask for
+         * disk discovery acquires it.
+         *
+         * THE INSTANCE, not the loaded map, because the loader is also the thing
+         * that ANSWERS FOR the load: {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+         * drains {@see CommandLoader::refusedDirectories()} off this same object
+         * after construction, so a commands directory refused for pointing
+         * outside the checkout reaches the launch report rather than only
+         * `error_log()`.
+         */
+        private readonly ?CommandLoader $commandLoader = null,
+        /**
+         * Pre-resolved {@see $customCommands}; null asks the constructor to load
+         * from {@see $commandLoader}. Present so {@see mutate()} can carry the
+         * cache across a clone — and so a test can inject a map without touching
+         * a filesystem.
+         *
+         * @var array<string, CommandSpec>|null
+         */
+        ?array $customCommands = null,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -862,6 +906,19 @@ final class Chat implements Model
                 var_export($maxCostUsd, true),
             ));
         }
+
+        // FILE-BASED ROWS ONLY. loadAll() merges the built-in registry underneath
+        // the two disk tiers so a project file can override a built-in by name;
+        // what is kept here is the result of that merge MINUS everything that is
+        // still a built-in row, because the built-ins are already reachable
+        // through CommandRegistry and dispatchCommand()'s match arms. Keeping
+        // them would list every built-in twice in the "/" popup. A project file
+        // that DOES override a built-in survives the filter — it is file-based by
+        // then — which is exactly the override loadAll() documents.
+        $this->customCommands = $customCommands ?? array_filter(
+            $commandLoader?->loadAll($this->projectRoot()) ?? [],
+            static fn(CommandSpec $spec): bool => $spec->isFileBased(),
+        );
 
         $this->compactor = new ContextCompactor($this->compactorConfig ?? CompactorConfig::new());
         $this->tokenTracker = $tokenTracker ?? new TokenTracker();
@@ -4389,6 +4446,10 @@ final class Chat implements Model
             'summaryBackend' => $this->summaryBackend,
             'pendingCompactionId' => $this->pendingCompactionId,
             'queuedPrompts' => $this->queuedPrompts,
+            'commandLoader' => $this->commandLoader,
+            // Carried, so the disk walk happens once per process rather than
+            // once per keystroke — see the property's doc-block.
+            'customCommands' => $this->customCommands,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -4514,9 +4575,44 @@ final class Chat implements Model
             return $this->enqueuePrompt($text);
         }
 
-        $dispatched = $this->dispatchCommand($text);
-        if ($dispatched !== null) {
-            return $dispatched;
+        // FILE-BASED COMMANDS ARE CHECKED FIRST, ahead of dispatchCommand()'s
+        // built-in arms, and that ordering IS the override
+        // {@see CommandLoader::loadAll()} documents: a project `compact.md` is
+        // meant to replace `/compact`, and a check placed after the match arms
+        // could never replace anything they already handle. The popup is built
+        // on the same precedence ({@see slashCommandRows()}), so what is listed
+        // and what runs cannot disagree — a claim that was FALSE for the
+        // `/name:arg` spelling until {@see expandCustomCommand()} learned it,
+        // and that {@see CommandRegistry::CONTROL_PLANE} bounds: seven names
+        // are reserved to the application and never reach this map at all.
+        //
+        // It rewrites $text instead of returning a [Chat, Cmd] pair like the
+        // built-ins do, because a file-based command IS a prompt — everything
+        // below (spend cap, idle compaction, the 85%/95% tiers, the turn
+        // dispatch itself) must apply to it exactly as it applies to typed
+        // prose. Returning early would route the one kind of prompt a repository
+        // can author around every one of those checks.
+        $expanded = $this->expandCustomCommand($text);
+        if ($expanded !== null) {
+            // AN EXPANSION THAT PRODUCED NOTHING IS REFUSED, not sent. The
+            // empty-draft guard at the top of this method runs against the
+            // TYPED text, and `/greet` is not empty — but a body of
+            // `$ARGUMENTS` invoked with no arguments expands to `''`, and
+            // without this the session dispatched a real turn carrying a user
+            // message whose content was the empty string. Refused visibly
+            // rather than swallowed: pressing Enter and watching nothing happen
+            // reads as a wedged app, and the author of the file is the only one
+            // who can fix it.
+            $expanded = trim($expanded);
+            if ($expanded === '') {
+                return $this->refuseEmptyCustomCommand($text);
+            }
+            $text = $expanded;
+        } else {
+            $dispatched = $this->dispatchCommand($text);
+            if ($dispatched !== null) {
+                return $dispatched;
+            }
         }
 
         // Spend cap, evaluated AFTER dispatchCommand() on purpose: a capped
@@ -4736,6 +4832,24 @@ final class Chat implements Model
      *
      * @return array{0:self,1:?\Closure}
      */
+    /**
+     * Refuse, VISIBLY, a file-based command whose template expanded to nothing.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function refuseEmptyCustomCommand(string $text): array
+    {
+        return [$this->mutate([
+            'history' => [...$this->history, Message::system(sprintf(
+                '%s is a command file whose template expanded to nothing — most often a body that is only '
+                . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
+                . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
+                . 'on its own.',
+                self::quoteDraftForNotice($text),
+            ))],
+        ]), null];
+    }
+
     private function refuseInFlightCommand(string $text): array
     {
         return [$this->mutate([
@@ -5108,6 +5222,85 @@ final class Chat implements Model
      *
      * @return array{0: self, 1: ?\Closure}|null
      */
+    /**
+     * The prompt a typed `/name …` should send when `name` is one of this
+     * session's file-based commands, or null when it is not one — in which case
+     * {@see submit()} falls through to {@see dispatchCommand()} and then to the
+     * model, exactly as before.
+     *
+     * THE NAME IS PARSED HERE RATHER THAN TAKEN FROM
+     * {@see CommandParser::parse()}, and that is not duplication for its own
+     * sake: `normalizeName()` strips every character outside `[A-Za-z0-9_-]` and
+     * lower-cases the rest, so it reports `/deploy/staging` as `deploystaging`
+     * and `/Foo` as `foo`. Both are legal command file names
+     * ({@see CommandSpec::NAME_PATTERN} allows `/` as the subdirectory namespace
+     * separator, which is the whole point of `deploy/staging.md`), so a lookup
+     * keyed on the parser's name would silently fail to find the commands the
+     * loader most deliberately supports. The name here is "everything up to the
+     * first whitespace", which is also what the "/" popup completes
+     * ({@see slashMenuPrefix()}), so the string the user picked is the string
+     * looked up.
+     *
+     * THE POSITIONAL TOKENS ARE STILL THE PARSER'S, fed the argument string this
+     * method isolated rather than the raw draft. That is what makes `$1` and
+     * `$ARGUMENTS` two views of ONE string instead of two independent parses that
+     * could disagree about where the arguments began — the parser's own idea of
+     * where the name ends is the part that is wrong here, its shell-quote
+     * splitting is the part that is right, and this takes only the second.
+     */
+    private function expandCustomCommand(string $text): ?string
+    {
+        if ($this->customCommands === []) {
+            return null;
+        }
+
+        // `/s` so a bare "/name" with a trailing newline still parses, and `\S+`
+        // so the name stops at the first whitespace of any kind.
+        if (preg_match('/^\/(\S+)(?:\s+(.*))?$/s', $text, $matches) !== 1) {
+            return null;
+        }
+
+        $name = $matches[1];
+        $arguments = trim($matches[2] ?? '');
+
+        $spec = $this->customCommands[$name] ?? null;
+
+        // THE COLON INVOCATION FORM, `/name:arg`, which
+        // {@see CommandParser::parse()} accepts and this method did not:
+        // `parse()` terminates the name at the first `:` and treats the rest as
+        // arguments, so `/compact:x` reached the BUILT-IN `/compact` while a
+        // project `compact.md` sat unread — i.e. every built-in was still
+        // reachable, un-overridden, through its colon spelling, which falsifies
+        // the precedence claim in {@see submit()}. Tried only after the whole
+        // `\S+` name misses, because `:` is not legal in a command file's name
+        // ({@see CommandSpec::NAME_PATTERN}) and so an exact hit can never be
+        // the colon form.
+        //
+        // The colon's tail is PREPENDED to the arguments rather than replacing
+        // them, matching `parse()`: it reads `/compact:x y` as name `compact`
+        // with `x y`, and the two paths must not disagree about what the
+        // arguments were.
+        if ($spec === null) {
+            $colon = strpos($name, ':');
+            if ($colon !== false) {
+                $candidate = $this->customCommands[substr($name, 0, $colon)] ?? null;
+                if ($candidate !== null) {
+                    $spec = $candidate;
+                    $arguments = trim(substr($name, $colon + 1) . ' ' . $arguments);
+                }
+            }
+        }
+
+        if ($spec === null) {
+            return null;
+        }
+
+        return $spec->expandTemplate(
+            $arguments,
+            (new CommandParser())->parse('/c ' . $arguments)?->args ?? [],
+        );
+    }
+
     private function dispatchCommand(string $text): ?array
     {
         // The bare "mcp auth …" form, which predates the discoverable `/mcp`
@@ -5334,7 +5527,11 @@ final class Chat implements Model
      */
     private function handleHelpCommand(): array
     {
-        $commands = CommandRegistry::slashCommands();
+        // slashCommandRows() rather than CommandRegistry::slashCommands(): the
+        // listing that answers "what can I type" must name the file-based
+        // commands too, or a project ships a command whose only discovery route
+        // is reading the repository.
+        $commands = $this->slashCommandRows();
 
         // Counted here, at render time, from the list being rendered - a
         // command count written into a docblock or a test literal is exactly
@@ -8324,7 +8521,52 @@ final class Chat implements Model
     {
         $prefix = $this->slashMenuPrefix();
 
-        return $prefix === null ? [] : CommandRegistry::filter($prefix);
+        return $prefix === null ? [] : CommandRegistry::filter($prefix, $this->slashCommandRows());
+    }
+
+    /**
+     * Every row the "/" popup and `/help` may list: the built-in slash-visible
+     * rows with this session's file-based commands merged over them by NAME.
+     *
+     * OVERRIDE, NOT APPEND, and by name rather than by position, because that is
+     * the tiering {@see CommandLoader::loadAll()} already performs and this is
+     * the surface it was performed for: a project `compact.md` replaces the
+     * built-in `/compact` row instead of producing a second `/compact` the user
+     * has to choose between. {@see submit()} honours the same precedence — it
+     * consults the file-based map BEFORE {@see dispatchCommand()} — so the row a
+     * user picks in the popup is the one that runs. If those two disagreed, the
+     * popup would be advertising a command that cannot be reached.
+     *
+     * Rebuilt per call rather than cached: it is two array walks over ~25 rows,
+     * and the alternative is a third copy of the same list that can go stale
+     * against {@see $customCommands}.
+     *
+     * @return list<CommandSpec>
+     */
+    public function slashCommandRows(): array
+    {
+        $byName = [];
+        foreach (CommandRegistry::slashCommands() as $spec) {
+            $byName[$spec->name] = $spec;
+        }
+
+        foreach ($this->customCommands as $name => $spec) {
+            if ($spec->slashVisible) {
+                $byName[$name] = $spec;
+            }
+        }
+
+        return array_values($byName);
+    }
+
+    /**
+     * The file-based commands this session discovered, name => spec.
+     *
+     * @return array<string, CommandSpec>
+     */
+    public function customCommands(): array
+    {
+        return $this->customCommands;
     }
 
     /**
@@ -8344,7 +8586,9 @@ final class Chat implements Model
     {
         $prefix = $this->slashMenuPrefix();
 
-        return $prefix === null ? [] : CommandRegistry::filterMatchResults($prefix);
+        return $prefix === null
+            ? []
+            : CommandRegistry::filterMatchResults($prefix, $this->slashCommandRows());
     }
 
     /**

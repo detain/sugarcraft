@@ -31,6 +31,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
 use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Cli\PermissionConfigException;
+use SugarCraft\Crush\Cli\Subcommands;
 
 // Parse argv first and dispatch before ever touching Program/Bootstrap::chat()
 // — `--help` and `-p`/`run "<prompt>"` must never attach to the TTY or enter
@@ -59,11 +60,26 @@ if ($args->version) {
 // invocation (the unconsumed flag also lands in $unknownFlags) and this is the
 // sharper of the two messages: it names the option that went wrong rather than
 // blaming the token that was only ever the symptom.
+//
+// This branch also carries the unsupported-`--output-format` error (Phase 4
+// item 6). Its hint comes from $args->usageHint rather than being written here:
+// there are now two error causes with two different remedies, and the
+// hard-coded "--prompt=<text>" line that used to sit here was printed under
+// both. Note that $args->outputFormat is the REJECTED value in that case, so
+// the failure below renders as text — which is the only honest answer when the
+// requested rendering is one nothing implements, and means STDOUT IS EMPTY on
+// that one path. That is the second of the two exceptions README.md's
+// "exactly one JSON object on stdout" contract names (the other being a
+// checkout with no vendor/autoload.php); the contract's own README sentence
+// used to list `--output-format` among the causes it COVERS, which was false
+// for exactly this reason. Scope: the invalid VALUE is the exception, not the
+// flag — a valid `--output-format json` beside any other usage error still
+// emits the document, because $args->outputFormat is then `json`.
 if ($args->usageError !== null) {
     exit(NonInteractive::failUsage(
         $args->usageError,
         $args->outputFormat,
-        'To pass a prompt that begins with "-", use --prompt=<text>.',
+        $args->usageHint,
     ));
 }
 
@@ -102,6 +118,41 @@ if ($rootError !== null) {
     exit(NonInteractive::failUsage($rootError, $args->outputFormat));
 }
 
+// `--config <path>` naming no readable file is the same class of usage error,
+// and for the same reason: that file carries the permission mode, the
+// permission rules and the trustedProjectHooks list, so falling through to
+// discovery would run the DEFAULT policy while the operator believed the named
+// one was in force. Exit 2 (crush_code.md Phase 4 item 6).
+$configError = ArgvParser::configError($args);
+if ($configError !== null) {
+    exit(NonInteractive::failUsage($configError, $args->outputFormat));
+}
+
+// Registered once, AFTER the check above proved the file readable and BEFORE
+// either dispatch, so the one-shot path and the TUI path read the same config.
+// A null (no --config given) leaves Bootstrap's own discovery in place.
+Bootstrap::useConfigPath($args->configPath);
+
+// The real subcommands — `mcp list`, `session list|delete`, `models`, `doctor`
+// and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6). Dispatched
+// HERE, in the same pre-flight place --help and --version are answered and
+// BEFORE Program/NonInteractive, because every one of them is a question about
+// the INSTALL rather than a turn of conversation: they have to answer on a
+// machine with no provider, no API key and no TTY. A subcommand that fell
+// through to Program::run() below would attach to the terminal and enter the
+// alt-screen — the "`--help` opens the TUI" bug (crush_code.md Phase 0 item 3)
+// reopened by a new verb. `doctor` is the sharpest case: it diagnoses an
+// install that may be broken, so it must not require the thing it is
+// diagnosing.
+//
+// AFTER the four pre-flight checks above rather than before them, and each
+// placement is load-bearing: an unknown flag beside a subcommand is still a
+// usage error, and `--config` must already be validated AND registered by
+// Bootstrap::useConfigPath() above, or `sugarcrush --config x.json doctor`
+// would report the policy from the DISCOVERED config while the operator
+// believed it was reading the named one. The dispatch itself sits INSIDE the
+// try/catch below — see the note there.
+//
 // A permission policy that is configured but unusable stops the launch rather
 // than falling back to the permissive default — see
 // Bootstrap::permissionGate(). Caught here, around BOTH dispatch paths, so a
@@ -113,6 +164,25 @@ if ($rootError !== null) {
 // this block: the diff should show the two lines that were added, not every
 // line of the dispatch it now wraps.
 try {
+
+// The subcommand dispatch (see the block above for why it happens here at all)
+// sits INSIDE this try, and it took a measurement to get right. A
+// ~/.sugar-crush/config.json that is not parseable JSON makes
+// Bootstrap::permissionConfig() throw, and `mcp list` reaches it through
+// projectMcpIsTrusted() — so with the dispatch outside this block that
+// invocation died as an uncaught PHP fatal with a stack trace over the
+// terminal, rc 255 (MEASURED, on a HOME whose config.json was `{ this is not
+// json`). Inside, it is the same exit 2 plus JSON error document every other
+// unusable-policy path produces.
+//
+// It does NOT cost `doctor` its answer, which was the reason the dispatch was
+// outside to begin with: every probe in Subcommands::doctorProbes() catches its
+// own throws, so `doctor` still prints its report and exits 1 on an install
+// this catch would otherwise turn into a bare exit 2. Both are asserted in
+// Tests\Integration\BinSugarcrushDispatchTest.
+if ($args->subcommand !== null) {
+    exit(Subcommands::dispatch($args));
+}
 
 // Dispatch on "the user asked for one-shot mode", NOT on "a prompt value was
 // parsed": a bare `sugarcrush -p` / `--prompt` / `run` has a null prompt, and

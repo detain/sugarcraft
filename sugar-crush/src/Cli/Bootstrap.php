@@ -15,6 +15,7 @@ use SugarCraft\Crush\Backend\CommandBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
@@ -133,6 +134,12 @@ final class Bootstrap
     private static array $reportedPermissionConfigWarnings = [];
 
     /**
+     * The config FILE `--config` named, or null to discover
+     * `~/.sugar-crush/config.json` — see {@see useConfigPath()}.
+     */
+    private static ?string $configPathOverride = null;
+
+    /**
      * The trusted project roots this process resolved, keyed by the
      * `config.json` they came out of — see {@see trustedRootsForThisProcess()}
      * for why the answer may not be recomputed mid-session.
@@ -195,9 +202,12 @@ final class Bootstrap
      * paths, and the FOREIGN one
      * ({@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry::refusedDirectories()}),
      * merged in {@see foreignAgentPresets()} on both of its paths for the same
-     * reason.
+     * reason, and the custom-command loader
+     * ({@see \SugarCraft\Crush\Commands\CommandLoader::refusedDirectories()}),
+     * drained in {@see chat()} AFTER the {@see \SugarCraft\Crush\Chat}
+     * construction that performs the walk (crush_code.md Phase 2 item 4).
      *
-     * FIVE SEAMS, THEREFORE, NOT FOUR: the workflow registry exposes a SECOND
+     * SIX SEAMS, THEREFORE, NOT FIVE: the workflow registry exposes a SECOND
      * one, {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::userTierRefusal()},
      * drained in {@see workflowEngine()} — so four feeders expose five seams. Its
      * subject is `~/.sugar-crush/workflows`
@@ -212,17 +222,16 @@ final class Bootstrap
      * the mismatch is recorded here instead of being left for the next reader to
      * infer from the values.
      *
-     * THREE OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
-     * is named rather than counted, because "three feeders" quietly becoming
-     * "three feeders and four things nobody drains" is the drift this collector
+     * TWO OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
+     * is named rather than counted, because "five feeders" quietly becoming
+     * "five feeders and three things nobody drains" is the drift this collector
      * keeps producing. It was FOUR until crush_code.md Phase 1 item 3 wired
-     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} — which is what a
-     * named gap is for. The three that remain are DORMANT — nothing in `src/` or
-     * `bin/` constructs them — and all three are GATED, which dormant does not
-     * imply and for one round did not mean:
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}, and THREE until
+     * Phase 2 item 4 wired {@see \SugarCraft\Crush\Commands\CommandLoader} — which
+     * is what a named gap is for, twice over. The two that remain are DORMANT —
+     * nothing in `src/` or `bin/` constructs them — and both are GATED, which
+     * dormant does not imply and for one round did not mean:
      *
-     *  - {@see \SugarCraft\Crush\Commands\CommandLoader} (`.sugar-crush/commands`)
-     *    `error_log()`s its refusal instead of exposing a seam;
      *  - {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
      *    (`.opencode/memory`) exposes `refusedDirectories()` with nothing
      *    reading it yet;
@@ -236,7 +245,7 @@ final class Bootstrap
      * One collector rather than four because the user does not care which class
      * noticed that their repository's directory was rejected.
      *
-     * FIVE WRITERS NOW, not four feeders: {@see mcpClient()} writes here DIRECTLY
+     * SIX WRITERS NOW, not five feeders: {@see mcpClient()} writes here DIRECTLY
      * rather than through a `refusedDirectories()`-style seam, because `.mcp.json`
      * is a FILE and there is no registry class between the read and this
      * collector. It is the only entry that is not a directory, which is worth
@@ -410,6 +419,10 @@ final class Bootstrap
         // PermissionGateHook::NAME.
         $permissionGate = self::permissionGate();
 
+        // Built here rather than inside the constructor call so its refusals
+        // survive the statement — see the `commandLoader:` argument below.
+        $commandLoader = new CommandLoader();
+
         $chat = new Chat(
             backend: self::backend($root, $skills, $permissionGate),
             memoryStore: self::memoryStore(),
@@ -484,7 +497,40 @@ final class Bootstrap
             // and both are evaluated before the constructor body runs, so the
             // order they appear in here is style, not mechanism.)
             workflowEngine: self::workflowEngine($root, $permissionGate),
+            // crush_code.md Phase 2 item 4. Until now nothing in src/ or bin/
+            // constructed a CommandLoader at all, so `~/.sugar-crush/commands`
+            // and `<root>/.sugar-crush/commands` were directories the loader
+            // knew how to walk and no launch ever asked it to — a `*.md` command
+            // file was inert on every real run.
+            //
+            // THE INSTANCE IS HELD, not inlined into the argument, because the
+            // refusals it accumulates are drained off it below. An anonymous
+            // `new CommandLoader()` here would report a commands directory that
+            // resolves outside the checkout to `error_log()` and nowhere else,
+            // which on a full-screen TUI is nowhere the user will look.
+            commandLoader: $commandLoader,
         );
+
+        // Drained AFTER construction for the same reason the workflow registry's
+        // refusals are: the walk happens inside the constructor, so there is
+        // nothing to collect until it has run. Adding this makes commands the
+        // EIGHTH feeder of {@see $projectTierRefusals} — see
+        // `ProjectTierRefusalInventoryTest`, which pins the feeder/gap split so
+        // a directory cannot quietly stop being either.
+        self::$projectTierRefusals = [
+            ...self::$projectTierRefusals,
+            ...$commandLoader->refusedDirectories(),
+        ];
+
+        // And the per-FILE refusals: a command file that tried to take over a
+        // control-plane name ({@see \SugarCraft\Crush\Commands\CommandRegistry::CONTROL_PLANE}).
+        // Path-keyed at the source, so it spreads in like every other feeder,
+        // and it introduces no new repository-chosen DOT-PATH — the file lives
+        // under `.sugar-crush/commands`, already the eighth feeder above.
+        self::$projectTierRefusals = [
+            ...self::$projectTierRefusals,
+            ...$commandLoader->refusedCommands(),
+        ];
 
         // AFTER the construction above, not beside reportSkillSkips() further
         // up: the workflow registry that decides whether this project's
@@ -1466,7 +1512,37 @@ final class Bootstrap
      */
     public static function userConfigPath(): string
     {
-        return self::configDirPath() . '/config.json';
+        // `--config <path>` wins over discovery — see {@see useConfigPath()}.
+        return self::$configPathOverride ?? self::configDirPath() . '/config.json';
+    }
+
+    /**
+     * Point every reader of the per-user `config.json` at $path instead of the
+     * discovered `~/.sugar-crush/config.json` — what `--config <path>` does.
+     *
+     * PROCESS-WIDE STATIC, not a parameter, because this class is a static
+     * facade whose config readers sit five and six calls below the two entry
+     * points `bin/sugarcrush` calls ({@see app()} and, through
+     * {@see NonInteractive::run()}, {@see backend()}): threading a path
+     * through every one of them would touch far more of this file than the
+     * flag is worth, and would still leave {@see readUserConfig()}'s other
+     * callers — `EngineBackend`'s per-turn dispatch settings among them —
+     * reading the discovered file while the rest of the process read the
+     * chosen one. `bin/sugarcrush` sets it once, after
+     * {@see ArgvParser::configError()} has established the file is readable
+     * and before either dispatch. Tests must reset it with null.
+     *
+     * WHAT IT DOES NOT MOVE, stated exactly: this names one FILE. The agents/,
+     * skills/, workflows/ and hooks trees, the session store and the memory
+     * store all still resolve off `~/.sugar-crush`. Nor does it relax the home
+     * -ownership gate — {@see permissionConfig()} still calls
+     * {@see trustedConfigDirPath()} for its throw before honouring the
+     * override, so a process that cannot establish whose home it is refuses to
+     * start whether or not a config file was named on the command line.
+     */
+    public static function useConfigPath(?string $path): void
+    {
+        self::$configPathOverride = $path;
     }
 
     /**
@@ -1525,8 +1601,21 @@ final class Bootstrap
         }
 
         // The write, not the read, is what earns the directory — see
-        // {@see userConfigPath()}.
-        $dir = self::configDirPath();
+        // {@see userConfigPath()}. Taken from the target FILE rather than from
+        // configDirPath(): the two name the same directory until `--config`
+        // points the target somewhere else ({@see useConfigPath()}), and then
+        // configDirPath() is the wrong one in two ways at once. The sibling
+        // check below would still PASS — tempnam() put the temp file exactly
+        // where it was asked to — and the rename() under it would then be a
+        // cross-directory move that is atomic only by luck and fails outright
+        // across a mount, losing the persist; and ensureDir() would create
+        // ~/.sugar-crush purely as scratch space on a run that was told to
+        // stay out of it. MEASURED: with configDirPath() here, a persist to a
+        // /tmp override still lands (same filesystem) but leaves that stray
+        // directory behind, which is what
+        // {@see BootstrapConfigPathOverrideTest::testWriteUserConfigPersistsIntoTheOverrideFile()}
+        // pins.
+        $dir = \dirname(self::userConfigPath());
         self::ensureDir($dir);
 
         // The temp file must be the target's SIBLING: rename() is only atomic
@@ -2445,7 +2534,14 @@ final class Bootstrap
         // same file whenever this user's home is knowable, and when it is not
         // this one refuses instead of reading a permission policy — and a
         // `trustedProjectHooks` list — out of a world-writable stand-in.
-        $path = self::trustedConfigDirPath() . '/config.json';
+        //
+        // Called for its THROW even when `--config` has named the file, on its
+        // own line rather than as the right operand of `??` (which PHP would
+        // not evaluate): naming the policy file explicitly says nothing about
+        // whether the ~/.sugar-crush this process would go on to read hooks
+        // and agent presets from is this user's, so the gate stays armed.
+        $discovered = self::trustedConfigDirPath() . '/config.json';
+        $path = self::$configPathOverride ?? $discovered;
 
         if (!is_file($path)) {
             // SOMETHING IS THERE AND IT IS NOT A READABLE REGULAR FILE — a
@@ -2682,6 +2778,174 @@ final class Bootstrap
      */
     public const MCP_CONFIG_FILENAME = '.mcp.json';
 
+    /** {@see mcpConfigDecision()} status: no `.mcp.json` at the project root. */
+    public const MCP_ABSENT = 'absent';
+
+    /** {@see mcpConfigDecision()} status: present, but it resolves outside the checkout. */
+    public const MCP_OUTSIDE_TREE = 'outside-tree';
+
+    /** {@see mcpConfigDecision()} status: present and contained, but this root is not trusted. */
+    public const MCP_UNTRUSTED = 'untrusted';
+
+    /** {@see mcpConfigDecision()} status: present, contained and trusted — servers may be started. */
+    public const MCP_TRUSTED = 'trusted';
+
+    /**
+     * Where this project's `.mcp.json` is, and whether this launch is allowed
+     * to start the servers it names — WITHOUT starting any of them.
+     *
+     * THE ONE DISCOVERY PATH. {@see mcpClient()} and {@see
+     * mcpServerInventory()} both come through here, so `sugarcrush mcp list`
+     * cannot report a file, a containment verdict or a trust verdict that
+     * differs from the one the launch acts on. Two readers with two copies of
+     * this rule is a defect this package has shipped before; the whole reason
+     * `mcp list` is not simply "json_decode(.mcp.json)" is that such a listing
+     * would happily enumerate servers the trust gate refuses to run.
+     *
+     * Records the same {@see $projectTierRefusals} entries the inline version
+     * did, keyed by the same path, so calling it twice is idempotent.
+     *
+     * @return array{path: string, root: string, canonicalRoot: string|false, status: string}
+     *   `status` is one of {@see self::MCP_ABSENT}, {@see self::MCP_OUTSIDE_TREE},
+     *   {@see self::MCP_UNTRUSTED}, {@see self::MCP_TRUSTED}.
+     */
+    public static function mcpConfigDecision(?string $root = null): array
+    {
+        $root = self::requireRoot($root);
+
+        // CANONICAL, not as spelled, for the reason {@see hookFiles()} gives at
+        // its own `realpath()`: the trust decision below is made on the resolved
+        // root, so keying the memo off the raw string would leave two names for
+        // one decision. MEASURED against the raw-string version, four spellings
+        // of ONE root — `$W/repo`, `$W/repo/`, `$W/repo/sub/..`, `$W/repo/./` —
+        // produced 4 cached clients and EIGHT live server processes, which is
+        // exactly the accumulation {@see $mcpClients} says memoization prevents.
+        $canonicalRoot = realpath($root);
+        $path = rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/')
+            . '/' . self::MCP_CONFIG_FILENAME;
+
+        $decision = ['path' => $path, 'root' => $root, 'canonicalRoot' => $canonicalRoot];
+
+        // is_file() FIRST, so the overwhelmingly common "no MCP config" case
+        // costs one stat and reaches neither the containment compare, the trust
+        // gate, nor the refusal report. A dangling symlink is not a file, so it
+        // lands here.
+        if (!is_file($path)) {
+            return $decision + ['status' => self::MCP_ABSENT];
+        }
+
+        if (!ContainedPath::within($path, $root)) {
+            // A REASON, NOT A SENTENCE, and it does not name the configured path:
+            // the one notice that prints this composes `ignoring <path> — <reason>`
+            // and already holds it, so naming it here put it in that line TWICE.
+            // Same mid-clause "resolves to …" shape as every sibling feeder — see
+            // {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()},
+            // whose doc-block records making this identical correction.
+            self::$projectTierRefusals[$path] = sprintf(
+                'resolves to %s, outside the project tree it was read from (%s); '
+                . 'refusing to start servers named by a file outside the checkout.',
+                realpath($path) === false ? 'nothing readable' : (string) realpath($path),
+                $root,
+            );
+
+            return $decision + ['status' => self::MCP_OUTSIDE_TREE];
+        }
+
+        // THE TRUST GATE, and it is checked AFTER containment so that an
+        // out-of-tree config is reported as out-of-tree rather than as untrusted:
+        // the two have different fixes and only one of them is "opt in".
+        if ($canonicalRoot === false || !self::projectMcpIsTrusted($canonicalRoot)) {
+            self::$projectTierRefusals[$path] = sprintf(
+                'starting the MCP servers it names means running programs this repository chose, '
+                . 'every time you open it, before any tool call and in every permission mode. '
+                . 'Add "%s" to "%s" in %s to opt in',
+                rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/'),
+                self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
+                self::userConfigPath(),
+            );
+
+            return $decision + ['status' => self::MCP_UNTRUSTED];
+        }
+
+        return $decision + ['status' => self::MCP_TRUSTED];
+    }
+
+    /**
+     * What `.mcp.json` DECLARES, for `sugarcrush mcp list` — read, never run.
+     *
+     * NOTHING HERE CALLS `proc_open()`, and that is the entire design
+     * constraint. {@see mcpClient()} STARTS every configured server as a side
+     * effect of being asked for the client, so routing a listing through it
+     * would mean `sugarcrush mcp list` launches every program this repository
+     * names — the exact act the trust gate exists to make deliberate, performed
+     * by the command an operator runs precisely BECAUSE they do not yet trust
+     * the file. So this reads the JSON and reports; `status` tells the caller
+     * whether the launch would run these entries at all.
+     *
+     * Consequence, stated because it is a real limit rather than an oversight:
+     * `enabled` reflects the CONFIG, not liveness. Nothing here can tell you a
+     * declared server would fail to start — finding that out means starting it.
+     *
+     * @return array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null}
+     *   `servers` is empty for every non-{@see self::MCP_TRUSTED} status and
+     *   for a file that is not decodable, in which case `error` says why.
+     */
+    public static function mcpServerInventory(?string $root = null): array
+    {
+        $decision = self::mcpConfigDecision($root);
+        $base = ['status' => $decision['status'], 'path' => $decision['path'], 'servers' => [], 'error' => null];
+
+        if ($decision['status'] !== self::MCP_TRUSTED) {
+            return $base;
+        }
+
+        $contents = @file_get_contents($decision['path']);
+        if (!is_string($contents)) {
+            return ['error' => 'could not be read'] + $base;
+        }
+
+        try {
+            $data = json_decode($contents, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            return ['error' => 'is not valid JSON (' . $e->getMessage() . ')'] + $base;
+        }
+
+        if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
+            return ['error' => 'has no "mcpServers" object'] + $base;
+        }
+
+        $servers = [];
+        foreach ($data['mcpServers'] as $name => $config) {
+            if (!is_string($name) || !is_array($config)) {
+                continue;
+            }
+
+            // The same three types {@see \SugarCraft\Crush\MCP\McpClient::startServer()}
+            // constructs, and the same `?? 'stdio'` default it applies, so an
+            // entry listed as `stdio` here is the entry that would be started
+            // as `stdio`. An unknown type is shown as written rather than
+            // normalised: that string is what makes startServers() throw, so
+            // hiding it would hide the diagnosis.
+            $type = is_string($config['type'] ?? null) ? $config['type'] : 'stdio';
+            $detail = match ($type) {
+                'stdio' => trim(
+                    (is_string($config['command'] ?? null) ? $config['command'] : '')
+                    . ' ' . implode(' ', array_filter(
+                        is_array($config['args'] ?? null) ? $config['args'] : [],
+                        static fn ($a): bool => is_string($a),
+                    ))
+                ),
+                'http' => is_string($config['url'] ?? null) ? $config['url'] : '',
+                'git' => is_string($config['path'] ?? null) ? $config['path'] : '(this project)',
+                default => '',
+            };
+
+            $servers[] = ['name' => $name, 'type' => $type, 'detail' => $detail];
+        }
+
+        return ['servers' => $servers] + $base;
+    }
+
     /**
      * The launch's MCP client, with its configured servers STARTED, or null when
      * this project has no usable `.mcp.json`.
@@ -2783,62 +3047,20 @@ final class Bootstrap
      */
     public static function mcpClient(?string $root = null): ?McpClient
     {
-        $root = self::requireRoot($root);
-
-        // CANONICAL, not as spelled, for the reason {@see hookFiles()} gives at
-        // its own `realpath()`: the trust decision below is made on the resolved
-        // root, so keying the memo off the raw string would leave two names for
-        // one decision. MEASURED against the raw-string version, four spellings
-        // of ONE root — `$W/repo`, `$W/repo/`, `$W/repo/sub/..`, `$W/repo/./` —
-        // produced 4 cached clients and EIGHT live server processes, which is
-        // exactly the accumulation {@see $mcpClients} says memoization prevents.
-        $canonicalRoot = realpath($root);
-        $path = rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/')
-            . '/' . self::MCP_CONFIG_FILENAME;
+        $decision = self::mcpConfigDecision($root);
+        $path = $decision['path'];
 
         $pid = getmypid() ?: 0;
         if (array_key_exists($path, self::$mcpClients[$pid] ?? [])) {
             return self::$mcpClients[$pid][$path];
         }
 
-        // is_file() FIRST, so the overwhelmingly common "no MCP config" case
-        // costs one stat and reaches neither the containment compare, the trust
-        // gate, nor the refusal report. A dangling symlink is not a file, so it
-        // lands here.
-        if (!is_file($path)) {
-            return null;
-        }
-
-        if (!ContainedPath::within($path, $root)) {
-            // A REASON, NOT A SENTENCE, and it does not name the configured path:
-            // the one notice that prints this composes `ignoring <path> — <reason>`
-            // and already holds it, so naming it here put it in that line TWICE.
-            // Same mid-clause "resolves to …" shape as every sibling feeder — see
-            // {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::projectTierRefusal()},
-            // whose doc-block records making this identical correction.
-            self::$projectTierRefusals[$path] = sprintf(
-                'resolves to %s, outside the project tree it was read from (%s); '
-                . 'refusing to start servers named by a file outside the checkout.',
-                realpath($path) === false ? 'nothing readable' : (string) realpath($path),
-                $root,
-            );
-
-            return null;
-        }
-
-        // THE TRUST GATE, and it is checked AFTER containment so that an
-        // out-of-tree config is reported as out-of-tree rather than as untrusted:
-        // the two have different fixes and only one of them is "opt in".
-        if ($canonicalRoot === false || !self::projectMcpIsTrusted($canonicalRoot)) {
-            self::$projectTierRefusals[$path] = sprintf(
-                'starting the MCP servers it names means running programs this repository chose, '
-                . 'every time you open it, before any tool call and in every permission mode. '
-                . 'Add "%s" to "%s" in %s to opt in',
-                rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/'),
-                self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
-                self::userConfigPath(),
-            );
-
+        // The memo is consulted BEFORE this gate, deliberately: a client whose
+        // config file was deleted (or whose trust grant was revoked) mid-process
+        // still owns live server processes that stopMcpServers() has to reach,
+        // so an already-created client is returned whatever the file says now.
+        // Only mcpConfigDecision() decides whether a NEW one may be built.
+        if ($decision['status'] !== self::MCP_TRUSTED) {
             return null;
         }
 
@@ -3246,15 +3468,25 @@ final class Bootstrap
      * unmentioned. A failure is swallowed: an unprunable database is not a
      * reason to refuse to start.
      *
+     * `prune: false` is for the READ-ONLY callers. Retention is a property of
+     * a LAUNCH, not of the store: it is safe here because this is the one
+     * point where no session is open. A diagnostic that merely COUNTS rows —
+     * {@see \SugarCraft\Crush\Cli\Subcommands::doctorProbes()}'s `session
+     * store` check — must not delete conversations on the way to the count,
+     * and MEASURED it did: two rows aged to 2020 with
+     * SUGARCRUSH_SESSION_RETENTION_DAYS=7 became one, with the removal
+     * reported on stderr, purely from running `sugarcrush doctor`. The default
+     * stays `true` so the launch path in {@see chat()} is unchanged.
+     *
      * @see \SugarCraft\Crush\Session\SessionStore::pruneSessions() for why
      *      named sessions are exempt from retention entirely.
      */
-    public static function sessionStore(): EnhancedSessionStore
+    public static function sessionStore(bool $prune = true): EnhancedSessionStore
     {
         $store = new EnhancedSessionStore(self::configDir() . '/session.db');
 
         $retentionDays = self::sessionRetentionDays();
-        if ($retentionDays > 0) {
+        if ($prune && $retentionDays > 0) {
             try {
                 $resumable = $store->listSessions(1)[0]['id'] ?? null;
                 $pruned = $store->pruneSessions(

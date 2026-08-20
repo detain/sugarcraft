@@ -268,6 +268,51 @@ final class McpToolWiringTest extends TestCase
     }
 
     /**
+     * {@see Bootstrap::mcpServerInventory()} — what `sugarcrush mcp list` reads
+     * — obeys the SAME trust verdict, at the ACCESSOR rather than only at the
+     * printer. `Subcommands::mcp()` also switches on the returned `status` and
+     * would suppress an untrusted listing on its own, so a test that only drove
+     * the CLI proved nothing about this method: MEASURED, deleting the trust
+     * check inside mcpServerInventory() left every CLI-level mcp test green.
+     * The claim is that the accessor never hands ANY caller the server list of
+     * a config this launch refuses to run.
+     */
+    public function testTheInventoryReturnsNoServersForAnUntrustedRoot(): void
+    {
+        $this->writeMcpConfig(trusted: false);
+
+        $inventory = Bootstrap::mcpServerInventory($this->repo);
+
+        $this->assertSame(Bootstrap::MCP_UNTRUSTED, $inventory['status']);
+        $this->assertSame([], $inventory['servers'], 'an untrusted config was enumerated');
+        $this->assertSame($this->repo . '/.mcp.json', $inventory['path']);
+        // And it started nothing while deciding that.
+        $this->assertSame(0, $this->handshakeCount());
+    }
+
+    /**
+     * The control for the pair above: the SAME file plus the grant, and the
+     * inventory names the server — WITHOUT starting it, which is the property
+     * that separates `mcp list` from {@see Bootstrap::mcpClient()}. Without
+     * this the test above would be satisfied by an inventory that never returns
+     * anything at all.
+     */
+    public function testTheInventoryNamesTheServerOnceTrustedAndStartsNothing(): void
+    {
+        $this->writeMcpConfig(trusted: false);
+        $this->trustTheRepo();
+
+        $inventory = Bootstrap::mcpServerInventory($this->repo);
+
+        $this->assertSame(Bootstrap::MCP_TRUSTED, $inventory['status']);
+        $this->assertNull($inventory['error']);
+        $this->assertSame(['fake'], array_column($inventory['servers'], 'name'));
+        $this->assertSame(['stdio'], array_column($inventory['servers'], 'type'));
+        $this->assertStringContainsString(PHP_BINARY, $inventory['servers'][0]['detail']);
+        $this->assertSame(0, $this->handshakeCount(), 'the inventory started a server');
+    }
+
+    /**
      * THE CONTROL, and the pair only means something with it: the SAME file, the
      * same mode, plus the user-side grant, and the server starts and its tool is
      * advertised. Otherwise the test above would be satisfied by an MCP feature

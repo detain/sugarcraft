@@ -183,6 +183,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'two boundaries live in readableDefaultConfigPath()',
             'OWNED_HOME — `~/.sugar-crush/config.json`, resolved through trustedConfigDirPath()',
             'OWNED_HOME — the permission policy file, additionally ownership-checked before it is read',
+            'CONTAINED — mcpServerInventory() reading the project `.mcp.json` for `sugarcrush mcp list`. '
+                . 'Same ContainedPath::within() compare and same trust gate mcpClient() applies, because both '
+                . 'come through mcpConfigDecision(); this arm is reached only on the TRUSTED verdict',
         ],
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',

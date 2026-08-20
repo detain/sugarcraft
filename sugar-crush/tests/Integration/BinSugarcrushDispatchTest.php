@@ -6,7 +6,11 @@ namespace SugarCraft\Crush\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\ArgvParser;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
+use SugarCraft\Crush\Cli\ParsedArgs;
+use SugarCraft\Crush\Cli\Subcommands;
+use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -410,6 +414,212 @@ final class BinSugarcrushDispatchTest extends TestCase
     }
 
     /**
+     * crush_code.md Phase 4 item 6, the `--output-format` half. Measured
+     * before the fix: `--output-format xml` reached every consumer, each of
+     * which tests `=== FORMAT_JSON` and renders text otherwise, so this
+     * invocation printed a plain-text answer and exited 0 — a `| jq` caller
+     * got an empty pipe with a success status.
+     */
+    public function testAnUnsupportedOutputFormatIsAUsageErrorAtTheBinary(): void
+    {
+        $result = $this->runBin(['-p', 'hello there', '--output-format', 'xml'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stdout: ' . $result['stdout']);
+        $this->assertStringContainsString('--output-format xml', $result['stderr']);
+    }
+
+    /**
+     * The same vector WITHOUT `-p`. This is the case that decides where the
+     * check has to live: the TUI never reads $outputFormat, so a check inside
+     * NonInteractive would let this one open the alt-screen and block. Exec'd
+     * deliberately — a regression that moves the check back out of the parser
+     * shows up here as a 20-second watchdog kill, not as a green suite.
+     */
+    public function testAnUnsupportedOutputFormatDoesNotOpenTheTuiEither(): void
+    {
+        $result = $this->runBin(['--output-format', 'xml'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stdout: ' . $result['stdout']);
+        $this->assertStringContainsString('unsupported output format', $result['stderr']);
+    }
+
+    /**
+     * The hint printed under a usage error is now the one that error earns —
+     * the binary used to print the `--prompt=<text>` remedy under every one.
+     */
+    public function testTheOutputFormatErrorDoesNotPrintThePromptHint(): void
+    {
+        $result = $this->runBin(['--output-format', 'xml'], []);
+
+        $this->assertStringNotContainsString('--prompt=', $result['stderr']);
+        $this->assertStringContainsString('text, json', $result['stderr']);
+    }
+
+    /**
+     * `--config` naming no file is a usage error in the class of `--root`
+     * naming no directory, and for a sharper reason: that file carries the
+     * permission mode, the permission rules and the trustedProjectHooks list,
+     * so falling through to discovery would run the DEFAULT policy while the
+     * operator believed the named one was in force.
+     */
+    public function testAConfigThatNamesNoFileIsAUsageError(): void
+    {
+        $missing = \sys_get_temp_dir() . '/bin_config_absent_' . \uniqid('', true) . '.json';
+        $result = $this->runBin(['-p', 'hello there', '--config', $missing], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stdout: ' . $result['stdout']);
+        $this->assertStringContainsString('no such file', $result['stderr']);
+        $this->assertStringContainsString($missing, $result['stderr']);
+    }
+
+    /** The TUI path rejects it identically — same reasoning as --root. */
+    public function testAConfigThatNamesNoFileDoesNotOpenTheTui(): void
+    {
+        $missing = \sys_get_temp_dir() . '/bin_config_absent_tui_' . \uniqid('', true) . '.json';
+        $result = $this->runBin(['--config', $missing], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stdout: ' . $result['stdout']);
+        $this->assertStringContainsString('no such file', $result['stderr']);
+    }
+
+    /**
+     * Reported through NonInteractive::failUsage() like every other exit-2
+     * cause, so it honours the "exactly one JSON object on stdout" contract
+     * rather than being a second reporting channel.
+     */
+    public function testTheConfigUsageErrorEmitsAJsonDocument(): void
+    {
+        $missing = \sys_get_temp_dir() . '/bin_config_absent_json_' . \uniqid('', true) . '.json';
+        $result = $this->runBin(['--output-format', 'json', '--config', $missing], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($result['stdout'], true));
+        $this->assertSame('usage', $decoded['error']['type']);
+        $this->assertStringContainsString('--config', $decoded['error']['message']);
+    }
+
+    /**
+     * `sugarcrush --config` with nothing after it. The parser stored null,
+     * which is how absence is spelled, so configError() passed, the override
+     * was never set, discovery stayed in force and the TUI opened —
+     * MEASURED before the fix: rc 124 under a 15s bound, stdout beginning
+     * `\e[?1049h`. The exec'd form is the assertion that matters here: this
+     * is the "`--help` opens the TUI" class, and only a real child process
+     * can tell a fall-through from a refusal.
+     */
+    public function testAConfigWithNoValueDoesNotOpenTheTui(): void
+    {
+        $result = $this->runBin(['--config'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stdout: ' . \substr($result['stdout'], 0, 120));
+        $this->assertStringContainsString('--config', $result['stderr']);
+        $this->assertSame('', $result['stdout'], 'the alt-screen was entered on a value-less --config');
+    }
+
+    /**
+     * THE FLAG IS APPLIED BY THE BINARY, not merely validated by it.
+     *
+     * Both halves are the test: the same malformed policy is invisible when it
+     * sits in a file nobody named (run 1, exit 0 — the discovered
+     * ~/.sugar-crush in the throwaway HOME is empty), and stops the launch when
+     * `--config` names it (run 2, exit 2). Without run 1 the case is satisfied
+     * by a binary that refuses everything; without run 2, by a
+     * `Bootstrap::useConfigPath(null)` — which is exactly the mutation that
+     * survived the previous round, because every other `--config` test either
+     * calls Bootstrap directly or asserts on a file that does not exist.
+     *
+     * The fixture lives in a 0700 directory inside the throwaway HOME, not in
+     * /tmp directly: `requirePrivatePolicyFile()` refuses a policy file whose
+     * directory is world-writable, so a /tmp fixture would fail for the wrong
+     * reason.
+     */
+    public function testTheBinaryReadsThePolicyOutOfTheFileConfigNames(): void
+    {
+        $path = $this->writeOverridePolicy('{"permissionMode":"plan",}');
+
+        $ignored = $this->runBin(['-p', 'hello there'], []);
+        $this->assertSame(0, $ignored['status'], 'the fixture leaked into discovery: ' . $ignored['stderr']);
+
+        $named = $this->runBin(['-p', 'hello there', '--config', $path], []);
+        $this->assertSame(self::EXIT_USAGE, $named['status'], 'stdout: ' . $named['stdout']);
+        $this->assertStringContainsString('not usable JSON', $named['stderr']);
+        $this->assertStringContainsString($path, $named['stderr'], 'the failure named a file other than the one --config chose');
+    }
+
+    /**
+     * The one exit-2 cause that CANNOT honour the README's "exactly one JSON
+     * object on stdout" contract, asserted so the README and the binary cannot
+     * drift apart again: the rejected value IS the requested rendering, so
+     * there is no format left to emit the document in and stdout stays empty.
+     * The README documents this as one of its two exceptions.
+     */
+    public function testAnInvalidOutputFormatIsTheDocumentedEmptyStdoutException(): void
+    {
+        $result = $this->runBin(['-p', 'hello there', '--output-format', 'xml'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status']);
+        $this->assertSame('', $result['stdout'], 'the README exception says stdout is empty here');
+        $this->assertStringContainsString('unsupported output format', $result['stderr']);
+    }
+
+    /**
+     * ...and the exception is the invalid VALUE, not the flag: a valid
+     * `--output-format json` next to a different usage error still emits the
+     * document, which is the half of the README sentence that survives.
+     */
+    public function testAValidJsonFormatStillEmitsTheDocumentBesideAnotherUsageError(): void
+    {
+        $missing = \sys_get_temp_dir() . '/bin_config_absent_pair_' . \uniqid('', true) . '.json';
+        $result = $this->runBin(['--output-format', 'json', '--config', $missing, '-p', 'hello there'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status']);
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($result['stdout'], true));
+        $this->assertNull($decoded['result']);
+    }
+
+    /**
+     * Write a policy fixture the child can be pointed at with `--config`, in a
+     * private directory inside the throwaway HOME `minimalEnv()` hands it.
+     * Returns the absolute path.
+     */
+    private function writeOverridePolicy(string $contents): string
+    {
+        if ($this->tempHome === '') {
+            $this->tempHome = \sys_get_temp_dir() . '/bin_dispatch_home_' . \uniqid('', true);
+            \mkdir($this->tempHome, 0700, true);
+        }
+
+        if (!\is_dir($this->tempHome . '/elsewhere')) {
+            \mkdir($this->tempHome . '/elsewhere', 0700, true);
+        }
+
+        $path = $this->tempHome . '/elsewhere/crush.json';
+        \file_put_contents($path, $contents);
+
+        return $path;
+    }
+
+    /**
+     * `--config` is a RECOGNISED flag in both spellings, which is a different
+     * assertion from "it errors": before it existed, this vector failed with
+     * "unrecognized option: --config" and would keep passing an exit-code-only
+     * check forever.
+     */
+    public function testConfigIsNotReportedAsAnUnrecognizedOption(): void
+    {
+        $missing = \sys_get_temp_dir() . '/bin_config_known_' . \uniqid('', true) . '.json';
+
+        foreach ([['--config', $missing], ['--config=' . $missing]] as $args) {
+            $result = $this->runBin($args, []);
+            $this->assertStringNotContainsString('unrecognized option', $result['stderr']);
+            $this->assertStringContainsString('no such file', $result['stderr']);
+        }
+    }
+
+    /**
      * The escape hatch has to keep working end to end, not just at the parse
      * layer — but exec'ing it would call a backend, so it is asserted where
      * the other backend-bound vectors are.
@@ -796,6 +1006,813 @@ final class BinSugarcrushDispatchTest extends TestCase
         $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
         $this->assertStringContainsString('no provider configured', $result['stderr']);
         $this->assertStringContainsString('SUGARCRUSH_BACKEND_CMD_STREAM', $result['stderr'], 'the notice has to name every variable it claims is unset');
+    }
+
+    // -------------------------------------------------------------------------
+    // crush_code.md Phase 4 item 6: the real subcommands.
+    //
+    // EVERY CASE HERE IS EXEC'D through runBin(), deliberately and against the
+    // temptation to call Subcommands::dispatch() directly: ROUTING is the thing
+    // most likely to break. A handler that works perfectly while ArgvParser
+    // fails to recognise its verb is precisely the failure mode `--version` had
+    // (crush_code.md Phase 0 item 3) — the token fell through every dispatch
+    // guard into Program::run() and hung. A unit test on the handler cannot see
+    // that; a child process that hangs on the deadline can.
+    //
+    // The env is always the minimal one ([] -> PATH + a throwaway HOME), so a
+    // runner's real ~/.sugar-crush/config.json or SUGARCRUSH_PROVIDER cannot
+    // change what these report.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: list<string>}>
+     */
+    public static function subcommandInvocations(): array
+    {
+        return [
+            'doctor'          => [['doctor']],
+            'models'          => [['models']],
+            'session list'    => [['session', 'list']],
+            'mcp list'        => [['mcp', 'list']],
+            'completion bash' => [['completion', 'bash']],
+            'completion zsh'  => [['completion', 'zsh']],
+            'completion fish' => [['completion', 'fish']],
+        ];
+    }
+
+    /**
+     * The whole point of the item: each subcommand answers on a machine with no
+     * provider, no config and no TTY, WITHOUT entering the alt-screen. A
+     * regression that drops the dispatch branch in bin/sugarcrush reopens the
+     * TUI, so this fails on runBin()'s deadline rather than hanging the suite.
+     *
+     * `doctor` is exercised here rather than exempted even though it is the one
+     * that reads the most: it must not require the thing it diagnoses.
+     *
+     * @param list<string> $args
+     *
+     * @dataProvider subcommandInvocations
+     */
+    public function testEverySubcommandAnswersWithoutOpeningTheTui(array $args): void
+    {
+        $result = $this->runBin($args, []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertNotSame('', \trim($result['stdout']), 'a subcommand must not print nothing');
+        $this->assertStringNotContainsString("\x1b", $result['stdout'], 'the TUI was entered');
+        $this->assertStringNotContainsString('unrecognized option', $result['stderr']);
+    }
+
+    /**
+     * A subcommand behind a flag. `run` regressed on exactly this (the parser
+     * only recognised it at $argv[1], so any preceding flag discarded it and
+     * the binary fell into Program::run()), and the new verbs are recognised by
+     * the same loop — so the regression is available to them too.
+     *
+     * @return array<string, array{0: list<string>}>
+     */
+    public static function subcommandBehindAFlagInvocations(): array
+    {
+        return [
+            '--output-format json first' => [['--output-format', 'json', 'models']],
+            '--output-format=json first' => [['--output-format=json', 'models']],
+            '--root . first'             => [['--root', '.', 'doctor']],
+        ];
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @dataProvider subcommandBehindAFlagInvocations
+     */
+    public function testASubcommandIsDispatchedEvenWhenAFlagPrecedesIt(array $args): void
+    {
+        $result = $this->runBin($args, []);
+
+        $this->assertNotSame(
+            124,
+            $result['status'],
+            'the subcommand was discarded and the TUI opened: ' . \implode(' ', $args),
+        );
+        $this->assertStringNotContainsString("\x1b", $result['stdout'], 'the TUI was entered');
+        $this->assertStringNotContainsString('unrecognized option', $result['stderr']);
+    }
+
+    /**
+     * The exit-code convention, reused rather than re-invented: a subcommand
+     * given a missing or unknown operand is exit 2 (nothing was attempted, a
+     * retry cannot help), reported through NonInteractive::failUsage() like
+     * every other pre-flight failure.
+     *
+     * @return array<string, array{0: list<string>, 1: string}>
+     */
+    public static function subcommandUsageErrors(): array
+    {
+        return [
+            'session with no action' => [['session'], 'no action given'],
+            'session unknown action' => [['session', 'bogus'], 'unknown action'],
+            'session delete with no id' => [['session', 'delete'], 'no session id given'],
+            'mcp with no action'     => [['mcp'], 'no action given'],
+            'mcp unknown action'     => [['mcp', 'bogus'], 'unknown action'],
+            'completion with no shell' => [['completion'], 'no shell given'],
+            'completion unknown shell' => [['completion', 'tcsh'], 'unsupported shell'],
+        ];
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @dataProvider subcommandUsageErrors
+     */
+    public function testSubcommandOperandErrorsExitTwoAndStayStdoutSilent(array $args, string $fragment): void
+    {
+        $result = $this->runBin($args, []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString($fragment, $result['stderr']);
+        $this->assertSame('', $result['stdout'], 'a text-mode usage error must not write to stdout');
+    }
+
+    /**
+     * The same operand errors under `--output-format json` put ONE object on
+     * stdout, because they go through the SAME NonInteractive::failUsage()
+     * every other exit-2 cause does rather than through a second reporting
+     * channel of their own.
+     *
+     * @param list<string> $args
+     *
+     * @dataProvider subcommandUsageErrors
+     */
+    public function testSubcommandOperandErrorsEmitTheJsonErrorDocument(array $args, string $fragment): void
+    {
+        $result = $this->runBin([...$args, '--output-format', 'json'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($result['stdout'], true));
+        $this->assertNull($decoded['result']);
+        $this->assertSame('usage', $decoded['error']['type']);
+        $this->assertStringContainsString($fragment, $decoded['error']['message']);
+    }
+
+    /**
+     * `doctor` reports the install rather than an image protocol — i.e. it is
+     * NOT the model-invoked {@see \SugarCraft\Crush\Tools\BuiltIn\Doctor} tool,
+     * which exists, is registered in Bootstrap::tools(), and answers the
+     * completely different question "what image protocol does this terminal
+     * speak" with a PNG swatch attached. crush_code.md Phase 4 item 6 asks for
+     * them to stay distinct; this pins that they are.
+     */
+    public function testDoctorReportsTheInstallAndIsNotTheModelInvokedDoctorTool(): void
+    {
+        $result = $this->runBin(['doctor'], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        foreach (['php', 'pdo_sqlite', 'config file', 'permission policy', 'provider', 'session store'] as $label) {
+            $this->assertStringContainsString($label, $result['stdout'], "doctor omitted the '$label' check");
+        }
+        // The tool's own vocabulary, which the CLI report must not borrow.
+        $this->assertStringNotContainsString('pixel-graphics', $result['stdout']);
+        $this->assertStringNotContainsString('capability swatch', $result['stdout']);
+    }
+
+    /**
+     * A config whose `permissionMode` is unusable makes the LAUNCH refuse to
+     * start (PermissionConfigException -> exit 2 with an empty stdout). That is
+     * exactly the install `doctor` exists for, so `doctor` must still answer,
+     * name the problem, and exit 1 — "ran and failed", not "nothing was
+     * attempted". This is why the dispatch sits OUTSIDE bin/sugarcrush's
+     * try/catch.
+     */
+    public function testDoctorStillAnswersOnAnInstallThatRefusesToLaunch(): void
+    {
+        $home = $this->privateHome();
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        \file_put_contents($home . '/.sugar-crush/config.json', '{"permissionMode":"nonsense"}');
+        \chmod($home . '/.sugar-crush/config.json', 0600);
+
+        $launch = $this->runBin(['-p', 'hi'], ['HOME' => $home]);
+        $this->assertSame(self::EXIT_USAGE, $launch['status'], 'the launch was expected to refuse');
+
+        $doctor = $this->runBin(['doctor'], ['HOME' => $home]);
+        $this->assertSame(1, $doctor['status'], 'stderr: ' . $doctor['stderr']);
+        $this->assertStringContainsString('FAIL permission policy', $doctor['stdout']);
+        $this->assertStringContainsString('nonsense', $doctor['stdout']);
+        $this->assertStringContainsString('1 check failed', $doctor['stdout']);
+    }
+
+    /**
+     * `models` reports the same provider enumeration Bootstrap::backendFor()
+     * resolves a name against — asserted through the JSON document so the shape
+     * a `| jq` consumer sees is pinned too.
+     */
+    public function testModelsListsTheProvidersBootstrapCanSelect(): void
+    {
+        $result = $this->runBin(['models', '--output-format', 'json'], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded);
+        $this->assertNull($decoded['result']['selected'], 'the minimal env selects nothing');
+
+        $names = \array_column($decoded['result']['providers'], 'provider');
+        $this->assertContains('openai', $names);
+        $this->assertContains('anthropic', $names);
+        // Not a subset of some hand-written list: the SAME accessor, called
+        // in-process here. Compared as a SORTED set because `models` ksort()s
+        // its output for a stable display order, which is a presentation choice
+        // and not a claim about the accessor -- the membership is the property
+        // under test.
+        $expected = \array_keys(Bootstrap::availableProviders());
+        \sort($expected);
+        $actual = $names;
+        \sort($actual);
+        $this->assertSame(
+            $expected,
+            $actual,
+            'models must enumerate Bootstrap::availableProviders(), not a second list',
+        );
+        $this->assertSame($names, $actual, 'models output must be sorted by provider name');
+    }
+
+    /**
+     * `SUGARCRUSH_PROVIDER` marks the selected row, which is the only part of
+     * `models` that can be wrong in a way a name list cannot show.
+     */
+    public function testModelsMarksTheSelectedProvider(): void
+    {
+        $result = $this->runBin(['models'], ['SUGARCRUSH_PROVIDER' => 'openai']);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertMatchesRegularExpression('/^\* openai\s/m', $result['stdout']);
+        $this->assertMatchesRegularExpression('/^  anthropic\s/m', $result['stdout']);
+    }
+
+    /**
+     * `session list` shows what the store holds, and `session delete <id>`
+     * removes exactly that row. Seeded through the real
+     * {@see EnhancedSessionStore} at the path Bootstrap derives from $HOME, so
+     * the id printed by `list` is the id `delete` accepts — the property that
+     * would break if the subcommand opened session.db by a second route.
+     */
+    public function testSessionListShowsSeededRowsAndDeleteRemovesOne(): void
+    {
+        $home = $this->privateHome();
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        $store = new EnhancedSessionStore($home . '/.sugar-crush/session.db');
+        $store->createSession('sess-keep-0001', 'openai', 'gpt-4o', null, 'keep-me');
+        $store->createSession('sess-drop-0002', 'openai', 'gpt-4o', null, 'drop-me');
+
+        $listed = $this->runBin(['session', 'list'], ['HOME' => $home]);
+        $this->assertSame(0, $listed['status'], 'stderr: ' . $listed['stderr']);
+        $this->assertStringContainsString('sess-keep-0001', $listed['stdout']);
+        $this->assertStringContainsString('sess-drop-0002', $listed['stdout']);
+        $this->assertStringContainsString('drop-me', $listed['stdout']);
+
+        $deleted = $this->runBin(['session', 'delete', 'sess-drop-0002'], ['HOME' => $home]);
+        $this->assertSame(0, $deleted['status'], 'stderr: ' . $deleted['stderr']);
+        $this->assertStringContainsString('sess-drop-0002', $deleted['stdout']);
+
+        $after = $this->runBin(['session', 'list'], ['HOME' => $home]);
+        $this->assertStringContainsString('sess-keep-0001', $after['stdout']);
+        $this->assertStringNotContainsString('sess-drop-0002', $after['stdout']);
+    }
+
+    /**
+     * An id nothing matches is exit 1, NOT 2, and the distinction is the
+     * documented one: the store was opened and queried, so something ran. Exit
+     * 2 is reserved for "nothing was attempted", which is what a MISSING id is
+     * — asserted beside it so the two cannot quietly collapse into one code.
+     */
+    public function testDeletingAnUnknownSessionIsExitOneWhileOmittingTheIdIsExitTwo(): void
+    {
+        $home = $this->privateHome();
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        new EnhancedSessionStore($home . '/.sugar-crush/session.db');
+
+        $unknown = $this->runBin(['session', 'delete', 'no-such-session'], ['HOME' => $home]);
+        $this->assertSame(1, $unknown['status'], 'stderr: ' . $unknown['stderr']);
+        $this->assertStringContainsString('no such session', $unknown['stderr']);
+
+        $omitted = $this->runBin(['session', 'delete'], ['HOME' => $home]);
+        $this->assertSame(self::EXIT_USAGE, $omitted['status']);
+    }
+
+    /**
+     * `mcp list` reads `.mcp.json` and STARTS NOTHING. The fixture's only
+     * server is a `command` that would create a file if it were ever executed;
+     * asserting the file's absence is the only way to prove the listing did not
+     * take mcpClient()'s proc_open() path — a `mcp list` implemented by asking
+     * for the client would launch every program the repository names, which is
+     * the act the trust gate exists to make deliberate.
+     */
+    public function testMcpListEnumeratesDeclaredServersWithoutStartingThem(): void
+    {
+        $home = $this->privateHome();
+        $project = $this->privateProject();
+        $tripwire = $project . '/started.tripwire';
+
+        \file_put_contents($project . '/.mcp.json', \json_encode([
+            'mcpServers' => [
+                'tripwire' => ['command' => '/usr/bin/touch', 'args' => [$tripwire]],
+                'remote' => ['type' => 'http', 'url' => 'https://example.invalid/mcp'],
+            ],
+        ]));
+
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        \file_put_contents(
+            $home . '/.sugar-crush/config.json',
+            \json_encode(['trustedProjectMcp' => [\realpath($project)]]),
+        );
+        \chmod($home . '/.sugar-crush/config.json', 0600);
+
+        $result = $this->runBin(['--root', $project, 'mcp', 'list'], ['HOME' => $home]);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('tripwire', $result['stdout']);
+        $this->assertStringContainsString('stdio', $result['stdout']);
+        $this->assertStringContainsString('remote', $result['stdout']);
+        $this->assertStringContainsString('https://example.invalid/mcp', $result['stdout']);
+        $this->assertFileDoesNotExist($tripwire, 'mcp list started a configured server');
+    }
+
+    /**
+     * An untrusted project root is REPORTED, not enumerated: listing the
+     * servers of a file this launch refuses to run would tell the operator the
+     * opposite of the truth. Same trust verdict mcpClient() makes, because both
+     * come through Bootstrap::mcpConfigDecision().
+     */
+    public function testMcpListReportsAnUntrustedProjectRootInsteadOfListingIt(): void
+    {
+        $project = $this->privateProject();
+        \file_put_contents(
+            $project . '/.mcp.json',
+            \json_encode(['mcpServers' => ['secret' => ['command' => '/usr/bin/true']]]),
+        );
+
+        $result = $this->runBin(['--root', $project, 'mcp', 'list'], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('not trusted', $result['stdout']);
+        $this->assertStringContainsString('trustedProjectMcp', $result['stdout']);
+        $this->assertStringNotContainsString('secret', $result['stdout'], 'an untrusted config was enumerated');
+    }
+
+    /**
+     * A throw from inside a subcommand is exit 2 with a message, NOT an
+     * uncaught PHP fatal with a stack trace over the terminal.
+     *
+     * MEASURED before the fix: with the dispatch placed OUTSIDE
+     * bin/sugarcrush's try/catch, a `~/.sugar-crush/config.json` of `{ this is
+     * not json` made `mcp list` die with rc 255 and a
+     * `PHP Fatal error: Uncaught PermissionConfigException` — because
+     * `mcpConfigDecision()` reaches `permissionConfig()` through
+     * `projectMcpIsTrusted()`. The dispatch now sits inside that block, so this
+     * reports like every other unusable-policy path.
+     *
+     * `doctor` is asserted beside it because moving the dispatch inside the
+     * catch is exactly what could cost `doctor` its report — it must still
+     * print, name the failure and exit 1 rather than being swallowed into a
+     * bare exit 2. That it does not is a property of the per-probe catches in
+     * Subcommands::doctorProbes(), and this is what holds them there.
+     */
+    public function testAThrowInsideASubcommandIsAReportedExitTwoAndNeverAFatal(): void
+    {
+        $home = $this->privateHome();
+        $project = $this->privateProject();
+        \file_put_contents(
+            $project . '/.mcp.json',
+            \json_encode(['mcpServers' => ['x' => ['command' => '/usr/bin/true']]]),
+        );
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        \file_put_contents($home . '/.sugar-crush/config.json', '{ this is not json');
+        \chmod($home . '/.sugar-crush/config.json', 0600);
+
+        $mcp = $this->runBin(['--root', $project, 'mcp', 'list'], ['HOME' => $home]);
+        $this->assertSame(self::EXIT_USAGE, $mcp['status'], 'stdout: ' . $mcp['stdout']);
+        $this->assertStringNotContainsString('Fatal error', $mcp['stderr']);
+        $this->assertStringNotContainsString('Stack trace', $mcp['stderr']);
+        $this->assertStringContainsString('not usable JSON', $mcp['stderr']);
+
+        // ...and the JSON contract still holds on that exit.
+        $json = $this->runBin(
+            ['--root', $project, 'mcp', 'list', '--output-format', 'json'],
+            ['HOME' => $home],
+        );
+        $decoded = \json_decode(\trim($json['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($json['stdout'], true));
+        $this->assertSame('usage', $decoded['error']['type']);
+
+        // The catch must not have swallowed doctor's whole report.
+        $doctor = $this->runBin(['--root', $project, 'doctor'], ['HOME' => $home]);
+        $this->assertSame(1, $doctor['status'], 'stderr: ' . $doctor['stderr']);
+        $this->assertStringContainsString('FAIL', $doctor['stdout']);
+        $this->assertStringContainsString('not usable JSON', $doctor['stdout']);
+    }
+
+    /**
+     * `--config <file>` must reach a subcommand, which is why the dispatch sits
+     * AFTER Bootstrap::useConfigPath() in bin/sugarcrush rather than before it.
+     * The fixture is chosen so the two answers cannot be confused: the SAME
+     * project root, listed under `trustedProjectMcp` in the file `--config`
+     * names and absent from the one discovery would find, so `mcp list` either
+     * enumerates the server (the override was honoured) or reports the root as
+     * untrusted (it was not). A dispatch moved above useConfigPath() reports
+     * "not trusted" here.
+     */
+    public function testConfigOverrideReachesASubcommand(): void
+    {
+        $home = $this->privateHome();
+        $project = $this->privateProject();
+        \file_put_contents(
+            $project . '/.mcp.json',
+            \json_encode(['mcpServers' => ['named' => ['command' => '/usr/bin/true']]]),
+        );
+
+        $override = $home . '/elsewhere.json';
+        \file_put_contents($override, \json_encode(['trustedProjectMcp' => [\realpath($project)]]));
+        \chmod($override, 0600);
+
+        $discovered = $this->runBin(['--root', $project, 'mcp', 'list'], ['HOME' => $home]);
+        $this->assertStringContainsString('not trusted', $discovered['stdout'], 'the fixture is not discriminating');
+
+        $overridden = $this->runBin(['--config', $override, '--root', $project, 'mcp', 'list'], ['HOME' => $home]);
+        $this->assertSame(0, $overridden['status'], 'stderr: ' . $overridden['stderr']);
+        $this->assertStringContainsString('named', $overridden['stdout']);
+        $this->assertStringNotContainsString('not trusted', $overridden['stdout']);
+    }
+
+    /**
+     * The three completion dialects are genuinely different, not one script
+     * under three labels — emitting bash syntax under a `zsh` label would be
+     * worse than emitting nothing, because compinit would source it and break
+     * the user's completion. bash syntax is additionally checked by `bash -n`
+     * below, which is the only assertion here that proves the output PARSES.
+     */
+    public function testTheThreeCompletionDialectsAreDistinct(): void
+    {
+        $bash = $this->runBin(['completion', 'bash'], [])['stdout'];
+        $zsh = $this->runBin(['completion', 'zsh'], [])['stdout'];
+        $fish = $this->runBin(['completion', 'fish'], [])['stdout'];
+
+        $this->assertNotSame($bash, $zsh);
+        $this->assertNotSame($zsh, $fish);
+        $this->assertNotSame($bash, $fish);
+
+        // bash: a COMPREPLY-filling function bound with `complete -F`.
+        $this->assertStringContainsString('COMPREPLY=', $bash);
+        $this->assertStringContainsString('complete -F _sugarcrush sugarcrush', $bash);
+
+        // zsh: #compdef plus _arguments/_describe. It must carry NONE of bash's
+        // vocabulary — that substitution is the failure this test exists for.
+        $this->assertStringStartsWith('#compdef sugarcrush', $zsh);
+        $this->assertStringContainsString('_arguments', $zsh);
+        $this->assertStringContainsString('_describe', $zsh);
+        $this->assertStringNotContainsString('COMPREPLY', $zsh);
+        $this->assertStringNotContainsString('compgen', $zsh);
+
+        // fish: declarative `complete -c` lines, no dispatch function at all.
+        $this->assertStringContainsString('complete -c sugarcrush', $fish);
+        $this->assertStringContainsString('__fish_use_subcommand', $fish);
+        $this->assertStringNotContainsString('COMPREPLY', $fish);
+        $this->assertStringNotContainsString('_arguments', $fish);
+    }
+
+    /**
+     * The bash script actually PARSES. Everything above is substring matching,
+     * which a syntactically broken script passes just as happily — and a broken
+     * script is worse than none, because `eval "$(sugarcrush completion bash)"`
+     * runs in the user's interactive shell.
+     */
+    public function testTheBashCompletionScriptParses(): void
+    {
+        $script = $this->runBin(['completion', 'bash'], [])['stdout'];
+        $path = \sys_get_temp_dir() . '/sugarcrush_completion_' . \uniqid('', true) . '.bash';
+        \file_put_contents($path, $script);
+
+        $output = [];
+        $status = 0;
+        \exec('bash -n ' . \escapeshellarg($path) . ' 2>&1', $output, $status);
+        @\unlink($path);
+
+        $this->assertSame(0, $status, 'bash -n rejected the emitted script: ' . \implode("\n", $output));
+    }
+
+    /**
+     * Every subcommand and every option the completions offer is one the parser
+     * actually recognises. A completion script that offers a flag the binary
+     * rejects is a trap, and the two lists sit in different classes.
+     */
+    public function testTheCompletionsOnlyOfferTokensTheParserAccepts(): void
+    {
+        $bash = $this->runBin(['completion', 'bash'], [])['stdout'];
+
+        \preg_match('/COMPREPLY=\(\$\(compgen -W "([^"]+)" -- "\$cur"\)\)\n}/', $bash, $verbs);
+        $this->assertNotEmpty($verbs, 'could not find the subcommand word list in the bash script');
+
+        foreach (\explode(' ', $verbs[1]) as $verb) {
+            if ($verb === 'run') {
+                $parsed = ArgvParser::parse(['sugarcrush', $verb, 'x']);
+                $this->assertTrue($parsed->promptRequested, "`$verb` is offered but not recognised");
+                continue;
+            }
+            $parsed = ArgvParser::parse(['sugarcrush', $verb]);
+            $this->assertSame($verb, $parsed->subcommand, "`$verb` is offered but not recognised");
+        }
+
+        \preg_match('/compgen -W "(--[^"]+)" -- "\$cur"/', $bash, $options);
+        $this->assertNotEmpty($options, 'could not find the option word list in the bash script');
+        foreach (\explode(' ', $options[1]) as $flag) {
+            $parsed = ArgvParser::parse(['sugarcrush', $flag, 'value']);
+            $this->assertSame([], $parsed->unknownFlags, "`$flag` is offered but the parser rejects it");
+        }
+    }
+
+    /**
+     * `--` still turns a subcommand verb back into a plain operand — asserted
+     * at the parse layer because the correct outcome is "boot the TUI", and
+     * exec'ing that is the hang the rest of this file guards against.
+     */
+    public function testASubcommandVerbAfterTheSeparatorIsAnOperand(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--', 'doctor']);
+
+        $this->assertNull($args->subcommand);
+        $this->assertSame([], $args->unknownFlags);
+        $this->assertFalse($args->promptRequested);
+    }
+
+    /**
+     * A trusted `.mcp.json` that cannot be PARSED is exit 1 in BOTH output
+     * formats.
+     *
+     * MEASURED before this fix: `mcp list` returned 1 while
+     * `--output-format json mcp list` returned 0 for the same install, so
+     * `sugarcrush mcp list --output-format json || fail` was a CI gate that
+     * could never fire. The JSON arm also put the failure string at
+     * `result.error`, so a consumer branching on the package's top-level
+     * `.error` envelope read null on a failure.
+     *
+     * Asserted here rather than at the accessor because the defect lived in
+     * the exit code, which only the binary produces.
+     */
+    public function testAnUnreadableMcpConfigIsExitOneInBothOutputFormats(): void
+    {
+        $home = $this->privateHome();
+        $project = $this->privateProject();
+        \file_put_contents($project . '/.mcp.json', '{ this is not json');
+
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        \file_put_contents(
+            $home . '/.sugar-crush/config.json',
+            \json_encode(['trustedProjectMcp' => [\realpath($project)]]),
+        );
+        \chmod($home . '/.sugar-crush/config.json', 0600);
+
+        $text = $this->runBin(['--root', $project, 'mcp', 'list'], ['HOME' => $home]);
+        $this->assertSame(1, $text['status'], 'stdout: ' . $text['stdout']);
+        $this->assertStringContainsString('not valid JSON', $text['stderr']);
+
+        $json = $this->runBin(['--root', $project, '--output-format', 'json', 'mcp', 'list'], ['HOME' => $home]);
+        $this->assertSame(
+            $text['status'],
+            $json['status'],
+            'the exit code changed with the output format: ' . $json['stdout'],
+        );
+
+        $document = \json_decode(\trim($json['stdout']), true);
+        $this->assertIsArray($document, 'stdout was not one JSON document: ' . $json['stdout']);
+        $this->assertNull($document['result'], 'a failure was reported with a non-null result');
+        $this->assertIsArray($document['error'] ?? null, 'the failure is not in the top-level error envelope');
+        $this->assertArrayHasKey('type', $document['error']);
+        $this->assertStringContainsString('not valid JSON', (string) $document['error']['message']);
+    }
+
+    /**
+     * ...while a config that is merely REFUSED — absent, out of tree,
+     * untrusted — is an answer, and stays exit 0 in both formats. Asserted
+     * beside the case above so "make the codes agree" cannot be satisfied by
+     * failing everything.
+     */
+    public function testARefusedMcpConfigIsExitZeroInBothOutputFormats(): void
+    {
+        $project = $this->privateProject();
+        \file_put_contents(
+            $project . '/.mcp.json',
+            (string) \json_encode(['mcpServers' => ['secret' => ['command' => '/usr/bin/true']]]),
+        );
+
+        $text = $this->runBin(['--root', $project, 'mcp', 'list'], []);
+        $json = $this->runBin(['--root', $project, '--output-format', 'json', 'mcp', 'list'], []);
+
+        $this->assertSame(0, $text['status'], 'stderr: ' . $text['stderr']);
+        $this->assertSame(0, $json['status'], 'stdout: ' . $json['stdout']);
+
+        $document = \json_decode(\trim($json['stdout']), true);
+        $this->assertIsArray($document);
+        $this->assertNull($document['error'] ?? null, 'a refusal was reported as a failure');
+        $this->assertSame([], $document['result']['servers'], 'an untrusted config was enumerated');
+    }
+
+    /**
+     * `doctor` COUNTS the session rows; it must not delete any.
+     *
+     * MEASURED before the fix: the probe called the plain
+     * Bootstrap::sessionStore(), which applies the opt-in
+     * SUGARCRUSH_SESSION_RETENTION_DAYS sweep on construction — so a health
+     * check on this fixture printed "retention removed 1 unnamed session" and
+     * the table went 2 rows to 1. The sweep is a launch behaviour; a
+     * diagnostic is read-only.
+     */
+    public function testDoctorCountsStoredSessionsWithoutPruningThem(): void
+    {
+        $home = $this->privateHome();
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        $dbPath = $home . '/.sugar-crush/session.db';
+        $store = new EnhancedSessionStore($dbPath);
+        $store->createSession('sess-ancient-01', 'openai', 'gpt-4o', null, null);
+        $store->createSession('sess-recent-02', 'openai', 'gpt-4o', null, null);
+
+        $pdo = new \PDO('sqlite:' . $dbPath);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->prepare('UPDATE sessions SET updated_at = ? WHERE id = ?')
+            ->execute(['2020-01-01 00:00:00', 'sess-ancient-01']);
+
+        $result = $this->runBin(
+            ['doctor'],
+            ['HOME' => $home, 'SUGARCRUSH_SESSION_RETENTION_DAYS' => '7'],
+        );
+
+        $this->assertStringNotContainsString('retention removed', $result['stderr']);
+        $this->assertStringContainsString('2 session(s) stored', $result['stdout']);
+
+        $after = new EnhancedSessionStore($dbPath);
+        $this->assertNotNull($after->getSession('sess-ancient-01'), 'doctor deleted a stored conversation');
+        $this->assertNotNull($after->getSession('sess-recent-02'));
+    }
+
+    /**
+     * Every verb the parser accepts is offered by ALL THREE completion
+     * scripts.
+     *
+     * The existing round-trip is one-directional — it proves every offered
+     * token parses, and so passes just as happily when a verb is offered by
+     * nobody. MEASURED: deleting one row of
+     * Subcommands::SUBCOMMAND_DESCRIPTIONS drops that verb out of all three
+     * scripts with the whole suite green.
+     */
+    public function testEveryVerbTheParserAcceptsIsOfferedByAllThreeCompletions(): void
+    {
+        $scripts = [
+            'bash' => $this->runBin(['completion', 'bash'], [])['stdout'],
+            'zsh' => $this->runBin(['completion', 'zsh'], [])['stdout'],
+            'fish' => $this->runBin(['completion', 'fish'], [])['stdout'],
+        ];
+
+        // ParsedArgs ships INSIDE ArgvParser.php, so PSR-4 only has it once
+        // that file is loaded — a bare ParsedArgs::SUBCOMMANDS here is a
+        // "class not found" in a test that touches the parser nowhere else.
+        \class_exists(ArgvParser::class);
+
+        // `run` is not in SUBCOMMANDS (the parser handles it as a prompt
+        // alias) but is a word a user types, so it is offered too.
+        foreach ([...ParsedArgs::SUBCOMMANDS, 'run'] as $verb) {
+            foreach ($scripts as $shell => $script) {
+                $this->assertMatchesRegularExpression(
+                    '/\b' . \preg_quote($verb, '/') . '\b/',
+                    $script,
+                    $shell . ' completion never offers the `' . $verb . '` subcommand',
+                );
+            }
+        }
+
+        // ...and every flag the one OPTIONS table names reaches all three
+        // generators, so a flag added there cannot silently miss a dialect.
+        // fish spells a long option `-l name`, not `--name`, which is why the
+        // needle differs per shell rather than being one string.
+        $options = (new \ReflectionClass(Subcommands::class))->getConstant('OPTIONS');
+        $this->assertIsArray($options);
+        foreach (\array_keys($options) as $flag) {
+            $flag = (string) $flag;
+            $this->assertStringContainsString($flag, $scripts['bash'], 'bash completion omits ' . $flag);
+            $this->assertStringContainsString($flag, $scripts['zsh'], 'zsh completion omits ' . $flag);
+            $this->assertStringContainsString(
+                '-l ' . \ltrim($flag, '-'),
+                $scripts['fish'],
+                'fish completion omits ' . $flag,
+            );
+        }
+
+        // Every flag `parse()` itself branches on is in that table. Read out
+        // of the parser's source because nothing else enumerates them, and a
+        // flag the binary accepts but no completion offers is a feature users
+        // never find.
+        $parserSource = (string) \file_get_contents(
+            (string) (new \ReflectionClass(ArgvParser::class))->getFileName(),
+        );
+        \preg_match_all("/\\\$arg === '(--[a-z][a-z-]*)'/", $parserSource, $matches);
+        $this->assertNotEmpty($matches[1], 'could not enumerate the parser\'s long flags');
+        foreach (\array_unique($matches[1]) as $flag) {
+            $this->assertArrayHasKey(
+                $flag,
+                $options,
+                $flag . ' is accepted by the parser but offered by no completion',
+            );
+        }
+    }
+
+    /**
+     * `doctor` and `models` take no operands, and REJECT one rather than
+     * discarding it.
+     *
+     * MEASURED before the fix: `sugarcrush models delete everything` printed
+     * the provider table at exit 0. `session`, `mcp` and `completion` all
+     * reject an unknown operand at exit 2; a word the CLI silently ignores is
+     * a word the user believes did something.
+     */
+    public function testDoctorAndModelsRejectAnOperand(): void
+    {
+        foreach ([['models', 'delete', 'everything'], ['doctor', 'bogus']] as $argv) {
+            $result = $this->runBin($argv, []);
+            $label = \implode(' ', $argv);
+
+            $this->assertSame(self::EXIT_USAGE, $result['status'], $label . ': ' . $result['stdout']);
+            $this->assertStringContainsString('unexpected operand', $result['stderr'], $label);
+            $this->assertSame('', $result['stdout'], $label . ' printed its report anyway');
+        }
+    }
+
+    /**
+     * The `pdo_sqlite` probe EXERCISES the driver rather than checking an
+     * extension name, and the driver it exercises is the one the session store
+     * opens.
+     *
+     * The name-checking spelling (`extension_loaded('pdo_sqlite')`) could be
+     * swapped for the neighbouring `sqlite3` — the extension composer.json
+     * declares and nothing in src/ calls — with every test green, because both
+     * are loaded on any box that runs this suite. There is no host here on
+     * which the two answers differ, so the check is pinned in the two ways
+     * that do not need one: the failing branch is driven directly with a DSN
+     * no driver claims, and the probe's DSN scheme is compared against the
+     * literal in SessionStore's own constructor.
+     */
+    public function testThePdoProbeExercisesTheDriverTheSessionStoreOpens(): void
+    {
+        $probe = new \ReflectionMethod(Subcommands::class, 'pdoDriverProbe');
+        $probe->setAccessible(true);
+        $dsn = (string) (new \ReflectionClass(Subcommands::class))->getConstant('SESSION_STORE_PROBE_DSN');
+
+        $good = $probe->invoke(null, $dsn);
+        $this->assertSame('OK', $good['status'], (string) $good['detail']);
+        $this->assertStringContainsString('pdo_sqlite usable', (string) $good['detail']);
+
+        // The branch no host can reach by unloading an extension.
+        $bad = $probe->invoke(null, 'nosuchdriver:whatever');
+        $this->assertSame('FAIL', $bad['status'], (string) $bad['detail']);
+        $this->assertStringContainsString('the session store cannot open its database', (string) $bad['detail']);
+
+        // ...and it is the store's OWN driver being opened.
+        $storeSource = (string) \file_get_contents(
+            (string) (new \ReflectionClass(EnhancedSessionStore::class))->getFileName(),
+        );
+        $storeSource .= (string) \file_get_contents(
+            (string) (new \ReflectionClass(\SugarCraft\Crush\Session\SessionStore::class))->getFileName(),
+        );
+        \preg_match('/new PDO\("([a-z0-9]+):/i', $storeSource, $m);
+        $this->assertNotEmpty($m, 'could not find the session store\'s PDO DSN');
+        $this->assertStringStartsWith(
+            $m[1] . ':',
+            $dsn,
+            'doctor probes a different PDO driver than the session store opens',
+        );
+    }
+
+    /**
+     * A private HOME for one test, separate from minimalEnv()'s shared
+     * $tempHome so a test that seeds a config or a database cannot contaminate
+     * the neighbouring cases that assume an empty one. Cleaned by tearDown()
+     * along with the rest of $tempHome.
+     */
+    private function privateHome(): string
+    {
+        if ($this->tempHome === '') {
+            $this->tempHome = \sys_get_temp_dir() . '/bin_dispatch_home_' . \uniqid('', true);
+            \mkdir($this->tempHome, 0700, true);
+        }
+
+        $home = $this->tempHome . '/home_' . \uniqid('', true);
+        \mkdir($home, 0700, true);
+
+        return $home;
+    }
+
+    /** A throwaway project root, for the `.mcp.json` fixtures. */
+    private function privateProject(): string
+    {
+        $project = $this->privateHome() . '/project';
+        \mkdir($project, 0700, true);
+
+        return $project;
     }
 
     /**

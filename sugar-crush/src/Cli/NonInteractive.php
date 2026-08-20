@@ -426,11 +426,20 @@ final class NonInteractive
      * U+FFFD so a document is always produced, and `JSON_THROW_ON_ERROR` makes
      * any other failure loud at the call site rather than silently empty.
      *
+     * PUBLIC because {@see Subcommands} emits contract documents of its own
+     * (`sugarcrush models --output-format json`, `doctor`, `session list`) and
+     * has to produce the SAME shape with the SAME flags. A second
+     * `json_encode()` over there would be a second definition of the document —
+     * exactly the drift {@see failUsage()} routes through
+     * {@see emitErrorDocument()} to avoid — and it would re-open the
+     * invalid-UTF-8 hole described above for every session name and MCP command
+     * string, which are bytes this package does not control.
+     *
      * @param array<string, mixed> $document
      *
      * @throws \JsonException
      */
-    private static function encodeDocument(array $document): string
+    public static function encodeDocument(array $document): string
     {
         $json = \json_encode(
             $document,

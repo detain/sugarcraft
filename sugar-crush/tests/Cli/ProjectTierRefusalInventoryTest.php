@@ -113,23 +113,47 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * The FOURTH holder of a repository-chosen directory, and the reason it is
-     * named as a gap rather than counted as a feeder: it reports by `error_log()`
-     * and is dormant. Pinned so "three feeders" cannot quietly become four (or
-     * stay three after this one is wired) without this test saying so.
+     * The FOURTH holder of a repository-chosen directory, WIRED — this test is
+     * the "or stay three after this one is wired" half of what its predecessor
+     * pinned, now discharged. crush_code.md Phase 2 item 4 gave
+     * {@see CommandLoader} a production caller
+     * ({@see Bootstrap::chat()} builds one and hands it to {@see \SugarCraft\Crush\Chat}),
+     * so `.sugar-crush/commands` moved from the gap column to the feeder column
+     * and this asserts BOTH halves of that move rather than the method's
+     * existence alone.
+     *
+     * `error_log()` is still required, and that is not leftover: a refusal that
+     * reaches the collector AND the log is reported twice, while one that reaches
+     * only the log is invisible under a full-screen TUI. Dropping the log would be
+     * a silent narrowing.
      */
-    public function testCommandLoaderIsDormantAndDoesNotFeedTheCollector(): void
+    public function testCommandLoaderFeedsTheCollectorNowThatItIsWired(): void
     {
-        $this->assertFalse(method_exists(CommandLoader::class, 'refusedDirectories'));
-        $this->assertFalse(method_exists(CommandLoader::class, 'projectTierRefusal'));
+        $this->assertTrue(method_exists(CommandLoader::class, 'refusedDirectories'));
 
         $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Commands/CommandLoader.php');
-        $this->assertStringNotContainsString('projectTierRefusal', $source);
         $this->assertStringContainsString('error_log', $source);
 
-        // Dormant, not disabled: the anchored two-argument contract is present and
-        // its containment check is real — nothing in src/ or bin/ constructs it
-        // with an anchor yet.
+        // The drain, and the construction it drains from, are both in Bootstrap.
+        $bootstrap = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $this->assertStringContainsString('new CommandLoader()', $bootstrap, 'a production caller exists');
+        $this->assertStringContainsString(
+            '$commandLoader->refusedDirectories()',
+            $bootstrap,
+            'and its refusals reach $projectTierRefusals',
+        );
+        // The per-FILE seam added with the control-plane reservation. It is
+        // NAME-keyed upstream, so the drain is a loop that prefixes the key
+        // rather than a spread — asserted separately for that reason.
+        $this->assertTrue(method_exists(CommandLoader::class, 'refusedCommands'));
+        $this->assertStringContainsString(
+            '$commandLoader->refusedCommands()',
+            $bootstrap,
+            'and a refused control-plane override reaches it too',
+        );
+
+        // The anchored two-argument contract survived the wiring — the gate was
+        // added BEFORE the consumer, and acquiring a consumer must not relax it.
         $anchored = (new \ReflectionMethod(CommandLoader::class, 'loadFromDirectory'))
             ->getParameters();
         $this->assertCount(2, $anchored);
@@ -192,6 +216,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/Teammate.php|.sugar-crush/teams' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json.' => self::USER,
+        // The install path `sugarcrush completion fish` PRINTS, in a comment.
+        // Rooted at `~`, so it is user-tier by the same rule as every entry
+        // around it -- and it is never read: nothing in src/ opens it, the
+        // string exists only to tell the operator where to redirect stdout.
+        'Cli/Subcommands.php|.config/fish' => self::USER,
         'MCP/OAuthClientRegistration.php|.local/share' => self::USER,
         'Session.php|.config/sugarcraft-crush' => self::USER,
         'Skills/ForeignSkillDiscovery.php|.config/opencode' => self::USER,
@@ -359,23 +388,26 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the ten reach the collector, and which are gated elsewhere. SEVEN
-     * and THREE — stated here so "four feeders" cannot quietly stand in for "and
-     * three paths nobody drains".
+     * Which of the ten reach the collector, and which are gated elsewhere. EIGHT
+     * and TWO — stated here so "seven feeders" cannot quietly stand in for "and
+     * two paths nobody drains".
      *
      * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
      * {@see Bootstrap::foreignAgentPresets()}: `.claude/agents` and
      * `.opencode/agents` moved from the gap column to the feeder column, which is
-     * a named gap being closed rather than a count drifting. The two halves are
-     * asserted against the derivation, so the move cannot be recorded in one
-     * column only.
+     * a named gap being closed rather than a count drifting. It became SEVEN AND
+     * THREE there, and EIGHT AND TWO when crush_code.md Phase 2 item 4 wired
+     * {@see CommandLoader} into {@see Bootstrap::chat()} and drained its
+     * `refusedDirectories()` — the same shape of move, recorded the same way. The
+     * two halves are asserted against the derivation, so a move cannot be
+     * recorded in one column only.
      */
-    public function testTheSevenThatFeedTheCollectorAndTheThreeThatAreNamedGaps(): void
+    public function testTheEightThatFeedTheCollectorAndTheTwoThatAreNamedGaps(): void
     {
         $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
-            '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/skills',
-            '.sugar-crush/workflows'];
-        $gaps = ['.opencode/memory', '.sugar-crush/commands', '.sugar-crush/hooks.yaml'];
+            '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/commands',
+            '.sugar-crush/skills', '.sugar-crush/workflows'];
+        $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml'];
 
         $union = array_merge($feeders, $gaps);
         sort($union);
@@ -452,11 +484,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
                 \SugarCraft\Crush\Tests\Memory\ForeignMemoryImporterContainmentTest::class,
                 ['below', 'within'],
             ],
-            'custom commands' => [
-                'src/Commands/CommandLoader.php',
-                \SugarCraft\Crush\Tests\Support\CommandLoaderContainmentTest::class,
-                ['below', 'within'],
-            ],
             'worktree config' => [
                 'src/Agents/WorktreeConfig.php',
                 \SugarCraft\Crush\Tests\Agents\WorktreeConfigTest::class,
@@ -490,6 +517,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             'foreign agent presets' => [
                 'src/Agents/ForeignAgentPresetRegistry.php',
                 \SugarCraft\Crush\Tests\Agents\ForeignAgentPresetDirContainmentTest::class,
+                ['below', 'within'],
+            ],
+            // Left dormantHolders() when crush_code.md Phase 2 item 4 wired it
+            // into Bootstrap::chat(). Same tuple, deliberately: the gate
+            // requirement is keyed to holding a repository-chosen directory, not
+            // to being dormant, so acquiring a caller must not drop a single
+            // required gate.
+            'custom commands' => [
+                'src/Commands/CommandLoader.php',
+                \SugarCraft\Crush\Tests\Support\CommandLoaderContainmentTest::class,
                 ['below', 'within'],
             ],
         ];

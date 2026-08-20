@@ -64,7 +64,9 @@ sugarcrush -p "explain the Width helper"        # one prompt, print, exit
 sugarcrush run "explain the Width helper"       # same thing
 sugarcrush -p "audit this" --output-format json # machine-readable envelope
 sugarcrush --output-format json run "audit this" # `run` works after flags too
+sugarcrush doctor                               # check the install (see Subcommands)
 sugarcrush --root /path/to/project              # set the project root explicitly
+sugarcrush --config ~/policies/crush.json       # read settings/permissions from this file
 sugarcrush --help                               # prints and exits (never opens the TUI)
 sugarcrush --version                            # prints the installed version and exits
 sugarcrush -- --not-a-flag                      # `--` ends options; everything after is positional
@@ -74,6 +76,40 @@ sugarcrush -- --not-a-flag                      # `--` ends options; everything 
 `sugarcrush ../other-project` works. It is what the Bash/Read/Edit/Glob tools
 are jailed to and where `CLAUDE.md`/`AGENTS.md` and `.sugar-crush/skills` are
 looked for.
+
+`--config <file>` (also `--config=<file>`) replaces the per-user
+`~/.sugar-crush/config.json` for this run: the theme, the persisted provider,
+the `instructions` globs, the `permissionMode`, the `permissionRules` and the
+`trustedProjectHooks` list all come out of the named file, and the discovered
+one is not merged in. It names one **file**, not a config directory — agents,
+skills, workflows, sessions and memory still live under `~/.sugar-crush`, and
+`--config` does not relax the "is this home directory yours" check that guards
+them. The file must already exist and be readable; naming one that does not is
+a usage error (exit `2`) rather than a fall-back to discovery, for the same
+reason `--root /typo` is one — silently running the DEFAULT permission policy
+while the operator believes a restrictive one is in force is worse than not
+starting. So is a `--config` with no value at all, or one followed by another
+option (`--config -p "hi"`, which used to eat the `-p` as the file name): a
+missing value is indistinguishable from an absent flag once parsed, so
+accepting it is the same silent fall-back to discovery.
+
+Because the named file carries the permission policy, it is held to the **same
+standard as `~/.sugar-crush/config.json`**: it must be owned by you, and
+neither it nor its directory may be world-writable. That rules out the two
+paths people reach for first — a file under `/tmp` is refused for the
+directory's `o+w` bit, and a root-owned `/etc/crush.json` for its ownership —
+and the refusal is a launch-time `PermissionConfigException` (exit `2`) from
+`Bootstrap`, worded about the file rather than about the flag. The check is
+deliberately not duplicated in `ArgvParser::configError()`, which validates
+existence and readability only: two copies of an ownership/mode rule is how the
+two drift apart.
+
+`--output-format` accepts exactly `text` (the default) and `json`, matched
+case-sensitively; anything else is a usage error (exit `2`) on both the
+one-shot and the TUI path. It used to be accepted verbatim and then compared
+for equality against `json` at each consumer, so `--output-format xml` printed
+plain text and exited `0` — a `| jq` caller got an empty pipe with a success
+status.
 
 **One-shot mode never falls back to the offline echo provider.** If this run
 selected a provider — via `$SUGARCRUSH_PROVIDER` or a persisted Ctrl+P "Switch
@@ -86,15 +122,74 @@ the opposite, lenient behaviour: it warns and opens an offline session, because
 refusing to launch an editor over a missing API key is worse than an offline
 one.
 
+The same three exit codes govern every subcommand below.
+
 | exit | meaning |
 | --- | --- |
-| `0` | the prompt ran and produced an answer |
-| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), or the answer could not be encoded in the requested format — retrying may help |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help |
+| `0` | the prompt ran and produced an answer, or the subcommand answered |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help |
 
 `2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that
-retries on `1` would otherwise retry it forever.
+retries on `1` would otherwise retry it forever. It also covers a subcommand
+handed a missing or unknown operand (`sugarcrush session`, `sugarcrush mcp
+bogus`, `sugarcrush completion tcsh`).
+
+### Subcommands
+
+```sh
+sugarcrush doctor                    # check this installation, exit 1 if anything FAILs
+sugarcrush models                    # providers this install can select; * marks the selected one
+sugarcrush session list              # stored sessions, newest first
+sugarcrush session delete <id>       # delete one stored session
+sugarcrush mcp list                  # what .mcp.json declares — without starting anything
+sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
+```
+
+Every one of these is dispatched in the same pre-flight place `--help` and
+`--version` are, **before** `Program` is constructed: they answer on a machine
+with no provider, no API key and no TTY, and none of them enters the
+alt-screen. `doctor` is the sharpest case — it is a health check for an install
+that may be broken, so it must not require the thing it is diagnosing. A
+config whose `permissionMode` is unusable makes the launch refuse to start
+(exit `2`, above); `doctor` still runs, names that as the failing check, and
+exits `1`.
+
+`doctor` is **read-only**: it counts the rows in the session database through
+`Bootstrap::sessionStore(prune: false)` rather than the plain accessor, so the
+opt-in `SUGARCRUSH_SESSION_RETENTION_DAYS` sweep that a *launch* applies cannot
+delete conversations on the way to a health check. `doctor` and `models` take
+no operands and reject one at exit `2` rather than ignoring it.
+
+`sugarcrush doctor` is **not** the model-callable `doctor` tool. That one is
+registered in `Bootstrap::tools()`, advertised to the LLM, and answers a
+completely different question — which image protocol this terminal speaks, with
+a PNG capability swatch attached. The CLI subcommand reports PHP, the
+extensions the session store needs, the config file, the permission policy, the
+selected provider, the session database and the project MCP config, takes no
+model, and cannot be reached by a tool call.
+
+`mcp list` **reads and never runs**. `Bootstrap::mcpClient()` starts every
+configured server as a side effect of being asked for the client, so routing a
+listing through it would `proc_open()` every program the repository names — the
+exact act the trust gate exists to make deliberate, performed by the command
+you run *because* you do not yet trust the file. It shares its path,
+containment and trust decision with `mcpClient()` (both go through
+`Bootstrap::mcpConfigDecision()`), so it can never report a verdict the launch
+disagrees with; an untrusted or out-of-tree config is reported rather than
+enumerated.
+
+`--output-format json` applies to `doctor`, `models`, `session list` and `mcp
+list`, producing the same `{"result": …}` envelope the one-shot path does, and
+the same `{"result":null,"error":{"type":…,"message":…}}` document on any
+failure — an operand error, an unknown session id, or an unreadable trusted
+`.mcp.json`. **The exit code never depends on the format**: `sugarcrush mcp
+list` and `sugarcrush --output-format json mcp list` return the same code for
+the same install, so a CI gate can be written either way. A refused config
+(absent, out of tree, untrusted) is an answer and exits `0` in both. `completion` is the exception, and deliberately: its output is a shell
+script you `eval`, and JSON-quoting it would produce something no shell can
+source — the same reasoning that keeps `--help` and `--version` plain text.
 
 A `1` from the engine already had its retries. Transient provider failures — a
 connect failure, a 5xx, a 408/429, an Anthropic `overloaded_error` — are retried
@@ -113,15 +208,28 @@ With `--output-format json`, stdout is always exactly one JSON object: either
 `{"result": "..."}` or `{"result": null, "error": {"type": "usage" |
 "provider_configuration" | "backend" | "encoding", "message": "...",
 "provider": "..."}}` (`provider` present only when a selection is to blame), so
-a `| jq` consumer never sees an empty pipe. That holds for the flag and
-`--root` usage errors too, which `bin/sugarcrush` catches before the one-shot
+a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
+and `--root` usage errors too, which `bin/sugarcrush` catches before the one-shot
 path is entered, and for a reply or an error message carrying bytes that are
 not valid UTF-8 (they are substituted, not dropped along with the whole
 document). `error.type` is not the exit code renamed — `usage` and
 `provider_configuration` are both `2`, `backend` and `encoding` are both `1` —
 it is how a consumer that kept the code tells apart the two kinds of each.
 
-The single exception is a checkout with no `vendor/autoload.php`: that exits
+There are exactly two exceptions, and both are cases where the JSON renderer
+itself is unavailable.
+
+The first is an **`--output-format` value that is not `text` or `json`**. That
+run exits `2` with an **empty stdout** and its message on stderr: the requested
+rendering is the thing being rejected, so there is no format left to honour —
+emitting the JSON document anyway would mean guessing that `--output-format
+xml` meant `json`, and `text` is what an unrecognised value has always fallen
+back to. (MEASURED: `sugarcrush -p hi --output-format xml` → rc 2, stdout 0
+bytes.) Note the scope: it is the **invalid value** that is exempt, not the
+flag — a *valid* `--output-format json` alongside any other usage error, such
+as `--output-format json --config /nonexistent`, still emits the document.
+
+The second is a checkout with no `vendor/autoload.php`: that exits
 `2` with an empty stdout, because the class that owns the JSON document shape
 is precisely the one that could not be loaded, and hand-rolling a second copy
 of the shape in `bin/sugarcrush` to cover it would be the drift that having one
@@ -331,6 +439,53 @@ it are worth knowing before you rely on it:
   with a turn the cap already let through.
 - The cap lives for the launch. It is deliberately not persisted, so it cannot
   silently refuse turns in a later session whose spend you never looked at.
+
+### Your own slash commands
+
+Drop a markdown file in `~/.sugar-crush/commands/` (yours) or
+`<project>/.sugar-crush/commands/` (the checkout's) and its name becomes a slash
+command: `review.md` gives `/review`, `deploy/staging.md` gives
+`/deploy/staging`. Optional YAML frontmatter (`description`, `argument-hint`,
+`model`, `subtask`) sets what the "/" popup and `/help` show; everything after it
+is the prompt that gets sent.
+
+```markdown
+---
+description: Review a diff and be blunt
+argument-hint: <path>
+---
+Review $1 for correctness bugs. Focus on: $ARGUMENTS
+```
+
+- `$ARGUMENTS` is everything typed after the command name, verbatim apart from
+  the surrounding whitespace: interior quotes and doubled spaces are kept,
+  leading and trailing whitespace is trimmed.
+- `$1` … `$9` are the same text split on whitespace, with shell quotes honoured
+  and stripped — `/deploy "us east" prod` puts `us east` in `$1`.
+- A placeholder with no argument becomes the empty string; it is not left in the
+  prompt for the model to puzzle over.
+- `$$` is a literal `$`. A `$` that is not a placeholder (`$PATH`, `$(date)`) is
+  left alone, so shell snippets inside a template survive.
+- Substitution is one pass over the whole body, so text that came *from* an
+  argument is never re-expanded.
+- A project file overrides a built-in of the same name, in both the popup and
+  dispatch — and in both spellings, `/compact` and `/compact:arg`.
+- **Except the control plane.** `budget`, `clear`, `exit`, `help`, `model`,
+  `permissions` and `quit` are reserved: a file with one of those names is
+  ignored, the built-in keeps running, and the refusal is printed at launch with
+  the path of the file. These are how you drive and leave the app, so a clone
+  cannot redefine them.
+- A command whose template expands to nothing — a body of just `$ARGUMENTS`,
+  invoked with no arguments — is refused with a note rather than sent as an empty
+  prompt.
+
+The project directory is resolved and checked against the checkout before
+anything under it is read: a committed `.sugar-crush/commands` symlink pointing
+outside is refused, with the reason printed at launch, rather than turning an
+outside file's contents into a prompt. Commands are discovered once, at launch —
+add a file, restart.
+
+`!`command`` and `@file` template forms are **not** implemented yet.
 
 ### What you see while a turn runs
 

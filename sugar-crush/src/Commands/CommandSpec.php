@@ -11,10 +11,14 @@ use SugarCraft\Crush\Palette\PaletteAction;
 /**
  * Metadata for one command, used by BOTH command surfaces - the "/" popup
  * ({@see \SugarCraft\Crush\Renderer::renderSlashMenu()}) and the Ctrl+P
- * palette ({@see \SugarCraft\Crush\Renderer::renderPalette()}). Pure display
- * data - it does not affect {@see \SugarCraft\Crush\Chat::submit()}'s own
- * dispatch chain, which stays the single source of truth for what a command
- * actually does.
+ * palette ({@see \SugarCraft\Crush\Renderer::renderPalette()}).
+ *
+ * Display data for a BUILT-IN row - it does not affect
+ * {@see \SugarCraft\Crush\Chat::submit()}'s own dispatch chain, which stays the
+ * single source of truth for what a built-in command does. A FILE-BASED row is
+ * the other half of that sentence and no longer only display data: it carries
+ * the prompt itself, and {@see expandTemplate()} is what `submit()` sends when
+ * one is typed.
  *
  * A row is visible in the "/" popup unless $slashVisible is false, and
  * visible in the Ctrl+P palette exactly when it carries a $paletteAction -
@@ -187,6 +191,87 @@ final class CommandSpec
     public function isFileBased(): bool
     {
         return $this->template !== null;
+    }
+
+    /**
+     * The prompt this file-based command sends, with its argument placeholders
+     * filled in. Returns null for a built-in row, which has no template and
+     * whose behaviour is PHP in {@see \SugarCraft\Crush\Chat::dispatchCommand()}.
+     *
+     * TWO PLACEHOLDER FORMS, and they are fed from two DIFFERENT readings of the
+     * same keystrokes, which is why both parameters exist rather than one:
+     *
+     *  - `$ARGUMENTS` is everything typed after the command name, VERBATIM —
+     *    quotes, doubled spaces and all, apart from the SURROUNDING whitespace
+     *    that {@see \SugarCraft\Crush\Chat::expandCustomCommand()} trims off
+     *    before calling this (the draft as a whole was already trimmed by
+     *    `submit()`, so trimming here only removes the run of spaces between the
+     *    name and the first argument). A template that says "Fix: $ARGUMENTS"
+     *    wants the sentence back the way it was written, so re-joining split
+     *    tokens with single spaces would be a quiet rewrite of the user's prose.
+     *  - `$1` … `$9` are the tokens {@see \SugarCraft\Crush\CommandParser::parse()}
+     *    produced, i.e. shell-quote split and UNQUOTED, so `/deploy "us east" prod`
+     *    puts `us east` in `$1` and `prod` in `$2`. Only nine, matching every
+     *    other tool that spells positional arguments this way; `$10` is `$1`
+     *    followed by a literal `0`, exactly as in `sh`.
+     *
+     * A MISSING POSITIONAL EXPANDS TO THE EMPTY STRING rather than staying
+     * literal. Both answers are defensible and this one is chosen because the
+     * output is a PROMPT: a leftover `$2` reaching the model is an implementation
+     * token leaking into the conversation, where it reads as a filename or a
+     * variable the model is expected to know. An empty slot reads as an omission,
+     * which is what it is. The same rule already applies to `$ARGUMENTS` with no
+     * arguments at all, so the two cannot disagree.
+     *
+     * `$$` IS THE ESCAPE, producing one literal `$`. A doubling rule rather than
+     * a backslash because the body is markdown headed for a model — backslashes
+     * there already mean something to both markdown and to whatever the prompt
+     * is quoting, while `$$` collides with nothing this class emits. A literal
+     * `$1` is therefore written `$$1`, and a `$` not followed by a placeholder
+     * (`$PATH`, `$(date)`, a bare `$`) is left ALONE, so an ordinary shell
+     * snippet inside a template survives untouched.
+     *
+     * ONE PASS OVER THE WHOLE BODY, not a pass per placeholder and not a pass per
+     * line, and that is the substantive decision here:
+     *
+     *  - Per placeholder (`$1` first, then `$ARGUMENTS`, or the reverse) means
+     *    the text a pass SUBSTITUTES is visible to the next pass. An argument
+     *    containing the characters `$ARGUMENTS` would then be re-expanded — user
+     *    input becoming template syntax, which is the injection shape this
+     *    whole class fails closed against elsewhere. A single alternation makes
+     *    replaced text unreachable to the matcher by construction, so the
+     *    "which order?" question has no answer BECAUSE it has no meaning here.
+     *  - Per line would make the result depend on where the author happened to
+     *    break lines, and nothing in the syntax spans or respects a newline.
+     *
+     * ARGUMENTS ARE NOT APPENDED when the template names no placeholder: the
+     * body is sent unchanged. Silently tacking them on the end would land them
+     * after whatever closing instruction the author wrote, changing what that
+     * instruction applies to — a template that wants arguments says where they go.
+     *
+     * @param string       $arguments  everything after the command name, as typed
+     * @param list<string> $positional the parsed tokens; index 0 is `$1`
+     */
+    public function expandTemplate(string $arguments, array $positional = []): ?string
+    {
+        if ($this->template === null) {
+            return null;
+        }
+
+        return preg_replace_callback(
+            '/\$(\$|ARGUMENTS|[1-9])/',
+            static function (array $m) use ($arguments, $positional): string {
+                if ($m[1] === '$') {
+                    return '$';
+                }
+                if ($m[1] === 'ARGUMENTS') {
+                    return $arguments;
+                }
+
+                return $positional[(int) $m[1] - 1] ?? '';
+            },
+            $this->template,
+        ) ?? $this->template;
     }
 
     /**

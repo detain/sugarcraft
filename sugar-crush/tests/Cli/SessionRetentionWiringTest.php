@@ -82,6 +82,30 @@ final class SessionRetentionWiringTest extends TestCase
         $this->assertSame([], $store->pruneReport());
     }
 
+    /**
+     * `prune: false` is the seam the READ-ONLY callers take, and it is a real
+     * one: the same fixture that loses a row through the default accessor
+     * keeps it here. `sugarcrush doctor` counts rows through this argument, so
+     * a health check cannot delete a conversation on the way to the count.
+     */
+    public function testTheNonPruningAccessorLeavesAnAncientSessionAlone(): void
+    {
+        $this->seedStore(['ancient' => null, 'fresh' => null]);
+        $this->ageSession('ancient', '2020-01-01 00:00:00');
+        putenv('SUGARCRUSH_SESSION_RETENTION_DAYS=7');
+
+        $readOnly = Bootstrap::sessionStore(prune: false);
+
+        $this->assertNotNull($readOnly->getSession('ancient'), 'a read-only open pruned the store');
+        $this->assertSame([], $readOnly->pruneReport());
+        $this->assertCount(2, $readOnly->listSessions(10));
+
+        // ...and the launch accessor on the SAME fixture still prunes, so the
+        // assertion above is a property of the argument rather than of a
+        // retention sweep that silently stopped working.
+        $this->assertNull(Bootstrap::sessionStore()->getSession('ancient'));
+    }
+
     public function testRetentionDefaultsToDisabled(): void
     {
         $this->assertSame(0, Bootstrap::sessionRetentionDays());
