@@ -397,6 +397,32 @@ the parent's loop, measure.
   the **opposite outcome**, which is a different and worse defect. Fix was one docblock; the lesson is
   that "the example is slightly off" was itself an under-measurement.
 
+### THE `candy-core` FOUNDATION EDIT IS CLEARED ACROSS THE WHOLE MONOREPO
+
+`c4718781` added `'Z' => KeyMsg(Tab, shift: true)` to `candy-core/src/InputReader.php::decodeCsi()`
+from a sugar-crush-scoped lane. `candy-core` is the foundation lib;
+`php scripts/affected-libs.php --files candy-core/src/InputReader.php` reports **affected=53/58**,
+so CI will fan it out that far. The implementer ran 2 libs; its reviewer ran 8. **The supervisor ran
+the full sweep: 57 libs with results, 0 FAILURES, 0 ERRORS, every one rc 0.** Nothing in the tree
+regressed on the foundation change.
+
+**Two sweep artefacts that must NOT be read as coverage gaps** (both recorded in
+`scratchpad/closure-results.txt` itself, since that file is what a later reader consults):
+- `candy-mosaic` shows `rc=143` in the raw log. **That is the supervisor's own kill signal, not a
+  failure.** It is a LoopPin lib; `timeout 300` killed `phpunit` but a forked test child outlived it
+  still holding the write end of the pipe, so the `$( … | grep … )` command substitution blocked for
+  25 minutes on a process that no longer existed. Re-run standalone with no pipeline it is green in
+  11s: **449 / 7704 / 6 skipped / rc 0.** ⚠️ **`timeout` does not rescue a piped phpunit in this
+  repo — redirect to a file instead of piping when backgrounding a suite.**
+- Four `SKIP(no vendor) <lib>}` lines carry a **trailing brace** — an artefact of parsing
+  `affected-libs.php`'s output, not a real lib. `candy-shine`, `candy-vt`, `candy-wish` and
+  `sugar-wishlist` each ran normally under their correct names and are green. **The supervisor
+  initially mis-read the `candy-shine` one as "the parse missed a real lib" and re-ran it, only to
+  reproduce the line already in the file** — a true observation (the parse emitted a malformed entry)
+  attached to a false consequence (a lib went uncovered). Same shape as the phantom `pane:files`
+  zone, made while writing up that very lesson. **Check whether a thing is already covered before
+  calling it a gap.**
+
 ### ROUND 34 IS ALREADY MEASURED — do not re-run discovery
 
 A read-only agent measured the whole cheap tail against the tree at `7957b2be`. Verdicts, with the
