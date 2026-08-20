@@ -2471,3 +2471,130 @@ keeping its own URI tracking.
   any agent wrote it — lane E's reviewer independently reported the same."* Not a
   code finding, but an unexplained working-tree change that two independent
   observers logged. Left untouched, as it has been throughout.
+
+---
+
+## Round 33 — findings from the P3.2 / P3.5 lane (FocusRing + cell-width padding)
+
+Recorded, not fixed: each is either outside that lane's granted file set or outside the bundle's
+scope. Every figure below was re-measured in the lane before it was written down.
+
+### E51 — mouse clicks bypass the permission modal (`Chat::handleMouse()` has no modal guard)
+
+**What.** `Chat::update()` dispatches `MouseMsg` to `handleMouse()` **before** its
+`if (!$msg instanceof KeyMsg) { return [$this, null]; }` early return. Every modal guard in the class —
+the `pendingPermission !== null` arm and the in-flight swallows — sits *after* that return and is
+therefore on the **keyboard path only**. `handleMouse()` itself opens on a wheel check and a
+left-button check and consults no modal state at all. So while a permission prompt is up and the
+keyboard is correctly captured, the mouse is not.
+
+**Where.** `sugar-crush/src/Chat.php:1108` (the `MouseMsg` dispatch), `:1110` (the non-`KeyMsg`
+return the guards hide behind), `:1194` (the `pendingPermission` guard), and `:3555`
+(`handleMouse()`, unguarded). Tool-call zones are dispatched at `:3639` into
+`toggleToolOutput()` (`:4174`).
+
+**Which zones actually survive the modal — correcting the record.** The implementation round reported
+this as a **`pane:files` zone surviving at row=1, col=1..7**. That is wrong on every part, and the
+correction matters more than the original claim:
+
+- **There is no `pane:files` zone anywhere in the product.** `markPane()`
+  (`sugar-crush/src/Renderer.php:1684`) is the sole producer of the `pane:` prefix
+  (`PANE_ZONE_PREFIX`, `:404`), and it is reached with exactly two panes: `Pane::Menu`, directly at
+  `:1253`, and `Pane::Agents`, via `markPaneHeader()` at `:1575` which calls `markPane()` at `:1793`.
+  The string `pane:files` occurs once in the whole tree, at `sugar-crush/tests/PaneClickTest.php:252`,
+  where it is a **hand-written synthetic fixture** fed straight to `Renderer::scanner()->scan()`. It
+  is almost certainly where the original report came from — a test fixture read as a live render.
+- **`pane:menu` is destroyed by the modal, not preserved.** It was reported as surviving; it does not.
+- **What genuinely survives are the `toolcall:<id>` zones** (`TOOL_CALL_ZONE_PREFIX`,
+  `sugar-crush/src/Renderer.php:424`), one per rendered tool call in the transcript.
+
+**On coordinates.** The reviewer's enumeration observed the surviving zones at **rows 5/8/11/14,
+cols 1..30** under its own fixture. Those numbers are *fixture-dependent* — row positions follow
+transcript content and column extent follows the label — and are recorded here as that reviewer's
+measurement, **not re-derived in this lane**. The load-bearing, encoding-independent fact is the
+zone **id prefix** (`toolcall:`) and the dispatch site (`:3639`), both verified here.
+
+**Severity — UX / correctness, NOT security.** Stated deliberately against the implementation round,
+which called it security-relevant. The only reachable action behind a surviving zone is
+`toggleToolOutput()`: expand or collapse an already-completed tool call in the scrollback. It **cannot
+answer, dismiss, grant, deny or bypass the permission prompt** — no zone that survives the modal
+dispatches into `handlePermissionKey()` or the deferred resolution. Calling it a permission bypass is
+not supported by measurement. What it *is*: the modal is advertised as capturing input, and it does
+not capture the mouse, so the transcript mutates under a prompt that claims to own the screen.
+
+**Step.** Guard `handleMouse()` on the same modal state the keyboard path checks — earliest correct
+point is a `pendingPermission !== null` check at the top of `handleMouse()`
+(`Chat.php:3555`), matching the arm at `:1194`. Decide explicitly whether a wheel *scroll* should
+remain allowed under a modal (reading the transcript while deciding is legitimate); a click dispatch
+should not.
+
+**Blocked on.** `Chat.php` was outside the P3.2/P3.5 lane's granted file set and is held by another
+lane. Not attempted.
+
+### E52 — `CSI 1;5Z` loses the shift its final byte encodes
+
+**What.** In `InputReader::decodeCsi()` the post-match rebuild replaces the **whole** `KeyMsg` from
+`$mods` whenever a `;<mod>` parameter was present. The new `'Z'` arm sets `shift: true`, but for a
+parameterised backtab the rebuild overwrites it wholesale. `CSI 1;2Z` is fine (the parameter encodes
+shift, so the rebuild re-derives the same flag), and that is the only case the arm's docblock used to
+discuss. `CSI 1;5Z` — ctrl *without* the shift bit — is rebuilt as plain `ctrl+tab`, dropping the
+shift that the `Z` final byte is the entire meaning of.
+
+**Where.** `candy-core/src/InputReader.php`, the `'Z'` arm and the `if ($key !== null && $mods !== null)`
+rebuild immediately below the key table.
+
+**Severity.** Low. No terminal in the xterm family is known to emit `CSI 1;5Z`; a fix would be guessing
+at a shape nothing sends. Recorded so the next reader does not have to re-derive it. The arm's
+docblock has been corrected in-place to name this limit rather than imply the parameterised form
+always works.
+
+**Step.** If it ever needs fixing: make the rebuild merge rather than replace, or special-case a `Z`
+final byte to OR the shift flag in. Merging is the more general fix and would want its own test sweep
+across every modified key, so it is not a drive-by.
+
+### E53 — fast and slow width paths diverge on ZWJ sequences
+
+**What.** `AgentViewPane::visualWidth()` delegates to `Width::string()` and is **grapheme-aware over a
+whole string**, while `AgentViewPane::truncate()` still walks `preg_split('//u')` and sums
+`charWidth()` **one codepoint at a time**. The two disagree on any ZWJ sequence. Measured in this
+lane: the family emoji `U+1F468 ZWJ U+1F469 ZWJ U+1F467` is **2 cells** whole-string and **6** summed
+per codepoint.
+
+**Where.** `sugar-crush/src/Tui/AgentViewPane.php` — `truncate()` and `visualWidth()`/`charWidth()`.
+
+**Severity.** Low, and bounded in the safe direction. The per-codepoint sum is the **larger** of the
+two, so the loop spends its budget early and truncates **sooner** than it needed to. It can drop a
+character that would have fit; it **cannot** emit a row wider than its budget, which is the failure
+mode this project treats as broken functionality (the diff renderer paints one line per terminal row).
+Over-truncation, never over-run.
+
+**Step.** Make the truncation loop iterate graphemes rather than codepoints, so both paths answer the
+same measure. The `visualWidth()` docblock has been softened in-place — it previously claimed the
+truncator and the pad "answer to ONE width authority", which is stronger than the code delivers; it
+now says they read the same width *table* and names this divergence.
+
+### E54 — `AgentViewPane::render($w)` over-runs its caller's budget below 44 columns
+
+**What.** `render(..., $w, ...)` returns rows of **`$w + 4`** cells: `$w` is handed to `Style::width()`,
+which sizes the **content box**, and the rounded border (2 cells) plus `padding(0, 1)` (2 cells) are
+drawn outside it. Measured in this lane across `$w` = 20/28/40/58/60/98, populated and empty-list alike
+— the `+4` holds in every case. Its two callers do **not** both compensate:
+
+- `Renderer::renderAgentView()` (`sugar-crush/src/Renderer.php:1567`) passes `max(40, $cols - 4)` —
+  **compensates exactly**, at 44 columns and above. Below 44 the `max(40, …)` clamp floors the width
+  and the rows run wider than the terminal.
+- `AgentDashboardPane::render()` (`sugar-crush/src/Tui/Components/AgentDashboardPane.php:194`) passes
+  `max(20, $width - 2)` — **does not compensate at all**. Measured, *both* of its paths over-run by
+  exactly 2: the empty-list `AgentViewPane::render()` call at `:202`, and the `box()` frame at `:205`,
+  which repeats the same `border + padding(0,1) + width($inner)` geometry. Pane width 30 → 32,
+  60 → 62, 100 → 102.
+
+**Severity.** Low — real but currently unobservable. Every dashboard frame goes out through
+`clipWidth(clipTail(...), $cols)` in `sugar-crush/src/Tui/Renderer.php` (the `$frame` assignment around
+`:464`), which trims the excess before the diff renderer sees it. The backstop is what makes this a
+documentation-grade finding today; it is also what would hide a real regression if the arithmetic
+drifted further.
+
+**Step.** Make the `+4` overhead explicit in `AgentViewPane`'s signature — either take an *outside*
+width and subtract internally, or expose a `chromeWidth()` constant both callers subtract — so the two
+call sites cannot disagree. Pre-existing; predates the P3.2/P3.5 bundle and out of its scope.

@@ -371,6 +371,31 @@ final class InputReader
             // already returned above, so reaching here always means a
             // parameterised — i.e. modified — Tab.
             'I' => new KeyMsg(KeyType::Tab),
+            // Shift+Tab, the one modified Tab that does NOT use the `CSI 1;<mod>I`
+            // form. Every xterm-family terminal spells backtab `CSI Z` instead,
+            // carrying the modifier in the final byte rather than in a
+            // parameter — so the `;<mod>` strip above finds nothing and $mods
+            // stays null. Set shift here rather than leaving it to that block.
+            //
+            // Without this arm `CSI Z` fell straight through to `default =>
+            // null` and was dropped by the reader, which meant no application
+            // on candy-core could bind Shift+Tab at all: a handler could be
+            // written and would simply never fire.
+            //
+            // A terminal that sends the parameterised `CSI 1;2Z` still works —
+            // $mods is then non-null and the rebuild below re-derives shift
+            // from it, landing on the same message.
+            //
+            // That rebuild is total, though, so it holds only where the
+            // parameter already encodes shift. `CSI 1;5Z` — ctrl WITHOUT the
+            // shift bit, on a terminal that still spells the key as backtab —
+            // is rebuilt from $mods alone and comes back ctrl+tab, dropping
+            // the shift this final byte is the whole meaning of. Left as-is
+            // rather than special-cased: no terminal in the xterm family is
+            // known to emit that combination, so a fix here would be guessing
+            // at a shape nothing sends. Recorded in
+            // docs/plans/crush_code_hardening_backlog.md.
+            'Z' => new KeyMsg(KeyType::Tab, shift: true),
             '~' => match ($keyParams) {
                 '1', '7' => new KeyMsg(KeyType::Home),
                 '4', '8' => new KeyMsg(KeyType::End),

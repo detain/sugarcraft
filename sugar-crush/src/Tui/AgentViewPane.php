@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Theme;
@@ -93,7 +94,14 @@ final class AgentViewPane
 
             // Truncate operation to fill remaining space.
             // name(~12) + dot(2) + sep(2) + status_bracket(~14) + sep(2) + right(~26)
-            $opBudget = max(5, $width - strlen($name) - 60);
+            //
+            // $width is a CELL budget, so the name has to be charged against it
+            // in cells. strlen() charged BYTES, which meant an agent named with
+            // any non-ASCII character silently bought less operation text than
+            // an identically-wide ASCII name -- "abc" got 17 columns while
+            // "abc" with an acute accent on the a got 16, for the same three
+            // cells on screen.
+            $opBudget = max(5, $width - Width::string($name) - 60);
             $operation = self::truncate($agent->operation, $opBudget);
 
             // Left section: dot + name + status + operation.
@@ -112,7 +120,24 @@ final class AgentViewPane
             $rightStyle = Style::new()->foreground($theme->shellMuted);
 
             // Right-pad the left section so the right section lands at the edge.
-            $leftPadded = str_pad($leftSection, $width - strlen($rightSection) - 1, ' ', STR_PAD_RIGHT);
+            //
+            // Width::padRight(), not str_pad(), for TWO reasons that both make
+            // str_pad() the wrong tool here and only one of which is about
+            // Unicode:
+            //
+            // 1. $rightSection's cost must be counted in cells, same argument
+            //    as $opBudget above.
+            // 2. $leftSection is STYLED -- $dot is a rendered Style, so the
+            //    string carries SGR escape bytes. str_pad() counts those as
+            //    occupied columns, so on a colour-capable terminal the measure
+            //    overshot by the whole escape sequence and str_pad() returned
+            //    the string untouched, i.e. the pad did nothing at all.
+            //    Width::string() strips ANSI before measuring, so the pad is
+            //    computed against what the terminal actually shows.
+            //
+            // padRight() is a no-op once the section already meets the width,
+            // so this cannot widen a row past its budget.
+            $leftPadded = Width::padRight($leftSection, $width - Width::string($rightSection) - 1);
 
             $rows[] = $rowStyle->render($leftPadded)
                 . $rightStyle->render($rightSection);
@@ -171,20 +196,34 @@ final class AgentViewPane
     }
 
     /**
-     * Compute visual width of a string (wide / combining characters count as 2).
+     * Compute visual width of a string in terminal cells.
      *
-     * @param string $text
-     * @return int
+     * Delegates to {@see Width::string()}, so this class's truncator and its
+     * right-pad now read the same width TABLE. They did not: the pad counted
+     * bytes while the truncator walked a local table, and that table disagreed
+     * with Width on real codepoints (emoji scored 1 here, 2 there; a combining
+     * accent scored 1 here, 0 there). Two tables cannot hold a column still
+     * however carefully either is written.
+     *
+     * One table is not quite one ANSWER, and the difference is worth stating
+     * exactly rather than rounding up to "one width authority". This function
+     * measures a whole string, so it is grapheme-aware; {@see truncate()}
+     * still sums {@see charWidth()} one codepoint at a time. On a ZWJ sequence
+     * the two therefore diverge — measured, the family emoji U+1F468 ZWJ
+     * U+1F469 ZWJ U+1F467 is 2 cells whole-string and 6 summed per codepoint.
+     *
+     * The divergence is bounded in the SAFE direction: the per-codepoint sum
+     * is the larger of the two, so the loop spends its budget early and
+     * truncates sooner than it had to. It can drop a character that would have
+     * fit; it cannot emit a row wider than the budget, which is the failure
+     * this file's tests exist to prevent. Recorded in
+     * docs/plans/crush_code_hardening_backlog.md rather than fixed here —
+     * making the loop grapheme-aware is a change to the truncator, not to the
+     * padding measure this bundle is about.
      */
     private static function visualWidth(string $text): int
     {
-        $width = 0;
-        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        foreach ($chars as $char) {
-            $width += self::charWidth($char);
-        }
-
-        return $width;
+        return Width::string($text);
     }
 
     /**
@@ -192,27 +231,6 @@ final class AgentViewPane
      */
     private static function charWidth(string $char): int
     {
-        $code = mb_ord($char, 'UTF-8');
-        if ($code === false || $code < 32) {
-            return 0;
-        }
-
-        if (
-            ($code >= 0x1100 && $code <= 0x115F)
-            || ($code >= 0x2329 && $code <= 0x232A)
-            || ($code >= 0x2E80 && $code <= 0x303E)
-            || ($code >= 0x3040 && $code <= 0xA4CF)
-            || ($code >= 0xAC00 && $code <= 0xD7A3)
-            || ($code >= 0xF900 && $code <= 0xFAFF)
-            || ($code >= 0xFE10 && $code <= 0xFE1F)
-            || ($code >= 0xFE30 && $code <= 0xFE6F)
-            || ($code >= 0xFF00 && $code <= 0xFFE5)
-            || ($code >= 0x20000 && $code <= 0x2FFFD)
-            || ($code >= 0x30000 && $code <= 0x3FFFD)
-        ) {
-            return 2;
-        }
-
-        return 1;
+        return Width::string($char);
     }
 }

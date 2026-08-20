@@ -237,6 +237,79 @@ final class InputReaderTest extends TestCase
         $this->assertTrue($msgs[0]->shift);
     }
 
+    // ---- backtab (CSI Z) --------------------------------------------------
+
+    /**
+     * `CSI Z` is Shift+Tab, and it is the one modified Tab that carries its
+     * modifier in the FINAL BYTE rather than in a `;<mod>` parameter.
+     *
+     * That is why it needs an arm of its own next to `'I'`: the generic
+     * modifier strip above the key table only ever looks at the parameters, so
+     * for backtab it finds nothing and `$mods` stays null. Before the arm
+     * existed the sequence fell through to `default => null` and the reader
+     * DROPPED it, which meant no candy-core application could bind Shift+Tab
+     * at all — a handler could be written and would simply never fire.
+     */
+    public function testBacktabDecodesToAShiftedTab(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[Z");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift, 'backtab decoded without the shift modifier');
+        $this->assertFalse($msgs[0]->ctrl);
+        $this->assertFalse($msgs[0]->alt);
+        // The label a string-keyed binding table matches on.
+        $this->assertSame('shift+tab', $msgs[0]->string());
+    }
+
+    /**
+     * A terminal that spells backtab in the parameterised `CSI 1;2Z` form
+     * lands on the same message.
+     *
+     * Here `$mods` IS non-null, so the post-match rebuild re-derives shift
+     * from the parameter and overwrites the arm's own flag with an identical
+     * one. Worth pinning separately because the two forms reach the same
+     * result down different paths.
+     */
+    public function testParameterisedBacktabDecodesToTheSameShiftedTab(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[1;2Z");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+        $this->assertFalse($msgs[0]->ctrl);
+    }
+
+    /** Backtab split across two reads must still emit exactly one KeyMsg. */
+    public function testBacktabSplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1b["));
+        $msgs = $r->parse('Z');
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+    }
+
+    /**
+     * Backtab must not disturb the plain Tab byte sitting next to it.
+     *
+     * 0x09 has no room for a modifier, so it is the unshifted Tab and stays
+     * that way; a mix-up here would turn every forward Tab into a backward
+     * one in any application that cycles focus.
+     */
+    public function testPlainTabByteStaysUnshiftedAlongsideBacktab(): void
+    {
+        $msgs = (new InputReader())->parse("\x09\x1b[Z");
+        $this->assertCount(2, $msgs);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertFalse($msgs[0]->shift, 'a plain Tab came back shifted');
+        $this->assertSame(KeyType::Tab, $msgs[1]->type);
+        $this->assertTrue($msgs[1]->shift);
+    }
+
     // ---- mouse (SGR encoded) ---------------------------------------------
 
     public function testMouseLeftPress(): void

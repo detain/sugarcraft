@@ -435,44 +435,69 @@ final class SlashMenuTabCompletionTest extends TestCase
     }
 
     /**
-     * Shift+Tab is claimed by neither half and cycles NO pane, popup or not.
+     * Shift+Tab is the shell's, in every state, and cycles panes BACKWARD.
      *
-     * The `!$msg->shift` conjunct on the shell's Tab rule is what makes the
-     * no-popup half true: without it the rule matches Shift+Tab, answers
-     * "claim" (there is no popup to yield to), and Shift+Tab silently becomes
-     * a second pane-cycle key. {@see testModifiedTabsNeitherCompleteNorType
-     * ATabCharacter()} only exercises the popup-open half, where dropping the
-     * conjunct is invisible.
+     * **This assertion was inverted, deliberately, and the reason it flipped
+     * matters more than the new value.** It used to read "Shift+Tab is claimed
+     * by neither half and cycles NO pane", guarding a real hazard: the shell's
+     * Tab rule carries a `!$msg->shift` conjunct, and dropping it made the
+     * rule answer "claim" for Shift+Tab (there is no popup to yield to) while
+     * `KeyboardHandler::handle()` had no arm to match the resulting
+     * `"shift+tab"` label. The key was CLAIMED AND THEN SWALLOWED -- it never
+     * reached Chat and never moved a pane. That is what the old test pinned,
+     * and it was right to.
+     *
+     * What changed is not the risk assessment but the code: `handle()` now has
+     * a real `'shift+tab'` arm calling {@see Pane::previous()}, so claim and
+     * action exist together and the swallow the old test guarded cannot
+     * happen. The `!$msg->shift` conjunct still stands on the ORIGINAL Tab
+     * rule -- Shift+Tab is claimed by its own rule beside it, not by widening
+     * that one, so the popup-yield logic is untouched.
+     *
+     * Nothing is stolen from Chat by this. Measured: Chat's only bare-Tab arm
+     * (`Chat.php`, the `slashMenuOwnsTab()` case) requires `!$msg->shift`, and
+     * its two Shift+Tab-adjacent bindings both require `ctrl` for session
+     * cycling, which `chatOwns()` claims before any of this runs. Before the
+     * arm existed, Shift+Tab fell through to Chat and Chat did nothing with
+     * it in any state, so the key was simply dead.
+     *
+     * @see \SugarCraft\Crush\Tests\Tui\PaneReverseCycleTest for the decode →
+     *      claim → act chain end to end, including the `CSI Z` byte sequence
+     *      without which none of this could fire from a real keyboard.
      */
-    public function testShiftTabCyclesNoPaneWithOrWithoutThePopup(): void
+    public function testShiftTabIsClaimedAndCyclesPanesBackwardWithOrWithoutThePopup(): void
     {
         $shiftTab = new KeyMsg(KeyType::Tab, shift: true);
 
-        // The claim is asserted directly, and it has to be: measured,
-        // `(new KeyMsg(KeyType::Tab, shift: true))->string()` is "shift+tab",
-        // which {@see KeyboardHandler::handle()}'s `$key === 'tab'` arm does
-        // not match -- so a shell that WRONGLY claimed Shift+Tab would swallow
-        // it silently rather than cycling a pane, and the pane assertions
-        // below would not notice. What the claim costs is the fall-through:
-        // a claimed key never reaches Chat at all.
-        $this->assertNull(
+        // Claimed in both states. The popup does not get a say: it binds only
+        // the unmodified Tab, so yielding Shift+Tab to it would hand the key
+        // to a surface with no arm for it -- the dead-keystroke failure the
+        // shell's own Tab docblock warns about.
+        $this->assertNotNull(
             (new KeyboardHandler())->handleKeyMsg($shiftTab, $this->shell()),
-            'Shift+Tab is not the shell\'s, popup or no popup',
+            'the shell did not claim Shift+Tab with no popup up',
         );
-        $this->assertNull(
+        $this->assertNotNull(
             (new KeyboardHandler())->handleKeyMsg(
                 $shiftTab,
                 $this->press($this->shell(), $this->type('/comp')),
             ),
+            'the shell did not claim Shift+Tab with the popup up',
         );
 
+        // Claimed AND acted on: Chat is the strip's first member, so one
+        // Shift+Tab wraps to its last. Asserting the pane MOVED is what
+        // separates this from the swallow the old test was written against.
         $empty = $this->press($this->shell(), [$shiftTab]);
-        $this->assertSame(Pane::Chat, $empty->pane, 'Shift+Tab is not a pane cycle');
+        $this->assertSame(Pane::Chat->previous(), $empty->pane);
+        $this->assertSame(Pane::Settings, $empty->pane, 'the reverse cycle did not wrap to the last tab');
+
+        // ...and it never reaches the input box, popup showing or not.
         $this->assertSame('', $empty->chat->inputBuf);
 
         $showing = $this->press($this->press($this->shell(), $this->type('/comp')), [$shiftTab]);
-        $this->assertSame(Pane::Chat, $showing->pane);
-        $this->assertSame('/comp', $showing->chat->inputBuf);
+        $this->assertSame(Pane::Settings, $showing->pane);
+        $this->assertSame('/comp', $showing->chat->inputBuf, 'Shift+Tab typed a character into the draft');
     }
 
     /**

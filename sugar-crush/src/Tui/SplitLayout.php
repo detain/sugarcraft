@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * Immutable value object representing a split pane layout.
  *
@@ -234,8 +236,24 @@ final class SplitLayout
             $leftLine = $this->truncateToWidth($leftLine, $leftWidth);
             $rightLine = $this->truncateToWidth($rightLine, $rightWidth);
 
-            // Pad left line to full width, then add divider and right line
-            $outputLines[] = str_pad($leftLine, $leftWidth, ' ', STR_PAD_RIGHT)
+            // Pad left line to full width, then add divider and right line.
+            //
+            // Width::padRight(), not str_pad(): the pad has to be counted in
+            // the same unit the truncation above already counts in, and
+            // str_pad() counts BYTES. Every multibyte character therefore ate
+            // pad it did not occupy and dragged the divider left -- two
+            // columns for "ee" spelled with acute accents (2 cells, 4 bytes),
+            // one for a CJK glyph (2 cells, 3 bytes). Note that the accented
+            // case is multibyte WITHOUT being wide, so reaching for
+            // mb_strlen() here would fix it and leave the CJK case broken;
+            // only a cell-width measure fixes both.
+            //
+            // The error was always UNDER-padding (bytes >= cells for UTF-8),
+            // so no row was ever over-wide -- and padRight() is a no-op once
+            // the line already meets the width, so widening the pad cannot
+            // make one now. That matters: the diff renderer paints one line
+            // per terminal row, so an over-wide row corrupts the frame.
+            $outputLines[] = Width::padRight($leftLine, $leftWidth)
                 . $divider
                 . $rightLine;
         }
@@ -311,17 +329,25 @@ final class SplitLayout
     }
 
     /**
-     * Compute visual width of a string (wide / combining characters count as 2).
+     * Compute visual width of a string in terminal cells.
+     *
+     * Delegates to {@see Width::string()} rather than summing this class's own
+     * table so that measuring, truncating and PADDING all answer to one
+     * authority. They did not: the pad used to count bytes, and the two
+     * surviving tables still disagreed on real codepoints -- this class scored
+     * an emoji 1 where Width scores 2, and scored a combining accent 1 where
+     * Width scores 0. A layout whose truncator and padder use different tables
+     * cannot keep a column aligned no matter how careful either one is.
+     *
+     * Width::string() also strips ANSI before measuring, which this loop never
+     * did. That fixes the fast path below. The slow path still walks raw
+     * codepoints, so a line long enough to need truncating AND carrying SGR
+     * can still be cut mid-sequence -- a known seam, left as-is because the
+     * two call sites feed it unstyled pane text.
      */
     private function visualWidth(string $text): int
     {
-        $width = 0;
-        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        foreach ($chars as $char) {
-            $width += $this->charWidth($char);
-        }
-
-        return $width;
+        return Width::string($text);
     }
 
     /**
@@ -329,27 +355,6 @@ final class SplitLayout
      */
     private function charWidth(string $char): int
     {
-        $code = mb_ord($char, 'UTF-8');
-        if ($code === false || $code < 32) {
-            return 0;
-        }
-
-        if (
-            ($code >= 0x1100 && $code <= 0x115F)
-            || ($code >= 0x2329 && $code <= 0x232A)
-            || ($code >= 0x2E80 && $code <= 0x303E)
-            || ($code >= 0x3040 && $code <= 0xA4CF)
-            || ($code >= 0xAC00 && $code <= 0xD7A3)
-            || ($code >= 0xF900 && $code <= 0xFAFF)
-            || ($code >= 0xFE10 && $code <= 0xFE1F)
-            || ($code >= 0xFE30 && $code <= 0xFE6F)
-            || ($code >= 0xFF00 && $code <= 0xFFE5)
-            || ($code >= 0x20000 && $code <= 0x2FFFD)
-            || ($code >= 0x30000 && $code <= 0x3FFFD)
-        ) {
-            return 2;
-        }
-
-        return 1;
+        return Width::string($char);
     }
 }

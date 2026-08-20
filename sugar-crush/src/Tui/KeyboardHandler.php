@@ -211,6 +211,23 @@ final class KeyboardHandler
             return !self::chatIsCompletingSlashCommand($app);
         }
 
+        // Shift+Tab cycles panes BACKWARD, and is claimed UNCONDITIONALLY --
+        // deliberately not mirroring the yield-to-the-popup rule directly
+        // above it. That rule exists because Tab is the "/" popup's completion
+        // key, so yielding hands the keystroke to a surface that answers it.
+        // Shift+Tab has no such answer: Chat binds it nowhere (Chat.php binds
+        // only the CTRL variants, for session cycling, and chatOwns() has
+        // already claimed those above). Yielding it would therefore produce
+        // exactly the dead keystroke the Tab block's own docblock warns
+        // against -- a matching ARM is what makes yielding safe, and there
+        // isn't one.
+        //
+        // Ordered after shellOwnsKeyboard() for the same reason Tab is, so an
+        // open menu, the Agents dashboard or the skill picker keeps it.
+        if ($msg->type === KeyType::Tab && $msg->shift && !$msg->ctrl && !$msg->alt) {
+            return true;
+        }
+
         if ($msg->type === KeyType::Escape && $app->pane !== Pane::Chat) {
             return true;
         }
@@ -341,6 +358,14 @@ final class KeyboardHandler
         // Handle Tab - cycle panes
         if ($key === 'tab') {
             return [$app->withPane($app->pane->next()), null];
+        }
+
+        // Shift+Tab - cycle panes the other way. The label is whatever
+        // KeyMsg::string() builds, which prefixes modifiers in the fixed order
+        // ctrl, alt, shift; ctrl+tab never reaches here (chatOwns() takes it),
+        // so 'shift+tab' is the only spelling this arm can see.
+        if ($key === 'shift+tab') {
+            return [$app->withPane($app->pane->previous()), null];
         }
 
         // Agent view keyboard handling - before generic navigation
