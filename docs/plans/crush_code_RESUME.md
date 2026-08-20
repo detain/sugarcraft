@@ -46,6 +46,46 @@ The briefs also carry the corrected floor (7786, not 7782) and the fact that mas
 is touched by any of the three supervisor commits, so a rebase CONFLICT is a real signal and
 the lanes are told to stop and report rather than force.
 
+### THE STANDING CYCLE — run this every time a lane commits, and whenever master moves
+
+Master moves for two reasons: the supervisor commits, and **CI pushes regenerated demo GIFs on
+its own** (`5b77a75f vhs: regenerate demo GIFs` arrived mid-round, unprompted). So this is a
+loop, not a one-off:
+
+```sh
+# 1. supervisor's own work: commit -> pull --rebase -> push, always in that order
+git pull --rebase && git push
+
+# 2. bring the lanes' work back into the live tree once they have pushed
+cd /home/sites/sugarcraft && git pull --rebase
+cd sugar-crush && vendor/bin/phpunit          # THE POST-HOC GATE. 7786/90242/1/rc0 is the floor.
+
+# 3. keep every live lane's refs fresh -- FETCH ONLY, never pull, while an agent is working
+for L in cmd lsp; do d=/home/sites/crush-lane-$L
+  before=$(git -C $d status --porcelain | wc -l)
+  git -C $d fetch origin master -q
+  echo "lane-$L behind=$(git -C $d rev-list --count HEAD..origin/master) dirty=$before->$(git -C $d status --porcelain | wc -l)"
+done
+```
+
+**Step 3 is `fetch`, not `pull`, and that distinction is load-bearing.** `fetch` writes refs and
+objects only and leaves the working tree and index alone (verified: dirty count 11 before, 11
+after, both lanes). A `pull`/`rebase`/`merge`/`checkout` into a lane whose tree is dirty and
+whose agent is live is how you corrupt a half-finished edit. Each lane rebases itself at its own
+commit gate, which is the one moment its tree is clean.
+
+**And never read a lane's behind-count without fetching first.** With master 6 ahead of both
+lanes, `crush-lane-cmd` reported **5** behind and `crush-lane-lsp` reported **0** behind — the
+first because its agent had fetched at some earlier point, the second because its agent never
+had. `lane-lsp` claimed zero drift while six commits behind. A `cp -a` copies remote-tracking
+refs as they stood at snapshot time and they then age independently per lane. See
+`docs/plans/crush_code_concurrency.md` §5.2c.
+
+**After a lane's work has landed on master and been gated, refresh that lane properly** (clean
+tree, then `git pull --rebase`) or recreate it from a quiescent tree per §5.2b — do not keep
+handing an agent a lane that is dozens of commits stale, because its baseline figures stop
+matching the ones in its brief.
+
 ### The two lanes: work PRESERVED, NOT committed
 
 Both lane working trees are intact on disk. In addition, each lane now carries a

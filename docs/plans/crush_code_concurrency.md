@@ -538,6 +538,52 @@ it. Without it you cannot distinguish "the lane found a real bug" from "the lane
 at a time while a great deal of work happens. Judge liveness from the agent transcript's mtime and from
 `pgrep -af 'bin/phpunit'` — never from the tree.
 
+### 5.2c KEEPING A LIVE LANE FRESH — `fetch` yes, `pull` NO
+
+Master moves while lanes work. It moves because the supervisor commits, and it moves **on its
+own** because CI regenerates and pushes the demo GIFs — `5b77a75f vhs: regenerate demo GIFs`
+landed in the middle of the C4b/C6 round, unprompted. So "the lane is 0 behind" is a claim with
+a shelf life measured in minutes.
+
+**The only refresh that is safe while an agent is working in a lane is `git fetch`.** It writes
+remote-tracking refs and objects and touches neither the working tree nor the index:
+
+```sh
+for L in cmd lsp; do
+  d=/home/sites/crush-lane-$L
+  before=$(git -C $d status --porcelain | wc -l)
+  git -C $d fetch origin master -q
+  after=$(git -C $d status --porcelain | wc -l)
+  echo "lane-$L behind=$(git -C $d rev-list --count HEAD..origin/master) dirty=$before->$after"
+done
+```
+
+Assert `dirty` is unchanged. If it moves, something other than fetch ran.
+
+**NEVER `git pull` / `rebase` / `merge` / `checkout` a lane whose tree is dirty and whose agent
+is live.** The lane's own commit gate already does the rebase, at the single moment its tree is
+clean — immediately after its commit and before its push. That is the right place for it, and
+adding a second rebase from outside is how you corrupt an agent's half-finished edit.
+
+#### The trap: a lane's `HEAD..origin/master` count is a measure of the LANE'S REF, not of drift
+
+Measured during the C4b/C6 round, with master 6 commits ahead of both lanes:
+
+| lane | `rev-list --count HEAD..origin/master` | truth |
+|---|---|---|
+| `crush-lane-cmd` | **5** | 6 behind — its agent had fetched at some earlier point |
+| `crush-lane-lsp` | **0** | 6 behind — its agent had never fetched |
+
+A full-repo `cp -a` copies the remote-tracking refs as they stood at snapshot time, and they
+then age independently in each lane depending on whether that lane's agent happened to run a
+`fetch`. **`lane-lsp` reported ZERO BEHIND while being six commits behind.** Both numbers were
+wrong and they were wrong by different amounts, which is worse than both being wrong the same
+way — it invites you to believe the one that looks plausible.
+
+So: **always `fetch` before reading a lane's behind-count**, and never quote a lane's own
+freshness figure without saying when it was fetched. This is the same defect the whole plan
+tracks — a number that travelled without its domain — expressed in git refs instead of prose.
+
 ### 5.3 VERIFY EVERY LANE BEFORE HANDING IT TO AN AGENT
 
 Four checks. All four passed on a probe copy I made and destroyed on 2026-08-19; the numbers below are
