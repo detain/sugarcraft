@@ -12,15 +12,19 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 
 ## Execution status (updated 2026-08-20)
 
-> **IN FLIGHT at the round-30 compact.** Two lanes are mid-work and one is idle; a third task
-> outside this plan is running. `docs/plans/crush_code_RESUME.md` §0-NOW is the authority for lane
+> **IN FLIGHT — round 31.** `docs/plans/crush_code_RESUME.md` §0-NOW is the authority for lane
 > state and §0-DS is the ONLY durable record of the DeepSeek-V4 sglang task the user requested.
 > Do not start a fourth lane — the user authorised two plan lanes plus that one task.
 >
-> - `/home/sites/crush-lane-cmd` — **P6.1 + P6.2** settings layering, fix stage (committed `3847fe42`)
-> - `/home/sites/crush-lane-sglang` — **DeepSeek-V4 sglang default**, implement stage
-> - `/home/sites/crush-lane-lsp` — idle, clean, queued for **P3.x** (sequence it after the sglang
->   lane lands; both touch `src/Chat.php`)
+> - `/home/sites/crush-lane-cmd` — **P6.3 + P6.4**, plus the argument-scoped permission-rule hole
+>   that has to be fixed first or item 4 ships the "second decorative config surface" its own text
+>   warns against
+> - `/home/sites/crush-lane-lsp` — **P8.10 + P8.11**, both inside `src/Context/`
+> - `/home/sites/crush-lane-sglang` — **DeepSeek-V4 sglang default**, implement stage, 11 dirty
+>
+> **P3.x is still queued and still blocked**: it touches `src/Chat.php` and so does the sglang lane.
+> A background daemon fetches every lane each 90s and rebases a lane only while it is clean AND
+> idle; a dirty lane is never pulled, rebased, reset or stashed (`crush_code_concurrency.md` §5.2c).
 
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
@@ -30,7 +34,7 @@ labels, and the reasoning behind judgement calls — is
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1-8 ·
 Phase 3 item 1 · Phase 4 items 1-6, 7 · Phase 5 items 1-9 + 10a ·
-**Phase 7 (all 6)** · Phase 8 items 1, 2, 3, 5, 7, 12, 14.
+**Phase 6 items 1-2** · **Phase 7 (all 6)** · Phase 8 items 1, 2, 3, 5, 7, 12, 14.
 **Phase 2 is complete except item 9**, the deliberately-last plugin epic.
 
 **56 of 75 items, counted by item** (Phase 2 item 4 completed in `3eca66df` and is
@@ -434,6 +438,27 @@ supervisor independently re-confirmed the first:
 - 🟡 **`CommandRegistry::CONTROL_PLANE` reserves `permissions`, which has no command row and no
   dispatch arm.** Harmless as a held name, but the const's doc-block calls these "the names by
   which the user drives and leaves the application", which is false of one of the seven.
+
+**FINDINGS FROM ROUND 30's SETTINGS LANE — routed, one already fixed.** The lane's own report
+flagged what it could not reach from its file set:
+
+- ✅ **`.sugar-crush/settings.local.json` was not gitignored at the monorepo root**, while
+  `LayeredSettings.php:89` describes it as "the project file meant to be `.gitignore`d". The claim
+  shipped without its implementation, so a user's *local* settings — the tier that exists precisely
+  to hold what should not be shared — would have been committed by the next `git add -A`. Fixed at
+  the root `.gitignore` alongside its exact precedent, `.claude/settings.local.json`. Note the
+  asymmetry that hid it: `sugar-crush/.gitignore:2` ignores the whole `.sugar-crush/` directory, so
+  the file *was* ignored under `sugar-crush/` and only unignored at the root — where
+  `.sugar-crush/config.json` is deliberately tracked and the directory therefore cannot be swept.
+- 🟡 **`sugar-crush/docs/PERMISSIONS.md` documents three `trustedProject*` grants and does not know
+  about the fourth.** `trustedProjectSettings` landed in `f0585149`, one commit after Phase 7 marked
+  that page complete. Zero hits for `settings.json`, `trustedProjectSettings` or `LayeredSettings`
+  anywhere under `sugar-crush/docs/`. **A page that enumerates the trust grants and misses one is
+  worse than no page**, because a reader who audits their config against it concludes they have seen
+  every way a cloned repository can influence the agent. Route to the next docs bundle, and prefer
+  deriving the list from the constants over re-typing it — this is the recurring defect in its
+  documentation form.
+- 🟡 The layering has **no reference page at all** under `sugar-crush/docs/`. Same bundle.
 - ⚪ **`sugarcrush --version` reports a commit that is not HEAD** — `Help::versionString()` reads
   `InstalledVersions::getReference()`, the reference recorded at `composer install` time. Not a
   bug; now documented in `docs/TROUBLESHOOTING.md`.
@@ -632,8 +657,22 @@ written after the work had landed. The OS-version line landed as `'OS version: '
 
 ### Phase 6 — Settings & configuration layering
 
-1. **Fix `WorktreeConfig`'s broken project-config path** (`__DIR__`-relative instead of `$root`-relative — silently wrong once sugar-crush is installed as a Composer dependency). Cheap, do first, no design risk. **(§13)**
-2. **Introduce a layered settings file**: `.sugar-crush/settings.json` (project, git-tracked) + `.sugar-crush/settings.local.json` (project, gitignored) + `~/.sugar-crush/settings.json` (user-global, `config.json` kept as a deprecated alias) — merged key-by-key, highest-precedence-wins, matching Claude Code's own layering model. See §13 for the full proposed schema and file-discovery precedence. Cover, in this first pass, only the fields that already have a real consumer today: `provider`/`model`/`theme`/`titleModel`/`instructions`/`disabledSkills`. **(§13)**
+1. ✅ **Fix `WorktreeConfig`'s broken project-config path** (`__DIR__`-relative instead of `$root`-relative — silently wrong once sugar-crush is installed as a Composer dependency). Cheap, do first, no design risk. **(§13)** — **DONE** (`f0585149`). It was hiding a
+   second, worse bug: `WorktreeManager`'s promoted `private readonly ?WorktreeConfig $config = null`
+   was followed by `$this->config = WorktreeConfig::new()`, so the constructor **fataled on its own
+   default** — the item could not have been exercised at all. Both fixed, and
+   `defaultConfigDir()` is now pinned from the *test's* own location so neither side of the assertion
+   is the expression under test.
+2. ✅ **Introduce a layered settings file**: `.sugar-crush/settings.json` (project, git-tracked) + `.sugar-crush/settings.local.json` (project, gitignored) + `~/.sugar-crush/settings.json` (user-global, `config.json` kept as a deprecated alias) — merged key-by-key, highest-precedence-wins, matching Claude Code's own layering model. See §13 for the full proposed schema and file-discovery precedence. Cover, in this first pass, only the fields that already have a real consumer today: `provider`/`model`/`theme`/`titleModel`/`instructions`/`disabledSkills`. **(§13)** — **DONE** (`f0585149`, with item 1). `src/Config/LayeredSettings.php`
+   merges a user tier and a **trust-gated** project tier; `LAYERED_KEYS` holds eight keys and
+   `PROJECT_TIER_KEYS` a six-key subset, with `userTierOnlyKeys()` **deriving** the complement so the
+   two lists cannot drift into a third that matches neither. Gate green at
+   **7922 / 90961 / 1 / rc 0**.
+   **Two deliberate departures from this item's text, both with the reason recorded in the code:**
+   `provider` and `instructions` are **user-tier only** (a project `provider` switches which host every
+   prompt is sent to and which key is spent; `instructions` globs are *forced* into the system prompt),
+   and **`model` was dropped entirely** because no user-key reader for it exists — adding it would have
+   been configurable-looking and inert. **Phase 6 item 6's `--model` flag has to confront that.**
 3. **Extend the settings loader to `tools.allow`/`tools.deny`** — filter `Bootstrap::tools()`'s returned list against the merged settings before handing it to `EngineBackend::withTools()`. **(§13)**
 4. **Once Phase 1 item 2 lands (`PermissionGate` in the main loop), extend settings to a `permission`/`permissionMode` block.** Sequenced deliberately after the wiring fix — shipping a settings `permission` key before `PermissionGate` reaches the main loop would just add a second decorative config surface next to `ScriptHook`'s existing one. **(§13)**
 5. **Add `keybindings` remap and `statusLine` command config** — pure additive TUI features, no interaction with the permission/hook work above, can land independently at any point. **(§13)**

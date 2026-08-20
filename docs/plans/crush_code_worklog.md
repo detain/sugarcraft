@@ -8649,3 +8649,133 @@ durable record of this task, since no plan file covers it. The load-bearing find
 - `temperature` defaulted to **0.7**, not 1.0, so the fix must be **model-aware** — silently
   retuning MiniMax would violate the keep-both-working instruction.
 
+
+---
+
+## Round 30 — closed. Phase 6 items 1-2 landed as `f0585149`; gate green
+
+**Post-hoc gate in the live tree: 7922 tests / 90961 assertions / 1 skipped / rc 0, 3m24.678s.**
+That is the new baseline. It matches the lane's own twice-measured figure exactly — worth recording
+because the lane and I had *disagreed* on the starting baseline (it derived 7878 where I had measured
+7877 twice) and I wrote at the time that "the post-hoc gate will settle it." It did: the lane's
+end-state arithmetic was right and the disagreement never propagated into a wrong claim.
+
+**`master` moved five times while that one lane worked** — `35f3c1ac` → `1308a1d1` → `8d15443c` →
+`6b63022e` → `7999c632`, then CI pushed `6d5090ab` (regenerated `.vhs/*.gif`) on top. The lane
+rebased twice, both clean, because every intervening commit was `.md`-only or binary and disjoint
+from its file set. This is now the normal condition rather than the exception, and it is the reason
+the commit recipe says `git pull --rebase` **always** rather than "when you expect drift."
+
+### What the lane got right that is worth carrying forward
+
+- **`userTierOnlyKeys()` derives the complement** of `LAYERED_KEYS` minus `PROJECT_TIER_KEYS` rather
+  than writing a third list. That is the structural cure for the recurring defect: two lists cannot
+  drift into a third that agrees with neither if the third is computed.
+- **It measured a guard's justification instead of asserting it.** The review argued a blank-root
+  guard was untestable belt-and-braces; the lane measured that **`realpath('')` on PHP 8.3.6 returns
+  the process CWD, not `false`**, so without the guard `projectSettingsTrusted('')` would put the
+  trust question to whatever directory the shell happened to be standing in. Same conclusion as the
+  review (no behaviour change today), opposite *reason*, and the reason is what makes the guard worth
+  keeping. It then pinned it.
+- **It narrowed a census verdict word on its own initiative** — `CONTAINED` → `CALLER_SUPPLIED` for
+  `LayeredSettings|file_get_contents`, because `CONTAINED` is true of `projectLayer()`'s caller and
+  **false** of `userLayer()`'s, and the census allows one word per occurrence. A one-word instance of
+  a claim travelling without its domain, found by the author.
+- It derived the eight-feeder placement from `token_get_all()` rather than `str_contains` over raw
+  source, explicitly because a `str_contains` would answer `true` for a *deleted-but-described*
+  drain — the same defect one level up.
+
+### Two deliberate departures from the plan text, both recorded in code
+
+Phase 6 item 2 named `provider`/`model`/`theme`/`titleModel`/`instructions`/`disabledSkills`. The
+lane made `provider` and `instructions` **user-tier only** (a project `provider` chooses which host
+every prompt is sent to and which credential is spent; `instructions` globs are *forced* into the
+system prompt, so a project value lets a repository force any file it ships), and **dropped `model`
+entirely** because no user-key reader exists for it. Both are the right call and both are argued in
+doc-blocks rather than in a commit message. **Phase 6 item 6's `--model` flag has to confront the
+second one** — that is now written into the plan next to the item.
+
+### The defect the lane could not reach, and why it matters
+
+`LayeredSettings.php:89` calls `settings.local.json` "the project file meant to be `.gitignore`d".
+The root `.gitignore` never got the entry. So the tier that exists *specifically* to hold what should
+not be shared would have been committed by the next `git add -A`. The claim shipped without its
+implementation — the recurring defect, in the one form where the code is right and the *repository*
+is wrong, which no amount of mutation testing inside `src/` could ever catch.
+
+What hid it: `sugar-crush/.gitignore:2` ignores the whole `.sugar-crush/` directory, so under
+`sugar-crush/` the file **was** ignored. Only the monorepo root is exposed, because the root's
+`.sugar-crush/config.json` is deliberately tracked and the directory therefore cannot be swept
+wholesale. A check run from the wrong directory would have reported this as fine — the same
+CWD-sensitivity that produced three simultaneous false alarms earlier in this plan.
+
+Fixed by the supervisor (one line, next to its exact precedent `.claude/settings.local.json`).
+
+---
+
+## Round 31 — launched: the permission-rule hole, and the context block
+
+Two lanes, both `implement → review → fix → commit`, run `wf_ea0ac65b-caf`, from `6d5090ab`.
+
+**Lane `cmd` — Phase 6 items 3+4, and the hole that makes item 4 pointless without it.**
+
+The plan sequenced item 4 ("a `permission`/`permissionMode` settings block") after "PermissionGate in
+the main loop", and reasoned that shipping it earlier "would just add a second decorative config
+surface." That prerequisite has landed — but a *different* one has not, and the plan did not know
+about it. Re-confirmed by measurement before writing the brief:
+
+`PermissionGate::ruleMatches()` compares only the tool NAME. `Deny Bash(rm -rf *)` ends with `*`, so
+it takes the glob branch, computes the prefix `Bash(rm -rf ` and asks
+`str_starts_with('Bash', 'Bash(rm -rf ')` — **false**. `Deny Read(./.env)` takes the exact branch and
+asks `'Read' === 'Read(./.env)'` — **false**. Both forms are advertised verbatim in
+`PermissionRule.php:9` and again in `PermissionGate`'s class doc-block. **A user who writes an
+argument-scoped deny has denied nothing, and the documentation tells them they have.**
+
+So a settings `permission` block layered on top of that matcher would be decorative in *exactly* the
+sense item 4 warns against. Part A of the bundle is the matcher; C is item 4; the brief says A then C
+and says why.
+
+The design decision the brief refuses to make for the agent: `refuses(ToolDeclaration)` is the second
+entry point and a declaration carries **no arguments**, so does `Deny Bash(rm -rf *)` refuse a bare
+`Bash` declaration? Refusing over-blocks every legitimate `Bash`; not refusing lets a declaration
+through that a real call would be denied for. Both defensible — pick, argue in code, pin with a test.
+The brief also requires the agent to state plainly whether a `Bash` deny is evadable by a different
+spelling of the same command, on the grounds that **a deny documented as advisory is honest and one
+advertised as a control is not.**
+
+Also handed over: `src/ToolCall.php` (`public readonly`) and `src/Tools/ToolCall.php` (private +
+accessors) are two different classes with the same basename and different contracts — the same split
+Phase 8 item 14 documented for the two `PathJail`s. Not in scope to unify; in scope to report.
+
+**Lane `lsp` — Phase 8 items 10+11, both inside `src/Context/`.** Chosen because it is genuinely
+disjoint: both are behaviour changes *inside* existing classes, needing no `Bootstrap.php` edit
+(which lane `cmd` owns this round) and no `Chat.php` edit (which the sglang task holds). The diff cap
+in item 10 is the whole feature — an uncapped `git diff` on a dirty monorepo would evict the
+conversation from the context window, and a *silently* truncated one is worse than none because the
+model reasons from it as complete. Item 11 explicitly permits "or document the gap", and the brief
+says to judge that honestly; its hard part is where the upward walk stops, which is a containment
+question (`ContainedPath`/`PathJail` already set precedent) and not a convenience one.
+
+**P3.x stays queued and stays blocked** — it touches `src/Chat.php`, and so does the sglang task.
+
+### Machinery: `node --check` is not a syntax check for these scripts
+
+A mangled template literal in the round-31 script — nested backtick escaping that came out as
+`` \`settings.json\` \` + \`now reach ... `` — **passed `node --check` and then failed on `import`
+with `SyntaxError: Invalid or unexpected token`.** This is the third distinct trap in the same family
+(`| head -3` returning head's exit code; `node --check` not seeing a live `${...}` interpolation).
+The standing rule is now: **the only sufficient check is evaluating the script the way the runtime
+does** — wrap the body in an `async function`, stub `agent`/`parallel`/`phase`/`log`, run it, and
+inspect the *rendered* prompts for `\``, live `${`, and `undefined`. That probe caught this one and
+confirmed all six prompts rendered clean before launch.
+
+### Machinery: the sync daemon
+
+The user asked that nothing drift out of sync or fall far behind. There is now a persistent 90s
+daemon that fetches the live tree and every lane, `--ff-only` pulls the live tree (no agent works
+there), and rebases a lane **only while it is clean AND has no process of its own running** —
+emitting an event only on change, plus an alert if a lane passes 6 behind and cannot auto-refresh.
+It encodes §5.2c rather than restating it: a dirty lane is never pulled, rebased, reset or stashed,
+because that is what corrupts a half-finished edit. It also replaced the round-30 monitor, which had
+started reporting my own rebases as lane commits — it compared HEAD rather than the ahead-count, and
+`git status --porcelain` emptiness plus ahead-count is the readiness signal that does not lie.

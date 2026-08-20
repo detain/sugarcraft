@@ -20,6 +20,7 @@
 *.log
 .cache/
 .claude/settings.local.json
+.sugar-crush/settings.local.json
 .claude/shell-snapshots
 .claude/paste-cache
 .claude/file-history
