@@ -21,12 +21,30 @@ Three supervisor commits landed while the lanes ran, all docs-or-disjoint from l
 | `37b6cb9e` | two plan status lines had decayed in OPPOSITE directions — see below |
 | `ef480c77` | **P8.3 done** — the stall hand-off, `sugar-crush/src/Tui/Components/AgentDashboardPane.php` + its test |
 
-**`ef480c77` HAS NOT BEEN GATED BY THE FULL SUITE.** It was committed deliberately ahead of
-the gate so a client restart could not lose it. Five targeted files were green
-(AgentDashboardPaneTest 38/38, AgentOutputPaneTest+TuiComponent 38/38, TuiComponentTest
-25/25, AgentManagerWiringTest 14/14, StallDetectorTest 21/21) and the wiring is
-mutation-checked. **FIRST ACTION ON RESUME: run the full suite in `/home/sites/sugarcraft/sugar-crush`
-and confirm it beats `7782 / 90237 / 1 / rc 0` with skips still 1.**
+**`ef480c77` IS NOW GATED AND GREEN.** Run on resume in the live tree:
+**`7786 tests / 90242 assertions / 1 skipped / rc 0`, 3m14s.** The arithmetic checks out
+exactly — +4 tests and +5 assertions over the `7782 / 90237` baseline, and the four new
+tests carry five assertions between them, so nothing else moved. Skip still 1 and still
+`tests/MCP/McpClientTest.php` (re-confirmed by running that file alone: 40 tests, 1 skipped).
+**`7786 / 90242 / 1` IS THE NEW BASELINE. Any lane still comparing against 7782 is stale.**
+
+**THE FAN-OUT WAS RELAUNCHED** as a fresh run, not a replay: workflow **`w8p9j4ivm`, run
+`wf_a28abde0-2cc`**, script
+`…/workflows/scripts/crush-c4b-c6-resume.js`.
+A blind `resumeFromRunId` would have re-run the C4b lane's implement stage from scratch INTO
+a tree that already held its own half-finished edits — a double-applied substitution rule or
+a duplicated method is the specific failure mode. So the new script routes the two lanes
+differently, and the routing was verified rather than assumed:
+
+| lane | job this run |
+|---|---|
+| `crush-lane-lsp` | **REVIEW** (implement was complete), pointed at `.lane-implement-result.md` |
+| `crush-lane-cmd` | **RESUME-IMPLEMENT**, told its tree holds part-built work, told to read `git diff` + `.lane-wip.patch` FIRST and carry on rather than restart, and told not to assume the inherited half is correct because nobody has reviewed it |
+
+The briefs also carry the corrected floor (7786, not 7782) and the fact that master moved to
+`574aca95`, so their `git pull --rebase` is expected to do real work. Neither lane's file set
+is touched by any of the three supervisor commits, so a rebase CONFLICT is a real signal and
+the lanes are told to stop and report rather than force.
 
 ### The two lanes: work PRESERVED, NOT committed
 

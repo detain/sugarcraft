@@ -26,10 +26,10 @@ labels, and the reasoning behind judgement calls — is
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1, 2, 3, 5, 6, 8 ·
 Phase 3 item 1 · Phase 4 items 1-6, 7 · Phase 5 items 1-9 + 10a ·
-Phase 7 items 1-2 · Phase 8 items 1, 2, 5, 7, 12, 14.
+Phase 7 items 1-2 · Phase 8 items 1, 2, 3, 5, 7, 12, 14.
 **Phase 2 item 4 is HALF done** — see the `a4be8263` note below.
 
-**49 of 75 items, counted by item** (Phase 4 item 6 landed in `a4be8263`; Phase 2 item 4 is half and is NOT counted). The count is not effort: Phase 2 item 4 alone is
+**50 of 75 items, counted by item** (Phase 4 item 6 landed in `a4be8263`; Phase 2 item 4 is half and is NOT counted). The count is not effort: Phase 2 item 4 alone is
 larger than all of Phase 7. **Phase 5 IS complete.** Item **10b** (differentiate the
 hardcoded `AgentDefinition` preset prompts) was measured on 2026-08-19 and found already
 done — by Bundle A (`bf3495f5`), whose own commit message says so: "Phase 5 items 1, 2, 3
@@ -280,16 +280,43 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
 - **`TerminalBackground::observe()` — WIRED.** Reached from `src/App/App.php:496`; the
   class's own comments at `:111`/`:127` read "Before `observe()` was wired…", i.e. past
   tense.
-- **Phase 8 item 3 (`StallDetector`) — the call-site half is done; only the render
-  branch is left, and it is NOT blocked on Phase 1.** The item predicted "purely a
-  call-site + one render branch" and that is exactly the split.
-  `src/Sessions/BackgroundSupervisor.php` imports it (`:8`), holds it (`:46`), defaults
-  it (`:61`), tracks tokens through it (`:706`) and exposes `getStallWarnings()`
-  (`:665`); `src/Tui/AgentOutputState.php` carries `?StallWarning $stallWarning` (`:37`)
-  threaded through `fromDisplayState()` (`:52`). **Nothing paints it** —
-  `grep -rn "stall\|Stall" src/Renderer.php` has zero hits, so the warning reaches a
-  view-state object and stops. The data path runs through `BackgroundSupervisor`, not
-  `AgentManager`, so the plan's stated dependency on Phase 1 does not apply.
+- ✅ **Phase 8 item 3 (`StallDetector`) — DONE** (`ef480c77`). **And the diagnosis that
+  used to stand here was wrong in an instructive way.** It read "the call-site half is
+  done; only the render branch is left", and its evidence was
+  `grep -rn "stall\|Stall" src/Renderer.php` returning zero hits. That grep was run on a
+  file that was never the painter. The painter is `src/Tui/AgentOutputPane.php`, which has
+  always drawn an amber border and appended `⚠ stalled` to the header for a non-null
+  warning (`:58`, `:76`) — so **the render branch was already written**, and a conclusion
+  about the whole codebase was drawn from one file that had no claim to the question. That
+  is the plan's own recurring defect, in the plan's own prose: a measurement taken on one
+  thing, written next to another.
+  Both halves were in fact complete. `src/Sessions/BackgroundSupervisor.php` imports
+  (`:8`), holds (`:46`), defaults (`:61`) and feeds the detector from
+  `onSessionStreaming()` (`:706`), and exposes `getStallWarnings()` (`:663`). What was
+  missing was neither end but the **hand-off**: `AgentDashboardPane::sessionEntry()` never
+  passed the argument, so `AgentOutputState`'s `?StallWarning` defaulted to null on every
+  path and the painter's branch was unreachable.
+  Two fixes were needed, not one. `entries()` now reads `getStallWarnings()` once per
+  frame — not once per session, which would be quadratic in session count for one
+  identical map — and keys it by session id, because that is the key
+  `onSessionStreaming()` tracks under. Separately, `row()` had typed its parameter as the
+  PARENT `AgentDisplayState`, which does not declare `stallWarning` at all, so the field
+  was invisible in the list row even though `entries()` has only ever produced
+  `AgentOutputState` subclass instances; a stalled session could reach the dashboard and
+  still look completely ordinary in the list. **That second fix was found only because a
+  test asserted on the rendered frame rather than on the field feeding it — the
+  state-level assertions passed while the render assertion failed.**
+  Registered `AgentManager` agents deliberately carry no warning, documented at the call
+  site: `track()` is fed from exactly one place, so a background session is the only thing
+  the detector has ever measured a rate for, and `AgentManager` telemetry is cumulative
+  totals with no per-chunk timing. There is no rate to judge, so passing a warning would
+  mean inventing one. Giving those rows a real signal requires the measurement first.
+  Four tests, mutation-checked: reverting the hand-off kills the positive and the render
+  test while the two null-asserting tests correctly survive. Gated on the full suite in
+  the live tree at **7786 / 90242 / 1 skipped / rc 0**, 3m14s (+4 tests, +5 assertions
+  over the `7782 / 90237` baseline — the four tests carry five assertions between them).
+  The data path runs through `BackgroundSupervisor`, not `AgentManager`, so the plan's
+  stated dependency on Phase 1 never applied.
 - **`Agent::fromPreset()`'s dropped-field count is recorded three different ways**
   across the plan, the worklog, and the code docblock (7 / 5 / 8-plus-2). The
   constructor at HEAD is authoritative; see the hardening ledger.
