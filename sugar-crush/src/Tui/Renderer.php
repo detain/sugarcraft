@@ -18,6 +18,7 @@ use SugarCraft\Crush\Tui\Components\ChatPane;
 use SugarCraft\Crush\Tui\Components\InputPane;
 use SugarCraft\Crush\Tui\Components\SkillsPane;
 use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
+use SugarCraft\Crush\Tui\Components\AgentSplitColumn;
 use SugarCraft\Crush\Tui\Components\AgentsPane;
 use SugarCraft\Crush\Tui\Components\FilesPane;
 use SugarCraft\Crush\Tui\Components\SettingsPane;
@@ -42,6 +43,47 @@ use SugarCraft\Mouse\Zone;
  */
 final class Renderer
 {
+    /** The one-cell divider {@see SplitLayout} draws between the two panes. */
+    private const SPLIT_DIVIDER_COLS = 1;
+
+    /**
+     * Narrowest terminal that gets a split content band at all.
+     *
+     * 80 is not a round number picked for looks, it is the smallest width at
+     * which BOTH panes clear their own floors:
+     * `intdiv(80, 3) = 26` for the agent column (over
+     * {@see SPLIT_MIN_AGENT_COLS}) leaves `80 - 26 - 1 = 53` for the shell
+     * band (over {@see SPLIT_MIN_BAND_COLS}). Below it the split is simply not
+     * offered and the frame is the single-band frame it has always been.
+     */
+    private const SPLIT_MIN_TOTAL_COLS = 80;
+
+    /**
+     * Narrowest agent column worth drawing, INCLUDING
+     * {@see AgentSplitColumn::PANE_CHROME} — so the tile inside it still gets
+     * 20 cells of text.
+     */
+    private const SPLIT_MIN_AGENT_COLS = 24;
+
+    /**
+     * Widest the agent column grows to, however wide the terminal. A peek tile
+     * is a header plus four lines; past this it is whitespace bought with the
+     * transcript's columns.
+     */
+    private const SPLIT_MAX_AGENT_COLS = 60;
+
+    /** The agent column's share of the terminal: one part in this many. */
+    private const SPLIT_AGENT_DIVISOR = 3;
+
+    /**
+     * Narrowest shell band that still holds a sidebar plus a usable chat
+     * column: {@see leftSidebar()}'s own floor of 20 plus the 24 the chat pane
+     * is floored at below. A band under this is why {@see agentSplitWidth()}
+     * can decline a split on a terminal that cleared
+     * {@see SPLIT_MIN_TOTAL_COLS}.
+     */
+    private const SPLIT_MIN_BAND_COLS = 44;
+
     /**
      * Render two panes in a split layout.
      *
@@ -55,6 +97,8 @@ final class Renderer
      * @param SplitDirection $direction   Split orientation (horizontal/vertical).
      * @param int           $topOrLeftNumerator   Proportion of first pane (default 1).
      * @param int           $totalDenominator    Total proportion units (default 2).
+     * @param int           $cols  Authoritative width; 0 falls back to {@see getTerminalSize()}.
+     * @param int           $rows  Authoritative height; 0 falls back to {@see getTerminalSize()}.
      * @return string Rendered split layout with divider.
      *
      * @see SplitLayout for proportional sizing and resize behavior.
@@ -65,6 +109,8 @@ final class Renderer
         SplitDirection $direction,
         int $topOrLeftNumerator = 1,
         int $totalDenominator = 2,
+        int $cols = 0,
+        int $rows = 0,
     ): string {
         $layout = new SplitLayout(
             $topOrLeft,
@@ -74,9 +120,19 @@ final class Renderer
             $totalDenominator,
         );
 
-        $size = self::getTerminalSize();
+        // The caller's size WINS when it has one. `getTerminalSize()` is a
+        // one-shot probe cached in a never-invalidated static, so making it the
+        // only source lets this split render at a stale geometry after a
+        // SIGWINCH while the frame around it renders at the `WindowSizeMsg`
+        // one — invariant 2 on {@see renderView()}, which is why the size is
+        // threaded here at all.
+        if ($cols <= 0 || $rows <= 0) {
+            $size = self::getTerminalSize();
+            $cols = $cols > 0 ? $cols : $size['cols'];
+            $rows = $rows > 0 ? $rows : $size['rows'];
+        }
 
-        return $layout->render($size['cols'], $size['rows']);
+        return $layout->render($cols, $rows);
     }
 
     /**
@@ -95,11 +151,28 @@ final class Renderer
      * This is the preferred entry point for split pane rendering as it
      * automatically adapts to the execution environment.
      *
+     * THE DIVERGENCE THIS FIXED WAS SIZE, NOT PROPORTIONS. Before Phase 8
+     * item 4 this method's whole signature was
+     * `(string, string, SplitDirection, int $cols = 0, int $rows = 0)` — there
+     * were no proportion parameters to drop, and both branches rendered 1/2
+     * because that is {@see SplitLayout}'s constructor default. What the
+     * no-multiplexer branch DID drop was the two parameters that existed: it
+     * called a {@see renderWithSplit()} that took no size at all, so it
+     * re-probed {@see getTerminalSize()} while the multiplexer branch used the
+     * caller's `$cols`/`$rows`. The identical call therefore rendered at one
+     * geometry inside tmux and another outside it. Both branches now take all
+     * four, and the proportions are new here rather than restored.
+     *
+     * That was invisible while nothing called this; it is the first thing
+     * {@see renderView()}'s compositor hit.
+     *
      * @param string         $topOrLeft    Content of the first pane.
      * @param string         $bottomOrRight Content of the second pane.
      * @param SplitDirection $direction   Split orientation.
-     * @param int            $cols         Available columns (defaults to terminal width).
-     * @param int            $rows         Available rows (defaults to terminal height).
+     * @param int            $cols         Available columns (0 = probe the terminal).
+     * @param int            $rows         Available rows (0 = probe the terminal).
+     * @param int            $topOrLeftNumerator Proportion of the first pane.
+     * @param int            $totalDenominator   Total proportion units.
      * @return string Rendered split layout with divider.
      *
      * @see MultiplexerSplitPane::isActive()
@@ -111,6 +184,8 @@ final class Renderer
         SplitDirection $direction,
         int $cols = 0,
         int $rows = 0,
+        int $topOrLeftNumerator = 1,
+        int $totalDenominator = 2,
     ): string {
         $multiplexer = new MultiplexerSplitPane();
 
@@ -127,11 +202,21 @@ final class Renderer
                 $direction,
                 $cols,
                 $rows,
+                $topOrLeftNumerator,
+                $totalDenominator,
             );
         }
 
         // No multiplexer - use in-process renderer directly
-        return self::renderWithSplit($topOrLeft, $bottomOrRight, $direction);
+        return self::renderWithSplit(
+            $topOrLeft,
+            $bottomOrRight,
+            $direction,
+            $topOrLeftNumerator,
+            $totalDenominator,
+            $cols,
+            $rows,
+        );
     }
 
     private static ?array $terminalSize = null;
@@ -360,8 +445,16 @@ final class Renderer
             return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
-        $leftPane = self::leftSidebar($a, $cols, $paneRows);
-        $rightPane = self::rightSidebar($a, $cols, $paneRows);
+        // The split-pane compositor's activation decision, taken BEFORE the
+        // band is laid out because it changes the band's width. See
+        // {@see agentSplitWidth()} for the policy; 0 means "no split", and
+        // every measurement below then reduces to what it was before.
+        $liveAgents = self::liveAgentOutputs($a);
+        $agentCols = self::agentSplitWidth($liveAgents, $cols);
+        $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
+
+        $leftPane = self::leftSidebar($a, $bandCols, $paneRows);
+        $rightPane = self::rightSidebar($a, $bandCols, $paneRows);
 
         // The chat pane gets the columns actually LEFT OVER, measured from the
         // rendered sidebars. The old `$cols - 80` guess assumed two 40-column
@@ -369,7 +462,7 @@ final class Renderer
         // right one is usually absent, so on a 120-column terminal it handed
         // the pane 40 columns out of an available 86 and then truncated
         // everything wider than 40 to fit.
-        $paneCols = max(24, $cols - self::blockWidth($leftPane) - self::blockWidth($rightPane));
+        $paneCols = max(24, $bandCols - self::blockWidth($leftPane) - self::blockWidth($rightPane));
 
         [$chatPane, $images] = ChatPane::renderView($a, $paneCols, $paneRows);
 
@@ -379,6 +472,10 @@ final class Renderer
             Layout::joinHorizontal(Position::TOP, $leftPane, $chatPane, $rightPane),
             $paneRows,
         );
+
+        if ($agentCols > 0) {
+            $middle = self::composeAgentSplit($a, $liveAgents, $middle, $bandCols, $agentCols, $cols, $paneRows);
+        }
 
         $parts = [$menuBar];
         if ($notice !== '') {
@@ -559,6 +656,186 @@ final class Renderer
         $lines = explode("\n", $block);
 
         return count($lines) <= $rows ? $block : implode("\n", array_slice($lines, -$rows));
+    }
+
+    /**
+     * Every agent producing text right now, keyed by name — registered or not:
+     * {@see \SugarCraft\Crush\Agents\AgentManager::liveOutputs()} derives
+     * from the sub-agent map, which is where a workflow's ad-hoc agents live.
+     *
+     * @return array<string, string>
+     */
+    private static function liveAgentOutputs(App $a): array
+    {
+        return $a->chat?->agentManager()?->liveOutputs() ?? [];
+    }
+
+    /**
+     * The split-pane compositor's ACTIVATION POLICY and its width, in one
+     * place. `0` means no split.
+     *
+     * ## The policy: data, not configuration
+     *
+     * The split appears exactly when at least one agent has a NON-TERMINAL
+     * sub-agent that has produced text, and the terminal is wide enough to
+     * carry two panes. There is no toggle and no config key, and that is what
+     * {@see \SugarCraft\Crush\Agents\AgentManager::liveOutputs()} was shaped
+     * for: it OMITS the silent ones — its docblock says in as many words that
+     * omitting them "is what keeps it from rendering a row of empty tiles — the
+     * exact reason that compositor was deferred rather than wired" — and, since
+     * this item's follow-up, the finished ones too, applying the same
+     * `!isComplete() && !isStopped()` predicate `active()` has always applied.
+     * A map that is empty whenever there is nothing to show IS the activation
+     * signal; a key defaulting to `false` would only ask the user to re-state
+     * it, and one defaulting to `true` would be this policy with an extra
+     * file.
+     *
+     * Without that liveness half the split would have been one-way: nothing
+     * clears `SubAgent::$output`, so the first workflow of a session would have
+     * opened a column that stayed open until the process exited.
+     *
+     * ## What this policy can and cannot do TODAY, measured
+     *
+     * The map is populated on a real launch. `/workflow run` reaches
+     * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()},
+     * which hands its `SubAgent`s to `AgentManager::executeAll()`
+     * (`Workflows/WorkflowEngine.php:1296`); that files each one under the
+     * manager's sub-agent map (`Agents/AgentManager.php:681`) and settles
+     * streamed text onto its `output`, and `liveOutputs()` reads that map. It
+     * did NOT before Phase 8 item 4's follow-up: `liveOutputs()` used to
+     * iterate the REGISTERED map, and a workflow's agents are ad-hoc, named
+     * `$task->name ?? $task->agentType` (`WorkflowEngine.php:1254`) and never
+     * registered — with neither shipped workflow naming a parallel task after
+     * a roster entry, that map could never contain one.
+     *
+     * WHAT IS STILL MISSING IS A FRAME. `Chat::workflowRun()` calls
+     * `$this->workflowEngine->run()` SYNCHRONOUSLY (`Chat.php:6212`) from
+     * inside `update()` (dispatched at `Chat.php:5480`), and candy-core's
+     * `Program` repaints from a periodic timer on the ReactPHP loop
+     * (`Program.php:387`) while `ProcessExecutor` blocks in a raw
+     * `stream_select()` (`ProcessExecutor.php:81`, `:235`) rather than on that
+     * loop. So the tick cannot fire until the whole workflow is over, and by
+     * then the liveness filter has emptied the map again. `workflowRun()`'s
+     * own docblock records this as KNOWN GAP issue #79 and names the fix — the
+     * fork-plus-socket pattern `Backend\EngineBackend::completeAsync()` already
+     * uses — as its own change-set.
+     *
+     * So this policy is correct and its data source is correct, and a user
+     * still cannot see the split: not because of a flag or a missing
+     * registration, but because nothing paints between the keystroke and the
+     * workflow's last stage. The other route that would populate it mid-frame,
+     * a Task/Agent tool delegating from a model turn, does not exist
+     * (crush_code.md #45). Until #79 lands, the split is exercised by
+     * `AgentSplitCompositorTest` and by an embedder driving the manager
+     * directly.
+     *
+     * ## Width, and why it can still decline
+     *
+     * The agent column takes one part in {@see SPLIT_AGENT_DIVISOR}, clamped
+     * to [{@see SPLIT_MIN_AGENT_COLS}, {@see SPLIT_MAX_AGENT_COLS}].
+     *
+     * The band check after the clamp is REDUNDANT WITH
+     * {@see SPLIT_MIN_TOTAL_COLS} as the constants stand, and saying otherwise
+     * would be inventing a case: for every `$cols >= 80` the band works out to
+     * at least 53 cells — the minimum of `cols - min(60, max(24, intdiv(cols,
+     * 3))) - 1`, attained at `cols = 80` and brute-forced to 100000 — well over
+     * the 44 floor, so nothing reaching that line has ever failed it. It is kept as the invariant's guard rather
+     * than as live logic — the clamp's LOWER bound can hand back a column
+     * WIDER than the proportion asked for, so lowering
+     * {@see SPLIT_MIN_TOTAL_COLS} or raising {@see SPLIT_MIN_AGENT_COLS} is
+     * exactly the edit that starts starving the band, and this is what makes
+     * that a declined split instead of a chat column squeezed under its own
+     * floor. `AgentSplitCompositorTest` sweeps the widths that pin the
+     * relationship. Declining is always safe: the caller falls back to the
+     * full-width band.
+     *
+     * @param array<string, string> $liveAgents as {@see liveAgentOutputs()} returns it
+     */
+    private static function agentSplitWidth(array $liveAgents, int $cols): int
+    {
+        if ($liveAgents === [] || $cols < self::SPLIT_MIN_TOTAL_COLS) {
+            return 0;
+        }
+
+        $width = min(
+            self::SPLIT_MAX_AGENT_COLS,
+            max(self::SPLIT_MIN_AGENT_COLS, intdiv($cols, self::SPLIT_AGENT_DIVISOR)),
+        );
+
+        if ($cols - $width - self::SPLIT_DIVIDER_COLS < self::SPLIT_MIN_BAND_COLS) {
+            return 0;
+        }
+
+        return $width;
+    }
+
+    /**
+     * Join the shell band and the live-agent column into one content band.
+     *
+     * Three things this method is responsible for, all of them width
+     * arithmetic that the render invariants make load-bearing:
+     *
+     * 1. The band is pre-clipped to `$bandCols` with the ANSI-AWARE
+     *    {@see clipWidth()}. {@see SplitLayout} has a truncator of its own, but
+     *    its slow path walks raw codepoints and its own docblock records that
+     *    it can cut a line mid-SGR; the band is styled, so a cut there would
+     *    leak a colour across the divider into the agent column. Handing it
+     *    content that already fits means that truncator never fires on it.
+     * 2. The proportions are handed over as numerator = `$bandCols`,
+     *    denominator = `$cols`, which makes `SplitLayout::splitPosition()`
+     *    return `round($bandCols / $cols * $cols)` = exactly `$bandCols`. The
+     *    ratio machinery is used for what it is, rather than approximated with
+     *    a 1/3 that rounds to a different cell on most widths.
+     * 3. `$bandCols + divider + $agentCols === $cols` is the invariant the
+     *    whole method rests on; it is established by the caller's
+     *    `$bandCols = $cols - $agentCols - SPLIT_DIVIDER_COLS` and is what
+     *    keeps every composed row exactly `$cols` wide instead of one border
+     *    over. `renderView()`'s own `clipWidth()` on the finished frame is the
+     *    backstop, not the mechanism.
+     *
+     * The entry point is {@see renderForCurrentEnvironment()} rather than
+     * {@see renderWithSplit()} because it is the one that asks
+     * {@see MultiplexerSplitPane} first — under tmux or iTerm2 the same call
+     * is the seam a future native-pane implementation takes over.
+     *
+     * @param array<string, string> $liveAgents as {@see liveAgentOutputs()} returns it
+     */
+    private static function composeAgentSplit(
+        App $a,
+        array $liveAgents,
+        string $band,
+        int $bandCols,
+        int $agentCols,
+        int $cols,
+        int $rows,
+    ): string {
+        $column = AgentSplitColumn::render(
+            $liveAgents,
+            $a->chat?->agentManager(),
+            $a->theme(),
+            $agentCols,
+            $rows,
+        );
+
+        // Unreachable by construction — agentSplitWidth() returned non-zero, so
+        // the map is non-empty and both budgets are positive, which is every
+        // way AgentSplitColumn::render() can answer ''. Kept because the
+        // alternative to a narrower-than-usual band is a frame whose rows are
+        // `$agentCols + 1` cells short of the terminal with nothing drawn in
+        // them, and a degraded band is the cheaper of the two.
+        if ($column === '') {
+            return $band;
+        }
+
+        return self::renderForCurrentEnvironment(
+            self::clipWidth($band, $bandCols),
+            $column,
+            SplitDirection::Vertical,
+            $cols,
+            $rows,
+            $bandCols,
+            $cols,
+        );
     }
 
     private static function leftSidebar(App $a, int $cols, int $rows): string

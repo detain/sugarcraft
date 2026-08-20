@@ -391,6 +391,26 @@ Two invariants the layer depends on, both of which have been broken before:
   produced the status-bar collision.
 - **Never over-wide lines.** The diff renderer paints one line per row.
 
+`SplitLayout`/`MultiplexerSplitPane` are no longer a standalone seam:
+`Tui\Renderer::renderView()` splits its content band whenever
+`AgentManager::liveOutputs()` is non-empty and the terminal is at least 80
+columns, putting a `Components\AgentSplitColumn` of live-agent tiles to the
+right of the shell band. Activation is data-driven — no flag, no config key —
+because `liveOutputs()` reports exactly the agents with a non-terminal
+sub-agent that has produced text, so it is empty both before work starts and
+after it finishes.
+
+**It is wired, and it is not yet visible.** The only production producer of
+that data is a workflow's parallel stage, and `Chat::workflowRun()` calls
+`WorkflowEngine::run()` synchronously from inside `update()` — the ReactPHP
+loop is blocked in `ProcessExecutor`'s `stream_select()` for the whole run, so
+candy-core's render tick never fires between the keystroke and the last stage,
+and by the time it does the agents are finished and the map is empty again.
+That is issue #79 (`Chat::workflowRun()`'s own docblock), not a gap in the
+compositor. Until it lands the split is exercised by
+`tests/Tui/AgentSplitCompositorTest.php` and by an embedder driving
+`AgentManager` directly.
+
 `WindowSizeMsg` is the size truth. Mouse tracking is on by default and has two
 escape hatches (`SUGARCRUSH_DISABLE_MOUSE`, `SUGARCRUSH_DISABLE_MOUSE_CLICKS`)
 because a terminal's own selection behaviour may be worth more to you.

@@ -323,29 +323,64 @@ final class AgentManager
     }
 
     /**
-     * Every registered agent's live output buffer, keyed by agent name, with
-     * silent agents omitted.
+     * Every agent that is producing text RIGHT NOW, keyed by agent name, with
+     * the silent and the finished ones omitted.
      *
      * This is the multi-agent shape the tmux/iTerm2 split-pane compositor
-     * ({@see \SugarCraft\Crush\Tui\Renderer::renderWithSplit()}) needs: it lays
+     * ({@see \SugarCraft\Crush\Tui\Renderer::renderView()}) needs: it lays
      * several agents' live output out side by side, so it wants "who is
      * producing text right now", not one name at a time. Omitting the silent
      * ones is what keeps it from rendering a row of empty tiles — the exact
      * reason that compositor was deferred rather than wired.
      *
-     * Keyed off the REGISTERED agents rather than off the sub-agent map, so a
-     * sub-agent whose registration was removed cannot resurrect a pane.
+     * ## Two things this method used to get wrong, both measured
+     *
+     * It iterated {@see $agents} — the REGISTERED map, written only by
+     * {@see register()} — so it could not see a workflow-spawned agent at all.
+     * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
+     * never registers: it builds ad-hoc `Agent`s named `$task->name ??
+     * $task->agentType` and hands the `SubAgent`s straight to
+     * {@see executeAll()}, which files them under {@see $subAgents} and nowhere
+     * else. Registering a real roster and inserting a `SubAgent` named
+     * `style-fixer` exactly as `executeAll()` does gave
+     * `liveOutput(\'style-fixer\')` a full buffer while this method returned
+     * `[]`. Neither shipped workflow names a parallel task after a roster
+     * agent (`examples/workflows/lint-then-fix.yaml:41,49`,
+     * `workflows/deep-research.php:46,57,68,79`), so the registered map was the
+     * one place the answer could never be.
+     *
+     * And it had no liveness filter, while every other consumer of this data
+     * goes through {@see active()}, which does. Nothing clears
+     * {@see SubAgent::$output} — {@see drain()} settles the pool's final text
+     * onto it — so a finished agent stayed in this map for the rest of the
+     * session and a pane keyed off it would never have come down.
+     *
+     * So: derived from {@see $subAgents}, filtered with the same
+     * `!isComplete() && !isStopped()` predicate {@see isWorking()} applies, and
+     * grouped by the sub-agent's own agent name. Registration is now
+     * irrelevant here, which also means a removed registration cannot strand an
+     * entry: {@see removeSubAgent()} takes the sub-agent out of the map this
+     * reads.
+     *
+     * Buffers are joined newest-last within an agent, matching
+     * {@see liveOutput()}; unlike that one, this method sees only the
+     * non-terminal sub-agents, because a raw-buffer accessor and an
+     * is-it-happening accessor want different things.
      *
      * @return array<string, string> agent name => live output
      */
     public function liveOutputs(): array
     {
         $outputs = [];
-        foreach ($this->agents as $name => $agent) {
-            $output = $this->liveOutput($agent->name);
-            if ($output !== '') {
-                $outputs[$name] = $output;
+        foreach ($this->subAgents as $subAgent) {
+            if ($subAgent->isComplete() || $subAgent->isStopped() || $subAgent->output === '') {
+                continue;
             }
+
+            $name = $subAgent->agent->name;
+            $outputs[$name] = isset($outputs[$name])
+                ? $outputs[$name] . "\n" . $subAgent->output
+                : $subAgent->output;
         }
 
         return $outputs;

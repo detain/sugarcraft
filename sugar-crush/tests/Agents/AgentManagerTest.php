@@ -1554,15 +1554,139 @@ final class AgentManagerTest extends TestCase
         $this->assertSame(['loud' => 'saying something'], $this->agentManager->liveOutputs());
     }
 
-    public function testLiveOutputsIsKeyedOffRegistrationsSoARemovedAgentCannotResurrectAPane(): void
+    public function testLiveOutputsDropsAnAgentWhoseSubAgentWasRemoved(): void
     {
+        // This used to hold because liveOutputs() iterated the REGISTERED map
+        // and asked liveOutput() for each name; it holds now because the
+        // sub-agent it derives from is gone from the map it reads. Same
+        // outcome, and the reason matters — the registration is untouched
+        // either way.
         $this->agentManager->register($this->createAgent(name: 'gone'));
         $subAgent = $this->agentManager->createSubAgent('gone', 'task');
         $subAgent->output = 'orphaned text';
 
         $this->agentManager->removeSubAgent($subAgent->id);
 
+        $this->assertNotNull($this->agentManager->get('gone'), 'the registration survives');
         $this->assertSame([], $this->agentManager->liveOutputs());
+    }
+
+    /**
+     * The defect that made the split-pane compositor unreachable in
+     * production: `liveOutputs()` iterated the REGISTERED map, and the one
+     * production producer of live agent output does not register.
+     *
+     * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
+     * builds ad-hoc `Agent`s named `$task->name ?? $task->agentType`
+     * (`WorkflowEngine.php:1254`) and hands the `SubAgent`s to
+     * {@see AgentManager::executeAll()}, whose first loop files them under
+     * `$subAgents` and nowhere else (`AgentManager.php:681`) — reproduced here
+     * by that exact insertion. Neither shipped workflow names a parallel task
+     * after a roster agent (`examples/workflows/lint-then-fix.yaml` names
+     * `style-fixer`/`correctness-fixer`), so the registered map was the one
+     * place the answer could never be. Against the old implementation the last
+     * assertion returns `[]`.
+     */
+    public function testLiveOutputsSeesAWorkflowSpawnedAgentThatWasNeverRegistered(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'reviewer', isActive: false));
+
+        $subAgent = $this->fileSubAgent(
+            new SubAgent(
+                id: 'fix-1-abc',
+                agent: $this->createAgent(name: 'style-fixer'),
+                task: 'fix the style',
+            ),
+        );
+        $subAgent->status = SubAgent::STATUS_STREAMING;
+        $subAgent->output = 'rewriting Foo.php';
+
+        $this->assertNull($this->agentManager->get('style-fixer'), 'never registered, by construction');
+        $this->assertTrue($this->agentManager->isWorking('style-fixer'));
+        $this->assertSame(['style-fixer' => 'rewriting Foo.php'], $this->agentManager->liveOutputs());
+    }
+
+    /**
+     * The other half: it has to go away again.
+     *
+     * Nothing clears {@see SubAgent::$output} — {@see AgentManager::executeAll()}
+     * settles the pool's FINAL text onto it — so a `liveOutputs()` that filtered
+     * only on `output !== ''` reported a finished agent for the rest of the
+     * session, and a pane keyed off it would never have come down. The filter
+     * is the same `!isComplete() && !isStopped()` predicate {@see
+     * AgentManager::isWorking()} applies, so this method and `active()` cannot
+     * disagree about who is working.
+     */
+    public function testLiveOutputsDropsAnAgentOnceItsSubAgentReachesATerminalState(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'talker'));
+        $subAgent = $this->agentManager->createSubAgent('talker', 'task');
+        $subAgent->status = SubAgent::STATUS_STREAMING;
+        $subAgent->output = 'still going';
+
+        $this->assertSame(['talker' => 'still going'], $this->agentManager->liveOutputs());
+
+        foreach ([SubAgent::STATUS_COMPLETE, SubAgent::STATUS_STOPPED, SubAgent::STATUS_FAILED] as $terminal) {
+            $subAgent->status = $terminal;
+            $this->assertFalse($this->agentManager->isWorking('talker'), "isWorking after {$terminal}");
+            $this->assertSame([], $this->agentManager->liveOutputs(), "liveOutputs after {$terminal}");
+            // The RAW buffer accessor keeps its value: the dashboard reads it
+            // for an agent it has already decided is worth a row.
+            $this->assertSame('still going', $this->agentManager->liveOutput('talker'));
+        }
+    }
+
+    /**
+     * Two sub-agents under one workflow name join newest-last, and a finished
+     * one contributes nothing — a mid-flight stage must not have a retry's
+     * dead first attempt pasted above its live text.
+     */
+    public function testLiveOutputsJoinsOnlyTheNonTerminalSubAgentsOfOneName(): void
+    {
+        $dead = $this->fileSubAgent(new SubAgent(
+            id: 'fix-1',
+            agent: $this->createAgent(name: 'style-fixer'),
+            task: 't',
+        ));
+        $dead->status = SubAgent::STATUS_FAILED;
+        $dead->output = 'first attempt';
+
+        $live = $this->fileSubAgent(new SubAgent(
+            id: 'fix-2',
+            agent: $this->createAgent(name: 'style-fixer'),
+            task: 't',
+        ));
+        $live->status = SubAgent::STATUS_RUNNING;
+        $live->output = 'second attempt';
+
+        $third = $this->fileSubAgent(new SubAgent(
+            id: 'fix-3',
+            agent: $this->createAgent(name: 'style-fixer'),
+            task: 't',
+        ));
+        $third->status = SubAgent::STATUS_STREAMING;
+        $third->output = 'third attempt';
+
+        $this->assertSame(
+            ['style-fixer' => "second attempt\nthird attempt"],
+            $this->agentManager->liveOutputs(),
+        );
+    }
+
+    /**
+     * File a SubAgent under the manager's sub-agent map exactly as
+     * {@see AgentManager::executeAll()}'s first loop does
+     * (`AgentManager.php:681`), without a pool or a provider — the workflow
+     * path's shape, minus its I/O.
+     */
+    private function fileSubAgent(SubAgent $subAgent): SubAgent
+    {
+        $property = new \ReflectionProperty(AgentManager::class, 'subAgents');
+        $map = $property->getValue($this->agentManager);
+        $map[$subAgent->id] = $subAgent;
+        $property->setValue($this->agentManager, $map);
+
+        return $subAgent;
     }
 
     // -------------------------------------------------------------------------

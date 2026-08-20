@@ -507,31 +507,16 @@ final class AgentDashboardPane
      *   keeps one entry to one row — an LF costs a row the height budget never
      *   reserved, and a lone CR lets session output overwrite the pane border.
      *   Losing an output line's indentation is the accepted price.
-     * - {@see stripPrivateUse()} removes the Private-Use block, which
-     *   `untrusted()` leaves alone because it is printable. Without it a
-     *   session could echo candy-mouse's zone sentinels or candy-core's image
-     *   markers back at us and forge a clickable region in our own frame.
+     * - The Private-Use sweep removes a block `untrusted()` leaves alone
+     *   because it is printable. Without it a session could echo candy-mouse's
+     *   zone sentinels or candy-core's image markers back at us and forge a
+     *   clickable region in our own frame.
+     *
+     * Both halves live in {@see PaneLabel::safe()}. They used to live here, in
+     * a copy {@see AgentSplitColumn} then made a second copy of.
      */
     private static function safe(string $raw): string
     {
-        return PaneLabel::of(self::stripPrivateUse($raw));
-    }
-
-    /** Drop every Private-Use code point (U+E000–U+F8FF and the astral planes). */
-    private static function stripPrivateUse(string $raw): string
-    {
-        $stripped = preg_replace('/\p{Co}/u', '', $raw);
-        if ($stripped !== null) {
-            return $stripped;
-        }
-
-        // Invalid UTF-8 bails the /u pattern; sweep the BMP Private-Use area's
-        // literal UTF-8 byte ranges instead so malformed output — which a
-        // byte-tail cut can produce on its own — cannot smuggle a sentinel in.
-        return (string) preg_replace(
-            '/\xEE[\x80-\xBF][\x80-\xBF]|\xEF[\x80-\xA3][\x80-\xBF]/',
-            '',
-            $raw,
-        );
+        return PaneLabel::safe($raw);
     }
 }

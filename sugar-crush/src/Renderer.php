@@ -110,16 +110,47 @@ use SugarCraft\Crush\Tui\Pane;
  * `Bootstrap::agentManager()` (built from `Bootstrap::provider()` +
  * `Bootstrap::skillRegistry()`, the two collaborators this note used to
  * record as unavailable) and passes it in, so the strip below is now
- * REACHABLE — which is not the same as populated. Nothing in `src/` or
- * `bin/` calls `AgentManager::createSubAgent()`/`executeSubAgent()` yet:
- * there is no Task/Agent tool, `Chat::executeAgents()` (the one production
- * route into `AgentManager::executeAll()`) has no caller, and
- * `WorkflowEngine` is never constructed. So the null check no longer stops
- * this code, but a real user still has no way to create the sub-agent that
- * `active()` derives liveness from. What would populate it is crush_code.md
- * #45 (the Task tool that delegates to a registered agent) and #13
- * (constructing `WorkflowEngine`); until one of those lands the strip is
- * exercised only by tests and by an embedder driving the manager directly.
+ * REACHABLE — which is not the same as populated.
+ *
+ * ⚠️ THE REST OF THIS PARAGRAPH USED TO SAY `WorkflowEngine` IS NEVER
+ * CONSTRUCTED AND THAT `Chat::executeAgents()` IS THE ONE PRODUCTION ROUTE
+ * INTO `AgentManager::executeAll()`. BOTH WERE TRUE WHEN WRITTEN AND BOTH ARE
+ * NOW FALSE. crush_code.md Phase 2 item 3 landed
+ * `Bootstrap::workflowEngine()` (`Cli/Bootstrap.php:718`, constructed at
+ * `:770`) and passes it to `Bootstrap::chat()` alongside the manager
+ * (`:607`, `:621`); `Chat::__construct()` links the two; and
+ * `WorkflowEngine::executeParallelStage()` calls
+ * `AgentManager::executeAll()` (`Workflows/WorkflowEngine.php:1296`), which
+ * files every `SubAgent` under the manager's SUB-AGENT map
+ * (`Agents/AgentManager.php:681`) and streams onto its `output`.
+ *
+ * ⚠️ AND THAT STILL DOES NOT POPULATE THIS STRIP — a first correction of this
+ * paragraph claimed it did, and the claim was measured false.
+ * `renderAgentView()` below reads `AgentManager::active()`, which iterates the
+ * REGISTERED map (`AgentManager::$agents`, written only by `register()`).
+ * `executeParallelStage()` never registers: it builds ad-hoc `Agent`s named
+ * `$task->name ?? $task->agentType` (`WorkflowEngine.php:1254`) and passes the
+ * `SubAgent`s straight to `executeAll()`. Neither shipped workflow names a
+ * parallel task after a roster agent — `examples/workflows/lint-then-fix.yaml`
+ * names `style-fixer`/`correctness-fixer`, `workflows/deep-research.php` names
+ * `docs-explorer`/`code-analyzer`/`pitfalls-researcher`/`integration-researcher`,
+ * and `Bootstrap::agentRoster()` ships coder/reviewer/debugger/architect/
+ * tester/devops — so `active()` cannot see one, and a `/workflow run` leaves
+ * this strip exactly as blank as it was.
+ *
+ * The shell's split-pane compositor solved its half of this by reading
+ * `liveOutputs()`, which now derives from the sub-agent map instead; THIS
+ * strip has not been changed to match, and doing so is its own decision
+ * (`active()` is a registration accessor that four other call sites share).
+ * Even if it were, no frame would paint during a run: `Chat::workflowRun()`
+ * calls `WorkflowEngine::run()` synchronously from inside `update()`
+ * (`Chat.php:6212`, dispatched at `:5480`) — its own docblock records this as
+ * KNOWN GAP issue #79.
+ *
+ * What is also still missing is the OTHER route: nothing in `src/` or `bin/`
+ * calls `createSubAgent()`/`executeSubAgent()` directly, because there is no
+ * Task/Agent tool — crush_code.md #45. Delegation from a model turn, as
+ * opposed to from a workflow, remains unavailable.
  *
  * What that does NOT mean is a permanent agent strip on every launch:
  * `Bootstrap::agentRoster()` registers its agents INACTIVE, and
@@ -139,10 +170,23 @@ use SugarCraft\Crush\Tui\Pane;
  * on `Tui\Renderer`, meant for laying out *multiple* agents' live output side
  * by side) could be wired to anything but empty tiles.
  * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane} consumes it
- * already. Neither of those two is wired into `render()` HERE, and that is now
- * a layout decision rather than a missing-data one: this class renders the
- * in-transcript single-column strip, and whether the compositor replaces it is
- * crush_code.md Phase 8 item 4's call.
+ * already, and crush_code.md Phase 8 item 4 has since answered the layout
+ * question the rest of this paragraph was waiting on: the compositor is WIRED,
+ * and it does NOT replace this strip.
+ *
+ * {@see \SugarCraft\Crush\Tui\Renderer::renderView()} splits its content band
+ * whenever `liveOutputs()` is non-empty and the terminal is at least 80
+ * columns, putting a {@see \SugarCraft\Crush\Tui\Components\AgentSplitColumn}
+ * of per-agent tiles to the RIGHT of the shell band — so the split is a
+ * property of the SHELL frame, one nesting level above this class. What
+ * `render()` draws here is the in-transcript single-column strip, unchanged.
+ * The two are not redundant: this one is a line in the transcript, the
+ * compositor's is a column beside it, and a session that has no `App` shell
+ * around it — or a terminal under 80 columns — still gets this one and only
+ * this one. Neither is visible during a workflow yet, for the issue-#79
+ * reason above; the compositor's docblock
+ * ({@see \SugarCraft\Crush\Tui\Renderer::agentSplitWidth()}) carries the
+ * measurement.
  * `src/Tui/Components/AgentsPane.php` — also in R20's file list
  * — is untouched by THIS class for a different reason than the one recorded
  * here originally. The `App`-keyed pane system it belongs to is no longer

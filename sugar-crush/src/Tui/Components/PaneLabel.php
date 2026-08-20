@@ -54,4 +54,39 @@ final class PaneLabel
 
         return trim($flat);
     }
+
+    /**
+     * {@see of()} plus a Private-Use sweep — the boundary for text that ends up
+     * INSIDE a bordered pane rather than on a label row.
+     *
+     * `untrusted()` leaves the Private-Use block alone because it is printable,
+     * and U+E000 is where candy-core's image markers AND candy-mouse's zone
+     * sentinels both begin, so a model or tool that echoes one back forges a
+     * clickable region (or a graphics placeholder) in our own frame. Every
+     * pane that renders a live agent buffer wants both halves;
+     * {@see AgentDashboardPane} and {@see AgentSplitColumn} each carried their
+     * own copy of exactly this pair before it moved here.
+     */
+    public static function safe(string $raw): string
+    {
+        return self::of(self::stripPrivateUse($raw));
+    }
+
+    /** Drop every Private-Use code point (U+E000–U+F8FF and the astral planes). */
+    private static function stripPrivateUse(string $raw): string
+    {
+        $stripped = preg_replace('/\p{Co}/u', '', $raw);
+        if ($stripped !== null) {
+            return $stripped;
+        }
+
+        // Invalid UTF-8 bails the /u pattern; sweep the BMP Private-Use area's
+        // literal UTF-8 byte ranges instead so malformed output — which a
+        // byte-tail cut can produce on its own — cannot smuggle a sentinel in.
+        return (string) preg_replace(
+            '/\xEE[\x80-\xBF][\x80-\xBF]|\xEF[\x80-\xA3][\x80-\xBF]/',
+            '',
+            $raw,
+        );
+    }
 }

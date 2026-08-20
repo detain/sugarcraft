@@ -73,11 +73,26 @@ final class MultiplexerSplitPane
      * even when multiplexer mode is detected. A future implementation
      * may shell out to tmux/iTerm2 to create native split panes.
      *
+     * The proportions are PASSED THROUGH rather than defaulted internally.
+     * They are NEW, not restored: neither this method nor
+     * {@see \SugarCraft\Crush\Tui\Renderer::renderForCurrentEnvironment()}
+     * had proportion parameters before Phase 8 item 4, so both branches
+     * rendered 1/2 — that being {@see \SugarCraft\Crush\Tui\SplitLayout}'s
+     * constructor default — and neither honoured a caller's proportions,
+     * because no caller could state any. (What DID diverge between the two
+     * branches was SIZE; see the note on `renderForCurrentEnvironment()`.)
+     * The compositor ({@see \SugarCraft\Crush\Tui\Renderer::renderView()})
+     * asks for an exact cell boundary by passing numerator = the first pane's
+     * width and denominator = the total, so a dropped proportion here is a
+     * visibly wrong layout, not a rounding difference.
+     *
      * @param string         $topOrLeft    Content of the first pane.
      * @param string         $bottomOrRight Content of the second pane.
      * @param SplitDirection $direction    Split orientation.
      * @param int            $cols         Available columns.
      * @param int            $rows         Available rows.
+     * @param int            $topOrLeftNumerator Proportion of the first pane.
+     * @param int            $totalDenominator   Total proportion units.
      * @return string Rendered split layout.
      */
     public function renderWithMultiplexer(
@@ -86,6 +101,8 @@ final class MultiplexerSplitPane
         SplitDirection $direction,
         int $cols,
         int $rows,
+        int $topOrLeftNumerator = 1,
+        int $totalDenominator = 2,
     ): string {
         // When multiplexer is active but we can't spawn real tmux panes,
         // fall back to in-process rendering. The multiplexer detection
@@ -94,6 +111,8 @@ final class MultiplexerSplitPane
             $topOrLeft,
             $bottomOrRight,
             $direction,
+            $topOrLeftNumerator,
+            $totalDenominator,
         );
 
         return $layout->render($cols, $rows);

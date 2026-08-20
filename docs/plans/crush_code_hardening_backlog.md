@@ -2061,14 +2061,54 @@ anyone who *does* wire one knows what gate to add at the same time.
   `AgentsPane` already is, or remove it, but only with explicit sign-off; not an
   automatic removal)"*. **The cheap, rule-compliant action is to write the
   docblock**, which converts an ambiguity into a documented seam.
-- **F5 — the tmux/iTerm2 split-pane compositor.**
-  `src/Tui/Renderer.php:63` (`renderWithSplit()`) and `:109`
-  (`renderForCurrentEnvironment()`); the only reference to the latter outside its
-  own definition is a docblock mention at `src/Renderer.php:134`, so it has
-  **zero production callers**. Deferred per its own docblock pending a public
-  live-output-buffer accessor on `AgentManager` (`src/Agents/AgentManager.php:329`
-  describes what it needs). That accessor is Phase 1 item 1's remaining
-  follow-up, and it also gates Phase 8 item 4.
+- **F5 — the tmux/iTerm2 split-pane compositor. WIRED, NOT YET VISIBLE — stays
+  open.** It used to have zero production callers, deferred per its own docblock
+  pending a public live-output-buffer accessor on `AgentManager`. That accessor
+  landed (Phase 1 item 1), and Phase 8 item 4 wired the compositor:
+  `Tui\Renderer::renderView()` reaches `renderForCurrentEnvironment()` through a
+  private `composeAgentSplit()` whenever `AgentManager::liveOutputs()` is
+  non-empty and the terminal is at least 80 columns, laying a
+  `Components\AgentSplitColumn` of live-agent tiles beside the shell band.
+  Activation is data-driven — no flag, no config key. Covered by
+  `tests/Tui/AgentSplitCompositorTest.php`.
+
+  **This was briefly marked RESOLVED and that was wrong on three counts, two of
+  them since fixed.** (1) The compositor read a `liveOutputs()` that iterated
+  the REGISTERED agent map, and a workflow's parallel stage never registers —
+  it builds ad-hoc `Agent`s named `$task->name ?? $task->agentType`
+  (`WorkflowEngine.php:1254`) and hands the `SubAgent`s to `executeAll()`, which
+  files them under the sub-agent map only (`AgentManager.php:681`). Measured:
+  with a real roster registered and a `SubAgent` named `style-fixer` inserted
+  exactly as `executeAll()` does, `liveOutput('style-fixer')` returned its
+  buffer while `liveOutputs()` returned `[]`. Neither shipped workflow names a
+  parallel task after a roster agent. **Fixed:** `liveOutputs()` now derives
+  from the sub-agent map. (2) It never deactivated — `liveOutput()` filters only
+  on `output !== ''` and nothing clears `SubAgent::$output`, so the first
+  workflow of a session would have opened a column that stayed open until exit.
+  **Fixed:** `liveOutputs()` applies the same `!isComplete() && !isStopped()`
+  predicate `active()` has always applied. (3) **NOT fixed, and this is why F5
+  stays open:** no frame paints while the agents talk. `Chat::workflowRun()`
+  calls `WorkflowEngine::run()` synchronously (`Chat.php:6212`) from inside
+  `update()` (dispatched at `Chat.php:5480`); candy-core's `Program` repaints
+  from a periodic timer on the ReactPHP loop (`Program.php:387`) while
+  `ProcessExecutor` blocks in a raw `stream_select()` (`ProcessExecutor.php:81`,
+  `:235`), so the tick cannot fire until the run is over — and by then the
+  liveness filter has correctly emptied the map. `workflowRun()`'s own docblock
+  records this as KNOWN GAP issue #79 and names the fix (the fork-plus-socket
+  pattern `Backend\EngineBackend::completeAsync()` uses). **F5 closes when #79
+  lands, not before.**
+
+  Two follow-ups this uncovered, neither in scope here:
+  - The in-transcript agent strip (`Renderer::renderAgentView()`) and
+    `AgentDashboardPane` both read `AgentManager::active()`, which is still
+    keyed off the REGISTERED map — so a workflow's agents are invisible to both
+    for the same reason the compositor's source was. Whether `active()` should
+    derive from the sub-agent map too is a four-call-site decision, not a
+    docblock edit.
+  - `AgentSplitColumn::state()` used `$agent?->isActive` for its status string,
+    which reads "stopped" for any roster agent, since `Bootstrap::agentRoster()`
+    registers the roster INACTIVE. Now `AgentManager::isWorking()`, mirroring
+    `active()`.
 - **F6 — `Agent::$isActive`.** Named as an intentional dormant seam in
   `Agent::fromPreset()`'s docblock (`src/Agents/Agent.php:113-114`), pointing at
   `fromDefinition()` for the reasoning.
