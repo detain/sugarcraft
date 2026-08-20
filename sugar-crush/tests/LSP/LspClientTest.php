@@ -218,7 +218,7 @@ final class LspClientTest extends TestCase
     public function testDefinitionsReturnsCachedResultOnCacheHit(): void
     {
         $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 1, 'character' => 0]]]];
-        $this->cache->set('file:///test.php', 'textDocument/definition', $expected);
+        $this->cache->set('file:///test.php', 'textDocument/definition@0:0', $expected);
 
         $result = $this->client->definitions('file:///test.php');
 
@@ -233,7 +233,7 @@ final class LspClientTest extends TestCase
         $result = $this->client->definitions('file:///test.php');
 
         $this->assertSame($expected, $result);
-        $this->assertTrue($this->cache->has('file:///test.php', 'textDocument/definition'));
+        $this->assertTrue($this->cache->has('file:///test.php', 'textDocument/definition@0:0'));
     }
 
     public function testDefinitionsReturnsEmptyOnDisconnected(): void
@@ -246,7 +246,7 @@ final class LspClientTest extends TestCase
     public function testReferencesReturnsCachedResultOnCacheHit(): void
     {
         $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 2, 'character' => 0]]]];
-        $this->cache->set('file:///test.php', 'textDocument/references', $expected);
+        $this->cache->set('file:///test.php', 'textDocument/references@0:0', $expected);
 
         $result = $this->client->references('file:///test.php', 0, 0);
 
@@ -266,7 +266,7 @@ final class LspClientTest extends TestCase
     public function testHoverReturnsCachedResultOnCacheHit(): void
     {
         $expected = ['contents' => 'Hover text'];
-        $this->cache->set('file:///test.php', 'textDocument/hover', $expected);
+        $this->cache->set('file:///test.php', 'textDocument/hover@0:0', $expected);
 
         $result = $this->client->hover('file:///test.php', 0, 0);
 
@@ -313,7 +313,7 @@ final class LspClientTest extends TestCase
     public function testCodeActionsReturnsCachedResultOnCacheHit(): void
     {
         $expected = [['title' => 'Remove unused variable', 'kind' => 1]];
-        $this->cache->set('file:///test.php', 'textDocument/codeAction', $expected);
+        $this->cache->set('file:///test.php', 'textDocument/codeAction@0:0', $expected);
 
         $result = $this->client->codeActions('file:///test.php', 0, 0, []);
 
@@ -328,5 +328,151 @@ final class LspClientTest extends TestCase
         $result = $this->client->codeActions('file:///test.php', 0, 0, []);
 
         $this->assertSame($expected, $result);
+    }
+
+    /**
+     * THE POSITIONAL CACHE KEY, asserted behaviourally rather than by inspecting
+     * the key string, and in BOTH directions because either half alone passes a
+     * broken build.
+     *
+     * Same file, same method, different cursor: the answer stored for 0:0 must
+     * NOT be handed back for 1:9. Before {@see LspClient::positionalKey()} it
+     * was — one client, one connected server, `references` at line 1 then at
+     * line 2 reached the server exactly ONCE and returned the first position's
+     * answer for the second question, with nothing in the result saying so.
+     *
+     * The second half is what stops "fix" the cache by disabling it: same file,
+     * same method, SAME cursor must still be a hit, and the connection's newer
+     * answer must NOT be the one returned.
+     */
+    public function testACachedAnswerAtOnePositionIsNotReusedAtAnother(): void
+    {
+        $atOrigin = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 0, 'character' => 0]]]];
+        $fresh = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 41, 'character' => 7]]]];
+
+        $this->cache->set('file:///test.php', 'textDocument/definition@0:0', $atOrigin);
+        $this->connection->initialize();
+        $this->connection->setDefinitionsResult($fresh);
+
+        $this->assertSame($fresh, $this->client->definitions('file:///test.php', 1, 9), 'a new position must ask');
+        $this->assertSame($atOrigin, $this->client->definitions('file:///test.php', 0, 0), '0:0 was cached');
+    }
+
+    public function testASecondQueryAtTheSamePositionIsStillServedFromTheCache(): void
+    {
+        $cached = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 1, 'character' => 9]]]];
+        $wouldBeFresh = [['uri' => 'file:///other.php', 'range' => ['start' => ['line' => 2, 'character' => 0]]]];
+
+        $this->cache->set('file:///test.php', 'textDocument/references@1:9', $cached);
+        $this->connection->initialize();
+        $this->connection->setReferencesResult($wouldBeFresh);
+
+        $this->assertSame($cached, $this->client->references('file:///test.php', 1, 9));
+    }
+
+    /**
+     * `codeAction` is the only positional request whose answer also depends on an
+     * argument past the cursor — the diagnostics being asked about — so the
+     * context is part of its key too. Asserted the same way: a context that
+     * differs must not be served the other context's answer.
+     */
+    public function testCodeActionsWithADifferentContextIsADifferentCacheEntry(): void
+    {
+        $forEmptyContext = [['title' => 'cached for no context']];
+        $fresh = [['title' => 'asked with a context']];
+
+        $this->client->codeActions('file:///test.php', 0, 0, []);
+        $this->assertTrue($this->cache->has('file:///test.php', 'textDocument/codeAction@0:0'));
+
+        $this->cache->set('file:///test.php', 'textDocument/codeAction@0:0', $forEmptyContext);
+        $this->connection->initialize();
+        $this->connection->setCodeActionsResult($fresh);
+
+        $withContext = $this->client->codeActions('file:///test.php', 0, 0, ['diagnostics' => [['code' => 'E1']]]);
+
+        $this->assertSame($fresh, $withContext);
+        $this->assertSame($forEmptyContext, $this->client->codeActions('file:///test.php', 0, 0, []));
+    }
+
+    /**
+     * `clearFile()` swept only the CONSTRUCTOR's cache, which is the same object
+     * as the default server's — so the narrower version was invisible until a
+     * second server existed, and then left that server answering a saved file
+     * from before the save. `clearAll()` always swept all of them; this pins that
+     * `clearFile()` now does too, and that it takes every POSITION of the file
+     * rather than only 0:0.
+     */
+    public function testClearFileEvictsEveryPositionOnEveryRegisteredServer(): void
+    {
+        $second = new FakeLspCache();
+        $this->client->addServer('typescript', new FakeLspConnection(), $second);
+
+        $this->cache->set('file:///test.php', 'textDocument/definition@0:0', [['uri' => 'a']]);
+        $this->cache->set('file:///test.php', 'textDocument/definition@7:3', [['uri' => 'b']]);
+        $second->set('file:///test.php', 'textDocument/hover@7:3', ['contents' => 'c']);
+        $this->cache->set('file:///kept.php', 'textDocument/definition@0:0', [['uri' => 'd']]);
+
+        $this->client->clearFile('file:///test.php');
+
+        $this->assertFalse($this->cache->has('file:///test.php', 'textDocument/definition@0:0'));
+        $this->assertFalse($this->cache->has('file:///test.php', 'textDocument/definition@7:3'));
+        $this->assertFalse($second->has('file:///test.php', 'textDocument/hover@7:3'), 'the added server too');
+        $this->assertTrue($this->cache->has('file:///kept.php', 'textDocument/definition@0:0'), 'other files stay');
+    }
+
+    /**
+     * THE DECODER IS THE TOLERANT END OF THE URI PAIR, and this is the only test
+     * that can prove it.
+     *
+     * `uriToPath()` used `urldecode()`, which implements
+     * `application/x-www-form-urlencoded` — in which a literal `+` means a SPACE.
+     * A `file://` URI is not a form body and `+` is legal in a POSIX filename, so
+     * `file:///src/Web+Fetch.php` decoded to a path that does not exist and
+     * `fallbackGrep()` returned `[]` — "no references" for a file it never
+     * opened.
+     *
+     * WHY IT IS TESTED HERE AND NOT THROUGH THE TOOL. `LspTool::fileUri()` now
+     * percent-encodes, and `%2B` decodes correctly under BOTH functions — so
+     * with the producer fixed, a tool-level test cannot tell them apart (measured:
+     * reverting this line to `urldecode()` left all 37 `LspToolTest` cases green).
+     * `$uri` is a PUBLIC argument of every query method, though, so a caller that
+     * is not that tool can hand over a raw `+`, and that is the case this drives.
+     *
+     * Disconnected on purpose: `fallbackGrep()` is the only consumer of the
+     * decoded path.
+     */
+    public function testAUriWithAnUnencodedPlusStillResolvesToItsFile(): void
+    {
+        $dir = (string) realpath((string) sys_get_temp_dir()) . '/sc_lspc_' . bin2hex(random_bytes(6));
+        mkdir($dir, 0o777, true);
+        $path = $dir . '/Web+Fetch.php';
+        file_put_contents($path, "<?php\n\$plusTarget = 1;\necho \$plusTarget;\n");
+
+        try {
+            $this->connection->disconnect(); // setUp() connects; the fallback is the path under test
+            $this->assertFalse($this->connection->isConnected());
+
+            $hits = $this->client->referencesFor('php', 'file://' . $path, 1, 0);
+
+            $this->assertCount(2, $hits, 'both occurrences of $plusTarget');
+        } finally {
+            @unlink($path);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * `documentSymbol` deliberately keeps the FILE-shaped key: the request takes
+     * no position, so qualifying it with one would turn every cursor move into a
+     * fresh whole-file parse for an identical answer.
+     */
+    public function testSymbolsKeepsTheFileShapedKeyBecauseTheRequestHasNoPosition(): void
+    {
+        $this->connection->initialize();
+        $this->connection->setSymbolsResult([['name' => 'MyClass', 'kind' => 5]]);
+
+        $this->client->symbols('file:///test.php');
+
+        $this->assertTrue($this->cache->has('file:///test.php', 'textDocument/documentSymbol'));
     }
 }

@@ -5,7 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\LSP;
 
 /**
- * In-memory TTL cache for LSP responses keyed by file URI + method.
+ * In-memory TTL cache for LSP responses keyed by file URI + an opaque method
+ * string.
+ *
+ * "Method" is what the CALLER passes, not necessarily a bare LSP method name:
+ * {@see LspClient::positionalKey()} passes `textDocument/references@12:4` for a
+ * cursor-shaped request, so that two positions in one file are two entries. This
+ * class neither parses nor validates that string — it only requires that callers
+ * which want separate entries pass separate strings, and the uri half is what
+ * {@see clearFile()} sweeps on.
  *
  * Caches the five response types produced by LspConnection:
  * definitions, references, hover, symbols, and diagnostics.

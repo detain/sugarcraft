@@ -22,6 +22,7 @@ use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Permissions\PermissionAction;
@@ -48,6 +49,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Doctor;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
+use SugarCraft\Crush\Tools\BuiltIn\LspTool;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
@@ -2987,7 +2989,10 @@ final class Bootstrap
      *     Bootstrap::tools($repo)  ->  tools=10  elapsed=0.02s
      *     cat pwned.txt            ->  PWNED-AT-LAUNCH
      *
-     * `tools=10` is the part that matters: the payload was not even a working MCP
+     * `tools=10` is the count THAT run returned, when the built-in set was ten;
+     * it is eleven today ({@see LspTool}) and the transcript above is left as it
+     * was measured rather than renumbered. What matters is that it equals the
+     * built-in count with NO bridge added: the payload was not even a working MCP
      * server, `initialize` failed, the server was discarded — AND THE COMMAND
      * STILL RAN. Starting IS the execution, so nothing downstream of `proc_open()`
      * can be the boundary. In particular the PreToolUse chain is not: that gate
@@ -3254,17 +3259,73 @@ final class Bootstrap
     }
 
     /**
+     * The model-facing {@see LspTool}, wired to whatever language servers this
+     * launch has — which today is NONE, and that is deliberate.
+     *
+     * AN INTENTIONAL DORMANT SEAM, in this repo's "wire it or document it, never
+     * delete it" sense. `src/LSP/` ships a finished {@see LspClient},
+     * {@see \SugarCraft\Crush\LSP\LspConnection} and
+     * {@see \SugarCraft\Crush\LSP\LspCache} with three test files, and before
+     * {@see LspTool} nothing outside `src/LSP/` referenced any of them. The tool
+     * is the reachability half. This method is the CONFIGURATION half, and it is
+     * empty for one measured reason: THERE IS NO SETTINGS KEY FOR LANGUAGE
+     * SERVERS. Measured on this tree — `grep -rin lsp` over `src/Cli/Bootstrap.php`
+     * and every settings reader in `src/` matched nothing but the additions in
+     * this commit, and `src/` has no `Settings` namespace at all
+     * ({@see \SugarCraft\Crush\Tui\Components\SettingsPane} is a TUI pane, not
+     * a loader). So there is nothing to read, and inventing a key here would be a
+     * config surface with no documentation, no validation and no user.
+     *
+     * WHAT HAS TO LAND NEXT, named rather than left implied: a settings block
+     * declaring, per language, a server command plus args; a launcher that
+     * `proc_open()`s it through {@see \SugarCraft\Crush\LSP\LspConnection::connect()}
+     * and calls `initialize()`; an `onNotification()` subscriber routing
+     * `textDocument/publishDiagnostics` into
+     * {@see LspClient::handlePublishDiagnostics()}, which NOTHING in `src/` does
+     * today — that is why {@see LspTool}'s empty `diagnostics` answer carries its
+     * own caveat rather than reading as "this file is clean"; a shutdown hook in
+     * the shape of {@see stopMcpServers()}; and — because STARTING A SERVER IS
+     * CODE EXECUTION,
+     * exactly as it is for `.mcp.json` — the same trust gate {@see mcpClient()}
+     * applies to a project-supplied config. That gate is the reason this is not
+     * a two-line change, and it is why the launcher is out of this bundle's scope
+     * rather than merely unfinished.
+     *
+     * MEANWHILE THE TOOL IS STILL REACHABLE AND STILL HONEST. With a null client
+     * every call returns an ERROR naming the language, never an empty success —
+     * see {@see LspTool} for why that distinction is the point, and
+     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::testTheWiredLspToolRefusesRatherThanAnsweringEmptyWithNoServerConfigured()}
+     * for the assertion that the LIVE wiring behaves that way rather than only
+     * the class in isolation.
+     *
+     * $client is injectable so an embedder that HAS built servers can hand them
+     * over without waiting for the settings block; {@see tools()} threads its own
+     * parameter straight through.
+     */
+    public static function lspTool(?string $root = null, ?LspClient $client = null): LspTool
+    {
+        return new LspTool($client, self::requireRoot($root));
+    }
+
+    /**
      * Build the built-in coding tools, with a shared InstructionFileLoader
      * wired into every tool that surfaces nested CLAUDE.md/AGENTS.md content
      * (Read/Edit/Glob/Write) so those files are actually reachable when a user
      * runs the real CLI binary.
      *
-     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET. Its BUILT-IN half is ten
-     * entries as of this writing, and THAT count — not this array's length — is
-     * the domain for every "N built-in tools" figure in `README.md`.
-     * `src/Tools/BuiltIn/` holds exactly those ten concrete `Tool` classes.
+     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET. Its BUILT-IN half is
+     * ELEVEN entries as of this writing — it was ten until {@see LspTool} was
+     * added — and THAT count, not this array's length, is the domain for every
+     * "N built-in tools" figure in `README.md`. `src/Tools/BuiltIn/` holds
+     * exactly those eleven concrete `Tool` classes.
      *
-     * The array is longer than ten only when the project ships a `.mcp.json` AND
+     * ELEVEN IS THE COUNT OF WIRED TOOLS, NOT OF USABLE ONES, and the two differ
+     * on every launch today: `LspTool` is reachable and answers every call with a
+     * "no language server configured" error, because nothing in `src/` reads a
+     * server command yet ({@see lspTool()}). A figure that said "eleven working
+     * tools" would be the wrong claim about this array.
+     *
+     * The array is longer than eleven only when the project ships a `.mcp.json` AND
      * the user has listed this root under `trustedProjectMcp` — both conditions,
      * see {@see mcpClient()} for why the second one exists. Then one
      * {@see McpToolBridge} per tool the configured MCP servers advertise is
@@ -3298,10 +3359,13 @@ final class Bootstrap
      *        pane all read ONE instance — two independently scanned
      *        registries would let a skill disabled on one still be invocable
      *        through the other. Defaults to a fresh scan of $root.
+     * @param LspClient|null $lsp Language servers for {@see LspTool}, threaded
+     *        through to {@see lspTool()}. Null — the shipped state, since nothing
+     *        in `src/` builds one — leaves the tool reachable but refusing.
      *
      * @return list<Tool>
      */
-    public static function tools(?string $root = null, ?InstructionFileLoader $loader = null, ?SkillRegistry $skills = null): array
+    public static function tools(?string $root = null, ?InstructionFileLoader $loader = null, ?SkillRegistry $skills = null, ?LspClient $lsp = null): array
     {
         $root = self::requireRoot($root);
         $loader ??= self::instructionLoader($root);
@@ -3341,17 +3405,27 @@ final class Bootstrap
             // a full SKILL.md body through this tool only when it decides one
             // is relevant (crush_feat.md section 7 E1/E2).
             new SkillTool($skills, new SkillLoader()),
-            // APPENDED, so the ten built-ins keep the wire order the model has
+            // ELEVENTH, and appended to the built-in half rather than inserted:
+            // every position above is a wire position the model has already
+            // learned. Dormant by construction on every launch today — see
+            // {@see lspTool()} for the missing configuration half and for why a
+            // dormant-but-reachable tool is shipped instead of an unreachable
+            // finished subsystem.
+            self::lspTool($root, $lsp),
+            // APPENDED, so the eleven built-ins keep the wire order the model has
             // learned and an MCP config can only ever ADD names. Empty unless
             // this project ships a `.mcp.json` AND the user trusted this root —
             // see {@see mcpTools()} and {@see mcpClient()}.
             //
-            // The doc-block above deliberately still says TEN: that count is the
-            // BUILT-IN set, which is what `README.md`'s figure and
-            // `BinSugarcrushWiringTest`'s scanned assertion are both about. What
-            // this array returns is that set PLUS whatever the project's MCP
-            // servers advertise, which is a per-project number nothing in `src/`
-            // can know.
+            // The doc-block above deliberately says ELEVEN, not "eleven plus
+            // whatever this call returned": that count is the BUILT-IN set, which
+            // is what `README.md`'s figure and `BinSugarcrushWiringTest`'s scanned
+            // assertion are both about. What this array returns is that set PLUS
+            // whatever the project's MCP servers advertise, which is a per-project
+            // number nothing in `src/` can know. It said TEN until `LspTool` was
+            // wired above; if you add a twelfth, this number, the README figure
+            // and `BuiltInToolCorpusTest`'s wired-count assertion all move
+            // together.
             ...self::mcpTools($root),
         ];
     }

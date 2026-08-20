@@ -27,17 +27,18 @@ use SugarCraft\Crush\Tools\Tool;
  *
  * So the SOURCE TREE is the corpus — `src/`, not one directory inside it. It was
  * one flat directory for two rounds, which put the same recurrence back in front
- * of `src/LSP/LspTool.php`; see {@see classNames()} for the measurement and for
- * why that widening changes nothing on today's tree. A new tool class is in every
- * one of these tests the moment it exists, and it fails them until it is wired.
+ * of the then-unwritten `LspTool`; see {@see classNames()} for the measurement,
+ * for why the widening changes nothing on today's tree, and for where that tool
+ * actually landed. A new tool class is in every one of these tests the moment it
+ * exists, and it fails them until it is wired.
  *
  * "THE SOURCE TREE IS THE CORPUS" USED TO MEAN "ONE TYPE PER FILE", and `src/`
  * already ships nineteen counterexamples. The scan derived exactly one class per
  * FILENAME, so a `Tool` implementor declared as a SECOND top-level symbol in a
  * file was invisible to all four consumers while {@see nonClassSources()} still
  * returned `[]` — silently, because the file's PRIMARY symbol does exist.
- * MEASURED with `token_get_all()` rather than `class_exists()`: 267 `.php` files
- * under `src/` declare 286 top-level types, 19 of them secondary, in 8 files.
+ * MEASURED with `token_get_all()` rather than `class_exists()`: 278 `.php` files
+ * under `src/` declare 297 top-level types, 19 of them secondary, in 8 files.
  * `src/App/App.php` alone declares twelve (`Msg`, `Cmd`, `UserInputMsg`, …), and
  * `src/ToolRegistry.php` declares `SugarCraft\Crush\Tool` — one `use` away from
  * colliding with the tool interface, and `tests/ToolRegistryTest.php` already
@@ -131,13 +132,30 @@ final class BuiltInToolCorpus
      * {@see \SugarCraft\Crush\Tests\Providers\ToolSchemaEncodingTest},
      * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest}).
      * IT IS NO LONGER LATENT, and that sentence used to say it was: MEASURED on
-     * this tree, 276 `.php` files under `src/` hold ELEVEN concrete `Tool`
-     * implementors, ten in `src/Tools/BuiltIn/` and one — {@see McpToolBridge},
+     * this tree, 278 `.php` files under `src/` hold TWELVE concrete `Tool`
+     * implementors, eleven in `src/Tools/BuiltIn/` and one — {@see McpToolBridge},
      * the adapter that makes a project's MCP tools dispatchable — in
-     * `src/Tools/`. Under the flat glob that eleventh would have been invisible to
+     * `src/Tools/`. Under the flat glob that twelfth would have been invisible to
      * all four consumers, which is verbatim the recurrence this corpus was written
-     * to prevent. The next planned tool, `src/LSP/LspTool.php` (plan step #17),
-     * lands the same way.
+     * to prevent.
+     *
+     * AND THE PREDICTION THAT USED TO SIT HERE WAS WRONG, which is worth leaving
+     * on the record rather than deleting. It read: "The next planned tool,
+     * `src/LSP/LspTool.php` (plan step #17), lands the same way" — i.e. outside
+     * the wired directory, needing the widening. It did not.
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} is the ELEVENTH entry in
+     * `src/Tools/BuiltIn/`, because it is a literal in `Bootstrap::tools()` and
+     * {@see BuiltInToolCorpusTest::testTheWideSweepFindsTheFlatGlobPlusExactlyTheRecordedDynamicTools()}
+     * asserts `assertSame(flat-glob + DYNAMIC_TOOL_CLASSES, classNames())` — so a
+     * wired tool placed in `src/Tools/` and not exempted reds that assertion, and
+     * exempting it is impossible because
+     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}
+     * requires every exempted class to be ABSENT from the array. Measured, not
+     * reasoned: with the file at `src/Tools/LspTool.php` that first assertion
+     * failed `actual size 11 matches expected size 10`. The widening is therefore
+     * still guarding a LATENT case, for some future tool that a real run
+     * dispatches without `Bootstrap::tools()` naming it, and `McpToolBridge`
+     * remains its only live instance.
      *
      * The counterpart is {@see DYNAMIC_TOOL_CLASSES}: the widening is what puts a
      * tool outside the wired directory INTO every test, and that list is what
@@ -145,13 +163,23 @@ final class BuiltInToolCorpus
      *
      * THE GUARD FIX BELOW IS A PREREQUISITE FOR THAT WIDENING, not a nicety
      * beside it. Symbol kinds measured across the PRIMARY (PSR-4-named) symbol of
-     * each of the same 267 files — one per file, which is the census's stated
-     * domain and NOT the same as the 286 top-level types those files declare:
-     * 220 concrete classes, 25 enums, 16 interfaces, 6 traits, **0 abstract
-     * classes**. So the
+     * each of 267 files — the tree AS IT WAS WHEN THIS PARAGRAPH WAS MEASURED,
+     * one symbol per file, which is the census's stated domain and NOT the same as
+     * the 286 top-level types those 267 files declared: 220 concrete classes, 25
+     * enums, 16 interfaces, 6 traits, **0 abstract classes**. The live figures
+     * move with the tree and are pinned in
+     * {@see BuiltInToolCorpusTest::testTheSymbolKindCensusTheDocBlockQuotes()};
+     * what this paragraph is about is the ZERO, which is the whole argument and
+     * has held at every size since. So the
      * one shape the old `class_exists()`-only guard classified correctly is the
-     * one shape that does not occur, and the 22 files it would have thrown on are
-     * already in the tree — `src/LSP/` alone ships `LspCacheInterface` and
+     * one shape that does not occur, and the files it would have thrown on are
+     * already in the tree: every interface and every trait the scan reaches. That
+     * is 16 + 6 = 22 in the historical figures above and it MOVES WITH THE TREE
+     * exactly as they do — it read 22 as a live count for one round after the
+     * interface count had gone to 17, which is this project's standing defect in
+     * miniature, so the live number is deliberately not written here;
+     * {@see BuiltInToolCorpusTest::testTheSymbolKindCensusTheDocBlockQuotes()}
+     * prints today's. `src/LSP/` alone ships `LspCacheInterface` and
      * `LspConnectionInterface`. Widening the scan without fixing the guard would
      * have aborted suite construction on this very checkout.
      *
@@ -474,12 +502,12 @@ final class BuiltInToolCorpus
      * The `src/` files that declare no symbol at their PSR-4 name.
      *
      * The visible half of {@see classNames()}'s one non-throwing skip. MEASURED
-     * on this tree: 0 of 267. Pinned at zero by
+     * on this tree: 0 of 278. Pinned at zero by
      * {@see BuiltInToolCorpusTest::testEverySourceFileDeclaresItsPsr4Symbol()},
      * so a file that becomes exempt turns ONE test red with its own name in the
      * message rather than aborting the whole suite's construction.
      *
-     * The "of 267" half is now load-bearing rather than decorative:
+     * The "of 278" half is now load-bearing rather than decorative:
      * {@see sourceFiles()} throws on an empty tree, so an empty result here can
      * no longer mean "nothing was scanned".
      *
@@ -508,8 +536,8 @@ final class BuiltInToolCorpus
      * {@see nonClassSources()} being vacuous. `classNames()` has always thrown on
      * an empty RESULT; `nonClassSources()` had no such guard, so pointed at an
      * existing-but-empty injected root it returned `[]` and
-     * `assertSame([], $exempt)` passed having scanned nothing. "0 of 267" was
-     * never asserted to have looked at 267 files. The guard lives here rather
+     * `assertSame([], $exempt)` passed having scanned nothing. "0 of N" was
+     * never asserted to have looked at N files. The guard lives here rather
      * than in each caller because both of them need it and there is one place a
      * scan can come back empty.
      *

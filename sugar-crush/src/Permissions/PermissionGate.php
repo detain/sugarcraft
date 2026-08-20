@@ -539,12 +539,31 @@ final class PermissionGate
     // -------------------------------------------------------------------------
 
     /**
-     * Read-only built-in tools (@see src/Tools/BuiltIn/): Read, Grep, Glob, WebFetch
-     * fetch/inspect without mutating local state. `Find` was never a real tool name.
+     * The built-in tools this gate treats as read-only: `Read`, `Grep`, `Glob`,
+     * `WebFetch`, `Lsp`. `Find` was never a real tool name.
+     *
+     * A DECISION, NOT A CENSUS OF `src/Tools/BuiltIn/`, and the earlier wording
+     * here ("Read-only built-in tools (@see src/Tools/BuiltIn/): …") claimed to be
+     * the latter — a list whose stated domain was a directory, while three tools
+     * in that directory that mutate nothing were absent from it. `WebSearch`,
+     * `Skill` and `doctor` are deliberately still absent: each reaches something
+     * outside this process (a search endpoint, a skill body that may carry
+     * `allowed-tools`, a capability probe), so leaving them to Ask costs a prompt
+     * while listing them would spend a judgement this class cannot make.
+     *
+     * `Lsp` IS here, and the reason is specific to it rather than inherited: its
+     * whole `operation` domain is queries — definition, references, hover,
+     * symbols, codeActions, diagnostics — and the mutating half of LSP (rename,
+     * formatting, APPLYING a code action's edit) is absent from that tool by
+     * construction. `codeActions` RETURNS proposed edits and nothing applies one;
+     * an edit still has to come back through `Edit`/`Write`, which are
+     * {@see isWriteTool()}. Without this entry, Plan mode — the mode whose entire
+     * purpose is reading a codebase before touching it — asked before every
+     * go-to-definition, and DontAsk denied it outright.
      */
     private function isReadOnlyTool(ToolCall $call): bool
     {
-        return in_array($call->name, ['Read', 'Grep', 'Glob', 'WebFetch'], true);
+        return in_array($call->name, ['Read', 'Grep', 'Glob', 'WebFetch', 'Lsp'], true);
     }
 
     /**

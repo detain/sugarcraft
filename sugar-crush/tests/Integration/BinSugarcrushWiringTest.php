@@ -191,12 +191,12 @@ final class BinSugarcrushWiringTest extends TestCase
             // Still a literal, and deliberately: this asserts the WIRE NAMES the
             // provider schema advertises, which the class names do not determine
             // (`SkillTool` announces itself as `Skill`) and which the model has
-            // learned. `doctor` is lower-case where the other nine are TitleCase —
+            // learned. `doctor` is lower-case where the other ten are TitleCase —
             // asserted as it actually is rather than as it ought to be, since
             // renaming a tool the model already knows is not this test's business.
             // A NEW tool fails the scanned assertion above before it reaches here,
             // so this list cannot silently go stale.
-            ['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'Skill', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
+            ['Bash', 'Edit', 'Glob', 'Grep', 'Lsp', 'Read', 'Skill', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
             $names,
         );
 
@@ -208,6 +208,50 @@ final class BinSugarcrushWiringTest extends TestCase
             $this->instructionLoaderOf($byClass[Read::class]),
             $this->instructionLoaderOf($byClass[\SugarCraft\Crush\Tools\BuiltIn\Write::class]),
         );
+    }
+
+    /**
+     * THE LIVE `Lsp` TOOL REFUSES; IT DOES NOT ANSWER EMPTY.
+     *
+     * This is the assertion that makes the whole design decision behind
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} real on the wiring path
+     * rather than only in a unit test of the class. Nothing in `src/` builds an
+     * {@see \SugarCraft\Crush\LSP\LspClient} — there is no settings key for
+     * language servers ({@see Bootstrap::lspTool()}) — so the tool a real launch
+     * gets has NO servers, and the one thing it must never do is hand back a
+     * successful empty result: to a model, "no references" is a fact about the
+     * codebase it will then act on, and it would be a fabrication.
+     *
+     * MEASURED AS A FALSIFIABLE PAIR rather than a keyword scan. `isError` true
+     * is the load-bearing half; the `php` in the message is what says the refusal
+     * names the language it could not ask, which is the difference between a
+     * usable diagnostic and "something went wrong". A build whose `LspTool`
+     * returned `new ToolResult(id, '[]')` passes any test that only greps the
+     * content for a word.
+     *
+     * The path is a file that really exists in the fixture repo, so a green here
+     * cannot be an accidental "file not found": the refusal is about the missing
+     * SERVER, and the tool checks the server before it touches the path
+     * deliberately, for exactly this reason.
+     */
+    public function testTheWiredLspToolRefusesRatherThanAnsweringEmptyWithNoServerConfigured(): void
+    {
+        $byClass = $this->toolsByClass();
+        $lsp = $byClass[\SugarCraft\Crush\Tools\BuiltIn\LspTool::class] ?? null;
+        $this->assertNotNull($lsp, 'Bootstrap::tools() must wire an LspTool');
+
+        $target = $this->tempDir . '/repo/Present.php';
+        file_put_contents($target, "<?php\n");
+
+        $result = $lsp->execute([
+            'id' => 'call_lsp',
+            'operation' => 'references',
+            'path' => $target,
+        ]);
+
+        $this->assertTrue($result->isError(), 'an unconfigured language server must be an ERROR result');
+        $this->assertStringContainsString('no language server configured for php', $result->content());
+        $this->assertSame('call_lsp', $result->toolCallId());
     }
 
     public function testReadEditGlobEachReceiveANonNullInstructionLoader(): void

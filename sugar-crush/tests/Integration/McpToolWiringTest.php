@@ -138,19 +138,24 @@ final class McpToolWiringTest extends TestCase
     /**
      * The built-ins keep their wire order and their count, and the bridge is
      * APPENDED — so an MCP config can only ever add names the model did not have.
+     *
+     * ELEVEN, and it was ten until `Lsp` was wired: the literal below is the
+     * BUILT-IN half in wire order, and `Lsp` is last in it for the same reason
+     * the bridge is last overall — every earlier position is one the model has
+     * already learned. The `+ 1` in the count is the single bridge this fixture's
+     * server advertises, not a second built-in.
      */
-    public function testTheTenBuiltInsAreUnchangedAndTheBridgeComesLast(): void
+    public function testTheElevenBuiltInsAreUnchangedAndTheBridgeComesLast(): void
     {
         $this->writeMcpConfig();
 
         $names = array_map(static fn (object $t): string => $t->name(), Bootstrap::tools($this->repo));
 
-        $this->assertSame(
-            ['Bash', 'Read', 'Edit', 'Glob', 'Grep', 'Write', 'WebFetch', 'WebSearch', 'doctor', 'Skill'],
-            \array_slice($names, 0, 10),
-        );
-        $this->assertSame('mcp__fake__ping', $names[10]);
-        $this->assertCount(11, $names);
+        $builtIns = ['Bash', 'Read', 'Edit', 'Glob', 'Grep', 'Write', 'WebFetch', 'WebSearch', 'doctor', 'Skill', 'Lsp'];
+
+        $this->assertSame($builtIns, \array_slice($names, 0, \count($builtIns)));
+        $this->assertSame('mcp__fake__ping', $names[\count($builtIns)]);
+        $this->assertCount(\count($builtIns) + 1, $names);
     }
 
     /**
@@ -166,7 +171,7 @@ final class McpToolWiringTest extends TestCase
         $tools = Bootstrap::tools($this->repo);
 
         $this->assertSame([], array_filter($tools, static fn (object $t): bool => $t instanceof McpToolBridge));
-        $this->assertCount(10, $tools);
+        $this->assertCount(11, $tools, 'the built-in set alone — eleven since Lsp was wired');
         $this->assertFileDoesNotExist($this->callLog);
         $this->assertSame(0, $this->handshakeCount());
     }
@@ -220,7 +225,10 @@ final class McpToolWiringTest extends TestCase
      *     Bootstrap::tools($repo)  ->  tools=10  elapsed=0.02s
      *     cat pwned.txt            ->  PWNED-AT-LAUNCH
      *
-     * `tools=10` is the point: the payload was not a working MCP server, the
+     * `tools=10` was the built-in count on the tree that run was taken against;
+     * it is ELEVEN today (`Lsp`), and the transcript is left as measured rather
+     * than renumbered. The point is that it equals the built-in count with no
+     * bridge added: the payload was not a working MCP server, the
      * handshake failed, the server was DISCARDED — and the command had already
      * run. So a tool-count assertion would have passed on the broken code, and
      * only the payload file distinguishes "not exposed to the model" from "not
@@ -237,7 +245,7 @@ final class McpToolWiringTest extends TestCase
         $tools = Bootstrap::tools($this->repo);
 
         $this->assertNull(Bootstrap::mcpClient($this->repo));
-        $this->assertCount(10, $tools, 'no bridges, because no server was started');
+        $this->assertCount(11, $tools, 'no bridges, because no server was started');
         // The load-bearing one. A short settle first: the payload writes and exits
         // immediately, so if it ran at all the file is already there.
         usleep(200_000);

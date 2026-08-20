@@ -182,7 +182,7 @@ final class BuiltInToolCorpusTest extends TestCase
         sort($expected);
 
         $this->assertSame($expected, BuiltInToolCorpus::classNames());
-        $this->assertCount(10, $flat, 'ten wired built-in tools on this tree');
+        $this->assertCount(11, $flat, 'eleven wired built-in tools on this tree');
 
         // And the recorded exemptions must genuinely live OUTSIDE the wired
         // directory: an entry that has moved into `src/Tools/BuiltIn/` would be
@@ -250,8 +250,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 17 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 277 files declare
-     * 296 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 278 files declare
+     * 297 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
@@ -293,9 +293,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(277, $files, 'php files under src/');
+        $this->assertSame(278, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 228, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
+            ['concrete' => 229, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -324,8 +324,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 277 `.php`
-     * files, 296 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names: 278 `.php`
+     * files, 297 top-level declarations, 19 of them secondary in 8 files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *
@@ -385,8 +385,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(277, count($files), 'php files under src/');
-        $this->assertSame(296, $declarations, 'top-level declarations in them');
+        $this->assertSame(278, count($files), 'php files under src/');
+        $this->assertSame(297, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),
