@@ -36,7 +36,7 @@ and every figure since is void. `sugar-crush/vendor/sugarcraft/` = 18 symlinks.
 |---|---|---|---|
 | `crush-lane-cmd` | the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `339f512c` | — released, dir reset to `origin/master` |
 | `crush-lane-sglang` | **DSML parser + streaming gap** | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `2bde4114` | — released, dir reset to `origin/master` |
-| `crush-lane-lsp` | **P3.2 FocusRing + P3.5 padding** (P3.3 DESCOPED — premise false) | **FIX** — review returned COMMIT AFTER FIXES, 0 BLOCKING | `src/Tui/**` (which is where `KeyboardHandler.php` lives), `src/App/**`, `src/Renderer.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
+| `crush-lane-lsp` | ~~P3.2 + P3.5~~ ✅ `c4718781` → now **P8.4 wire the split-pane compositor** | **IMPLEMENT** | `src/Tui/**` (which is where `KeyboardHandler.php` lives), `src/App/**`, `src/Renderer.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
 
 **LIVE SUITE: `8299 / 91986 / 1 skipped / rc 0` — supervisor-measured at `2bde4114`.** This supersedes
 the 8111/91477 baseline that held across rounds 31-33. Master also carries CI `vhs:` GIF commits
@@ -80,7 +80,33 @@ Both lanes are instructed to STOP on any non-count conflict. `lsp` is barred fro
 |---|---|---|---|
 | `cmd` | `339f512c` | **8204 / 91728 / 1 / rc 0** | matched its claim exactly |
 | `sglang` | `2bde4114` | **8299 / 91986 / 1 / rc 0** | matched its claim exactly |
-| `lsp` | — | in FIX | reviewer measured 8127/91560/1/rc 0 pre-rebase; 8/8 own mutations + 8/8 reviewer mutations killed |
+| `lsp` | `c4718781` | **8315 / 92077 / 1 / rc 0** (+ candy-core **781 / 6982 / 25 / rc 0**) | matched its claim exactly; 8/8 own + 8/8 reviewer mutations killed |
+
+**ALL THREE ROUND-33 BUNDLES ARE LANDED AND VERIFIED. The suite floor is now 8315 / 92077 / 1 / rc 0.**
+
+**`lsp` closed all four SHOULD-FIX items and improved on two of them.** It BUILT the popup state
+rather than renaming the test that falsely claimed it (`shellWithAnOpenSlashPopup()` hosts a real
+`Chat` and types `/comp` through `update()`), and it asserts the precondition before the contrast so
+the test cannot silently go vacuous again — proved by mutation: mirroring the shift-Tab arm fails
+**exactly one test**, the new one. It added the missing `candy-core` tests and proved the gap the
+reviewer alleged: deleting the `'Z'` arm now fails **exactly 4 tests, all four of them new**,
+confirming the pre-existing 777 were blind to it. `md5sum -c` OK on every restore.
+It also found the brief's item-3 claim **understated**: `AgentDashboardPane` under-compensates on
+BOTH its paths, not just the empty-list one, because `box()` repeats the same border+padding geometry.
+
+🔎 **THE PHANTOM ZONE'S ORIGIN, and it is the recurring defect in its purest form.** `pane:files`
+occurs **exactly once in the whole tree** — `tests/PaneClickTest.php:252`, a hand-written synthetic
+string fed to `scan()`. A test FIXTURE was read as a LIVE RENDER, and the id and coordinates lifted
+from it travelled through an implement report, into the supervisor's RESUME, and were only stopped by
+a reviewer who enumerated the real registry. **A string that exists is not a thing that happens.**
+
+**Backlog E51-E54 recorded** in `docs/plans/crush_code_hardening_backlog.md`: E51 the mouse-path modal
+gap (`Chat::handleMouse()` dispatched at `Chat.php:1108`, before the `!$msg instanceof KeyMsg` return,
+so the guards at `:1194`/`:1315`/`:1324` are keyboard-only; reaches `toggleToolOutput()` via `:3639`
+— **UX/correctness, NOT security**); E52 `CSI 1;5Z` loses the shift the `Z` encodes; E53 ZWJ fast/slow
+width divergence (measured 2 vs 6, over-truncating direction only); E54 the `$w + 4` caller asymmetry.
+The lane **declined to re-derive E51's row/col coordinates** and said so, attributing them to the
+reviewer and marking them not re-derived — the correct handling of a number you did not measure.
 
 **`sglang` was handed to its fix agent RED and the brief said green.** It measured
 **8153 / 91612 / 1 with 2 failures, rc 1** — not the briefed 8150 / 91605 / rc 0. The interrupted
