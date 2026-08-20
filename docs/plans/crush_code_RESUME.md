@@ -153,6 +153,40 @@ traps that would make an implementer get each one wrong:
   which lane `cmd` holds.**
 - **Finding #6 and P7.6: ✅ done, see the table above.**
 
+### THE ITEM THAT UNBLOCKS A SAFE DEFAULT — promote it to the front of the queue
+
+**`sugar-crush` ships with `DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions`
+(`src/Cli/Bootstrap.php:153`), and with the shipped empty rule set that is EXACTLY EQUAL to having
+no gate.** Supervisor-verified 2026-08-20. This is **deliberate, documented and currently correct** —
+`Bootstrap.php:2819-2840`, `README.md:827` and `docs/PERMISSIONS.md` all state it, and all three call
+it a stopgap rather than the settled design. Do NOT "fix" it by tightening the default; that would
+turn "no permission system" into "every Edit refused".
+
+The reason is named precisely, and so is the exit condition. Modes that answer Ask
+(`default`/`accept-edits`/`auto`) **fail CLOSED on the engine path**, because:
+
+1. **Nothing attaches an approver.** `EngineBackend::withPermissionApprover()`
+   (`src/Backend/EngineBackend.php:314`) has **no caller in `src/` at all** — supervisor-measured;
+   the only callers are `tests/Backend/EngineBackendPermissionGateTest.php` and
+   `tests/Integration/MemoryPromptWiringTest.php:320`. The constructor threads
+   `$permissionApprover` through all twelve `with*()` clones, so the seam is complete and wired to
+   nothing.
+2. **Behind that one:** `EngineBackend::completeAsync()` runs the turn in a `pcntl_fork()`ed child
+   whose only channel back to the parent is a **one-way frame stream**. An approver would need that
+   socket to become request/response before it could put a question on screen.
+
+**This is the highest-value item left in the plan for the user's stated goal of daily-driving
+sugar-crush**, and it is the "wire the dormant seam" shape the standing rule is about — the seam
+exists, is complete, and reaches nothing. Everything else in the permission surface is a guard rail
+on a gate that, by default, is not deciding anything. Round 33's `accept-edits` fix is real and
+worth having, but it only bites for a user who has explicitly opted into `accept-edits`.
+
+Sequencing note: piece 2 is the hard half and `Chat` already solves the equivalent problem for its
+OWN tool calls — the blocking `PermissionRequestMsg` / Veil modal flow, with `y`/`n`/`a` settling the
+paused call (`README.md:800`). So the design question is whether the forked child can be given a
+request/response channel, not whether the UI exists. Measure `completeAsync()`'s frame protocol
+before sizing this.
+
 ### THE QUEUE AFTER THE TWO LANES LAND
 
 1. **P8.9** + **finding #7 `/permissions`** — both were blocked only by lane `cmd`'s file hold, both
