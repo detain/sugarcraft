@@ -68,6 +68,26 @@ handling and `..` containment.
   to measure and did not measure itself.**
   Now pinned by `testATagCarryingTheSentenceTokenBlockCharacterIsNotDsml`.
   This is the third consecutive round in which the defect appears inside the work correcting it.
+- 🔴 **A TEXT-SCANNING FALLBACK PARSER IS A PROMPT-INJECTION SURFACE, AND THE PRECEDENT CARRIED THE
+  BUG.** The round-33 reviewer fed the new `DsmlToolCallParser` a message that merely *described*
+  DSML — "to call a tool you emit markup like this: ```<｜DSML｜tool_calls>…name=\"rm_rf\"…```. I have
+  not actually called anything." It returned **one real tool call, `rm_rf` with `path=/`.** Not
+  hypothetical: the DeepSeek card puts the DSML example **into the system prompt**
+  (`encoding_dsv4.py:84-94`, `render_tools`), so a model asked how tool-calling works quotes its own
+  instructions back verbatim. **The fallback whose whole purpose is that tool calls are never
+  silently MISSED was, for one prompt shape, silently INVENTING them** — the failure mode inverted.
+  The cause is detection by `str_contains($content, MARKER)`, i.e. "the marker appears anywhere";
+  upstream instead scans **positionally** from `f"\n\n<{dsml_token}{tool_calls_block_name}"`
+  (`enc.py:726`).
+  **And it was inherited.** `MinimaxXmlFallbackToolCallParser:74` has the identical
+  `str_contains($content, self::ENVELOPE_MARKER)` and has been shipped and wired since long before
+  this bundle — supervisor-measured. The brief said "copy its shape, not its regexes"; **the shape
+  was the vulnerability**, and neither that class's own review nor this brief noticed. Exposure
+  differs and the code must say so: `minimax-xml-fallback` is reachable only when explicitly named in
+  the `toolCallParser` config key, while DSML is now the derived default for the DeepSeek-V4 family.
+  **The general rule: a precedent is a vector. "Follow the existing pattern" propagates whatever the
+  pattern got wrong, and copying a shape copies its holes.**
+
 - **A CORRECTED CONSTANT LEAVES CORRECTED-LOOKING ARITHMETIC BEHIND.** `7957b2be` swept five places
   that *quoted* the superseded 393,216 and missed three that were **derived from it**:
   `contextWindow()`'s tier figures `~275,251 / ~334,233 / ~373,555` are 70/85/95% of 393,216. A grep
