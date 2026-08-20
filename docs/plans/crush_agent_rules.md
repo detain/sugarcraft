@@ -19,6 +19,26 @@ Bash CWD does NOT persist between calls — use absolute paths or chain with &&.
 - Never `-c core.hooksPath=/dev/null`, never `--no-verify`.
 - Never delete dormant/unwired code because it looks incomplete. Wire it or document it as a seam.
 
+## EVERY FIGURE IN YOUR BRIEF IS PROVISIONAL — MEASURE, THEN SAY SO
+
+Any suite baseline, commit SHA or behind-count written into your brief was true when the brief
+was written and may not be true when you read it. Master moves while you work: the supervisor
+commits, and **CI pushes regenerated demo GIFs on its own schedule**. Across one round, three
+separate agents were each handed a stale baseline and each had to correct it — one was told
+`574aca95`/3 commits, measured 5, and a later agent in the same round measured 7.
+
+So:
+
+1. **`git fetch origin master` first, then measure.** Report the SHA you actually observed.
+2. **Never quote a brief's figure as your own measurement.** If they disagree, say both and name
+   which one you measured. That disagreement is a finding worth reporting, not noise.
+3. **If your tree is dirty you cannot rebase** — `git pull --rebase` refuses it, and `stash` /
+   `commit` / `checkout` are forbidden to you. That is expected mid-implementation. State your
+   baseline as the lane's own HEAD, verify that the commits you are behind do not touch your file
+   set, and compute what your figure becomes after the rebase rather than pretending you rebased.
+4. A count you did not measure yourself is exactly the defect this plan tracks. **A baseline is a
+   claim, and it decays.**
+
 ## Running tests — KEEP CONTEXT SMALL
 - While iterating, run ONE test FILE: `cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/X/YTest.php`
   (~0.05-6s). Never run `tests/Cli` as a DIRECTORY — it hangs >4min.
