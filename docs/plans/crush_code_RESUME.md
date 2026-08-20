@@ -11,11 +11,21 @@ Nothing here depends on a prior conversation's context.
 **Written mid-round so a compact cannot lose it. §0-NOW-32 below is the previous round's block and
 remains the authority for the standing rules, the queue rationale and the DeepSeek record.**
 
-### CONCURRENCY IS NOW 3, BY USER INSTRUCTION
+### CONCURRENCY: **2**, BY USER INSTRUCTION (superseding the earlier 3)
 
-The user raised the lane count from 2 to 3 on resume ("resume.. concurrency of 3"). The concurrency
-document's own arithmetic says sustainable N = 3, hard cap 4, so this is within the measured ceiling.
-`docs/plans/crush_code_concurrency.md` stays the authority for the mechanics.
+**CURRENT STANDING INSTRUCTION — concurrency is 2.** The user raised it 2 → 3 on resume ("resume..
+concurrency of 3"), then lowered it back: *"after these lanes finish their review/fixes switch to 2
+lanes at a time for now"*. **The step down takes effect as the in-flight round-34 lanes complete
+their review/fix cycles — do not kill anything mid-cycle to reach 2, and do not launch a third lane
+once they land.** `crush-lane-sglang` is the lane that stays parked; keep it clean at master so it can
+take over the instant either active lane is released.
+
+A read-only measurement/scout agent does NOT count against the lane budget — it holds no files, makes
+no writes, and cannot collide. Only lanes that write count.
+
+The concurrency document's own arithmetic says sustainable N = 3, hard cap 4, so 2 is comfortably
+inside the measured ceiling; `docs/plans/crush_code_concurrency.md` stays the authority for the
+mechanics.
 
 **The round was PAUSED once ("pause everything temporarily") and resumed.** Both fix agents and the
 sync daemon were stopped mid-flight and every agent was confirmed killed before the pause. That pause
