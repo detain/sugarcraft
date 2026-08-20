@@ -495,6 +495,49 @@ Disk is the only column lib-only wins and it wins by an irrelevant margin.
   Packagist copies, and the only signal is the skip count going 1 → 2). The 109 MB is the price of a
   usable lane.
 
+### 5.2b PRECONDITION: NEVER SNAPSHOT A TREE THAT IS BEING MUTATED
+
+**Added 2026-08-20 after the supervisor did exactly this and nearly misdiagnosed the result.**
+
+A lane is only as good as the tree it was copied from. If any agent is running a **mutation harness**
+in the source tree when you `cp -a`, the copy freezes whatever mutation happened to be applied at that
+instant, and the lane's baseline is silently wrong from birth.
+
+This is not hypothetical. Measured: a probe copy taken mid-review froze
+`'fish' => self::zshCompletion()` where the live tree had `self::fishCompletion()`. The probe's suite
+then reported exactly **1 failure**, and the obvious (wrong) reading was that an unrelated dependency
+change had broken something. It was caught only because the diff happened to be two tokens wide. A
+mutation to a comparison operator or a boundary constant would not have been.
+
+**Why this is worse in a lane than in a probe:** every figure the lane reports afterwards — its
+baseline, its deltas, its "N mutations, N killed" table — is measured against a corrupted tree. A
+mutation the lane then applies and finds "already failing" reads as *killed*. That is a false green,
+and false greens are how this project's §5 defect ships.
+
+So, before `cp -a`:
+
+```sh
+# 1. Prove nothing is mid-mutation. A STILL `git status` IS NOT ENOUGH — see the note below.
+pgrep -af 'bin/phpunit'                                  # must be empty
+# and check every live agent transcript's mtime is not advancing
+
+# 2. Record what you copied FROM, into the lane itself.
+SRC=/home/sites/sugarcraft ; LANE=/home/sites/crush-lane-w
+cp -a $SRC $LANE
+{ echo "source-head: $(git -C $SRC rev-parse HEAD)"
+  echo "source-status-md5: $(git -C $SRC status --porcelain=v1 --untracked-files=all | md5sum | cut -d' ' -f1)"
+  echo "snapshot-at: $(date -Is)"
+} > $LANE/.lane-provenance
+```
+
+If a lane later reports something surprising, `.lane-provenance` is what tells you whether to believe
+it. Without it you cannot distinguish "the lane found a real bug" from "the lane was born broken".
+
+**A STILL TREE IS NOT EVIDENCE OF AN IDLE AGENT.** A mutation loop edits one file, runs ONE test file
+(~0.05s), and restores from a checksummed backup. `git status` is therefore byte-identical for minutes
+at a time while a great deal of work happens. Judge liveness from the agent transcript's mtime and from
+`pgrep -af 'bin/phpunit'` — never from the tree.
+
 ### 5.3 VERIFY EVERY LANE BEFORE HANDING IT TO AN AGENT
 
 Four checks. All four passed on a probe copy I made and destroyed on 2026-08-19; the numbers below are
