@@ -21,6 +21,7 @@ use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Tui\StallDetector;
 use SugarCraft\Crush\Tui\Renderer as ShellRenderer;
 
 /**
@@ -480,5 +481,103 @@ final class AgentDashboardPaneTest extends TestCase
 
         $this->assertSame([0, 0], LiveRenderer::zoneOrigin());
         $this->assertNull(LiveRenderer::scanner()->hit(1, 1));
+    }
+
+    // ── stall detection reaching the dashboard (Phase 8 item 3) ──────────
+
+    /**
+     * A supervisor whose detector has flagged a session hands the pane a real
+     * StallWarning, keyed by the session id the detector tracks under.
+     *
+     * The rate here is genuinely below the minimum — two observations with no
+     * tokens between them is 0 tok/s against a 0.5 floor — so the slow period
+     * really does accumulate. The threshold is 0 only so the crossing happens
+     * in milliseconds instead of the default 30 seconds; it is not what makes
+     * the session look slow.
+     */
+    public function testAStalledSessionReachesThePaneAsARealWarning(): void
+    {
+        $supervisor = new BackgroundSupervisor(
+            stallDetector: new StallDetector(thresholdSeconds: 0, minTokensPerSecond: 0.5),
+        );
+        $session = $this->session('s1', 'wedged');
+        $supervisor->addSession($session);
+
+        $supervisor->onSessionStreaming($session, '');
+        usleep(20_000);
+        $supervisor->onSessionStreaming($session, '');
+
+        $entry = AgentDashboardPane::entries($this->app(new Chat(backgroundSupervisor: $supervisor)))[0];
+
+        $this->assertNotNull($entry->stallWarning);
+        $this->assertSame('s1', $entry->stallWarning->agentId);
+    }
+
+    /**
+     * The counterpart, and the one that makes the test above mean something: a
+     * session the detector has NOT flagged arrives with a null warning. Same
+     * wiring, same two observations, same absent tokens — only the threshold
+     * differs, and 20ms of slow period does not cross a 60-second one. Without
+     * this, a builder that hardcoded a warning would pass the positive case.
+     */
+    public function testAnUnflaggedSessionArrivesWithNoWarning(): void
+    {
+        $supervisor = new BackgroundSupervisor(
+            stallDetector: new StallDetector(thresholdSeconds: 60, minTokensPerSecond: 0.5),
+        );
+        $session = $this->session('s1', 'healthy-enough');
+        $supervisor->addSession($session);
+
+        $supervisor->onSessionStreaming($session, '');
+        usleep(20_000);
+        $supervisor->onSessionStreaming($session, '');
+
+        $entry = AgentDashboardPane::entries($this->app(new Chat(backgroundSupervisor: $supervisor)))[0];
+
+        $this->assertNull($entry->stallWarning);
+    }
+
+    /**
+     * End to end: the warning does not merely reach the state object, it
+     * changes what the user sees. AgentOutputPane appends "⚠ stalled" to the
+     * header for a non-null warning, so this asserts on the rendered frame
+     * rather than on the field that feeds it.
+     */
+    public function testTheRenderedDashboardShowsTheStallIndicator(): void
+    {
+        $supervisor = new BackgroundSupervisor(
+            stallDetector: new StallDetector(thresholdSeconds: 0, minTokensPerSecond: 0.5),
+        );
+        $session = $this->session('s1', 'wedged');
+        $supervisor->addSession($session);
+
+        $supervisor->onSessionStreaming($session, '');
+        usleep(20_000);
+        $supervisor->onSessionStreaming($session, '');
+
+        $stalled = AgentDashboardPane::render(
+            $this->app(new Chat(backgroundSupervisor: $supervisor)),
+            100,
+            8,
+        );
+
+        $this->assertStringContainsString('stalled', $stalled);
+    }
+
+    /**
+     * An agent registered through AgentManager carries no warning, because
+     * nothing on that path ever calls StallDetector::track() — the detector is
+     * fed only from BackgroundSupervisor::onSessionStreaming(). This pins the
+     * null as the deliberate answer it is, so that if a later change starts
+     * measuring AgentManager throughput, this test is the one that has to be
+     * updated rather than a silent behaviour change.
+     */
+    public function testARegisteredAgentCarriesNoStallWarning(): void
+    {
+        $manager = $this->manager([$this->agent('reviewer')]);
+
+        $entry = AgentDashboardPane::entries($this->app(new Chat(agentManager: $manager)))[0];
+
+        $this->assertNull($entry->stallWarning);
     }
 }

@@ -17,6 +17,7 @@ use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\Mode;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Tui\StallWarning;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -131,8 +132,17 @@ final class AgentDashboardPane
 
         $supervisor = $chat->backgroundSupervisor();
         if ($supervisor !== null) {
+            // Once per frame, not once per session: getStallWarnings() walks
+            // every tracked agent, so calling it inside the loop would make
+            // the dashboard quadratic in session count for one identical map.
+            // It is pure in-memory arithmetic over StallDetector's snapshots
+            // (no I/O, no query), which is what makes it safe on a render path.
+            $warnings = $supervisor->getStallWarnings();
+
             foreach ($supervisor->getActiveSessions() as $session) {
-                $entries[] = self::sessionEntry($session);
+                // Keyed by session id because that is the key
+                // BackgroundSupervisor::onSessionStreaming() tracks under.
+                $entries[] = self::sessionEntry($session, $warnings[$session->id] ?? null);
             }
         }
 
@@ -278,7 +288,7 @@ final class AgentDashboardPane
      * block here would be mistaken for one of them by
      * {@see \SugarCraft\Crush\Renderer::maskImageMarkers()}.
      */
-    private static function row(int $index, AgentDisplayState $entry, bool $selected, int $inner, Theme $theme): string
+    private static function row(int $index, AgentOutputState $entry, bool $selected, int $inner, Theme $theme): string
     {
         $slot = $index < self::MAX_JUMP_SLOTS ? '[' . ($index + 1) . ']' : '   ';
         $label = Style::new()
@@ -286,6 +296,23 @@ final class AgentDashboardPane
             ->render($slot);
 
         $line = $label . ' ' . AgentStatusBar::renderAgentLine($entry, $theme);
+
+        // The LIST row has to carry this too, not just the peek overlay. The
+        // parameter above used to be typed as the PARENT AgentDisplayState,
+        // which does not declare `stallWarning` at all — so the field was
+        // invisible here even though `entries()` has only ever produced
+        // AgentOutputState. That type was the whole reason a stalled session
+        // could reach the dashboard and still look ordinary in the list.
+        //
+        // `shellWarning` duplicates AgentOutputPane::STALL_TOKEN's value,
+        // which is private; the two must stay in step or one widget will
+        // colour a stall differently from the other.
+        if ($entry->stallWarning !== null) {
+            $line .= Style::new()
+                ->foreground($theme->shellWarning)
+                ->bold()
+                ->render("  \u{26A0} stalled");
+        }
 
         return Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line;
     }
@@ -337,6 +364,18 @@ final class AgentDashboardPane
      * A registered agent's display state, sourced from the manager's real
      * telemetry (W3.F2) rather than the placeholder zeros this pane's
      * predecessor reported.
+     *
+     * NO STALL WARNING HERE, AND THAT IS NOT AN OVERSIGHT. Stall detection is
+     * fed from exactly one place — {@see
+     * \SugarCraft\Crush\Sessions\BackgroundSupervisor::onSessionStreaming()}
+     * calls `track()` as a background session's chunks arrive — so a background
+     * session is the only thing the detector has ever observed a token rate
+     * for. A registered agent reaches this pane through `AgentManager`, whose
+     * telemetry is cumulative totals with no per-chunk timing, so there is no
+     * rate to judge and no threshold to cross. Passing a warning here would
+     * mean inventing one. To give these rows a real stall signal, the
+     * measurement has to come first: something on the AgentManager path has to
+     * call `track()`.
      */
     private static function agentEntry(Agent $agent, \SugarCraft\Crush\Agents\AgentManager $manager): AgentOutputState
     {
@@ -363,8 +402,19 @@ final class AgentDashboardPane
         );
     }
 
-    /** A background session's display state, with a byte-bounded output tail. */
-    private static function sessionEntry(BackgroundSession $session): AgentOutputState
+    /**
+     * A background session's display state, with a byte-bounded output tail.
+     *
+     * $stall is the session's entry from {@see
+     * \SugarCraft\Crush\Sessions\BackgroundSupervisor::getStallWarnings()},
+     * or null when it is not stalling. Passing it is what makes
+     * {@see AgentOutputPane}'s stall branch reachable at all: that pane has
+     * always rendered an amber border and a warning line for a non-null
+     * `stallWarning`, and this builder has always defaulted the parameter,
+     * so the producer and the renderer were both complete while nothing
+     * joined them (crush_code.md Phase 8 item 3).
+     */
+    private static function sessionEntry(BackgroundSession $session, ?StallWarning $stall = null): AgentOutputState
     {
         return AgentOutputState::fromDisplayState(
             AgentDisplayState::new(
@@ -377,6 +427,7 @@ final class AgentDashboardPane
             ),
             model: self::safe($session->agent->model),
             outputBuffer: self::outputTail($session->output),
+            stallWarning: $stall,
         );
     }
 
