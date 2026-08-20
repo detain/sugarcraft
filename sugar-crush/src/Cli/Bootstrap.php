@@ -91,6 +91,26 @@ final class Bootstrap
     private const PERMISSION_RULES_CONFIG_KEY = 'permissionRules';
 
     /**
+     * The keys {@see permissionSettingsLayer()} accepts from the user's
+     * hand-authored `settings.json` — Phase 6 item 4.
+     *
+     * A WHITELIST, so that file cannot reach the OTHER things
+     * {@see permissionConfig()}'s return value decides. `trustedProjectHooks`,
+     * `trustedProjectMcp`, `trustedProjectCommands` and
+     * `trustedProjectSettings` are deliberately not here: they are the grants
+     * that make a repository's files policy at all, and the file they are
+     * written in should be the one the CLI itself writes and the one a user
+     * edits knowing it is the root of trust — not a second file that happens to
+     * be read for a mode.
+     *
+     * @var list<string>
+     */
+    private const PERMISSION_SETTINGS_KEYS = [
+        self::PERMISSION_MODE_CONFIG_KEY,
+        self::PERMISSION_RULES_CONFIG_KEY,
+    ];
+
+    /**
      * The per-user opt-in that makes a PROJECT `.sugar-crush/hooks.yaml`
      * eligible to run at all — a list of project roots, in the same
      * `~/.sugar-crush/config.json` {@see PERMISSION_RULES_CONFIG_KEY} is read
@@ -2831,7 +2851,13 @@ final class Bootstrap
      */
     public static function permissionGate(): PermissionGate
     {
-        $config = self::permissionConfig();
+        // The LAYERS rather than the merge, so the refusal below can name the
+        // file the bad value actually came from — see
+        // {@see permissionConfigLayers()} for the error message that made this
+        // necessary. Merged here rather than through `permissionConfig()` so
+        // the two policy files are read once per launch, not twice.
+        $layers = self::permissionConfigLayers();
+        $config = array_merge(...array_values($layers));
 
         // An EMPTY env var is absence, not a bad value: `FOO=` is how a
         // wrapper script drops an inherited override. Anything else it says,
@@ -2854,7 +2880,8 @@ final class Bootstrap
         $mode = self::permissionModeFrom($envRaw, '$' . self::PERMISSION_MODE_ENV)
             ?? self::permissionModeFrom(
                 $configRaw,
-                self::PERMISSION_MODE_CONFIG_KEY . ' in ' . self::userConfigPath(),
+                self::PERMISSION_MODE_CONFIG_KEY . ' in '
+                    . self::permissionKeySource($layers, self::PERMISSION_MODE_CONFIG_KEY),
             )
             ?? self::DEFAULT_PERMISSION_MODE;
 
@@ -2902,9 +2929,17 @@ final class Bootstrap
      * and the persisted provider genuinely SHOULD survive a corrupt config,
      * because guessing wrong about them costs nothing.
      *
+     * LAYERED SINCE Phase 6 item 4, over the user tier ONLY: the
+     * `permissionMode`/`permissionRules` of `~/.sugar-crush/settings.json`
+     * ({@see permissionSettingsLayer()}) beneath the whole of `config.json`.
+     * Both files are read by {@see readPolicyFile()}, so the strictness is the
+     * same for either — and no project file is consulted at any trust level,
+     * which is the one thing {@see readUserConfig()} does differently and the
+     * one thing it must never do here.
+     *
      * @return array<string, mixed>
      *
-     * @throws PermissionConfigException when the file exists and cannot be used
+     * @throws PermissionConfigException when either file exists and cannot be used
      */
     private static function permissionConfig(): array
     {
@@ -2918,9 +2953,165 @@ final class Bootstrap
         // not evaluate): naming the policy file explicitly says nothing about
         // whether the ~/.sugar-crush this process would go on to read hooks
         // and agent presets from is this user's, so the gate stays armed.
-        $discovered = self::trustedConfigDirPath() . '/config.json';
-        $path = self::$configPathOverride ?? $discovered;
+        return array_merge(...array_values(self::permissionConfigLayers()));
+    }
 
+    /**
+     * The permission layers KEYED BY THE PATH THEY CAME FROM, lowest precedence
+     * first — `settings.json` then `config.json`.
+     *
+     * THE KEYS ARE THE POINT, and they exist because an error message lied.
+     * `permissionGate()` refuses a launch whose `permissionMode` names no real
+     * mode, and it named the file as a literal `userConfigPath()` — hardcoded to
+     * `config.json` — from the moment `settings.json` became a second source.
+     * Measured: a `~/.sugar-crush/settings.json` of `{"permissionMode":"nope"}`
+     * with no `config.json` at all refused the launch with "permissionMode in
+     * …/config.json is 'nope'", sending the user to edit a file that does not
+     * exist. {@see readPolicyFile()}'s own doc-block claims which file refused
+     * the launch is always in the error; for that one branch it was not. So the
+     * merge cannot be anonymous — provenance has to survive it, which is what
+     * {@see permissionKeySource()} reads.
+     *
+     * `config.json` outranks `settings.json` for {@see readUserConfig()}'s
+     * reason: it is the file the CLI WRITES, so it must also be the file that
+     * decides. `array_merge`, later wins — and the ordering of this array IS
+     * that precedence, for both the merge and the provenance lookup, so the two
+     * cannot disagree about which file won.
+     *
+     * ONE EDGE, named rather than left to be discovered: `--config` pointed at
+     * the user's own `settings.json` collapses the two entries into one, since
+     * they are the same array key. The surviving entry is the
+     * {@see readPolicyFile()} read — the whole file, not the
+     * {@see PERMISSION_SETTINGS_KEYS} whitelist — which is the right answer for
+     * a file the user has explicitly named as THE policy file, and provenance
+     * still points at it.
+     *
+     * @return array<string, array<string, mixed>>
+     *
+     * @throws PermissionConfigException when either file exists and cannot be used
+     */
+    private static function permissionConfigLayers(): array
+    {
+        $configDir = self::trustedConfigDirPath();
+        $discovered = $configDir . '/config.json';
+        $path = self::$configPathOverride ?? $discovered;
+        $settingsPath = rtrim($configDir, '/') . '/' . LayeredSettings::USER_FILE;
+
+        return [
+            $settingsPath => self::permissionSettingsLayer($settingsPath),
+            $path => self::readPolicyFile($path),
+        ];
+    }
+
+    /**
+     * WHICH FILE last set a permission key, for an error message that has to
+     * name it.
+     *
+     * The LAST layer carrying the key, matching `array_merge`'s later-wins, and
+     * `array_key_exists` rather than `?? null` so that a layer setting a key to
+     * an explicit null is still the layer that set it.
+     *
+     * The fallback is reached only for a key NO layer carries, and it is
+     * deliberately not exercised by any caller today: a permission key absent
+     * from every layer is read as absent and never reaches an error message
+     * about its value. It returns the file the CLI writes because that is the
+     * least wrong thing to point a user at, not because it has been observed.
+     *
+     * @param array<string, array<string, mixed>> $layers
+     */
+    private static function permissionKeySource(array $layers, string $key): string
+    {
+        $source = null;
+        foreach ($layers as $path => $data) {
+            if (\array_key_exists($key, $data)) {
+                $source = $path;
+            }
+        }
+
+        return $source ?? self::userConfigPath();
+    }
+
+    /**
+     * The permission keys of `~/.sugar-crush/settings.json` — crush_code.md
+     * Phase 6 item 4's `permission`/`permissionMode` settings block.
+     *
+     * WHY NOT THROUGH {@see \SugarCraft\Crush\Config\LayeredSettings}, which
+     * already reads this exact file: that class's reader is TOLERANT by
+     * contract — a malformed file is the absence of a layer, because the keys it
+     * carries are a theme and a model name and guessing wrong about those costs
+     * nothing. The permission path may not have that tolerance; it is the whole
+     * argument of {@see permissionGate()}. Routing `permissionMode` through the
+     * tolerant merge would have meant one stray comma silently downgrading a
+     * configured `plan` session to the permissive default, which is the
+     * fail-open this method exists to close. So the same FILE is read twice by
+     * two readers with different strictness, deliberately, and
+     * `LayeredSettings::LAYERED_KEYS` documents its half of the split.
+     *
+     * NO PROJECT TIER, AT ANY TRUST LEVEL. `permissionMode` reaches
+     * `bypass-permissions`, so a project-tier permission block would be a full
+     * sandbox escape delivered by `git clone` — the operator's `chat()` would
+     * come up ungated because a checked-in file said so. There is no trust flag
+     * that makes that a reasonable grant, which is why this reads only the
+     * home-owned directory and why the keys are absent from
+     * `LayeredSettings::PROJECT_TIER_KEYS` and from `LAYERED_KEYS` entirely.
+     *
+     * FOLLOWS THE HOME, NOT `--config`. {@see useConfigPath()} names one file;
+     * this is a different file, in the directory `trustedConfigDirPath()`
+     * resolves — the same choice {@see userSettingsDirOrNull()} makes for the
+     * tolerant reader, so both readers of `settings.json` agree on WHICH
+     * `settings.json`.
+     *
+     * A NOTED BEHAVIOUR CHANGE: a `~/.sugar-crush/settings.json` that exists and
+     * cannot be parsed now REFUSES THE LAUNCH, where before it was silently
+     * skipped. That is the cost of the file becoming a policy source, and it is
+     * the same bargain `config.json` already makes. It is also strictly louder
+     * rather than newly broken: such a file already lost the user their theme
+     * and provider without saying so.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws PermissionConfigException when the file exists and cannot be used
+     */
+    private static function permissionSettingsLayer(string $path): array
+    {
+        $data = self::readPolicyFile($path);
+
+        // array_key_exists, not `??`, and the reason had to be CORRECTED: an
+        // earlier version of this comment claimed an explicit
+        // `"permissionRules": null` "has to reach permissionRules()' own
+        // handling", which was a behavioural claim about code that did not
+        // behave that way — `permissionRules()` opened with `?? null` and read
+        // explicit-null and absent identically, so the two spellings of this
+        // filter were exactly equivalent and a mutation between them was
+        // unkillable. The claim is now true because `permissionRules()` was
+        // changed to make it true: a present-but-null rules key is REPORTED on
+        // stderr, since a user who wrote it believes they configured rules and
+        // has none. `array_key_exists` is also what
+        // {@see permissionKeySource()} needs, for the same reason — a layer
+        // that set a key to null is still the layer that set it.
+        $kept = [];
+        foreach (self::PERMISSION_SETTINGS_KEYS as $key) {
+            if (\array_key_exists($key, $data)) {
+                $kept[$key] = $data[$key];
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
+     * One policy file, read with no tolerance at all — extracted verbatim from
+     * {@see permissionConfig()} so that `config.json` and the user's
+     * `settings.json` cannot diverge into two differently-strict readers of the
+     * same kind of file. Every message below still names `$path`, so which file
+     * refused the launch is always in the error.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws PermissionConfigException when the file exists and cannot be used
+     */
+    private static function readPolicyFile(string $path): array
+    {
         if (!is_file($path)) {
             // SOMETHING IS THERE AND IT IS NOT A READABLE REGULAR FILE — a
             // directory named `config.json`, a dangling symlink. The walk
@@ -3076,8 +3267,25 @@ final class Bootstrap
      */
     private static function permissionRules(array $config): array
     {
-        $raw = $config[self::PERMISSION_RULES_CONFIG_KEY] ?? null;
+        // ABSENT AND EXPLICITLY NULL ARE DIFFERENT THINGS HERE, and they were
+        // not before: `?? null` collapsed them, so `"permissionRules": null`
+        // loaded no rules and said nothing — the same silence that let the
+        // argument-scoped grammar deny nothing for as long as it did. A user
+        // who typed the key believes they configured rules. Absence is not an
+        // error (a fresh install has no key at all); presence with no usable
+        // value is, at the same stderr-and-continue level as every other
+        // item-wise rules complaint.
+        if (!\array_key_exists(self::PERMISSION_RULES_CONFIG_KEY, $config)) {
+            return [];
+        }
+
+        $raw = $config[self::PERMISSION_RULES_CONFIG_KEY];
         if ($raw === null) {
+            self::warnPermissionConfig(
+                self::PERMISSION_RULES_CONFIG_KEY . ' is present but null rather than a list of rules; '
+                . 'no rules were loaded',
+            );
+
             return [];
         }
 
@@ -3105,6 +3313,33 @@ final class Bootstrap
                 self::warnPermissionConfig(
                     self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') has no valid 'action' "
                     . "(expected allow, deny or ask); rule skipped rather than coerced",
+                );
+                continue;
+            }
+
+            // A pattern the grammar cannot parse is reported and skipped here
+            // rather than handed to the gate, for the same reason a bad
+            // `action` is: {@see PermissionRule} degrades a malformed pattern to
+            // a name that matches no real tool, so a `Deny` typo'd this way
+            // would silently deny NOTHING. That is the exact failure the
+            // argument-scoped grammar was rewritten to end, and stderr is the
+            // only place it can be noticed.
+            //
+            // THE REASON COMES FROM THE GRAMMAR, not from this call site. This
+            // warning used to assert "has an unbalanced parenthesis" for every
+            // rejection, and measured, that was false for half of the grammar's
+            // rejections: `""` contains no parenthesis and `"(rm *)"` contains a
+            // balanced pair — both are refused for having no tool-name half.
+            // A diagnostic that misnames the mistake is worse than a generic
+            // one, so the wording lives in
+            // {@see PermissionRule::patternRejectionReason()} beside the check
+            // that produces it.
+            $rejection = PermissionRule::patternRejectionReason($entry['pattern']);
+            if ($rejection !== null) {
+                self::warnPermissionConfig(
+                    self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') {$rejection}, so it is "
+                    . 'not a Tool or Tool(argument-pattern) pattern; rule skipped rather than loaded as a pattern '
+                    . 'that would match nothing',
                 );
                 continue;
             }
@@ -3753,7 +3988,7 @@ final class Bootstrap
         // same skill once per tool (crush_feat.md section 7 E4).
         $nudge = SkillPathNudge::new($skills);
 
-        return [
+        $tools = [
             new Bash($root),
             new Read($root, instructionLoader: $loader, skillNudge: $nudge),
             new Edit($root, instructionLoader: $loader, skillNudge: $nudge),
@@ -3804,6 +4039,99 @@ final class Bootstrap
             // together.
             ...self::mcpTools($root),
         ];
+
+        // FILTERED HERE, NOT AT THE CALL SITES, and that is the load-bearing
+        // part rather than tidiness: `withTools(self::tools(...))` appears
+        // THREE times in this class — in `app()`, `backend()` and
+        // `backendFor()` — and a filter applied at two of them is a config key
+        // that works until the user switches provider. (The plan for this item
+        // named two sites; there are three. An earlier version of this comment
+        // named `chat()` as one of them, which is wrong in the way this project
+        // keeps being wrong: `chat()` reaches tools only transitively through
+        // `backend()` and holds no `self::tools(` call of its own. Measured with
+        // `grep -n 'self::tools(' src/Cli/Bootstrap.php`; deliberately no line
+        // numbers, since a comment quoting them decays on the next insertion
+        // above.) Everything
+        // downstream of this return receives an already-filtered set, including
+        // `mcpTools()`'s appended bridges, which is what makes
+        // `disabledTools: ["mcp__git__*"]` mean anything.
+        return self::filterToolSet($tools);
+    }
+
+    /**
+     * Apply the user's `allowedTools` / `disabledTools` settings to the
+     * model-facing tool set — Phase 6 item 3's `tools.allow` / `tools.deny`.
+     *
+     * BOTH KEYS ONLY EVER SHRINK THE SET, and saying so is the whole security
+     * argument for {@see LayeredSettings::PROJECT_TIER_KEYS} admitting one of
+     * them: {@see tools()}'s array is the ceiling, nothing here can add to it,
+     * and an `allowedTools` whitelist is an intersection rather than a grant.
+     * The names are {@see PermissionRule::matchesToolName()}'s dialect —
+     * `fnmatch()`, so `mcp__git__*` works — because two glob dialects for tool
+     * names would be two things `mcp__git__*` could mean.
+     *
+     * NOT A SEQUENCE OF TWO PASSES — A CONJUNCTION, and the difference matters
+     * to the claim {@see LayeredSettings::PROJECT_TIER_KEYS} rests on. A tool is
+     * kept iff the allow-list admits it AND the deny-list does not name it, in
+     * ONE predicate, so there is no "first" and no "then" for a later stage to
+     * re-admit anything in. An earlier draft of this comment said "allow-list
+     * first, then deny", which was a sequencing this code never had; the
+     * conclusion was right and the mechanism named for it was invented. Either
+     * shape happens to be safe here because both halves only ever remove, but a
+     * conjunction is safe by inspection and a pipeline is safe only by argument.
+     *
+     * An EMPTY or ABSENT `allowedTools` means "all of them", following
+     * {@see \SugarCraft\Crush\MCP\McpRouter::resolveAllowedTools()}, which
+     * already makes exactly this decision for MCP servers. The alternative
+     * reading — an empty list means no tools — turns `"allowedTools": []` into
+     * a silently toolless agent, and a user who wants that has
+     * `disabledTools: ["*"]`.
+     *
+     * A NON-LIST VALUE IS IGNORED rather than coerced, matching
+     * {@see permissionRules()}'s discipline: `"disabledTools": "Bash"` is a
+     * mistake whose charitable reading (a one-element list) is a guess, and
+     * guessing on a key that decides what the model can do is how a config bug
+     * becomes a capability change. Ignored means "as if unset", which for
+     * `disabledTools` is the permissive direction — stated because it is the
+     * one place in this method that does not fail closed, and it is chosen for
+     * consistency with every other tolerant `readUserConfig()` reader rather
+     * than because the safe direction is unclear.
+     *
+     * @param list<Tool> $tools
+     * @return list<Tool>
+     */
+    private static function filterToolSet(array $tools): array
+    {
+        $config = self::readUserConfig();
+        $allow = is_array($config['allowedTools'] ?? null) ? $config['allowedTools'] : [];
+        $deny = is_array($config['disabledTools'] ?? null) ? $config['disabledTools'] : [];
+
+        if ($allow === [] && $deny === []) {
+            return $tools;
+        }
+
+        $matches = static function (array $patterns, string $name): bool {
+            foreach ($patterns as $pattern) {
+                if (is_string($pattern) && PermissionRule::matchesToolName($pattern, $name)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        return array_values(array_filter(
+            $tools,
+            static function (Tool $tool) use ($allow, $deny, $matches): bool {
+                $name = $tool->name();
+
+                if ($allow !== [] && !$matches($allow, $name)) {
+                    return false;
+                }
+
+                return !$matches($deny, $name);
+            },
+        ));
     }
 
     /**

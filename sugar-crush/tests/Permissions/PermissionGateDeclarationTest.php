@@ -232,6 +232,10 @@ final class PermissionGateDeclarationTest extends TestCase
             $decide->invoke(
                 new PermissionGate(PermissionMode::Auto),
                 (new ToolDeclaration('Bash'))->asNamedCallForGateOnly(),
+                // commitAutoStrikes, then argumentsKnown — both false, which is
+                // exactly what `refuses()` passes. Positional because
+                // ReflectionMethod::invoke() has no named form.
+                false,
                 false,
             ),
             'a missing SafetyClassifier must never read as a confident Allow from the declaration path',
@@ -246,6 +250,10 @@ final class PermissionGateDeclarationTest extends TestCase
             $decide->invoke(
                 new PermissionGate(PermissionMode::Auto, [], new SafetyClassifier()),
                 (new ToolDeclaration('Bash'))->asNamedCallForGateOnly(),
+                // commitAutoStrikes, then argumentsKnown — both false, which is
+                // exactly what `refuses()` passes. Positional because
+                // ReflectionMethod::invoke() has no named form.
+                false,
                 false,
             ),
         );

@@ -51,7 +51,10 @@ final class LayeredSettingsTest extends TestCase
      */
     public function testTheUserTierOnlyKeysAreExactlyTheLayeredKeysNoProjectMaySet(): void
     {
-        self::assertSame(['provider', 'instructions'], LayeredSettings::userTierOnlyKeys());
+        self::assertSame(
+            ['provider', 'instructions', 'allowedTools'],
+            LayeredSettings::userTierOnlyKeys(),
+        );
 
         // The derivation, restated as a property rather than a second literal.
         foreach (LayeredSettings::userTierOnlyKeys() as $key) {

@@ -10,8 +10,14 @@ use SugarCraft\Crush\ToolCall;
  * PermissionGate evaluates every ToolCall against the active PermissionMode
  * and returns a PermissionDecision (Allow / Deny / Ask).
  *
- * PermissionRule matching is glob-style: Bash(composer update *), Read(./.env), mcp__git__*
- * A rule matches when the ToolCall name matches the pattern portion.
+ * Rule matching is {@see PermissionRule}'s, and the whole grammar plus its
+ * honest limits are documented on that class: `Bash(composer update *)`,
+ * `Read(./.env)`, `mcp__git__*`. What is worth knowing HERE is that the
+ * argument-scoped half of that language matched NOTHING until it moved there —
+ * this class compared the tool name and only the tool name, so
+ * `Deny Bash(rm -rf *)` and `Deny Read(./.env)` both evaluated to `allow` on a
+ * measured run. Do not reintroduce a name comparison in this file; there is one
+ * matcher and {@see PermissionRule::matches()} is it.
  *
  * Four modes are implemented here (P2B.S2 + P2B.S3):
  * - Default:     reads silently; writes/networking always Ask
@@ -95,7 +101,7 @@ final class PermissionGate
      */
     public function evaluate(ToolCall $call): PermissionDecision
     {
-        return $this->decide($call, commitAutoStrikes: true);
+        return $this->decide($call, commitAutoStrikes: true, argumentsKnown: true);
     }
 
     /**
@@ -121,7 +127,12 @@ final class PermissionGate
      *   `Deny Bash` / `Deny Bash*` / `Deny mcp__git__*` refuses the
      *   declaration. This is the ONLY refusal available under `Auto`.
      * - Argument-sensitive rules (`Bash(rm *)`) cannot match: a declaration has
-     *   no arguments. Left to the call site that has them.
+     *   no arguments. Left to the call site that has them. TRUE BY
+     *   CONSTRUCTION since the matcher moved to {@see PermissionRule}, which
+     *   takes an explicit `$argumentsKnown` and is passed `false` from here —
+     *   before that it was true only because no argument-scoped pattern matched
+     *   anything at all, anywhere. {@see PermissionRule::matches()} carries the
+     *   cost argument for choosing this over refusing the declaration.
      * - The `rm -rf /` breaker cannot fire either, for the same reason — it
      *   reads `arguments['command']`.
      * - `Plan` refuses `Edit`, `Write` and every `mcp__*` declaration, but NOT
@@ -144,6 +155,7 @@ final class PermissionGate
         return $this->decide(
             $declaration->asNamedCallForGateOnly(),
             commitAutoStrikes: false,
+            argumentsKnown: false,
         ) === PermissionDecision::Deny;
     }
 
@@ -158,9 +170,18 @@ final class PermissionGate
      * @param bool $commitAutoStrikes Whether an Auto-mode outcome may be
      *        recorded in the circuit-breaker counters. TRUE only for a real
      *        call: {@see evaluate()} passes true, {@see refuses()} passes
-     *        false. It is the ONLY difference between the two paths.
+     *        false.
+     * @param bool $argumentsKnown Whether `$call`'s arguments are the real
+     *        ones. FALSE only for the {@see refuses()} path, whose `$call` is a
+     *        name synthesised from a {@see ToolDeclaration} — arguments that are
+     *        not absent but UNKNOWABLE, and the two have to be told apart
+     *        because {@see PermissionRule::matches()} fails CLOSED on an absent
+     *        subject and must not do so on an unknowable one. Both flags carry
+     *        the same distinction (real call vs. hypothetical) into different
+     *        subsystems, which is why they are separate parameters rather than
+     *        one: an Auto strike is about STATE, this is about EVIDENCE.
      */
-    private function decide(ToolCall $call, bool $commitAutoStrikes): PermissionDecision
+    private function decide(ToolCall $call, bool $commitAutoStrikes, bool $argumentsKnown): PermissionDecision
     {
         // 0. Circuit breaker: `rm -rf /` / `rm -rf ~` is refused unconditionally,
         // in every mode, before rules are considered — no Allow rule and no mode
@@ -170,7 +191,7 @@ final class PermissionGate
         }
 
         // 1. Check explicit rules first (highest priority)
-        $ruleDecision = $this->evaluateRules($call);
+        $ruleDecision = $this->evaluateRules($call, $argumentsKnown);
         if ($ruleDecision !== null) {
             return $ruleDecision;
         }
@@ -191,32 +212,19 @@ final class PermissionGate
 
     /**
      * Check rules in order; first match wins.
+     *
+     * @param bool $argumentsKnown threaded straight through to
+     *        {@see PermissionRule::matches()} — see {@see decide()} for why the
+     *        two entry points differ on it.
      */
-    private function evaluateRules(ToolCall $call): ?PermissionDecision
+    private function evaluateRules(ToolCall $call, bool $argumentsKnown): ?PermissionDecision
     {
         foreach ($this->rules as $rule) {
-            if ($this->ruleMatches($rule, $call)) {
+            if ($rule->matches($call, $argumentsKnown)) {
                 return $this->actionToDecision($rule->action);
             }
         }
         return null;
-    }
-
-    /**
-     * Glob-match a rule pattern against a tool call name.
-     * Supports: Bash* (prefix match), Bash (exact match).
-     */
-    private function ruleMatches(PermissionRule $rule, ToolCall $call): bool
-    {
-        $pattern = $rule->pattern;
-
-        // Glob wildcard: match tool name by prefix
-        if (str_ends_with($pattern, '*')) {
-            $prefix = substr($pattern, 0, -1);
-            return str_starts_with($call->name, $prefix);
-        }
-
-        return $call->name === $pattern;
     }
 
     private function actionToDecision(PermissionAction $action): PermissionDecision
@@ -409,8 +417,20 @@ final class PermissionGate
      * riding along, and the target being wrapped in matching quotes (`"/"`, `'~'`)
      * — a quoted path is a routine shell habit, not an unusual evasion, and the
      * literal token comparison must see through it. Case-insensitive; handles
-     * prefixes like `sudo`. Command chains (`foo && rm -rf /`) are checked
-     * segment-by-segment.
+     * prefixes like `sudo`. Command chains are checked segment-by-segment, and
+     * the separator class is `[;&|\r\n]+` rather than `[;&|]+`: a NEWLINE
+     * separates two commands exactly as `;` does, and while it lacked one this
+     * breaker — the mode-independent one, the one nothing can switch off —
+     * allowed `echo hi\nrm -rf /` under `bypass-permissions` while denying
+     * `echo hi && rm -rf /`. Measured, not reasoned.
+     *
+     * BE CLEAR ABOUT WHAT THIS IS NOT. Mode-independence makes it unswitchable,
+     * not unevadable: it reads `arguments['command']` and tokenises it, so it is
+     * shell-text matching with the same ceiling {@see PermissionRule}'s
+     * "HONEST LIMITS" block documents — `/bin/rm -rf /`, `$(echo rm) -rf /` and
+     * `bash -c 'rm -rf /'` are all past it. It is a guard rail against an
+     * accident, and calling it a containment boundary (as a first draft of that
+     * block did) would be exactly the overclaim that block exists to refuse.
      *
      * Matches: rm -rf /, rm -fr /, rm -r -f /, rm --recursive --force /,
      * rm -rf --no-preserve-root /, rm -rf "/", rm -rf '/', rm -rf ~,
@@ -428,7 +448,7 @@ final class PermissionGate
             return false;
         }
 
-        foreach (preg_split('/[;&|]+/', $args['command']) as $segment) {
+        foreach (preg_split('/[;&|\r\n]+/', $args['command']) as $segment) {
             if ($this->segmentIsRmRfRootOrHome($segment)) {
                 return true;
             }

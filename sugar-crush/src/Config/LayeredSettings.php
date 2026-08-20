@@ -38,11 +38,18 @@ use SugarCraft\Crush\Support\ContainedPath;
  *
  * WHAT IS NOT LAYERED, and this is the security boundary rather than a scoping
  * shortcut: any key absent from {@see LAYERED_KEYS} is answered by layer 4
- * ALONE, exactly as before this class existed. So `permissionRules`,
- * `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands` and
- * {@see PROJECT_SETTINGS_TRUST_KEY} itself cannot be written, weakened or
- * self-granted from any lower layer — a project cannot add itself to the list
- * of trusted projects. The whitelist is also why nothing decorative can slip
+ * ALONE, exactly as before this class existed. So `permissionMode`,
+ * `permissionRules`, `trustedProjectHooks`, `trustedProjectMcp`,
+ * `trustedProjectCommands` and {@see PROJECT_SETTINGS_TRUST_KEY} itself cannot
+ * be written, weakened or self-granted from any lower layer — a project cannot
+ * add itself to the list of trusted projects.
+ *
+ * `permissionMode`/`permissionRules` being absent from {@see LAYERED_KEYS} does
+ * NOT mean they are unreadable from `~/.sugar-crush/settings.json`: they are, as
+ * of Phase 6 item 4. It means they do not come through THIS class, whose reader
+ * is deliberately tolerant. {@see LAYERED_KEYS} carries the full argument.
+ *
+ * The whitelist is also why nothing decorative can slip
  * in: every key in it is named by a real reader, cited on
  * {@see LAYERED_KEYS}, and a key nothing reads is worse than a missing one
  * because it looks configurable.
@@ -148,6 +155,40 @@ final class LayeredSettings
      *  - `parallelToolCalls` / `parallelToolDeadlineSeconds`
      *                 {@see \SugarCraft\Crush\Backend\EngineBackend}'s per-turn
      *                 dispatch settings, which read through `readUserConfig()`.
+     *  - `allowedTools` / `disabledTools`
+     *                 {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}, which
+     *                 filters the model-facing tool set before any of its three
+     *                 `withTools()` call sites sees it.
+     *
+     * `allowedTools` / `disabledTools`, NOT a nested `tools: {allow, deny}`,
+     * and the shape is forced rather than chosen: {@see merge()} is KEY-WISE,
+     * so a single `tools` key would be replaced whole by whichever layer set it
+     * — and the two halves belong to DIFFERENT TIERS
+     * ({@see PROJECT_TIER_KEYS} takes `disabledTools` and refuses
+     * `allowedTools`). Nested under one key, a project's `tools.deny` and a
+     * user's `tools.allow` could not coexist, and gating one half without the
+     * other would be unexpressible. The spelling follows `disabledSkills`,
+     * which is the same idea one layer up.
+     *
+     * NO PERMISSION KEY HERE, and this is the one omission a reader of Phase 6
+     * item 4 will come looking for. `permissionMode` and `permissionRules` ARE
+     * readable from `~/.sugar-crush/settings.json` as of that item — but NOT
+     * through this class, because this class's reader is TOLERANT by contract
+     * (a malformed file is the absence of a layer, {@see readFile()}) and the
+     * permission path may not be: `Bootstrap::permissionGate()` refuses to
+     * start on a policy file it cannot parse, precisely so a stray comma cannot
+     * silently downgrade a session to the permissive default. Routing the
+     * permission keys through {@see merge()} would have handed them that
+     * tolerance. They are read instead by
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::permissionSettingsLayer()},
+     * which applies the strict reader to the same user-tier file and no project
+     * file at all, and whose result `Bootstrap::permissionConfigLayers()` puts
+     * BENEATH `config.json`. (`permissionPolicy()` is what this line said
+     * before, and no such method has ever existed — a `{@see}` naming a symbol
+     * that is not there is the same defect as a decorative config key, one
+     * layer up: it reads as a reader and is not one.) Listing these keys here
+     * would have been the opposite of the no-decorative-surface rule: a key
+     * with a reader that ignores it.
      *
      * NO `model` KEY, deliberately, and it is the one name a reader expects to
      * find here. Nothing reads a top-level `model` out of the user config:
@@ -167,6 +208,8 @@ final class LayeredSettings
         'disabledSkills',
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',
+        'allowedTools',
+        'disabledTools',
     ];
 
     /**
@@ -185,6 +228,37 @@ final class LayeredSettings
      *    removing a capability can also mean removing a check the user relies on.
      *  - `parallelToolCalls` / `parallelToolDeadlineSeconds` are throughput. A
      *    repository whose test suite serialises badly has a real reason.
+     *  - `disabledTools` names tools to REMOVE from the set
+     *    {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} built, which is the
+     *    `disabledSkills` argument one layer down: "there is no MCP server in
+     *    this checkout, stop offering WebSearch" is a thing a repository knows.
+     *    Gated for `disabledSkills`' reason too — removing a capability can
+     *    remove a check — and it CANNOT widen anything, because that set is the
+     *    ceiling and both tool keys only ever shrink it.
+     *
+     * `allowedTools` IS ABSENT, and it is the interesting one, because on
+     * capability alone it looks as safe as its sibling: a whitelist intersected
+     * with an existing set cannot add a tool either. Two reasons it is still
+     * user-tier only.
+     *
+     * First, a whitelist's effect is defined by what it OMITS, so it is the one
+     * shape in which a small, innocuous-looking value deletes almost
+     * everything. `allowedTools: ["Bash"]` removes `Read`, `Edit`, `Write`,
+     * `Grep` and `Glob` in one line — and what the model does next is not "less
+     * work", it is the SAME work through `Bash`, which reaches the permission
+     * gate as opaque shell text instead of as a reviewable path. That is a
+     * privilege escalation by degradation: strictly fewer tools, strictly
+     * coarser review. `disabledTools` can express the same attack, but only by
+     * naming every tool it removes, which is a value an operator reading the
+     * file can see.
+     *
+     * Second, a whitelist is what a user reaches for when they want a CEILING,
+     * and a ceiling a checkout can rewrite is not one. What makes that hold when
+     * both keys are in play is not an ordering:
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()} keeps a tool iff
+     * the allow-list admits it AND the deny-list does not name it — one
+     * conjunction, no stages — so there is no later step in which a project's
+     * `disabledTools` could re-admit what the user's `allowedTools` excluded.
      *
      * @var list<string>
      */
@@ -195,6 +269,7 @@ final class LayeredSettings
         'disabledSkills',
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',
+        'disabledTools',
     ];
 
     /**
@@ -202,8 +277,10 @@ final class LayeredSettings
      * file may contribute, at any trust level.
      *
      * DERIVED, not written out, so the two lists above cannot drift apart into a
-     * third list that agrees with neither. Today it is `provider` and
-     * `instructions`:
+     * third list that agrees with neither. Today it is `provider`,
+     * `instructions` and `allowedTools` — the third one's argument is on
+     * {@see PROJECT_TIER_KEYS}, next to the sibling key that IS allowed, since
+     * that is where the two have to be compared:
      *
      * `provider` is not "which of my accounts". The value is a NAME, and
      * {@see \SugarCraft\Crush\Providers\ProviderFactory::defaultConfig()}

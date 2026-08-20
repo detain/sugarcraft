@@ -193,8 +193,13 @@ final class BootstrapPermissionGateTest extends TestCase
             'sudo rm -rf /' => ['Bash', ['command' => 'sudo rm -rf /']],
             'chained rm' => ['Bash', ['command' => 'cd / && rm -rf *']],
             'benign ls' => ['Bash', ['command' => 'ls -la']],
-            'benign read' => ['Read', ['path' => 'README.md']],
-            'benign edit' => ['Edit', ['path' => 'notes.txt', 'content' => 'hi']],
+            // `file_path`, which is what these tools' schemas actually name —
+            // and what `PermissionRule::SUBJECT_ARGUMENTS` maps them to. As
+            // `path` these two rows described a call no tool can make, so they
+            // exercised the unknowable-subject branch instead of the one they
+            // read as being about.
+            'benign read' => ['Read', ['file_path' => 'README.md']],
+            'benign edit' => ['Edit', ['file_path' => 'notes.txt', 'content' => 'hi']],
             'benign glob' => ['Glob', ['pattern' => '*.php']],
         ];
     }

@@ -559,6 +559,47 @@ final class PermissionGateTest extends TestCase
     }
 
     /**
+     * A NEWLINE CHAIN GOT PAST THE MODE-INDEPENDENT BREAKER. Measured under
+     * `bypass-permissions` before the fix:
+     *
+     *     'rm -rf /'              => Deny
+     *     'echo hi && rm -rf /'   => Deny
+     *     "echo hi\nrm -rf /"     => Allow   <- the unswitchable breaker, evaded
+     *
+     * `isRmRfRootOrHome()` split the command on `/[;&|]+/`, which has no `\n` in
+     * it, so a newline-separated chain arrived as one segment beginning `echo`
+     * and the tokenizer never saw the `rm`. The separator class is now
+     * `/[;&|\r\n]+/`.
+     *
+     * Asserted as EQUALITY between the three spellings rather than three
+     * hardcoded `Deny`s: the claim is that they are the same command written
+     * differently, and that is what must hold.
+     */
+    public function testRmRfCircuitBreakerCatchesANewlineSeparatedChain(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $plain = $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /']));
+
+        $this->assertSame(PermissionDecision::Deny, $plain);
+
+        foreach (['echo hi && rm -rf /', "echo hi\nrm -rf /", "echo hi\r\nrm -rf ~", "true\nsudo rm -fr '/'"] as $command) {
+            $this->assertSame(
+                $plain,
+                $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => $command])),
+                json_encode($command) . ' is the same command as `rm -rf /` behind a separator',
+            );
+        }
+
+        // The control: the breaker is still about `rm -rf` on `/` or `~`, and a
+        // newline in an innocuous chain does not trip it.
+        $this->assertNotSame(
+            PermissionDecision::Deny,
+            $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => "echo hi\nrm -rf ./build"])),
+        );
+    }
+
+    /**
      * R3(a): the breaker fires unconditionally in every mode, not just BypassPermissions.
      */
     public function testRmRfCircuitBreakerFiresInEveryMode(): void
