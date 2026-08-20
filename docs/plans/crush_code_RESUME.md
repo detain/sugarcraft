@@ -6,19 +6,21 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. STATE AT THE ROUND-31 COMPACT — read this first, then §0 for the standing rules
+## 0-NOW. STATE AT THE ROUND-32 COMPACT — read this first, then §0 for the standing rules
 
-**`master` = `7ce8a735`. Live tree clean, 0 ahead / 0 behind.**
-**All three lane dirs are clean, idle and current at `7ce8a735`** — `crush-lane-cmd`,
-`crush-lane-lsp`, `crush-lane-sglang`. Any of them can be reused as-is.
+**`master` = `d97580ab`. Live tree clean, 0 ahead / 0 behind. NOTHING IS IN FLIGHT.**
+The three lane dirs (`crush-lane-cmd`, `crush-lane-lsp`, `crush-lane-sglang`) were all clean, idle and
+current at `bde87f1c` when round 32 committed; the sync daemon rebases them onto `d97580ab`
+automatically because they satisfy its clean+idle condition. Any of them can be reused as-is.
 
-**IN FLIGHT: a read-only re-verification sweep** (three agents, Phases 1-3 / 4-6 / 7-8). It writes
-nothing and commits nothing, so it collides with no lane and can be abandoned at any point without
-cleanup. See "DO THIS NEXT" below for why it runs before any further feature bundle.
+**ROUND 32 IS COMPLETE AND COMMITTED** — the re-verification sweep (read-only, three agents over
+Phases 1-3 / 4-6 / 7-8) plus the DeepSeek context-window correction, both in `d97580ab`. There is no
+partial work anywhere and no agent running.
 
-**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0` — SUPERVISOR-CONFIRMED.** The gate that
-was still running at the round-31 compact finished at `rc 0` with exactly these figures, matching the
-`cmd` lane's own post-rebase report at `f764b463`. The 8111 number no longer needs re-measuring.
+**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0` — SUPERVISOR-CONFIRMED TWICE.** Once as
+the gate left running at the round-31 compact (which matched the `cmd` lane's own figure at
+`f764b463`), and again after round 32's changes. The count did not move because round 32 changed only
+constant values that existing tests assert, plus documentation.
 **Skips MUST stay 1** — `tests/MCP/McpClientTest.php:106`. A 2 means `vendor/sugarcraft/*` was
 replaced by Packagist copies and every figure since is void.
 
@@ -35,6 +37,13 @@ been quietly off by one forever, because nothing ever re-derived it. **Phase 7 i
 **The twelve real items left:** 2.9 (deliberately-last plugin epic) · 3.2, 3.3, 3.4 open and 3.5
 partial · 6.5, 6.6 · 7.6 partial · 8.4, 8.8, 8.9, 8.13. The inline verdicts in `crush_code.md` carry
 the evidence for each; the ✅ markers are now applied so the document's own convention holds again.
+
+### WHAT LANDED IN ROUND 32
+
+| commit | what |
+|---|---|
+| `bde87f1c` | the round-31 gate confirmed at 8111, and the three-disagreeing-sources-of-truth finding |
+| `d97580ab` | **the re-verification sweep** (nine misstatements corrected inline, count re-derived, queue reordered) **+ the DeepSeek window moved to `1_048_570`** — and that number is `max_req_input_len`, not `max_model_len`; the doc-block on the constant explains why the smaller enforced figure is the right denominator |
 
 ### WHAT LANDED IN ROUND 31
 

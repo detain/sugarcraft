@@ -12,12 +12,14 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 
 ## Execution status (updated 2026-08-20)
 
-> **ROUND 31 LANDED. NOTHING IS IN FLIGHT as of this write-up.**
+> **ROUND 32 LANDED. NOTHING IS IN FLIGHT.** Round 32 was the read-only re-verification sweep plus
+> the DeepSeek context-window correction (`d97580ab`); round 31's three feature commits are below.
 > `docs/plans/crush_code_RESUME.md` §0-NOW is the authority for lane state; §0-DS is the ONLY durable
 > record of the DeepSeek-V4 sglang task the user requested.
 >
-> Landed this round: **P6.3 + P6.4 + the argument-scoped permission-rule hole** (`f764b463`),
-> **P8.10 + P8.11** (`1bd2e4d3`), **the DeepSeek-V4 sglang default** (`ed57d46a`).
+> Landed in round 31: **P6.3 + P6.4 + the argument-scoped permission-rule hole** (`f764b463`),
+> **P8.10 + P8.11** (`1bd2e4d3`), **the DeepSeek-V4 sglang default** (`ed57d46a`). Round 32 added no
+> plan items on purpose — it measured the ones already claimed.
 >
 > All three lane dirs (`crush-lane-cmd`, `crush-lane-lsp`, `crush-lane-sglang`) are clean, idle and
 > current. The user authorised **2 concurrent plan lanes** plus the sglang task; do not exceed that.
