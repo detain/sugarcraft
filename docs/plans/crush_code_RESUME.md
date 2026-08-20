@@ -6,76 +6,137 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0. STATE AS OF THE 2026-08-19 COMPACT — read this first
+## 0. STATE AS OF THE 2026-08-20 COMPACT — read this first
 
-**HEAD is `3bc51735`. Working tree CLEAN at the moment this was written.**
-**Suite baseline: `7637 tests / 89596 assertions / 1 skipped / rc 0`** (sugar-crush, against local
-sibling symlinks — skips MUST stay 1; a 2 means `vendor/sugarcraft/*` got replaced by Packagist copies
-and every figure is void).
+**HEAD is `a2221578`, tree CLEAN, in sync with `origin/master` (0 ahead / 0 behind).**
+**Suite baseline: `7782 tests / 90237 assertions / 1 skipped / rc 0`, ~3m12s** — supervisor-measured
+in the live tree, against local sibling symlinks. **Skips MUST stay 1.** A 2 means
+`vendor/sugarcraft/*` got replaced by Packagist copies and every figure since is void. The one
+legitimate skip is `tests/MCP/McpClientTest.php:106`.
 
-### ALL FIVE USER-REPORTED BUGS ARE DONE
+`sugar-crush/vendor/sugarcraft/` now has **18** symlinks, not 16 — see the dependency note below.
 
-These were reported while daily-driving the binary and jumped the audit queue under §3. **They are NOT
-plan items — never add them to the 75.**
+### FAN-OUT IS CURRENTLY **ON**, AT 2 LANES
 
-| bug | what it was | commit |
+The user asked for 2 concurrent lanes (their words: *"do the fan out but go with 2 concurrent lanes
+not 3 for now"*), and said they will say when to change it. `docs/plans/crush_code_concurrency.md`
+is the authority for the mechanics; §0b below is the summary.
+
+**Workflow `wo6lx5vcd` (run id `wf_4ee49ce4-130`) is RUNNING**, two lanes in parallel, each
+implement → review → fix:
+
+| lane dir | bundle | scope |
 |---|---|---|
-| W1 | long replies cut off at the pane edge | `47ee2c86` |
-| W2 | typing / Ctrl+P dead while a turn runs; Enter now queues | `a8d8ec75` |
-| W5 | `/websearch`, `/share`, `/agents` killed the app on any non-zero exit | `f8fd9cfa` |
-| W3 | the whole `src/Tui/` shell ignored `Theme`; + retain the real terminal background; + the `ansi` theme was silently up-converted to absolute RGB | `6c1e51c8`, review round `fe7ce954` |
-| W4 | Tab switched panes instead of completing a partial `/command` | `3bc51735` |
+| `/home/sites/crush-lane-cmd` | **C4b** | the rest of Phase 2 item 4 — the `` !`cmd` `` and `@file` template forms |
+| `/home/sites/crush-lane-lsp` | **C6** | Phase 2 item 7 — WRITE `src/Tools/LspTool.php` (the plan wrongly says "add `implements Tool`"; no such class exists) |
 
-### PLAN ITEMS: 48 of 75 done, 27 left
+Both lanes were snapshotted from a verified-quiescent tree at `a2221578` and each carries a
+`.lane-provenance` file recording source HEAD, a `git status` hash and the timestamp. Both verified:
+18 symlinks, 0 broken, `ReflectionClass` resolving INSIDE the lane.
 
-Phase 5 is COMPLETE (item 10b was found already done — see the B4 section below; verify before
-re-planning anything). Phases 0, 1 complete. Phase 2 items 1, 2, 3, 5, 6, 8 complete.
+**THE COMMIT GATE IS DIFFERENT IN FAN-OUT MODE — this is a deliberate change, not drift.** In solo
+mode the supervisor ran the suite and committed. In fan-out the user's design is that each lane
+commits and pushes to `master` from its own copy, so **the lanes commit themselves**, gated on: full
+suite green in-lane with skipped == 1, `check-path-repos --no-lib-path-repos` rc 0, config md5
+unchanged, no `.vhs/*.gif` and no `composer.lock` staged, and `git pull --rebase origin master`
+before every push. The supervisor's remaining job is the POST-hoc gate: pull into
+`/home/sites/sugarcraft` and run the full suite there.
 
-### WHAT IS RUNNING RIGHT NOW
+**The LSP lane holds the CENSUS TOKEN this round.** It is adding a `src/*.php` file; the cmd lane was
+explicitly forbidden from adding one. Two lanes both bumping `assertSame(278, …)` merges CLEANLY and
+is silently wrong — that is the sharpest conflict class in the map.
 
-**Workflow `wi86qgl13` (run id `wf_85ae4115-4fe`)**, launched 2026-08-19, three bundles:
-- **C5a** — validate an unrecognised `--output-format` (today it silently degrades to text at exit 0)
-  and add `--config <path>`. implement → review → fix.
-- **C5b** — real CLI subcommands (`doctor`, `models`, `session list`/`delete`, `mcp list`,
-  `completion`). implement → review → fix.
-- **C4a** — Phase 2 item 4 part 1: wire `CommandLoader` as an instance into `Chat` + `$ARGUMENTS`/`$1..$9`
-  substitution. measure → implement → review → fix.
+### IF THE WORKFLOW RESULT IS LOST TO A COMPACT
 
-**If that workflow's result is lost, its work is still in the working tree** — agents never commit, so
-`git status` plus `git diff` is the recoverable state. Re-run the suite, verify, and commit. That is
-exactly how W3 was salvaged after its agent was stopped mid-run.
+The lanes are **independent git repositories**, so recovery is different from solo mode:
 
-### THE COMMIT GATE IS MINE, NOT AN AGENT'S
+```sh
+for L in /home/sites/crush-lane-cmd /home/sites/crush-lane-lsp; do
+  echo "=== $L ==="; cat $L/.lane-provenance
+  git -C $L log --oneline -3          # did it commit?
+  git -C $L status --short            # or is the work still uncommitted?
+  git -C $L rev-list --left-right --count HEAD...origin/master   # did it push?
+done
+```
+A lane that committed AND pushed needs nothing but a `git pull` in the live tree. A lane that
+committed but did not push: push it. A lane with uncommitted work: that work is still there — verify
+and commit it. Lanes are disposable once their work is on `origin/master`; `rm -rf` them then.
 
-Workflows run implement/review/fix/re-verify. **The supervisor runs the full suite personally and
-commits.** This is not ceremony: it caught four false mutation kills in W1, and in W3 it caught that
-the agent's headline "0 collapses" was measured over six backgrounds and written as a property of all
-of them.
+### PLAN ITEMS: 49 of 75 done, 26 left
 
-### AGENT CONTEXT BUDGET — a standing user instruction
+`a4be8263` closed **Phase 4 item 6** (real subcommands `doctor`/`models`/`session`/`mcp`/`completion`,
+`--config <file>`, and a validated `--output-format` that no longer degrades silently to text at
+exit 0). **Phase 2 item 4 is HALF done and is NOT in the 49** — the `CommandLoader` wiring and
+`$ARGUMENTS`/`$1..$9` landed; `` !`cmd` `` and `@file` are what lane C4b is doing now.
 
-**The user asked that per-agent context finish around 200k, not 360k.** A single W3 agent hit 360k. The
-four causes and their fixes, all now in force:
-1. A ~6,000-word preamble inlined into every prompt → **`docs/plans/crush_agent_rules.md`**, which
-   agents read instead. Workflow scripts must point at that path (an earlier run pointed at a
-   session-scoped `/tmp/claude-*` copy that does not survive a compact).
-2. Each stage inheriting the previous stages' full reports → commit the bundle first where possible and
-   have reviewers read `git show <sha>`.
-3. One agent owning several parts across several libs → **split into narrow parallel reviewers**, one
-   lens each.
-4. Many mutations each triggering a 3-minute full suite → cap ~5-8 mutations, run ONE test file while
-   iterating, full suite at most twice.
+Phases 0, 1, 5 complete. Phase 2 items 1, 2, 3, 5, 6, 8 complete.
+
+### A SUPERVISOR-ONLY ACTION THAT ALREADY HAPPENED — `ddd9560d`
+
+**`candy-focus` and `candy-kit` are now in `sugar-crush/composer.json`.** They were NOT dependencies,
+so Phase 3 item 2 (candy-focus `FocusRing` for pane cycling) and Phase 3 item 5b (restyle the help
+screen with candy-kit) were literally unimplementable by an agent — closing the gap needs a `require`
+bump plus `composer update`, which every agent is forbidden to run. Measured: no OTHER dependency is
+missing. Three namespaces looked absent (`Bits`, `Charts`, `Query`) but all three appear only inside
+`src/Skills/BuiltIn/*/SKILL.md` documentation, never in code; `Pty` is correctly `require-dev`.
+
+If you ever repeat this: add the `require` lines, snapshot the manifest, `check-path-repos --fix
+--strict-closure`, `composer update`, `git checkout -- '*/composer.json'`, restore the snapshot, and
+verify `--no-lib-path-repos` exits 0 and the manifest has no `repositories[]` block.
+
+### TWO SECURITY-RELEVANT FIXES LANDED IN `a4be8263` — do not "re-find" them
+
+Both were found by review rounds, not by the implementers' green suites, and both are functionality
+class under §3 (data loss / losing control of `/exit`), so they were fixed now rather than deferred:
+
+1. **`doctor` DELETED STORED CONVERSATIONS** — its probe reached the session store through the
+   pruning accessor. Fixed with a `Bootstrap::sessionStore(bool $prune = true)` seam; the launch path
+   is byte-identical.
+2. **Repository content could SHADOW CONTROL BUILT-INS**, `/exit` and `/permissions` included — a
+   checked-in `.sugar-crush/commands/exit.md` was enough. Fixed in the LOADER (not in `Chat`), so the
+   popup, `/help` and dispatch read one already-reserved `CommandRegistry::CONTROL_PLANE` map instead
+   of three that agree by luck. Non-reserved built-ins (`compact`, `rewind`, …) stay overridable.
+
+### THE HAZARD DISCOVERED THIS ROUND — read before creating any lane
+
+**Never `cp -a` a tree while an agent is running a mutation harness in it.** The copy freezes whatever
+mutation was applied at that instant. Measured: a probe copy froze
+`'fish' => self::zshCompletion()` where live had `fishCompletion()`, its suite showed 1 failure, and
+the obvious wrong reading was that an unrelated dependency change had broken something. A lane born
+that way reports false mutation kills all round, because a pre-broken test reads as killed.
+
+**Corollary: a still `git status` is NOT evidence of an idle agent.** A mutation loop edits one file,
+runs ONE test file (~0.05s), and restores from a checksummed backup, so the tree sits byte-identical
+for minutes while a great deal happens. Judge liveness from the agent transcript's mtime and from
+`pgrep -af 'bin/phpunit'`. (Beware: `pgrep -c -f 'bin/phpunit'` counts your own pgrep and its shell
+wrapper — check the actual lines, not the count.)
+
+### QUEUE AFTER C4b + C6
+
+C4a/C4b close Phase 2 item 4 · then **P2.1/2** (the McpClient rename, tracker #12) · **P3.x** (now
+unblocked by `ddd9560d`) · **P6.1/2** then the 4-deep chain behind it · **P8.3** (whose halves the
+tracker has BACKWARDS — the render branch is written at `src/Tui/AgentOutputPane.php:58`; what is
+missing is the hand-off, since `BackgroundSupervisor::getStallWarnings()` has no production caller) ·
+Phase 7 docs · **P2.9** (plugins) explicitly LAST · then `#88` · then the hardening backlog E1-E50.
 
 ### W3'S TWO KNOWN-OPEN ITEMS (deliberate, recorded, not defects of omission)
 
 1. **A mid-grey crossover band.** Over all 256 greys × 5 palettes, backgrounds around
    `#6c6c6c`-`#797979` can project two different shell tokens to the SAME colour (14/256 greys on
    `ansi`, 7/256 on `dracula`). **Legibility is unaffected** — 5 palettes × 24 backgrounds, zero
-   sub-4.5 — so the user's bug stays fixed; what degrades is role DISTINCTION. `project()`'s docblock
-   still claims distinctness as a universal when it was measured on fourteen backgrounds.
+   sub-4.5 — so the user's bug stays fixed; what degrades is role DISTINCTION.
 2. **The frame walk ignores SGR 2 (faint)**, which `src/Renderer.php` emits at 17 sites. Dracula's
    `shellMuted` measures 6.31:1 but is painted at roughly 2.70:1. Left open on purpose: modelling
    "half-way to the background" would pin a terminal-by-terminal guess as fact.
+
+### AGENT CONTEXT BUDGET — a standing user instruction
+
+**Per-agent context should finish around 200k, not 360k.** The analysis agent that produced the
+concurrency map came in at 190k, which is the shape to aim for. In force: rules live in
+`docs/plans/crush_agent_rules.md` and are read by path, never inlined; agents are told never to read
+`src/Cli/Bootstrap.php` (212 KB) or `src/Chat.php` (~6,100 lines) in full; stages pass reports rather
+than having each agent re-derive; mutations capped at 5-8 with single-FILE test runs while iterating
+and the full suite at most twice.
 
 ---
 

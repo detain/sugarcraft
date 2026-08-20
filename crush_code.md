@@ -12,6 +12,13 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 
 ## Execution status (updated 2026-08-20)
 
+> **IN FLIGHT RIGHT NOW — fan-out mode, 2 concurrent lanes.** `/home/sites/crush-lane-cmd` is doing
+> bundle **C4b** (Phase 2 item 4's remaining `` !`cmd` `` and `@file` forms) and
+> `/home/sites/crush-lane-lsp` is doing **C6** (Phase 2 item 7, which is a WRITE-the-tool item — there
+> is no `src/Tools/LspTool.php`). Each lane is a full `cp -a` copy of the monorepo on `master` and
+> **commits and pushes to master itself**. Read `docs/plans/crush_code_RESUME.md` §0 before touching
+> either item, and `docs/plans/crush_code_concurrency.md` before adding a third lane.
+
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage
 labels, and the reasoning behind judgement calls — is

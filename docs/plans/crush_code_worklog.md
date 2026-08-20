@@ -8310,3 +8310,71 @@ to detect — I only caught it because the diff was two tokens wide.
 Corollary, also new: **a still `git status` is NOT evidence of a stalled agent.** A mutation loop edits,
 runs one test file (~0.05s), and restores from a checksummed backup, so the tree sits perfectly still
 through a great deal of work. Check the agent transcript's mtime and `pgrep -af phpunit` instead.
+
+---
+
+## Round 28 — FAN-OUT MODE ON, 2 lanes (workflow `wf_4ee49ce4-130`, launched 2026-08-20)
+
+**The user turned concurrency on**: *"do the fan out but go with 2 concurrent lanes not 3 for now"*,
+and will say when to change it. This is the first round that is not one-agent-at-a-time.
+
+Entry state: HEAD `a2221578`, tree clean, in sync with origin, suite **7782 / 90237 / 1 / rc 0**.
+
+### Lane setup — the recipe's first real use
+
+| lane | bundle |
+|---|---|
+| `/home/sites/crush-lane-cmd` | C4b — the `` !`cmd` `` and `@file` template forms |
+| `/home/sites/crush-lane-lsp` | C6 — WRITE `src/Tools/LspTool.php` |
+
+Quiescence proven first (0 dirty files, no real `phpunit` process), then `cp -a` of the whole repo,
+then a `.lane-provenance` file per lane recording source HEAD + `git status` md5 + timestamp.
+
+Verified per lane, not assumed: **18** `vendor/sugarcraft/*` symlinks, **0** broken,
+`SugarCraft\Core\Model` → `<lane>/candy-core/src/Model.php` and `SugarCraft\Focus\FocusRing` →
+`<lane>/candy-focus/src/FocusRing.php`. That second one matters: it proves `ddd9560d`'s new
+dependency propagated into the sandboxes, which a lib-only sandbox could never have shown.
+
+**A `pgrep` gotcha worth recording:** `pgrep -c -f 'bin/phpunit'` returned **2** on a genuinely idle
+tree, because the pattern matched my own `pgrep` and its shell wrapper. Read the actual lines. Had I
+trusted the count I would have refused to snapshot a quiescent tree — the mirror image of the
+mid-mutation hazard, and just as wrong.
+
+### The commit gate CHANGED, deliberately
+
+Solo mode: the supervisor ran the suite and committed. Fan-out mode: **each lane commits and pushes to
+`master` from its own copy**, which is the user's stated design. Gated in-lane on suite green with
+skipped == 1, `check-path-repos --no-lib-path-repos` rc 0, config md5 unchanged, nothing staged under
+`.vhs/` or a `composer.lock`, and `git pull --rebase origin master` before every push. The
+supervisor's job becomes the POST-hoc gate: pull into the live tree and run the full suite there.
+
+This is a real loosening and it is worth naming as one. The pre-commit supervisor gate caught four
+false mutation kills in W1 and caught W3's "0 collapses" being measured over six backgrounds and
+written as universal. What replaces it is the in-lane review round plus the post-pull suite — weaker
+on prose claims, equally strong on green/red. If a lane ships a claim that turns out to be domain-less,
+that is the cost, and the post-hoc read of `git show <sha>` is where to catch it.
+
+### The census token
+
+The LSP lane holds it, because it adds a `src/*.php` file; the cmd lane was explicitly forbidden from
+adding one and told to STOP and report rather than add. Two lanes both rewriting `assertSame(277, …)`
+to `278` is the conflict class that **merges cleanly and is silently wrong** — git sees identical text
+and auto-merges, leaving 278 where the truth is 279. It is the only conflict in the map that does not
+announce itself.
+
+### Briefs carried the security shape, not just the parser
+
+C4b adds a feature whose whole point is that **a markdown file checked into a repository can execute a
+shell command**. Given last round found repository content could already shadow `/exit`, the brief
+required reusing the machinery that exists — `Chat::permissionGate()` (`src/Chat.php:9046`) and
+`Bootstrap::trustedProjectRoots($config, $key, $nothingTrusted)` (`src/Cli/Bootstrap.php:2301`), whose
+worked caller is `trustedProjectHookRoots()` — rather than inventing a gate, and to treat USER-level
+and PROJECT-level command files differently or justify not doing so against the clone-a-hostile-repo
+case. A short per-substitution timeout IS correct here and does not violate the no-blanket-timeout
+rule, which is about provider HTTP clients.
+
+C6's brief carries the correction that the plan asks for the wrong thing: item 7 says "add
+`implements Tool`", but there is no `src/Tools/LspTool.php` and `src/LSP/` has **zero call sites**
+outside itself. It is a write-the-tool item. The one design decision it must not guess: a query with
+no configured server has to return a clear "no server for <language>" result, never `[]`, because an
+empty array reads to the model as "this symbol has no references" — a confident lie.
