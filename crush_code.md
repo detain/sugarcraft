@@ -10,7 +10,7 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 
 **A note on the Appendix's voice.** Each of the 13 sections was written by an independent research pass assigned one angle, and several sections cross-reference each other's findings before this document existed as a single file — phrases like "sibling agent," "sibling-confirmed," "the orchestrator," "this agent," or "per the assignment" refer to that research process, not to you the reader. Kept intentionally, per the "close to verbatim" policy above, rather than smoothed over — but worth knowing going in.
 
-## Execution status (updated 2026-08-19)
+## Execution status (updated 2026-08-20)
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage
@@ -18,10 +18,11 @@ labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1, 2, 3, 5, 6, 8 ·
-Phase 3 item 1 · Phase 4 items 1-5, 7 · Phase 5 items 1-9 + 10a ·
+Phase 3 item 1 · Phase 4 items 1-6, 7 · Phase 5 items 1-9 + 10a ·
 Phase 7 items 1-2 · Phase 8 items 1, 2, 5, 7, 12, 14.
+**Phase 2 item 4 is HALF done** — see the `a4be8263` note below.
 
-**48 of 75 items, counted by item.** The count is not effort: Phase 2 item 4 alone is
+**49 of 75 items, counted by item** (Phase 4 item 6 landed in `a4be8263`; Phase 2 item 4 is half and is NOT counted). The count is not effort: Phase 2 item 4 alone is
 larger than all of Phase 7. **Phase 5 IS complete.** Item **10b** (differentiate the
 hardcoded `AgentDefinition` preset prompts) was measured on 2026-08-19 and found already
 done — by Bundle A (`bf3495f5`), whose own commit message says so: "Phase 5 items 1, 2, 3
@@ -34,9 +35,27 @@ Two things it also got wrong: there are **six** presets, not five (`devops` is i
 now pinned in BOTH directions — `AgentDefinitionTest::testEveryPresetNamesEverySkillItIsGranted`
 and `::testNoPresetPromptNamesASkillItIsNotGranted`, the latter reading the skill universe
 off `SkillLoader::loadBuiltInSkills()` so a skill added later is covered the moment it exists. Phase 4 item
-**6** (real subcommands, `--config`, an exit-code convention, `--output-format` warning) is
-also outstanding and had fallen out of the RESUME queue entirely; the arithmetic is what
-caught it.
+**6** (real subcommands, `--config`, an exit-code convention, `--output-format` warning) had
+fallen out of the RESUME queue entirely; the arithmetic is what caught it. **It is now DONE
+in `a4be8263`** — `doctor`, `models`, `session list`/`delete`, `mcp list` and `completion` in
+a new `src/Cli/Subcommands.php`, plus `--config <file>` and a validated `--output-format`
+that no longer degrades silently to text at exit 0.
+
+**Phase 2 item 4 is HALF DONE in `a4be8263` — do not mark it complete.** What landed:
+`CommandLoader` is constructed in `Bootstrap::chat()` and threaded into `Chat`, so a
+markdown file under `.sugar-crush/commands/` is a real slash command — listed in the popup,
+offered by `/help`, dispatched — and `$ARGUMENTS` / `$1`..`$9` expand. What did NOT land, and
+is still explicitly documented as unimplemented in `CommandLoader`'s class docblock: the
+`` !`cmd` `` shell-substitution form and the `@file` inclusion form. That remainder is bundle
+**C4b**.
+
+**One security-relevant fix rode along and is worth remembering**, because it was found by
+the review round and not by the implementer's green suite: repository-supplied content could
+**shadow control built-ins**, `/exit` and `/permissions` included — a checked-in
+`.sugar-crush/commands/exit.md` was enough to take over the command. The fix reclaims a
+`CommandRegistry::CONTROL_PLANE` list inside the LOADER after the merge, so the popup,
+`/help` and dispatch all read one already-reserved map rather than three that agree by luck.
+Non-reserved built-ins (`compact`, `rewind`, …) stay overridable on purpose.
 
 **FIVE USER-REPORTED BUGS JUMPED THIS QUEUE and are NOT plan items — do not add them to the
 count. ALL FIVE ARE NOW DONE AND COMMITTED.** All five were reported while daily-driving the binary,

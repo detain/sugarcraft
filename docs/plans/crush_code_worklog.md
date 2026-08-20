@@ -8249,3 +8249,64 @@ Three things worth carrying forward that are not in any diff:
 3. **The user was right and I overrode them.** They wrote "not wrapped but cut off". Cut off IS
    truncation, and that was the mechanism; I replaced an accurate description with a soft-wrap theory and
    carried it into a brief as ground truth. Read the report as evidence, not as a symptom to reinterpret.
+
+---
+
+## Round 27 — C5a + C5b + C4a, one workflow, ten agents (committed `a4be8263`, 2026-08-20)
+
+**Supervisor gate: 7782 tests / 90237 assertions / 1 skipped / rc 0, 3m12s.** Entry HEAD `23d9bb54`.
+Skips stayed 1 (`tests/MCP/McpClientTest.php:106`), `vendor/sugarcraft` still 16 symlinks at gate time,
+tracked `.sugar-crush/config.json` md5 `05480c743aff302fd6c06c5a4a4c2210`, `check-path-repos
+--no-lib-path-repos` rc 0.
+
+Workflow `wf_85ae4115-4fe`: 10 agents, 0 errors, 1.44M subagent tokens, 8197s wall. Three bundles,
+each implement → review → fix. **Committed as ONE commit on purpose:** the three interleave across 20
+hunks of `src/Cli/Bootstrap.php` and 9 of `README.md`, so any split produces an intermediate commit
+whose suite was never run. Verified history beats tidy history.
+
+### The five defects the review rounds found that the implementers' own green suites did not
+
+1. **`sugarcrush --config` with no value opened the alt-screen TUI.** rc 124, stdout beginning
+   `\e[?1049h`. Same shape as the `--help`-opens-the-TUI bug already shipped once. The operator typed
+   the flag and silently got the *discovered* default policy — the exact outcome the flag exists to
+   prevent.
+2. **`doctor` DELETED STORED CONVERSATIONS.** Its probe reached the session store through the pruning
+   accessor. Fixed with a `Bootstrap::sessionStore(bool $prune = true)` seam, default `true` so the
+   launch path stays byte-identical. Data loss counts as functionality under §3 — fixed now, not deferred.
+3. **Repository content could shadow control built-ins, `/exit` and `/permissions` included.** A
+   checked-in `.sugar-crush/commands/exit.md` was enough. Fixed in the LOADER, not in `Chat`, so the
+   popup, `/help` and dispatch read one already-reserved map instead of three that agree by luck.
+4. **A file-based command expanding to nothing dispatched a real turn with an empty user message.**
+5. **`/name:arg` bypassed file-based overrides entirely** — `expandCustomCommand()` read the name as
+   `\S+` while `CommandParser::parse()` terminates it at a colon. Every built-in reachable as
+   `/name:arg` was un-overridable, falsifying a docblock that claimed "what is listed and what runs
+   cannot disagree".
+
+### §5 again — but this time twice, self-caught, by the mutation that survived
+
+Both C5a and C5b had a *stated rationale* disproved by their own surviving mutation, and both corrected
+the PROSE rather than the code:
+
+- C5a wrote (in a Bootstrap comment AND a test docblock) that a wrong temp dir would make the
+  sibling-file check refuse and every persist a no-op. Mutation 7 survived and disproved it: `tempnam()`
+  puts the file exactly where asked. The real breakage is a **cross-directory `rename()`** plus
+  `ensureDir()` creating `~/.sugar-crush` on a run told to stay out of it. On this host both paths are
+  `/tmp`, so the content assertion proved nothing. After correcting both prose sites and adding
+  `assertDirectoryDoesNotExist()`, the mutation died.
+- This is the intended outcome of the discipline: **the number that matters is what a reviewer who did
+  not write the code can still break** — never the implementer's own score.
+
+### A NEW hazard, found by accident, that belongs in the concurrency recipe
+
+I made a `cp -a` probe copy of the tree **while a reviewer was mid-mutation**, and the copy froze the
+mutation in place: `'fish' => self::zshCompletion()` where live had `fishCompletion()`. The probe's suite
+then showed 1 failure, which I nearly attributed to an unrelated dependency change.
+
+**Rule: snapshot a lane only from a QUIESCENT tree, and record the source HEAD plus a `git status` hash
+in the lane.** A lane cloned from a tree another agent is mutating inherits a corrupted baseline, and
+every figure it reports afterwards is measured against a lie. This is cheap to get wrong and expensive
+to detect — I only caught it because the diff was two tokens wide.
+
+Corollary, also new: **a still `git status` is NOT evidence of a stalled agent.** A mutation loop edits,
+runs one test file (~0.05s), and restores from a checksummed backup, so the tree sits perfectly still
+through a great deal of work. Check the agent transcript's mtime and `pgrep -af phpunit` instead.
