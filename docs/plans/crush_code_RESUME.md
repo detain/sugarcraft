@@ -509,6 +509,35 @@ sweep buys **four** distinct properties and its band-floor check is monotone, so
 cols=80 is load-bearing. **This matters repo-wide: assertion totals are a headline health metric in
 this plan and they are inflated by the `…OrEqual` family.**
 
+### ⚠️ THE ASSERTION TOTAL IS NOT COUNTING ASSERT CALLS — supervisor-verified
+
+Every round of this plan quotes `tests / assertions` as its health figure. **PHPUnit 10 counts
+`assertLessThanOrEqual()` and `assertGreaterThanOrEqual()` as TWO assertions each** (they are
+composite `LogicalOr` constraints). Supervisor-verified directly, with a four-method probe run
+against `sugar-crush/vendor/bin/phpunit`:
+
+```
+assertSame              -> OK (1 test, 1 assertion)
+assertLessThanOrEqual   -> OK (1 test, 2 assertions)
+assertGreaterThanOrEqual-> OK (1 test, 2 assertions)
+assertLessThan          -> 1 assertion   (plain comparisons are NOT doubled)
+```
+
+**Scale, stated as two different things because they ARE two different things:**
+- **Repo-wide the distortion is small.** `grep -rho "assert\(Less\|Greater\)ThanOrEqual("` over
+  `sugar-crush/tests/` finds **142 static call sites**. If each ran exactly once that is +142 on
+  92,144, i.e. **0.15%**. ⚠️ **That is a FLOOR, not the answer** — a static count cannot see loop
+  iterations, and one such call inside a 281-iteration sweep contributes **562**.
+- **Per-bundle it can be enormous.** P8.4 reported **+1488 assertions** for +23 tests; the real
+  assert-CALL count is **~880**, a **~68% overstatement**, because 1344 of them came from two loops.
+
+**How to read a bundle's assertion delta from now on:** a large delta is evidence of loop iterations,
+not of properties pinned. P8.4's 724-assertion sweep buys **four** distinct properties, and its
+band-floor check is monotone so only the minimum at cols=80 is load-bearing. **Ask what a delta
+PINS, never what it totals** — and the proof is that the same 724 assertions failed to catch
+`intdiv($cols,3)` → `round($cols/3)`, because they assert the SUM (`band + 1 + column == cols`),
+which holds under any sizing policy.
+
 ### ROUND 34 IS ALREADY MEASURED — do not re-run discovery
 
 A read-only agent measured the whole cheap tail against the tree at `7957b2be`. Verdicts, with the
