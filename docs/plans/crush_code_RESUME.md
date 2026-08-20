@@ -44,7 +44,7 @@ handling and `..` containment.
 | `7957b2be` | **the window was corrected in one place and described in four others** — round 32 moved `DEEPSEEK_V4_CONTEXT_WINDOW` to `1_048_570` and never swept the describing text. Fixed `src/Chat.php:9605,9610` + `crush_code.md:1824,1999,2069`; `crush_feat.md` §12 got a dated header note (it is an accurate research record of a deployment that no longer exists, so it gets a note, not a rewrite) |
 | `e1840c13` | **P7.6 ✅ (Phase 7 now 6 of 6)** — ARCHITECTURE.md's diagram + `## Chat` heading no longer call `Chat` the root Model, and the two-hats/do-not-retire warning is finally on the page — **and finding #6**, which turned out to be INVERTED rather than misspelled |
 
-### THE TWO RULES ROUND 33 HAS EARNED SO FAR
+### THE RULES ROUND 33 HAS EARNED SO FAR
 
 - **A DATE STAMP DOES NOT STOP A NUMBER BEING READ AS CURRENT.** `crush_code.md:1999` and `:2069`
   both carried "**393,216** … as of `ed57d46a`" — stamped with the commit they were measured at,
@@ -53,6 +53,28 @@ handling and `..` containment.
   does not make a stale number look stale. **No test pinned any of the five copies**, which is why
   the suite could not have caught it. The durable fix was to say the figure is model-aware and
   provider-reported and to name the literals as illustrative, not to write a fresher literal.
+- 🔴 **THE SUPERVISOR'S OWN BRIEF CARRIED THE RECURRING DEFECT — INSIDE THE PARAGRAPH WARNING ABOUT
+  IT.** The DSML brief told its agent: *"those are FULLWIDTH vertical bars (U+FF5C), not ASCII `|`,
+  and the tokens contain U+2581 LOWER ONE EIGHTH BLOCK. Verify the exact bytes yourself with a hex
+  dump before writing a pattern — a pattern written with ASCII pipes will match nothing, silently,
+  and a test written with the same wrong bytes will pass."* The agent did exactly that, hex-dumped
+  upstream's `encoding/README.md`, and reported back: the DSML tags are
+  `3c ef bd 9c 44 53 4d 4c ef bd 9c` — **U+FF5C only, no `e2 96 81` anywhere.** U+2581 appears solely
+  in `<｜begin▁of▁sentence｜>` / `<｜end▁of▁sentence｜>`, which are sentence tokens, not markup tokens.
+  **A true claim about one token family, written next to a different one** — the exact shape, in the
+  sentence instructing the reader to distrust exactly that shape. The instruction is what saved it;
+  the fact attached to the instruction was wrong. Inherited verbatim from the round-32 workflow
+  script and shipped without re-measurement, which is the whole failure: **the brief told the agent
+  to measure and did not measure itself.**
+  Now pinned by `testATagCarryingTheSentenceTokenBlockCharacterIsNotDsml`.
+  This is the third consecutive round in which the defect appears inside the work correcting it.
+- **A CORRECTED CONSTANT LEAVES CORRECTED-LOOKING ARITHMETIC BEHIND.** `7957b2be` swept five places
+  that *quoted* the superseded 393,216 and missed three that were **derived from it**:
+  `contextWindow()`'s tier figures `~275,251 / ~334,233 / ~373,555` are 70/85/95% of 393,216. A grep
+  for the stale number cannot find a number computed from the stale number. The lane found them and
+  corrected them to `~733,999 / ~891,284 / ~996,141`. **Sweep for the derived values, not just the
+  literal.**
+
 - **TWO PAGES CAN STATE OPPOSITE THINGS AND THE CORRECT ONE IS THE UNFLAGGED ONE.**
   `HookManager.php:34` warned that `name: confirm-remove` would UNINSTALL `ConfirmRemoveHook`.
   `ConfirmRemoveHook::name()` returns `confirm-rm`, so `confirm-remove` is the one name that collides
