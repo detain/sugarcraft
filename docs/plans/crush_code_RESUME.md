@@ -8,19 +8,29 @@ Nothing here depends on a prior conversation's context.
 
 ## 0-NOW. STATE AT THE ROUND-31 COMPACT — read this first, then §0 for the standing rules
 
-**`master` = `f076830e`. Live tree clean, 0 ahead / 0 behind. NOTHING IS IN FLIGHT.**
-**All three lane dirs are clean, idle and current at `f076830e`** — `crush-lane-cmd`,
+**`master` = `7ce8a735`. Live tree clean, 0 ahead / 0 behind.**
+**All three lane dirs are clean, idle and current at `7ce8a735`** — `crush-lane-cmd`,
 `crush-lane-lsp`, `crush-lane-sglang`. Any of them can be reused as-is.
 
-**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0`** — the `cmd` lane's post-rebase figure
-at `f764b463`; the supervisor's post-hoc gate at `f076830e` was still running at compact time, so
-**treat 8111 as reported-not-yet-supervisor-confirmed and re-measure.** The last supervisor-confirmed
-gate was **7975 / 91097 / 1 / rc 0** at `ed57d46a`.
+**IN FLIGHT: a read-only re-verification sweep** (three agents, Phases 1-3 / 4-6 / 7-8). It writes
+nothing and commits nothing, so it collides with no lane and can be abandoned at any point without
+cleanup. See "DO THIS NEXT" below for why it runs before any further feature bundle.
+
+**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0` — SUPERVISOR-CONFIRMED.** The gate that
+was still running at the round-31 compact finished at `rc 0` with exactly these figures, matching the
+`cmd` lane's own post-rebase report at `f764b463`. The 8111 number no longer needs re-measuring.
 **Skips MUST stay 1** — `tests/MCP/McpClientTest.php:106`. A 2 means `vendor/sugarcraft/*` was
 replaced by Packagist copies and every figure since is void.
 
-**62 of 75 plan items.** Phase 2 complete except item 9 (the deliberately-last plugin epic);
-**Phase 6 items 1-4**; Phase 7 complete; Phase 8 items 1, 2, 3, 5, 6, 7, 10, 11, 12, 14.
+**62 of 75 plan items — AND THIS NUMBER IS UNDER ACTIVE DISPUTE.** Phase 2 complete except item 9
+(the deliberately-last plugin epic); **Phase 6 items 1-4**; Phase 7 complete; Phase 8 items 1, 2, 3,
+5, 6, 7, 10, 11, 12, 14. Two contradictions found while briefing the sweep, both in `crush_code.md`:
+its own body still reads **"56 of 75 items, counted by item"** where this header says 62, and its
+stated convention that "items completed in the tree carry a ✅ … — DONE marker inline" has decayed —
+Phase 2 items 1-8, Phase 4 items 1/2/5/6/7, Phase 5 items 1-3 and Phase 7 items 3-6 are all claimed
+complete in the header while carrying no inline marker at all. So there are currently three
+disagreeing sources of truth for completion: the header prose, the inline markers, and the tree. The
+sweep exists to make the tree the only one that counts. **Do not quote 62 until it reports.**
 
 ### WHAT LANDED IN ROUND 31
 
