@@ -67,10 +67,46 @@ sugarcrush --output-format json run "audit this" # `run` works after flags too
 sugarcrush doctor                               # check the install (see Subcommands)
 sugarcrush --root /path/to/project              # set the project root explicitly
 sugarcrush --config ~/policies/crush.json       # read settings/permissions from this file
+sugarcrush --model gpt-5 -p "audit this"        # pick the model (not the provider)
+sugarcrush --permission-mode plan -p "audit this" # pick the permission mode for this run
 sugarcrush --help                               # prints and exits (never opens the TUI)
 sugarcrush --version                            # prints the installed version and exits
 sugarcrush -- --not-a-flag                      # `--` ends options; everything after is positional
 ```
+
+`--model <name>` (also `--model=<name>`) names the conversation MODEL and
+overrides `$SUGARCRUSH_MODEL` and the provider's own default. It does not pick a
+provider — that still comes from `$SUGARCRUSH_PROVIDER` or the persisted
+`provider` setting, and the two are independent axes. The Ctrl+P palette entry
+labelled "Switch model" switches the PROVIDER, which is why the distinction is
+worth stating twice.
+
+`--permission-mode <mode>` (also `--permission-mode=<mode>`) runs this launch
+under one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`,
+`bypass-permissions`. It is the highest-precedence source, beating
+`$SUGARCRUSH_PERMISSION_MODE` and the `permissionMode` config key.
+
+A **non-empty** value that is not one of those modes refuses the launch with
+exit 2 rather than falling back to the permissive default — the same refusal,
+with the same message shape, that the environment variable and the config key
+already produce; only the named source differs. (`sugarcrush doctor` is not a
+launch: it reports the same bad value as a failed `permission policy` check and
+exits 1.)
+
+An **empty** value — `--permission-mode=` or `--permission-mode ""` — is a
+usage error, also exit 2, but raised by the argument parser before any of that.
+Here the flag is deliberately **stricter than the other two sources**: an empty
+`$SUGARCRUSH_PERMISSION_MODE` or `"permissionMode": ""` is read as *absent* and
+the run proceeds on the next source down, whereas an empty flag refuses. The
+asymmetry is intentional. An unset variable is a normal state of an environment,
+but typing the flag is an explicit act, and `sugarcrush --permission-mode="$MODE"`
+with `$MODE` unset otherwise leaves the operator believing a mode is in force
+when none is — succeeding silently at exit 0 under whatever the config said.
+`--config` refuses an empty value for exactly this reason; this flag now follows
+that precedent instead of half of it. `--model`/`--model=` is refused the same
+way.
+
+Both flags apply to the TUI and to `-p`/`run` alike.
 
 `--root` also accepts the first positional argument that looks like a path, so
 `sugarcrush ../other-project` works. It is what the Bash/Read/Edit/Glob tools

@@ -2046,4 +2046,191 @@ final class BinSugarcrushDispatchTest extends TestCase
 
         return $fields[19] ?? null;
     }
+
+    /**
+     * P6.6: `--permission-mode` reaches the gate on the ONE-SHOT path.
+     *
+     * This is the assertion the flag most needed, and the reason it is a
+     * process-wide registration rather than a `Bootstrap::chat()` parameter:
+     * `-p` dispatches through `NonInteractive::run()`, which enters at
+     * `Bootstrap::backend()`/`backendFor()` and NEVER calls `chat()`. A flag
+     * threaded into `chat()` alone would leave
+     * `sugarcrush --permission-mode plan -p "..."` running under whatever the
+     * config said while appearing to have been told otherwise — silently, since
+     * nothing on a one-shot run prints the mode.
+     *
+     * An invalid value is what makes it OBSERVABLE from outside the process:
+     * the refusal proves the flag's value reached `permissionGate()` on this
+     * path. A valid one produces no output that names the mode.
+     */
+    public function testAnInvalidPermissionModeFlagRefusesTheOneShotPath(): void
+    {
+        $result = $this->runBin(['--permission-mode', 'nonsense', '-p', 'hi'], []);
+
+        $this->assertSame(2, $result['status']);
+        $this->assertStringContainsString('--permission-mode', $result['stderr']);
+        $this->assertStringContainsString('is not a permission mode', $result['stderr']);
+    }
+
+    /**
+     * The same refusal on the TUI path (no `-p`), which dispatches through
+     * `Bootstrap::app()`/`chat()` instead. Both dispatches, one message.
+     */
+    public function testAnInvalidPermissionModeFlagRefusesTheTuiPath(): void
+    {
+        $result = $this->runBin(['--permission-mode', 'nonsense'], []);
+
+        $this->assertSame(2, $result['status']);
+        $this->assertStringContainsString('--permission-mode', $result['stderr']);
+    }
+
+    /**
+     * It rides the existing `PermissionConfigException` -> `failUsage()` path,
+     * so it produces the usage error DOCUMENT under `--output-format json`
+     * rather than a bare stderr line or an uncaught fatal. Registration happens
+     * before `bin/sugarcrush`'s try/catch, which is exactly why the value is
+     * registered raw and validated inside `permissionGate()`.
+     */
+    public function testAnInvalidPermissionModeFlagEmitsTheJsonUsageDocument(): void
+    {
+        $result = $this->runBin(
+            ['--permission-mode', 'nonsense', '--output-format', 'json', '-p', 'hi'],
+            [],
+        );
+
+        $this->assertSame(2, $result['status']);
+
+        $document = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($document);
+        $this->assertNull($document['result']);
+        $this->assertSame('usage', $document['error']['type']);
+        $this->assertStringContainsString('--permission-mode', (string) $document['error']['message']);
+    }
+
+    /**
+     * The other direction: a VALID mode and a `--model` must not disturb the
+     * one-shot run. Without this, "every mode refuses" would pass the three
+     * assertions above while having broken the feature.
+     *
+     * With no provider configured the run answers from the offline echo
+     * provider, which is exit 0 — see `NonInteractive::noticeOfflineDefault()`.
+     */
+    public function testValidLaunchFlagsDoNotDisturbTheOneShotRun(): void
+    {
+        foreach ([
+            ['--permission-mode', 'plan', '-p', 'hi'],
+            ['--permission-mode=accept-edits', '-p', 'hi'],
+            ['--model', 'some-model', '-p', 'hi'],
+            ['--model=some-model', '--permission-mode=plan', '-p', 'hi'],
+        ] as $args) {
+            $result = $this->runBin($args, []);
+
+            $this->assertSame(0, $result['status'], \implode(' ', $args) . ' -> ' . $result['stderr']);
+            $this->assertStringContainsString('hi', $result['stdout']);
+        }
+    }
+
+    /**
+     * A missing value is a usage error from the PARSER, before any gate is
+     * built — a different code path from the invalid-value case above, and it
+     * must not be swallowed as an unknown flag.
+     */
+    public function testLaunchFlagsWithoutAValueAreUsageErrors(): void
+    {
+        foreach (['--permission-mode', '--model'] as $flag) {
+            $result = $this->runBin([$flag], []);
+
+            $this->assertSame(2, $result['status'], $flag);
+            $this->assertStringContainsString($flag . ' expects', $result['stderr']);
+            $this->assertStringNotContainsString('unrecognized option', $result['stderr']);
+        }
+    }
+
+    /**
+     * An EMPTY value is a usage error too — the case that shipped broken.
+     *
+     * MEASURED before the fix, against this same binary:
+     * `--permission-mode= doctor` and `--permission-mode "" doctor` both exited
+     * 0 having applied NO mode, while `--config=` already exited 2 on the
+     * identical shape. Asserted HERE, through the real binary, and not only at
+     * the parser: the defect was that the operator saw exit 0, and exit 0 is a
+     * property of the process, not of `ParsedArgs`.
+     *
+     * Both spellings of both flags, because the attached and spaced forms fail
+     * through different branches.
+     */
+    public function testLaunchFlagsWithAnEmptyValueAreUsageErrors(): void
+    {
+        foreach ([
+            ['--permission-mode='],
+            ['--permission-mode', ''],
+            ['--model='],
+            ['--model', ''],
+        ] as $args) {
+            $label = implode(' ', $args);
+            $result = $this->runBin([...$args, 'doctor'], []);
+
+            $this->assertSame(self::EXIT_USAGE, $result['status'], $label);
+            $this->assertStringContainsString('the value is empty', $result['stderr'], $label);
+        }
+    }
+
+    /**
+     * `--model` actually reaches the resolver — the argv -> bin -> model wiring.
+     *
+     * WHY THIS EXISTS as a separate case when
+     * {@see testValidLaunchFlagsDoNotDisturbTheOneShotRun()} already passes
+     * `--model some-model`: that case asserts only exit 0 and the echoed
+     * prompt, both of which are true when the flag is DROPPED. MEASURED by
+     * mutation — `Bootstrap::useModel($args->model)` -> `useModel(null)` in
+     * `bin/sugarcrush` SURVIVES it, and survived 171 tests besides. Nothing
+     * pinned that a parsed `--model` was ever handed to anything.
+     *
+     * `doctor` is the observable: it prints `provider <name> (model <model>)`
+     * from `Bootstrap::selectedProviderLabel()`, the same resolver
+     * `backendFor()` builds the real backend from. A sentinel value that no
+     * provider default could produce makes the assertion unambiguous.
+     *
+     * The env var is set to a DIFFERENT sentinel so this pins precedence in the
+     * same breath: the flag must win. Without that, an implementation that
+     * ignored the flag and read `$SUGARCRUSH_MODEL` would pass.
+     *
+     * DOMAIN: `doctor`, one of the three dispatch paths. It proves the
+     * registration in `bin/sugarcrush` happens before dispatch and that the
+     * resolver honours it; the TUI and one-shot paths read the same static
+     * through the same resolver, which is the point of it being a static.
+     */
+    public function testTheModelFlagReachesTheResolverAndBeatsTheEnvironment(): void
+    {
+        $result = $this->runBin(['--model', 'ZZ-FLAG-MODEL-ZZ', 'doctor'], [
+            'SUGARCRUSH_PROVIDER' => 'openai',
+            'SUGARCRUSH_MODEL' => 'ZZ-ENV-MODEL-ZZ',
+        ]);
+
+        $this->assertStringContainsString(
+            'ZZ-FLAG-MODEL-ZZ',
+            $result['stdout'],
+            'the parsed --model never reached Bootstrap: ' . $result['stdout'] . $result['stderr'],
+        );
+        $this->assertStringNotContainsString(
+            'ZZ-ENV-MODEL-ZZ',
+            $result['stdout'],
+            '$SUGARCRUSH_MODEL out-ranked an explicit --model on this launch',
+        );
+    }
+
+    /**
+     * The other direction, so the case above cannot pass by hard-coding: with
+     * no flag, the environment variable still decides. A `--model` that somehow
+     * defaulted to a constant would break this one.
+     */
+    public function testWithoutTheFlagTheEnvironmentModelStillReachesTheResolver(): void
+    {
+        $result = $this->runBin(['doctor'], [
+            'SUGARCRUSH_PROVIDER' => 'openai',
+            'SUGARCRUSH_MODEL' => 'ZZ-ENV-MODEL-ZZ',
+        ]);
+
+        $this->assertStringContainsString('ZZ-ENV-MODEL-ZZ', $result['stdout']);
+    }
 }

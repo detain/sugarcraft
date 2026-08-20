@@ -175,6 +175,36 @@ final class HelpTest extends TestCase
             'selectedProviderName',            // tier 1 vs tier 4, for the label
             'selectedProviderLabel',           // the model override on the label
             'backendCommandTierIsSelected',    // the two shell-out tiers, by name
+            // The `--model`/$SUGARCRUSH_MODEL resolver. backendFor() (which
+            // builds the backend) and selectedProviderLabel() (which captions
+            // it) used to each call getenv('SUGARCRUSH_MODEL') themselves, so
+            // the literal was inside a scraped body; both now share this one
+            // resolver. Named here so the scrape keeps measuring what it claims
+            // to — which variables backend selection READS — rather than where
+            // a string literal happens to sit.
+            'selectedModelName',
+
+            // KNOWN GAP, pre-existing and deliberately left as-is.
+            //
+            // `backendFor()` — the method that BUILDS the backend — is not in
+            // this list, so a `getenv('SUGARCRUSH_...')` added there would not
+            // be scraped and could ship undocumented. Every other
+            // backend-selection method is named above; this one was missed.
+            //
+            // MEASURED, so the risk is stated at its real size rather than
+            // guessed: `backendFor()`'s body carries exactly one occurrence of
+            // the string SUGARCRUSH_MODEL, in the inline comment "--model wins
+            // over $SUGARCRUSH_MODEL wins over the provider default". The
+            // regex below is anchored on SINGLE QUOTES, so that unquoted
+            // mention is correctly ignored, and adding `backendFor` here today
+            // would change nothing — the variable it once read is already
+            // covered through `selectedModelName`, which replaced its
+            // getenv() call.
+            //
+            // So: LATENT, not live. Adding it is safe and would close the gap;
+            // it is left out of this change only because this bundle is about
+            // the two launch flags and widening the census is a separate
+            // concern with its own blast radius.
         ] as $method) {
             $reflected = new \ReflectionMethod(Bootstrap::class, $method);
             $body = \implode("\n", \array_slice(

@@ -46,7 +46,8 @@ unusable. Read the stderr line; it names the file and the value.
 | Message mentions | Cause | Fix |
 |---|---|---|
 | invalid JSON in `config.json` | a stray comma | fix the file; `doctor`'s `config file` check reports the parser's own message |
-| an unrecognised permission mode | a typo in `permissionMode` or `SUGARCRUSH_PERMISSION_MODE` | one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions` |
+| an unrecognised permission mode | a typo in `permissionMode`, `SUGARCRUSH_PERMISSION_MODE` or `--permission-mode` | one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions` |
+| `--permission-mode expects a mode, but the value is empty` (or the same for `--model`) | usually `--permission-mode="$MODE"` with `$MODE` unset or misspelled in the calling script | quote-check the variable. The flag refuses an empty value on purpose — it used to accept one, apply no mode at all and exit 0, so a script could believe a mode was in force when none was. Note the deliberate asymmetry: an **empty** `SUGARCRUSH_PERMISSION_MODE` or `"permissionMode": ""` is read as *absent* and falls through to the next source, because an unset variable is a normal state of an environment while typing the flag is an explicit act |
 | `hooks.yaml` … refusing to start | YAML syntax error, unknown event name, uncompilable matcher, or an unrecognised entry key | see [`HOOKS.md`](HOOKS.md) |
 | a hook would displace an already-registered hook | your `hooks.yaml` reuses a built-in's name **on that built-in's own event** — `protect-files` or `confirm-rm` on `PreToolUse`, `audit` on `PostToolUse` | rename the entry; see the name/event table in [`HOOKS.md`](HOOKS.md#a-loaded-hook-may-only-add-to-the-chain) |
 | `cannot be reached: … so whether hooks are configured there is unknowable` | a directory on the way to the hook file cannot be searched | fix the permissions on the ancestor directory |

@@ -727,7 +727,9 @@ final class Subcommands
      *
      * `value`: null = a bare switch; 'text' = free text; 'dir'/'file' = a path
      * the shell should complete; 'format' = one of
-     * {@see ParsedArgs::OUTPUT_FORMATS}. The three generators below translate
+     * {@see ParsedArgs::OUTPUT_FORMATS}; 'mode' = one of
+     * {@see \SugarCraft\Crush\Permissions\PermissionMode::cases()}, derived at generation time rather than
+     * written out so a mode added to the enum cannot go un-completable. The three generators below translate
      * that one column into three genuinely different dialects rather than
      * sharing a script — see {@see completion()}.
      *
@@ -738,6 +740,8 @@ final class Subcommands
         '--output-format' => ['short' => null, 'value' => 'format', 'desc' => 'Output format: text or json'],
         '--root' => ['short' => null, 'value' => 'dir', 'desc' => 'Use <dir> as the project root'],
         '--config' => ['short' => null, 'value' => 'file', 'desc' => 'Read settings and permissions from <file>'],
+        '--model' => ['short' => null, 'value' => 'text', 'desc' => 'Conversation model name (not a provider)'],
+        '--permission-mode' => ['short' => null, 'value' => 'mode', 'desc' => 'Permission mode to run under'],
         '--help' => ['short' => '-h', 'value' => null, 'desc' => 'Show the help screen'],
         '--version' => ['short' => '-v', 'value' => null, 'desc' => 'Show the installed version'],
     ];
@@ -770,6 +774,21 @@ final class Subcommands
         'completion' => self::SHELLS,
     ];
 
+    /**
+     * The permission modes, space-separated, for the three completion dialects.
+     *
+     * DERIVED from the enum rather than listed, for the reason the OPTIONS
+     * docblock gives: a literal list here would be a set of modes measured once
+     * and then quietly wrong about the enum it claims to describe.
+     */
+    private static function permissionModeWords(): string
+    {
+        return \implode(' ', \array_map(
+            static fn (\SugarCraft\Crush\Permissions\PermissionMode $m): string => $m->value,
+            \SugarCraft\Crush\Permissions\PermissionMode::cases(),
+        ));
+    }
+
     private static function bashCompletion(): string
     {
         $verbs = \implode(' ', \array_keys(self::SUBCOMMAND_DESCRIPTIONS));
@@ -784,6 +803,7 @@ final class Subcommands
                 'dir' => 'COMPREPLY=($(compgen -d -- "$cur"))',
                 'file' => 'COMPREPLY=($(compgen -f -- "$cur"))',
                 'format' => 'COMPREPLY=($(compgen -W "' . $formats . '" -- "$cur"))',
+                'mode' => 'COMPREPLY=($(compgen -W "' . self::permissionModeWords() . '" -- "$cur"))',
                 default => null,
             };
             if ($action !== null) {
@@ -837,6 +857,7 @@ final class Subcommands
                 'dir' => ':directory:_files -/',
                 'file' => ':file:_files',
                 'format' => ':format:(' . \implode(' ', ParsedArgs::OUTPUT_FORMATS) . ')',
+                'mode' => ':mode:(' . self::permissionModeWords() . ')',
                 'text' => ':text:',
                 default => '',
             };
@@ -931,6 +952,7 @@ final class Subcommands
                 // only", which is right for a closed set and wrong for a path.
                 'dir', 'file' => ' -r -F',
                 'format' => ' -x -a ' . \escapeshellarg(\implode(' ', ParsedArgs::OUTPUT_FORMATS)),
+                'mode' => ' -x -a ' . \escapeshellarg(self::permissionModeWords()),
                 'text' => ' -r',
                 default => '',
             };

@@ -115,6 +115,8 @@ final class ArgvParser
         $usageError = null;
         $usageHint = null;
         $configPath = null;
+        $model = null;
+        $permissionMode = null;
         $endOfOptions = false;
         $subcommand = null;
         $subcommandArgs = [];
@@ -352,6 +354,119 @@ final class ArgvParser
                 continue;
             }
 
+            // --model=<value>  (no space)
+            //
+            // An EMPTY value is a usage error, not a value — see
+            // self::EMPTY_MODEL_ERROR.
+            if (\str_starts_with($arg, '--model=')) {
+                $value = \substr($arg, 8); // length of "--model="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = self::EMPTY_MODEL_ERROR;
+                        $usageHint = self::MODEL_VALUE_HINT;
+                    }
+                    ++$i;
+                    continue;
+                }
+                $model = $value;
+                ++$i;
+                continue;
+            }
+
+            // --model <value>
+            //
+            // STRICT rather than lenient (--root/--output-format swallow
+            // whatever follows, including nothing): a model name is never
+            // flag-shaped, so `--model -p "hi"` is a typo in which the bare
+            // form ate the next OPTION, and silently starting on the provider
+            // default while dropping -p is worse than refusing. Same treatment
+            // --config already gets, and the =-form above stays available for
+            // the value that legitimately begins with "-".
+            if ($arg === '--model') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'sugarcrush: --model expects a model name, but the argument list ended'
+                            : \sprintf(
+                                'sugarcrush: --model expects a model name, but the next argument is the option %s',
+                                $next,
+                            );
+                        $usageHint = self::MODEL_VALUE_HINT;
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = self::EMPTY_MODEL_ERROR;
+                        $usageHint = self::MODEL_VALUE_HINT;
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $model = $next;
+                $i += 2;
+                continue;
+            }
+
+            // --permission-mode=<value>  (no space)
+            //
+            // An EMPTY value is a usage error, not a value — see
+            // self::EMPTY_PERMISSION_MODE_ERROR.
+            if (\str_starts_with($arg, '--permission-mode=')) {
+                $value = \substr($arg, 18); // length of "--permission-mode="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = self::EMPTY_PERMISSION_MODE_ERROR;
+                        $usageHint = self::permissionModeValueHint();
+                    }
+                    ++$i;
+                    continue;
+                }
+                $permissionMode = $value;
+                ++$i;
+                continue;
+            }
+
+            // --permission-mode <value>
+            //
+            // The VALUE is not validated here. Bootstrap::permissionGate() runs
+            // it through the same permissionModeFrom() that judges
+            // $SUGARCRUSH_PERMISSION_MODE and the config key, so all three
+            // sources fail with one message shape and one exit path — see
+            // Bootstrap::usePermissionMode(). What IS checked here is the
+            // shape: a missing value must not silently leave the mode at its
+            // default, which for this flag means running unattended under
+            // whatever the config said.
+            if ($arg === '--permission-mode') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'sugarcrush: --permission-mode expects a mode, but the argument list ended'
+                            : \sprintf(
+                                'sugarcrush: --permission-mode expects a mode, but the next argument is the option %s',
+                                $next,
+                            );
+                        $usageHint = self::permissionModeValueHint();
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = self::EMPTY_PERMISSION_MODE_ERROR;
+                        $usageHint = self::permissionModeValueHint();
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $permissionMode = $next;
+                $i += 2;
+                continue;
+            }
+
             // Unrecognised flag — recorded, never applied. bin/sugarcrush
             // turns a non-empty list into a usage error (exit 2); dropping it
             // here is what let `--version` boot the TUI.
@@ -420,7 +535,7 @@ final class ArgvParser
             }
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode);
     }
 
     /**
@@ -555,6 +670,61 @@ final class ArgvParser
      */
     private const CONFIG_VALUE_HINT = 'Write it as --config=<file> if the path begins with "-"; it may not be omitted.';
 
+    private const MODEL_VALUE_HINT = 'Write it as --model=<name> if the model name begins with "-"; it may not be omitted.';
+
+    /**
+     * The usage error for `--model=` and `--model ""` — an EMPTY value.
+     *
+     * Worded to match {@see \SugarCraft\Crush\Cli\Bootstrap::configError()}'s
+     * "but the value is empty", because it answers the identical question for
+     * the identical reason: null means "the flag was absent, fall back", so
+     * letting '' collapse into null would make an explicitly-typed flag do
+     * nothing and say nothing. `--config` has refused this since it was
+     * written; this flag now matches its precedent rather than half of it.
+     *
+     * Raised in the PARSER rather than in a later validator (where
+     * `--config`'s equivalent lives) because the parser is the only layer that
+     * can still tell `--model ""` from `--model` never given — by the time a
+     * validator sees {@see ParsedArgs::$model} the empty token is
+     * indistinguishable from absence for the SPACE form, since the token was
+     * consumed. The =-form could be checked later; the space form could not,
+     * and one site for both beats two that can drift.
+     */
+    private const EMPTY_MODEL_ERROR = 'sugarcrush: --model expects a model name, but the value is empty';
+
+    /**
+     * The usage error for `--permission-mode=` and `--permission-mode ""`.
+     *
+     * See {@see EMPTY_MODEL_ERROR} for why an empty value is an error and why
+     * the check lives in the parser. The stake is higher for this flag: an
+     * operator writing `sugarcrush --permission-mode="$MODE"` with `$MODE`
+     * unset believed a mode was in force, got none, and was told nothing at
+     * exit 0 — the run silently continued under whatever the config or
+     * `$SUGARCRUSH_PERMISSION_MODE` said.
+     *
+     * That is a flag that SILENTLY DOES NOTHING, not a privilege escalation:
+     * the default this fell back to is {@see \SugarCraft\Crush\Cli\Bootstrap::DEFAULT_PERMISSION_MODE},
+     * which is deliberately permissive and documented as such. The defect is
+     * the silence, not the destination.
+     */
+    private const EMPTY_PERMISSION_MODE_ERROR = 'sugarcrush: --permission-mode expects a mode, but the value is empty';
+
+    /**
+     * DERIVED from {@see PermissionMode::cases()} rather than written out, so
+     * the hint cannot come to list a set of modes the enum no longer has —
+     * the same construction {@see \SugarCraft\Crush\Cli\Bootstrap::permissionModeFrom()}
+     * uses for its own "expected one of" list.
+     */
+    private static function permissionModeValueHint(): string
+    {
+        $modes = \implode(', ', \array_map(
+            static fn (\SugarCraft\Crush\Permissions\PermissionMode $m): string => $m->value,
+            \SugarCraft\Crush\Permissions\PermissionMode::cases(),
+        ));
+
+        return 'Valid modes are: ' . $modes . '.';
+    }
+
     /**
      * The usage error for a prompt option whose value is a flag.
      *
@@ -667,6 +837,12 @@ final readonly class ParsedArgs
         public ?string $configPath = null,
         public ?string $subcommand = null,
         public array $subcommandArgs = [],
+        /** The model `--model` named, or null. Not validated — any string is a
+         *  plausible model name to a provider this binary does not know. */
+        public ?string $model = null,
+        /** The RAW string `--permission-mode` named, or null. Validated by
+         *  {@see \SugarCraft\Crush\Cli\Bootstrap::permissionGate()}, not here. */
+        public ?string $permissionMode = null,
     ) {
     }
 
@@ -691,7 +867,9 @@ final readonly class ParsedArgs
         ?string $configPath = null,
         ?string $subcommand = null,
         array $subcommandArgs = [],
+        ?string $model = null,
+        ?string $permissionMode = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode);
     }
 }

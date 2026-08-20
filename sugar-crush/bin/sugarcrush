@@ -133,6 +133,20 @@ if ($configError !== null) {
 // A null (no --config given) leaves Bootstrap's own discovery in place.
 Bootstrap::useConfigPath($args->configPath);
 
+// Registered at the same seam and for the same reason: process-wide, before
+// EITHER dispatch, so all three paths honour them. `-p`/`run` enters at
+// NonInteractive::run() -> Bootstrap::backend()/backendFor() and never goes
+// through Bootstrap::chat(), so a flag threaded into chat() alone would leave
+// `sugarcrush --permission-mode plan -p "..."` running under the config's mode
+// while appearing to have been told otherwise.
+//
+// --permission-mode is registered RAW. Bootstrap::permissionGate() validates it
+// with the same permissionModeFrom() that judges the env var and the config
+// key, which throws PermissionConfigException — caught by the try/catch below,
+// which is why validation must happen inside the dispatch and not here.
+Bootstrap::useModel($args->model);
+Bootstrap::usePermissionMode($args->permissionMode);
+
 // The real subcommands — `mcp list`, `session list|delete`, `models`, `doctor`
 // and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6). Dispatched
 // HERE, in the same pre-flight place --help and --version are answered and

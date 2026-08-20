@@ -85,6 +85,19 @@ Options:
                          /tmp is normally refused for one of those reasons).
                          Only the FILE moves: agents, skills, workflows,
                          sessions and memory stay in ~/.sugar-crush.
+      --model <name>     Use <name> as the conversation model, overriding
+                         $SUGARCRUSH_MODEL and the provider's own default. Also
+                         accepts --model=<name>. Selects a model, not a provider
+                         — the provider still comes from $SUGARCRUSH_PROVIDER or
+                         the persisted `provider` setting, and the two are
+                         independent axes.
+      --permission-mode <mode>
+                         Run under <mode> instead of the mode in the config
+                         file. Also accepts --permission-mode=<mode>. Highest
+                         precedence: it beats $SUGARCRUSH_PERMISSION_MODE and
+                         the permissionMode config key. One of: default,
+                         accept-edits, plan, auto, dont-ask,
+                         bypass-permissions.
   -h, --help             Show this help message
   -v, --version          Show the installed version and exit
       --                 End of options: every later argument is positional,
@@ -93,7 +106,10 @@ Options:
 Environment variables:
   SUGARCRUSH_PROVIDER    Provider to use: openai, anthropic, claude-code,
                          sglang, bedrock, vertex, custom
-  SUGARCRUSH_MODEL       Model name (overrides provider default)
+  SUGARCRUSH_MODEL       Model name (overrides provider default; --model wins)
+  SUGARCRUSH_PERMISSION_MODE
+                         Permission mode to start in, overriding the
+                         permissionMode config key (--permission-mode wins)
   SUGARCRUSH_BACKEND_CMD Shell command for a custom backend adapter, under the
                          PROSE contract: receives JSON history on stdin, writes
                          the reply text to stdout, which is used verbatim

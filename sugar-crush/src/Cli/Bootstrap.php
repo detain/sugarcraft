@@ -178,6 +178,19 @@ final class Bootstrap
     private static ?string $configPathOverride = null;
 
     /**
+     * The model `--model` named, or null to fall back to `$SUGARCRUSH_MODEL`
+     * and then the provider default — see {@see useModel()}.
+     */
+    private static ?string $modelOverride = null;
+
+    /**
+     * The RAW, UNVALIDATED string `--permission-mode` named, or null when the
+     * flag was absent — see {@see usePermissionMode()} for why it is stored
+     * unvalidated.
+     */
+    private static ?string $permissionModeOverride = null;
+
+    /**
      * The trusted project roots this process resolved, keyed by the
      * `config.json` they came out of — see {@see trustedRootsForThisProcess()}
      * for why the answer may not be recomputed mid-session.
@@ -1605,7 +1618,8 @@ final class Bootstrap
         self::useProjectRootForSettings($root);
         $factory = new ProviderFactory();
         $provider = $factory->create($factory->defaultConfig($providerName));
-        $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
+        // --model wins over $SUGARCRUSH_MODEL wins over the provider default.
+        $model = self::selectedModelName() ?? ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
 
         $loader = self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
@@ -1722,6 +1736,107 @@ final class Bootstrap
     public static function useConfigPath(?string $path): void
     {
         self::$configPathOverride = $path;
+    }
+
+    /**
+     * Register `--model <name>` for this process.
+     *
+     * A PROCESS-WIDE STATIC for the same reason {@see useConfigPath()} is one,
+     * and deliberately following that precedent rather than inventing a third
+     * mechanism: `bin/sugarcrush` has THREE dispatch paths — `Subcommands`,
+     * `NonInteractive::run()` and `Program`/{@see app()} — and only the last
+     * goes through {@see chat()}. A flag threaded as a parameter into `chat()`
+     * would silently do nothing for `sugarcrush -p "..."`, which enters at
+     * {@see backend()}/{@see backendFor()} instead. One static registered
+     * before either dispatch is read identically by all three.
+     *
+     * WHAT `--model` MEANS, because the surrounding code disagrees with itself
+     * about the word: it names a MODEL, the same domain as `$SUGARCRUSH_MODEL`
+     * ("Model name (overrides provider default)" on the help screen), and it is
+     * resolved by {@see selectedModelName()}. It is NOT a provider. The Ctrl+P
+     * palette's entry labelled "Switch model" calls
+     * {@see backendFor()}, whose first parameter is a PROVIDER name, and that
+     * label is the reason this needed settling in writing: the two are
+     * independent axes and this flag is the model one.
+     *
+     * No `model` key is added to {@see \SugarCraft\Crush\Config\LayeredSettings::LAYERED_KEYS}
+     * to back it. That was considered and rejected: the docblock on that const
+     * records that a top-level `model` key would be "surface with no reader",
+     * and a launch flag does not need one — it is read here, at the same two
+     * sites `$SUGARCRUSH_MODEL` already is.
+     *
+     * ## TEST ISOLATION — read this before calling either setter from a test
+     *
+     * This static and {@see usePermissionMode()}'s LIVE FOR THE WHOLE PROCESS
+     * and are NOT reset between test cases or between test classes. A class
+     * that sets one and does not clear it decides the launch of every test that
+     * runs after it, in any file, for the rest of the suite.
+     *
+     * There is deliberately no automatic reset. That matches
+     * {@see useConfigPath()}, which has behaved this way since it was written
+     * and which `BootstrapConfigPathOverrideTest` and
+     * `BootstrapLayeredSettingsTest` each clear in their own `tearDown()`.
+     * Generalising the reset was considered and declined: it would mean a
+     * shared trait or a suite-wide hook that, to be coherent, would have to
+     * take over `useConfigPath()` too — a new mechanism for three statics whose
+     * existing convention already works and is followed everywhere it applies.
+     *
+     * **So the convention is the contract: clear what you set.**
+     * `Tests\Cli\LaunchFlagsTest` clears both in `setUp()` AND `tearDown()`,
+     * which is the pattern to copy — the `setUp()` half also makes that class
+     * immune to a leak from somewhere else.
+     */
+    public static function useModel(?string $model): void
+    {
+        self::$modelOverride = ($model === null || $model === '') ? null : $model;
+    }
+
+    /**
+     * Register `--permission-mode <mode>` for this process. See
+     * {@see useModel()} for why this is a static rather than a parameter.
+     *
+     * STORED RAW AND VALIDATED LATER, on purpose. {@see permissionModeFrom()}
+     * THROWS {@see PermissionConfigException} for a value that is not a mode,
+     * and `bin/sugarcrush` catches that exception around its dispatch block —
+     * but registration happens BEFORE that `try`, so validating here would let
+     * the exception escape as an uncaught fatal instead of the exit-2 usage
+     * error (with the JSON error document under `--output-format json`) that
+     * every other bad permission value produces. Deferring the check to
+     * {@see permissionGate()} puts it inside the `try` and reuses the one
+     * error message shape, which then names `--permission-mode` as its source
+     * exactly as it names `$SUGARCRUSH_PERMISSION_MODE` or the config file.
+     *
+     * DOCUMENTED CONSEQUENCE: a subcommand that never builds a gate (`completion`,
+     * `--help`, `--version`) does not validate the value, so
+     * `sugarcrush --permission-mode nonsense completion bash` succeeds. The flag
+     * is inert on those paths anyway; failing them would cost a second, eager
+     * validation site that could drift from this one.
+     */
+    public static function usePermissionMode(?string $mode): void
+    {
+        self::$permissionModeOverride = ($mode === null || $mode === '') ? null : $mode;
+    }
+
+    /**
+     * The model name this run should use, or null to let the caller fall back
+     * to the provider's own default.
+     *
+     * ONE resolver rather than two `??` chains, because there are two readers —
+     * {@see backendFor()}, which builds the backend that actually runs, and
+     * {@see selectedProviderLabel()}, which produces the status-bar caption.
+     * If only the first honoured `--model`, the status bar would name a
+     * different model than the one answering, which is precisely the "a value
+     * true of one path displayed as a property of another" defect.
+     */
+    private static function selectedModelName(): ?string
+    {
+        if (self::$modelOverride !== null) {
+            return self::$modelOverride;
+        }
+
+        $env = getenv('SUGARCRUSH_MODEL');
+
+        return ($env === false || $env === '') ? null : $env;
     }
 
     /**
@@ -2877,7 +2992,12 @@ final class Bootstrap
             default => get_debug_type($configRaw),
         };
 
-        $mode = self::permissionModeFrom($envRaw, '$' . self::PERMISSION_MODE_ENV)
+        // --permission-mode is the highest-precedence source: an explicit flag on
+        // THIS launch beats an inherited env var and beats a config file. It runs
+        // through the same permissionModeFrom(), so a value that is not a mode
+        // fails with the same message shape, naming the flag as its source.
+        $mode = self::permissionModeFrom(self::$permissionModeOverride, '--permission-mode')
+            ?? self::permissionModeFrom($envRaw, '$' . self::PERMISSION_MODE_ENV)
             ?? self::permissionModeFrom(
                 $configRaw,
                 self::PERMISSION_MODE_CONFIG_KEY . ' in '
@@ -4433,8 +4553,10 @@ final class Bootstrap
             return self::backendCommandTierIsSelected() ? ['command', 'unknown'] : ['echo', 'echo'];
         }
 
-        $model = getenv('SUGARCRUSH_MODEL');
-        if ($model === false || $model === '') {
+        // Same resolver backendFor() builds the real backend from, so the
+        // caption cannot name a different model than the one answering.
+        $model = self::selectedModelName();
+        if ($model === null) {
             try {
                 $configured = (new ProviderFactory())->defaultConfig($name)['model'] ?? null;
             } catch (\Throwable) {
