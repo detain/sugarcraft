@@ -19,9 +19,10 @@ bin/sugarcrush                argv → pre-flight → dispatch
       │
       └─ Cli\Bootstrap              ALL wiring lives here
              │
-             └─ App\App             the pane shell (menu bar, tabs, panes)
+             └─ App\App             THE root TEA Model handed to Program,
+                    │                and the engine state object Runtime takes
                     │  hosts
-                    └─ Chat         the TEA Model: init / update / view
+                    └─ Chat         a TEA Model too — hosted, not the root
                            │  Backend seam:  complete(history): Message
                            └─ Backend\EngineBackend
                                   │
@@ -32,7 +33,9 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                          └─ Permissions\*        the gate, last in that chain
 ```
 
-Everything above `Chat` renders; everything below it does work.
+Everything from `Chat` up renders; everything below it does work. Note the split
+runs *through* `App` rather than above it — `App` is on both sides of that line,
+which is the whole of the next warning.
 
 ---
 
@@ -91,14 +94,23 @@ pull-based seams for a doctor report or a debug pane, with
 
 ---
 
-## `Chat` — the TEA model
+## `Chat` — a TEA model, and the one that is not the root
 
-`src/Chat.php` is the root model in candy-core's TEA shape: `init()`,
-`update(Msg): [Model, ?Cmd]`, `view()`. Side effects are `Cmd`s and never happen
-in `view()`.
+`src/Chat.php` is `final class Chat implements Model` in candy-core's TEA shape:
+`init()`, `update(Msg): [Model, ?Cmd]`, `view()`. Side effects are `Cmd`s and
+never happen in `view()`.
 
-It is the largest file in the package — 10,381 lines, measured on this
-checkout — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
+**It is not the ROOT model, and this page said it was.** `bin/sugarcrush` hands
+`Bootstrap::app()` to `new Program(...)`, and `App` is itself
+`final class App implements Model` (`src/App/App.php`). Two classes implement
+`Model`; exactly one of them is the root, and it is not this one. The wrong
+version of this sentence is not a harmless imprecision — see the warning under
+[`App` hosts `Chat`](#app-hosts-chat), which records a revert it already caused.
+
+It is the largest file in the package — well past ten thousand lines; run
+`wc -l src/Chat.php` rather than trusting a figure here, because the one this
+sentence used to carry ("10,381 lines, measured on this checkout") was stale by
+the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
 palette, session tabs, the permission prompt, and the dispatch arms for 22
 built-in slash commands.
 
@@ -111,6 +123,26 @@ That is why `/agents`, `/workflow` and `/memory` all answer politely on an
 unwired `Chat`.
 
 ### `App` hosts `Chat`
+
+> **⚠️ `App` WEARS TWO HATS — DO NOT "RETIRE" IT.** This warning is the reason
+> this page exists, and until now the page did not carry it.
+>
+> `SugarCraft\Crush\App\App` is **the live engine state object** —
+> `Runtime::run(App $app, …)` (`src/Runtime.php:154`) and `EngineBackend` both
+> take it, and it carries the tools, hooks and skills — **and**, since the
+> pane-shell migration, **the root TUI `Model`** (`src/App/App.php`,
+> `final class App implements Model`). Both hats are live. Any plan document
+> describing "the dead `App`/`Tui\Renderer` system" is wrong about the first
+> half. What was genuinely unreachable was the **pane layer** (`Tui\Renderer`
+> and its `Tui\Components\*`), and the migration **wired that up rather than
+> deleting it**.
+>
+> This is not hypothetical. Reading `App` as dead caused a real
+> revert-then-restore in this repository; the incident is recorded in
+> `CALIBER_LEARNINGS.md` under the heading this box is named after. The
+> misreading is easy to arrive at honestly — `App` looks like a pane shell, and
+> a pane shell looks retirable — which is exactly why the warning has to sit
+> beside the description rather than in a learnings file nobody greps.
 
 `bin/sugarcrush` runs `Bootstrap::app()`, not `Bootstrap::chat()`. `App`
 (`src/App/App.php`) is the pane shell — menu bar, pane focus, agent-view keys,

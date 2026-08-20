@@ -31,13 +31,29 @@ final class HookManager
      *
      * A LOADED HOOK MAY ONLY ADD TO THE CHAIN, NEVER REPLACE ANYTHING IN IT.
      * {@see HookRegistry::register()} keys by event+name and overwrites, so
-     * without the guard below a file saying `name: confirm-remove` would
-     * UNINSTALL {@see BuiltIn\ConfirmRemoveHook} — a config file switching a
-     * guard off by naming it, which is the same hole
+     * without the guard below a file saying `name: confirm-rm` on
+     * `event: PreToolUse` would UNINSTALL {@see BuiltIn\ConfirmRemoveHook} — a
+     * config file switching a guard off by naming it, which is the same hole
      * {@see HookRegistry::isReserved()} closes for the permission gate, and
      * which a file the CLI now reads by convention makes reachable. Refusing
-     * is also what keeps the outcome independent of WHICH file was loaded
-     * first: a project `.sugar-crush/hooks.yaml` cannot disarm a hook the
+     * BOTH HALVES OF THAT EXAMPLE ARE LOAD-BEARING, and this line spent its
+     * whole life naming the wrong one. It read `confirm-remove` — the CLASS
+     * name's spelling, not the hook's. {@see BuiltIn\ConfirmRemoveHook::name()}
+     * returns `confirm-rm`, so `confirm-remove` is the one name here that
+     * collides with nothing and is quietly ACCEPTED as an additional hook.
+     * The example demonstrated the opposite of the outcome it claimed, which
+     * `docs/HOOKS.md`'s own table has stated correctly the whole time
+     * (`confirm-rm` refused, `confirm-remove` accepted). The event half matters
+     * for the same reason: the key is event PLUS name, so `confirm-rm` on
+     * `PostToolUse` is also accepted. A guard example that names neither
+     * coordinate precisely is not an example of the guard.
+     *
+     * The guard itself was never wrong — it asks
+     * {@see HookRegistry::get()} for `$event` + `$name` and hardcodes no list,
+     * so it protects whatever is registered. Only this prose was.
+     *
+     * Refusing is also what keeps the outcome independent of WHICH file was
+     * loaded first: a project `.sugar-crush/hooks.yaml` cannot disarm a hook the
      * user wrote in their home directory by reusing its name, in either
      * registration order.
      *
