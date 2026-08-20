@@ -216,6 +216,13 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Context/InstructionFileLoader.php|file_get_contents' => [
             'CONTAINED — the root instruction file, one compare per read decision',
+            'CONTAINED — an ancestor (monorepo-parent) instruction file, compared against '
+                . 'InstructionFileLoader::ancestorRoot() rather than against $repoRoot: the file is '
+                . 'by construction outside $repoRoot, so that boundary would refuse every one of '
+                . 'them. The verdict word is still CONTAINED because the read is still gated by a '
+                . 'ContainedPath compare — what differs is WHICH boundary, and the boundary it uses '
+                . 'is established by a positive `.git` marker found above $repoRoot, never by a '
+                . 'walk to `/`',
             'CONTAINED — a walked-to instruction file',
             'CONTAINED — a configured `instructions:` glob match',
         ],

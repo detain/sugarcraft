@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Context;
 
 use DateTimeImmutable;
+use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 
 /**
  * Renders the execution environment for injection into the system prompt.
@@ -14,25 +16,217 @@ use DateTimeImmutable;
  * directory, the model name and the timestamp. Everything else
  * {@see render()} emits is read AT RENDER TIME: `PHP_OS_FAMILY`, `php_uname()`,
  * `PHP_VERSION` (constants, so stable anyway) and — the one that matters — the
- * git snapshot, which shells out to `git branch`/`status`/`log` on every
+ * git snapshot, which shells out to `git branch`/`status`/`log`/`diff` on every
  * `render()` call. `buildSystemPrompt()` runs once per step of the agentic loop,
- * so those three subprocesses run per step, and the block's git section reflects
- * the repository as the agent has already changed it rather than as it was at
- * session start.
+ * so those FIVE subprocesses run per step (one `branch`, one `status`, one
+ * `log`, and one `diff` for each of the staged and unstaged views), and the
+ * block's git section reflects the repository as the agent has already changed
+ * it rather than as it was at session start. FIVE is the count WHEN THE PROCESS
+ * HELPERS EXIST: four of them go through `proc_open` and one through
+ * `shell_exec`, and a build where either is in `disable_functions` runs fewer —
+ * see {@see gitStatusSnapshot()} for what it emits instead, and why a hard
+ * failure there would have taken the whole session down rather than one line.
  *
- * That is deliberate — a model reading a stale `git status` after its own edits
- * is worse than the subprocess cost — and it is pinned by
+ * WHAT THAT COSTS, measured rather than estimated, and PAIRED — each before/
+ * after figure taken on the SAME tree, because the first draft of this note
+ * compared an after-figure from one repository against a before-figure from
+ * another and reported a 4.5x that was really 14x:
+ *
+ *  - This monorepo checkout, 6,969 tracked files, lightly dirty:
+ *    **23.9 ms/render** for the three commands the block had before, **36.3 ms**
+ *    with both diff sections. ~1.5x.
+ *  - A 291-tracked-file repository with all 291 modified — a 124 KB working
+ *    diff: **7.6 ms** before, **106.7 ms** after. ~14x.
+ *
+ * The two ratios differ because the two halves scale on DIFFERENT axes, which is
+ * the actual finding: the old block's cost tracked the TRACKED-FILE COUNT (what
+ * `status --porcelain` must stat), while the added cost tracks the SIZE OF THE
+ * DIFF. A big clean repo pays almost nothing extra; a small repo with everything
+ * rewritten pays the most. THAT SECOND AXIS HAS NO CEILING, and an earlier
+ * revision of this note claimed one: it called ~107 ms "the absolute worst
+ * case", which was the worst case OF THE TWO FIXTURES ABOVE and not of the
+ * mechanism — a figure whose domain was two directories, written as a property
+ * of the code. Pushed on purpose since: a 45.9 MB working diff (40 files, 400k
+ * changed lines each way) renders in **399 ms**, of which `git diff` itself is
+ * 373 ms. The block still comes out 9,013 B and peak memory is still 4.0 MB, so
+ * the cap and the bounded drain hold under it; what does not hold is any fixed
+ * millisecond figure. If it ever needs cutting the lever is named on
+ * {@see gitDiffSection()}: the diff is DRAINED in full so the truncation marker
+ * can state the real byte total, instead of being cut short by a SIGPIPE that
+ * would leave the total unknowable. Reverse that trade there, and expect the
+ * marker to lose its total.
+ *
+ * WHAT IT COSTS IN PROMPT CACHE — the larger of the two costs, and absent from a
+ * note that claimed to state the cost. The three-command block's bytes moved
+ * only when the set of modified PATHS moved; a diff body moves when ANY BYTE of
+ * any tracked file moves. MEASURED, two successive edits to the SAME file with
+ * `$now` pinned so the date line cannot account for it: the three-command block
+ * rendered BYTE-IDENTICAL both times (327 B, no differing byte at all), this one
+ * rendered 598 B then 615 B and first differs at byte **524**. Those four
+ * figures are of that one two-edit fixture, not of this repository. The
+ * consequence is not local to the block: on
+ * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} it precedes the
+ * instruction documents, the memory block and the skill listing, and on
+ * {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()} it is the TAIL of the
+ * system message with the entire conversation behind it — so on either path a
+ * step that touched one file re-prefills everything downstream.
+ * `tests/Providers/PromptStabilityTest` exists because "the cache hit survives
+ * only as far as the first byte that differs", which is what makes this a bill
+ * rather than a theory. It is spent knowingly: a model shown a stale diff of its
+ * own edits is the exact failure this feature exists to prevent. The lever, if
+ * it ever has to be pulled, is to emit the diff only on the step AFTER a write
+ * tool actually ran — which needs a signal this class does not receive today,
+ * and is why it is named here rather than implemented.
+ *
+ * The live-rather-than-frozen choice is deliberate — a model reading a stale
+ * `git status` after its own edits is worse than either cost — and it is pinned
+ * by
  * `tests/Providers/PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
- * It also has a consequence for anything reasoning about prompt caching: this
- * block sits ahead of the others, so the first write of a session voids the
- * cacheable prefix for everything after it (see {@see MemoryBlock}, which builds
- * an argument on exactly that).
+ * See {@see MemoryBlock}, which builds an argument on exactly this block's
+ * position in the prompt.
  *
  * The full line set is enumerated on {@see render()}, which is the method that
  * emits it — one list, in one place, so the two cannot drift apart again.
  */
 final readonly class EnvironmentBlock
 {
+    /**
+     * Bounded process capture and the one truncation wording, reused rather
+     * than respelled.
+     *
+     * Both live under `Tools\Concerns` because tool results were the first
+     * thing here that needed them; neither touches `$this` state and
+     * {@see \SugarCraft\Crush\Commands\CommandSpec} already uses
+     * `TruncatesOutput` from outside `Tools`, so the namespace is where they
+     * were born rather than a statement about who may use them. Property-free,
+     * which is what lets a `readonly` class use them at all.
+     *
+     * The pairing is the whole reason a truthful cap is possible here:
+     * {@see CapturesProcessOutput::runCaptured()} drains the pipe to
+     * completion while RETAINING only $maxBytes, and returns the exact count of
+     * what it discarded, so {@see TruncatesOutput::truncateOutput()} can name
+     * the real size of the diff rather than the size of the part that fit.
+     */
+    use CapturesProcessOutput;
+    use TruncatesOutput;
+
+    /**
+     * Retained bytes per diff section, before the truncation marker's reserve.
+     *
+     * MEASURED, on this monorepo, which is the fair worst case the plan item
+     * asks for. NAME THE DOMAIN FIRST, because the sizing sample is NEITHER of
+     * the two commands this class runs: `git diff HEAD~10 HEAD` is a COMMIT
+     * RANGE, here **425,603 B across 8,391 lines** (`HEAD~3 HEAD`: 164,340 B /
+     * 3,118 lines), and it stands in for a working tree that has been rewritten
+     * that heavily rather than for today's. What carries over to the commands
+     * that ARE run is the MEAN — ~51 B per diff line, counting hunk headers and
+     * unchanged context — and that was checked against the real thing rather
+     * than assumed: this checkout's actual `git diff` is **70,452 B over 1,398
+     * lines = 50.4 B/line**, against 50.7 for the HEAD~10 range. At the ~4
+     * B/token rule of thumb the range figure is ~106k tokens of diff; emitted on
+     * EVERY step of the agentic loop it does not merely inflate the prompt, it
+     * evicts the conversation. So the cap is the feature and the diff is the
+     * sample.
+     *
+     * 8 KiB is ~160 diff lines AT THAT MEASURED MEAN — a figure whose domain is
+     * this repository's own diffs, not a property of diffs in general; a repo of
+     * minified bundles gets far fewer lines for the same bytes.
+     *
+     * Sized BETWEEN its two neighbours on purpose. {@see MemoryBlock::MAX_BYTES}
+     * is 4096 for twelve curated notes, and {@see TruncatesOutput}'s tool
+     * default is 65536; a diff needs more than a note list (one hunk with
+     * context is already ~10 lines) and less than a tool result, because a tool
+     * result is text the model ASKED for whereas this block is emitted
+     * unconditionally on every step whether it helps or not.
+     *
+     * DOMAIN OF THE BOUND: per SECTION. {@see render()} emits two independently
+     * capped sections (staged, unstaged), so the block's diff contribution is
+     * bounded by 2 * this, plus the two label lines. Independent rather than a
+     * shared budget so a large staged diff cannot starve the unstaged one, which
+     * is the section holding the edits the agent itself just made.
+     */
+    public const DIFF_MAX_BYTES = 8192;
+
+    /**
+     * Retained bytes for the `--porcelain` status and the recent-log lines, each.
+     *
+     * NOT part of P8.10, and here because P8.10's cap was measurably defeated by
+     * its neighbour. MEASURED while sizing {@see DIFF_MAX_BYTES}, on a 291-file
+     * working tree: `git status --porcelain` alone was **9,791 B over 291 lines**
+     * (~34 B per changed path) and the finished `<env>` block came to 18,390 B
+     * with a correctly-capped 8 KiB diff inside it. `--porcelain` also lists
+     * UNTRACKED paths, so one unignored `node_modules` or `vendor` makes the
+     * field arbitrarily large — and unlike the diff it was never bounded at all,
+     * in bytes or in memory.
+     *
+     * 4 KiB is ~120 changed paths AT THAT MEASURED 34 B/line — a mean over this
+     * repository's own porcelain output, not a constant of git. Half
+     * {@see DIFF_MAX_BYTES} because a path list is a summary and the diff is the
+     * evidence; the same reasoning that puts a diff below a tool result puts a
+     * name list below a diff.
+     *
+     * `log --oneline -5` is bounded to five LINES by its own flag, which is a
+     * bound in the wrong dimension: a commit subject has no length limit, so
+     * five lines is not five short lines. It gets the same byte cap rather than
+     * an argument about how long a subject usually is.
+     *
+     * THE WHOLE BLOCK, therefore: 2 * {@see DIFF_MAX_BYTES} + 2 * this = 24,576 B
+     * of capped FIELD text, plus the branch line, the seven fixed lines, the
+     * four field labels and the `<env>` fence. Each field's truncation marker is
+     * reserved INSIDE its own cap by
+     * {@see TruncatesOutput::truncateMerged()} rather than added on top, so the
+     * 24,576 is a true ceiling on the fields and only the fixed part sits
+     * outside it — under 25 KiB (25,600 B) however dirty the tree is. That is a
+     * CLAIM ABOUT THIS ARITHMETIC and it is pinned rather than asserted:
+     * {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest::testTheWholeGitSectionStaysBoundedHoweverDirtyTheTreeIs()}
+     * derives the same 25,600 from the two constants, so a change to either cap
+     * moves the test with the code instead of leaving a stale number here.
+     * MEASURED against it on a fixture with ALL FOUR capped fields clipped at
+     * once — 60 rewritten tracked files (30 staged, 30 not), 60 untracked ones
+     * and five 1,500-byte commit subjects — the block came to **21,774 B**, i.e.
+     * 3.8 KiB of headroom under the derived ceiling. That figure is of THAT
+     * fixture; the ceiling is the claim.
+     * `branch --show-current` is deliberately left uncapped — a ref
+     * name is bounded by the filesystem's own 255-byte name limit, and its empty
+     * value is MEANINGFUL (a detached HEAD reports empty and exits 0), so
+     * routing it through a helper that reports exit codes would turn a real
+     * state into an error report.
+     */
+    public const SUMMARY_MAX_BYTES = 4096;
+
+    /**
+     * `?` (0x3F) — what an invalid UTF-8 byte sequence in the git output is
+     * replaced with before the block leaves {@see render()}.
+     *
+     * WHY A ONE-BYTE SUBSTITUTE AND NOT U+FFFD. Every cap on this class is
+     * counted in BYTES, and U+FFFD costs three of them, so scrubbing with it
+     * could grow a section past the cap the section was just clipped to — a
+     * bound defeated by the repair applied after it. `?` cannot: mbstring emits
+     * one substitute per invalid SEQUENCE and every invalid sequence is at least
+     * one byte, so the scrub's output is never longer than its input. MEASURED
+     * over six shapes (a lone `\xe9`, a truncated 2-of-3 and 2-of-4 sequence,
+     * three bare continuation bytes, `\xff\xfe\xfd` between ASCII, and a lead
+     * byte followed by a printable): in/out byte lengths 4/4, 2/1, 2/1, 3/3,
+     * 7/7, 2/2 — never longer, and `mb_check_encoding()` true on all six.
+     *
+     * It also makes the COUNT exact, which is why the marker can state one.
+     * 0x3F is never a continuation byte, so a `?` already present in the input
+     * is never consumed as part of an invalid sequence and passes through
+     * untouched (`"\xc3("` scrubs to `"?("`, the `(` surviving). The number of
+     * substitutions is therefore exactly the increase in `?` count, with no
+     * second pass over the text.
+     */
+    private const UTF8_SUBSTITUTE = 0x3F;
+
+    /**
+     * The one reason string for "the process helper this needs is disabled".
+     *
+     * Its own constant because {@see gitField()} and {@see gitDiffSection()}
+     * must say the same thing — a model that learns one wording for
+     * "unavailable" should not have to learn a second.
+     */
+    private const NO_PROCESS_REASON = 'unavailable (proc_open is disabled on this build)';
+
     public function __construct(
         private string $cwd,
         private string $modelName,
@@ -77,8 +271,11 @@ final readonly class EnvironmentBlock
      *
      * Seven lines, in this order: cwd, git-repository flag, platform, OS version,
      * PHP version, model name, current date. When the cwd is a git repository, a
-     * git section (branch, --porcelain status, recent log) is appended — polled
-     * here, on every call, not frozen at capture time.
+     * git section (branch, --porcelain status, recent log, staged diff, unstaged
+     * diff) is appended — polled here, on every call, not frozen at capture
+     * time. Every field of that section except the branch name is size-capped;
+     * see {@see DIFF_MAX_BYTES} and {@see SUMMARY_MAX_BYTES} for the bounds and
+     * for why the branch is the one exception.
      *
      * There is deliberately no "additional working directories" line, although
      * crush_code.md Phase 5 item 10a asks for one. See the inline note at the
@@ -107,11 +304,17 @@ final readonly class EnvironmentBlock
             // matches the reference pattern item 10a asks to match.
             //
             // Unguarded by function_exists() as a considered choice, not an
-            // oversight: gitStatusSnapshot() below already calls shell_exec()
-            // three times in this same render path, and shell_exec is far more
-            // commonly disabled than php_uname, so a guard here would protect
-            // the wrong end of the same method while adding a branch no test can
-            // reach.
+            // oversight: gitStatusSnapshot() below reaches the shell FIVE times
+            // in this same render path — ONCE through shell_exec (the branch
+            // name) and FOUR times through proc_open, which is the count after
+            // the capped fields moved to {@see CapturesProcessOutput}; an
+            // earlier revision of this comment still said "shell_exec() three
+            // times", which had been true of the three-command version and of
+            // nothing since. Both of those are far more commonly disabled than
+            // php_uname, so a guard here would protect the wrong end of the same
+            // method — and unlike here, the ends that matter ARE guarded now,
+            // because an unguarded call to a disabled function is an Error, not
+            // a false return.
             'OS version: ' . php_uname('s') . ' ' . php_uname('r'),
             'PHP version: ' . PHP_VERSION,
             'Model: ' . $this->modelName,
@@ -123,40 +326,250 @@ final readonly class EnvironmentBlock
             $lines[] = $this->gitStatusSnapshot();
         }
 
-        return "<env>\n" . implode("\n", $lines) . "\n</env>";
+        return "<env>\n" . $this->utf8Safe(implode("\n", $lines)) . "\n</env>";
+    }
+
+    /**
+     * Guarantee the block is valid UTF-8, announcing it when it was not.
+     *
+     * WHY THIS EXISTS: without it, ONE latin-1 text file in the working tree
+     * takes down EVERY step of the session, not the git section. `git status
+     * --porcelain` quotes non-ASCII PATHS (core.quotepath), but a diff BODY is
+     * emitted as raw bytes, so adding the diff put arbitrary working-tree bytes
+     * into the system prompt for the first time. REPRODUCED: a one-file repo
+     * whose tracked `notes.txt` holds `caf\xe9 na\xefve` and has been rewritten
+     * renders a 648 B block for which `mb_check_encoding()` is false,
+     * `json_encode()` returns `false` ("Malformed UTF-8 characters"), and
+     * `GuzzleHttp\Utils::jsonEncode()` — which is what `'json' => $params`
+     * reaches in {@see \SugarCraft\Crush\Providers\SglangProvider} and
+     * {@see \SugarCraft\Crush\Providers\CustomProvider} — THROWS. The same
+     * fixture against the three-command version of this class: 331 B, valid
+     * UTF-8, encodes fine. So it is a regression this feature introduced and not
+     * a property the prompt path always had.
+     *
+     * WHY HERE AND NOT IN THE PROVIDERS. Two reasons. The narrow one: the
+     * providers are another lane's file set. The real one: this is the block's
+     * own invariant to keep. `JSON_INVALID_UTF8_SUBSTITUTE` in a provider would
+     * fix the encode for that provider only, and this class has FIVE consumers'
+     * worth of downstream — the session store already sets that flag, the
+     * worker pool sets it, the TUI does not — so repairing it at the source
+     * fixes all of them at once and leaves each provider's flags a question
+     * about that provider.
+     *
+     * WHY THE WHOLE BLOCK AND NOT JUST THE DIFF. The diff is the reason but not
+     * the only route: a ref name, a `--porcelain` line git chose not to quote,
+     * and the CAPTURED CWD ITSELF are all bytes this class does not control, and
+     * a latin-1 directory name would break the encode with no diff involved.
+     * One pass over ≤25 KiB is cheaper than four.
+     *
+     * WHY IT IS ANNOUNCED. Silent repair is the same defect as silent
+     * truncation, one field over: the model would read `caf?` as a filename that
+     * really is spelled that way. The note's count is of SUBSTITUTED SEQUENCES
+     * IN THE RENDERED, ALREADY-CAPPED BLOCK — not of invalid bytes in the
+     * underlying diff, most of which the cap already discarded unread.
+     */
+    private function utf8Safe(string $block): string
+    {
+        if (mb_check_encoding($block, 'UTF-8')) {
+            return $block;
+        }
+
+        // Global mbstring state, so it is restored even if the convert throws.
+        $previous = mb_substitute_character();
+        mb_substitute_character(self::UTF8_SUBSTITUTE);
+
+        try {
+            $scrubbed = mb_convert_encoding($block, 'UTF-8', 'UTF-8');
+        } finally {
+            mb_substitute_character($previous);
+        }
+
+        $replaced = substr_count($scrubbed, '?') - substr_count($block, '?');
+
+        return $scrubbed . "\n[encoding: {$replaced} byte sequence(s) of this block were not valid UTF-8"
+            . ' and were replaced with "?". Any path or content shown above may be misspelled at those'
+            . ' positions.]';
     }
 
     /**
      * Checks whether the captured working directory is a git repository.
      *
-     * We check for the presence of a .git directory — the cheapest possible
-     * check, and it runs on every render alongside the git section it gates, so
-     * cheap is the requirement.
+     * `file_exists`, not `is_dir`, and the difference is not cosmetic: a
+     * `git worktree` and a submodule both spell `.git` as a FILE containing a
+     * `gitdir:` pointer. MEASURED inside a real `git worktree add` while this
+     * method still said `is_dir`: the block reported
+     * `Is directory a git repo: No` and emitted NO GIT SECTION AT ALL, so
+     * everything this class polls — branch, status, log, both diffs — was
+     * silently dead in a checkout git itself considers perfectly ordinary.
+     * {@see ancestorRoot()} argues the same point 200 lines away and had already
+     * chosen `file_exists`; this was the one place left disagreeing with it.
+     *
+     * A `.git` that is a file git cannot follow (or a stray unrelated file of
+     * that name) now reaches the git commands and comes back
+     * `unavailable (git exited N)`, which is the honest answer — the same
+     * treatment the `mkdir .git` shape gets, and the reason those fields report
+     * an exit code instead of an empty string.
+     *
+     * Still the cheapest possible check, which is the requirement: it runs on
+     * every render alongside the git section it gates.
      */
     private function isGitRepo(): bool
     {
-        return is_dir($this->cwd . '/.git');
+        return file_exists($this->cwd . '/.git');
     }
 
     /**
      * Reads the current git state of the captured working directory.
      *
-     * Called from {@see render()}, so it re-runs on every render — three
-     * subprocesses per call, and `buildSystemPrompt()` renders once per step of
-     * the agentic loop. Live rather than frozen on purpose: a model that has just
+     * Called from {@see render()}, so it re-runs on every render — FIVE
+     * subprocesses per call (branch, status, log, staged diff, unstaged diff),
+     * and `buildSystemPrompt()` renders once per step of the agentic loop. Live rather than frozen on purpose: a model that has just
      * edited files must not be shown the status those files had at session start.
      * Pinned by
      * `tests/Providers/PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
      *
-     * Each field (branch, status, log) is captured separately so
-     * failures in one field don't poison the others; empty strings indicate failure.
+     * Each field is captured separately so a failure in one does not poison the
+     * others. What a failure LOOKS LIKE differs by field, and the difference is
+     * the point rather than an inconsistency: `branch` still reports empty when
+     * GIT says empty, because empty is a real answer for it (detached HEAD);
+     * `status`, `log` and both diff sections report `unavailable (git exited N)`,
+     * because for them empty and broken are otherwise byte-identical and the
+     * first reads to a model as "nothing has changed". See {@see gitField()} and
+     * {@see gitDiffSection()}.
+     *
+     * A DISABLED PROCESS HELPER IS A THIRD OUTCOME, distinct from both: git was
+     * never asked, so there is no exit code to report and "empty" would be a
+     * lie. `branch` reports `unavailable (shell_exec is disabled on this build)`
+     * and the four capped fields report {@see NO_PROCESS_REASON}. Five
+     * subprocesses per call is therefore the count WHERE BOTH HELPERS EXIST; on
+     * a build with `proc_open` disabled it is one, and with both disabled it is
+     * zero and the git section is five unavailability lines instead of an
+     * exception.
      */
     private function gitStatusSnapshot(): string
     {
-        $branch = trim((string) shell_exec('git -C ' . escapeshellarg($this->cwd) . ' branch --show-current 2>/dev/null'));
-        $status = trim((string) shell_exec('git -C ' . escapeshellarg($this->cwd) . ' status --porcelain 2>/dev/null'));
-        $log = trim((string) shell_exec('git -C ' . escapeshellarg($this->cwd) . ' log --oneline -5 2>/dev/null'));
+        // `function_exists` rather than a bare call: a function in
+        // `disable_functions` is UNDEFINED, so calling it raises an Error that
+        // `@` does not suppress. MEASURED with `php -d
+        // disable_functions=proc_open`: before these three guards, `render()`
+        // threw `Error: Call to undefined function ...proc_open()` and took the
+        // whole system-prompt build down, where the three-command version of
+        // this class returned a 327 B block on the same host. Reporting the
+        // missing helper is the same rule the exit codes below follow — an
+        // unavailability the model can see beats a silence it cannot.
+        $branch = \function_exists('shell_exec')
+            ? trim((string) shell_exec('git -C ' . escapeshellarg($this->cwd) . ' branch --show-current 2>/dev/null'))
+            : 'unavailable (shell_exec is disabled on this build)';
+        $status = $this->gitField(['status', '--porcelain'], self::SUMMARY_MAX_BYTES);
+        $log = $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES);
 
-        return "Current branch: {$branch}\n\nStatus:\n{$status}\n\nRecent commits:\n{$log}";
+        return "Current branch: {$branch}\n\nStatus:\n{$status}\n\nRecent commits:\n{$log}"
+            . "\n\n" . $this->gitDiffSection('Staged changes (git diff --cached, index vs HEAD)', '--cached')
+            . "\n\n" . $this->gitDiffSection('Unstaged changes (git diff, working tree vs index)', null);
+    }
+
+    /**
+     * Run one `git` subcommand under the captured cwd, bounded to $maxBytes.
+     *
+     * WHY THE FAILURE TEXT IS NOT AN EMPTY STRING. This method replaced two
+     * `shell_exec(... '2>/dev/null')` calls whose docblock said "empty strings
+     * indicate failure" — which conflates a CLEAN TREE with a git that could not
+     * run, and they are byte-identical. `mkdir .git` with no `git init` (the
+     * shape {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest}
+     * builds) reaches here, git exits 128, and the old code rendered an empty
+     * `Status:` section that reads as "nothing has changed". That is the same
+     * defect a silently-truncated diff is, one field over.
+     *
+     * @param list<string> $argv Subcommand and flags, each shell-escaped individually
+     */
+    private function gitField(array $argv, int $maxBytes): string
+    {
+        if (!\function_exists('proc_open')) {
+            return self::NO_PROCESS_REASON;
+        }
+
+        $command = 'git -C ' . escapeshellarg($this->cwd);
+        foreach ($argv as $arg) {
+            $command .= ' ' . escapeshellarg($arg);
+        }
+
+        $captured = $this->runCaptured($command, null, $maxBytes);
+
+        if ($captured['exitCode'] !== 0) {
+            return "unavailable (git exited {$captured['exitCode']})";
+        }
+
+        return $this->truncateOutput(
+            $captured['stdout'],
+            $maxBytes,
+            $captured['stdoutDropped'],
+            $captured['stdoutMidLine'],
+        );
+    }
+
+    /**
+     * One labelled, size-capped diff section.
+     *
+     * WHY BOTH SECTIONS EXIST, SEPARATELY LABELLED. `git diff` and
+     * `git diff --cached` answer different questions and neither is "the diff":
+     * unstaged is working tree vs index, staged is index vs HEAD. The agent's
+     * own {@see \SugarCraft\Crush\Tools\BuiltIn\Edit}/`Write` never stage
+     * anything, so UNSTAGED is where its edits land; anything a human staged
+     * before launching sits only in STAGED. `git diff HEAD` would show the union
+     * in one block and lose exactly that distinction, and a model told only "the
+     * diff" then reports work it did not do (or misses work it did). The label
+     * names the literal command so the reader can reproduce the section.
+     *
+     * WHY THE SHORTSTAT LEADS. `--shortstat --patch` emits one summary line
+     * ("N files changed, X insertions(+), Y deletions(-)") ahead of the patch.
+     * {@see TruncatesOutput} clips from the END, so that line is the one part of
+     * the section a cap can never remove — which is what lets the model separate
+     * "there are no more changes" from "I was not shown the rest": the scale is
+     * always complete even when the body is a sample, and the marker says so
+     * again in bytes. A silently-clipped patch would be read as the whole
+     * change set.
+     *
+     * WHY AN EXIT CODE IS NOT AN EMPTY DIFF. `git diff` on a broken or
+     * inaccessible repository exits non-zero with empty stdout, which is
+     * byte-identical to a clean tree. Rendering "(none)" for that case would
+     * state "nothing changed" on evidence that says "nothing was read", so the
+     * two outcomes get different text. stdout only, deliberately: stderr carries
+     * git's own explanation and would land in the prompt as prose, so the exit
+     * code is what is reported instead.
+     *
+     * @param string      $label    Human label naming the exact command, for the model
+     * @param string|null $selector `--cached` for the staged view, null for unstaged
+     */
+    private function gitDiffSection(string $label, ?string $selector): string
+    {
+        if (!\function_exists('proc_open')) {
+            return $label . ': ' . self::NO_PROCESS_REASON;
+        }
+
+        $command = 'git -C ' . escapeshellarg($this->cwd) . ' diff --shortstat --patch'
+            . ($selector === null ? '' : ' ' . escapeshellarg($selector));
+
+        // $maxBytes bounds what is RETAINED, not what is read: git is drained to
+        // completion (so it is never SIGPIPE'd and its exit code stays
+        // meaningful) while memory stays bounded whatever the working tree holds.
+        // A `git diff` over an accidentally-unignored vendor tree is hundreds of
+        // megabytes, and shell_exec() would materialise all of it before any cap
+        // could apply.
+        $captured = $this->runCaptured($command, null, self::DIFF_MAX_BYTES);
+
+        if ($captured['exitCode'] !== 0) {
+            return $label . ": unavailable (git exited {$captured['exitCode']})";
+        }
+
+        if ($captured['stdout'] === '' && $captured['stdoutDropped'] === 0) {
+            return $label . ': (none)';
+        }
+
+        return $label . ":\n" . $this->truncateOutput(
+            $captured['stdout'],
+            self::DIFF_MAX_BYTES,
+            $captured['stdoutDropped'],
+            $captured['stdoutMidLine'],
+        );
     }
 }

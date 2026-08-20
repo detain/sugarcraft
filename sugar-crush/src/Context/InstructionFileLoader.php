@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Context;
 
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
  * Loads instruction files (CLAUDE.md, AGENTS.md) from the repo root and
@@ -20,11 +21,21 @@ use SugarCraft\Crush\Support\ContainedPath;
  * ImportResolver, mirroring Claude Code's CLAUDE.md/AGENTS.md import syntax
  * (this repo's own root CLAUDE.md already uses `@./AGENTS.md`).
  *
- * EVERY read here is bounded by repoRoot through {@see ContainedPath}, and the
- * count is deliberate rather than incidental: FIVE call sites, one per read
- * decision this class makes — `loadRoot()`'s root entry, `loadForced()`'s glob
- * match, `loadForPath()`'s starting directory and its per-level candidate, and
- * `expandImports()`'s gate closure. There is no local prefix compare left, and
+ * EVERY read here is bounded through {@see ContainedPath}, and the count is
+ * deliberate rather than incidental: SIX call sites, one per read decision this
+ * class makes — `loadRoot()`'s root entry, `loadAncestorRoots()`'s ancestor
+ * entry, `loadForced()`'s glob match, `loadForPath()`'s starting directory and
+ * its per-level candidate, and `expandImports()`'s gate closure. Pinned as a
+ * count in {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}::ROUTED_CALL_SITES.
+ *
+ * BOUNDED BY WHICH ROOT IS NOW A REAL QUESTION, and the answer is per-tier
+ * rather than "repoRoot" — five of the six pass `$repoRoot`, while
+ * `loadAncestorRoots()` and the `expandImports()` gate it calls pass
+ * {@see ancestorRoot()}, because an ancestor file is by construction outside
+ * `$repoRoot` and judging it against `$repoRoot` would refuse all of them.
+ * `$repoRoot`'s own entries are NOT relaxed by that: the gate the measured
+ * escapes closed still compares against `$repoRoot` exactly as before. There is
+ * no local prefix compare left, and
  * that is the point. Two of the five (`loadForced()`, `expandImports()`) existed
  * as hand-spelled compares for six review rounds, and they are WHY the other
  * three were missing: a sweep instrumented on `grep -rn str_starts_with src/`
@@ -66,8 +77,9 @@ final class InstructionFileLoader
      * Every path this loader declined to read, path as spelled => why.
      *
      * THE SEAM, added because "skipped silently" was defended with an argument
-     * that was weaker than it looked. Each of `loadRoot()`, `loadForced()` and
-     * `loadForPath()` refuses a candidate without a word to anyone, and the
+     * that was weaker than it looked. Each of `loadRoot()`,
+     * `loadAncestorRoots()`, `loadForced()` and `loadForPath()` refuses a
+     * candidate without a word to anyone, and the
      * reason given was that a channel "would mean touching Runtime/Bootstrap".
      * That is true of a DISPLAY and false of a seam: the other three
      * repository-chosen tiers each expose a pull-based one
@@ -114,6 +126,15 @@ final class InstructionFileLoader
     private ?array $forcedCache = null;
 
     /**
+     * Memoized answer to {@see ancestorRoot()}, with its own resolved flag
+     * because `null` is a real answer ("no monorepo parent is in scope") and
+     * not "not computed yet".
+     */
+    private bool $ancestorRootResolved = false;
+
+    private ?string $ancestorRoot = null;
+
+    /**
      * @param string $repoRoot Absolute path to the repository root
      * @param string[] $forcedInstructions Glob patterns from config, force-loaded every session
      * @param ImportResolver|null $importResolver Expander for `@path` references; defaults to ImportResolver::new()
@@ -142,10 +163,37 @@ final class InstructionFileLoader
      * commit `CLAUDE.md` as a symlink, and this class has no channel to the
      * user, so the honest behaviour is to read nothing rather than to read it.
      *
-     * @return string[] Contents of whichever root files exist and resolve inside
-     *                  repoRoot (missing files, files resolving outside it, and
-     *                  files already inlined by an earlier file's import, are
-     *                  skipped)
+     * MONOREPO PARENTS ARE READ FIRST (P8.11). Until this change `$repoRoot` was
+     * both the only directory consulted and the only boundary, so pointing
+     * `--root` at one library of a monorepo dropped the monorepo's own
+     * conventions from the system prompt entirely and recorded NOTHING — not
+     * even in {@see refusedPaths()}, because a file that is never a candidate is
+     * never refused. MEASURED on this checkout before the change, which is its
+     * own fixture (the monorepo root ships `CLAUDE.md` + `AGENTS.md`;
+     * `sugar-crush/` ships neither):
+     *
+     *     new InstructionFileLoader('<mono>/sugar-crush')->loadRoot()  =>  []
+     *     new InstructionFileLoader('<mono>')->loadRoot()              =>  1 document, 25,110 B
+     *
+     * Both figures are of THIS repository at the time of the change and will
+     * drift with its docs; the shape — everything versus nothing — is the claim.
+     * {@see ancestorRoot()} owns where the upward walk stops and why, which is a
+     * containment question rather than a convenience one.
+     *
+     * ORDER IS GENERAL BEFORE SPECIFIC: each ancestor directory outermost-first,
+     * then `$repoRoot`'s own files last. Later text dominates in a prompt, so
+     * the most specific instructions are the ones that end up nearest the
+     * conversation. Dedup is the existing `$emittedPaths` set keyed by REALPATH,
+     * so the layout the {@see refusedPaths()} docblock calls natural — a
+     * per-library `CLAUDE.md` symlinked to the monorepo's shared one — now
+     * delivers those bytes once, from the ancestor pass, instead of nowhere.
+     * (The per-library link is still refused by the `$repoRoot` gate below, and
+     * still recorded; what changed is that the content arrives anyway.)
+     *
+     * @return string[] Contents of whichever ancestor and root files exist and
+     *                  resolve inside their own boundary (missing files, files
+     *                  resolving outside it, and files already inlined by an
+     *                  earlier file's import, are skipped)
      */
     public function loadRoot(): array
     {
@@ -153,12 +201,19 @@ final class InstructionFileLoader
             return $this->rootCache;
         }
 
+        // Ancestors first, and gated against the ANCESTOR root rather than
+        // $repoRoot: an ancestor file is by construction outside $repoRoot, so
+        // reusing that boundary would refuse every one of them. Two boundaries,
+        // each naming the domain it bounds — $repoRoot still bounds $repoRoot's
+        // own entries below, which is the gate the measured escapes closed and
+        // is deliberately NOT widened here.
+        $contents = $this->loadAncestorRoots();
+
         $rootFiles = [
             $this->repoRoot . '/CLAUDE.md',
             $this->repoRoot . '/AGENTS.md',
         ];
 
-        $contents = [];
         foreach ($rootFiles as $path) {
             if (!is_file($path)) {
                 continue;
@@ -207,10 +262,202 @@ final class InstructionFileLoader
             // to where the repository put it", and resolving that too would
             // silently change which file an import names.
             $raw = file_get_contents($realPath);
-            $contents[] = $raw === false ? '' : $this->expandImports($raw, dirname($path));
+            $contents[] = $raw === false ? '' : $this->expandImports($raw, dirname($path), $this->repoRoot);
         }
 
         return $this->rootCache = $contents;
+    }
+
+    /**
+     * The monorepo root whose instruction files are in scope for this
+     * `$repoRoot`, or null when there is none.
+     *
+     * WHERE THE WALK STOPS IS THE WHOLE DESIGN, and it is a containment question
+     * rather than a convenience one: an upward walk with no floor reads whatever
+     * `CLAUDE.md` it passes into a system prompt, and `/` is not a bound. Four
+     * rules, in the order they are checked, each returning null rather than
+     * guessing:
+     *
+     * 1. `$repoRoot` does not resolve — a boundary that will not resolve is not
+     *    a boundary, the same answer {@see loadForPath()} gives.
+     * 2. `$repoRoot` IS ITSELF A CHECKOUT (`.git` present, directory or file).
+     *    This is the ambiguity a path-repo checkout or a submodule creates, and
+     *    it is answered conservatively: a library that is its own working tree
+     *    has no monorepo parent, so its parent directory is somebody else's
+     *    filesystem and nothing above it is read. `file_exists` rather than
+     *    `is_dir` because a worktree and a submodule both spell `.git` as a
+     *    FILE, and treating those as "not a checkout" would walk straight out
+     *    of them.
+     * 3. NO `.git` ANYWHERE ABOVE. Then there is no enclosing project and the
+     *    walk yields nothing — this, not a depth limit, is what makes reading a
+     *    user's home directory impossible for an ordinary `--root /tmp/scratch`:
+     *    the walk needs a positive VCS marker to stop AT, and absent one it
+     *    returns null instead of climbing to `/`.
+     * 4. THE WALK REACHES the user's home directory — at it or above it, which
+     *    is stronger than the rule this started as and had to be. A home under
+     *    version control is a dotfiles repo, not a monorepo, and its `CLAUDE.md`
+     *    is a personal-tier file; adopting it as a PROJECT tier would silently
+     *    import one repository's instructions into every unrelated project
+     *    inside it. The first version compared only the MARKER against `$HOME`,
+     *    which left the outcome its own rationale forbids reachable one level
+     *    up. MEASURED: a checkout at `<b>/A`, `HOME=<b>/A/home` with no `.git`
+     *    of its own, `--root <b>/A/home/proj/lib` — the walk passed straight
+     *    THROUGH `$HOME`, stopped at `<b>/A`, and `$HOME/CLAUDE.md` was emitted
+     *    as a project-tier document. So the home check now runs on every step of
+     *    the walk and BEFORE the marker test, which subsumes the marker case
+     *    (a home that is itself a checkout is rejected at the same step it would
+     *    have been matched) and closes the pass-through one. The consequence,
+     *    stated because it is a real narrowing: nothing at or above `$HOME` is
+     *    ever project tier, so a monorepo that encloses the user's home is not
+     *    discoverable — the conservative answer rules 2 and 3 already give.
+     *    Skipped when {@see \SugarCraft\Crush\Support\HomeDirectory::resolved()}
+     *    cannot tell whose home this is, because a guard that cannot identify
+     *    its subject must not invent one.
+     *
+     * The answer is memoized, and the reason is the OBSERVABLE one rather than
+     * a speed argument: {@see loadRoot()} memoizes too, but this is also the
+     * pull-based seam a display would read, and the walk's inputs are files on
+     * disk that a build step can create or delete mid-session — so re-walking
+     * per call would let two callers in one session get two DIFFERENT answers
+     * for the same root. That is what
+     * {@see \SugarCraft\Crush\Tests\Context\InstructionFileLoaderTest::testTheAncestorRootIsMemoizedAgainstAMarkerThatDisappearsMidSession()}
+     * pins, by moving the marker between two calls; an `assertSame($x(), $x())`
+     * would pass against a pure function and prove nothing, which is what the
+     * first version of that test did.
+     */
+    public function ancestorRoot(): ?string
+    {
+        if ($this->ancestorRootResolved) {
+            return $this->ancestorRoot;
+        }
+
+        $this->ancestorRootResolved = true;
+
+        $root = realpath($this->repoRoot);
+        if ($root === false || file_exists($root . '/.git')) {
+            return $this->ancestorRoot = null;
+        }
+
+        $home = HomeDirectory::resolved();
+        $realHome = \is_string($home) ? realpath($home) : false;
+
+        $dir = \dirname($root);
+        while (true) {
+            // Rule 4, checked BEFORE the marker and on EVERY step: reaching
+            // $HOME ends the walk whether or not $HOME is itself a checkout.
+            // Marker-only was the first version and it let the walk pass
+            // straight through a home whose parent was a checkout — see the
+            // measured case in this method's docblock. Equality against the
+            // RESOLVED home, so a home reached through a symlinked path is
+            // still recognised.
+            if ($realHome !== false && $dir === $realHome) {
+                return $this->ancestorRoot = null;
+            }
+
+            if (file_exists($dir . '/.git')) {
+                return $this->ancestorRoot = $dir;
+            }
+
+            $parent = \dirname($dir);
+            if ($parent === $dir) {
+                return $this->ancestorRoot = null; // reached `/` with no marker
+            }
+            $dir = $parent;
+        }
+    }
+
+    /**
+     * Read `CLAUDE.md`/`AGENTS.md` from every directory between
+     * {@see ancestorRoot()} and `$repoRoot`, outermost first.
+     *
+     * INCLUSIVE of the ancestor root, EXCLUSIVE of `$repoRoot` — `$repoRoot`'s
+     * own two files are read by {@see loadRoot()} afterwards, under
+     * `$repoRoot`'s own gate, and reading them here as well would either
+     * duplicate them or move which boundary judges them.
+     *
+     * The intermediate directories are included, not just the two ends: in
+     * `<mono>/packages/web/app` rooted at `app`, `packages/web/CLAUDE.md` is the
+     * file most likely to matter, and stopping at the extremes would skip
+     * exactly it.
+     *
+     * CONTAINMENT is judged against the ancestor root, which is the boundary the
+     * walk established. Every candidate is an ENTRY question — may this file be
+     * read — so {@see ContainedPath::within()}, matching the other four entry
+     * gates in this class; a file cannot resolve onto a directory boundary, so
+     * the predicate choice is not observable here either. A candidate resolving
+     * outside the ancestor root (a `packages/web/CLAUDE.md` symlinked to
+     * `/etc/…`) is refused AND RECORDED, so this pass does not reintroduce the
+     * silent-escape shape the class docblock describes.
+     *
+     * @return string[]
+     */
+    private function loadAncestorRoots(): array
+    {
+        $ancestorRoot = $this->ancestorRoot();
+        if ($ancestorRoot === null) {
+            return [];
+        }
+
+        $root = realpath($this->repoRoot);
+        if ($root === false) {
+            return []; // unreachable: ancestorRoot() resolved it to get here
+        }
+
+        // Collected climbing UP from $repoRoot's parent, then reversed, so the
+        // emitted order is outermost-first without a second walk.
+        $dirs = [];
+        for ($dir = \dirname($root); $dir !== $ancestorRoot; $dir = \dirname($dir)) {
+            $parent = \dirname($dir);
+            if ($parent === $dir) {
+                // Unreachable while $ancestorRoot is a true ancestor of $root;
+                // a bare `break` rather than a walk to `/` if that ever changes.
+                break;
+            }
+            $dirs[] = $dir;
+        }
+        $dirs[] = $ancestorRoot;
+
+        $contents = [];
+        foreach (array_reverse($dirs) as $dir) {
+            foreach (['CLAUDE.md', 'AGENTS.md'] as $filename) {
+                $path = $dir . '/' . $filename;
+                if (!is_file($path)) {
+                    continue;
+                }
+
+                if (!ContainedPath::within($path, $ancestorRoot)) {
+                    $this->refusedPaths[$path] = 'an ancestor instruction file resolving outside the '
+                        . 'enclosing checkout (' . $ancestorRoot . ')';
+
+                    continue;
+                }
+
+                $realPath = realpath($path) ?: $path;
+                if (isset($this->emittedPaths[$realPath])) {
+                    continue;
+                }
+
+                $this->emittedPaths[$realPath] = true;
+
+                // Read RESOLVED, import base SPELLED — both for the reasons
+                // loadRoot() states. The import gate is handed $ancestorRoot,
+                // NOT $repoRoot, and that is load-bounded rather than incidental:
+                // an ancestor file's own siblings are outside $repoRoot by
+                // construction, so $repoRoot would refuse every `@import` it
+                // makes — which is precisely the 6,614 B loss expandImports()'s
+                // docblock measures. A file's imports are bounded by ITS OWN
+                // checkout; $repoRoot's own files still pass $repoRoot on the
+                // call in loadRoot(). (An earlier revision of this comment
+                // asserted the opposite of the line below it; widening the
+                // boundary to \dirname($ancestorRoot) is a mutation that
+                // testAnAncestorImportLeavingTheEnclosingCheckoutIsStillBlocked
+                // kills, which is what makes the argument checkable.)
+                $raw = file_get_contents($realPath);
+                $contents[] = $raw === false ? '' : $this->expandImports($raw, \dirname($path), $ancestorRoot);
+            }
+        }
+
+        return $contents;
     }
 
     /**
@@ -350,6 +597,17 @@ final class InstructionFileLoader
         // merely SPELLED through a symlink ($repoRoot is resolved, $dir was
         // not), which climbed above the root with nothing committed at all.
         //
+        // AN ANCESTOR `CLAUDE.md` IS NOW READ — BY A DIFFERENT ROUTE, AND THIS
+        // GATE IS STILL THE RIGHT ANSWER HERE. {@see loadAncestorRoots()} reads
+        // files above $repoRoot deliberately, which reads at first glance like
+        // the escape above being reopened. It is not the same mechanism: that
+        // pass climbs from $repoRoot to a POSITIVE VCS MARKER, decides once at
+        // session start, and cannot be steered; this walk starts wherever the
+        // agent's last tool call happened to point, so relaxing it would hand
+        // the choice of what lands in the system prompt to an arbitrary touched
+        // path. Pinned by
+        // `InstructionFileLoaderTest::testLoadForPathStillRefusesAWalkStartingOutsideTheCheckoutDespiteTheGitAncestor()`.
+        //
         // within() rather than below() records the question, and NOT a
         // behavioural choice — an earlier revision argued it as one. `$dir ===
         // $repoRoot` returns null under EITHER predicate, because `while ($dir
@@ -425,7 +683,7 @@ final class InstructionFileLoader
                     // Resolved, for the reason loadRoot() reads resolved; the
                     // import base stays spelled, for the reason it stays spelled.
                     $raw = file_get_contents($realPath);
-                    return $raw === false ? null : $this->expandImports($raw, dirname($fullPath));
+                    return $raw === false ? null : $this->expandImports($raw, dirname($fullPath), $repoRoot);
                 }
             }
 
@@ -542,12 +800,30 @@ final class InstructionFileLoader
     /**
      * Expand `@path` import references in freshly-read instruction content.
      *
+     * $boundary IS THE CHECKOUT THE EXPANDED FILE BELONGS TO, not always
+     * `$repoRoot`. It was `$repoRoot` unconditionally, and that was measurably
+     * wrong the moment {@see loadAncestorRoots()} started reading files ABOVE
+     * `$repoRoot`: the monorepo `CLAUDE.md` here opens with `@./AGENTS.md` and
+     * `@./CONTRIBUTING.md`, both of which are its siblings and both of which the
+     * `$repoRoot` boundary refused — MEASURED with `--root <mono>/sugar-crush`,
+     * `loadRoot()` came back with 18,496 B and two `<import-blocked>` notes
+     * against 25,110 B for the same file read from `<mono>`. `CONTRIBUTING.md`
+     * (6,992 B on disk) was lost outright, because no other route emits it;
+     * `AGENTS.md` survived only by being re-read as a SECOND top-level document
+     * rather than inlined where its import sits. The 6,614 B gap between those
+     * two totals is the NET DOCUMENT-SIZE DIFFERENCE — the lost body minus the
+     * two blocked-import notes that replaced it — and is not the size of any
+     * file, which is the arithmetic the first draft of this note mislabelled.
+     * A file's imports are bounded by ITS OWN checkout; passing the boundary in
+     * is what makes that true for both tiers, and it widens nothing for
+     * `$repoRoot`'s own files, which still pass `$repoRoot`.
+     *
      * A boundary-check closure is handed straight into
      * ImportResolver::expand(), which threads it through EVERY recursive
      * expansion call (not just the references present in the outermost
-     * $content) -- so a reference that resolves outside $repoRoot is
+     * $content) -- so a reference that resolves outside $boundary is
      * blocked and replaced with an inline warning note no matter how many
-     * @import hops deep it is found, mirroring Claude Code's approval-dialog
+     * `@import` hops deep it is found, mirroring Claude Code's approval-dialog
      * concept for imports that leave the project (at minimum, sugar-crush
      * has no interactive approval flow yet, so this is the "at minimum a
      * warning-tagged note" fallback). In-repo references are left for
@@ -562,20 +838,20 @@ final class InstructionFileLoader
      * ImportResolver (which is stateless and shared) or in the caller (which
      * only ever sees the finished string).
      */
-    private function expandImports(string $content, string $baseDir): string
+    private function expandImports(string $content, string $baseDir, string $boundary): string
     {
-        $gate = function (string $realPath, string $pathFragment): ?string {
+        $gate = function (string $realPath, string $pathFragment) use ($boundary): ?string {
             // ImportResolver `is_file()`-checks and `realpath()`s before calling
             // this, so $realPath is always a resolvable existing path and
             // within()'s re-resolution of it cannot change the verdict — it
             // costs one cached stat to keep this file free of a local idiom.
-            if (!ContainedPath::within($realPath, $this->repoRoot)) {
+            if (!ContainedPath::within($realPath, $boundary)) {
                 // Recorded as well as noted inline: this is the ONE refusal in
                 // this class that was never silent, and leaving it out of the
                 // map would make `refusedPaths()` an incomplete picture of the
                 // same question.
                 $this->refusedPaths[$realPath] = "an @import from '{$pathFragment}' resolving outside the "
-                    . 'checkout (' . $this->repoRoot . ')';
+                    . 'checkout (' . $boundary . ')';
 
                 return "<import-blocked reason=\"outside-repo-root\">Import '{$pathFragment}' resolves to"
                     . " '{$realPath}', outside the repository root, and was not followed.</import-blocked>";
