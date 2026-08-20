@@ -6,6 +6,104 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## 0-PAUSE. THE FAN-OUT WAS STOPPED MID-FLIGHT FOR A CLIENT RESTART — READ THIS BEFORE §0
+
+The user asked to stop the agents so they could restart the client, and said they would
+resume this same session afterwards. **Workflow `wo6lx5vcd` (run `wf_4ee49ce4-130`) was
+stopped with `TaskStop`, and the journal-watch monitor `bsgqag88l` with it.** Nothing was
+lost; nothing unreviewed was committed. Read this section, then §0 for the standing state.
+
+**HEAD is now `ef480c77`**, not the `a2221578` that §0 below still names as the tree state.
+Three supervisor commits landed while the lanes ran, all docs-or-disjoint from lane files:
+
+| SHA | what |
+|---|---|
+| `37b6cb9e` | two plan status lines had decayed in OPPOSITE directions — see below |
+| `ef480c77` | **P8.3 done** — the stall hand-off, `sugar-crush/src/Tui/Components/AgentDashboardPane.php` + its test |
+
+**`ef480c77` HAS NOT BEEN GATED BY THE FULL SUITE.** It was committed deliberately ahead of
+the gate so a client restart could not lose it. Five targeted files were green
+(AgentDashboardPaneTest 38/38, AgentOutputPaneTest+TuiComponent 38/38, TuiComponentTest
+25/25, AgentManagerWiringTest 14/14, StallDetectorTest 21/21) and the wiring is
+mutation-checked. **FIRST ACTION ON RESUME: run the full suite in `/home/sites/sugarcraft/sugar-crush`
+and confirm it beats `7782 / 90237 / 1 / rc 0` with skips still 1.**
+
+### The two lanes: work PRESERVED, NOT committed
+
+Both lane working trees are intact on disk. In addition, each lane now carries a
+`.lane-wip.patch` (a staged-then-unstaged `git diff --cached`, so untracked new files are
+included) as belt-and-braces:
+
+| lane | state | evidence file |
+|---|---|---|
+| `/home/sites/crush-lane-lsp` | **implement stage COMPLETE**, review stage had just started | `.lane-implement-result.md` (35 lines) + `.lane-wip.patch` (1506 lines) |
+| `/home/sites/crush-lane-cmd` | **mid-implement**, no result journaled | `.lane-wip.patch` (1650 lines) |
+
+**The LSP lane is essentially finished and self-reports green: `7815 / 90346 / 1 / rc 0`
+in-lane (baseline + 33 tests), 8/8 applied mutations KILLED, config md5 intact.** Read
+`/home/sites/crush-lane-lsp/.lane-implement-result.md` in full before doing anything with
+it — it is the highest-value artifact of the round and it corrected the BRIEF in two places:
+
+1. **The plan's prescribed path `src/Tools/LspTool.php` is structurally impossible.**
+   `BuiltInToolCorpusTest` asserts `glob('src/Tools/BuiltIn/*.php')` + `DYNAMIC_TOOL_CLASSES`
+   equals `BuiltInToolCorpus::classNames()`, and the only escapes were barred by
+   `BinSugarcrushWiringTest` requiring every exempted class to be ABSENT from
+   `Bootstrap::tools()`. It shipped `src/Tools/BuiltIn/LspTool.php` instead. **Phase 2 item 7's
+   wording in `crush_code.md` is wrong about the path and should be corrected, not followed.**
+2. **My census list was wrong in both directions** — 8 real sites, not 5, and 4 of the sites
+   I named (`BinSugarcrushWiringTest::crushSourceFiles`, `ContainedPathInventoryTest::ROUTED_CALL_SITES`,
+   `ReadPathCensusTest::READ_PATHS`, `ProjectTierRefusalInventoryTest`) do not move at all.
+
+It also **self-caught the round's canonical defect**: its first draft headed every answer
+`from the %s language server` while the single hit had come from `LspClient`'s same-file grep
+fallback — a text match presented as a semantic reference. That is the "claim that travelled
+without its domain" pattern, caught by probing rather than by a test.
+
+**DO NOT COMMIT THE LSP LANE WITHOUT ITS REVIEW STAGE.** Its suite is green and its mutations
+are killed, and that is exactly the condition under which the previous round's review still
+found five defects the implementers' green suites had missed — including a `doctor` subcommand
+that DELETED STORED CONVERSATIONS. Green is not reviewed.
+
+### Resuming the lanes
+
+Same session, so `Workflow({scriptPath, resumeFromRunId: 'wf_4ee49ce4-130'})` will replay the
+cached implement stages instantly and run only the review/fix stages live. Script:
+`/home/my/.claude/projects/-home-sites-sugarcraft/7f7de064-ad93-41c3-9188-a6742b2f3918/workflows/scripts/crush-c4b-c6-fanout-wf_4ee49ce4-130.js`
+If that resume is unavailable (different session), the fallback is to re-brief from each lane's
+`.lane-implement-result.md` and `.lane-wip.patch` — the cmd lane has no result file, so it
+needs its brief re-derived from the patch.
+
+### Two tracker rows were stale, and one was BLOCKING real work
+
+Measured at `07834d99`, recorded in `37b6cb9e`:
+
+- **Phase 2 item 2 (the `Bootstrap` MCP builder) was DONE and marked open.** `mcpClient()` at
+  `Bootstrap.php:3048`, `mcpTools()` at `:3159` building one `McpToolBridge` per advertised tool
+  at `:3168`, spread into `tools()` at `:3355`. Because the Phase 7 authoring guides and the
+  Phase 2 item 9 plugin epic were both recorded as **blocked by it**, a stale row and no real
+  dependency was holding them shut. **Phase 7 docs and P2.9 are unblocked as of now.**
+- **Phase 8 item 12 decayed the other way** — a note claimed `Write` was "deliberately not
+  registered" while `:3335` constructs it inside the array `tools()` returns at `:3304`,
+  contradicting this same file's DONE entry ~40 lines above. Both entries' line numbers had
+  drifted (51→55, 2498→3335).
+- **Phase 8 items 2 and 12 are complete**; Phase 8 item 1 and 5 are complete and only **item 6**
+  (VHS demos) remains of that bundle.
+
+### Where P8.3 landed, and the finding inside it
+
+Both halves of stall detection were already built — `BackgroundSupervisor::onSessionStreaming()`
+has always fed `StallDetector::track()`, and `AgentOutputPane` has always drawn the amber border
+and indicator. Nothing carried the warning between them. Two fixes were needed, not one:
+`entries()` now reads `getStallWarnings()` once per frame and keys it by session id, AND
+`row()` had typed its parameter as the PARENT `AgentDisplayState`, which does not declare
+`stallWarning` at all — so a stalled session could reach the dashboard and still look ordinary
+in the list. **That second one was found only because a test asserted on the rendered frame
+rather than on the field feeding it: the state-level assertions passed while the render failed.**
+Registered `AgentManager` agents deliberately carry no warning, documented in place, because
+`track()` is fed from exactly one call site and AgentManager telemetry has no per-chunk timing.
+
+---
+
 ## 0. STATE AS OF THE 2026-08-20 COMPACT — read this first
 
 **HEAD is `a2221578`, tree CLEAN, in sync with `origin/master` (0 ahead / 0 behind).**
