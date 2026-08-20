@@ -35,11 +35,16 @@ and every figure since is void. `sugar-crush/vendor/sugarcraft/` = 18 symlinks.
 | lane dir | bundle | stage | owns |
 |---|---|---|---|
 | `crush-lane-cmd` | the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `339f512c` | — released, dir reset to `origin/master` |
-| `crush-lane-sglang` | **DSML parser + streaming gap** | **FIX** | `src/Providers/**` — **holds the census token** |
-| `crush-lane-lsp` | **P3.2 FocusRing + P3.5 padding** (P3.3 DESCOPED — premise false) | **REVIEW** (uncommitted) | `src/Tui/**` (which is where `KeyboardHandler.php` lives), `src/App/**`, `src/Renderer.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
+| `crush-lane-sglang` | **DSML parser + streaming gap** | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `2bde4114` | — released, dir reset to `origin/master` |
+| `crush-lane-lsp` | **P3.2 FocusRing + P3.5 padding** (P3.3 DESCOPED — premise false) | **FIX** — review returned COMMIT AFTER FIXES, 0 BLOCKING | `src/Tui/**` (which is where `KeyboardHandler.php` lives), `src/App/**`, `src/Renderer.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
 
-**MASTER IS NOW `c39f1a99`** — CI pushed a `vhs: regenerate demo GIFs` commit on top of `339f512c`.
-The live tree is at `c39f1a99` and clean. Lanes `sglang` and `lsp` are both behind it.
+**LIVE SUITE: `8299 / 91986 / 1 skipped / rc 0` — supervisor-measured at `2bde4114`.** This supersedes
+the 8111/91477 baseline that held across rounds 31-33. Master also carries CI `vhs:` GIF commits
+(`c39f1a99`, `a3c9e074`) which touch no source.
+
+**A FOURTH lane bundle is briefed and waiting on a file, not on capacity** — the headless engine
+approver needs `src/Cli/Bootstrap.php`, which lane `cmd` holds for P8.9. Launch it the moment P8.9
+lands; the measurement is below and needs no rediscovery.
 
 **Pre-fix lane figures** (both predate their fix stage; re-measure):
 `cmd` 8191 / 91682 / 1 / rc 0 · `sglang` 8150 / 91605 / 1 / rc 0.
@@ -68,6 +73,37 @@ Both lanes are instructed to STOP on any non-count conflict. `lsp` is barred fro
 | `3e74a716` | the permission gate is, by default, not deciding anything |
 | `2bbe7035` | round-33 state at 3 lanes, written so a compact loses nothing |
 | `339f512c` | **LANE `cmd` — the first lane commit of round 33.** `--permission-mode` / `--model` empty values now exit 2; the `accept-edits` scoped-write gate pinned. Supervisor-verified **8204 / 91728 / 1 / rc 0** in the live tree |
+
+### ROUND 33 RESULTS — supervisor-verified, not lane-reported
+
+| lane | SHA | supervisor-measured | note |
+|---|---|---|---|
+| `cmd` | `339f512c` | **8204 / 91728 / 1 / rc 0** | matched its claim exactly |
+| `sglang` | `2bde4114` | **8299 / 91986 / 1 / rc 0** | matched its claim exactly |
+| `lsp` | — | in FIX | reviewer measured 8127/91560/1/rc 0 pre-rebase; 8/8 own mutations + 8/8 reviewer mutations killed |
+
+**`sglang` was handed to its fix agent RED and the brief said green.** It measured
+**8153 / 91612 / 1 with 2 failures, rc 1** — not the briefed 8150 / 91605 / rc 0. The interrupted
+round-32 agent's untracked `EnvelopeScanner.php` had moved a census count 280→281 and never updated
+the counter. **The pre-fix figure in a brief describes the tree the REVIEWER saw, and an interrupted
+agent can have written since.** Second lane in one round to be handed a stale premise this way
+(`cmd`'s tree was likewise mid-write, fataling on an undefined constant at exit 255).
+
+**`sglang` enlarged the fix rather than accept the artefact.** The inherited `EnvelopeScanner`'s
+docblock claimed replacing the envelope pattern removed the PCRE cliff. It would only have **moved**
+it — `INVOKE_PATTERN` and `PARAMETER_PATTERN` carry the same lazy `(.*?)`. Generalised to
+`MarkupScanner` (positional envelope + element + attribute scanning), so B1/B2/B3 fall to one
+mechanism and neither parser calls `preg_*` at all. **B3's briefed diagnosis was half right:**
+`envelopeBodies()` DID check `preg_match_all` and logged the true cause; the unchecked call is the
+*invoke*-level one, which appended a second, false diagnosis after the true one.
+It proved the inherited defect by swapping the shipped `MinimaxXmlFallbackToolCallParser` back in and
+watching the new tests fail with the fabricated `rm_rf path=/` and the argument-less `write`.
+
+**The `TOOL_CALL_PARSER_NAMES` mutation is dead**, killed two ways: set-equality between the
+`self::TOOL_CALL_PARSER_*` constants named in `toolCallParser()`'s body and the ones the list carries,
+plus a reflection pin of declared constants against the list. PHP cannot derive the constant from the
+`match`, but the source is readable — **when the language cannot connect two hand-maintained lists,
+read the source and connect them.**
 
 ### THE OPEN FINDINGS EACH LANE IS CLOSING — full detail, so a compact loses nothing
 
