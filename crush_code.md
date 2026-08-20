@@ -24,13 +24,14 @@ authoritative, resumable record — including every review finding, the sabotage
 labels, and the reasoning behind judgement calls — is
 **`docs/plans/crush_code_worklog.md`**. Read that first when resuming.
 
-**Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1, 2, 3, 5, 6, 8 ·
+**Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1-8 ·
 Phase 3 item 1 · Phase 4 items 1-6, 7 · Phase 5 items 1-9 + 10a ·
 Phase 7 items 1-2 · Phase 8 items 1, 2, 3, 5, 7, 12, 14.
-**Phase 2 item 4 is HALF done** — see the `a4be8263` note below.
+**Phase 2 is complete except item 9**, the deliberately-last plugin epic.
 
-**50 of 75 items, counted by item** (Phase 4 item 6 landed in `a4be8263`; Phase 2 item 4 is half and is NOT counted). The count is not effort: Phase 2 item 4 alone is
-larger than all of Phase 7. **Phase 5 IS complete.** Item **10b** (differentiate the
+**52 of 75 items, counted by item** (Phase 2 item 4 completed in `3eca66df` and is
+now counted in full; Phase 2 item 7 in `f43177c2`). The count is not effort: Phase 2
+item 4 alone was larger than all of Phase 7. **Phase 5 IS complete.** Item **10b** (differentiate the
 hardcoded `AgentDefinition` preset prompts) was measured on 2026-08-19 and found already
 done — by Bundle A (`bf3495f5`), whose own commit message says so: "Phase 5 items 1, 2, 3
 and item 10's preset half." So the RESUME note claiming the phase was finished was RIGHT

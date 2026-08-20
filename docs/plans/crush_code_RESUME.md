@@ -6,161 +6,106 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-PAUSE. THE FAN-OUT WAS STOPPED MID-FLIGHT FOR A CLIENT RESTART — READ THIS BEFORE §0
+## 0-NOW. STATE AFTER ROUND 29 — read this first, then §0 for the standing rules
 
-The user asked to stop the agents so they could restart the client, and said they would
-resume this same session afterwards. **Workflow `wo6lx5vcd` (run `wf_4ee49ce4-130`) was
-stopped with `TaskStop`, and the journal-watch monitor `bsgqag88l` with it.** Nothing was
-lost; nothing unreviewed was committed. Read this section, then §0 for the standing state.
+**Round 29 is COMPLETE and both lanes landed on `master`.** Phase 2 is now finished except item
+9, the deliberately-last plugin epic.
 
-**HEAD is now `ef480c77`**, not the `a2221578` that §0 below still names as the tree state.
-Three supervisor commits landed while the lanes ran, all docs-or-disjoint from lane files:
+| bundle | commit | what |
+|---|---|---|
+| **C6** — Phase 2 item 7 | `f43177c2` | the `Lsp` tool: `src/Tools/BuiltIn/LspTool.php` + 1,116-line test, `LspClient` positional cache, `PermissionGate` read-only classification |
+| **C4b** — Phase 2 item 4 (2nd half) | `3eca66df` | the `` !`cmd` `` and `@file` template forms, tier-gated |
 
-| SHA | what |
-|---|---|
-| `37b6cb9e` | two plan status lines had decayed in OPPOSITE directions — see below |
-| `ef480c77` | **P8.3 done** — the stall hand-off, `sugar-crush/src/Tui/Components/AgentDashboardPane.php` + its test |
+**Count: 52 of 75 items.** Phase 2 item 4 is now counted in full (it was previously recorded as
+half and excluded).
 
-**`ef480c77` IS NOW GATED AND GREEN.** Run on resume in the live tree:
-**`7786 tests / 90242 assertions / 1 skipped / rc 0`, 3m14s.** The arithmetic checks out
-exactly — +4 tests and +5 assertions over the `7782 / 90237` baseline, and the four new
-tests carry five assertions between them, so nothing else moved. Skip still 1 and still
-`tests/MCP/McpClientTest.php` (re-confirmed by running that file alone: 40 tests, 1 skipped).
-**`7786 / 90242 / 1` IS THE NEW BASELINE. Any lane still comparing against 7782 is stale.**
+**SUITE BASELINE IS NOW `7877 tests / 90590 assertions / 1 skipped / rc 0`** (~3m24s), measured
+by the lane on the tree it pushed. Skip is still `tests/MCP/McpClientTest.php:106` and MUST stay 1.
+A 2 means `vendor/sugarcraft/*` got replaced by Packagist copies and every figure since is void.
 
-**THE FAN-OUT WAS RELAUNCHED** as a fresh run, not a replay: workflow **`w8p9j4ivm`, run
-`wf_a28abde0-2cc`**, script
-`…/workflows/scripts/crush-c4b-c6-resume.js`.
-A blind `resumeFromRunId` would have re-run the C4b lane's implement stage from scratch INTO
-a tree that already held its own half-finished edits — a double-applied substitution rule or
-a duplicated method is the specific failure mode. So the new script routes the two lanes
-differently, and the routing was verified rather than assumed:
+**The plan's prescribed path for the Lsp tool was WRONG and is corrected in practice.** It said
+`src/Tools/LspTool.php`; that is structurally impossible against `BuiltInToolCorpusTest`'s
+bidirectional invariant, independently reproduced with a throwaway probe class. The shipped path
+is `src/Tools/BuiltIn/LspTool.php`. There are now **11** built-ins, and `Bootstrap::tools()` is
+LONGER than that whenever a trusted project's MCP servers advertise anything — do not conflate
+the two counts.
 
-| lane | job this run |
-|---|---|
-| `crush-lane-lsp` | **REVIEW** (implement was complete), pointed at `.lane-implement-result.md` |
-| `crush-lane-cmd` | **RESUME-IMPLEMENT**, told its tree holds part-built work, told to read `git diff` + `.lane-wip.patch` FIRST and carry on rather than restart, and told not to assume the inherited half is correct because nobody has reviewed it |
+**Two things shipped reachable-but-not-useful, deliberately, and are documented as dormant seams
+rather than left implied:** the `Lsp` tool has no server launcher (no settings key for language
+servers exists anywhere in `src/`), so every call today returns an *error* naming the language it
+could not ask — an empty success would read to the model as "this symbol has no references",
+which is a fabricated fact about the user's code. And `diagnostics` carries an explicit note that
+nothing subscribes to `publishDiagnostics`, so an empty map is not "this file is clean". The
+launcher is the next step for that subsystem and needs the same project-trust gate `.mcp.json`
+gets, because starting a server is code execution.
 
-The briefs also carry the corrected floor (7786, not 7782) and the fact that master moved to
-`574aca95`, so their `git pull --rebase` is expected to do real work. Neither lane's file set
-is touched by any of the three supervisor commits, so a rebase CONFLICT is a real signal and
-the lanes are told to stop and report rather than force.
+### The lanes are still on disk and are now STALE — refresh before reuse
 
-### THE STANDING CYCLE — run this every time a lane commits, and whenever master moves
+`/home/sites/crush-lane-cmd` and `/home/sites/crush-lane-lsp` both still exist, both clean, both
+carrying their `.lane-*-result.md` reports (worth reading — they are the round's best artifacts).
+Their work is on `master`, so they have served their purpose. **Before handing either to a new
+agent, refresh it** (clean tree → `git pull --rebase`) or recreate from a quiescent tree per
+`docs/plans/crush_code_concurrency.md` §5.2b — a lane left stale stops matching the baseline in
+its own brief, which is how three agents in this round were handed a wrong number.
 
-Master moves for two reasons: the supervisor commits, and **CI pushes regenerated demo GIFs on
-its own** (`5b77a75f vhs: regenerate demo GIFs` arrived mid-round, unprompted). So this is a
-loop, not a one-off:
+Both lanes now carry the supervisor's scratch paths in `.git/info/exclude` (§5.2d). Keep that
+when recreating: without it, `git add -A` in the lane's commit recipe can sweep the supervisor's
+own instrumentation into `master`.
+
+### THE STANDING CYCLE — every time a lane commits, and whenever master moves
+
+CI pushes regenerated demo GIFs on its own schedule — it did so **twice** during round 29
+(`5b77a75f`, `e522f69a`). This is a loop, not a one-off:
 
 ```sh
-# 1. supervisor's own work: commit -> pull --rebase -> push, always in that order
-git pull --rebase && git push
+git pull --rebase && git push                  # supervisor's own work, in that order
 
-# 2. bring the lanes' work back into the live tree once they have pushed
-cd /home/sites/sugarcraft && git pull --rebase
-cd sugar-crush && vendor/bin/phpunit          # THE POST-HOC GATE. 7786/90242/1/rc0 is the floor.
+git pull --rebase  # bring lane work back
+cd sugar-crush && vendor/bin/phpunit            # POST-HOC GATE. floor: 7877/90590/1/rc0
 
-# 3. keep every live lane's refs fresh -- FETCH ONLY, never pull, while an agent is working
-for L in cmd lsp; do d=/home/sites/crush-lane-$L
-  before=$(git -C $d status --porcelain | wc -l)
-  git -C $d fetch origin master -q
-  echo "lane-$L behind=$(git -C $d rev-list --count HEAD..origin/master) dirty=$before->$(git -C $d status --porcelain | wc -l)"
+for L in cmd lsp; do d=/home/sites/crush-lane-$L   # keep live lanes fresh: FETCH ONLY
+  b=$(git -C $d status --porcelain | wc -l); git -C $d fetch origin master -q
+  echo "lane-$L behind=$(git -C $d rev-list --count HEAD..origin/master) dirty=$b->$(git -C $d status --porcelain | wc -l)"
 done
 ```
 
-**Step 3 is `fetch`, not `pull`, and that distinction is load-bearing.** `fetch` writes refs and
-objects only and leaves the working tree and index alone (verified: dirty count 11 before, 11
-after, both lanes). A `pull`/`rebase`/`merge`/`checkout` into a lane whose tree is dirty and
-whose agent is live is how you corrupt a half-finished edit. Each lane rebases itself at its own
-commit gate, which is the one moment its tree is clean.
+`fetch` not `pull`: it writes refs and objects only and leaves the working tree and index alone.
+Pulling into a lane whose tree is dirty and whose agent is live corrupts a half-finished edit;
+each lane rebases itself at its own commit gate, the one moment its tree is clean. **And never
+read a lane's behind-count without fetching first** — with master 6 ahead of both lanes, one
+reported 5 behind and the other reported **0**. See §5.2c.
 
-**And never read a lane's behind-count without fetching first.** With master 6 ahead of both
-lanes, `crush-lane-cmd` reported **5** behind and `crush-lane-lsp` reported **0** behind — the
-first because its agent had fetched at some earlier point, the second because its agent never
-had. `lane-lsp` claimed zero drift while six commits behind. A `cp -a` copies remote-tracking
-refs as they stood at snapshot time and they then age independently per lane. See
-`docs/plans/crush_code_concurrency.md` §5.2c.
+**Hold your own push while a lane is between its rebase and its push.** Pushing then rejects its
+push as non-fast-forward, and its brief tells it to stop and report on trouble — turning
+supervisor bookkeeping into a spurious lane failure. This happened once and was avoided by
+committing locally and holding.
 
-**After a lane's work has landed on master and been gated, refresh that lane properly** (clean
-tree, then `git pull --rebase`) or recreate it from a quiescent tree per §5.2b — do not keep
-handing an agent a lane that is dozens of commits stale, because its baseline figures stop
-matching the ones in its brief.
+### Anchor absolute paths — one CWD drift produced three simultaneous false alarms
 
-### The two lanes: work PRESERVED, NOT committed
+An unanchored `md5sum .sugar-crush/config.json` run from `sugar-crush/` resolves to
+`sugar-crush/.sugar-crush/config.json` — the **different, untracked** file that is NOT the
+invariant — and reported a changed md5, zero vendor symlinks and path-repos rc 1 all at once.
+All three were one bad path. Use `/home/sites/sugarcraft/...` or `git -C`.
 
-Both lane working trees are intact on disk. In addition, each lane now carries a
-`.lane-wip.patch` (a staged-then-unstaged `git diff --cached`, so untracked new files are
-included) as belt-and-braces:
+### QUEUE — what is next
 
-| lane | state | evidence file |
-|---|---|---|
-| `/home/sites/crush-lane-lsp` | **implement stage COMPLETE**, review stage had just started | `.lane-implement-result.md` (35 lines) + `.lane-wip.patch` (1506 lines) |
-| `/home/sites/crush-lane-cmd` | **mid-implement**, no result journaled | `.lane-wip.patch` (1650 lines) |
+Phase 2 item 9 (plugins) stays LAST. Unblocked and ready now:
 
-**The LSP lane is essentially finished and self-reports green: `7815 / 90346 / 1 / rc 0`
-in-lane (baseline + 33 tests), 8/8 applied mutations KILLED, config md5 intact.** Read
-`/home/sites/crush-lane-lsp/.lane-implement-result.md` in full before doing anything with
-it — it is the highest-value artifact of the round and it corrected the BRIEF in two places:
+1. **P6.1/2** — `WorktreeConfig`'s path + layered settings files; then the 4-deep chain behind it
+   (P6.3/5, P6.4/6). This is the biggest remaining functional block and it is serial in
+   `Bootstrap.php`.
+2. **Phase 7 docs** (P7.3/4 authoring guides, P7.5/6 TROUBLESHOOTING + ARCHITECTURE) — docs-only,
+   the safest possible concurrent lane, and **no longer blocked**: the tracker row that said
+   Phase 2 item 2 was open was stale, and it was gating these.
+3. **P3.x** — the sugar-bits/candy-forms TextInput, candy-focus FocusRing, candy-sprinkles Table,
+   candy-kit help screen. `candy-focus` and `candy-kit` are in `sugar-crush/composer.json` as of
+   `ddd9560d` and resolve in-lane.
+4. **P8.6** (VHS demos), P8.4, P8.8, P8.9/10/11, P8.13.
+5. Then the hardening backlog E1-E50 and the follow-up tracker rows.
 
-1. **The plan's prescribed path `src/Tools/LspTool.php` is structurally impossible.**
-   `BuiltInToolCorpusTest` asserts `glob('src/Tools/BuiltIn/*.php')` + `DYNAMIC_TOOL_CLASSES`
-   equals `BuiltInToolCorpus::classNames()`, and the only escapes were barred by
-   `BinSugarcrushWiringTest` requiring every exempted class to be ABSENT from
-   `Bootstrap::tools()`. It shipped `src/Tools/BuiltIn/LspTool.php` instead. **Phase 2 item 7's
-   wording in `crush_code.md` is wrong about the path and should be corrected, not followed.**
-2. **My census list was wrong in both directions** — 8 real sites, not 5, and 4 of the sites
-   I named (`BinSugarcrushWiringTest::crushSourceFiles`, `ContainedPathInventoryTest::ROUTED_CALL_SITES`,
-   `ReadPathCensusTest::READ_PATHS`, `ProjectTierRefusalInventoryTest`) do not move at all.
+**The next Lsp step, if that subsystem is picked up:** the server launcher (per-language command
+config, `LspConnection::connect()` + `initialize()`, a shutdown hook, and the project-trust gate).
 
-It also **self-caught the round's canonical defect**: its first draft headed every answer
-`from the %s language server` while the single hit had come from `LspClient`'s same-file grep
-fallback — a text match presented as a semantic reference. That is the "claim that travelled
-without its domain" pattern, caught by probing rather than by a test.
-
-**DO NOT COMMIT THE LSP LANE WITHOUT ITS REVIEW STAGE.** Its suite is green and its mutations
-are killed, and that is exactly the condition under which the previous round's review still
-found five defects the implementers' green suites had missed — including a `doctor` subcommand
-that DELETED STORED CONVERSATIONS. Green is not reviewed.
-
-### Resuming the lanes
-
-Same session, so `Workflow({scriptPath, resumeFromRunId: 'wf_4ee49ce4-130'})` will replay the
-cached implement stages instantly and run only the review/fix stages live. Script:
-`/home/my/.claude/projects/-home-sites-sugarcraft/7f7de064-ad93-41c3-9188-a6742b2f3918/workflows/scripts/crush-c4b-c6-fanout-wf_4ee49ce4-130.js`
-If that resume is unavailable (different session), the fallback is to re-brief from each lane's
-`.lane-implement-result.md` and `.lane-wip.patch` — the cmd lane has no result file, so it
-needs its brief re-derived from the patch.
-
-### Two tracker rows were stale, and one was BLOCKING real work
-
-Measured at `07834d99`, recorded in `37b6cb9e`:
-
-- **Phase 2 item 2 (the `Bootstrap` MCP builder) was DONE and marked open.** `mcpClient()` at
-  `Bootstrap.php:3048`, `mcpTools()` at `:3159` building one `McpToolBridge` per advertised tool
-  at `:3168`, spread into `tools()` at `:3355`. Because the Phase 7 authoring guides and the
-  Phase 2 item 9 plugin epic were both recorded as **blocked by it**, a stale row and no real
-  dependency was holding them shut. **Phase 7 docs and P2.9 are unblocked as of now.**
-- **Phase 8 item 12 decayed the other way** — a note claimed `Write` was "deliberately not
-  registered" while `:3335` constructs it inside the array `tools()` returns at `:3304`,
-  contradicting this same file's DONE entry ~40 lines above. Both entries' line numbers had
-  drifted (51→55, 2498→3335).
-- **Phase 8 items 2 and 12 are complete**; Phase 8 item 1 and 5 are complete and only **item 6**
-  (VHS demos) remains of that bundle.
-
-### Where P8.3 landed, and the finding inside it
-
-Both halves of stall detection were already built — `BackgroundSupervisor::onSessionStreaming()`
-has always fed `StallDetector::track()`, and `AgentOutputPane` has always drawn the amber border
-and indicator. Nothing carried the warning between them. Two fixes were needed, not one:
-`entries()` now reads `getStallWarnings()` once per frame and keys it by session id, AND
-`row()` had typed its parameter as the PARENT `AgentDisplayState`, which does not declare
-`stallWarning` at all — so a stalled session could reach the dashboard and still look ordinary
-in the list. **That second one was found only because a test asserted on the rendered frame
-rather than on the field feeding it: the state-level assertions passed while the render failed.**
-Registered `AgentManager` agents deliberately carry no warning, documented in place, because
-`track()` is fed from exactly one call site and AgentManager telemetry has no per-chunk timing.
-
----
 
 ## 0. STATE AS OF THE 2026-08-20 COMPACT — read this first
 

@@ -8378,3 +8378,120 @@ C6's brief carries the correction that the plan asks for the wrong thing: item 7
 outside itself. It is a write-the-tool item. The one design decision it must not guess: a query with
 no configured server has to return a clear "no server for <language>" result, never `[]`, because an
 empty array reads to the model as "this symbol has no references" — a confident lie.
+
+---
+
+## Round 29 — the 2-lane fan-out, stopped for a restart and resumed as two different jobs
+
+**Landed:** `f43177c2` (C6, Phase 2 item 7 — the `Lsp` tool) and `3eca66df` (C4b, Phase 2
+item 4's second half — the `` !`cmd` `` and `@file` template forms). Phase 2 is now complete
+except item 9, the deliberately-last plugin epic. 5 agents, 0 errors, 779k subagent tokens,
+47 minutes.
+
+### The round was interrupted and that shaped it
+
+The user stopped the first workflow mid-flight to restart the client. The C6 lane had finished
+implementing minutes earlier; C4b was still mid-implement. Both working trees survived, and each
+also got a `.lane-wip.patch` (staged→diffed→unstaged, so untracked new files are included).
+
+**Resuming was NOT a replay.** A blind `resumeFromRunId` would have re-run C4b's implement stage
+from scratch into a tree already holding its own half-finished edits — a double-applied
+substitution rule or a duplicated method is the specific failure mode. The relaunch routed the
+lanes differently: C6 straight to review pointed at its preserved report, C4b to a
+"finish an interrupted implementation" brief told to read `git diff` and the patch FIRST, carry
+on rather than restart, and **not** assume the inherited half was correct because nobody had
+reviewed it.
+
+### Review earned its place twice over
+
+Both implementers reported all their own mutations killed. Both were wrong.
+
+- **C6 implementer: 8/8 killed. Reviewer derived its own and 3 of 8 SURVIVED** — all three
+  inverting a prose or schema claim while keeping its keywords. The worst was flipping the JSON
+  **schema** text from `ZERO-INDEXED (Grep prints 1-based)` to `ONE-INDEXED (Grep prints
+  0-based)`: survived four test files, because only `description()` was pinned and the schema —
+  the text the model actually reads per argument — was pinned nowhere.
+- **C4b implementer: 8/8 killed. Reviewer derived 7 and 6 SURVIVED.** One survivor was an
+  exploit: honouring a frontmatter `tier:` line lets a project `review.md` declare `tier: user`
+  and, under `projectCommandsTrusted: false`, **create the marker with the gate bypassed** —
+  an attack `fromFile()`'s own docblock names, with zero test behind it. Another hardcoded
+  `projectCommandsTrusted: true` and survived, because nothing outside the new test file
+  referenced it: the launch wiring of the entire security property was untested.
+
+### Four fabricated-fact bugs, one security regression
+
+The C6 review found three ways its empty answer was still a lie, all measured with controls:
+
+1. `file://` built without percent-encoding while `uriToPath()` used `urldecode`, so `+` became
+   a space. A file named `Web+Fetch.php` with two real hits returned `isError=false` /
+   "No references found".
+2. The cache keyed on `uri|method` with **no line or column**, so "coordinates forwarded
+   unchanged" held only for the first query per file+operation. The class's own docblock had
+   named that hazard — "the least detectable failure this tool has" — and then shipped it.
+3. `'1'` as a string coordinate silently became `0`.
+
+The fix round then found two more of the same shape on its own: `fallbackGrep` for `symbols`
+took its identifier from line 0, which is `<?php`, so it searched for a declaration of `php`
+and **every PHP file returned no symbols**; and `clearFile()` swept only the constructor's
+cache while `clearAll()` swept all.
+
+**C4b's B1 was a security regression introduced by the security feature.** The new
+`TEMPLATE_PATTERN`'s nested quantifier `(?:[\w.\-]+\/)*` exhausts PCRE's JIT stack on a
+repository-authored body of ~50 KB; `preg_replace_callback` returns null and the old
+`) ?? $this->template;` sent the **raw** body — so a hostile repo defeated the documented
+"refused rather than left literal" property by making its file big. Threshold bisected at
+44,018 B fine / 50,018 B failing. At HEAD the pattern was `/\$(\$|ARGUMENTS|[1-9])/` and could
+not fail, so the exposure was new. Fixed twice over: the pattern is now flat, and
+`expandTemplate()` fails closed. The regex change was justified the right way — old vs new
+diffed over 18 subjects, **identical on 17**, with the one narrowing (`@a.b/c` no longer
+matching its `a.b` prefix) measured and documented.
+
+Supervisor re-verified B1 independently rather than trusting the report: at 50,077 B the scan
+now completes with `preg_last_error_msg()` "No error", at 80,077 B likewise, neither literal
+form reached the output, no marker created.
+
+### Three lessons about verification itself
+
+- **A fix can strand its own sibling outside the reach of any test.** Once C6's `fileUri()`
+  encoded, `%2B` decoded identically under `urldecode` and `rawurldecode` — so reverting the
+  decoder passed **all 37** tool-level tests. The agent measured that, recognised the tool could
+  no longer distinguish them, and added the test one level down at `LspClient` where `$uri` is a
+  public argument. Mutation then died.
+- **Both fix agents caught vacuity in their own drafts.** C6's symbols cursor-independence probe
+  reused one client, so the file-shaped cache key it had just added made it a cache hit proving
+  nothing. C4b's spent-budget test slept 1 ms and asserted a prefix — it passed whether or not
+  the check existed, because a 10-second budget is never drained in 1 ms; rewritten to spend the
+  real budget, which is why that file now takes 11.6 s and the docblock says why no cheaper form
+  is honest.
+- **When the fix removes the line a reviewer mutated, restore the defect rather than skip the
+  mutation.** C4b's M-C and M-E both had to be re-expressed against the new code; it did that
+  instead of reporting them inapplicable.
+
+### Process defects found in the supervisor's own machinery
+
+- **Three agents in one round each corrected a baseline the supervisor handed them** — told
+  `574aca95`/3 commits, one measured 5, a later one measured 7, and the final figure moved twice
+  more mid-round. It self-corrected every time, but by agent diligence rather than instruction.
+  `crush_agent_rules.md` now says: fetch then measure, report the SHA observed, never quote the
+  brief's figure as your own, and treat the disagreement as a finding.
+- **The supervisor's own scratch files sat where the brief says `git add -A`.** The restart-survival
+  files (`.lane-provenance`, `.lane-wip.patch`, `.lane-*-result.md`) live in the lane ROOT. The C6
+  lane staged selectively and its commit came out clean — luck, not a control. Both lanes now
+  carry those paths in `.git/info/exclude` (per-clone, untracked, so it cannot leak into a commit
+  the way an edited `.gitignore` would). Side benefit: a finished lane's `git status --porcelain`
+  is now empty, so "clean" means clean.
+- **A lane's own behind-count lies.** With master 6 ahead of both, `crush-lane-cmd` reported 5
+  behind and `crush-lane-lsp` reported **0** — a `cp -a` copies remote-tracking refs as they stood
+  at snapshot time and they age independently per lane. Always `fetch` before reading the count.
+  And `fetch` is the ONLY safe refresh while an agent works: it leaves the working tree and index
+  alone (verified 11 dirty before, 11 after), whereas a `pull` into a dirty lane corrupts a
+  half-finished edit. Each lane rebases itself at its own commit gate, the one moment it is clean.
+- **CI pushed regenerated GIFs to master TWICE during the round**, unprompted (`5b77a75f`,
+  `e522f69a`). Both rebased cleanly because no lane touches `.vhs/`. Lane freshness is a loop.
+- **A CWD drift produced three simultaneous false alarms.** An unanchored `md5sum
+  .sugar-crush/config.json` run from `sugar-crush/` resolved to
+  `sugar-crush/.sugar-crush/config.json` — the *different, untracked* file the briefs explicitly
+  name as NOT the invariant — reporting a changed md5, zero vendor symlinks and path-repos rc 1
+  all at once. Anchor absolute paths; the distinction written into the briefs is what made the
+  diagnosis one step.
+
