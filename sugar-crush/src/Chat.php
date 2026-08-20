@@ -9602,15 +9602,23 @@ final class Chat implements Model
      * and reports a positive one - crush_code.md Phase 5 item 4, which replaced
      * a hardcoded 100,000 that matched no provider in this repo: measured over
      * every `contextWindow()` in `src/Providers/`, the six with a model behind
-     * them report 8,192 / 16,385 / 128,000 / 196,608 / 200,000 / 393,216
+     * them report 8,192 / 16,385 / 128,000 / 196,608 / 200,000 / 1,048,570
      * depending on model, and not one of them 100,000. The seventh (Echo)
      * reports 0 for "unknown".
      *
      * SIX PROVIDERS, SIX-PLUS FIGURES - the counts are of different things and
-     * were never equal. 393,216 is the newest of them:
+     * were never equal. 1,048,570 is the newest of them:
      * {@see \SugarCraft\Crush\Providers\SglangProvider::contextWindow()}
      * became model-aware and answers that for the DeepSeek-V4 family, keeping
      * 196,608 for MiniMax.
+     *
+     * THAT LAST FIGURE IS TRANSCRIBED AND DECAYS, and this line is the proof:
+     * it read 393,216 from the day the model-awareness landed until the sweep
+     * that found it here, because the constant was corrected in
+     * `SglangProvider.php` and nothing swept the places DESCRIBING it. Do not
+     * reason from the number. The only durable claim in this paragraph is that
+     * the figure is MODEL-AWARE and provider-reported; the six literals are
+     * illustrative of the spread, not a contract, and no test pins them.
      *
      * A backend with no model behind it still gets
      * {@see ContextWindow::FALLBACK_TOKENS}, which is that same 100,000, so

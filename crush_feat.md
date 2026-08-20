@@ -1755,6 +1755,39 @@ Sources: [Aider — Agent Patterns Catalog](https://www.agentpatternscatalog.org
 
 *(request parameters, API surface & tool-call parsing — MiniMax M2.7)*
 
+> **⚠️ THIS SECTION IS A RESEARCH RECORD OF A DEPLOYMENT THAT NO LONGER EXISTS. Dated note added
+> 2026-08-20; the section body below is deliberately left as written.**
+>
+> Everything under §12 was measured against `skynet2.interserver.net` while it served
+> **`MiniMaxAI/MiniMax-M2.7`**. The user has since switched that server to
+> **`deepseek-ai/DeepSeek-V4-Flash-0731`**, and *the old model is gone from it* — so §12's model-specific
+> claims describe the predecessor, not the live backend. The general SGLang API-surface material (endpoints,
+> the `--tool-call-parser` plugin list, `separate_reasoning`) is still accurate; the MiniMax-specific
+> material is history. Three things §12 states that are now FALSE of the live deployment:
+>
+> - **`--context-length 196608`.** §12 and the summary at the top of this document both cite it. The
+>   DeepSeek deployment's `http://skynet2.interserver.net:30000/server_info` reports
+>   `context_length: null` — it was **never launched with `--context-length` at all**. Any doc in this
+>   repo citing that flag for DeepSeek is describing the MiniMax deployment it replaced. The live figure
+>   is `max_req_input_len` = **1,048,570** (the scheduler's enforced per-request INPUT ceiling, and the
+>   one that returns an error), which is a different quantity from the `max_model_len` = 1,048,576 that
+>   `GET /v1/models` publishes as the model's total input-plus-output window.
+> - **`--reasoning-parser minimax-append-think`.** The live deployment runs `--reasoning-parser minimax`,
+>   which is not an alias — it splits `reasoning_content` properly, which is what makes
+>   `separate_reasoning` behave.
+> - **The MiniMax-M2.x `</parameter>` truncation bug (§12 D5, and item 4 of this document's summary).**
+>   Measured against DeepSeek-V4 on 2026-08-20: a body containing
+>   `<invoke name="x"><parameter name="y">z</parameter></invoke> DONE` came back **64/64 bytes, identical,
+>   `</parameter>` intact**. `SglangProvider::flagTruncationRiskInLatestToolResults()` is now model-aware
+>   and returns early for the DeepSeek-V4 family; unmeasured models are still warned.
+>
+> And one thing §12 could not have known: DeepSeek-V4's **native** tool-call emission is **DSML markup**
+> (`<｜DSML｜tool_calls>` …), neither JSON nor the MiniMax XML that §12's D5/D6 material is about. The
+> live server returns structured OpenAI `tool_calls` only because someone passed `--tool-call-parser` —
+> a flag the model's own HF card omits from its documented launch command.
+>
+> The durable record for the DeepSeek-V4 backend is `docs/plans/crush_code_RESUME.md` §0-DS.
+
 ### A) SGLang server API surface
 
 **HTTP endpoints** (native + OpenAI-compatible, from `docs.sglang.io`):
