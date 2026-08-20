@@ -548,6 +548,94 @@ PINS, never what it totals** — and the proof is that the same 724 assertions f
 `intdiv($cols,3)` → `round($cols/3)`, because they assert the SUM (`band + 1 + column == cols`),
 which holds under any sizing policy.
 
+### ROUND 35 IS MEASURED — and finding #8 was SILENTLY DELETED from this file
+
+🔴 **FINDING #8's TEXT WAS DROPPED BY `7ce8a735` AND TWO LATER LINES STILL REFERENCE IT.** The OPEN
+FINDINGS list carries only seven entries while other lines still say "#8 docs". Recovered verbatim
+from `git show 7ce8a735` and restored here so it cannot be lost again:
+
+> **8. 🟡 `sugar-crush/docs/PERMISSIONS.md` enumerates three `trustedProject*` grants and misses the
+> fourth** (`trustedProjectSettings`, landed one commit after Phase 7 was marked complete), and the
+> settings layering has no reference page at all. A page that enumerates trust grants and misses one
+> is worse than no page. Route to the next docs bundle; prefer deriving the list from the constants.
+
+**Still true, verbatim:** `docs/PERMISSIONS.md:239`'s heading literally reads `## The three
+\`trustedProject*\` keys` and its table at `:248-250` has three rows. The fourth is real —
+`LayeredSettings.php:142` `PROJECT_SETTINGS_TRUST_KEY = 'trustedProjectSettings'`, consumed at
+`Bootstrap.php:2039-2041`, already documented in `README.md:159-162`. ⚠️ **"Prefer deriving the list
+from the constants" is not cheaply possible** — the four keys live in TWO classes and three are
+`private const` (`Bootstrap.php:120`, `:136`, `:151`); only `LayeredSettings`' is public. A drift test
+reaches the first three by reflection only. Say so rather than implying one list exists.
+
+### R35 VERDICTS — three items have FALSE PREMISES, and two plan sizings are wrong by a wide margin
+
+- **P3.4 — OPEN, but TWO of its four targets do not exist as described.** ✅ Real:
+  `Commands/AgentsCommand.php:84-100` (byte-length `strlen()`/`substr()` columns on model-supplied
+  text — same defect class as P3.5) and `Commands/McpAuthCommand.php:66-85`. ❌ **`/sessions` is a
+  MODAL WIDGET**, not a list — `Chat::handleSessionsCommand()` (`:7457`) opens a `SessionPicker`
+  (`buildSessionPicker()` `:7496`); there is no list-shaped text to table-ise. ❌ **LSP diagnostics is
+  false twice**: the output is `json_encode(...)` into a **`ToolResult`** (`LspTool.php:359-370`) —
+  it goes to the MODEL, not the screen — **and the surface is dead**: `LspClient::$diagnostics`
+  (`:38`) is filled only by `handlePublishDiagnostics()` (`:446`), which has **zero `src/` callers**.
+  ⚠️ **This file's own claim that P3.4 "reaches deep into `src/Chat.php`" is WRONG** — `Chat.php` only
+  `ob_start()`-captures (`:6488-6527`, `:10345-10354`); the rendering lives in `src/Commands/`.
+  Scoped to the two real targets it is **~150-250 lines across two small files.**
+  🔴 **THE TRAP:** `tests/Commands/NoRawAnsiInTranscriptTest.php` guards `McpAuthCommand`/`ShareCommand`
+  with a **source-literal regex** (`:44`), so a `Table` styled at RUNTIME sails past it while
+  reintroducing the exact bug the file exists for. **Border-only — no `Style`, no `styleFunc`, no
+  `Theme`** — and widen that test to cover `AgentsCommand.php`, which is unguarded today.
+- **Finding #5 — OPEN, both figures EXACT** (rare here). `AgentPreset.php:22-37` has **16** promoted
+  properties; `Agent::fromPreset()` reads **6**; **10** are dropped. ⚠️ The finding names
+  `agentRoster()` but the code is `Agent::fromPreset()` — `Bootstrap::agentRoster()` (`:1045`) only
+  calls it, and **`Bootstrap.php` is lane-held**, so scope the fix to `Agent.php`/`AgentPreset.php`.
+  It is **not** a field-mapping change: `Agent` has no properties for the 10, so the fix widens the
+  value object and fans out to every constructor call site. ⚠️ The `permissionMode` half is dormant
+  downstream — it would be consumed at `AgentManager::createSubAgent()`, which has **no `src/`
+  caller**. Carry the field (no-delete rule), but **do not claim it changes behaviour.**
+- **Finding #4 — OPEN, and it is a DECISION, not a wiring.** 9 frontmatter keys (`Skill.php:16-24`),
+  **5 inert**. `context` has one real read (`SkillRegistry.php:150`) whose only call sites are
+  `App.php:367` and `:454` — **both in methods with no production caller**, so `context: fork` is
+  inert on every real run. 🔴 **There are TWO skill→system-prompt paths and the finding names only the
+  dormant one.** The LIVE path is `Runtime::buildSystemPrompt()` (`:1391-1397`), which already appends
+  `systemPromptContribution()` for every enabled skill. **Naively wiring `App::applySkillsToSystemPrompt()`
+  emits every skill body TWICE.**
+- **P8.8 — OPEN, greenfield (zero hits), but its two halves are different KINDS of thing.** Half A
+  (a lib's `vendor/composer/autoload_*.php`) is generic and works for any Composer project; **Half B
+  parses `docs/MATCHUPS.md`/`PROJECT_NAMES.md` and is hardcoded to THIS repository** — inert for every
+  other user. Settle that before writing code. Precedent is **`MemoryBlock`** (351 lines), not
+  `EnvironmentBlock` (575); the item's "~150-250 lines" is low — **budget 300-400**. ⚠️
+  `EnvironmentBlock::MAX_*` carries a "sized BETWEEN its two neighbours" argument (`:113-135`) that a
+  THIRD block invalidates.
+- **`Help::screen()` restyle — RECOMMEND DROP.** The plan says it is "a raw heredoc" at
+  `Help.php:36-41`; the heredoc actually runs `:38-182` — **145 lines, not 6, a 24× sizing error.**
+  `candy-kit`'s primitives emit ANSI unconditionally (`Banner.php:18-35`) and `--help` is routinely
+  piped, so a faithful restyle needs a `posix_isatty()` guard the item never mentions — and
+  `tests/Cli/HelpTest.php:90-104` asserts a line-start regex against `screen()` that ANY SGR prefix
+  breaks, for every flag. A cosmetic item the plan itself grades "LOW priority, not worth a dedicated
+  PR" costing a TTY design decision plus a 490-line test rewrite. **Record the unused `candy-kit` dep
+  as a finding instead.**
+- **P8.13 — DEFER.** ⚠️ The "eleven tools" figure lives in **SEVEN files, not the three** recorded
+  here — including **`docs/AGENTS_AUTHORING.md:185`** ("There is no `Task` or `Agent` tool"), which
+  P8.13 directly falsifies and which no prior measurement named. Also `Bootstrap::tools()`'s docblock
+  is **`:4041-4098`**, not the `:3925-3965` recorded here (that range is the MCP shutdown seam).
+  **P8.8 and P8.13 collide on the census token — they cannot run in parallel lanes.**
+- **P6.5 — OPEN, both halves currently blocked on lane-held files.** ⚠️ `crush_code.md:800-808`'s own
+  conflict claim is **FALSE**: it says the keybindings half "reads `src/Chat.php`", but `Chat.php` has
+  **zero** registry calls — only three doc-comment mentions (`:106`, `:1407`, `:2313`). Real call
+  sites are `Tui/KeyboardHandler.php:49,98,344` and `Renderer.php:3270,3296`. ⚠️ **`candy-kit/src/StatusLine.php`
+  EXISTS** and is a rendering primitive, not this feature — an implementer greping `statusLine` will
+  find it and may think the work is half-done.
+
+**PLAN-TEXT ERRORS TO SWEEP** (each verified by the scout; ✅ = already fixed since it measured):
+`crush_code.md:751` (`Help.php:36-41` → `:38-182`) · `:1359`/`:1414` (env block `:40-45`/"three" →
+`:106-170`/seven+, stale, closed by Phase 4 item 4) · `:864` + `AGENTS.md` (**`MATCHUPS.md` is at
+`docs/MATCHUPS.md`, not root**) · `:749` (`candy-sprinkles\Table` → `SugarCraft\Sprinkles\Table\Table`)
+· `:800-808` (false Chat.php conflict) · this file's `ARCHITECTURE.md:192` (prompt assembly is
+`:224-241`) · this file's `Bootstrap::tools()` `:3925-3965` (→ `:4041-4098`) · this file's P3.4
+"reaches into Chat.php" · ✅ `src/Renderer.php:117` "`WorkflowEngine` is never constructed" — **the
+scout measured at `aae62989` and `7714675d` had already corrected it**; the paragraph now carries the
+both-directions correction. **Verify a scout finding against CURRENT master before recording it.**
+
 ### ROUND 34 IS ALREADY MEASURED — do not re-run discovery
 
 A read-only agent measured the whole cheap tail against the tree at `7957b2be`. Verdicts, with the
