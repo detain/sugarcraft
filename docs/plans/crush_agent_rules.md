@@ -19,6 +19,17 @@ Bash CWD does NOT persist between calls — use absolute paths or chain with &&.
 - Never `-c core.hooksPath=/dev/null`, never `--no-verify`.
 - Never delete dormant/unwired code because it looks incomplete. Wire it or document it as a seam.
 
+## DO NOT READ THE TWO BIG FILES IN FULL — AND DO NOT TRUST A SIZE YOU WERE QUOTED
+
+`src/Cli/Bootstrap.php` and `src/Chat.php` are both far too large to read whole. `grep -n` for the
+symbol, then `sed -n 'A,Bp'` a narrow window. Same for any file over ~800 lines.
+
+**Measure the size rather than believing a brief.** A brief in round 30 quoted Chat.php at "~6,100
+lines" when it was **10,381** (504,205 B) and Bootstrap.php at "212 KB" when it was 223,382 B /
+4,253 lines. The rule holds at any size, which is exactly why the number should never have been in
+it — a hardcoded size is a claim that decays while the instruction it decorates does not. `wc -l`
+costs nothing.
+
 ## EVERY FIGURE IN YOUR BRIEF IS PROVISIONAL — MEASURE, THEN SAY SO
 
 Any suite baseline, commit SHA or behind-count written into your brief was true when the brief

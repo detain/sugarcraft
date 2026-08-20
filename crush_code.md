@@ -322,6 +322,47 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
   across the plan, the worklog, and the code docblock (7 / 5 / 8-plus-2). The
   constructor at HEAD is authoritative; see the hardening ledger.
 
+**FINDINGS FROM ROUND 30's DOCS LANE — measured while fact-checking, not yet fixed.** A
+documentation pass turns out to be an unusually good bug detector, because writing "here is how
+you configure X" forces someone to find X's consumer. Each of these was measured, and the
+supervisor independently re-confirmed the first:
+
+- 🔴 **Argument-scoped permission rules silently match NOTHING, and the doc-comment advertises
+  them.** `PermissionGate::ruleMatches()` (`src/Permissions/PermissionGate.php:209-220`) compares
+  only `ToolCall::$name` — glob-prefix if the pattern ends `*`, exact equality otherwise. It never
+  looks at arguments. So `Deny Bash(rm -rf *)` takes the glob branch, computes the prefix
+  `Bash(rm -rf ` and asks `str_starts_with('Bash', 'Bash(rm -rf ')` → false: **the rule never
+  fires**. `Read(./.env)` fails the exact compare the same way. Meanwhile
+  `src/Permissions/PermissionRule.php:9` offers `Bash(composer update *)`, `Read(./.env)` and
+  `mcp__git__*` as "Pattern examples", and `PermissionGate::refuses()`'s comment says
+  argument-sensitive rules are "left to the call site that has them" — but the call site uses this
+  same matcher. **A user who writes an argument-scoped deny has denied nothing while believing they
+  are protected.** Two doc-comments over-claim and one matcher under-delivers; fix the matcher or
+  delete the advertised syntax, and either way the two comments must stop promising it.
+- 🔴 **Prefix rule matching on the REAL-CALL path is pinned by no test.** Mutating
+  `str_starts_with($call->name, $prefix)` → `$call->name === $prefix` leaves
+  `PermissionGateTest` green (36/43 OK); only `PermissionGateDeclarationTest`'s *declaration* path
+  catches it. Same for the read-only tool list: removing `'Lsp'` survives the gate's own three test
+  files and is caught only by `LspToolTest`. Behaviour is safe today because both paths share
+  `ruleMatches()` — a refactor that split them would go green.
+- 🟡 **`WorkflowEngine` never resolves an agent.** A stage's `agent: reviewer` becomes
+  `new Agent(name: 'reviewer', prompt: '')` — a label, not the preset. Preset rosters and workflow
+  stages are unrelated objects that happen to share a string. Also `executeStage()` runs
+  `$tasks[0]` only, and `pipeline`/`withVerification` have **no YAML spelling** at all. Phase 2
+  item 3 wired the engine's construction; it did not make stages address the roster.
+- 🟡 **Skill frontmatter: 4 of 9 keys are live.** `allowed-tools`, `disallowed-tools` and `effort`
+  are read by nothing. `model`/`context` are read only by `App::applySkillsToSystemPrompt()` and
+  `App::dispatchSkill()`, **neither of which has a caller in `src/` or `bin/`** — so `context:
+  fork` is inert on the CLI path.
+- 🟡 **`Bootstrap::agentRoster()` drops 10 of 16 preset fields**, `permissionMode` among them, so a
+  preset declaring `bypass-permissions` reads as though it works.
+- 🟡 **`CommandRegistry::CONTROL_PLANE` reserves `permissions`, which has no command row and no
+  dispatch arm.** Harmless as a held name, but the const's doc-block calls these "the names by
+  which the user drives and leaves the application", which is false of one of the seven.
+- ⚪ **`sugarcrush --version` reports a commit that is not HEAD** — `Help::versionString()` reads
+  `InstalledVersions::getReference()`, the reference recorded at `composer install` time. Not a
+  bug; now documented in `docs/TROUBLESHOOTING.md`.
+
 **Partially complete, do not read the ✅ as "finished":**
 
 - **Phase 1 item 1's three follow-ups.** The `AgentManager` wiring landed, but:

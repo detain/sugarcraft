@@ -355,7 +355,9 @@ grep — there is no `PluginLoader` in `src/` to grep.** Measure it in P2.9's me
 
 ### 3.3 W is strictly serial *inside itself*, and that is the whole ceiling
 
-All 11 of W's items edit `src/Cli/Bootstrap.php` (212 KB, and C3 moved it by ~486 lines in one bundle).
+All 11 of W's items edit `src/Cli/Bootstrap.php` (**223,382 B / 4,253 lines measured 2026-08-20**; the
+"212 KB" that stood here was measured weeks earlier and had already drifted — C3 alone moved the file
+by ~486 lines in one bundle, so quote a size only with the date you took it).
 Two concurrent W agents would conflict on essentially every item. **W is one agent at a time, always,
 in both modes.**
 
@@ -395,7 +397,7 @@ them.
 - **Wall-clock is W-bound.** Concurrency here buys you the 16 non-W items running "for free" alongside
   W. It does not shorten the plan by 3×, and any schedule that assumes it does is wrong.
 - **The one thing that would genuinely raise the ceiling** is splitting `src/Cli/Bootstrap.php`. It is
-  212 KB and 4,000+ lines, it owns tool registration *and* config reading *and* permission config *and*
+  223,382 B and 4,253 lines as of 2026-08-20, it owns tool registration *and* config reading *and* permission config *and*
   MCP lifecycle *and* the shutdown seam. That is not a concurrency task and it is not in the plan, so I
   am naming it and not proposing it — but if the user ever asks "why can't we go faster", this is the
   answer.
