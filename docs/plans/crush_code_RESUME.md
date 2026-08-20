@@ -172,6 +172,52 @@ now set it to max as default for this model"**.
 - **"Agentic" was pinned to "the request offered tools"** — the only agentic signal a
   `CompleteRequest` carries. `Runtime` always passes tools, so in practice `top_p` is 0.95 for chat
   turns and 1.0 for tool-less side calls (compaction summaries, titles).
+- 🔴 **THE TEXT FALLBACK COVERS THE WRONG SHAPE FOR THE NEW DEFAULT MODEL.** The user pointed at
+  `https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731/blob/main/encoding/README.md`
+  (fetched 2026-08-20). DeepSeek-V4's **native** tool-call emission is **DSML markup**, not JSON and
+  not MiniMax XML:
+
+  ```
+  <｜DSML｜tool_calls>
+  <｜DSML｜invoke name="$TOOL_NAME">
+  <｜DSML｜parameter name="$PARAM" string="true|false">$VALUE</｜DSML｜parameter>
+  </｜DSML｜invoke>
+  </｜DSML｜tool_calls>
+  ```
+
+  `string="true"` means the value is a raw string; `string="false"` means it is JSON (number,
+  boolean, array, object) — so the flag is load-bearing and a parser that ignores it will hand the
+  model's numbers over as strings. Tool results go back as `<tool_result>{json}</tool_result>`.
+  Reasoning is delimited `<think>…</think>` between the `<｜Assistant｜>` prefix and the content.
+  Other special tokens: `<｜begin▁of▁sentence｜>`, `<｜end▁of▁sentence｜>`, `<｜User｜>`.
+
+  **Measured: the tree has ZERO occurrences of `DSML` in `src/`, `tests/` or `bin/`.** The parser
+  directory holds exactly three files — `OpenAiArrayToolCallParser`, `ToolCallParserInterface`, and
+  `MinimaxXmlFallbackToolCallParser`. So the wired text fallback parses a shape **this model never
+  emits**. A fallback that exists, is wired, and covers the wrong model is the recurring defect at
+  architecture level.
+
+  **Why it is not academic:** the deployment returns structured `tool_calls` today only because
+  someone passed `--tool-call-parser`, which **the HF card's own documented launch command omits**
+  (it shows only `--speculative-algorithm DSPARK --trust-remote-code`). A restart without that flag
+  turns every tool call into raw text that the OpenAI-array parser cannot see and the MiniMax
+  fallback cannot match — the agent would silently do nothing on every tool call, which is the
+  quietest possible failure.
+
+  **Queued as an additive follow-up** (`DsmlToolCallParser` alongside, never replacing — the user's
+  "support both ways" rule). Two sequencing constraints: it is the **first new `src/` file** in this
+  task, so it moves the census literals (`BuiltInToolCorpusTest`, `ReadPathCensusTest`,
+  `ContainedPathInventoryTest`) and must not run while another lane is also adding a `src/` file;
+  and the streaming path still ignores the injected `ToolCallParserInterface` (pre-existing §12 D2
+  gap), so a DSML parser wired only into the non-streaming path would still recover nothing while
+  streaming — that gap has to be closed in the same bundle or the fix is half a fix.
+
+  Also from that page, worth knowing but **not** actionable for us: `reasoning_effort` is implemented
+  server-side as a **text prefix prepended before the system message**, and `"low"` maps to *no
+  prefix*. So the levels are prompt shaping, not a sampling knob. The card documents prefixes for
+  only `low`/`high`/`max` while the server accepts seven names — consistent with the deployment
+  being ahead of the card, which is the standing rule for this model.
+
 - **SUPERVISOR TO-DO once the sglang lane commits** (its agent correctly refused to edit these —
   they are supervisor-owned — and they go stale the moment that commit lands):
   `crush_code.md:1607` reasons from "`contextWindow()` correctly reports 196,608";

@@ -676,6 +676,33 @@ written after the work had landed. The OS-version line landed as `'OS version: '
 3. **Extend the settings loader to `tools.allow`/`tools.deny`** — filter `Bootstrap::tools()`'s returned list against the merged settings before handing it to `EngineBackend::withTools()`. **(§13)**
 4. **Once Phase 1 item 2 lands (`PermissionGate` in the main loop), extend settings to a `permission`/`permissionMode` block.** Sequenced deliberately after the wiring fix — shipping a settings `permission` key before `PermissionGate` reaches the main loop would just add a second decorative config surface next to `ScriptHook`'s existing one. **(§13)**
 5. **Add `keybindings` remap and `statusLine` command config** — pure additive TUI features, no interaction with the permission/hook work above, can land independently at any point. **(§13)**
+
+   **MEASURED BEFORE STARTING (2026-08-20) — this item's "no interaction with the permission/hook
+   work" is wrong on both halves, and the `statusLine` half is a permission question, not a TUI one:**
+
+   - 🔴 **`statusLine` is a command-execution key.** It has **zero occurrences** anywhere in `src/`,
+     `bin/` or any config — fully greenfield — and the feature it names (Claude Code's model) means
+     *shelling out to a user-supplied command every render and painting its stdout*. So this is not
+     an additive TUI feature; it is a new arbitrary-code-execution surface reached from a settings
+     file. **It MUST be user-tier only.** A project-tier `settings.json` able to set it would be RCE
+     on clone-and-launch — strictly worse than the `provider` and `instructions` keys that
+     `LayeredSettings::userTierOnlyKeys()` already excludes, and for the same reason stated more
+     sharply. Whoever builds it must also decide the timeout, what happens when the command hangs
+     (it runs per render), and whether its output is sanitised the way `Sanitize::untrusted()`
+     handles other foreign bytes — a status command that emits raw SGR can repaint the frame.
+   - 🟡 **The `keybindings` remap fights the registry's design.** `src/Commands/KeyBindingRegistry.php`
+     (611 lines) is **entirely static** — `all()`/`live()`/`dormant()`/`grouped()`/`byId()`/
+     `shellCtrlRunes()`/`chatCtrlRunes()`/`chatCtrlRunesYieldedToShell()` over nine
+     `CONTEXT_*` constants and nine private per-context builders — and its own doc-block at `:261`
+     states the design intent that "each derivation is a pure function of a constant". A per-launch
+     user remap is by definition not that. So the choice is to thread an instance through
+     `src/Tui/KeyboardHandler.php`, `src/Renderer.php` (`:3270` `live()`, `:3296` `grouped()`) and
+     `src/Chat.php` (`chatCtrlRunes()`), or to add a static override — which leaks between tests and
+     silently voids the purity the file leans on. **Decide deliberately; do not add a static setter
+     by reflex.** Note the consumer list means this half reads `src/Chat.php`, so it cannot run
+     concurrently with any lane that edits it.
+   - Consequence for sequencing: the two halves of this item are a TUI refactor and a permission
+     decision. They are separable and probably should be separated.
 6. **Add `--model`/`--permission-mode` CLI flags** as the highest-precedence override tier, per Claude Code's/opencode's own layering (env vars → CLI flags → local settings → project settings → user settings). **(§13)**
 
 ### Phase 7 — Documentation
