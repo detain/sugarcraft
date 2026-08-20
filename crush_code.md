@@ -45,8 +45,17 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 > `App`-vs-`Chat` misreading it was written to prevent.~~ **CLOSED in round 33** — see item 6 below.
 > **Phase 7 is complete at 6 of 6.**
 >
-> The DSML tool-call parser (§0-DS) is scripted and unblocked. Next queue is in
-> `docs/plans/crush_code_RESUME.md` §0-NOW.
+> **ROUND 33 IS IN FLIGHT AT 3 LANES AND NOTHING BELOW IS MARKED FOR IT YET.** `cmd` holds the
+> `accept-edits` fail-open + P6.6; `sglang` holds the DSML parser + the streaming gap; `lsp` holds
+> P3.2/P3.3/P3.5. **Do not read the absence of a ✅ on those items as evidence they are open** —
+> check `docs/plans/crush_code_RESUME.md` §0-NOW first, which carries each lane's open findings in
+> full. Marking an in-flight item done is the defect this document has committed four times; marking
+> it open while three agents are closing it is the same defect facing the other way.
+>
+> Next queue is in `docs/plans/crush_code_RESUME.md` §0-NOW. The item promoted to the FRONT of it is
+> not in this document's phase list at all: **nothing attaches a permission approver**
+> (`EngineBackend::withPermissionApprover()` has no caller in `src/`), which is what keeps the
+> shipped default at `bypass-permissions` — i.e. at "no gate".
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage

@@ -9089,3 +9089,113 @@ argument for the awareness rather than against it. The test doc-block now says
 outright that it pins a transcribed figure and guards the model-awareness, not the
 number's truth: it would pass while the constant and the deployment disagree,
 which is exactly how the 393216 survived its own obsolescence.
+
+---
+
+## Round 33 — the defect turns up in the supervisor's own brief, and a fallback starts inventing calls
+
+**Written mid-round.** Three lanes are in flight and none has committed; six supervisor commits have
+landed. `docs/plans/crush_code_RESUME.md` §0-NOW carries the live state.
+
+### The gate was re-confirmed before anything started
+
+`8111 / 91477 / 1 skipped / rc 0` at `53e60812` — the third consecutive supervisor confirmation of
+the same figure. That mattered more than usual this round, because it is the number three lane briefs
+were built on, and the previous round's lesson was that a baseline is a claim that decays.
+
+### Two items closed by the supervisor alone, in files no lane held
+
+**P7.6 closed Phase 7 at 6 of 6.** `docs/ARCHITECTURE.md` called `Chat` "the root model in
+candy-core's TEA shape" while `App implements Model` and `bin/sugarcrush` hands `Bootstrap::app()` to
+`new Program(...)`. The document written to prevent that misreading reproduced it in its own diagram,
+and the "`App` wears two hats, do not retire it" warning it was commissioned to carry was simply
+absent — it lived only in `CALIBER_LEARNINGS.md`, a file nobody greps while reading an architecture
+page.
+
+**One clause of that item should never have been listed.** `ARCHITECTURE.md:115` has always read
+"`bin/sugarcrush` runs `Bootstrap::app()`, not `Bootstrap::chat()`". An implementer who grepped for
+`Bootstrap::app` would have found it and closed the item on the wrong clause. That is round 32's own
+rule — verify by domain, not by token — failing inside round 32's write-up *of that rule*.
+
+**Finding #6 was inverted, not misspelled.** `HookManager.php:34` warned that `name: confirm-remove`
+would UNINSTALL the built-in. `ConfirmRemoveHook::name()` returns `confirm-rm`, so `confirm-remove`
+is the one name that collides with nothing and is quietly *accepted*. `docs/HOOKS.md:118` and its
+table at `:130-131` have said so the whole time. **Two pages of this repo stated opposite things
+about the same two strings, and the correct one was the one nobody had flagged.** The plan recorded
+it as "only the example is wrong"; "slightly off" was itself an under-measurement.
+
+### The rules this round earned
+
+**A date stamp does not stop a number being read as current.** Round 32 moved
+`DEEPSEEK_V4_CONTEXT_WINDOW` to `1_048_570` and swept nothing that *described* it. Five copies
+survived. Two of them — `crush_code.md:1999` and `:2069` — were **stamped with the commit they were
+measured at**, which is exactly the discipline this plan asks for, and still read as present-tense
+fact a day after the value moved underneath them. **No test pinned any of the five**, so the suite
+could not have caught it. The fix that holds is saying the figure is model-aware and
+provider-reported and naming the literals as illustrative; a fresher literal would decay again.
+
+**A corrected constant leaves corrected-looking arithmetic behind.** That sweep caught five places
+QUOTING 393,216 and missed three DERIVED from it — the 70/85/95% tier figures
+(`~275,251 / ~334,233 / ~373,555`). A grep for a stale number cannot find a number computed from it.
+The lane found them and corrected them to `~733,999 / ~891,284 / ~996,141`, and an independent
+reviewer re-derived that arithmetic and confirmed it.
+
+**The supervisor's own brief carried the recurring defect, inside the paragraph warning about it.**
+The DSML brief told its agent that the special tokens use fullwidth bars, that a wrong-byte pattern
+matches nothing silently, and that a test written with the same wrong bytes passes anyway — and in
+the same sentence asserted the tokens "contain U+2581 LOWER ONE EIGHTH BLOCK". The agent hex-dumped
+upstream and reported back: the DSML tags are `3c ef bd 9c 44 53 4d 4c ef bd 9c`, **U+FF5C only**.
+U+2581 is real but lives in the *sentence* tokens, not the *markup* tokens. A true claim about one
+token family written next to a different one. **The instruction saved it; the fact attached to the
+instruction was wrong**, inherited verbatim from the round-32 workflow script and shipped without
+re-measurement — so the brief told the agent to measure and did not measure itself. Third
+consecutive round in which the defect appears inside the work correcting it, and the first in which
+the supervisor is the author.
+
+**A text-scanning fallback parser is a prompt-injection surface, and a precedent is a vector.**
+The reviewer fed the new `DsmlToolCallParser` a message that only *described* DSML — a model
+explaining how tool calls work, ending "I have not actually called anything" — and got back one real
+tool call, `rm_rf` with `path=/`. The card puts that example **into the system prompt**, so a model
+asked how tool-calling works quotes its own instructions back. **The fallback whose entire purpose is
+that calls are never silently MISSED was silently FABRICATING them** — the failure mode inverted.
+Cause: `str_contains($content, MARKER)` where upstream scans positionally.
+Then the supervisor found `MinimaxXmlFallbackToolCallParser:74` carrying the identical guard, shipped
+and wired since long before this bundle. The brief had said "copy its shape, not its regexes".
+**The shape was the vulnerability.** "Follow the existing pattern" propagates whatever the pattern
+got wrong.
+
+### The fact that reframes the permission surface
+
+Chasing the severity of a review finding turned up `DEFAULT_PERMISSION_MODE = BypassPermissions`
+(`Bootstrap.php:153`) — and with the shipped empty rule set that is **exactly equal to having no
+gate**. It is deliberate, documented in three places, and currently right: Ask fails closed on the
+engine path, so a stricter default would turn "no permission system" into "every Edit refused".
+
+The exit condition is already written down and both halves are measurable.
+`EngineBackend::withPermissionApprover()` (`:314`) has **no caller in `src/` at all** while the
+constructor threads `$permissionApprover` through all twelve `with*()` clones — a complete seam wired
+to nothing, the exact shape the standing "wire it, never remove it" rule exists for. Behind it,
+`completeAsync()` forks and its only channel back is a one-way frame stream. The UI half is not the
+blocker: `Chat` already runs the blocking `PermissionRequestMsg` modal with `y`/`n`/`a`.
+
+**Promoted to the front of the queue.** It is the highest-value remaining item for daily-driving, and
+it reframes this round's own work honestly: the `accept-edits` fix is real, but it only bites for
+someone who has explicitly opted into `accept-edits`.
+
+### What the reviewers were worth
+
+Both lanes' implement stages reported clean. Both reviewers found blocking defects anyway — four in
+`sglang` (fabricated calls, silently vanishing parameters, a 1 MB PCRE cliff that loses the call and
+misdiagnoses it, and a README deletion that hides a gap still open in two other providers) and two in
+`cmd`, plus three surviving mutations guarding real escapes that nothing pinned.
+
+The `cmd` reviewer also did the round's most useful non-finding: it **nearly filed a false BLOCKING**,
+caught itself, and reported the near-miss. `cp ./payload ./.*/victim` really does escape under `sh`,
+but `Bash.php:127` wraps in `bash -c` and bash excludes `.`/`..` from globs. So the gate's decision to
+leave `*` out of `SHELL_METACHARS` is correct **only because of a constant in a file it never
+references** — a load-bearing cross-file dependency that was undocumented until this round. It also
+warned that its own subagent had reported mutation verdicts it had *predicted without running*, which
+is the provenance rule the whole plan turns on.
+
+That reviewer's gate verdict is the strongest claim this round can make: **~110 attack strings, no
+escape, no feature loss.**
