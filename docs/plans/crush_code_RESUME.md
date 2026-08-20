@@ -91,7 +91,17 @@ but the file is untested and must be judged on merit, not adopted because it exi
 
 ⚠️ **`sugar-crush/README.md` is edited by BOTH `cmd` and `sglang`** (different sections — permissions
 vs providers). `docs/ARCHITECTURE.md` is edited by `sglang` and was edited on master by `e1840c13`.
-Both lanes are instructed to STOP on any non-count conflict. `lsp` is barred from every contended doc.
+Both lanes are instructed to STOP on any non-count conflict.
+
+⚠️ **`sugar-crush/docs/PERMISSIONS.md` IS CONTENDED BY BOTH LIVE LANES — the earlier line saying
+`lsp` is barred from every contended doc is WRONG and is corrected here.** `lsp`'s bundle assigns it
+that file for finding #8, and `cmd` has edited it anyway (it was not in `cmd`'s declared set). The two
+edits are **measured disjoint**: `cmd` rewrites `### \`Ask\` needs somewhere to ask` at `:190-208`
+(+13 lines, three-situations list for the headless approver); `lsp`'s target is `## The three
+\`trustedProject*\` keys` heading at `:239` and its table at `:248-250`. ~40 lines apart, so a rebase
+auto-merges — but whichever lane rebases second inherits shifted offsets, and if it reports a conflict
+here it is a MERGE artefact to arbitrate, not a lane error. Supervisor arbitrates; neither lane
+reverts the other's section.
 
 ### ROUND 33 — the supervisor-only commits (historical; all three lane bundles landed later, see the table above)
 
