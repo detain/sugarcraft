@@ -26,11 +26,12 @@ labels, and the reasoning behind judgement calls — is
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1-8 ·
 Phase 3 item 1 · Phase 4 items 1-6, 7 · Phase 5 items 1-9 + 10a ·
-Phase 7 items 1-2 · Phase 8 items 1, 2, 3, 5, 7, 12, 14.
+**Phase 7 (all 6)** · Phase 8 items 1, 2, 3, 5, 7, 12, 14.
 **Phase 2 is complete except item 9**, the deliberately-last plugin epic.
 
-**52 of 75 items, counted by item** (Phase 2 item 4 completed in `3eca66df` and is
-now counted in full; Phase 2 item 7 in `f43177c2`). The count is not effort: Phase 2
+**56 of 75 items, counted by item** (Phase 2 item 4 completed in `3eca66df` and is
+now counted in full; Phase 2 item 7 in `f43177c2`; **Phase 7 items 3-6 in `8d15443c`**, which
+completes Phase 7). The count is not effort: Phase 2
 item 4 alone was larger than all of Phase 7. **Phase 5 IS complete.** Item **10b** (differentiate the
 hardcoded `AgentDefinition` preset prompts) was measured on 2026-08-19 and found already
 done — by Bundle A (`bf3495f5`), whose own commit message says so: "Phase 5 items 1, 2, 3
@@ -321,6 +322,43 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
 - **`Agent::fromPreset()`'s dropped-field count is recorded three different ways**
   across the plan, the worklog, and the code docblock (7 / 5 / 8-plus-2). The
   constructor at HEAD is authoritative; see the hardening ledger.
+
+**PHASE 7 IS COMPLETE — and its review found five instances of the recurring defect inside the
+documentation bundle itself** (`8d15443c`, ten new pages under `sugar-crush/docs/`, 2,691 lines,
+zero `.php` files touched). The reviewer fact-checked every capability claim against source and
+independently re-measured the full 12-tool × 6-mode permission matrix and the rule-pattern table.
+The five it killed are all worth knowing, because they are the shapes this defect takes when the
+subject is prose rather than code:
+
+1. **A count written next to the wrong noun.** SKILLS.md said discovery "walks four native
+   locations and four foreign ones". Native is **three** (`SkillLoader::loadAllManifests()`
+   :716-734 calls `builtInSkillsDir()`, `userSkillsDir()`, `projectSkillsDir()`) — and the page's
+   own table below it listed three. The FOREIGN count had been written next to NATIVE.
+2. **A figure measured on the caller, written as a property of the callee.** ARCHITECTURE.md put
+   `maxSteps` (default 8) under "`Runtime` — the agentic loop". `Runtime::__construct` has no such
+   parameter; `private readonly int $maxSteps = 8` is `src/Backend/EngineBackend.php:126` and the
+   bound is at `:462`.
+3. **Two pages contradicting each other about the same object.** ARCHITECTURE.md attributed
+   `createAnthropic()` to `ClaudeCodeProvider`; it returns a **`CustomProvider`** with
+   `x-api-key`/`anthropic-version` headers (`ProviderFactory` :564-595), and `claude-code` is a
+   separate SEVENTH selectable provider (`:601`) the sentence omitted. ENVIRONMENT.md had it right.
+4. **Two measurements spliced into one attributed block.** HOOKS.md quoted "the child's whole
+   environment" including a `PATH=…` line that `env` never printed — it came from a different
+   probe. `dash` sets `PATH` as a shell variable and does **not export** it, so it is absent from
+   the environment and not inherited by anything the hook execs, which makes the derived advice
+   understate the consequence for a grandchild process.
+5. **A worked example naming a thing that does not exist** — see the `src` finding below.
+
+🟡 **`src` finding routed out of the docs lane: `src/Hooks/HookManager.php:34` names a hook that
+does not exist.** Its docblock warns that a file saying `name: confirm-remove` would UNINSTALL the
+built-in — but `BuiltIn\ConfirmRemoveHook::name()` returns **`'confirm-rm'`** (`:41-43`), so
+`confirm-remove` collides with nothing and is *accepted*. Verified: `confirm-remove` → accepted,
+`confirm-rm` → refused. The guard is real and works on the real name; only its own worked example
+is wrong, which is the worst place for a wrong example because it is what a reader copies. The
+review also established that the guard keys by **event+name**, so `audit` is accepted for a
+`PreToolUse` entry (`AuditHook` is `PostToolUse`) — defensible, but not what a reader of that
+comment would predict. Same shape as the `PermissionRule` over-claim above: the comment promises
+more than the code delivers.
 
 **ROUND 30's SETTINGS LANE FOUND PHASE 6 ITEM 1 WAS MASKING AN UNCATCHABLE FATAL.** The plan
 framed item 1 as a `__DIR__`-vs-`$root` path preference. It was that, but the branch containing
