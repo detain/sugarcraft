@@ -584,6 +584,34 @@ So: **always `fetch` before reading a lane's behind-count**, and never quote a l
 freshness figure without saying when it was fetched. This is the same defect the whole plan
 tracks — a number that travelled without its domain — expressed in git refs instead of prose.
 
+### 5.2d THE SUPERVISOR'S OWN SCRATCH FILES ARE INSIDE THE LANE, AND THE BRIEF SAYS `git add -A`
+
+Near-miss, C4b/C6 round. To make lane work survive a client restart the supervisor writes
+`.lane-provenance`, `.lane-wip.patch`, `.lane-implement-result.md` and `.lane-review-result.md`
+into the **lane root** — and the commit recipe handed to every lane agent is literally
+`git add -A && git commit`. Those two facts together mean the supervisor's own instrumentation
+can be committed to `master` by an agent following its brief exactly, and the agent would be
+right to do it.
+
+The LSP lane happened to stage selectively and its commit came out clean (12 files, all under
+`sugar-crush/`). That was luck, not design, and luck is not a control.
+
+**Fix, applied to every lane at creation time — local-only, never a tracked `.gitignore`:**
+
+```sh
+printf '%s\n' .lane-provenance .lane-wip.patch \
+  .lane-implement-result.md .lane-review-result.md .lane-fix-result.md \
+  >> <lane>/.git/info/exclude
+```
+
+`.git/info/exclude` is per-clone and untracked, so it cannot leak into a commit the way an edited
+`.gitignore` would. After applying it, a finished lane's `git status --porcelain` should be
+**empty** — which is also a much better readiness signal than "only my own files are left",
+because it makes "clean" mean clean.
+
+Generalise the lesson: **any file the supervisor writes into a lane is a file some agent may
+commit.** Either exclude it or keep it outside the lane.
+
 ### 5.3 VERIFY EVERY LANE BEFORE HANDING IT TO AN AGENT
 
 Four checks. All four passed on a probe copy I made and destroyed on 2026-08-19; the numbers below are
