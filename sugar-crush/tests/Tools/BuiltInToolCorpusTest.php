@@ -250,17 +250,24 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 17 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 279 files declare
-     * 298 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 281 files declare
+     * 300 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
-     * The most recent file is `Config/LayeredSettings` — the settings-file
-     * layering behind {@see \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()}.
-     * A single concrete class, hence the +1 on `concrete` and on the file count,
-     * and nothing else moving; the 19 SECONDARY declarations in 8 files are
-     * untouched by it, which is why only the two totals above move and the
-     * per-file map below does not. Ordinals are deliberately not quoted
+     * The most recent file is `Providers/ToolCallParser/MarkupScanner` — the
+     * positional markup reader both text-scanning tool-call parsers were rebuilt
+     * on. A single concrete class, hence the +1 on `concrete` and on the file
+     * count, and nothing else moving; the 19 SECONDARY declarations in 8 files
+     * are untouched by it, which is why only the two totals above move and the
+     * per-file map below does not.
+     *
+     * THE PREVIOUS BUMP NAMED THE WRONG CAUSE. This paragraph attributed the
+     * last +1 to `Config/LayeredSettings` after the numbers had already been
+     * moved by a different file, so the prose and the literal disagreed about
+     * what changed. Re-deriving a census is cheap; re-deriving it from a
+     * sentence that names the wrong file is how the next reader gets the next
+     * bump wrong. Ordinals are deliberately not quoted
      * here: the walk below is `RecursiveDirectoryIterator` order, so "the Nth
      * file" is a fact about the filesystem, not about the tree.
      */
@@ -295,9 +302,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(279, $files, 'php files under src/');
+        $this->assertSame(281, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 230, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
+            ['concrete' => 232, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -326,8 +333,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 279 `.php`
-     * files, 298 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names: 281 `.php`
+     * files, 300 top-level declarations, 19 of them secondary in 8 files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *
@@ -387,8 +394,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(279, count($files), 'php files under src/');
-        $this->assertSame(298, $declarations, 'top-level declarations in them');
+        $this->assertSame(281, count($files), 'php files under src/');
+        $this->assertSame(300, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

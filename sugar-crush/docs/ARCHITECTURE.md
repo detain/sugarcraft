@@ -345,8 +345,15 @@ path, not a configuration you can ask for by name.
 `${VAR:-default}` placeholders in provider config values.
 
 `ToolCallParser/` exists because not every OpenAI-compatible endpoint emits tool
-calls the same way — `openai` is the default and `minimax-xml-fallback` the
-alternative.
+calls the same way. Three strategies: `openai` (read the server's parsed
+`tool_calls[]`), `minimax-xml-fallback` and `dsml`, the last two recovering a
+model's native tool-call syntax from the message content when the server was
+launched without a `--tool-call-parser` flag. Both fallbacks delegate to
+`openai` whenever `tool_calls[]` is present. With no name configured the
+strategy is derived from the model — `dsml` for the DeepSeek-V4 family. Only
+`SglangProvider` consults any of this, on its streaming path as well as its
+batch one; `CustomProvider` and `OpenAIProvider` take no `toolCallParser` at
+all.
 
 **No blanket total-request timeout is applied to a provider call**, anywhere. A
 completion can legitimately run for tens of minutes.

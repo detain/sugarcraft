@@ -376,15 +376,31 @@ final readonly class SglangProvider implements ProviderInterface
      *
      * TWO figures, each with its own domain:
      *
-     * - {@see DEEPSEEK_V4_CONTEXT_WINDOW} = 393,216 for the DeepSeek-V4
-     *   family. Not a guess and not from a card: it is `max_model_len` in the
-     *   deployed server's own `GET /v1/models` response, read from skynet2 on
-     *   2026-08-20 for `deepseek-ai/DeepSeek-V4-Flash-0731`.
+     * - {@see DEEPSEEK_V4_CONTEXT_WINDOW} = 1,048,570 for the DeepSeek-V4
+     *   family. Not a guess and not from a card: it is `max_req_input_len` in
+     *   the deployed server's own `/server_info` response, read from skynet2
+     *   on 2026-08-20 for `deepseek-ai/DeepSeek-V4-Flash-0731`.
+     *
+     *   THE FIELD IS THE LOAD-BEARING HALF, not the number. `/server_info`'s
+     *   `max_req_input_len` (1048570) is the ceiling the scheduler enforces on
+     *   ONE REQUEST'S INPUT - the only one of the two published figures that
+     *   returns an error - whereas `GET /v1/models`'s `max_model_len`
+     *   (1048576) is the model's TOTAL window, input plus generated output.
+     *   This method is the denominator of every context tier and
+     *   {@see ProviderInterface::contextWindow()} states that erring LARGE is
+     *   the harmful direction, so the enforced input limit is the right
+     *   domain. {@see DEEPSEEK_V4_CONTEXT_WINDOW}'s own docblock is the long
+     *   form of this argument; this bullet previously contradicted it by
+     *   naming both the wrong value (393,216, which the slot held earlier on
+     *   the same day) and the wrong field.
      * - {@see LEGACY_DEFAULT_CONTEXT_WINDOW} = 196,608 for everything else.
      *   That is the `--context-length 196608` the MiniMax-M2.7 skynet2 launch
      *   command pinned (§12), which is what this method returned
      *   unconditionally before. It is retained EXACTLY, so a MiniMax
-     *   deployment's tiers do not move.
+     *   deployment's tiers do not move. That flag is a fact about the MiniMax
+     *   deployment ONLY and does not carry across: `/server_info` reports
+     *   `context_length: null` for the DeepSeek one, which was never launched
+     *   with `--context-length` at all.
      *
      * Judged on `$this->model` - the CONFIGURED model - because this method is
      * handed no request. {@see buildParams()}'s sampling defaults judge on
@@ -401,8 +417,14 @@ final readonly class SglangProvider implements ProviderInterface
      * {@see \SugarCraft\Crush\Chat} makes it the budget its four context
      * tiers are percentages of - the 70% reminder, 85% automatic compaction,
      * 95% blocking refusal and the idle-compaction prompt. On the DeepSeek-V4
-     * arm those fire at ~275,251 / ~334,233 / ~373,555 estimated tokens; on
+     * arm those fire at ~733,999 / ~891,284 / ~996,141 estimated tokens; on
      * the legacy arm at ~137,625 / ~167,116 / ~186,777, unchanged.
+     *
+     * Those three DeepSeek figures are 70/85/95% of 1,048,570 and of nothing
+     * else. They are restated here only because they were last written as
+     * ~275,251 / ~334,233 / ~373,555 - the same percentages of the superseded
+     * 393,216 - and a derived figure left behind after its input moves is this
+     * project's signature defect. Recompute them whenever the constant moves.
      * {@see \SugarCraft\Crush\Runtime::shouldPromptIdleCompaction()} reads
      * it too.
      */
@@ -459,6 +481,33 @@ final readonly class SglangProvider implements ProviderInterface
             // call only, exactly matching one completeStream() invocation.
             $toolCallBuffer = [];
 
+            // The REASSEMBLED content of this one response, and the flag that
+            // says the structured path already produced tool calls. Both exist
+            // solely for {@see recoverTextualToolCalls()} below; see its
+            // docblock for why the seam is here and not in parseChunk().
+            // Locals for the same reason $toolCallBuffer is one: this is a
+            // `final readonly class`, so per-response state cannot live on a
+            // property, and their lifetime is exactly one generator call.
+            //
+            // MEMORY COST OF THE REASSEMBLY, STATED BECAUSE IT IS A BEHAVIOUR
+            // CHANGE: before this seam existed, completeStream() held no copy
+            // of the response text at all. It now holds ONE, so peak usage
+            // grows by roughly the size of the response - measured at +8.9 MB
+            // on a synthetic 8 MB response, chunk count unchanged. That
+            // headline figure is an upper bound well past what this deployment
+            // can actually produce: 8 MB of text is on the order of 2M tokens,
+            // and the cost scales linearly, so an ordinary 500 KB completion
+            // costs about 500 KB.
+            //
+            // It is NOT gated on whether a text-scanning parser is armed, and
+            // that is a deliberate decline rather than an oversight. Asking
+            // would mean widening {@see ToolCallParserInterface} - a shipped
+            // strategy seam with three implementations - with a capability
+            // method, or type-switching on the concrete parser, which defeats
+            // the point of the seam. One string copy is not worth either.
+            $assembledContent = '';
+            $sawStructuredToolCalls = false;
+
             // GuzzleHttp\Psr7\Stream has no readLine() - it implements only
             // the plain PSR-7 StreamInterface. Buffer raw chunks and split on
             // "\n" ourselves (same approach as CustomProvider::completeStream()).
@@ -472,10 +521,54 @@ final readonly class SglangProvider implements ProviderInterface
                     if (str_starts_with($line, 'data: ')) {
                         $data = json_decode(substr($line, 6), true);
                         if ($data !== null && isset($data['choices'][0]['delta'])) {
-                            yield $this->parseChunk($data, $toolCallBuffer);
+                            $chunk = $this->parseChunk($data, $toolCallBuffer);
+
+                            $sawStructuredToolCalls = $sawStructuredToolCalls
+                                || ($chunk->toolCalls !== null && $chunk->toolCalls !== []);
+
+                            if ($sawStructuredToolCalls) {
+                                // Once the structured path has produced a call,
+                                // recoverTextualToolCalls() returns null no
+                                // matter what the text says - so everything
+                                // buffered is provably dead and nothing more
+                                // needs buffering. Releasing it here is the
+                                // half of the gate that costs no abstraction.
+                                $assembledContent = '';
+                            } else {
+                                $assembledContent .= $chunk->content;
+                            }
+
+                            // Yielded UNCHANGED and in wire order. The
+                            // recovery below is purely additive - it never
+                            // withholds, delays or rewrites a content chunk,
+                            // so the streamed-token UX is byte-for-byte what
+                            // it was.
+                            yield $chunk;
                         }
                     }
                 }
+            }
+
+            $recovered = $this->recoverTextualToolCalls($assembledContent, $sawStructuredToolCalls);
+
+            if ($recovered !== null) {
+                // Empty content on purpose: the text was already streamed
+                // above, and {@see \SugarCraft\Crush\Runtime::runStreaming()}
+                // appends every chunk's content to its buffer, so repeating
+                // it here would duplicate the whole turn in the transcript.
+                // `tokensUsed: 0` / `costUsd: 0.0` make
+                // {@see \SugarCraft\Crush\Usage::reported()} return null for
+                // this chunk, which {@see \SugarCraft\Crush\Usage::sum()}
+                // skips - so a recovered turn's usage total is unchanged, and
+                // in particular a turn that reported nothing still sums to
+                // null rather than to zero.
+                yield new CompleteResponse(
+                    content: '',
+                    reasoning: null,
+                    toolCalls: $recovered,
+                    tokensUsed: 0,
+                    costUsd: 0.0,
+                );
             }
         } catch (GuzzleException $e) {
             throw new \RuntimeException('SGLANG request failed: ' . $e->getMessage(), 0, $e);
@@ -647,8 +740,14 @@ final readonly class SglangProvider implements ProviderInterface
      * suffix - and the next redeploy changes the date without changing which
      * card's sampling applies. See {@see DEEPSEEK_V4_FAMILY_TOKEN} for why the
      * token is not the broader `deepseek`.
+     *
+     * PUBLIC so {@see ProviderFactory::toolCallParser()} can pick this
+     * family's default tool-call parser from the SAME predicate that picks its
+     * sampling and its context window. A second, independently-spelled family
+     * test in the factory would be free to drift from this one, and then two
+     * files would disagree about what "DeepSeek-V4" means.
      */
-    private static function isDeepSeekV4(string $model): bool
+    public static function isDeepSeekV4(string $model): bool
     {
         return str_contains(strtolower($model), self::DEEPSEEK_V4_FAMILY_TOKEN);
     }
@@ -899,10 +998,16 @@ final readonly class SglangProvider implements ProviderInterface
      * ({@see \SugarCraft\Crush\Runtime}, {@see \SugarCraft\Crush\Agents\AgentManager})
      * route this provider through `completeStream()` instead, and that path's
      * `parseChunk()`/`resolveStreamedToolCalls()` reassembly builds its own
-     * tool calls without consulting the injected parser. Switching
-     * `toolCallParser` therefore does not yet affect the live streaming chat
-     * loop; threading it through belongs to §12 D2, not D6, and is
-     * unscheduled.
+     * tool calls from `delta.tool_calls[]`.
+     *
+     * THAT IS NO LONGER THE WHOLE STORY, and this paragraph used to end by
+     * saying the injected parser "does not yet affect the live streaming chat
+     * loop". It does now: {@see recoverTextualToolCalls()} runs the same
+     * parser over the reassembled streamed content when - and only when - the
+     * structured path produced nothing. So the two paths agree on which parser
+     * is in force. What remains asymmetric is WHEN it is consulted: here it is
+     * the only decoder, whereas on the streaming path it is a fallback behind
+     * `delta.tool_calls[]`.
      */
     private function parseResponse(array $data): CompleteResponse
     {
@@ -939,6 +1044,78 @@ final readonly class SglangProvider implements ProviderInterface
     private function resolvedToolCallParser(): ToolCallParserInterface
     {
         return $this->toolCallParser ?? OpenAiArrayToolCallParser::new(self::argumentDecoder());
+    }
+
+    /**
+     * Runs the injected parser over the fully reassembled streamed content,
+     * closing the §12 D2 gap that made parser selection a batch-path-only
+     * setting.
+     *
+     * THE GAP THIS CLOSES. {@see supportsStreaming()} returns true and both
+     * production consumers branch on it ({@see \SugarCraft\Crush\Runtime} and
+     * {@see \SugarCraft\Crush\Agents\AgentManager}), so the live TUI chat loop
+     * takes `completeStream()`. Until now that path reassembled tool calls
+     * itself, in {@see resolveStreamedToolCalls()}, and never consulted
+     * {@see ToolCallParser\ToolCallParserInterface} at all - so selecting a
+     * text-scanning fallback armed it on the one path nobody takes. A parser
+     * wired only into {@see parseResponse()} would have recovered nothing in
+     * the live chat, which is precisely the illusion
+     * {@see ToolCallParser\MinimaxXmlFallbackToolCallParser}'s docblock warns
+     * against.
+     *
+     * WHY THE SEAM IS HERE, ARGUED AGAINST THE POSITION {@see parseChunk()}
+     * STATES. That method's docblock says the equivalent fix for a `</think>`
+     * closer straddling a chunk boundary "belongs where content is reassembled
+     * ({@see \SugarCraft\Crush\Runtime::runStreaming()}), not here". The first
+     * half of that is right and is why this is not in `parseChunk()`: one
+     * delta cannot see an envelope split across two of them. The second half
+     * does not transfer to THIS fix, for a reason specific to it. Reasoning
+     * splitting needs only the text, which `Runtime` has. Tool-call recovery
+     * additionally needs `$this->toolCallParser` - per-provider, injected
+     * strategy state that `Runtime` neither holds nor should: `Runtime` is
+     * provider-agnostic and drives Vertex, Bedrock and Custom through the same
+     * loop, so putting a `--tool-call-parser` compensation there would push a
+     * MiniMax/DeepSeek-specific concern into every provider's path. So the
+     * seam wants the narrowest scope that sees BOTH the whole response and the
+     * injected parser, and `completeStream()` is the only one: it owns exactly
+     * one response's lifetime and already threads a by-reference buffer for
+     * this same reassembly reason. `parseChunk()` sees the parser but not the
+     * whole response; `Runtime` sees the whole response but not the parser.
+     *
+     * NO DOUBLE-EMISSION. `$sawStructuredToolCalls` is the guard: if
+     * `delta.tool_calls[]` produced anything at all this response, this
+     * returns null and the structured result stands alone. The two paths are
+     * therefore mutually exclusive by construction, not by the parsers
+     * happening to disagree.
+     *
+     * COSTS NOTHING ON THE DEFAULT PARSER. {@see OpenAiArrayToolCallParser}
+     * reads only `tool_calls`, and the synthesised message below deliberately
+     * has no such key, so it returns null immediately. A deployment on the
+     * default parser sees no behaviour change whatsoever.
+     *
+     * KNOWN GAP, deliberately not closed here: the recovered markup is still
+     * present in the content that was streamed to the screen and into the
+     * transcript, so a user watching a fallback-recovered turn sees the raw
+     * envelope. Stripping it would mean withholding content chunks until the
+     * envelope is known to be complete, which is the one thing that WOULD
+     * degrade the streamed-token UX. {@see parseResponse()} has the identical
+     * property on the batch path and always has.
+     *
+     * @return array<ToolCall>|null
+     */
+    private function recoverTextualToolCalls(string $content, bool $sawStructuredToolCalls): ?array
+    {
+        if ($sawStructuredToolCalls || $content === '') {
+            return null;
+        }
+
+        // Synthesised with NO `tool_calls` key, because its absence is exactly
+        // the condition every fallback parser triggers on - handing over an
+        // empty array instead would take their delegated fast path and find
+        // nothing.
+        $calls = $this->resolvedToolCallParser()->parse(['content' => $content]);
+
+        return $calls === [] ? null : $calls;
     }
 
     /**

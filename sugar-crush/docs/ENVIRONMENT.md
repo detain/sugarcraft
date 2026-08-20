@@ -187,9 +187,14 @@ An unset variable with no `:-default` resolves to the empty string.
 discussions of SugarCrush's environment surface but is **not** read by any
 direct `getenv()` call. It works only through the placeholder mechanism above,
 and only if you write that placeholder into a config file yourself — no config
-shipped with the repo contains it. Its two valid values are `openai` (the
-default) and `minimax-xml-fallback`; an unset variable resolves to the empty
+shipped with the repo contains it. Its three valid values are `openai`,
+`minimax-xml-fallback` and `dsml`; an unset variable resolves to the empty
 string, which is treated as "key absent" rather than as a typo.
+
+"Key absent" is not the same as `openai`. With no value the parser is derived
+from the configured model — `dsml` for the DeepSeek-V4 family, `openai` for
+everything else — so leaving the placeholder unset is the recommended state,
+not a fallback to the OpenAI-only strategy.
 
 ---
 

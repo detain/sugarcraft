@@ -13,6 +13,7 @@ use SugarCraft\Crush\Providers\OpenAIProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
@@ -1049,12 +1050,162 @@ final class ProviderFactoryTest extends TestCase
         ]);
     }
 
-    public function testDefaultConfigSglangDeclaresTheOpenaiToolCallParser(): void
+    public function testCreateSglangSelectsTheDsmlParserFromConfig(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            // A NON-DeepSeek model on purpose: this pins the explicit name,
+            // not the model-derived default, so the two mechanisms cannot be
+            // confused for one another.
+            'model' => 'MiniMax-M2.7',
+            'toolCallParser' => ProviderFactory::TOOL_CALL_PARSER_DSML,
+        ]);
+
+        $this->assertInstanceOf(DsmlToolCallParser::class, $this->toolCallParserOf($provider));
+    }
+
+    /**
+     * The model-derived default, asserted in BOTH directions from one method
+     * so a change that collapses the two arms cannot pass.
+     *
+     * DeepSeek-V4 gets DSML armed because that family's card documents a
+     * launch command with no `--tool-call-parser` flag, and without the
+     * fallback every tool call on such a deployment is lost in silence.
+     * Everything else keeps the OpenAI-only parser, so no MiniMax deployment's
+     * behaviour moves.
+     *
+     * @dataProvider defaultParserByModelProvider
+     */
+    public function testTheUnnamedToolCallParserIsDerivedFromTheModel(string $model, string $expected): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => $model,
+        ]);
+
+        $this->assertInstanceOf($expected, $this->toolCallParserOf($provider));
+    }
+
+    public static function defaultParserByModelProvider(): array
+    {
+        return [
+            'deployed DeepSeek id' => [SglangProvider::DEFAULT_MODEL, DsmlToolCallParser::class],
+            // The family predicate deliberately over-matches, so a redeploy
+            // that only changes the dated suffix or the point release still
+            // takes the DSML arm.
+            'DeepSeek point release' => ['deepseek-ai/DeepSeek-V4.5', DsmlToolCallParser::class],
+            'MiniMax' => ['MiniMax-M2.7', OpenAiArrayToolCallParser::class],
+            'an unrelated model' => ['qwen3-coder', OpenAiArrayToolCallParser::class],
+        ];
+    }
+
+    /**
+     * The error message must enumerate EVERY name the factory accepts.
+     *
+     * It used to read `'expected "%s" or "%s"'` with exactly two arguments, so
+     * adding a third parser without touching it would have printed an error
+     * omitting the very name the operator was trying to spell. Asserting
+     * against {@see ProviderFactory::TOOL_CALL_PARSER_NAMES} rather than a
+     * hand-typed list is what makes this catch the NEXT parser too.
+     */
+    public function testTheUnknownParserMessageEnumeratesEverySelectableName(): void
+    {
+        try {
+            $this->factory->create([
+                'type' => 'sglang',
+                'baseUrl' => 'http://localhost:30000',
+                'model' => 'MiniMax-M2.7',
+                'toolCallParser' => 'nope',
+            ]);
+
+            $this->fail('an unknown parser name must throw');
+        } catch (\InvalidArgumentException $e) {
+            foreach (ProviderFactory::TOOL_CALL_PARSER_NAMES as $name) {
+                $this->assertStringContainsString(
+                    sprintf('"%s"', $name),
+                    $e->getMessage(),
+                    sprintf('the error omits the selectable parser "%s"', $name),
+                );
+            }
+        }
+    }
+
+    /**
+     * The other half of the same guarantee, and the one that catches a name
+     * added to the constant but never given a `match` arm - which would throw
+     * "Unknown toolCallParser" for a name the error message itself advertises.
+     *
+     * @dataProvider selectableToolCallParserNameProvider
+     */
+    public function testEverySelectableToolCallParserNameActuallyConstructs(string $name): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+            'toolCallParser' => $name,
+        ]);
+
+        $this->assertInstanceOf(ToolCallParserInterface::class, $this->toolCallParserOf($provider));
+    }
+
+    public static function selectableToolCallParserNameProvider(): array
+    {
+        return array_map(
+            static fn (string $name): array => [$name],
+            array_combine(ProviderFactory::TOOL_CALL_PARSER_NAMES, ProviderFactory::TOOL_CALL_PARSER_NAMES),
+        );
+    }
+
+    /**
+     * `defaultConfig('sglang')` declares the KNOB but not a VALUE, and the
+     * difference is the whole point.
+     *
+     * This used to assert `'openai'`. That was correct while `openai` was the
+     * unconditional default; it stopped being correct when the default grew a
+     * second, model-derived arm (`dsml` for the DeepSeek-V4 family). A stamped
+     * literal would keep selecting the OpenAI-only parser after an operator
+     * edits `model`, silently disarming the DSML fallback on exactly the
+     * family that needs it - the same decay `reasoningEffort` is null to
+     * avoid.
+     *
+     * The key must still be PRESENT: `defaultConfig()` output is what the
+     * Ctrl+P palette's Switch Model listing shows, so dropping it would hide
+     * the knob.
+     */
+    public function testDefaultConfigSglangDeclaresTheToolCallParserKnobWithoutStampingAValue(): void
     {
         $config = $this->factory->defaultConfig('sglang');
 
         $this->assertArrayHasKey('toolCallParser', $config);
-        $this->assertSame('openai', $config['toolCallParser']);
+        $this->assertNull($config['toolCallParser']);
+    }
+
+    /**
+     * The TRUTH behind the null above: feeding `defaultConfig('sglang')`
+     * straight back into `create()` must arm the DSML parser, because that
+     * config's own `model` is a DeepSeek-V4 id.
+     *
+     * This is the assertion the old `assertSame('openai', ...)` could not
+     * make. It pins the round trip - default config in, correct parser out -
+     * rather than the spelling of one field, so it stays honest if the
+     * defaulting mechanism is rewritten.
+     */
+    public function testDefaultConfigSglangRoundTripsIntoTheDsmlParserForItsOwnDefaultModel(): void
+    {
+        $config = $this->factory->defaultConfig('sglang');
+
+        $this->assertTrue(
+            SglangProvider::isDeepSeekV4((string) $config['model']),
+            'the sglang default model is expected to be a DeepSeek-V4 id',
+        );
+
+        $this->assertInstanceOf(
+            DsmlToolCallParser::class,
+            $this->toolCallParserOf($this->factory->create($config)),
+        );
     }
 
     /**
@@ -1252,5 +1403,89 @@ final class ProviderFactoryTest extends TestCase
         $this->assertCount(1, $calls);
         $this->assertSame('read_file', $calls[0]->name());
         $this->assertSame(['path' => '/etc/hosts'], $calls[0]->arguments());
+    }
+
+    /**
+     * THE DIRECTION THE OTHER TWO TESTS CANNOT SEE, and the one a mutation
+     * survived.
+     *
+     * Deleting the line `self::TOOL_CALL_PARSER_DSML,` from
+     * {@see ProviderFactory::TOOL_CALL_PARSER_NAMES} left every existing test
+     * green: `testEverySelectableToolCallParserNameActuallyConstructs` iterates
+     * the constant, so a name removed from it is simply never tried, and
+     * `testTheUnknownParserMessageEnumeratesEverySelectableName` asserts the
+     * message lists everything in the constant, which a shorter constant still
+     * satisfies. The `match` went on accepting `dsml` while the error message
+     * stopped advertising it - drift caught in one direction only.
+     *
+     * A previous report conceded that PHP cannot mechanically derive the
+     * constant from the `match` arms. That is true of the LANGUAGE and false
+     * of the SOURCE, which is readable: this asserts set EQUALITY between the
+     * `self::TOOL_CALL_PARSER_*` constants the method body actually mentions
+     * and the ones the constant lists. A name in the constant with no arm
+     * fails it; an arm for a name the constant omits fails it too.
+     */
+    public function testTheSelectableNameListAndTheMatchArmsReferenceExactlyTheSameConstants(): void
+    {
+        $method = new \ReflectionMethod(ProviderFactory::class, 'toolCallParser');
+        $lines = (array) file((string) $method->getFileName());
+        $body = implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        preg_match_all('/self::(TOOL_CALL_PARSER_[A-Z0-9_]+)/', $body, $matches);
+
+        $referenced = array_values(array_diff(array_unique($matches[1]), ['TOOL_CALL_PARSER_NAMES']));
+
+        $this->assertNotEmpty($referenced, 'the match arms must be readable, or this test proves nothing');
+
+        $armValues = array_map(
+            static fn (string $constant): mixed => \constant(ProviderFactory::class . '::' . $constant),
+            $referenced,
+        );
+
+        sort($armValues);
+        $listed = ProviderFactory::TOOL_CALL_PARSER_NAMES;
+        sort($listed);
+
+        $this->assertSame(
+            $listed,
+            $armValues,
+            'TOOL_CALL_PARSER_NAMES and the match arms of toolCallParser() must name the same parsers',
+        );
+    }
+
+    /**
+     * The same correspondence from the other end, without reading any source:
+     * a `TOOL_CALL_PARSER_*` constant that exists but is not listed is a
+     * parser the operator can select and the error message will deny.
+     */
+    public function testEveryDeclaredParserNameConstantIsListedAsSelectable(): void
+    {
+        $declared = [];
+
+        foreach ((new \ReflectionClass(ProviderFactory::class))->getConstants() as $name => $value) {
+            if (str_starts_with($name, 'TOOL_CALL_PARSER_') && $name !== 'TOOL_CALL_PARSER_NAMES') {
+                $declared[$name] = $value;
+            }
+        }
+
+        $this->assertNotEmpty($declared);
+
+        foreach ($declared as $name => $value) {
+            $this->assertContains(
+                $value,
+                ProviderFactory::TOOL_CALL_PARSER_NAMES,
+                sprintf('%s is declared but missing from TOOL_CALL_PARSER_NAMES', $name),
+            );
+        }
+
+        $this->assertCount(
+            count($declared),
+            ProviderFactory::TOOL_CALL_PARSER_NAMES,
+            'TOOL_CALL_PARSER_NAMES must list every declared name and no others',
+        );
     }
 }

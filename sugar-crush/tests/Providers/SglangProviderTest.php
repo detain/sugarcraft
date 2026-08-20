@@ -272,7 +272,7 @@ final class SglangProviderTest extends TestCase
 
     public function testOpenAiCompatibleForwardsTheToolCallParserToTheProvider(): void
     {
-        $parser = new MinimaxXmlFallbackToolCallParser(new OpenAiArrayToolCallParser());
+        $parser = MinimaxXmlFallbackToolCallParser::new(new OpenAiArrayToolCallParser());
 
         $provider = SglangProvider::openAiCompatible(
             'https://api.example.com',

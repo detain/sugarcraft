@@ -735,14 +735,32 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 
 The `anthropic` type key is **not** a native Messages API client. `ProviderFactory::createAnthropic()` builds a `CustomProvider` with Anthropic's `x-api-key`/`anthropic-version` headers, but that class POSTs an OpenAI-shaped body to `chat/completions`, and it is constructed with `supportsFunctionCalling: false` — so this type key cannot do tool calling. For a real Anthropic-native path today, use `claude-code` (which drives the `claude` binary) or point `SUGARCRUSH_BACKEND_CMD` at a shell script. Fixing this is tracked as a known gap.
 
-The `sglang` type accepts an optional `toolCallParser` key: `'openai'` (the
-default — read the server's parsed `tool_calls[]` array) or
-`'minimax-xml-fallback'` (same, but when the array is absent, recover MiniMax's
-raw `<tool_call>` XML out of the message content). Switch it only if your SGLang
-deployment was launched *without* `--tool-call-parser`, which leaves the model's
-tool-call XML unparsed in the content. Note this currently applies to the batch
-`complete()` path only — the streaming path reassembles tool calls itself and
-does not yet consult the setting.
+The `sglang` type accepts an optional `toolCallParser` key, with three values:
+
+- `'openai'` — read the server's parsed `tool_calls[]` array, and nothing else.
+- `'minimax-xml-fallback'` — the same, but when that array is absent, recover
+  MiniMax's raw `<minimax:tool_call>` XML out of the message content.
+- `'dsml'` — the same, but recover DeepSeek-V4's native DSML markup
+  (`<｜DSML｜tool_calls>`) instead.
+
+All three read `tool_calls[]` first, so the two fallbacks cost one `isset` on a
+correctly configured server. They matter only if your SGLang deployment was
+launched *without* `--tool-call-parser`, which leaves the model's native
+tool-call syntax unparsed in the content — and the DeepSeek-V4 model card's own
+documented launch command omits that flag, which is why `dsml` exists.
+
+**Omit the key** and the parser is derived from the model: `dsml` for the
+DeepSeek-V4 family, `openai` for everything else. That is why
+`defaultConfig('sglang')` reports `toolCallParser: null` rather than a name — a
+stamped literal would keep applying after you edited `model` to another family.
+This differs from `reasoningEffort` in no way; both are model-derived for the
+same reason.
+
+The setting applies to **both** the batch `complete()` path and the streaming
+path. On the streaming path the fallback runs over the reassembled content once
+the response ends, and only when the structured `delta.tool_calls[]` route
+produced nothing, so it can neither duplicate a call nor delay a streamed
+token.
 
 It also accepts an optional `reasoningEffort` key — SGLang's top-level
 `reasoning_effort` request field. One of `none`, `minimal`, `low`, `medium`,
@@ -859,7 +877,7 @@ The chassis speaks the root `Message` value object; the engine speaks the typed 
 
 Things that are genuinely not finished, stated plainly rather than left for you to discover:
 
-- **`SglangProvider`'s `toolCallParser` applies to the batch `complete()` path only.** The streaming path reassembles tool calls itself and does not consult the setting.
+- **`toolCallParser` reaches only one of the three providers.** It is closed for `SglangProvider`, which now consults the selected parser on the streaming path as well as the batch one. `CustomProvider` and `OpenAIProvider` accept no `toolCallParser` argument at all and carry their own hardcoded `tool_calls[]` walks — `OpenAIProvider::parseChunk()` returns `toolCalls: null` unconditionally — so on those two a deployment launched without `--tool-call-parser` still loses every tool call, with no setting that would recover it.
 - **An ASK decision fails closed on the engine path.** The blocking modal works for `Chat`'s own tool calls. On the engine path it does not, for a simpler reason than the plumbing suggests: **nothing anywhere attaches an approver** — `EngineBackend::withPermissionApprover()` has no caller outside its own test — so every ASK settles as "permission required and no approver is attached to this run". Attaching one is necessary but not sufficient: `completeAsync()` runs the turn in a `pcntl_fork()`ed child whose only channel back to the parent is a one-way frame stream, so an approver would also need that socket to become request/response before it could put a question on screen. Until both land, a mode that answers Ask refuses those calls instead of prompting — which is why the shipped default mode is `bypass-permissions` rather than `default`.
 - **The `anthropic` provider type key is OpenAI-shaped.** It authenticates as Anthropic but posts to `chat/completions` with `supportsFunctionCalling: false`, so it cannot call tools. Use `claude-code` or `SUGARCRUSH_BACKEND_CMD` for a native Anthropic path.
 - **Five shell commands are still inert**: `GroupInputCmd`, `CancelAgentCmd`, `ResumeAgentCmd`, `StopAllAgentsCmd`, `QuitAgentViewCmd`. The first has no counterpart in the live app; the agent four would need to reach into a worker pool the shell does not hold. Their pane/selection half *is* applied — only the action half is missing.

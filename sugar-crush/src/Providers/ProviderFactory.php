@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Providers;
 
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
+use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
@@ -28,6 +29,34 @@ final readonly class ProviderFactory
     public const TOOL_CALL_PARSER_OPENAI = 'openai';
 
     public const TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK = 'minimax-xml-fallback';
+
+    /**
+     * DeepSeek-V4's native DSML markup ({@see DsmlToolCallParser}), for a
+     * DeepSeek deployment launched without a `--tool-call-parser` flag - which
+     * is what that model card's own documented launch command shows.
+     */
+    public const TOOL_CALL_PARSER_DSML = 'dsml';
+
+    /**
+     * Every selectable name, in one place, so
+     * {@see toolCallParser()}'s error message CANNOT omit a parser it accepts.
+     *
+     * That message used to be `'expected "%s" or "%s"'` with exactly two
+     * arguments: adding a third parser without touching it would have printed
+     * an error omitting the very name the operator was trying to spell. The
+     * list is built from this constant rather than typed as a third literal
+     * for the same reason.
+     *
+     * This does NOT by itself keep the constant in step with the `match` arms
+     * - PHP has no way to derive one from the other. That guarantee is a test:
+     * every name here must construct, and the thrown message must name every
+     * name here.
+     */
+    public const TOOL_CALL_PARSER_NAMES = [
+        self::TOOL_CALL_PARSER_OPENAI,
+        self::TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK,
+        self::TOOL_CALL_PARSER_DSML,
+    ];
 
     /**
      * The dev/test-fixture config this factory reads, relative to
@@ -381,12 +410,25 @@ final readonly class ProviderFactory
                 // from defaultConfig() output, which is what the Ctrl+P
                 // palette's Switch Model listing shows.
                 'reasoningEffort' => null,
-                // §12 D6's documented default. Named explicitly rather than
-                // left implicit so the knob is discoverable from
+                // Null, NOT a concrete parser name, for EXACTLY the reason
+                // `reasoningEffort` above is null: the effective default is
+                // derived from the MODEL
+                // ({@see defaultToolCallParserFor()} - `dsml` for the
+                // DeepSeek-V4 family, `openai` otherwise), so stamping
+                // `'openai'` here would keep selecting the OpenAI-only parser
+                // after someone edits `model`, silently disarming the DSML
+                // fallback on the very family that needs it.
+                //
+                // This USED to be `self::TOOL_CALL_PARSER_OPENAI`. It was a
+                // correct literal while `openai` was the unconditional
+                // default; it became a decaying one the moment the default
+                // grew a second arm.
+                //
+                // The key is still present so the knob stays discoverable from
                 // defaultConfig() output - which is exactly what the Ctrl+P
                 // palette's Switch Model listing shows
                 // ({@see \SugarCraft\Crush\Cli\Bootstrap::availableProviders()}).
-                'toolCallParser' => self::TOOL_CALL_PARSER_OPENAI,
+                'toolCallParser' => null,
             ],
             'bedrock' => [
                 'type' => 'bedrock',
@@ -629,25 +671,35 @@ final readonly class ProviderFactory
 
     /**
      * W1.A6 (§12 D6): selects the client-side tool-call parser from the
-     * optional `toolCallParser` config key, defaulting to `'openai'`.
+     * optional `toolCallParser` config key. OMITTING THE KEY DOES NOT MEAN
+     * `'openai'` - it means {@see defaultToolCallParserFor()}, which derives
+     * the parser from the MODEL: `dsml` for the DeepSeek-V4 family, `openai`
+     * for everything else.
+     *
+     * This sentence used to say the key defaulted to `'openai'` flatly, and
+     * that stopped being true 120 lines below it when the default grew its
+     * second arm. A signature described at the wrong scope is this file's own
+     * instance of the defect the bundle it shipped in was fixing elsewhere.
      *
      * Before this, both parser classes existed but nothing constructed either
-     * one; the factory now selects between them. The default deliberately
-     * matches the confirmed live deployment (which does pass
+     * one; the factory now selects between them. The explicit names still
+     * match the confirmed live deployment (which does pass
      * `--tool-call-parser`), so this is a seam a misconfigured deployment can
      * switch, not a change to normal behaviour.
      *
-     * KNOWN GAP, still open: the selected parser is consulted only by
+     * THAT GAP IS NOW CLOSED. This docblock previously recorded that the
+     * selected parser was consulted only by
      * {@see SglangProvider::parseResponse()}, i.e. the batch `complete()`
-     * path. `SglangProvider::supportsStreaming()` returns true and both
-     * production consumers branch on it ({@see \SugarCraft\Crush\Runtime} and
-     * {@see \SugarCraft\Crush\Agents\AgentManager}), so the live chat loop
-     * takes `completeStream()` -> `parseChunk()` ->
-     * `resolveStreamedToolCalls()`, which reassembles tool calls itself and
-     * never touches {@see ToolCallParser\ToolCallParserInterface}. Selecting
-     * `minimax-xml-fallback` therefore recovers nothing on the streaming path
-     * today. Threading the parser through streaming reassembly is §12 D2
-     * territory, outside D6's scope, and remains unscheduled.
+     * path, so selecting a fallback recovered nothing in the live chat loop -
+     * which takes `completeStream()`, since
+     * `SglangProvider::supportsStreaming()` returns true and both production
+     * consumers branch on it ({@see \SugarCraft\Crush\Runtime} and
+     * {@see \SugarCraft\Crush\Agents\AgentManager}).
+     * {@see SglangProvider::recoverTextualToolCalls()} now runs the same
+     * parser over the reassembled streamed content whenever the structured
+     * `delta.tool_calls[]` path produced nothing, so a selected fallback is
+     * armed on the path the TUI actually uses. That method's docblock argues
+     * the choice of seam.
      *
      * @param array<string, mixed> $config
      */
@@ -657,7 +709,15 @@ final readonly class ProviderFactory
             baseUrl: $config['baseUrl'],
             model: $config['model'],
             apiKey: $config['apiKey'] ?? null,
-            toolCallParser: $this->toolCallParser($config['toolCallParser'] ?? null),
+            // The model is passed because an unnamed parser is chosen FROM it
+            // ({@see defaultToolCallParserFor()}) - the same model-derived
+            // defaulting `reasoningEffort` uses, and for the same reason: a
+            // literal stamped here would keep applying after someone edits
+            // `model` to a different family.
+            toolCallParser: $this->toolCallParser(
+                $config['toolCallParser'] ?? null,
+                (string) $config['model'],
+            ),
             reasoningEffort: self::configuredReasoningEffort($config['reasoningEffort'] ?? null),
         );
     }
@@ -736,20 +796,84 @@ final readonly class ProviderFactory
      *
      * @throws \InvalidArgumentException When the name is not a known parser.
      */
-    private function toolCallParser(mixed $name): ToolCallParserInterface
+    private function toolCallParser(mixed $name, string $model): ToolCallParserInterface
     {
-        $default = OpenAiArrayToolCallParser::new(SglangProvider::argumentDecoder());
+        $openAi = OpenAiArrayToolCallParser::new(SglangProvider::argumentDecoder());
 
         return match ($name) {
-            null, '', self::TOOL_CALL_PARSER_OPENAI => $default,
-            self::TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK => MinimaxXmlFallbackToolCallParser::new($default),
+            null, '' => $this->defaultToolCallParserFor($model, $openAi),
+            self::TOOL_CALL_PARSER_OPENAI => $openAi,
+            self::TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK => MinimaxXmlFallbackToolCallParser::new($openAi),
+            self::TOOL_CALL_PARSER_DSML => DsmlToolCallParser::new($openAi),
             default => throw new \InvalidArgumentException(sprintf(
-                'Unknown toolCallParser: %s (expected "%s" or "%s")',
+                'Unknown toolCallParser: %s (expected %s)',
                 is_scalar($name) ? (string) $name : get_debug_type($name),
-                self::TOOL_CALL_PARSER_OPENAI,
-                self::TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK,
+                self::quotedToolCallParserNames(),
             )),
         };
+    }
+
+    /**
+     * The parser to use when the operator named none - derived from the MODEL,
+     * not stamped as a literal.
+     *
+     * DSML IS THE DEFAULT FOR THE DEEPSEEK-V4 FAMILY, and opt-in elsewhere.
+     * The reasoning, since this DIVERGES from the precedent set by
+     * {@see TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK}, which was left opt-in:
+     *
+     * - The cost of arming it is near zero. {@see DsmlToolCallParser::parse()}
+     *   delegates immediately whenever `tool_calls` is set, so on a correctly
+     *   configured server it is one `isset` per response and nothing else. Its
+     *   scan needs BOTH an absent `tool_calls` AND a literal
+     *   `<｜DSML｜tool_calls>` marker in the content, a pair that cannot occur
+     *   on a server that decoded the call itself.
+     * - The cost of NOT arming it is total and silent. Without a
+     *   `--tool-call-parser` flag - which the DeepSeek-V4 card's own launch
+     *   command omits - every tool call arrives as unparsed text and the agent
+     *   does nothing, with no error anywhere.
+     * - The precedent points the other way only because the deployed family
+     *   changed. When the MiniMax fallback was written, MiniMax was the
+     *   deployed model and the flag was being passed. Today
+     *   {@see SglangProvider::DEFAULT_MODEL} is a DeepSeek-V4 id, so leaving
+     *   DSML opt-in would mean the DEFAULT model is the one with no safety
+     *   net. That is the asymmetry that justifies diverging, not a general
+     *   preference for armed fallbacks.
+     *
+     * GATED ON {@see SglangProvider::isDeepSeekV4()}, reused rather than
+     * respelled. That predicate deliberately OVER-matches (`deepseek-v40`,
+     * `DeepSeek-V4.5` and `DeepSeek-V4.1-Flash` all take the V4 arm), and the
+     * asymmetry suits this use even better than its original one. A FALSE
+     * MATCH costs nothing: a non-DeepSeek model gets a parser that delegates
+     * everything, because it will never emit a DSML envelope for the scan to
+     * find. A MISS - a DeepSeek-V4 deployment under a model id that does not
+     * contain the family token - costs exactly today's behaviour, the OpenAI
+     * parser alone, and is recoverable by naming `dsml` explicitly. So both
+     * error directions are strictly better than the status quo.
+     */
+    private function defaultToolCallParserFor(
+        string $model,
+        ToolCallParserInterface $openAi,
+    ): ToolCallParserInterface {
+        return SglangProvider::isDeepSeekV4($model)
+            ? DsmlToolCallParser::new($openAi)
+            : $openAi;
+    }
+
+    /**
+     * `"openai", "minimax-xml-fallback" or "dsml"` - built from
+     * {@see TOOL_CALL_PARSER_NAMES} so the error text cannot fall behind the
+     * set of names actually accepted.
+     */
+    private static function quotedToolCallParserNames(): string
+    {
+        $quoted = array_map(
+            static fn (string $name): string => sprintf('"%s"', $name),
+            self::TOOL_CALL_PARSER_NAMES,
+        );
+
+        $last = array_pop($quoted);
+
+        return $quoted === [] ? $last : implode(', ', $quoted) . ' or ' . $last;
     }
 
     /**
