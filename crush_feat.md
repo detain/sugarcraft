@@ -1897,8 +1897,14 @@ docker run --gpus all --rm -p 30000:8000 \
     --enable-strict-thinking \
 > **SUPERSEDED 2026-08-20 — the deployment this launch command describes no longer exists.** The
 > user repointed `skynet2.interserver.net` from `MiniMax-M2.7` to
-> `deepseek-ai/DeepSeek-V4-Flash-0731`; `GET /v1/models` now reports `max_model_len` **393216**, not
-> the `196608` fixed below. The command is preserved as the record of what was measured on
+> `deepseek-ai/DeepSeek-V4-Flash-0731`; `GET /v1/models` reported `max_model_len` **393216** on
+> 2026-08-20, not the `196608` fixed below — and then **1048576** later the SAME DAY after a
+> relaunch. All readings are recorded because the point generalises: this figure is transcribed, not
+> fetched, so every copy of it in this repo is a claim about a date. **The port now uses 1048570**,
+> which is `max_req_input_len` from `/server_info` — the enforced per-request INPUT ceiling — rather
+> than `max_model_len`'s 1048576, which is the total input-plus-output window. See
+> `SglangProvider::DEEPSEEK_V4_CONTEXT_WINDOW`'s doc-block for why the smaller, enforced figure is the
+> right one for a compaction denominator. The command is preserved as the record of what was measured on
 > 2026-08-10, because a figure's provenance is part of its domain — read every `196608` and every
 > `MiniMax` in this section as historical. What the port now does is in `crush_code.md` and
 > `docs/plans/crush_code_RESUME.md` §0-DS; the code landed in `ed57d46a`.

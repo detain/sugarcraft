@@ -8984,3 +8984,108 @@ CI.
 - **A near-fabricated finding, avoided.** A truncated `ls | head` made it look as though there were
   two parallel `src/Workflow` trees with seven overlapping basenames. There is one directory. Checked
   before reporting; would have been exactly the class of defect this audit exists to catch.
+
+---
+
+## Round 32 — the re-verification sweep, and a constant that decayed inside one day
+
+Two things happened this round. Neither was a feature.
+
+### The sweep
+
+Three read-only agents measured every nominally-open and every recently-claimed
+plan item against the tree: Phases 1-3, 4-6, 7-8. No writes, no commits, so it
+collided with nothing and could have been abandoned at any point.
+
+**The count was right by accident.** The header said 62 of 75, the body said 56.
+Re-deriving from the verdicts gives 62 — but only because the header over-counted
+Phase 7 by one (item 6 is partial) and under-counted Phase 5 by one (item 10 is
+fully done, 10a *and* 10b). The two errors cancelled. Had only one been present
+the figure would have been quietly off by one indefinitely, because nothing in
+this process ever re-derived it. That is the real finding: not that 62 was wrong,
+but that nothing could have told us either way.
+
+**Nine items described the tree incorrectly.** The four that mattered:
+
+- **P5.1** quoted the base system prompt as "one string literal today:
+  `'You are SugarCrush, an AI coding assistant.'`". It has carried
+  `# Tone and style`, `# Tool use`, `# Acting vs. asking` and `# Security` since
+  `bf3495f5`. **P5.2** called five tool descriptions "one-clause each"; all five
+  are multi-sentence. Either line would have sent an agent to rewrite finished
+  work — the same failure that `REMINDER_TOKEN_LIMIT` caused last round.
+- **P8.3** claimed the render branch was outstanding, on the evidence "zero
+  `stall` hits in `src/Renderer.php`". That grep is true. It is still true. It
+  was aimed at the wrong file: there are two renderers, and the branch lives in
+  `AgentDashboardPane.php` with 21 hits, tested 38/38, landed `ef480c77`.
+  **A measurement can be correct, repeatable, and about the wrong domain.**
+- **P3.5** is the mirror image, and the more dangerous shape. The `strlen()` the
+  item tells you to grep for is *gone* from `SplitLayout.php`, so a grep-only
+  re-verification closes the item — while the byte-length `str_pad()` at `:238`
+  keeps the identical defect for any multibyte-but-narrow character, and no test
+  in either file makes a wide-char assertion. The tell-tale name was removed and
+  the bug kept. Unfixed *and* unguarded.
+- **P7.6 cost Phase 7 its "complete".** `docs/ARCHITECTURE.md` never states the
+  "`App` wears two hats, do not retire it" warning it exists to carry, and its
+  diagram calls `Chat` "the TEA Model" while `App implements Model`
+  (`src/App/App.php:71`) and `bin/sugarcrush:211` hands `Bootstrap::app()` — not
+  `Chat` — to `new Program(...)`. The document reproduces the misreading it was
+  written to prevent, the one that already caused a revert-then-restore.
+
+Six `file:line` citations had rotted onto unrelated docblocks; the table is in
+`crush_code.md`. Also corrected: `LAYERED_KEYS` is 10 keys not 8 and
+`PROJECT_TIER_KEYS` 7 not 6 — found inside the plan's *settled* prose, not an
+open item, which is where nobody looks.
+
+**Sizing changed the queue order.** P6.6 measured smaller than either half of
+P6.5 (both flags reuse resolvers already exercised live), so it goes first. P6.5's
+keybindings half is a small redesign rather than an addition —
+`KeyBindingRegistry` is 611 static lines whose own docblock warns against the
+setter the obvious fix would add. P8.9 is the cheapest item left and genuinely
+open, confirmed *not* closed incidentally by P8.11.
+
+**The rule this round earns: verify by domain, not by token.** Every failure above
+is a true statement about the wrong scope. Grepping for a symbol the plan names is
+necessary and not sufficient — the symbol can be gone while the defect remains
+(P3.5), or present in a file that was never the live path (P8.3).
+
+### The DeepSeek window moved mid-round, and then the right field turned out to be a different one
+
+The user reported the deployment's context window had changed. Rather than
+transcribe the report, `curl https://skynet2.interserver.net/v1/models` —
+`max_model_len: 1048576`, confirmed. Then the user pointed at
+`/server_info`, which reports `max_req_input_len: 1048570`, six lower. Those
+are different quantities: `max_model_len` is the model's total window, input
+plus generated output; `max_req_input_len` is the ceiling the scheduler
+enforces on one request's input and the only one of the two that returns an
+error. `contextWindow()` is the denominator of every context tier, and
+`ProviderInterface::contextWindow()`'s own docblock says erring large is the
+harmful direction — too large switches the reminder, the auto-compaction and
+the blocking refusal off rather than firing them early. So the constant is
+**1_048_570**, the enforced input limit, not the headline window.
+
+Six tokens will never decide a compaction. Recording it anyway, because the
+two fields will diverge further on a differently-configured deployment and
+then the distinction is the entire answer — and because "I read a number off
+the obvious endpoint" is how this round's other nine defects happened.
+
+`/server_info` also reports `context_length: null`: this deployment was never
+launched with an explicit `--context-length` at all, so every doc in the repo
+citing that flag for DeepSeek is describing the MiniMax deployment it
+replaced. That is now stated on the constant.
+
+`DEEPSEEK_V4_CONTEXT_WINDOW` was `393_216`,
+written **the previous day**, by this plan, with a doc-block that explicitly
+warned "a redeploy under a different `--context-length` makes it wrong with no
+local symptom." That warning came true within a day and nothing noticed. The
+doc-block now says so in the past tense, and tells the next reader to check
+both endpoints rather than the obvious one.
+
+Note what did *not* need changing: all three compaction tiers are percentages of
+`$tokenLimit` (`ContextCompactor.php:126`, `:150`, `:197`), so they rescaled
+themselves. `ContextWindow::FALLBACK_TOKENS` is only reached when a provider
+answers 0, which sglang does not. **The fix that held was the model-awareness, not
+the number** — the number decayed within hours of being written, which is the
+argument for the awareness rather than against it. The test doc-block now says
+outright that it pins a transcribed figure and guards the model-awareness, not the
+number's truth: it would pass while the constant and the deployment disagree,
+which is exactly how the 393216 survived its own obsolescence.

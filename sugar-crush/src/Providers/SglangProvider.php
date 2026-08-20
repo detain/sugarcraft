@@ -133,9 +133,35 @@ final readonly class SglangProvider implements ProviderInterface
     private const DEEPSEEK_V4_REASONING_EFFORT = 'max';
 
     /**
-     * `max_model_len` reported by the deployed server's own `GET /v1/models`
-     * for {@see DEFAULT_MODEL}, read 2026-08-20 and re-confirmed still 393216
-     * on the same day.
+     * The largest input the deployed server will accept for
+     * {@see DEFAULT_MODEL}: `max_req_input_len` from its own `/server_info`,
+     * read 2026-08-20.
+     *
+     * WHICH OF TWO NEARLY-IDENTICAL FIGURES THIS IS, because the server
+     * publishes both and they differ by six tokens. `GET /v1/models` reports
+     * `max_model_len` **1048576** - the model's total window, input plus
+     * generated output. `/server_info` reports `max_req_input_len`
+     * **1048570** - the ceiling the scheduler actually enforces on a single
+     * request's input, and the one that returns an error when exceeded. This
+     * constant is the SECOND, for two reasons. It is the limit that can
+     * actually reject a request, and {@see ProviderInterface::contextWindow()}
+     * states that erring large is the harmful direction: every context tier is
+     * a percentage of this number, so overshooting switches the reminder, the
+     * automatic compaction and the blocking refusal off rather than firing
+     * them early. Six tokens will never decide a compaction, but the two
+     * fields will diverge further on a differently-configured deployment, and
+     * then the distinction is the whole answer.
+     *
+     * Note `/server_info` also reports `context_length: null` - this
+     * deployment was never launched with an explicit `--context-length`, so
+     * the window comes from the model config and no launch command records it.
+     * Any doc in this repo that cites a `--context-length` flag for the
+     * DeepSeek deployment is describing the MiniMax one it replaced.
+     *
+     * The history, because it is the argument for re-reading rather than
+     * trusting: this slot held **393216** on 2026-08-20, written that day, and
+     * was already wrong by the end of it. Then it briefly held 1048576, from
+     * `max_model_len`, before `/server_info` showed that was the wrong field.
      *
      * A TRANSCRIBED CONSTANT, NOT A LIVE READ, and the distinction has to be
      * stated because this provider does talk to that endpoint's server and
@@ -145,17 +171,24 @@ final readonly class SglangProvider implements ProviderInterface
      * frame), so a synchronous HTTP round trip in it would block the TUI on
      * every redraw. The cost of transcribing is that this figure decays exactly
      * as the 128,000 it replaced did - a redeploy under a different
-     * `--context-length` makes it wrong with no local symptom. Re-verify with
+     * `--context-length` makes it wrong with no local symptom. That is not a
+     * hypothetical: it is what happened to the 393216 this line used to hold,
+     * within a day of it being written, and nothing in this codebase noticed.
+     * Treat the date above as part of the value. Re-verify BOTH endpoints -
+     * `/v1/models` alone would have left this constant six tokens high and,
+     * more importantly, reading the wrong field. Re-verify with
      * `curl -s https://skynet2.interserver.net/v1/models`, whose
      * `data[0].max_model_len` is this number.
      *
-     * Twice the MiniMax figure
-     * below, which is why {@see contextWindow()} had to become model-aware:
-     * answering 196,608 for this model would have put every one of
-     * {@see \SugarCraft\Crush\Chat}'s four context tiers at half the real
-     * budget.
+     * Over five times the MiniMax figure below, which is why
+     * {@see contextWindow()} had to become model-aware: answering 196,608 for
+     * this model would now put every one of
+     * {@see \SugarCraft\Crush\Chat}'s four context tiers at under a fifth of
+     * the real budget. While this constant was 393216 the same mistake cost
+     * half, so the penalty for confusing the two grew when the deployment
+     * grew.
      */
-    private const DEEPSEEK_V4_CONTEXT_WINDOW = 393_216;
+    private const DEEPSEEK_V4_CONTEXT_WINDOW = 1_048_570;
 
     /**
      * The context window this class reports for anything that is NOT the

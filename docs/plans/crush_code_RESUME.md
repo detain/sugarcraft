@@ -22,15 +22,19 @@ was still running at the round-31 compact finished at `rc 0` with exactly these 
 **Skips MUST stay 1** — `tests/MCP/McpClientTest.php:106`. A 2 means `vendor/sugarcraft/*` was
 replaced by Packagist copies and every figure since is void.
 
-**62 of 75 plan items — AND THIS NUMBER IS UNDER ACTIVE DISPUTE.** Phase 2 complete except item 9
-(the deliberately-last plugin epic); **Phase 6 items 1-4**; Phase 7 complete; Phase 8 items 1, 2, 3,
-5, 6, 7, 10, 11, 12, 14. Two contradictions found while briefing the sweep, both in `crush_code.md`:
-its own body still reads **"56 of 75 items, counted by item"** where this header says 62, and its
-stated convention that "items completed in the tree carry a ✅ … — DONE marker inline" has decayed —
-Phase 2 items 1-8, Phase 4 items 1/2/5/6/7, Phase 5 items 1-3 and Phase 7 items 3-6 are all claimed
-complete in the header while carrying no inline marker at all. So there are currently three
-disagreeing sources of truth for completion: the header prose, the inline markers, and the tree. The
-sweep exists to make the tree the only one that counts. **Do not quote 62 until it reports.**
+**62 of 75 — SETTLED, re-derived from the tree by the round-32 sweep.** Phase 0 14 + Phase 1 3 +
+Phase 2 8 + Phase 3 1 + Phase 4 7 + Phase 5 10 + Phase 6 4 + Phase 7 5 + Phase 8 10 = 62, over a
+denominator of 75. Item **8.15 is a standing flag, not a deliverable** (it proposes no fix and expects
+none), so the honest reading is **62 of 74 deliverables plus one flag**.
+
+**62 was right by accident.** The header said 62, the body said 56, and 62 wins only because it
+over-counted Phase 7 by one (item 6 is partial) and under-counted Phase 5 by one (item 10 is fully
+done, 10a *and* 10b) — the two errors cancelled. With only one of them present the number would have
+been quietly off by one forever, because nothing ever re-derived it. **Phase 7 is NOT complete.**
+
+**The twelve real items left:** 2.9 (deliberately-last plugin epic) · 3.2, 3.3, 3.4 open and 3.5
+partial · 6.5, 6.6 · 7.6 partial · 8.4, 8.8, 8.9, 8.13. The inline verdicts in `crush_code.md` carry
+the evidence for each; the ✅ markers are now applied so the document's own convention holds again.
 
 ### WHAT LANDED IN ROUND 31
 
@@ -40,22 +44,35 @@ sweep exists to make the tree the only one that counts. **Do not quote 62 until 
 | `1bd2e4d3` | **P8.10 + P8.11** — `EnvironmentBlock` size-capped git diff, `InstructionFileLoader` parent walk |
 | `f764b463` | **P6.3 + P6.4 + the argument-scoped permission-rule hole**, and four ways the first cut overclaimed |
 
-### DO THIS NEXT, AND THIS IS THE MOST IMPORTANT LINE IN THE FILE
+### THE SWEEP HAS RUN. WHAT IT FOUND, AND THE ONE RULE TO CARRY FORWARD
 
-**Run a read-only RE-VERIFICATION SWEEP of the remaining open plan items before any further feature
-bundle.** Three items in a row turned out already-done or misstated the moment they were measured:
+Nine items were described incorrectly. All nine are corrected inline in `crush_code.md`. The four that
+matter before you pick up a lane:
 
-- `Chat::REMINDER_TOKEN_LIMIT` — quoted by the plan as a live flat-100,000 proxy; **zero occurrences**
-  in `src/` or `tests/`, removed in `08cc1b6a` (2026-08-19) by *this plan's own* Phase 5 Bundle B1.
-- **Open finding #3** — 3 of its 4 clauses decayed; two would have sent an agent to fix working code.
-- **P8.6** — "currently only one tape exists"; there are **five**, including all three the item names.
+- **P5.1** quoted the base system prompt as "one string literal today: `'You are SugarCrush, an AI
+  coding assistant.'`". It has had `# Tone and style`, `# Tool use`, `# Acting vs. asking` and
+  `# Security` since `bf3495f5`. **P5.2** called five tool descriptions "one-clause each"; all five are
+  multi-sentence. Either line, left standing, sends an agent to rewrite finished work.
+- **P8.3** claimed the render branch was outstanding on the evidence "zero `stall` hits in
+  `src/Renderer.php`". That grep is true and still true — and aimed at the wrong file. There are two
+  renderers; the branch is in `AgentDashboardPane.php` with **21** hits, tested 38/38, landed
+  `ef480c77`. **A measurement can be correct, repeatable, and about the wrong domain.**
+- **P3.5** is the mirror image and the more dangerous shape: the `strlen()` it tells you to grep for is
+  **gone** from `SplitLayout.php`, so a grep-only check closes the item — while the byte-length
+  `str_pad()` at `:238` keeps the identical defect and **no test guards either file**. The tell-tale
+  name was removed and the bug kept.
+- **P7.6** is why Phase 7 lost its "complete": `docs/ARCHITECTURE.md` never states the "`App` wears two
+  hats, do not retire it" warning it was written to carry, and its diagram calls `Chat` "the TEA Model"
+  while `App implements Model` (`src/App/App.php:71`) and `bin/sugarcrush:211` hands `Bootstrap::app()`
+  — not `Chat` — to `new Program(...)`. The document reproduces the misreading it exists to prevent,
+  the one that caused a real revert-then-restore (`CALIBER_LEARNINGS.md:72-79`).
 
-Each would have cost a full implement→review→fix round to discover. **The "N of 75" count above is
-therefore not trustworthy** — the 13 nominally-open items may be closer to 8. A sweep is cheap
-(read-only, no commits, no `src/` writes, no census risk, collides with nothing) and it makes every
-later round's brief honest. **Do it before spending another lane on a feature.**
+**THE RULE: verify by domain, not by token.** Every failure above is a true statement about the wrong
+scope. Before trusting any `file:line` in the plan, confirm it still points at the thing it names — six
+citations had rotted onto unrelated docblocks (the table is in `crush_code.md`). Grepping for a symbol
+the plan named is necessary and **not** sufficient: the symbol can be gone while the defect remains.
 
-### QUEUE, after the sweep
+### QUEUE
 
 1. 🔴 **`PermissionGate::isScopedWriteTool()` fail-open** (`:641`) — the round's own finding, and a
    **grant** path. Bare `preg_split('/\s+/')`, no separator split, judges by the first token.
@@ -66,18 +83,40 @@ later round's brief honest. **Do it before spending another lane on a feature.**
    `…/workflows/scripts/crush-dsml.js`, now UNBLOCKED (the census-collision constraint has passed).
    Must include Part B (the streaming path ignores the injected `ToolCallParserInterface`) or it is
    half a fix. See §0-DS.
-3. **P6.5** (keybindings remap + `statusLine`) and **P6.6** (`--model` / `--permission-mode` flags).
-   Read the measured annotations on item 5 in `crush_code.md` first: `statusLine` is a
-   command-execution key (**must be user-tier only** or a clone gets RCE on launch), and the
-   keybindings half fights `KeyBindingRegistry`'s entirely-static design. P6.6 must confront that
-   `LAYERED_KEYS` still has **no `model`** — two lanes have now independently declined to add inert
-   surface, so item 6 has to add the reader.
-4. **P3.x** — TextInput, candy-focus FocusRing, candy-sprinkles Table, candy-kit help screen. **No
+3. **P6.6 before P6.5 — the sweep inverted their order.** P6.6 (`--model` / `--permission-mode`)
+   measured **smaller than either half of P6.5**: both flags reuse resolvers that already exist and
+   are already exercised live (`PermissionMode::tryFrom()`, and `Bootstrap::backendFor()` is what
+   `/model` calls today). The work is CLI parsing plus threading one optional param into
+   `Bootstrap::chat()` (hardwired to `backend()` at `:447-536`) and `permissionGate()` (0-arg at
+   `:2852-2894`). Open question to settle first: whether `NonInteractive::run()` needs the same two
+   threaded separately from the TUI path. `LAYERED_KEYS` still has **no `model`** reader — two lanes
+   have independently declined to add inert surface, so this item has to add it.
+4. **P6.5 — two medium halves, ship as two PRs.** `statusLine`: the settings plumbing is nearly free
+   because `LayeredSettings::only()` (`:484-494`) is an allowlist that silently drops unknown keys, so
+   simply *not* adding the key to `PROJECT_TIER_KEYS` makes it user-tier-only — which it **must** be,
+   or cloning a hostile repo is code execution on launch. The real cost is the feature: shelling out
+   every render without blocking the loop, a timeout/hang policy, and stripping raw SGR from stdout.
+   `keybindings`: **a small redesign, not an addition** — `KeyBindingRegistry` is 611 lines and
+   entirely static ("a pure function of a constant", its own docblock), so an instance has to be
+   threaded through `Renderer.php:3270`/`:3296` and `KeyboardHandler.php:49,98` **without** adding the
+   static setter that docblock warns against. Note the plan's claim that this half conflicts with
+   `src/Chat.php` is imprecise: `Chat.php` only comments on the registry; the real call sites — and
+   the real concurrency conflict with any other lane — are in `KeyboardHandler.php`.
+5. **P8.9 is the cheapest item left and is genuinely open.** `Grep.php` lacks the
+   `InstructionFileLoader` constructor param + `loadForPath()` call that `Read`/`Edit`/`Write`/`Glob`
+   all have. Confirmed **not** closed incidentally by P8.11, which was the unrelated `loadRoot()`
+   parent-walk. Good filler to bundle with anything above.
+6. **P3.x** — candy-focus FocusRing (3.2), sugar-veil click-outside (3.3), candy-sprinkles Table (3.4),
+   and 3.5's unguarded cell-width padding. All four confirmed genuinely open. **No
    longer blocked** (the sglang task released `src/Chat.php`).
-5. Remaining findings: #4 skills, #5 `agentRoster()`, #6 (**smaller than recorded** — the
+7. Remaining findings: #4 skills, #5 `agentRoster()`, #6 (**smaller than recorded** — the
    `HookManager` guard is correct and general, `registry->get($event,$name)` with no hardcoded list;
    only its worked example names a nonexistent `confirm-remove`), #7 `/permissions`, #8 docs.
-6. **P8.4**, **P8.8**, **P8.9**, **P8.13**; then **Phase 2 item 9** (plugins) LAST, then E1-E50.
+8. **P7.6** (the `ARCHITECTURE.md` diagram + the two-hats warning — cheap, and it protects against a
+   repeat of a revert that already happened once), **P8.4** (a decision, not code: wire the compositor
+   or document the dormant seam in `ARCHITECTURE.md` — the source docblock that punts to "Phase 8 item
+   4's call" does **not** close it), **P8.8**, **P8.13**; then **Phase 2 item 9** (plugins) LAST, then
+   E1-E50.
 
 ### STANDING CYCLE (unchanged, and it has held for 3 rounds)
 
@@ -172,7 +211,19 @@ now set it to max as default for this model"**.
 **Measured against the live server by the supervisor, 2026-08-20 — believe this over the model card:**
 
 - Endpoint `https://skynet2.interserver.net/v1`, **no API key**. `GET /v1/models` →
-  `deepseek-ai/DeepSeek-V4-Flash-0731`, `max_model_len` **393216**.
+  `deepseek-ai/DeepSeek-V4-Flash-0731`, `max_model_len` **1048576** — but **the constant tracks
+  1048570, and that is deliberate.** The server publishes two nearly-identical figures and the
+  difference is the domain: `/v1/models` `max_model_len` = 1048576 is the model's TOTAL window
+  (input + output), while `http://skynet2.interserver.net:30000/server_info`
+  `max_req_input_len` = **1048570** is the ceiling the scheduler enforces on one request's INPUT and
+  the one that actually returns an error. `contextWindow()` is the denominator of every context tier,
+  and `ProviderInterface::contextWindow()` states that erring LARGE is the harmful direction (too
+  large switches the tiers off rather than firing early), so the input limit wins. Also note
+  `/server_info` reports `context_length: null` — this deployment was **never launched with
+  `--context-length`**, so any doc here citing that flag for DeepSeek is describing the MiniMax
+  deployment it replaced. ⚠️ This slot read **393216** when first measured on 2026-08-20, was already
+  wrong by the end of that day, then briefly held 1048576 from the wrong field. **Re-`curl` both
+  endpoints before trusting any figure in this section.**
 - **Tool calls come back as STRUCTURED OpenAI `tool_calls`, non-streaming AND streaming.**
   Non-streaming: `finish_reason: "tool_calls"`, `function.arguments` a JSON string. Streaming
   (`stream:true`, two-city prompt): 19 SSE chunks, 10 `delta.reasoning_content` deltas, **two
@@ -214,8 +265,10 @@ now set it to max as default for this model"**.
   `max_model_len: 393216`** — and its doc-block asserted that 196,608 *was* the live
   `--context-length`. So all four of `Chat`'s context tiers were sized against half the real budget
   while the comment claimed otherwise. The recurring defect (a number carrying the wrong domain)
-  found in shipped code rather than in a review. Now model-aware: 393,216 for DeepSeek-V4, 196,608
-  preserved for everything else. Note the residue the agent flagged rather than silently
+  found in shipped code rather than in a review. Now model-aware: **1,048,570** for DeepSeek-V4
+  (393,216 when this fix landed; the deployment grew the same day), 196,608 preserved for everything
+  else. **The fix was model-awareness, and that is what holds — the number itself decayed within
+  hours of being written, which is the argument for the awareness rather than against it.** Note the residue the agent flagged rather than silently
   "improving": `LEGACY_DEFAULT_CONTEXT_WINDOW = 196_608` is a *MiniMax* figure now serving as the
   fallback for every third model — a guess. `0` would be honest but would disable all four tiers on
   MiniMax, so behaviour was preserved and the domain documented on the constant.

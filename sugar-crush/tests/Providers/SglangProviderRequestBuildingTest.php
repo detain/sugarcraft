@@ -585,7 +585,7 @@ final class SglangProviderRequestBuildingTest extends TestCase
             $this->assertEqualsWithDelta(1.0, $sent['temperature'], 0.0, $model);
             $this->assertArrayHasKey('top_p', $sent, $model);
             $this->assertSame('max', $sent['reasoning_effort'], $model);
-            $this->assertSame(393_216, $provider->contextWindow(), $model);
+            $this->assertSame(1_048_570, $provider->contextWindow(), $model);
 
             return;
         }

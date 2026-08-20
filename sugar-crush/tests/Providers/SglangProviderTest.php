@@ -172,23 +172,29 @@ final class SglangProviderTest extends TestCase
     /**
      * The window is MODEL-AWARE now, and it had to become so: 196,608 is the
      * MiniMax-M2.7 deployment's `--context-length`, while the DeepSeek-V4-Flash
-     * the server actually runs today reports `max_model_len: 393216` from its
-     * own `GET /v1/models` (read from skynet2 2026-08-20). Answering the
-     * MiniMax figure for it would have put all four of Chat's context tiers at
-     * half the real budget.
+     * the server actually runs today accepts `max_req_input_len: 1048570` per
+     * its own `/server_info` (read from skynet2 2026-08-20, after a same-day
+     * relaunch moved it up from 393216 - see the constant's doc-block, which
+     * also explains why this is `max_req_input_len` and not the `max_model_len:
+     * 1048576` that `/v1/models` reports six tokens higher). Answering the
+     * MiniMax figure for it would now put all four of Chat's context tiers at
+     * under a fifth of the real budget.
      *
      * Asserted as the exact figure AND as not-the-other-one, because a
      * single-arm regression is the whole hazard here: both arms returning
-     * 196,608 (the bug) or both returning 393,216 (silently doubling MiniMax's
-     * budget past what its server will hold) are equally wrong, and only a pair
-     * of assertions distinguishes them.
+     * 196,608 (the bug) or both returning 1,048,570 (handing MiniMax five times
+     * the budget its server will hold) are equally wrong, and only a pair of
+     * assertions distinguishes them. Note this test pins a TRANSCRIBED figure:
+     * it will pass while the constant and the deployment disagree, which is
+     * exactly how the 393216 survived its own obsolescence. It guards the
+     * model-awareness, not the number's truth.
      */
     public function testContextWindowIsTheDeepSeekV4FigureForADeepSeekV4Model(): void
     {
         $client = $this->createMock(Client::class);
         $provider = new SglangProvider('https://api.example.com', 'deepseek-ai/DeepSeek-V4-Flash-0731', null, $client);
 
-        $this->assertSame(393_216, $provider->contextWindow());
+        $this->assertSame(1_048_570, $provider->contextWindow());
         $this->assertNotSame(196_608, $provider->contextWindow());
     }
 
@@ -218,7 +224,7 @@ final class SglangProviderTest extends TestCase
         $client = $this->createMock(Client::class);
         $provider = new SglangProvider('https://api.example.com', 'deepseek-ai/DeepSeek-V4-Flash-0731', null, $client);
 
-        $this->assertSame(393_216, $provider->contextWindow());
+        $this->assertSame(1_048_570, $provider->contextWindow());
     }
 
     // -------------------------------------------------------------------------
