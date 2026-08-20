@@ -28,13 +28,81 @@ final class WorktreeManager
     private readonly string $expandedBasePath;
     private readonly string $registryPath;
 
+    /**
+     * NOT A PROMOTED PROPERTY, and not nullable, and both halves are the fix
+     * for a fatal rather than a style preference.
+     *
+     * It was `private readonly ?WorktreeConfig $config = null` promoted, with
+     * `$this->config = WorktreeConfig::new()` in the body for the null case.
+     * PHP initialises a promoted readonly property AT PROMOTION, so that
+     * assignment is a second write and throws:
+     *
+     *     new WorktreeManager()
+     *     Error: Cannot modify readonly property WorktreeManager::$config
+     *
+     * MEASURED on this host, PHP 8.3, against the unmodified class. Which means
+     * the entire default-configuration branch — `new WorktreeManager()`,
+     * `WorktreeManager::new($repoRoot)`, the documented factory — was not a
+     * wrong config, it was an uncatchable `Error`. Nothing in `src/` constructs
+     * one (the class is dormant) and every test passed an explicit
+     * {@see WorktreeConfig}, so no suite ever entered the branch. Resolving the
+     * config into a declared property before it is ever written once makes the
+     * branch reachable, which is also what makes the `configDir` argument below
+     * mean anything at all.
+     */
+    private readonly WorktreeConfig $config;
+
     public function __construct(
-        private readonly ?WorktreeConfig $config = null,
+        ?WorktreeConfig $config = null,
         private readonly string $repoRoot = '',
     ) {
-        if ($this->config === null) {
-            $this->config = WorktreeConfig::new();
+        if ($config === null) {
+            // CONFIGURED BY THE REPOSITORY IT MANAGES, not by whatever directory
+            // happens to contain this package. Until this line passed
+            // `configDir`, `WorktreeConfig::new()` fell through to
+            // {@see WorktreeConfig::defaultConfigDir()} — `dirname(__DIR__, 3)`,
+            // the directory ABOVE the package — while `$repoRoot` sat right
+            // here in the same constructor.
+            //
+            // WHAT THAT WOULD HAVE DONE, in the conditional and not the past
+            // tense, because it never actually ran: the readonly double-write
+            // documented on the property above made this whole branch an
+            // uncatchable `Error`, so no caller ever reached the config read at
+            // all. Both halves of the defect are real and they are SEQUENTIAL —
+            // the fatal came first, and the cross-tree read is what the branch
+            // would have done on the first day it worked. MEASURED in this
+            // checkout for the directory the old expression names: it is the
+            // sugarcraft monorepo root, whose tracked `.sugar-crush/config.json`
+            // reads `{"worktreeCleanupPeriodDays": 30, "worktreeIncludeFile":
+            // ".worktreeinclude"}` — so a working
+            // `WorktreeManager::new('/srv/someone-elses-repo')` would have taken
+            // a 30-day cleanup period and an include-file NAME out of THIS
+            // repository and applied both to that one, with
+            // {@see resolveWorktreeInclude()} resolving that name against
+            // `$this->repoRoot`. A value read from tree A, applied to tree B:
+            // the two halves of the sentence would have had different domains.
+            //
+            // It would also be inert rather than merely wrong under a real
+            // `composer require`, where `dirname(__DIR__, 3)` is
+            // `vendor/sugarcraft/` — a directory that will not hold a
+            // `.sugar-crush/config.json` — so the feature could only ever have
+            // appeared to work from a monorepo checkout. That asymmetry is why
+            // this is a fix and not a preference.
+            //
+            // `''` STAYS ON THE OLD DEFAULT, deliberately. An empty
+            // `$repoRoot` is this class's "no repository named" (see
+            // {@see resolveWorktreeInclude()}, which falls back to `getcwd()`
+            // for the same input), and it is not a path — `configDir: ''`
+            // would make {@see WorktreeConfig::readConfig()} resolve
+            // `/.sugar-crush/config.json` at the filesystem root. Null keeps
+            // the documented default for that case, so no existing caller that
+            // passes no root changes behaviour.
+            $config = WorktreeConfig::new(
+                configDir: $repoRoot !== '' ? $repoRoot : null,
+            );
         }
+
+        $this->config = $config;
         $this->expandedBasePath = $this->expandPath($this->config->basePath);
         $this->registryPath = $this->expandedBasePath . '/.registry.json';
         $this->loadRegistry();

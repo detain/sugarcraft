@@ -201,6 +201,27 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Cli/Bootstrap.php|.sugar-crush/hooks.yaml' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/workflows' => self::REPOSITORY,
         'Commands/CommandLoader.php|.sugar-crush/commands' => self::REPOSITORY,
+        // MOVED OUT OF THE PACKAGE-RELATIVE BLOCK BELOW, and the move is the
+        // finding rather than a tidy-up. This literal was package-relative
+        // because {@see \SugarCraft\Crush\Agents\WorktreeManager} constructed
+        // its config as a bare `WorktreeConfig::new()`, so the only directory the
+        // read ever resolved against was `dirname(__DIR__, 3)`. That constructor
+        // now passes `configDir: $repoRoot`, which makes the dominant caller's
+        // directory the REPOSITORY UNDER MANAGEMENT — a tree the operator cloned.
+        // The package-relative answer survives only as the residue reached by a
+        // bare `new()` with no repository named, which is why this row is
+        // repository-chosen and `.sugar-crush/config.json` now carries this tier
+        // alongside the user tier rather than the package one.
+        'Agents/WorktreeConfig.php|.sugar-crush/config.json' => self::REPOSITORY,
+        // The settings layering's project tier. Both files arrive with a CLONE,
+        // and neither feeds this collector — see the gap list in
+        // {@see testTheEightThatFeedTheCollectorAndTheFiveThatAreNamedGaps()}
+        // for why a silent refusal is right for these two specifically. THREE
+        // rows joined the repository-chosen block in this change-set; the row
+        // above is the third and it is a RECLASSIFICATION, not a new path, so
+        // "these two" means the two settings files and nothing else.
+        'Config/LayeredSettings.php|.sugar-crush/settings.json' => self::REPOSITORY,
+        'Config/LayeredSettings.php|.sugar-crush/settings.local.json' => self::REPOSITORY,
         'Memory/ForeignMemoryImporter.php|.opencode/memory' => self::REPOSITORY,
         'Skills/ForeignSkillDiscovery.php|.opencode/skills' => self::REPOSITORY,
         'Skills/SkillLoader.php|.sugar-crush/skills' => self::REPOSITORY,
@@ -245,7 +266,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // in development, `vendor/sugarcraft/` under a composer install. Not `~`
         // and not the checkout under analysis. Still gated, because a
         // package-relative path is one a symlink can move just as easily.
-        'Agents/WorktreeConfig.php|.sugar-crush/config.json' => self::PACKAGE,
         'Providers/ProviderFactory.php|.sugar-crush/config.dev.json' => self::PACKAGE,
 
         // Neither: not a tier this collector is about.
@@ -330,7 +350,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         }
 
         $this->assertSame(
-            [self::USER => true, self::PACKAGE => true],
+            [self::REPOSITORY => true, self::USER => true],
             $byPath['.sugar-crush/config.json'],
             'the string that was classified user-tier everywhere while one of its two homes was ungated',
         );
@@ -339,10 +359,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * TEN repository-chosen paths, and the enumeration in
+     * THIRTEEN repository-chosen paths, and the enumeration in
      * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
      * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
-     * ten.
+     * ten; it now names thirteen. See that doc-block for which of the three
+     * additions is a NEW path and which is one literal reclassified.
      *
      * `BOTH` counts here: a string serving the project tier is repository-chosen
      * whatever else it also serves.
@@ -351,7 +372,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     {
         $repository = $this->repositoryChosenPaths();
 
-        $this->assertCount(10, $repository);
+        $this->assertCount(13, $repository);
 
         // SCOPED TO THE DOC-BLOCKS THAT MAKE THE CLAIM, not to the file. Asserted
         // file-wide, this passed while the enumeration itself was missing a name,
@@ -412,9 +433,45 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the ten reach the collector, and which are gated elsewhere. EIGHT
-     * and TWO — stated here so "seven feeders" cannot quietly stand in for "and
-     * two paths nobody drains".
+     * THE TWO FIGURES {@see Bootstrap::projectTierRefusals()}'s doc-block QUOTES,
+     * pinned — which is the only reason either sentence can be trusted.
+     *
+     * The distinct-path figure had no assertion behind it and drifted: it read
+     * "twenty" while `src/` held twenty-one. Nothing was wrong with the
+     * enumeration — {@see testTheDotPathEnumerationIsDerivedFromSrc()} compares
+     * OCCURRENCES (`file|path`) and was green throughout — but a count of
+     * DISTINCT paths is a different figure over a different domain, and no test
+     * had ever looked at it. That is this project's recurring defect in its
+     * smallest form: a number in prose, next to a number that is checked.
+     *
+     * Both are asserted here rather than in the two tests that already derive
+     * them, so a change that moves either one reds a test whose name says the
+     * doc-block is what needs editing.
+     */
+    public function testBothCensusFiguresThisDocBlockQuotes(): void
+    {
+        $distinct = [];
+        foreach (array_keys($this->dotPathsIn(\dirname(__DIR__, 2) . '/src')) as $occurrence) {
+            [, $path] = explode('|', $occurrence, 2);
+            $distinct[$path] = true;
+        }
+
+        self::assertCount(23, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(13, $this->repositoryChosenPaths(), 'of which repository-chosen');
+
+        $enumeration = $this->docBlockAbove(
+            \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
+            'public static function projectTierRefusals()',
+        );
+
+        self::assertStringContainsString('THIRTEEN repository-chosen', $enumeration);
+        self::assertStringContainsString('TWENTY-THREE distinct', $enumeration);
+    }
+
+    /**
+     * Which of the THIRTEEN reach the collector, and which are gated elsewhere.
+     * EIGHT and FIVE — stated here so "eight feeders" cannot quietly stand in
+     * for "and five paths nobody drains".
      *
      * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
      * {@see Bootstrap::foreignAgentPresets()}: `.claude/agents` and
@@ -422,16 +479,40 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * a named gap being closed rather than a count drifting. It became SEVEN AND
      * THREE there, and EIGHT AND TWO when crush_code.md Phase 2 item 4 wired
      * {@see CommandLoader} into {@see Bootstrap::chat()} and drained its
-     * `refusedDirectories()` — the same shape of move, recorded the same way. The
-     * two halves are asserted against the derivation, so a move cannot be
-     * recorded in one column only.
+     * `refusedDirectories()` — the same shape of move, recorded the same way.
+     * Phase 6 items 1+2 added THREE gaps and no feeder, so it is EIGHT AND FIVE.
+     *
+     * `.sugar-crush/commands` NEARLY WENT BACK TO THE GAP COLUMN, and the union
+     * check below could not have stopped it: `assertSame($union, $paths)` plus
+     * `assertSame([], $intersection)` is satisfied by 8/5 and by 7/6 alike, so
+     * those two lines pin the PARTITION and say nothing about the PLACEMENT.
+     * That is this project's other recurring defect — a test asserting that a
+     * clause is present rather than that it is true. `chat()` really does spread
+     * `$commandLoader->refusedDirectories()` into the collector, so the row is a
+     * fact about `src/` and is now DERIVED from it: every path's column comes
+     * from {@see DRAIN_EVIDENCE} checked against
+     * {@see collectorDrains()}, and the two literals below are what that
+     * derivation is compared to rather than what decides it.
+     *
+     * WHAT THE DERIVATION DOES NOT COVER, since a half-derived instrument that
+     * reads as derived is the thing this file was rewritten once to stop being:
+     * the GAP column is the absence of a {@see DRAIN_EVIDENCE} entry, so a
+     * deleted entry moves a path to the gaps and reds this test with the path
+     * named, but nothing here would notice a subsystem that grew a drain and a
+     * matching evidence row in the same edit. The positive direction is what
+     * this covers, and it is the direction the defect ran in.
      */
-    public function testTheEightThatFeedTheCollectorAndTheTwoThatAreNamedGaps(): void
+    public function testTheEightThatFeedTheCollectorAndTheFiveThatAreNamedGaps(): void
     {
         $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
             '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/commands',
             '.sugar-crush/skills', '.sugar-crush/workflows'];
-        $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml'];
+        $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml',
+            '.sugar-crush/config.json', '.sugar-crush/settings.json',
+            '.sugar-crush/settings.local.json'];
+
+        $this->assertCount(8, $feeders, 'the EIGHT this test is named for');
+        $this->assertCount(5, $gaps, 'and the FIVE');
 
         $union = array_merge($feeders, $gaps);
         sort($union);
@@ -442,6 +523,97 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             'every repository-chosen path is one or the other',
         );
         $this->assertSame([], array_intersect($feeders, $gaps), 'and never both');
+
+        // THE PLACEMENT, derived. `src/` decides which column each path is in;
+        // the arrays above only get to agree with it.
+        foreach ($this->repositoryChosenPaths() as $path) {
+            $evidence = self::DRAIN_EVIDENCE[$path] ?? null;
+            $drained = $evidence !== null && $this->collectorDrains($evidence);
+
+            $this->assertContains(
+                $path,
+                $drained ? $feeders : $gaps,
+                $drained
+                    ? "{$path}: src/Cli/Bootstrap.php spreads `{$evidence}` into "
+                        . '$projectTierRefusals, so this path is a FEEDER'
+                    : "{$path}: nothing in src/Cli/Bootstrap.php spreads its subsystem's "
+                        . 'refusals into $projectTierRefusals, so this path is a named GAP',
+            );
+        }
+    }
+
+    /**
+     * The drain expression that carries each FEEDER's refusals into
+     * {@see Bootstrap::$projectTierRefusals}. A path with no entry here is a
+     * named gap.
+     *
+     * KEYED BY DOT-PATH, NOT BY OWNING CLASS, and that is not a convenience.
+     * `.sugar-crush/agents` and `.sugar-crush/hooks.yaml` are both literals in
+     * `Cli/Bootstrap.php` — one a feeder, one a gap — so "which class holds the
+     * literal" cannot answer "does it reach the collector". Three receivers do
+     * double duty in the other direction: `$registry->refusedDirectories()`
+     * covers the native and foreign agent registries alike (both write through a
+     * `$registry` variable), and `$manager->refusedDirectories()` covers all
+     * three skill tiers, which is correct — a single drain feeding several tiers
+     * is one drain.
+     *
+     * @var array<string, string>
+     */
+    private const DRAIN_EVIDENCE = [
+        '.claude/agents' => '$registry->refusedDirectories()',
+        '.claude/skills' => '$manager->refusedDirectories()',
+        '.opencode/agents' => '$registry->refusedDirectories()',
+        '.opencode/skills' => '$manager->refusedDirectories()',
+        '.sugar-crush/agents' => '$registry->refusedDirectories()',
+        '.sugar-crush/commands' => '$commandLoader->refusedDirectories()',
+        '.sugar-crush/skills' => '$manager->refusedDirectories()',
+        '.sugar-crush/workflows' => '$registry->projectTierRefusal()',
+    ];
+
+    /**
+     * Does `src/Cli/Bootstrap.php` carry `$expression` in a position that
+     * reaches {@see Bootstrap::$projectTierRefusals}?
+     *
+     * COMMENTS STRIPPED FIRST, with `token_get_all()`, because this file's own
+     * doc-blocks quote every one of these expressions — a plain
+     * `str_contains()` over the source would answer `true` for a drain that had
+     * been deleted and only described. That is the exact shape of the defect
+     * this method exists to catch, so it must not be built out of it.
+     *
+     * A WINDOW rather than the statement, because two of the six drains assign
+     * the seam's result to a local first (`$refusal = $registry->…;` then
+     * `self::$projectTierRefusals[$path] = $refusal;`), so the expression and
+     * the write are different statements. 1200 code characters before each
+     * mention of the collector and 400 after; measured against the widest gap in
+     * `src/` today, which is the workflow registry's at roughly 120.
+     */
+    private function collectorDrains(string $expression): bool
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
+        )) as $token) {
+            if (\is_array($token)) {
+                if ($token[0] === \T_COMMENT || $token[0] === \T_DOC_COMMENT) {
+                    continue;
+                }
+                $code .= $token[1];
+                continue;
+            }
+            $code .= $token;
+        }
+
+        $needle = 'self::$projectTierRefusals';
+        $offset = 0;
+        while (($at = strpos($code, $needle, $offset)) !== false) {
+            $from = max(0, $at - 1200);
+            if (str_contains(substr($code, $from, ($at - $from) + 400), $expression)) {
+                return true;
+            }
+            $offset = $at + \strlen($needle);
+        }
+
+        return false;
     }
 
     /**

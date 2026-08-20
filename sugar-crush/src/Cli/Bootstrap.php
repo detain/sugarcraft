@@ -16,6 +16,7 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandLoader;
+use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
@@ -187,6 +188,38 @@ final class Bootstrap
     private static array $trustedCommandRoots = [];
 
     /**
+     * The same again, for {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY},
+     * frozen for {@see trustedRootsForThisProcess()}'s reason and for that
+     * reason ALONE. The freeze is per resolved config PATH, so a test that
+     * repoints `--config` gets a fresh answer.
+     *
+     * NO EXTRA THREAT OVER ITS THREE SIBLINGS, stated because the first cut of
+     * this doc-block claimed one: that "a project's own `settings.local.json`
+     * is writable by anything running in the checkout, so without the freeze a
+     * turn could append a trust line and have its own later reads honour it".
+     * That is not reachable, and the review that caught it measured why. This
+     * key is not in {@see LayeredSettings::LAYERED_KEYS}, so
+     * `LayeredSettings::only()` drops it from every settings file at every
+     * tier — a project's, and the user's own `settings.json` too — and the list
+     * itself is read from `config.json` through {@see permissionConfig()},
+     * which the layering does not touch. A write to a settings file therefore
+     * cannot add a trust entry at all, frozen or not. What the freeze actually
+     * buys here is what it buys for hooks, MCP and commands: one answer per
+     * process, so a mid-session edit to the user's OWN `config.json` cannot
+     * widen the grant a launch already decided.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedSettingsRoots = [];
+
+    /**
+     * The project root {@see readUserConfig()}'s project layer is read from, or
+     * null for "no project named yet" — see
+     * {@see useProjectRootForSettings()}.
+     */
+    private static ?string $projectRootForSettings = null;
+
+    /**
      * The hook entries this process read, keyed by file path — see
      * {@see hookFileEntries()} for why the file is read once per launch.
      *
@@ -249,22 +282,43 @@ final class Bootstrap
      * the mismatch is recorded here instead of being left for the next reader to
      * infer from the values.
      *
-     * TWO OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
+     * FIVE OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
      * is named rather than counted, because "five feeders" quietly becoming
      * "five feeders and three things nobody drains" is the drift this collector
      * keeps producing. It was FOUR until crush_code.md Phase 1 item 3 wired
      * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}, and THREE until
      * Phase 2 item 4 wired {@see \SugarCraft\Crush\Commands\CommandLoader} — which
-     * is what a named gap is for, twice over. The two that remain are DORMANT —
-     * nothing in `src/` or `bin/` constructs them — and both are GATED, which
-     * dormant does not imply and for one round did not mean:
+     * is what a named gap is for, twice over. It is FIVE now, and the three
+     * that arrived with Phase 6 items 1+2 are NOT of the same kind as the two
+     * that were already here, so "dormant and gated" is no longer the whole
+     * list's property and is stated per entry instead:
      *
      *  - {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
-     *    (`.opencode/memory`) exposes `refusedDirectories()` with nothing
+     *    (`.opencode/memory`) is DORMANT — nothing in `src/` or `bin/`
+     *    constructs it — and GATED, which dormant does not imply and for one
+     *    round did not mean. It exposes `refusedDirectories()` with nothing
      *    reading it yet;
      *  - `.sugar-crush/hooks.yaml` has its own trust gate
      *    ({@see projectHooksAreTrusted()}) and refuses the LAUNCH rather than
-     *    degrading, so a collector entry would be unreachable.
+     *    degrading, so a collector entry would be unreachable;
+     *  - `.sugar-crush/config.json` as read by
+     *    {@see \SugarCraft\Crush\Agents\WorktreeConfig::readConfig()} became
+     *    repository-chosen when {@see \SugarCraft\Crush\Agents\WorktreeManager}
+     *    started passing the repository under management as its config
+     *    directory. DORMANT: nothing in `src/` constructs a `WorktreeManager`,
+     *    so a refusal recorded there would have no reader;
+     *  - `.sugar-crush/settings.json` and
+     *  - `.sugar-crush/settings.local.json`
+     *    ({@see \SugarCraft\Crush\Config\LayeredSettings}) are the opposite of
+     *    dormant — {@see readUserConfig()} reads them, and `EngineBackend`
+     *    calls that once per TURN. They are gaps because of the FREQUENCY, not
+     *    the wiring: an entry per read would either repeat every turn or make
+     *    "this project is not opted in" — the ordinary state of every project
+     *    the user has not listed under
+     *    {@see \SugarCraft\Crush\Config\LayeredSettings::PROJECT_SETTINGS_TRUST_KEY}
+     *    — read as a failure in a doctor report. Both are gated
+     *    ({@see projectSettingsTrusted()} plus two `ContainedPath` compares);
+     *    neither is reported.
      *
      * The full enumeration and its derivation live in
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}.
@@ -378,6 +432,14 @@ final class Bootstrap
         // reached through backend() -> tools() — reports the missing root as a
         // clear error rather than handing a path jail a `false`.
         $root ??= getcwd() ?: null;
+
+        // Every entry point that resolves a root names it as THE project for
+        // the settings layers, before anything below reads a config — see
+        // {@see useProjectRootForSettings()}. Set on all four rather than in
+        // one shared helper because there is no single funnel: `app()` does
+        // not call `chat()`'s resolution, and `NonInteractive` enters at
+        // `backend()`.
+        self::useProjectRootForSettings($root);
 
         // A LAUNCH's refusals, not a PROCESS's. This map is what
         // {@see projectTierRefusals()} advertises to a doctor report or a debug
@@ -691,14 +753,32 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * TEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * THIRTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * twenty distinct ones on this tree, ten of them classified
+     * TWENTY-THREE distinct ones on this tree, thirteen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
-     * reds when an eleventh appears.
+     * reds when a fourteenth appears.
+     *
+     * IT WENT TEN -> THIRTEEN IN ONE CHANGE-SET, from three different causes, and
+     * they are worth separating because only one of them is a new path:
+     *
+     *  - `.sugar-crush/settings.json` and `.sugar-crush/settings.local.json` are
+     *    genuinely new — the project tier of
+     *    {@see \SugarCraft\Crush\Config\LayeredSettings}.
+     *  - `.sugar-crush/config.json` was RECLASSIFIED, not added. It was
+     *    package-relative for as long as {@see \SugarCraft\Crush\Agents\WorktreeManager}
+     *    built its config with a bare `WorktreeConfig::new()`; that constructor
+     *    now passes the repository under management, so the same literal reads a
+     *    tree the operator cloned.
+     *
+     * The DISTINCT count had also drifted on its own: it read "twenty" while
+     * `src/` held twenty-one, because no assertion stood behind it — a figure in
+     * prose decays silently. {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest::testBothCensusFiguresThisDocBlockQuotes()}
+     * now pins both numbers, which is the only thing that keeps a sentence like
+     * this one true.
      *
      * THE SHAPE EXCLUDES A BARE DOT-FILE, and one of those is in this map. A
      * literal with no directory component — `src/` holds exactly two,
@@ -721,9 +801,31 @@ final class Bootstrap
      * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
      * reader; the split was five and five before it.
      *
-     * The THREE that are gated elsewhere and named as gaps rather than counted
-     * here — `.sugar-crush/commands`, `.opencode/memory`,
-     * `.sugar-crush/hooks.yaml` — are itemised on {@see $projectTierRefusals}.
+     * The FIVE that are gated elsewhere and named as gaps rather than counted
+     * here — `.opencode/memory`, `.sugar-crush/hooks.yaml`,
+     * `.sugar-crush/config.json`, `.sugar-crush/settings.json`,
+     * `.sugar-crush/settings.local.json` — are itemised on
+     * {@see $projectTierRefusals}, all five of them.
+     *
+     * `.sugar-crush/commands` IS NOT ONE OF THEM, and this sentence used to say
+     * it was — a gap list that went stale when crush_code.md Phase 2 item 4
+     * wired {@see \SugarCraft\Crush\Commands\CommandLoader} and
+     * {@see chat()} started draining `refusedDirectories()` straight into
+     * {@see $projectTierRefusals}. It is the EIGHTH feeder. The stale sentence
+     * then very nearly reclassified the live code to match itself, which is the
+     * direction this project's recurring defect always runs: prose is easier to
+     * believe than a drain twenty lines long.
+     *
+     * The last three of the five joined with the settings layering and the
+     * `WorktreeConfig` reclassification above, and all three are gaps
+     * DELIBERATELY rather than pending work. `.sugar-crush/config.json` is read
+     * by a class nothing in `src/` constructs, so a refusal it recorded would
+     * have no reader. The two `settings*.json` files are read by
+     * {@see readUserConfig()}, which `EngineBackend` calls once per TURN: an
+     * entry per read would either repeat or, worse, make "this project is not
+     * opted in" — the ordinary state of every project the user has not listed —
+     * look like a failure in a doctor report. Both are gated; neither is
+     * reported.
      *
      * @return array<string, string> configured path => why it was refused
      */
@@ -1227,6 +1329,14 @@ final class Bootstrap
     {
         $root ??= getcwd() ?: null;
 
+        // Every entry point that resolves a root names it as THE project for
+        // the settings layers, before anything below reads a config — see
+        // {@see useProjectRootForSettings()}. Set on all four rather than in
+        // one shared helper because there is no single funnel: `app()` does
+        // not call `chat()`'s resolution, and `NonInteractive` enters at
+        // `backend()`.
+        self::useProjectRootForSettings($root);
+
         $chat = self::chat($root);
         [$provider, $model] = self::provider();
 
@@ -1363,6 +1473,14 @@ final class Bootstrap
 
         $root ??= getcwd() ?: null;
 
+        // Every entry point that resolves a root names it as THE project for
+        // the settings layers, before anything below reads a config — see
+        // {@see useProjectRootForSettings()}. Set on all four rather than in
+        // one shared helper because there is no single funnel: `app()` does
+        // not call `chat()`'s resolution, and `NonInteractive` enters at
+        // `backend()`.
+        self::useProjectRootForSettings($root);
+
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
             try {
@@ -1457,6 +1575,14 @@ final class Bootstrap
         ToolIpcFiles::sweepOnce();
 
         $root ??= getcwd() ?: null;
+
+        // Every entry point that resolves a root names it as THE project for
+        // the settings layers, before anything below reads a config — see
+        // {@see useProjectRootForSettings()}. Set on all four rather than in
+        // one shared helper because there is no single funnel: `app()` does
+        // not call `chat()`'s resolution, and `NonInteractive` enters at
+        // `backend()`.
+        self::useProjectRootForSettings($root);
         $factory = new ProviderFactory();
         $provider = $factory->create($factory->defaultConfig($providerName));
         $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
@@ -1590,9 +1716,103 @@ final class Bootstrap
      * output (and fails any `failOnWarning` suite) on a path that then goes on
      * to degrade gracefully anyway.
      *
+     * LAYERED SINCE {@see LayeredSettings} — the return value is this file's
+     * contents with that class's whitelisted keys backfilled from
+     * `~/.sugar-crush/settings.json` and, for a TRUSTED project root only, from
+     * `<root>/.sugar-crush/settings.json` and `settings.local.json`. For every
+     * key `LayeredSettings` does not name, the answer is unchanged: this
+     * file, alone, exactly as before. See that class for the precedence order
+     * and for why the user's files outrank the project's.
+     *
+     * STILL TOLERANT AND STILL NON-THROWING, which the layering must not
+     * change: `EngineBackend` calls this once per turn, and the trust lookup it
+     * now performs goes through {@see permissionConfig()}, which throws on an
+     * unusable config and on an unknowable home. {@see projectSettingsTrusted()}
+     * swallows that into `false`, so every uncertainty costs the project layer
+     * and nothing else.
+     *
+     * THE USER LAYER DOES NOT FOLLOW `--config`, which is the one asymmetry
+     * worth naming here because the first cut of this method got it wrong.
+     * `settings.json` is resolved from {@see userSettingsDirOrNull()} — the
+     * home-owned `~/.sugar-crush` — and NOT from `dirname(userConfigPath())`.
+     * MEASURED against the first cut: `--config /tmp/anything/config.json`
+     * made `/tmp/anything/settings.json` a USER-TIER file, so a `provider` and
+     * an `instructions` list — the two keys this whole design refuses to a
+     * project at any trust level — came out of a directory with no containment
+     * check, no home-ownership check and no trust gate. A repository shipping
+     * `crush.json` alongside a `settings.json` and a README saying
+     * `sugarcrush --config ./crush.json` would have had the user tier.
+     * {@see useConfigPath()} already documents that the flag names ONE FILE and
+     * moves nothing else in `~/.sugar-crush`; the settings file is one of the
+     * things it does not move.
+     *
      * @return array<string, mixed>
      */
     public static function readUserConfig(): array
+    {
+        $root = self::$projectRootForSettings;
+        $userSettingsDir = self::userSettingsDirOrNull();
+
+        return LayeredSettings::merge(
+            self::rawUserConfig(),
+            $userSettingsDir === null ? [] : LayeredSettings::userLayer($userSettingsDir),
+            $root === null
+                ? []
+                : LayeredSettings::projectLayer($root, self::projectSettingsTrusted($root)),
+        );
+    }
+
+    /**
+     * The directory {@see LayeredSettings::USER_FILE} is read from, or null
+     * when this process cannot establish whose home it is.
+     *
+     * {@see trustedConfigDirPath()}, NOT {@see configDirPath()} and NOT
+     * `dirname(userConfigPath())`, and the two exclusions have different
+     * reasons:
+     *
+     *  - not `dirname(userConfigPath())`, because that follows `--config` — see
+     *    {@see readUserConfig()} for the measurement;
+     *  - not `configDirPath()`, because that resolves through
+     *    {@see homePath()}'s world-writable STAND-IN when no home is knowable,
+     *    and a `settings.json` may carry `provider` and `instructions`. Those
+     *    are the same policy tier `hooks.yaml` and the agent presets are in, so
+     *    they get the same gate those already have.
+     *
+     * NULL RATHER THAN A THROW, unlike every other caller of that method: this
+     * one is reached from {@see readUserConfig()}, whose contract is that no
+     * uncertainty costs more than the setting it was about. On a real launch
+     * the question is already settled — {@see chat()}, {@see backend()} and
+     * {@see backendFor()} each resolve {@see trustedConfigDirPath()} before
+     * they build anything, so a process that cannot establish its home has
+     * already refused to start. What this guard covers is the direct caller:
+     * `EngineBackend`'s per-turn read, and a subcommand that reads the config
+     * without a launch behind it.
+     */
+    private static function userSettingsDirOrNull(): ?string
+    {
+        try {
+            return self::trustedConfigDirPath();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * The CLI-written user file ALONE — {@see readUserConfig()} minus the
+     * layering.
+     *
+     * Separate from the layered read because {@see writeUserConfig()} merges
+     * onto what it reads and then writes the result back. Reading the LAYERED
+     * view there would copy every effective value into the user's own file the
+     * first time anything persisted a theme: a `titleModel` a project chose
+     * would become a permanent user-tier setting, outliving the checkout that
+     * suggested it and surviving into every other repository. That is a
+     * one-way promotion from the lowest-trust layer to the highest, performed
+     * by a UI action that says "Switch theme".
+     *
+     * @return array<string, mixed>
+     */
+    private static function rawUserConfig(): array
     {
         $path = self::userConfigPath();
         if (!is_file($path)) {
@@ -1607,6 +1827,91 @@ final class Bootstrap
         $data = json_decode($contents, true);
 
         return is_array($data) ? $data : [];
+    }
+
+    /**
+     * Name the project whose `.sugar-crush/settings.*` files this process may
+     * consider — called by the four entry points that resolve a `$root`
+     * ({@see chat()}, {@see app()}, {@see backend()}, {@see backendFor()}).
+     *
+     * NO PROJECT LAYER UNTIL AN ENTRY POINT HAS NAMED ONE, and that is the
+     * whole of the rule. `readUserConfig()` has no `$root` parameter and cannot
+     * grow one — its callers include `EngineBackend`'s per-turn read, five and
+     * six frames below anything that knows a root — so the root has to be
+     * remembered, the same way {@see useConfigPath()} remembers a config path
+     * and for the same reason. Deriving it from `getcwd()` inside the read
+     * instead would have been wrong whenever `--root` named something else: the
+     * settings would come from the directory the user was standing in and the
+     * files from the repository they pointed at.
+     *
+     * Falling back to `getcwd()` was the other candidate and is deliberately
+     * NOT taken: a subcommand like `sugarcrush models` reads the user config
+     * without ever naming a project, and having it silently pick up the CWD's
+     * settings would make the project tier apply on paths that never opened a
+     * project. Unnamed means user tier only, which is the pre-layering
+     * behaviour and the safe direction.
+     *
+     * Null resets it, which tests must do — and a BLANK string is normalised to
+     * null rather than stored, which buys no behaviour today and is kept anyway
+     * for one measured reason: on PHP 8.3 `realpath('')` answers with the
+     * PROCESS CWD, not `false`. Stored blank, {@see projectSettingsTrusted()}
+     * would put the trust question to whatever directory the shell was standing
+     * in — a directory no entry point named. The layer still comes back empty
+     * because {@see LayeredSettings::projectLayer()} refuses a blank root, so
+     * this is the outer of three guards; it is pinned directly, by reflection,
+     * in `BootstrapLayeredSettingsTest`, since nothing observable downstream can
+     * tell the three apart.
+     */
+    public static function useProjectRootForSettings(?string $root): void
+    {
+        self::$projectRootForSettings = $root === null || trim($root) === '' ? null : $root;
+    }
+
+    /**
+     * Whether the operator opted this project root in to contributing settings
+     * — {@see projectCommandShellIsTrusted()}'s shape for
+     * {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY}, with the same
+     * fail-closed-on-every-uncertainty behaviour and the same once-per-process
+     * freeze.
+     *
+     * THE THROW IS SWALLOWED HERE and nowhere else in the family. Its three
+     * siblings let {@see PermissionConfigException} out, because each is called
+     * from a launch path that SHOULD refuse to start on an unusable permission
+     * policy. This one is called from {@see readUserConfig()}, whose contract is
+     * that a corrupt config costs the theme and not the session — see its
+     * doc-block — and which `EngineBackend` calls once per turn. So an
+     * unreadable config, or a home this process cannot establish ownership of,
+     * costs the project settings layer. That is fail-closed: the layer is the
+     * lowest-trust input in the stack, and its absence is the pre-layering
+     * behaviour.
+     */
+    private static function projectSettingsTrusted(string $root): bool
+    {
+        $canonical = realpath($root);
+        if ($canonical === false) {
+            return false;
+        }
+
+        // INSIDE the try as well, unlike the three siblings: this is the
+        // home-ownership gate, and it throws on exactly the launch
+        // ({@see requireHomeDirectory()}) that must not take the theme with it.
+        // Leaving it outside would have made the swallow above cosmetic — the
+        // first uncertainty in the chain would still have escaped.
+        try {
+            $path = self::trustedConfigDirPath() . '/config.json';
+
+            if (!\array_key_exists($path, self::$trustedSettingsRoots)) {
+                self::$trustedSettingsRoots[$path] = self::trustedProjectRoots(
+                    self::permissionConfig(),
+                    LayeredSettings::PROJECT_SETTINGS_TRUST_KEY,
+                    'no project settings file may contribute a setting',
+                );
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return in_array($canonical, self::$trustedSettingsRoots[$path], true);
     }
 
     /**
@@ -1627,7 +1932,10 @@ final class Bootstrap
      */
     public static function writeUserConfig(array $patch): void
     {
-        $merged = array_merge(self::readUserConfig(), $patch);
+        // rawUserConfig(), NOT readUserConfig(): see that method for why merging
+        // onto the LAYERED view would persist a project's or a settings.json's
+        // values into the user's own file as a side effect of switching a theme.
+        $merged = array_merge(self::rawUserConfig(), $patch);
         $json = json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         if ($json === false) {
             return;

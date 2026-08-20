@@ -195,6 +195,21 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — includeFile() reads an `@path` written inside a command file, behind this '
                 . 'file\'s own ContainedPath::within() compare against the checkout',
         ],
+        'Config/LayeredSettings.php|file_get_contents' => [
+            // NOT `CONTAINED`, which is what this row said first and is true of only ONE of the two '
+            // callers — the recurring defect in a single word. readFile() is private and both of its
+            // callers hold their own boundary, of two DIFFERENT kinds, so the verdict has to be the
+            // one that is true of both.
+            'CALLER_SUPPLIED — readFile() is the ONE read behind the whole settings layering, and '
+                . 'each caller bounds the path before reaching it, differently: projectLayer() only '
+                . 'past ContainedPath::below() on `<root>/.sugar-crush` and ContainedPath::within() '
+                . 'on the file, plus a trust grant already established for that root '
+                . '(LayeredSettings::PROJECT_SETTINGS_TRUST_KEY); userLayer() takes its DIRECTORY '
+                . 'from its caller and in production is handed '
+                . 'Bootstrap::userSettingsDirOrNull() — trustedConfigDirPath(), the home-OWNED '
+                . '~/.sugar-crush, deliberately NOT dirname(userConfigPath()) and so not '
+                . 'relocatable by --config',
+        ],
         'Context/ImportResolver.php|file_get_contents' => [
             'CALLER_SUPPLIED — an `@file` import, judged by the $boundaryCheck callback the caller '
                 . 'supplies (InstructionFileLoader passes one built on ContainedPath)',

@@ -77,6 +77,57 @@ sugarcrush -- --not-a-flag                      # `--` ends options; everything 
 are jailed to and where `CLAUDE.md`/`AGENTS.md` and `.sugar-crush/skills` are
 looked for.
 
+### Settings files
+
+Four files are read, and the **highest one that mentions a key wins** for that
+key:
+
+| # | File | Who wrote it | Wins over |
+|---|------|--------------|-----------|
+| 4 | `~/.sugar-crush/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider` | everything |
+| 3 | `~/.sugar-crush/settings.json` | you, by hand | the project's two |
+| 2 | `<project>/.sugar-crush/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below) | the shared project file |
+| 1 | `<project>/.sugar-crush/settings.json` | whoever wrote the repository | nothing |
+
+Two things about that order are deliberate and the reverse of what most editors
+do. **Your files beat the project's**, because a project file arrived with a
+`git clone` — a repository can fill in what you left unsaid and never overrule
+a choice you made. And **`config.json` beats `settings.json`** despite being
+the deprecated name, because it is the file the CLI *writes*: ranked the other
+way, a `settings.json` naming `theme` would make every Ctrl+P "Switch theme"
+appear to do nothing at all. `config.json` keeps working indefinitely; nothing
+needs migrating.
+
+Only these keys are layered — `provider`, `theme`, `titleModel`,
+`summaryModel`, `instructions`, `disabledSkills`, `parallelToolCalls`,
+`parallelToolDeadlineSeconds`. Everything else (`permissionMode`,
+`permissionRules`, the `trustedProject*` lists) is read from
+`~/.sugar-crush/config.json` **alone**, exactly as before — so no lower layer
+can weaken a permission policy or grant itself trust.
+
+**A project's settings files are ignored until you opt that project in.**
+`<project>/.sugar-crush/settings.json` was written by whoever wrote the
+repository, so honouring it out of the box would let `git clone <repo> && cd
+<repo> && sugarcrush` pick your model and turn off your skills. Same gate shape
+as project hooks and `.mcp.json`, separate key — list the project in
+`trustedProjectSettings` in your own `~/.sugar-crush/config.json`:
+
+```json
+{ "trustedProjectSettings": ["/home/you/src/that-project"] }
+```
+
+Absolute (or `~/`-rooted) paths only; a relative entry like `"."` would trust
+every repository you ever run from, so it is refused and reported. And
+`settings.local.json` gets **the same gate** as its tracked sibling: `.gitignore`
+is advice to whoever commits, not a property of a repo someone else wrote, so a
+`git add -f`'d "local" file arrives with a clone just as readily. The two differ
+in precedence only.
+
+Even for a trusted project, two keys are **never** taken from a project file:
+`provider`, because it decides which host every prompt in the session is sent
+to; and `instructions`, because it decides which files become authoritative
+system-prompt text. Put those in your own file where you can see them.
+
 `--config <file>` (also `--config=<file>`) replaces the per-user
 `~/.sugar-crush/config.json` for this run: the theme, the persisted provider,
 the `instructions` globs, the `permissionMode`, the `permissionRules` and the
@@ -84,7 +135,11 @@ the `instructions` globs, the `permissionMode`, the `permissionRules` and the
 one is not merged in. It names one **file**, not a config directory — agents,
 skills, workflows, sessions and memory still live under `~/.sugar-crush`, and
 `--config` does not relax the "is this home directory yours" check that guards
-them. The file must already exist and be readable; naming one that does not is
+them. **`settings.json` is one of the things it does not move**: layer 3 above
+is always `~/.sugar-crush/settings.json`, never a `settings.json` sitting next
+to the file you named. Otherwise `--config ./anything.json` would hand a
+directory nobody vetted the user tier — the tier that may set `provider` and
+`instructions`. The file must already exist and be readable; naming one that does not is
 a usage error (exit `2`) rather than a fall-back to discovery, for the same
 reason `--root /typo` is one — silently running the DEFAULT permission policy
 while the operator believes a restrictive one is in force is worse than not

@@ -92,9 +92,30 @@ final class WorktreeConfig
      * The directory this factory looks for `.sugar-crush/config.json` under when
      * no `$configDir` is passed: the one CONTAINING this package.
      *
-     * Kept as the production default because changing where a shipped library
-     * reads its settings from is not this change-set's call — what changed is
-     * that the answer is now a named seam rather than an inline expression, so
+     * NARROWED TO THE NO-REPOSITORY CASE. It used to be what
+     * {@see WorktreeManager::__construct()} would have got on every
+     * construction — the conditional is deliberate: that constructor's
+     * default-config branch fataled on a readonly double-write before it ever
+     * reached this method, so the cross-tree read it was set up to perform is
+     * what it WOULD have done rather than what it did. See that constructor for
+     * both halves and for the measured numbers. `WorktreeManager` now passes
+     * `configDir: $repoRoot` whenever it has one, so this default is reached
+     * only when NO repository was named (`$repoRoot === ''`) or when something
+     * other than `WorktreeManager` calls {@see new()} bare.
+     *
+     * IT IS STILL `dirname(__DIR__, 3)` AND THAT IS STILL WRONG-ISH, stated
+     * plainly rather than fixed here: the expression means "the directory above
+     * the package", which is the checkout root in this monorepo and
+     * `vendor/sugarcraft/` under a `composer require`. So its answer changes
+     * meaning with the install layout, and in the layout real users have it
+     * names a directory that will not hold a settings file at all. Left alone
+     * because the caller that made the difference observable now passes an
+     * explicit directory, and inventing a *different* implicit default (the
+     * CWD? the nearest enclosing `.git`?) for the remaining bare calls would
+     * trade a documented oddity for an undocumented one. A bare {@see new()} is
+     * best read as "the defaults, plus whatever the development checkout says".
+     *
+     * Named as a seam rather than left inline so
      * {@see \SugarCraft\Crush\Tests\Agents\WorktreeConfigTest} can drive a
      * temporary tree instead of writing to the repository's own tracked
      * `.sugar-crush/config.json` and restoring it in a `finally`. An interrupted
