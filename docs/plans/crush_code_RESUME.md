@@ -36,7 +36,7 @@ and every figure since is void. `sugar-crush/vendor/sugarcraft/` = 18 symlinks.
 |---|---|---|---|
 | `crush-lane-cmd` | the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `339f512c` | — released, dir reset to `origin/master` |
 | `crush-lane-sglang` | **DSML parser + streaming gap** | **FIX** | `src/Providers/**` — **holds the census token** |
-| `crush-lane-lsp` | **P3.2 FocusRing + P3.5 padding** (P3.3 DESCOPED — premise false) | **REVIEW** (uncommitted) | `src/Tui/**`, `src/App/**`, `Renderer.php`, `KeyboardHandler.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
+| `crush-lane-lsp` | **P3.2 FocusRing + P3.5 padding** (P3.3 DESCOPED — premise false) | **REVIEW** (uncommitted) | `src/Tui/**` (which is where `KeyboardHandler.php` lives), `src/App/**`, `src/Renderer.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
 
 **MASTER IS NOW `c39f1a99`** — CI pushed a `vhs: regenerate demo GIFs` commit on top of `339f512c`.
 The live tree is at `c39f1a99` and clean. Lanes `sglang` and `lsp` are both behind it.
@@ -146,7 +146,126 @@ attacking them first; treat everything below as CLAIMED until that report lands.
   plan's `:112`; all four modals share **one** Veil (`Renderer.php:1150`), so per-modal arming needs
   a conditional, not a second Veil; `Table` is `SugarCraft\Sprinkles\Table\Table`.
 
+### ENGINE-PATH APPROVER — MEASURED, and it is NOT the small item the queue implied
+
+A read-only scout measured it at `c39f1a99`. **The headline: the approver contract and the UI that
+would serve it are shaped incompatibly, and no docblock in the tree says so.**
+
+- **The contract is synchronous and bool-returning.** `Runtime.php:1143` calls it inline:
+  `resolveAsk($ask, $onPermissionRequest($toolCall, $ask) === true)`. Declared `Runtime.php:121-128`,
+  threaded at `:154`, consumed at `settleAsk()` `:1114-1144`. `EngineBackend.php:466` is its only
+  supplier in `src/`.
+- **`Chat`'s permission prompt is NOT a blocking closure — it is a `Deferred` + TEA state machine.**
+  `Chat::requestPermission()` `:1773` makes a `Deferred` at `:2010`, parks state at `:2012-2022`,
+  returns `Cmd::promise(...)` at `:2024`; `answerPermission()` `:2047` resolves it at `:2069`.
+  **Three docblocks call the approver a "BLOCKING closure"** (`AgentManager.php:416`,
+  `Bootstrap.php:914`, `docs/PERMISSIONS.md:193`) — that is INTENT, not implementation. An
+  implementer who trusts them writes `withPermissionApprover(fn() => $chat->prompt(...))` and it
+  cannot cohere. **This is THE trap on this item.**
+- **The prompt UI is complete and starved, not missing.** Producer `Chat::gateToolCall()` `:3054` →
+  `beginToolCalls()` `:1742` builds `PermissionRequestMsg` at `:1752`; renderer
+  `Renderer.php:3398` `renderPermissionPrompt()` in the overlay chain at `:1131`; keys
+  `Chat.php:1194-1195` → `:2227`; `PermissionReply` (`Once`/`Always`/`Reject`);
+  `PermissionPromptStage`. **`PermissionRequestMsg.php:19-22` already names the engine path as the
+  intended second producer.** It is starved because `gateToolCall()` bails at `:3056` for tools not
+  in `$this->tools` and **nothing in production calls `Chat::registerTool()`** (`:4520`).
+- **Four execution paths, and blocking is only safe on two.** TUI+pcntl → forked child
+  (`EngineBackend.php:715`), cannot freeze the UI but cannot reach it either; **TUI without
+  pcntl/socketpair → `completeAsyncBlocking()` `:1201` resolves INLINE ON THE LOOP at `:1208`, where
+  a blocking approver DOES freeze the UI** (three fall-through points: `:705`, `:711`, `:721`);
+  headless `-p`/`run` (`NonInteractive.php:207`) and background sessions
+  (`BackgroundSessionRunner.php:195`) are plain synchronous, where blocking is correct.
+- **The fork channel is one-way TODAY but full-duplex ALREADY.** `$parentSocket` appears at exactly
+  five points and **there is no `fwrite` to it anywhere**; `writeFrame()` `:1010` is child-side only.
+  But `:709` is `stream_socket_pair(...SOCK_STREAM...)` and the length-prefixed framing
+  (`:1010`/`drainFrames()` `:1044`) is symmetric. So the TUI fix is **adding a direction to an
+  existing channel**, not replacing the transport — 120-200 lines in `EngineBackend` + 100-180
+  INFERRED in `Chat.php`.
+
+**DECISION — do the headless subset FIRST, as its own bundle.** `NonInteractive.php:207` runs on a
+plain synchronous stack with no loop and no fork, so a blocking approver there is the natural shape,
+not a compromise. It touches only `src/Cli/**` (free), needs neither `Chat.php` nor the fork
+protocol, and it is what makes `--permission-mode default` on `-p` **mean something** instead of
+failing closed — the direct completion of what lane `cmd` shipped in `339f512c`. Attach at
+`Bootstrap::backend()` `:1571-1583` / `backendFor()` `:1627-1639`, NOT via an `instanceof
+EngineBackend` narrow in NonInteractive: `Backend` (`src/Backend.php:38-77`) declares only
+`complete()`/`completeAsync()`.
+**A policy-only approver is a REJECTED half-measure** — `PermissionRule` (634 lines) already decides
+exactly that, earlier, at `PermissionGate::decide()` `:220-227`; the residue reaching `Ask` is by
+definition what policy could not answer, so it would ship a second weaker copy of the rule engine.
+
+**Collision verdict: the engine-approver bundle CAN run alongside `lsp` and `sglang`** — every
+mandatory file is free (`src/Backend/**`, `src/Cli/**`, `src/Chat.php`, plus `Runtime.php` and
+`PermissionRequestMsg.php` which are in no held set) — **conditional on the engine ASK reusing
+Chat's existing `pendingPermission`/`permissionStage` state.** Build a separate engine-permission
+pane instead and `src/Renderer.php` becomes mandatory and the lane collides with `lsp`.
+
+**Traps to carry into that bundle:**
+1. `=== true`, never a truthy cast (`Runtime.php:1143`, `AgentManager.php:591`) — every
+   `PermissionReply` case is a truthy enum object, `Reject` included. `Runtime.php:1137-1142` names
+   `ForeignAgentPresetRegistry` as the prior incident where a cast granted access.
+2. **Show the approver the REWRITTEN call, not the original** (`Runtime.php:1131-1141`, `asAsked()`
+   `:1180`) — an ASK can carry a hook's rewrite; showing the original puts one command in front of
+   the user and runs another.
+3. **The two seams have DIFFERENT signatures.** `EngineBackend` takes `(ToolCall, HookResult): bool`
+   (`:312`); `AgentManager` takes `(ToolCall, SubAgent): bool` (`:48`). `AgentManager.php:551-552`
+   says "an approver written once works on both" — **that is about the RETURN contract, not the
+   parameter list.** One closure cannot serve both without an adapter. `AgentManager`'s seam is
+   unwired only because `Bootstrap.php:607` passes two arguments to a three-parameter method.
+4. **The fork kills state, not just the channel.** `PermissionGateHook.php:67-80` Auto strike
+   counters increment in the child and die with it, so the 3-strike breaker restarts every turn on
+   the TUI path. An `Always` grant recorded child-side vanishes the same way — session grants must be
+   recorded in the PARENT (`Chat.php:2108-2111` already does this for the Chat-native path).
+5. **The idle timeout will kill a turn waiting on a human.** `COMPLETE_TIMEOUT_SECONDS` resets per
+   frame (`EngineBackend.php:805-816`) and a child blocked on an approval reply emits none. Treat the
+   approval-request frame as progress, or pause the timer while an ask is outstanding. **This is an
+   idle ceiling on the fork channel, NOT a total-request timeout on an LLM call**, so amending it does
+   not violate the standing rule.
+6. **Retry double-prompts** (`AgentManager.php:405-430`): a 503 mid-stream re-runs
+   `evaluateToolCalls()`, calling the approver AGAIN and double-committing strikes — measured in-tree
+   as "one Write call plus a 503 mid-stream shows the user 2 approval prompts". Harmless only because
+   the seam is unwired; **wiring it makes it live.** Backlog E28. FINDING, not a blocker.
+7. **`PermissionRequestMsg` cannot be reused verbatim** — it carries `$assistantMessage` and replays
+   the whole parked batch (`:29-30`, `Chat.php:550`), which fits Chat owning the batch. On the engine
+   path the calls are mid-iteration inside a generator in another process; there is nothing to replay.
+   Reuse the **state fields it feeds**, not the Msg.
+8. **Do NOT flip the default mode in the same change.** `Bootstrap.php:2934-2954` plus 8 assertion
+   sites in `tests/Cli/BootstrapPermissionGateTest.php` pin `BypassPermissions`. Wiring the approver
+   is a PREREQUISITE for flipping it, not the flip.
+
+**Open, needs a spike before the TUI half is briefed:** whether the child can block on a socket read
+without deadlocking the parent's `addReadStream` — both ends are the same socketpair, the parent's
+handler runs on the loop and would have to write the reply from inside a Chat `update()` cycle, and
+the parent end is non-blocking (`:731`). Fork a child, block it on `fread($childSocket)`, write from
+the parent's loop, measure.
+
 ### THE RULES ROUND 33 HAS EARNED SO FAR
+
+- 🔴 **THE SUPERVISOR RELAYED A WRONG CITATION TWICE WITHOUT OPENING THE FILE — AND WROTE A SECOND
+  ONE INTO THE OWNERSHIP TABLE.** Both were caught by a scout, not by the supervisor.
+  1. `ARCHITECTURE.md:381-389` was recorded by the round-34 pre-measurement as the "Built but
+     unwired" seam list. It is not; it is the **render-invariants** section ("the frame must clip to
+     the terminal height", "never over-wide lines"). The seam list is at **`:417-421`**. The
+     supervisor relayed the wrong range into the RESUME and then into a lane brief, twice, without
+     ever running `sed -n '381,389p'`. **A citation inherited from an agent is not measured just
+     because an agent measured something.**
+  2. The lane-ownership table wrote lane `lsp`'s held set as `` `Renderer.php`, `KeyboardHandler.php` ``
+     — a parallel pair implying a shared directory. **`src/Renderer.php` exists; `src/KeyboardHandler.php`
+     does not.** The file is `src/Tui/KeyboardHandler.php`, already covered by `src/Tui/**`, so the
+     held set was unchanged in substance and no lane was misrouted — **this time.** The defect is that
+     two paths were written as a pair when only one was checked.
+  Same shape as every prior instance: **a true thing written next to a different thing.** The novelty
+  is the vector — *relay*. Rounds 31-33 each found the defect inside the work correcting it; this one
+  was inside the ownership bookkeeping that exists to keep lanes from colliding.
+  **Rule: re-open the file at the line range before repeating any citation you did not personally
+  take, including one from your own earlier document.**
+
+- **THE DOCBLOCKS CAN AGREE WITH EACH OTHER AND ALL BE WRONG.** Three separate places
+  (`AgentManager.php:416`, `Bootstrap.php:914`, `docs/PERMISSIONS.md:193`) call the permission
+  approver a "BLOCKING closure". The implementation it describes is a `Deferred` + TEA state machine
+  that cannot be called from a `bool`-returning closure at all. Corroboration across files is not
+  evidence — the three agree because they were written from the same intent, before the
+  implementation diverged. **Consensus among comments measures a shared ancestor, not the code.**
 
 - **A DATE STAMP DOES NOT STOP A NUMBER BEING READ AS CURRENT.** `crush_code.md:1999` and `:2069`
   both carried "**393,216** … as of `ed57d46a`" — stamped with the commit they were measured at,
