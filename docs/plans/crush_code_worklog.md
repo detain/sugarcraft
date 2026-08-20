@@ -8495,3 +8495,157 @@ form reached the output, no marker created.
   all at once. Anchor absolute paths; the distinction written into the briefs is what made the
   diagnosis one step.
 
+
+---
+
+## Round 30 — settings layering + the Phase 7 guides, and a documentation pass that found six bugs
+
+**Landed so far:** `8d15443c` (Phase 7 items 3-6 — ten pages under `sugar-crush/docs/`, 2,691
+lines, zero `.php` files) which **completes Phase 7**, plus `35f3c1ac` / `1308a1d1` / `6b63022e`
+recording findings. The settings half committed as `3847fe42` at the time of writing. Count **56 of
+75**; Phase 2 complete except item 9.
+
+### A documentation bundle turned out to be the round's best bug detector
+
+Writing "here is how you configure X" forces someone to find X's consumer, and the docs lane found
+six code defects while fact-checking. The headline one, re-confirmed independently by the
+supervisor:
+
+**Argument-scoped permission rules match nothing, and the doc-comment advertises them.**
+`PermissionGate::ruleMatches()` (`:209-220`) compares only `ToolCall::$name` — glob-prefix if the
+pattern ends `*`, exact equality otherwise. Arguments are never examined. `Deny Bash(rm -rf *)`
+takes the glob branch, computes prefix `Bash(rm -rf ` and asks
+`str_starts_with('Bash', 'Bash(rm -rf ')` → false. **The rule never fires.** `Read(./.env)` fails
+the exact compare identically. Meanwhile `PermissionRule.php:9` offers exactly those forms as
+"Pattern examples" and `refuses()` says argument-sensitive rules are "left to the call site" —
+which uses this same matcher. A user who writes an argument-scoped deny has denied nothing.
+
+Its coverage twin: mutating that `str_starts_with` to `===` leaves `PermissionGateTest` green
+(36/43 OK); only the *declaration* path catches it. Safe today because both paths share one
+matcher, and a refactor that split them would go green.
+
+Also found: `WorkflowEngine` never resolves `agent:` to a preset (it fabricates
+`new Agent(name, prompt:'')`), `executeStage()` runs `$tasks[0]` only, and
+`pipeline`/`withVerification` have no YAML spelling at all; 5 of 9 skill frontmatter keys are inert,
+two because their only readers have no caller; `agentRoster()` drops 10 of 16 preset fields
+including `permissionMode`; and `CONTROL_PLANE` reserves a `/permissions` command that has no row
+and no dispatch arm.
+
+### The docs lane's own review killed five false claims — the defect in prose form
+
+Worth cataloguing because these are the shapes it takes when the subject is documentation:
+
+1. **A foreign count written next to the native one.** "Walks four native locations and four foreign
+   ones" — native is three (`loadAllManifests()` :716-734), and the page's own table said three.
+2. **A figure measured on the caller, filed under the callee.** `maxSteps` (default 8) documented
+   under "`Runtime` — the agentic loop"; it is `EngineBackend.php:126`, bound at `:462`.
+3. **Two pages contradicting each other.** ARCHITECTURE credited `createAnthropic()` to
+   `ClaudeCodeProvider`; it returns a `CustomProvider` (`:564-595`), and `claude-code` is a separate
+   seventh provider (`:601`) the sentence omitted. ENVIRONMENT had it right.
+4. **Two probes spliced into one attributed block.** A `PATH=…` line credited to `env` came from a
+   different probe — `dash` sets `PATH` as a shell variable and does **not export** it, so it is
+   absent from the environment and not inherited by anything the hook execs, which makes the derived
+   advice understate the consequence for a grandchild process.
+5. **A worked example naming something that does not exist.** `HookManager.php:34` warns that a file
+   saying `name: confirm-remove` would uninstall the built-in guard — but
+   `BuiltIn\ConfirmRemoveHook::name()` returns **`'confirm-rm'`** (`:41-43`). Verified both ways:
+   `confirm-remove` accepted, `confirm-rm` refused. The guard works on the real name; only its
+   example is wrong, which is the worst place for it since an example is what gets copied. The guard
+   also keys by **event+name**, so `audit` is accepted for a `PreToolUse` entry.
+
+### Phase 6 item 1 was masking a constructor that fataled on its own default
+
+The plan framed it as a `__DIR__`-vs-`$root` preference. Measured: the branch could never run.
+`WorktreeManager.php:32` **promotes** `private readonly ?WorktreeConfig $config = null` and the body
+at `:36` assigns `$this->config = WorktreeConfig::new()` — a second write to a readonly property, so
+constructing one without an explicit config throws. Supervisor verified on pristine `master`:
+`WorktreeManager::new("/srv/other-repo")` → `Error: Cannot modify readonly property … at :36`.
+
+It stayed invisible because nothing in `src/` constructs one and every test passed an explicit
+config, so no suite ever entered the branch — **which is exactly why the cross-domain read the plan
+describes had never been observed by anyone.** That read is real once the branch executes:
+`dirname(__DIR__, 3)` is the monorepo root, so `WorktreeManager::new('/srv/other-repo')` took
+`worktreeCleanupPeriodDays` and `worktreeIncludeFile` out of THIS repository and resolved the name
+against the other tree. Under a real `composer require` the expression is `vendor/sugarcraft/`,
+where no such file exists — so the feature was also *inert* outside a monorepo. **That asymmetry is
+what makes it a fix rather than a preference, and the plan's framing could not have produced the
+argument.**
+
+The plan's key list for item 2 was wrong in both directions too: there is **no `model` user-config
+key** (`Subcommands.php:423`'s `$config['model']` is a *provider* config), while `summaryModel`,
+`parallelToolCalls` and `parallelToolDeadlineSeconds` all have real `readUserConfig()` consumers and
+were omitted. The lane covered the 8 real keys and **declined to add `model`**, because a key
+nothing reads looks configurable and is inert.
+
+### Design judgement worth preserving from the settings work
+
+- **The user's files outrank the project's** — the reverse of the editor convention, because the
+  project layer arrived with a clone. "A project fills in what you left unsaid; it never overrules a
+  choice you made."
+- **`config.json` outranks `settings.json`** despite being the deprecated name, because it is the
+  file the CLI *writes*: ranked the other way, a `settings.json` naming `theme` would make every
+  Ctrl+P "Switch theme" appear to do nothing with nothing in the UI naming the culprit.
+- **Whitelist, not blanket merge**, so `permissionRules`/`trustedProject*` cannot be weakened or
+  self-granted from a lower layer.
+- **`settings.local.json` gets the same trust gate:** ".gitignore is advice to the committer,
+  `git add -f` ships one, so 'local' is no trust signal."
+- **`writeUserConfig()` reads raw**, because merging onto the layered view would copy a project's
+  value permanently into the user's own file as a side effect of "Switch theme" — a one-way
+  promotion from lowest to highest trust.
+- **Project paths spelled as whole literals** so `ProjectTierRefusalInventoryTest` can see them:
+  "making the fix hide itself from the instrument would have been the round's own defect one level
+  up."
+
+Both of its surviving mutations disproved **its own prose**, and it corrected the prose rather than
+papering over — including deliberately leaving one alive, because the only test that could kill it
+would have been vacuous.
+
+### Supervisor machinery, again
+
+- **My own block warning agents that numbers decay contained two decayed numbers**: `Chat.php`
+  quoted at "~6,100 lines" is **10,381**; `Bootstrap.php` at "212 KB" is **223,382 B / 4,253
+  lines**. The rule (don't read them whole) holds at any size, which is precisely why the size
+  should never have been in it. `crush_agent_rules.md` is now measurement-based and the concurrency
+  doc's figures carry their date.
+- **A workflow died instantly with `VAR is not defined`** — a `\\${VAR}` in a brief left `${VAR}` as
+  a live interpolation inside a JS template literal. `node --check` passes that happily. Fix: a
+  probe that *evaluates* the prelude with stubs and asserts the lanes, baseline and literal text.
+  Used it again on the sglang script, where it caught a `head -123` cut that had landed mid-`COMMIT`
+  because an earlier patch had lengthened the block above it.
+- **`node --check … | head -3` reported success on a broken file** — the pipe hands back *head's*
+  exit code. Same trap already documented for `phpunit | tail`.
+- **A CWD drift produced three simultaneous false alarms.** An unanchored
+  `md5sum .sugar-crush/config.json` run from `sugar-crush/` resolves to
+  `sugar-crush/.sugar-crush/config.json` — the *different, untracked* file the briefs explicitly
+  name as NOT the invariant — reporting a changed md5, zero vendor symlinks and path-repos rc 1 at
+  once. The distinction written into the briefs is what made the diagnosis one step.
+
+---
+
+## Interlude — the DeepSeek-V4 sglang task (user request, not a plan item)
+
+The user repointed their self-hosted SGLang server from `MiniMax-M2.7` to
+`deepseek-ai/DeepSeek-V4-Flash-0731` and asked for it to become the default, with
+`reasoning_effort` support, the model's recommended sampling, live tool-parsing verification, and
+**both models kept working**. Later: "for now set it to max as default for this model."
+
+**Full measured ground truth is in `docs/plans/crush_code_RESUME.md` §0-DS** — it is the only
+durable record of this task, since no plan file covers it. The load-bearing findings:
+
+- **The server returns structured OpenAI `tool_calls`, streaming and not**, with parallel calls at
+  distinct indices — so `OpenAiArrayToolCallParser` already covers this model and **no new parser
+  class is needed**. That also means no new `src/` file, hence no census collision with the settings
+  lane running concurrently.
+- **The HF card contradicts the deployment.** The card says no Jinja chat template and documents no
+  `--tool-call-parser`, which predicts raw-text tool calls; the server plainly has a parser
+  configured. The deployment is what we build against.
+- **`reasoning_effort` accepts seven names, not the card's three** —
+  `none|minimal|low|medium|high|xhigh|max`, or a float — per the server's own validation error.
+  Narrowing to three would refuse values it serves.
+- **Omitting it is not neutral:** thinking then lands inline in `content` instead of
+  `reasoning_content`. An independent reason to default it.
+- **It was not configurable anywhere** before this work, and `extraTemplateKwargs` is the wrong seam
+  (Jinja template, which this model lacks).
+- `temperature` defaulted to **0.7**, not 1.0, so the fix must be **model-aware** — silently
+  retuning MiniMax would violate the keep-both-working instruction.
+

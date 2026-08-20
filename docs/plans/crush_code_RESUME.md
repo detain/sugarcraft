@@ -6,105 +6,127 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. STATE AFTER ROUND 29 — read this first, then §0 for the standing rules
+## 0-NOW. STATE AT THE ROUND-30 COMPACT — read this first, then §0 for the standing rules
 
-**Round 29 is COMPLETE and both lanes landed on `master`.** Phase 2 is now finished except item
-9, the deliberately-last plugin epic.
+**`master` = `6b63022e`. Live tree clean, 0 ahead / 0 behind.**
+**Suite baseline: `7877 tests / 90590 assertions / 1 skipped / rc 0`** (~3m26s), supervisor-measured.
+**Skips MUST stay 1** — `tests/MCP/McpClientTest.php:106`. A 2 means `vendor/sugarcraft/*` was
+replaced by Packagist copies and every figure since is void.
 
-| bundle | commit | what |
+**56 of 75 plan items.** Phase 2 complete except item 9 (the deliberately-last plugin epic);
+**Phase 7 complete (all 6)**.
+
+### THREE LANES EXIST. TWO ARE MID-FLIGHT. Do not reuse a dirty one.
+
+| lane dir | job | state at compact |
 |---|---|---|
-| **C6** — Phase 2 item 7 | `f43177c2` | the `Lsp` tool: `src/Tools/BuiltIn/LspTool.php` + 1,116-line test, `LspClient` positional cache, `PermissionGate` read-only classification |
-| **C4b** — Phase 2 item 4 (2nd half) | `3eca66df` | the `` !`cmd` `` and `@file` template forms, tier-gated |
+| `/home/sites/crush-lane-cmd` | **P6.1 + P6.2** — settings-file layering | **FIX STAGE RUNNING**, HEAD `7d873a15`, 12 dirty, 4 behind |
+| `/home/sites/crush-lane-sglang` | **DeepSeek-V4 sglang default** (user request, see §0-DS) | **IMPLEMENT RUNNING**, HEAD `1308a1d1`, 11 dirty, 2 behind |
+| `/home/sites/crush-lane-lsp` | — | **IDLE, clean, refreshed to `6b63022e`**; queued for P3.x |
 
-**Count: 52 of 75 items.** Phase 2 item 4 is now counted in full (it was previously recorded as
-half and excluded).
+Workflows (same session; `resumeFromRunId` works only in-session):
 
-**SUITE BASELINE IS NOW `7877 tests / 90590 assertions / 1 skipped / rc 0`** (~3m24s), measured
-by the lane on the tree it pushed. Skip is still `tests/MCP/McpClientTest.php:106` and MUST stay 1.
-A 2 means `vendor/sugarcraft/*` got replaced by Packagist copies and every figure since is void.
+- Round 30 · task `w95zfdgm9` (relaunch) → **run `wf_c637f8b5-a85`**, script
+  `…/workflows/scripts/crush-round30.js`. 6 agents started, 5 done, `a294af89` (settings fix) running.
+  Its docs half already landed as `8d15443c`.
+- sglang · task `w61n2892v` → **run `wf_7a9fd600-a06`**, script
+  `…/workflows/scripts/crush-sglang-deepseek.js`. 1 agent started, 0 done, `a135292e` running.
 
-**The plan's prescribed path for the Lsp tool was WRONG and is corrected in practice.** It said
-`src/Tools/LspTool.php`; that is structurally impossible against `BuiltInToolCorpusTest`'s
-bidirectional invariant, independently reproduced with a throwaway probe class. The shipped path
-is `src/Tools/BuiltIn/LspTool.php`. There are now **11** built-ins, and `Bootstrap::tools()` is
-LONGER than that whenever a trusted project's MCP servers advertise anything — do not conflate
-the two counts.
+Each lane commits and pushes to `master` itself. Journals hold every agent's full return value —
+`subagents/workflows/<run>/journal.jsonl` — and each lane also carries `.lane-*-result.md` copies.
+**Read the journal before concluding a lane returned nothing.**
 
-**Two things shipped reachable-but-not-useful, deliberately, and are documented as dormant seams
-rather than left implied:** the `Lsp` tool has no server launcher (no settings key for language
-servers exists anywhere in `src/`), so every call today returns an *error* naming the language it
-could not ask — an empty success would read to the model as "this symbol has no references",
-which is a fabricated fact about the user's code. And `diagnostics` carries an explicit note that
-nothing subscribes to `publishDiagnostics`, so an empty map is not "this file is clean". The
-launcher is the next step for that subsystem and needs the same project-trust gate `.mcp.json`
-gets, because starting a server is code execution.
+**Every lane carries the supervisor's scratch paths in `.git/info/exclude`** (§5.2d). Keep that when
+creating a lane: without it, `git add -A` in the commit recipe sweeps supervisor instrumentation
+into `master`. A finished lane's `git status --porcelain` should be **empty**.
 
-### The lanes are still on disk and are now STALE — refresh before reuse
+### 0-DS. THE DEEPSEEK-V4 TASK — NOT A PLAN ITEM, and this is its only durable record
 
-`/home/sites/crush-lane-cmd` and `/home/sites/crush-lane-lsp` both still exist, both clean, both
-carrying their `.lane-*-result.md` reports (worth reading — they are the round's best artifacts).
-Their work is on `master`, so they have served their purpose. **Before handing either to a new
-agent, refresh it** (clean tree → `git pull --rebase`) or recreate from a quiescent tree per
-`docs/plans/crush_code_concurrency.md` §5.2b — a lane left stale stops matching the baseline in
-its own brief, which is how three agents in this round were handed a wrong number.
+The user switched their self-hosted SGLang server from `MiniMax-M2.7` to
+**`deepseek-ai/DeepSeek-V4-Flash-0731`**. **The old model is GONE from that server**, so the
+shipped sglang default 404s on the model name today. Their instructions, verbatim in substance:
+make it the new default; add `reasoning_effort` supporting `low`/`high`/`max`; use
+`temperature = 1.0` with `top_p = 0.95` for agentic and `1.0` otherwise; test tool parsing against
+the live server; **"dont delete old handling we want it to support both ways"**; and (later) **"for
+now set it to max as default for this model"**.
 
-Both lanes now carry the supervisor's scratch paths in `.git/info/exclude` (§5.2d). Keep that
-when recreating: without it, `git add -A` in the lane's commit recipe can sweep the supervisor's
-own instrumentation into `master`.
+**Measured against the live server by the supervisor, 2026-08-20 — believe this over the model card:**
 
-### THE STANDING CYCLE — every time a lane commits, and whenever master moves
+- Endpoint `https://skynet2.interserver.net/v1`, **no API key**. `GET /v1/models` →
+  `deepseek-ai/DeepSeek-V4-Flash-0731`, `max_model_len` **393216**.
+- **Tool calls come back as STRUCTURED OpenAI `tool_calls`, non-streaming AND streaming.**
+  Non-streaming: `finish_reason: "tool_calls"`, `function.arguments` a JSON string. Streaming
+  (`stream:true`, two-city prompt): 19 SSE chunks, 10 `delta.reasoning_content` deltas, **two
+  parallel calls at `index` 0 and 1** accumulating correctly with distinct `call_…` ids.
+  **So `OpenAiArrayToolCallParser` already covers this model and NO new parser class is needed.**
+- The HF card says the model ships **no Jinja chat template** and documents no `--tool-call-parser`
+  (only `--speculative-algorithm DSPARK --trust-remote-code`). **The deployment contradicts the
+  card** — someone configured a parser. If any prompt shape ever yields a tool call as *text*, that
+  is what `MinimaxXmlFallbackToolCallParser` exists for.
+- **`reasoning_effort`: the server accepts MORE than the card's three.** Its own validation error is
+  authoritative: `literal['none','minimal','low','medium','high','xhigh','max']` **or a constrained
+  float**. Measured `low`→29, `high`→55, `max`→63 reasoning_tokens, and **`medium` works** (22).
+  `bogus` → `{"object":"error"}` carrying that literal list. **Do not narrow to three** — that
+  refuses values the server serves.
+- **Omitting `reasoning_effort` is NOT neutral:** `reasoning_content` is `null`, `reasoning_tokens`
+  0, and the model's thinking lands **inline in `content`**. An absent effort pollutes assistant
+  text — an independent argument for defaulting it.
+- **It was not configurable at all before this work.** Zero occurrences of
+  `reasoning_effort`/`reasoningEffort` in `src/`, `bin/`, `tests/` or any config;
+  `CompleteRequest` had 13 params and none was it. `extraTemplateKwargs` → `chat_template_kwargs`
+  is the WRONG seam (server-side Jinja template, which this model lacks). Already correct and
+  present: `'separate_reasoning' => true` at `SglangProvider.php:319`, which is what makes
+  `reasoning_content` populate.
+- **`temperature` defaulted to `0.7`** at `SglangProvider.php:310`, not 1.0, and `:323` sent
+  `top_p => $request->topP` (null when unset). The fix must be **model-aware** — silently retuning
+  MiniMax violates the user's keep-both-working rule.
+- **The default model lived in THREE tracked places**, all saying `MiniMax-M2.7`:
+  `src/Providers/SglangProvider.php:68`, `/.sugar-crush/config.dev.json`, and
+  `/sugar-crush/.sugar-crush/config.dev.json`. **`config.dev.json` is NOT the md5 invariant** —
+  that is `.sugar-crush/config.json` (no `.dev`). File 3 has a hardlink partner OUTSIDE the repo, so
+  an in-place rewrite changes that path too while a `sed -i` breaks the link.
+- **Follow-up deliberately deferred:** do NOT add reasoning-effort to the layered-settings
+  whitelist while `lane-cmd` is building `src/Config/LayeredSettings.php`. Add it to `LAYERED_KEYS`
+  after that lands.
 
-CI pushes regenerated demo GIFs on its own schedule — it did so **twice** during round 29
-(`5b77a75f`, `e522f69a`). This is a loop, not a one-off:
+### What landed this round
 
-```sh
-git pull --rebase && git push                  # supervisor's own work, in that order
+| commit | what |
+|---|---|
+| `8d15443c` | **Phase 7 items 3-6** — ten pages under `sugar-crush/docs/`, 2,691 lines, zero `.php` |
+| `6b63022e` | Phase 7 marked complete; the docs review's five defects recorded |
+| `1308a1d1` | the `WorktreeManager` fatal + the plan's wrong key list |
+| `35f3c1ac` | the permission-matcher hole and five more docs-lane findings |
 
-git pull --rebase  # bring lane work back
-cd sugar-crush && vendor/bin/phpunit            # POST-HOC GATE. floor: 7877/90590/1/rc0
+### OPEN FINDINGS worth picking up (all in `crush_code.md`, measured, none fixed)
 
-for L in cmd lsp; do d=/home/sites/crush-lane-$L   # keep live lanes fresh: FETCH ONLY
-  b=$(git -C $d status --porcelain | wc -l); git -C $d fetch origin master -q
-  echo "lane-$L behind=$(git -C $d rev-list --count HEAD..origin/master) dirty=$b->$(git -C $d status --porcelain | wc -l)"
-done
-```
+1. 🔴 **Argument-scoped permission rules match NOTHING.** `PermissionGate::ruleMatches()`
+   (`:209-220`) compares only `ToolCall::$name`. `Deny Bash(rm -rf *)` computes prefix
+   `Bash(rm -rf ` → `str_starts_with('Bash', …)` false → **never fires**. `PermissionRule.php:9`
+   advertises exactly that syntax. A user who writes an argument-scoped deny has denied nothing.
+2. 🔴 Prefix matching on the **real-call** path is pinned by no test (only the declaration path).
+3. 🟡 `WorkflowEngine` never resolves `agent:` to a preset — fabricates `new Agent(name, prompt:'')`;
+   `executeStage()` runs `$tasks[0]` only; `pipeline`/`withVerification` have no YAML spelling.
+4. 🟡 5 of 9 skill frontmatter keys inert; `App::dispatchSkill()`/`applySkillsToSystemPrompt()` have
+   no caller, so `context: fork` does nothing on the CLI path.
+5. 🟡 `agentRoster()` drops 10 of 16 preset fields incl. `permissionMode`.
+6. 🟡 `HookManager.php:34`'s worked example names `confirm-remove`; the hook is **`confirm-rm`**, so
+   the example names a hook the guard does not protect. Guard keys by **event+name**.
+7. 🟡 `CONTROL_PLANE` reserves a `/permissions` command with no row and no dispatch arm.
 
-`fetch` not `pull`: it writes refs and objects only and leaves the working tree and index alone.
-Pulling into a lane whose tree is dirty and whose agent is live corrupts a half-finished edit;
-each lane rebases itself at its own commit gate, the one moment its tree is clean. **And never
-read a lane's behind-count without fetching first** — with master 6 ahead of both lanes, one
-reported 5 behind and the other reported **0**. See §5.2c.
+### QUEUE
 
-**Hold your own push while a lane is between its rebase and its push.** Pushing then rejects its
-push as non-fast-forward, and its brief tells it to stop and report on trouble — turning
-supervisor bookkeeping into a spurious lane failure. This happened once and was avoided by
-committing locally and holding.
-
-### Anchor absolute paths — one CWD drift produced three simultaneous false alarms
-
-An unanchored `md5sum .sugar-crush/config.json` run from `sugar-crush/` resolves to
-`sugar-crush/.sugar-crush/config.json` — the **different, untracked** file that is NOT the
-invariant — and reported a changed md5, zero vendor symlinks and path-repos rc 1 all at once.
-All three were one bad path. Use `/home/sites/sugarcraft/...` or `git -C`.
-
-### QUEUE — what is next
-
-Phase 2 item 9 (plugins) stays LAST. Unblocked and ready now:
-
-1. **P6.1/2** — `WorktreeConfig`'s path + layered settings files; then the 4-deep chain behind it
-   (P6.3/5, P6.4/6). This is the biggest remaining functional block and it is serial in
-   `Bootstrap.php`.
-2. **Phase 7 docs** (P7.3/4 authoring guides, P7.5/6 TROUBLESHOOTING + ARCHITECTURE) — docs-only,
-   the safest possible concurrent lane, and **no longer blocked**: the tracker row that said
-   Phase 2 item 2 was open was stale, and it was gating these.
-3. **P3.x** — the sugar-bits/candy-forms TextInput, candy-focus FocusRing, candy-sprinkles Table,
-   candy-kit help screen. `candy-focus` and `candy-kit` are in `sugar-crush/composer.json` as of
-   `ddd9560d` and resolve in-lane.
+1. **P3.x** in `lane-lsp` — TextInput, candy-focus FocusRing, candy-sprinkles Table, candy-kit help
+   screen. Needs **no new `src/` file**, so it will not collide with the census literals `lane-cmd`
+   already moved (278→279). **Sequence it AFTER `lane-sglang` lands** — both touch `src/Chat.php`.
+2. **P6.3/5 and P6.4/6** — the 4-deep chain behind P6.1/2, serial in `Bootstrap.php`.
+3. The open findings above, especially #1.
 4. **P8.6** (VHS demos), P8.4, P8.8, P8.9/10/11, P8.13.
-5. Then the hardening backlog E1-E50 and the follow-up tracker rows.
+5. **Phase 2 item 9** (plugins) LAST, then the hardening backlog E1-E50.
 
-**The next Lsp step, if that subsystem is picked up:** the server launcher (per-language command
-config, `LspConnection::connect()` + `initialize()`, a shutdown hook, and the project-trust gate).
+**Do not exceed the lane count the user set.** They asked for **2 concurrent plan lanes**; the third
+(`lane-sglang`) exists because they explicitly requested that task. Four would exceed what they
+authorised.
 
 
 ## 0. STATE AS OF THE 2026-08-20 COMPACT — read this first
