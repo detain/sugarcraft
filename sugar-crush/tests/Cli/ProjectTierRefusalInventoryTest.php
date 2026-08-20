@@ -152,13 +152,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             'and a refused control-plane override reaches it too',
         );
 
-        // The anchored two-argument contract survived the wiring — the gate was
-        // added BEFORE the consumer, and acquiring a consumer must not relax it.
+        // The anchor survived the wiring — the gate was added BEFORE the
+        // consumer, and acquiring a consumer must not relax it. THREE parameters
+        // now, not two: the third is `$tier`, added when `` !`cmd` `` shipped,
+        // because which DIRECTORY a command came out of is what decides whether
+        // its shell form may run. What is pinned is that the anchor is still
+        // SECOND and still optional — the count is asserted so a fourth
+        // parameter cannot arrive unremarked, not because two was the property.
         $anchored = (new \ReflectionMethod(CommandLoader::class, 'loadFromDirectory'))
             ->getParameters();
-        $this->assertCount(2, $anchored);
+        $this->assertCount(3, $anchored);
         $this->assertSame('anchoredIn', $anchored[1]->getName());
         $this->assertTrue($anchored[1]->isOptional());
+        $this->assertSame('tier', $anchored[2]->getName());
+        $this->assertTrue($anchored[2]->isOptional());
     }
 
     /**
@@ -214,6 +221,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/TeamConfig.php|.sugar-crush/teams' => self::USER,
         'Agents/TeamManager.php|.sugar-crush/teams' => self::USER,
         'Agents/Teammate.php|.sugar-crush/teams' => self::USER,
+        // Not a path this file reads or builds: it is the sentence
+        // `Chat::refuseCommandShell()` puts in the transcript telling the
+        // operator WHERE to write `trustedProjectCommands` if they want a
+        // project command file's !`cmd` to run. User-tier by the same rule as
+        // the entries around it — the grant lives under `~`, which is exactly
+        // why a repository cannot make it.
+        'Chat.php|.sugar-crush/config.json' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json.' => self::USER,
         // The install path `sugarcrush completion fish` PRINTS, in a comment.
@@ -263,10 +277,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is TWENTY-EIGHT occurrences of twenty
-     * distinct paths, of which ten distinct paths are repository-chosen. A new
-     * one anywhere in `src/` fails here by file and name until somebody
-     * classifies it — and the SAME path arriving in a SECOND file fails too,
+     * APPEARS IN. On this tree that is THIRTY occurrences — one per entry in
+     * {@see DOT_PATHS} — of TWENTY-ONE distinct paths. THIRTEEN of those
+     * occurrences are repository-chosen by this file's own definition
+     * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
+     * they are TEN distinct paths — which is the figure
+     * {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()} asserts,
+     * on PATHS. All four figures are measured off the map above, and each is
+     * written next to the thing it counts because the pair has been mixed up in
+     * both directions: the first two were left at 28/20 while the map grew to
+     * 30/21, and the correction that fixed them replaced a correct "ten distinct
+     * paths are repository-chosen" with 10-occurrences/8-paths, which is the
+     * `REPOSITORY`-class-only measurement and not what `repositoryChosenPaths()`
+     * returns. A new dot-path anywhere in `src/` fails here by file and name
+     * until somebody classifies it — and the SAME path arriving in a SECOND file fails too,
      * which is the case the string-keyed version could not express.
      */
     public function testTheDotPathEnumerationIsDerivedFromSrc(): void

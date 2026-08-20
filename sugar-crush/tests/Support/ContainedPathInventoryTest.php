@@ -176,6 +176,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Agents/WorktreeManager.php' => 2,
         'Cli/Bootstrap.php' => 1,
         'Commands/CommandLoader.php' => 2,
+        'Commands/CommandSpec.php' => 1,
         'Context/InstructionFileLoader.php' => 5,
         'Memory/ForeignMemoryImporter.php' => 2,
         'Providers/ProviderFactory.php' => 2,
@@ -191,7 +192,22 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "TWENTY-SEVEN call sites in ELEVEN files", per file. Each count is one read
+     * `Commands/CommandSpec.php` is the twelfth file to acquire a routed call
+     * site (FOURTH in this map's order, which is alphabetical), and it arrived with the read
+     * it gates: {@see \SugarCraft\Crush\Commands\CommandSpec::includeFile()}
+     * resolves an `@path` written inside a command file — a path chosen by
+     * whoever authored that `*.md`, which for the project tier is whoever wrote
+     * the repository — and confines it to the checkout before a byte is read.
+     * ONE compare rather than the anchor-plus-entry pair its sibling
+     * `Commands/CommandLoader.php` holds, for `Cli/Bootstrap.php`'s reason: the
+     * boundary here IS the root, and a tree cannot be confined to itself.
+     *
+     * "TWENTY-EIGHT call sites in TWELVE files", per file — the sum and the key
+     * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
+     * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
+     * `src/`. (It read "twenty-seven in eleven" until `Commands/CommandSpec.php`
+     * arrived and made it stale by one in each figure; the sentence is a
+     * restatement of the map and has to move with it.) Each count is one read
      * decision, so a dropped gate shows up as the file's number falling — which
      * is the half of #89 an instrument like this genuinely covers.
      *

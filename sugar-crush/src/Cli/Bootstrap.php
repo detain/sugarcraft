@@ -114,6 +114,21 @@ final class Bootstrap
      */
     private const TRUSTED_PROJECT_MCP_CONFIG_KEY = 'trustedProjectMcp';
 
+    /**
+     * The THIRD opt-in of the same shape: it makes a PROJECT command file's
+     * `` !`cmd` `` form eligible to run at all
+     * ({@see \SugarCraft\Crush\Chat::refuseCommandShell()}).
+     *
+     * A THIRD SEPARATE KEY, for the reason {@see TRUSTED_PROJECT_MCP_CONFIG_KEY}
+     * gives for the second: folding it into either existing key would hand every
+     * root already listed there a new capability by upgrade rather than by
+     * decision. And the decision genuinely differs again — "run what this repo
+     * put in hooks.yaml" fires on tool use, whereas this fires when the operator
+     * types a `/name` the popup offered them, which is the one place a shell
+     * execution looks like a menu selection.
+     */
+    private const TRUSTED_PROJECT_COMMANDS_CONFIG_KEY = 'trustedProjectCommands';
+
     private const DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
 
     /**
@@ -160,6 +175,16 @@ final class Bootstrap
      * @var array<string, list<string>>
      */
     private static array $trustedMcpRoots = [];
+
+    /**
+     * The same again, for {@see TRUSTED_PROJECT_COMMANDS_CONFIG_KEY}, frozen for
+     * the reason {@see trustedRootsForThisProcess()} gives: a session that gets
+     * a line appended to the user's config must not be able to make that line
+     * take effect in the session that wrote it.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedCommandRoots = [];
 
     /**
      * The hook entries this process read, keyed by file path — see
@@ -511,6 +536,12 @@ final class Bootstrap
             // resolves outside the checkout to `error_log()` and nowhere else,
             // which on a full-screen TUI is nowhere the user will look.
             commandLoader: $commandLoader,
+            // The `` !`cmd` `` gate for the PROJECT tier of that loader. Resolved
+            // here rather than inside Chat so it is answered once, at launch,
+            // from the frozen trust list — see
+            // {@see projectCommandShellIsTrusted()}. A null $root cannot be
+            // trusted by a list of absolute paths, so it is false without asking.
+            projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted($root),
         );
 
         // Drained AFTER construction for the same reason the workflow registry's
@@ -2280,6 +2311,43 @@ final class Bootstrap
         }
 
         return in_array($canonical, self::$trustedMcpRoots[$path], true);
+    }
+
+    /**
+     * Whether the operator has opted this project root in to running the
+     * `` !`cmd` `` form of a command file under
+     * `<root>/.sugar-crush/commands` — {@see projectMcpIsTrusted()}'s shape for
+     * {@see TRUSTED_PROJECT_COMMANDS_CONFIG_KEY}, with the same
+     * fail-closed-on-every-uncertainty behaviour and the same once-per-process
+     * freeze.
+     *
+     * PUBLIC, unlike its two siblings, because the consumer is not in this
+     * class: the check happens when a `/name` is submitted, inside
+     * {@see \SugarCraft\Crush\Chat}, and {@see chat()} passes the ANSWER (a
+     * bool) rather than the ability to ask. Handing Chat this method instead
+     * would let it re-ask mid-session, which is precisely what the freeze exists
+     * to prevent.
+     *
+     * @throws PermissionConfigException when the user config exists and is unusable
+     */
+    public static function projectCommandShellIsTrusted(string $root): bool
+    {
+        $canonical = realpath($root);
+        if ($canonical === false) {
+            return false;
+        }
+
+        $path = self::trustedConfigDirPath() . '/config.json';
+
+        if (!\array_key_exists($path, self::$trustedCommandRoots)) {
+            self::$trustedCommandRoots[$path] = self::trustedProjectRoots(
+                self::permissionConfig(),
+                self::TRUSTED_PROJECT_COMMANDS_CONFIG_KEY,
+                'no project command file may run a shell',
+            );
+        }
+
+        return in_array($canonical, self::$trustedCommandRoots[$path], true);
     }
 
     /**

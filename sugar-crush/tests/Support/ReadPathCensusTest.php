@@ -192,6 +192,8 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Commands/CommandSpec.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Commands/CommandLoader.php — parses a path the loader already bounded',
+            'CONTAINED — includeFile() reads an `@path` written inside a command file, behind this '
+                . 'file\'s own ContainedPath::within() compare against the checkout',
         ],
         'Context/ImportResolver.php|file_get_contents' => [
             'CALLER_SUPPLIED — an `@file` import, judged by the $boundaryCheck callback the caller '

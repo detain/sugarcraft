@@ -874,6 +874,26 @@ final class Chat implements Model
          * @var array<string, CommandSpec>|null
          */
         ?array $customCommands = null,
+        /**
+         * Whether the operator has opted THIS project root in to running the
+         * `` !`cmd` `` form of a PROJECT-tier command file
+         * ({@see \SugarCraft\Crush\Cli\Bootstrap::projectCommandShellIsTrusted()}
+         * reads `trustedProjectCommands` from `~/.sugar-crush/config.json`).
+         *
+         * DEFAULTS TO FALSE, and the default is the security property rather
+         * than a convention: `<root>/.sugar-crush/commands/*.md` arrives in a
+         * `git clone`, so a hostile repository plus one innocuous-looking
+         * `/review` is arbitrary command execution unless somebody said yes
+         * first. Every embedder and every test that does not pass this argument
+         * therefore gets the refusing behaviour, which is the direction to be
+         * wrong in.
+         *
+         * IT DOES NOT GATE THE USER TIER. `~/.sugar-crush/commands/*.md` is the
+         * operator's own file and needs no per-project grant — see
+         * {@see refuseCommandShell()} for the full rule and for what the
+         * permission gate adds on top of it.
+         */
+        private readonly bool $projectCommandsTrusted = false,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -4450,6 +4470,12 @@ final class Chat implements Model
             // Carried, so the disk walk happens once per process rather than
             // once per keystroke — see the property's doc-block.
             'customCommands' => $this->customCommands,
+            // Carried like every other launch-time decision: it is read on the
+            // keystroke that submits a `/command`, which is always a clone of
+            // the Chat the Bootstrap built, so a value dropped here would make
+            // the trust grant evaporate on the first character typed and turn
+            // every project command's !`cmd` into a refusal.
+            'projectCommandsTrusted' => $this->projectCommandsTrusted,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -5298,7 +5324,117 @@ final class Chat implements Model
         return $spec->expandTemplate(
             $arguments,
             (new CommandParser())->parse('/c ' . $arguments)?->args ?? [],
+            $this->commandDirective($spec),
         );
+    }
+
+    /**
+     * The resolver {@see CommandSpec::expandTemplate()} calls for the two
+     * template forms that leave the string: `` !`cmd` `` and `@path`.
+     *
+     * THIS METHOD IS THE POLICY AND {@see CommandSpec} IS THE MECHANISM, and the
+     * split is where it is because of what each side can see. The spec is a
+     * value object read off disk; the launch's one
+     * {@see \SugarCraft\Crush\Permissions\PermissionGate} and the answer to
+     * "did the operator trust this checkout" live here. A spec that could gate
+     * itself would be a repository-supplied file deciding its own permissions.
+     *
+     * THE ROOT IS RESOLVED ONCE, outside the closure, so every substitution in
+     * one expansion is judged against the same directory even though
+     * {@see projectRoot()} falls back to `getcwd()` — a command whose own
+     * `` !`cd /tmp && …` `` moved the process must not move the boundary its
+     * later `@path` forms are checked against.
+     */
+    private function commandDirective(CommandSpec $spec): \Closure
+    {
+        $root = $this->projectRoot();
+
+        return function (string $kind, string $payload, float $secondsRemaining) use ($spec, $root): string {
+            if ($kind === 'include') {
+                return $spec->includeFile($payload, $root);
+            }
+
+            $refusal = $this->refuseCommandShell($spec, $payload);
+            if ($refusal !== null) {
+                return $refusal;
+            }
+
+            return $spec->runShellSubstitution($payload, $root, $secondsRemaining);
+        };
+    }
+
+    /**
+     * Why this `` !`cmd` `` may not run, or null if it may.
+     *
+     * TWO CHECKS, IN THIS ORDER, and the order is the substantive decision:
+     *
+     * 1. THE TIER. `CommandSpec::$tier === 'project'` means the file came out of
+     *    `<root>/.sugar-crush/commands`, i.e. out of a `git clone`, and running
+     *    a shell out of it needs {@see $projectCommandsTrusted} — the operator
+     *    having named this root under `trustedProjectCommands`. `'user'` is the
+     *    operator's own `~/.sugar-crush/commands` and needs no per-project
+     *    grant. `null` is neither: nothing on disk produced it, so an in-process
+     *    caller built it with {@see CommandSpec::new()} and had to write the
+     *    command out in PHP to do so, which is not a boundary this check can add
+     *    anything to.
+     *
+     * 2. THE GATE, and only then, because {@see PermissionGate::evaluate()}
+     *    MUTATES Auto mode's circuit-breaker counters. A command refused by the
+     *    tier rule is one that was never going to run, and its own doc-block
+     *    forbids moving a counter for a call that did not really happen.
+     *
+     * ONLY `Deny` REFUSES; an `Ask` proceeds. That is this codebase's own rule,
+     * not a shortcut: {@see PermissionGate::refuses()} states that a caller which
+     * cannot show the blocking permission prompt must not turn "would have
+     * asked" into "no", and template expansion happens inside `submit()` with no
+     * prompt available. The cost is stated rather than hidden — in the shipped
+     * default mode, which answers `Ask` for `Bash`, a `` !`…` `` in an
+     * authorised command file runs WITHOUT a prompt. What makes that acceptable
+     * is that authorisation is check 1: it is either the operator's own file or a
+     * checkout they explicitly trusted. What the gate still buys is the
+     * argument-sensitive half a declaration cannot reach — an explicit
+     * `Deny Bash(rm *)`, and the `rm -rf /` breaker, both of which read
+     * `arguments['command']` and so need the real command string this passes.
+     */
+    private function refuseCommandShell(CommandSpec $spec, string $command): ?string
+    {
+        if ($spec->tier === 'project' && !$this->projectCommandsTrusted) {
+            return sprintf(
+                '[!`%s` was not run: /%s came from this project\'s .sugar-crush/commands, which arrives '
+                . 'with the repository, and a command file from a checkout may only run a shell if you have '
+                . 'listed this project under "trustedProjectCommands" in ~/.sugar-crush/config.json — the '
+                . 'rest of the command file was sent.]',
+                CommandSpec::abbreviateForm($command),
+                $spec->name,
+            );
+        }
+
+        // NO GATE IS NOT A REFUSAL. `permissionGate()` answers null for every
+        // embedder and most tests — a Chat built without a hook chain and
+        // without an EngineBackend — and refusing there would mean a session
+        // with NO permission configuration was STRICTER than one running the
+        // shipped default mode, which answers `Ask` and proceeds. Check 1 is
+        // what carries the authorisation in that case, and it has already run:
+        // the file is either the operator's own or a checkout they named.
+        $gate = $this->permissionGate();
+        if ($gate === null) {
+            return null;
+        }
+
+        // `\SugarCraft\Crush\ToolCall`, the TUI-side half of the two ToolCall
+        // pairs crush_feat.md §1 D flags — NOT `Tools\ToolCall`, which is the
+        // engine-side pair and which PermissionGate does not accept. Named
+        // fully rather than imported so the choice is visible at the call site.
+        if ($gate->evaluate(new \SugarCraft\Crush\ToolCall('Bash', ['command' => $command]))
+            === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
+            return sprintf(
+                '[!`%s` was not run: this session\'s permission mode (%s) denies it]',
+                CommandSpec::abbreviateForm($command),
+                $gate->mode()->value,
+            );
+        }
+
+        return null;
     }
 
     private function dispatchCommand(string $text): ?array

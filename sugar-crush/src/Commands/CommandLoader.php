@@ -38,12 +38,33 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * construction and then serves all three command surfaces from the merged map —
  * the "/" popup, `/help`'s listing, and dispatch itself
  * ({@see \SugarCraft\Crush\Commands\CommandSpec::expandTemplate()} turns the
- * template into the prompt that is sent). Of crush_feat.md section 4.E4's four
- * template forms, `$ARGUMENTS` and `$1`..`$9` are implemented there; `` !`cmd` ``
- * and `@file` are NOT, and are deliberately left for a later step — the first
- * runs a shell out of repository-supplied text and the second reads a
- * repository-named file, so each needs its own gate rather than being folded in
- * behind this one.
+ * template into the prompt that is sent). ALL FOUR of crush_feat.md section
+ * 4.E4's template forms are now implemented: `$ARGUMENTS` and `$1`..`$9` in
+ * {@see CommandSpec::expandTemplate()}, and `` !`cmd` `` and `@file` behind the
+ * two gates the earlier revision of this doc-block said each would need.
+ *
+ * WHAT GATES THE TWO NEW FORMS, and why they are gated differently — the
+ * distinction this class exists to make, since it is the only thing that knows
+ * which DIRECTORY a command came out of:
+ *
+ *  - `@file` is a bounded read confined to the CHECKOUT, for both tiers, by
+ *    {@see CommandSpec::includeFile()}'s {@see ContainedPath} compare. Same
+ *    boundary as the `*.md` walk below and for the same reason: an included
+ *    file becomes prompt text.
+ *  - `` !`cmd` `` runs a shell, so the tier decides. A USER-tier command
+ *    (`~/.sugar-crush/commands`) is the operator's own file — as much theirs as
+ *    `~/.bashrc` — and runs subject only to the launch's
+ *    {@see \SugarCraft\Crush\Permissions\PermissionGate}. A PROJECT-tier one
+ *    arrived in a `git clone`, so it ADDITIONALLY requires the operator to have
+ *    listed this root under `trustedProjectCommands` in
+ *    `~/.sugar-crush/config.json` — the same per-key trust mechanism
+ *    {@see \SugarCraft\Crush\Cli\Bootstrap::trustedProjectRoots()} already
+ *    serves `trustedProjectHooks` and `trustedProjectMcp`. Untrusted, the form
+ *    is refused with a notice in the prompt's place, not silently dropped.
+ *
+ * The tier is stamped onto each row here ({@see CommandSpec::$tier}) rather than
+ * read from the file's frontmatter, because a frontmatter field is written by
+ * whoever wrote the file — which for the project tier is the party being gated.
  */
 final class CommandLoader
 {
@@ -173,9 +194,16 @@ final class CommandLoader
      *        boundary alone — which the paragraph above measures as relocatable.
      *
 
+     * @param string|null $tier stamped onto every row this call produces
+     *        ({@see CommandSpec::$tier}) — `'user'` or `'project'`. It is a
+     *        PARAMETER because only the caller knows which directory it asked
+     *        for, and it is what decides whether a `` !`cmd` `` in one of these
+     *        files may reach a shell; null leaves the rows untiered, which for
+     *        `` !`cmd` `` is treated as "an in-process caller chose this", not as
+     *        "project".
      * @return array<string, CommandSpec>
      */
-    public function loadFromDirectory(string $dir, ?string $anchoredIn = null): array
+    public function loadFromDirectory(string $dir, ?string $anchoredIn = null, ?string $tier = null): array
     {
         $realDir = realpath($dir);
         if ($realDir === false || !is_dir($realDir)) {
@@ -234,7 +262,7 @@ final class CommandLoader
             $name = $this->commandNameFor($realDir, $realPath);
 
             try {
-                $commands[$name] = CommandSpec::fromFile($realPath, $name);
+                $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier);
                 $this->commandSources[$name] = $realPath;
             } catch (\Throwable $e) {
                 error_log("Failed to load command from {$realPath}: {$e->getMessage()}");
@@ -292,7 +320,7 @@ final class CommandLoader
             return [];
         }
 
-        return $this->loadFromDirectory($this->userCommandsDir($home), $home);
+        return $this->loadFromDirectory($this->userCommandsDir($home), $home, 'user');
     }
 
     /**
@@ -307,7 +335,7 @@ final class CommandLoader
      */
     public function loadProjectCommands(string $projectRoot): array
     {
-        return $this->loadFromDirectory($this->projectCommandsDir($projectRoot), $projectRoot);
+        return $this->loadFromDirectory($this->projectCommandsDir($projectRoot), $projectRoot, 'project');
     }
 
     /**

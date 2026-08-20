@@ -405,11 +405,11 @@ have no slash spelling, so `CommandRegistry` keeps them out of the `/` popup and
 `tests/Commands/SlashDispatchTest.php` fails if a row gains a popup entry
 without gaining a dispatch handler.
 
-**File-based custom commands** (`.sugar-crush/commands/*.md`) are LOADABLE, not
-loaded: `Commands\CommandLoader` parses them and understands
-`description`/`argument-hint`/`model`/`subtask` frontmatter, but nothing in
-`src/` or `bin/` constructs a loader, so no such file is read at runtime and
-nothing dispatches one — a dormant seam, not a shipped feature.
+**File-based custom commands** (`.sugar-crush/commands/*.md`) are loaded and
+dispatched: `bin/sugarcrush` builds a `Commands\CommandLoader` per launch, and a
+`*.md` under either commands directory is listed in the "/" popup and in `/help`
+and runs when you type it. See [Your own slash commands](#your-own-slash-commands)
+for the template syntax and for what a command file is and is not allowed to do.
 
 `/bg` really does run the work: it dispatches onto a `BackgroundSupervisor`
 that `bin/sugarcrush` constructs per launch, and the result comes back into
@@ -485,7 +485,60 @@ outside is refused, with the reason printed at launch, rather than turning an
 outside file's contents into a prompt. Commands are discovered once, at launch —
 add a file, restart.
 
-`!`command`` and `@file` template forms are **not** implemented yet.
+#### Running a command and including a file
+
+Two template forms leave the string. Both are gated, and they are gated
+differently, because they are not the same risk.
+
+``!`cmd` `` runs `cmd` and substitutes what it printed:
+
+```markdown
+Current branch: !`git rev-parse --abbrev-ref HEAD`
+```
+
+- **A command file in your home** (`~/.sugar-crush/commands/`) is yours, as much
+  as `~/.bashrc` is, and its ``!`cmd` `` runs.
+- **A command file in the checkout** (`<project>/.sugar-crush/commands/`) arrived
+  with the repository. Its ``!`cmd` `` does **not** run unless you have listed
+  that project under `trustedProjectCommands` in `~/.sugar-crush/config.json` —
+  the same shape of opt-in as `trustedProjectHooks` and `trustedProjectMcp`, and
+  a separate key so trusting one thing does not trust the others. Untrusted, the
+  form is replaced by a note saying so and the rest of the template is still
+  sent. Clone a hostile repo, type its innocuous-looking `/review`, and nothing
+  runs.
+- Your permission rules apply on top of the above: an explicit `Deny Bash` or
+  `Deny Bash(rm *)` refuses the substitution. A mode that would *ask* proceeds
+  instead — there is no prompt to show mid-expansion, and the file was already
+  authorised by the two rules above.
+- Arguments can never become part of a command. Substitution is a single pass, so
+  a ``!`…` `` you *type* as an argument is prose, and a `$ARGUMENTS` written
+  *inside* ``!`…` `` is not substituted.
+- All the ``!`…` `` forms in one command share **10 seconds** of wall clock
+  between them, not 10 seconds each; whatever is left is what the next one gets,
+  and a form that arrives with nothing left says so. The app is single-threaded,
+  so that budget is how long the terminal can freeze. It is not configurable, and
+  deliberately not settable from frontmatter — that file may be the repository's.
+- Output is capped at 16 KB per substitution and the clip announces itself.
+  stderr joins the prompt only when the command failed, along with its exit code.
+
+`@path` splices in a file:
+
+```markdown
+Follow the conventions in @CONVENTIONS.md when you answer.
+```
+
+- The path is **relative to the checkout and confined to it**, for command files
+  from either directory. `@../../.ssh/id_rsa.pub`, and a symlink under the
+  checkout pointing at the same, are refused with a note. An absolute
+  `@/etc/passwd` is not an include at all — it stays literal and nothing is read.
+- It must end in an extension, and the extension has to be on the LAST segment,
+  so an `@name` mention, an email address, and an extensionless
+  `@../../.ssh/id_rsa` are all left alone — the last of those is not refused with
+  a note, it is simply never treated as an include.
+- 16 KB per substitution, same cap and same announced clip.
+- Unlike ``!`cmd` ``, an include needs no trust opt-in: it is a bounded read
+  inside a checkout you already opened. If you want a file from *outside* the
+  checkout, say ``!`cat ~/notes.md` `` and let the permission gate see it.
 
 ### What you see while a turn runs
 
