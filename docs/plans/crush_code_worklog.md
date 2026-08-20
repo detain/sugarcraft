@@ -9199,3 +9199,55 @@ is the provenance rule the whole plan turns on.
 
 That reviewer's gate verdict is the strongest claim this round can make: **~110 attack strings, no
 escape, no feature loss.**
+
+### Round 33 — how it actually finished
+
+All three bundles landed and were verified by the supervisor's own suite runs rather than the lanes'
+reported totals: `cmd` `339f512c` at 8204 / 91728 / 1 / rc 0, `sglang` `2bde4114` at 8299 / 91986 /
+1 / rc 0, `lsp` `c4718781` at 8315 / 92077 / 1 / rc 0 plus candy-core 781 / 6982 / 25 / rc 0. Every
+lane's claim matched. The floor that had held since round 31 moved from 8111 / 91477.
+
+**The round's most reusable lesson has nothing to do with any of the three bundles.** Both fix lanes
+were handed a brief whose "pre-fix figure" described a tree that no longer existed, and for the same
+structural reason: the round had been paused mid-flight, and an interrupted agent goes on writing
+after the reviewer stops reading. `cmd`'s tree was mid-write and **fataling at exit 255 on an
+undefined constant** while the suite still reported green, because nothing exercised the empty-value
+path the half-written code had introduced. `sglang`'s was **two tests red at rc 1**, not the green it
+was briefed, because the interrupted agent's untracked file had moved a census count and never
+updated the counter that guards it. Both lanes caught it themselves and re-measured. The rule earned:
+**a pre-fix figure describes the tree the REVIEWER saw, and an interrupted agent can have written
+since. Re-measure the floor before standing on it.**
+
+**Two lanes were told to copy a precedent and both found the precedent carried a defect.** `sglang`
+was told to follow `MinimaxXmlFallbackToolCallParser`'s shape and discovered the shape *was* the
+vulnerability — the same `str_contains($content, MARKER)` guard, shipped and wired long before the
+DSML parser inherited it. `lsp` was told `bbf83869` was precedent for editing `candy-core` from a
+sugar-crush-scoped step, and its reviewer found the precedent had also added 44 lines of
+`InputReaderTest.php`, an obligation the lane had dropped while claiming the permission. **A
+precedent is a vector, and it grants both halves or neither.**
+
+**The phantom zone.** The `lsp` implement report described an outside click reaching a live
+`pane:files` zone at `row=1 col=1..7`. The reviewer enumerated the whole registry: `markPane()` is
+the sole `pane:*` producer and is reached with only `Pane::Menu` and `Pane::Agents`; the zones that
+actually survive a modal are `toolcall:call_*` at rows 5/8/11/14; and `pane:menu` is *destroyed* by
+the modal, not preserved. The string `pane:files` occurs **exactly once in the tree** —
+`tests/PaneClickTest.php:252`, a hand-written synthetic fed to `scan()`. A test fixture was read as a
+live render, and the id and coordinates taken from it survived into the supervisor's own RESUME
+before anyone checked. The underlying defect is real but is UX, not security: the reachable action is
+`toggleToolOutput()`, which cannot answer or dismiss a permission prompt. **A string that exists is
+not a thing that happens.**
+
+**The supervisor's own bookkeeping carried the defect twice**, both caught by agents rather than by
+the supervisor. `ARCHITECTURE.md:381-389` was relayed twice as the "Built but unwired" seam list; it
+is the render-invariants section, and the seam list is at `:417-421`. And the lane-ownership table —
+the artefact whose entire job is keeping concurrent lanes off each other's files — listed
+`Renderer.php, KeyboardHandler.php` as a pair, when `src/Renderer.php` exists and
+`src/KeyboardHandler.php` does not. No lane was misrouted, because the real file sits inside the
+`src/Tui/**` the table already granted. **Rule: re-open the file at the line range before repeating
+any citation you did not personally take, including one from your own earlier document.**
+
+**And the docblocks can agree with each other and all be wrong.** Three places —
+`AgentManager.php:416`, `Bootstrap.php:914`, `docs/PERMISSIONS.md:193` — call the permission approver
+a "BLOCKING closure". It is a `Deferred` plus a TEA state machine that cannot be called from a
+`bool`-returning closure at all. The three agree because they were written from one intent, before
+the implementation diverged. **Consensus among comments measures a shared ancestor, not the code.**
