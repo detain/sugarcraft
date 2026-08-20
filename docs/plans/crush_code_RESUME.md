@@ -135,11 +135,50 @@ now set it to max as default for this model"**.
 - **`temperature` defaulted to `0.7`** at `SglangProvider.php:310`, not 1.0, and `:323` sent
   `top_p => $request->topP` (null when unset). The fix must be **model-aware** — silently retuning
   MiniMax violates the user's keep-both-working rule.
-- **The default model lived in THREE tracked places**, all saying `MiniMax-M2.7`:
+- **CORRECTED BY THE IMPLEMENT AGENT: the default model lived in FOUR tracked places, not three.**
+  My brief named three and missed `ProviderFactory::defaultConfig('sglang')['model']` (was line 363)
+  — **the one that `$SUGARCRUSH_PROVIDER=sglang` actually reaches**, because `defaultConfig()` is
+  `bin/sugarcrush`'s only hook into the provider system. Changing three of four would have left the
+  plain `sglang` provider type 404ing on the model name. All four now fixed, and `defaultConfig`
+  reads `SglangProvider::DEFAULT_MODEL` so the two cannot drift. The three my brief did name were:
   `src/Providers/SglangProvider.php:68`, `/.sugar-crush/config.dev.json`, and
   `/sugar-crush/.sugar-crush/config.dev.json`. **`config.dev.json` is NOT the md5 invariant** —
   that is `.sugar-crush/config.json` (no `.dev`). File 3 has a hardlink partner OUTSIDE the repo, so
   an in-place rewrite changes that path too while a `sed -i` breaks the link.
+- **A SECOND BUG THE BRIEF NEVER MENTIONED, found by the implement agent:
+  `SglangProvider::contextWindow()` hard-returned `196_608` while the live server reports
+  `max_model_len: 393216`** — and its doc-block asserted that 196,608 *was* the live
+  `--context-length`. So all four of `Chat`'s context tiers were sized against half the real budget
+  while the comment claimed otherwise. The recurring defect (a number carrying the wrong domain)
+  found in shipped code rather than in a review. Now model-aware: 393,216 for DeepSeek-V4, 196,608
+  preserved for everything else. Note the residue the agent flagged rather than silently
+  "improving": `LEGACY_DEFAULT_CONTEXT_WINDOW = 196_608` is a *MiniMax* figure now serving as the
+  fallback for every third model — a guess. `0` would be honest but would disable all four tiers on
+  MiniMax, so behaviour was preserved and the domain documented on the constant.
+- **Measured bounds, sharper than the brief's "a constrained float":** `0.0` OK, `0.5` OK, `0.99` OK,
+  `1.0` REJECTED (`le: 0.99`), `-0.5` and `1.5` REJECTED — so `0.0 <= x <= 0.99` on this deployment.
+  The float is forwarded **without a local range check on purpose**, so a later SGLang widening the
+  bound is not refused by us; out-of-range fails loudly at the server, whose 400 names the live
+  bound. The seven NAMES are validated locally (closed, server-authoritative set), so a typo fails
+  before any request is sent.
+- **`reasoning_effort` is emitted TOP-LEVEL** in `buildParams()`, not under `chat_template_kwargs`.
+  Confirmed no prompt shape produced a text tool call at any of the seven effort levels, with effort
+  absent, or with `separate_reasoning` absent — **so no new parser class was needed** and the
+  existing `OpenAiArrayToolCallParser` handled every live payload unmodified.
+- **PHP encodes `1.0` as JSON `1`** (Guzzle's `json` option sets no `JSON_PRESERVE_ZERO_FRACTION`),
+  so the DeepSeek defaults go on the wire as `"temperature":1,"top_p":1`. SGLang's pydantic coerces
+  int to float and returns 200 — probed, and pinned in a test on the raw body so nobody later reads
+  a capture as a lost decimal.
+- **"Agentic" was pinned to "the request offered tools"** — the only agentic signal a
+  `CompleteRequest` carries. `Runtime` always passes tools, so in practice `top_p` is 0.95 for chat
+  turns and 1.0 for tool-less side calls (compaction summaries, titles).
+- **SUPERVISOR TO-DO once the sglang lane commits** (its agent correctly refused to edit these —
+  they are supervisor-owned — and they go stale the moment that commit lands):
+  `crush_code.md:1607` reasons from "`contextWindow()` correctly reports 196,608";
+  `crush_code.md:2530` quotes the old `config.dev.json`; `crush_feat.md:1857` still describes the
+  deployment as MiniMax. Fix all three AFTER the commit lands, not before — until then the tree does
+  not yet say what they would be corrected to.
+
 - **Follow-up deliberately deferred, and STILL deferred.** `src/Config/LayeredSettings.php` landed
   in `f0585149`, but round 31's lane `cmd` is now extending `LAYERED_KEYS` again for P6.3/P6.4. Add
   reasoning-effort to `LAYERED_KEYS` only after THAT lands, or two lanes rewrite the same constant.
