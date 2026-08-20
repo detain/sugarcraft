@@ -27,6 +27,7 @@ use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
+use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 
@@ -856,6 +857,70 @@ final class ParallelToolCallsTest extends TestCase
         // directory, run in this process, no longer carries the document.
         $third = $read->execute(['file_path' => $repo . '/sub/a.txt', 'description' => 'read a again']);
         $this->assertStringNotContainsString('nested project instructions', $third->content());
+    }
+
+    /**
+     * The same claim for `Grep`, which took the announce-once pair in P8.9 and
+     * therefore took the fork problem with it.
+     *
+     * `Grep`'s own unit tests simulate the fork boundary in-process by calling
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Grep::exportSessionState()} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Grep::mergeSessionState()} by hand.
+     * That pins the pair's SHAPE but not that {@see Runtime} actually asks —
+     * a Grep that forgot to implement {@see CarriesSessionState} would still
+     * pass those, because the methods would still exist and still work. This
+     * one runs the real `pcntl_fork()` path.
+     *
+     * Two searches, two different governed directories, so a merge that
+     * carried only ONE child's marks back would be visible rather than
+     * indistinguishable from a merge that carried both.
+     */
+    public function testRealGrepToolsMergeTheirAnnounceOnceMarksBackAcrossTheFork(): void
+    {
+        $repo = $this->dir . '/greprepo';
+        foreach (['alpha', 'bravo'] as $name) {
+            mkdir($repo . '/' . $name, 0o777, true);
+            file_put_contents($repo . '/' . $name . '/CLAUDE.md', 'RULE-' . strtoupper($name));
+            file_put_contents($repo . '/' . $name . '/hit.txt', "needle\n");
+        }
+
+        $loader = new InstructionFileLoader($repo);
+        $grep = new Grep($repo, instructionLoader: $loader);
+
+        $results = $this->execute([
+            new ToolCall('call_g1', 'Grep', [
+                'pattern' => 'needle',
+                'path' => $repo . '/alpha',
+                'description' => 'search alpha',
+            ]),
+            new ToolCall('call_g2', 'Grep', [
+                'pattern' => 'needle',
+                'path' => $repo . '/bravo',
+                'description' => 'search bravo',
+            ]),
+        ], [$grep]);
+
+        $this->assertStringContainsString('RULE-ALPHA', $results[0]->content());
+        $this->assertStringContainsString('RULE-BRAVO', $results[1]->content());
+
+        $emitted = $loader->emittedPaths();
+        foreach (['alpha', 'bravo'] as $name) {
+            $this->assertContains(
+                realpath($repo . '/' . $name . '/CLAUDE.md'),
+                $emitted,
+                "the mark {$name}'s child set must reach the parent, or every later search re-emits it",
+            );
+        }
+
+        // And it is honoured from here on: a third search of one of those
+        // directories, run in THIS process, no longer carries the document.
+        $third = $grep->execute([
+            'pattern' => 'needle',
+            'path' => $repo . '/alpha',
+            'description' => 'search alpha again',
+        ]);
+        $this->assertStringContainsString('/alpha/hit.txt:1:', $third->content(), 'the hit itself must still be there');
+        $this->assertStringNotContainsString('RULE-ALPHA', $third->content());
     }
 
     // =========================================================================

@@ -11,11 +11,14 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
+use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
+use SugarCraft\Crush\Tools\BuiltIn\Write;
 
 /**
  * R19: bin/sugarcrush previously built `new Chat(backend: $backend)` with no
@@ -254,11 +257,69 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->assertSame('call_lsp', $result->toolCallId());
     }
 
-    public function testReadEditGlobEachReceiveANonNullInstructionLoader(): void
+    /**
+     * The roster this file used to hand-maintain, now DERIVED and pinned.
+     *
+     * The three tests below each named a literal `[Read, Edit, Glob]` — two as
+     * a `foreach` over that array, the third
+     * (`…ShareTheSameInstructionLoaderInstance`) as three explicit
+     * `instructionLoaderOf()` calls — while `Bootstrap::tools()` handed the
+     * pair to FIVE tools, and the gap that literal left was real but NARROWER
+     * than it looks — worth stating precisely, because the imprecise version
+     * is the bug this project keeps shipping. MEASURED at 82b8ee3e by dropping
+     * one argument at a time and re-running, from `sugar-crush/`:
+     *
+     *   vendor/bin/phpunit tests/Integration/FeatWiringReachabilityTest.php \
+     *     tests/Integration/SkillPathScopingWiringTest.php \
+     *     tests/Integration/BinSugarcrushWiringTest.php \
+     *     tests/Tools/BuiltIn/WriteTest.php \
+     *     tests/Tools/BuiltIn/SkillPathScopingTest.php
+     *
+     *  - Unmutated, that command reports `OK (376 tests, 1980 assertions)`.
+     *  - `Write` losing `skillNudge:` reports `OK (376 tests, 1980
+     *    assertions)` — not merely still green, byte-identical to the
+     *    unmutated run. THAT was the unguarded half.
+     *  - `Write` losing `instructionLoader:` reports `Tests: 376, Assertions:
+     *    1980, Failures: 1`, at
+     *    `testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()` in this
+     *    file — which carries its own same-instance assertion for Write,
+     *    written when Write was wired. So the LOADER half was covered, just
+     *    not by these loops.
+     *
+     * (An earlier draft of this block claimed "428 tests, 2039 assertions".
+     * No command produces that over these files; it was a figure measured
+     * against some other selection and then written down next to this one —
+     * which is the precise defect the rest of this docblock exists to warn
+     * about. The figures above were re-measured before being written.)
+     *
+     * Which is the argument for deriving rather than for adding two more
+     * names: the covered half was covered by an assertion in a different test
+     * with a different subject, so nothing connected the lists and nobody
+     * could see which half was which. The loops now walk
+     * {@see loaderCarryingToolClasses()} — read off the real tool set — and
+     * this test is the one place the expected membership is written down.
+     *
+     * Which makes the assertion below the deliberate acknowledgement step
+     * rather than a restatement: a new tool that takes an
+     * `instructionLoader` property is automatically covered by every loop,
+     * and fails HERE until someone adds it, which is exactly the moment to
+     * decide whether it should have had the pair at all.
+     */
+    public function testTheLoaderCarryingToolRosterIsExactlyTheFiveToolsThatDeclareIt(): void
+    {
+        $this->assertSame(
+            [Edit::class, Glob::class, Grep::class, Read::class, Write::class],
+            $this->loaderCarryingToolClasses(),
+            'A tool gained or lost an $instructionLoader property. Widen or narrow this list '
+            . 'deliberately — every other loader/nudge assertion in this file is derived from it.',
+        );
+    }
+
+    public function testEveryLoaderCarryingToolReceivesANonNullInstructionLoader(): void
     {
         $byClass = $this->toolsByClass();
 
-        foreach ([Read::class, Edit::class, Glob::class] as $class) {
+        foreach ($this->loaderCarryingToolClasses() as $class) {
             $this->assertArrayHasKey($class, $byClass, "Expected {$class} among the built-in tools");
             $this->assertInstanceOf(
                 InstructionFileLoader::class,
@@ -268,21 +329,58 @@ final class BinSugarcrushWiringTest extends TestCase
         }
     }
 
-    public function testReadEditGlobShareTheSameInstructionLoaderInstance(): void
+    public function testEveryLoaderCarryingToolSharesTheSameInstructionLoaderInstance(): void
     {
         // loadForPath() tracks "already injected this session" per loader
         // instance (InstructionFileLoader::$emittedPaths) -- a shared
-        // instance across the three tools is what makes the nested
+        // instance across the tools is what makes the nested
         // CLAUDE.md/AGENTS.md dedup semantics apply CLI-wide instead of
         // once per tool.
         $byClass = $this->toolsByClass();
 
-        $readLoader = $this->instructionLoaderOf($byClass[Read::class]);
-        $editLoader = $this->instructionLoaderOf($byClass[Edit::class]);
-        $globLoader = $this->instructionLoaderOf($byClass[Glob::class]);
+        $loaders = [];
+        foreach ($this->loaderCarryingToolClasses() as $class) {
+            $loaders[$class] = $this->instructionLoaderOf($byClass[$class]);
+        }
 
-        $this->assertSame($readLoader, $editLoader);
-        $this->assertSame($editLoader, $globLoader);
+        $first = array_key_first($loaders);
+        foreach ($loaders as $class => $loader) {
+            $this->assertSame($loaders[$first], $loader, "{$class} must share the one session loader");
+        }
+    }
+
+    /**
+     * Read/Edit/Glob's nudge wiring WAS already asserted — by
+     * `SkillPathScopingWiringTest::testBootstrapGivesReadEditAndGlobTheSameNudgeTracker()`
+     * and again inside `FeatWiringReachabilityTest` (Read+Edit). Both name
+     * their tools as literals, so `Write` and `Grep` fell outside all of them;
+     * see this file's roster docblock for the measurement.
+     *
+     * It matters that this failure is silent rather than loud:
+     * {@see SkillPathNudge} dedups per INSTANCE (`$announced`), so a tool given
+     * its own tracker still nudges. It just re-announces a skill the model was
+     * already told about, once more per tool, for the rest of the session —
+     * which reads as a working feature.
+     */
+    public function testEveryLoaderCarryingToolSharesTheOneSkillPathNudge(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $nudges = [];
+        foreach ($this->loaderCarryingToolClasses() as $class) {
+            $nudge = $this->privateValue($byClass[$class], 'skillNudge');
+            $this->assertInstanceOf(
+                SkillPathNudge::class,
+                $nudge,
+                "{$class} carries an InstructionFileLoader, so it must carry the nudge tracker too",
+            );
+            $nudges[$class] = $nudge;
+        }
+
+        $first = array_key_first($nudges);
+        foreach ($nudges as $class => $nudge) {
+            $this->assertSame($nudges[$first], $nudge, "{$class} must share the one session nudge tracker");
+        }
     }
 
     /**
@@ -294,7 +392,7 @@ final class BinSugarcrushWiringTest extends TestCase
      * InstructionFileLoader::$emittedPaths in two, so the same-instance
      * claim is asserted against a single real Bootstrap::backend() here.
      */
-    public function testBackendSharesItsInstructionLoaderWithTheReadEditGlobTools(): void
+    public function testBackendSharesItsInstructionLoaderWithEveryLoaderCarryingTool(): void
     {
         $backend = Bootstrap::backend($this->tempDir . '/repo');
 
@@ -308,7 +406,7 @@ final class BinSugarcrushWiringTest extends TestCase
             $byClass[$tool::class] = $tool;
         }
 
-        foreach ([Read::class, Edit::class, Glob::class] as $class) {
+        foreach ($this->loaderCarryingToolClasses() as $class) {
             $this->assertArrayHasKey($class, $byClass, "Expected {$class} among the backend's tools");
             $this->assertSame(
                 $backendLoader,
@@ -1092,6 +1190,32 @@ final class BinSugarcrushWiringTest extends TestCase
         $ref->setAccessible(true);
 
         return $ref->getValue($target);
+    }
+
+    /**
+     * Every class in the real built-in tool set that declares an
+     * `instructionLoader` property, sorted for a stable assertion.
+     *
+     * Reflection over `Bootstrap::tools()` rather than a literal, so the
+     * roster cannot drift from the tools that actually exist. The property is
+     * the right discriminator rather than an interface: `CarriesSessionState`
+     * is about surviving a fork and something could implement it for other
+     * state, whereas declaring this property IS taking the pair.
+     *
+     * @return list<class-string>
+     */
+    private function loaderCarryingToolClasses(): array
+    {
+        $classes = [];
+        foreach ($this->toolsByClass() as $class => $tool) {
+            if ((new \ReflectionClass($tool))->hasProperty('instructionLoader')) {
+                $classes[] = $class;
+            }
+        }
+
+        sort($classes);
+
+        return $classes;
     }
 
     private function instructionLoaderOf(object $tool): ?InstructionFileLoader

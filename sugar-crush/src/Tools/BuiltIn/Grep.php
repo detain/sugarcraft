@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\IgnoreRules;
@@ -12,7 +15,7 @@ use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Grep implements Tool, ParallelSafe
+final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
 {
     use CapturesProcessOutput;
     use TruncatesOutput;
@@ -27,16 +30,80 @@ final readonly class Grep implements Tool, ParallelSafe
     public function __construct(
         private ?string $root = null,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
+        private ?InstructionFileLoader $instructionLoader = null,
+        private ?SkillPathNudge $skillNudge = null,
     ) {}
 
     /**
-     * Unconditionally concurrency-safe: `grep -rn` reads, and this tool holds
-     * no session-scoped state for a fork to strand (contrast `Read`/`Glob`,
-     * which carry the announce-once collaborators).
+     * Still concurrency-safe, but NOT for the reason this docblock used to
+     * give. It said:
+     *
+     *   "Unconditionally concurrency-safe: `grep -rn` reads, and this tool
+     *    holds no session-scoped state for a fork to strand (contrast
+     *    `Read`/`Glob`, which carry the announce-once collaborators)."
+     *
+     * BOTH halves of that were wrong once the collaborators arrived, and the
+     * second half was ALREADY wrong before they did. `Read` and `Glob` carry
+     * the announce-once collaborators AND both return true here — so carrying
+     * them was never the thing that would have cost a tool its verdict, and
+     * "contrast Read/Glob" pointed at two tools that do not in fact contrast.
+     *
+     * {@see ParallelSafe} states the real rule in its point 2: session-scoped
+     * state is allowed in a group PROVIDED it survives the fork. There are two
+     * ways to satisfy that — hold none, or implement
+     * {@see CarriesSessionState}. This tool used to satisfy it the first way
+     * and now satisfies it the second, which is why the verdict is unchanged
+     * while its justification is not.
+     *
+     * So the promise is CONDITIONAL on the export/merge pair below, and that
+     * is the load-bearing sentence: delete {@see exportSessionState()} and
+     * this `true` becomes a lie that nothing in the type system catches — the
+     * `CarriesSessionState` implements-clause would go with it and
+     * {@see \SugarCraft\Crush\Runtime} would silently stop asking. Grep would
+     * still be side-effect-free, and a `CLAUDE.md` surfaced by a forked Grep
+     * would re-surface on the next call for the rest of the session.
+     * `GrepInstructionWiringTest` pins that pair rather than the verdict.
+     *
+     * Point 1 of {@see ParallelSafe} is unaffected and unchanged: `grep -rn`
+     * reads, mutates nothing a sibling could observe, and terminates on its
+     * own.
      */
     public function isParallelSafe(): bool
     {
         return true;
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @see Read::exportSessionState() — deliberately the same two keys. All
+     *      loader-carrying tools share ONE loader and ONE nudge tracker (see
+     *      {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}), so a key one of
+     *      them exported and another did not would leave that half
+     *      re-announcing forever.
+     */
+    public function exportSessionState(): array
+    {
+        return [
+            'emittedInstructionPaths' => $this->instructionLoader?->emittedPaths() ?? [],
+            'announcedSkills' => $this->skillNudge?->announced() ?? [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    public function mergeSessionState(array $state): void
+    {
+        $paths = $state['emittedInstructionPaths'] ?? null;
+        if (is_array($paths)) {
+            $this->instructionLoader?->markEmitted(array_values($paths));
+        }
+
+        $skills = $state['announcedSkills'] ?? null;
+        if (is_array($skills)) {
+            $this->skillNudge?->markAnnounced(array_values($skills));
+        }
     }
 
     public function name(): string
@@ -207,11 +274,124 @@ final readonly class Grep implements Tool, ParallelSafe
             );
         }
 
+        // Announced AFTER the clip, and read off the CLIPPED content rather
+        // than off the raw hit list, so the announce-once budget is only ever
+        // spent on a path the model actually received.
+        //
+        // Appending rather than interleaving is MEASURED, not stylistic. Glob
+        // does the opposite — it prepends each matched file's instruction body
+        // into the list before truncating — and with a 200-byte cap over a
+        // 500-line `sub/CLAUDE.md` the instruction body wins the entire budget
+        // and the FILE LIST, the answer the caller asked for, is what the
+        // truncation marker reports as dropped. Grep would fare worse still: a
+        // hit list is a `path:line:text` record stream, so an injected
+        // markdown body does not merely crowd the answer out, it emits
+        // hundreds of lines that PARSE as hits. Appending after the clip gives
+        // up the cap's exactness over this block and buys back both
+        // properties: the hits always survive, and nothing is marked emitted
+        // that the model never saw. {@see Read} already takes the same
+        // exemption for the same reason.
+        //
+        // Both halves of that trade are recorded rather than left implicit:
+        // Glob's prepend-before-clip defect is E56 and the cap this exemption
+        // gives up is E55, both in docs/plans/crush_code_hardening_backlog.md,
+        // with the byte measurements behind the numbers above.
+        if ($this->instructionLoader !== null || $this->skillNudge !== null) {
+            $hitFiles = self::hitFiles($content, $path);
+
+            $instructions = [];
+            foreach ($hitFiles as $file) {
+                $loaded = $this->instructionLoader?->loadForPath($file);
+                if ($loaded !== null) {
+                    $instructions[] = $loaded;
+                }
+            }
+
+            // LABELLED, where Read and Glob emit the body raw. Those two put it
+            // where position alone explains it — at the top of the one file
+            // being read, or beside the path it belongs to. Here it lands after
+            // a run of `... [note]` lines at the end of a record stream, and an
+            // unlabelled markdown blob in that position is indistinguishable
+            // from tool output that failed to parse.
+            if ($instructions !== []) {
+                $content = self::separated($content);
+                $content .= sprintf(
+                    "... [instructions: %d instruction file(s) govern the matched paths. "
+                    . "Surfaced once per session, so they are shown here and not repeated.]\n",
+                    count($instructions),
+                );
+                $content .= implode("\n", $instructions);
+            }
+
+            $nudge = $this->skillNudge?->forPaths($hitFiles);
+            if ($nudge !== null) {
+                $content = self::separated($content);
+                $content .= $nudge;
+            }
+        }
+
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: $content,
             isError: $run['exitCode'] > 1,
         );
+    }
+
+    /**
+     * The distinct files the surviving hit lines refer to, in first-hit order.
+     *
+     * Parsed back out of the rendered content rather than threaded through
+     * from {@see withoutIgnoredHits()} BECAUSE it must reflect the clip: a hit
+     * truncation dropped is a path the model cannot see, and announcing its
+     * `CLAUDE.md` against it would spend the once-per-session mark on a file
+     * the model was never shown.
+     *
+     * $content at this point ALREADY carries the `... [skipped: ...]` and
+     * `... [gitignored: ...]` notes, which is safe rather than incidental:
+     * {@see hitPath()} recognises a hit only by the search-root prefix (or by
+     * grep's exact `Binary file X matches` wording), and a note opens with
+     * `... [`. Anything appended AFTER this call — the instruction block, the
+     * nudge — is never re-scanned at all.
+     *
+     * `strval` over the keys for the reason
+     * {@see \SugarCraft\Crush\Context\InstructionFileLoader::emittedPaths()}
+     * documents: PHP coerces a decimal-integer string key to `int`.
+     * Unreachable here (these are rooted paths), mirrored so the idiom does
+     * not drift.
+     *
+     * @return list<string>
+     */
+    private static function hitFiles(string $content, string $searchRoot): array
+    {
+        if ($content === '') {
+            return [];
+        }
+
+        $prefix = rtrim($searchRoot, '/') . '/';
+        $files = [];
+
+        foreach (explode("\n", $content) as $line) {
+            $file = self::hitPath($line, $prefix);
+            if ($file !== null) {
+                $files[$file] = true;
+            }
+        }
+
+        return array_map(strval(...), array_keys($files));
+    }
+
+    /**
+     * $content with a trailing newline, so an appended block starts on a line
+     * of its own. The two notes above open with the same two lines inline;
+     * this is that idiom named once.
+     */
+    private static function separated(string $content): string
+    {
+        if ($content !== '' && !str_ends_with($content, "\n")) {
+            $content .= "\n";
+        }
+
+        return $content;
     }
 
     /**

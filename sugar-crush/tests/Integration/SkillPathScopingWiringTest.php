@@ -74,6 +74,32 @@ final class SkillPathScopingWiringTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * NARROW BY DESIGN, and no longer the only guard. This names three tools;
+     * `Bootstrap::tools()` hands the tracker to FIVE (Read, Edit, Glob, Grep,
+     * Write). A hand-kept list here is what let `Write`'s nudge wiring ship
+     * unguarded. MEASURED at 82b8ee3e, from `sugar-crush/`:
+     *
+     *   vendor/bin/phpunit tests/Integration/FeatWiringReachabilityTest.php \
+     *     tests/Integration/SkillPathScopingWiringTest.php \
+     *     tests/Integration/BinSugarcrushWiringTest.php \
+     *     tests/Tools/BuiltIn/WriteTest.php \
+     *     tests/Tools/BuiltIn/SkillPathScopingTest.php
+     *
+     * reports `OK (376 tests, 1980 assertions)` untouched, and reports the
+     * SAME `OK (376 tests, 1980 assertions)` with `skillNudge:` dropped from
+     * `Write` — the mutation moves not one assertion. Its `instructionLoader:`
+     * half was NOT unguarded: dropping that one gives `Tests: 376,
+     * Assertions: 1980, Failures: 1` at
+     * `BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`.
+     *
+     * The roster-wide assertion now lives in
+     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::testEveryLoaderCarryingToolSharesTheOneSkillPathNudge()},
+     * which DERIVES its list from the tools that actually declare the
+     * property. This test is kept as the focused Read/Edit/Glob case it always
+     * was; it is deliberately not widened, because two derivations of the same
+     * roster is the duplication that started this.
+     */
     public function testBootstrapGivesReadEditAndGlobTheSameNudgeTracker(): void
     {
         $byClass = [];

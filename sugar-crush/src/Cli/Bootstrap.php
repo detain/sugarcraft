@@ -4102,10 +4102,20 @@ final class Bootstrap
         $loader ??= self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
 
-        // ONE tracker across Read/Edit/Glob: the "announce a path-scoped skill
-        // the first time we touch a file it covers" rule is only correct if all
-        // three share the announced-set. Three trackers would re-announce the
-        // same skill once per tool (crush_feat.md section 7 E4).
+        // ONE tracker across every tool that resolves a path — Read, Edit,
+        // Glob, Grep and Write: the "announce a path-scoped skill the first
+        // time we touch a file it covers" rule is only correct if all of them
+        // share the announced-set. Five trackers would re-announce the same
+        // skill once per tool (crush_feat.md section 7 E4).
+        //
+        // This comment said THREE and named Read/Edit/Glob. It was already
+        // stale — `Write` below has taken the same pair since it was wired —
+        // and `Grep` has now joined them, which is the arithmetic this project
+        // keeps getting wrong. The count and the names are both asserted, not
+        // just written here: `BinSugarcrushWiringTest` now DERIVES the roster
+        // from the tools that declare an `instructionLoader` property instead
+        // of restating a hand-kept list, so the next tool to take the pair
+        // fails that test until it is acknowledged there.
         $nudge = SkillPathNudge::new($skills);
 
         $tools = [
@@ -4113,7 +4123,18 @@ final class Bootstrap
             new Read($root, instructionLoader: $loader, skillNudge: $nudge),
             new Edit($root, instructionLoader: $loader, skillNudge: $nudge),
             new Glob($root, instructionLoader: $loader, skillNudge: $nudge),
-            new Grep($root),
+            // Same pair as Read/Edit/Glob/Write, and it was the one
+            // path-resolving tool without them: a `CLAUDE.md` governing a
+            // directory stayed unannounced when Grep was what surfaced the
+            // file, and a `paths:`-scoped skill stayed silent on a search that
+            // named every file it covers.
+            //
+            // Taking the pair gives Grep session-scoped state, which is why
+            // it now implements `CarriesSessionState` — see
+            // {@see \SugarCraft\Crush\Tools\BuiltIn\Grep::isParallelSafe()}
+            // for why its concurrency verdict is unchanged but its
+            // justification is not.
+            new Grep($root, instructionLoader: $loader, skillNudge: $nudge),
             // Write, and it was missing: {@see Edit} refuses a path that does
             // not exist yet (it requires `file_exists()` AND a non-empty
             // `old_string`), so with the set at nine the model's ONLY route to

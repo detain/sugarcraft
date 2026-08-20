@@ -2598,3 +2598,91 @@ drifted further.
 **Step.** Make the `+4` overhead explicit in `AgentViewPane`'s signature — either take an *outside*
 width and subtract internally, or expose a `chromeWidth()` constant both callers subtract — so the two
 call sites cannot disagree. Pre-existing; predates the P3.2/P3.5 bundle and out of its scope.
+
+---
+
+## Round 34 — findings from the P8.9 lane (Grep's announce-once pair)
+
+Recorded, not fixed: both are pre-existing shapes in tools outside that lane's bundle, surfaced by
+wiring `Grep` for the same pair. Every byte figure below was re-measured in the lane before it was
+written down.
+
+### E55 — `maxOutputBytes` no longer bounds `Grep`'s result
+
+**What.** P8.9 gave `Grep` the announce-once pair (`InstructionFileLoader` +
+`SkillPathNudge`). The instruction block is appended **after** the clip — a
+deliberate, documented choice: prepending it would let a large `CLAUDE.md` win
+the whole budget and push the hit list, the answer, out under the truncation
+marker (`Glob` has exactly that defect; see **E56**). The cost of appending is
+that the appended block is outside the cap, and `InstructionFileLoader` applies
+no size limit of its own. So `maxOutputBytes` now bounds the hit list, not the
+result.
+
+**Where.** `sugar-crush/src/Tools/BuiltIn/Grep.php` — the append block after
+`truncateMerged()`; `sugar-crush/src/Context/InstructionFileLoader.php`
+(`loadForPath()` returns the file whole).
+
+**Evidence — MEASURED.** A temp tree with one 6513-byte `sub/CLAUDE.md` and one
+matching `sub/*.php`, `new Grep($root, 400, new InstructionFileLoader($root))`:
+the result is **6700 bytes against a 400-byte cap — 16.8×**. Scales with the
+instruction file, and with the number of distinct governed directories a single
+search touches.
+
+**Severity.** Low today, and NOT a new class of problem. `Read` has carried the
+same shape since it was wired: at cap 200 over a 2421-byte file under that same
+tree it returns **6726 bytes** with the answer head intact — the instructions
+are appended outside its `$maxBytes` too. What is new is that `Grep` is the case
+`TruncatesOutput`'s own docblock cites as motivating (`:18`, "a `Grep` for a
+common identifier"), and it warns that a single oversized result "can exhaust
+the context window outright". That bound is now defeatable by a large
+`CLAUDE.md` sitting in a hit directory.
+
+Real-world exposure on this repository is ~0: `loadForPath()` walks up to but
+**excludes** `$repoRoot`, and the only `CLAUDE.md`/`AGENTS.md` below the root
+live under `.caliber/backups/`. It needs a checkout that keeps large instruction
+files in subdirectories.
+
+**Step.** Give the appended block its own budget — a second cap applied to the
+instruction text, independent of `maxOutputBytes`, with its own marker — and
+apply it in `Read` at the same time, since both tools take the same exemption
+for the same reason.
+
+### E56 — `Glob` prepends instruction bodies BEFORE truncating, so the file list is what gets dropped
+
+**What.** `Glob` injects each matched file's instruction body into the list and
+then truncates the whole thing. With a small cap and a large `CLAUDE.md` the
+body consumes the entire budget and the **matched paths — the answer the caller
+asked for — are what the truncation marker reports as dropped**. The tool
+returns a document the caller did not ask for and none of the filenames it did.
+
+**Where.** `sugar-crush/src/Tools/BuiltIn/Glob.php` — the prepend happens ahead
+of the `TruncatesOutput` call.
+
+**Evidence — MEASURED.** Temp tree, `sub/CLAUDE.md` of `"BIG-RULE\n"` plus 500
+padding lines, five matching `sub/m*.php`,
+`new Glob($root, new InstructionFileLoader($root), [], null, 200)`: the result is
+193 bytes, **0 of the 5 matched paths are listed**, the `BIG-RULE` body is
+present, and the truncation marker fires. Reproduced independently by this
+round's reviewer.
+
+**Only `Glob` has this shape**, which is worth stating because it is easy to
+assume it is general:
+
+- `Grep` appends after the clip — the hits always survive (that is **E55**'s
+  trade, taken deliberately).
+- `Read` truncates the body first and prepends after, so the answer survives and
+  the cap is simply exceeded — the **E55** shape, not this one.
+- `Edit` and `Write` do not truncate at all; neither, in fact, does `Read` —
+  `use TruncatesOutput;` appears in only `Bash`, `Glob`, `Grep`, `LspTool` and
+  `EnvironmentBlock` (`Read` has its own inline `$maxBytes` cut). So `Glob` is
+  the single tool where the instruction body is prepended into a budget the
+  answer must then compete for.
+
+**Severity.** Low, same exposure argument as **E55** — it needs an oversized
+instruction file in a matched directory. But the failure mode is worse than
+E55's: E55 returns too much, E56 returns the wrong thing, and the truncation
+marker makes it look like a legitimately large result rather than a lost one.
+
+**Step.** Reverse `Glob`'s order to match `Grep`'s — clip the file list to the
+cap, then append the instruction block — which folds this into E55's single
+"budget the appended block" fix rather than needing its own.
