@@ -295,6 +295,17 @@ pane instead and `src/Renderer.php` becomes mandatory and the lane collides with
    sites in `tests/Cli/BootstrapPermissionGateTest.php` pin `BypassPermissions`. Wiring the approver
    is a PREREQUISITE for flipping it, not the flip.
 
+⚠️ **THE APPROVER BUNDLE MUST UPDATE TWO README PARAGRAPHS, AND README IS A CONTENDED FILE.**
+`sugar-crush/README.md:854` states "on the **engine** path an ASK currently fails closed, so an
+asking mode refuses those calls rather than prompting", and `:881` is a whole known-gap entry —
+"**nothing anywhere attaches an approver** — `EngineBackend::withPermissionApprover()` has no caller
+outside its own test" — which also correctly names the one-way frame stream as the second blocker.
+**Both are accurate today and both become PARTLY false the moment the headless subset lands**, since
+the gap then closes for `-p`/`run`/background sessions and stays open only for the TUI. Rescope them;
+do not delete them (that is the same mistake `sglang`'s B4 had to undo). Supervisor-verified at
+`22c468ba`: the README survived two lanes editing different sections in round 33 and reads
+coherently, so any incoherence after the approver bundle is that bundle's.
+
 **Open, needs a spike before the TUI half is briefed:** whether the child can block on a socket read
 without deadlocking the parent's `addReadStream` — both ends are the same socketpair, the parent's
 handler runs on the loop and would have to write the reply from inside a Chat `update()` cycle, and
