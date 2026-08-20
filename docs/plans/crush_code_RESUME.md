@@ -6,10 +6,11 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 33 IS IN FLIGHT AT 3 LANES — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 34 IS IN FLIGHT AT 2 LANES — read this first, then §0 for the standing rules
 
-**Written mid-round so a compact cannot lose it. §0-NOW-32 below is the previous round's block and
-remains the authority for the standing rules, the queue rationale and the DeepSeek record.**
+**Written mid-round so a compact cannot lose it.** Round 33 is CLOSED and verified; round 34 is
+half-landed with two lanes still running; round 35 is already measured further down. §0-NOW-32 below
+is an older round's block and remains the authority for the standing rules and the DeepSeek record.
 
 ### CONCURRENCY: **2**, BY USER INSTRUCTION (superseding the earlier 3)
 
@@ -31,33 +32,54 @@ mechanics.
 sync daemon were stopped mid-flight and every agent was confirmed killed before the pause. That pause
 is why the `sglang` lane holds a partial artefact — see below.
 
-### WHERE THINGS STAND
+### WHERE THINGS STAND — as of master `5cbd5200`
 
-**Suite: `8111 / 91477 / 1 skipped / rc 0` — supervisor-confirmed a THIRD time**, at `53e60812`,
-before round 33 started. Unchanged across rounds 31-33. **Skips MUST stay 1**
-(`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was replaced by Packagist copies
-and every figure since is void. `sugar-crush/vendor/sugarcraft/` = 18 symlinks.
+**SUITE FLOOR: `8360 / 93659 / 1 skipped / rc 0` — supervisor-measured at `7714675d`.** This
+supersedes every earlier figure (8111/91477 held rounds 31-33; 8299, 8315, 8331 were intermediate).
+**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was
+replaced by Packagist copies and every figure since is void.
+`sugar-crush/vendor/sugarcraft/` = **18 symlinks**.
 `md5sum /home/sites/sugarcraft/.sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`.
+`php tools/check-path-repos.php --no-lib-path-repos` must exit 0; zero tracked per-lib `composer.lock`.
 
-**THREE LANES ARE RUNNING.** All three passed implement+review and are in their FIX stage, except
-`lsp` which is a fresh bundle at implement stage.
+⚠️ **Assertion totals are NOT assert-call counts** — PHPUnit 10 counts the `…OrEqual` family as 2.
+See the dedicated block below before quoting any assertion delta as coverage.
 
-| lane dir | bundle | stage | owns |
+**TWO LANES ARE RUNNING** (the user's cap; `sglang` is parked clean at master).
+
+| lane dir | bundle | stage | holds |
 |---|---|---|---|
-| `crush-lane-cmd` | the `accept-edits` fail-open **+ P6.6** (`--model` / `--permission-mode`) | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `339f512c` | — released, dir reset to `origin/master` |
-| `crush-lane-sglang` | **DSML parser + streaming gap** | ✅ **COMMITTED + SUPERVISOR-VERIFIED** `2bde4114` | — released, dir reset to `origin/master` |
-| `crush-lane-lsp` | ~~P3.2 + P3.5~~ ✅ `c4718781` → now **P8.4 wire the split-pane compositor** | **IMPLEMENT** | `src/Tui/**` (which is where `KeyboardHandler.php` lives), `src/App/**`, `src/Renderer.php`, **+ `candy-core/src/InputReader.php` (taken outside grant)** |
+| `crush-lane-cmd` | **headless engine permission approver** (`NonInteractive` path only) | **IMPLEMENT** | `src/Backend/**`, `src/Cli/**`, `src/Runtime.php`, `src/PermissionRequestMsg.php`, `README.md`, `src/Sessions/BackgroundSessionRunner.php` |
+| `crush-lane-lsp` | **P3.4 `Table` restyle + finding #5 (`fromPreset` drops 10/16) + finding #8 (trust-grant docs)** | **IMPLEMENT** | `src/Commands/**`, `tests/Commands/**`, `src/Agents/Agent.php`, `src/Agents/AgentPreset.php`, `docs/PERMISSIONS.md`, new `docs/SETTINGS.md` |
+| `crush-lane-sglang` | — | **PARKED** | clean at master, ready to take the next bundle |
 
-**LIVE SUITE: `8299 / 91986 / 1 skipped / rc 0` — supervisor-measured at `2bde4114`.** This supersedes
-the 8111/91477 baseline that held across rounds 31-33. Master also carries CI `vhs:` GIF commits
-(`c39f1a99`, `a3c9e074`) which touch no source.
+**EVERY LANE DIR IS MERGED AND NOTHING IS UNPUSHED** — verified: live tree = `origin/master` exactly,
+all three lanes ahead=0. A lane that is "behind" is behind *because* it is mid-work; each rebases onto
+master itself immediately before committing, which is where the merge happens. The sync daemon
+(`scratchpad/sync-lanes.sh`) ff-only pulls the live tree, rebases a lane ONLY when clean AND idle,
+**never touches a dirty lane**, and emits `ALERT` when a lane is behind and cannot auto-refresh.
 
-**A FOURTH lane bundle is briefed and waiting on a file, not on capacity** — the headless engine
-approver needs `src/Cli/Bootstrap.php`, which lane `cmd` holds for P8.9. Launch it the moment P8.9
-lands; the measurement is below and needs no rediscovery.
+### WHAT LANDED — rounds 33 and 34, all supervisor-verified by my own suite runs
 
-**Pre-fix lane figures** (both predate their fix stage; re-measure):
-`cmd` 8191 / 91682 / 1 / rc 0 · `sglang` 8150 / 91605 / 1 / rc 0.
+| commit | round | what | verified |
+|---|---|---|---|
+| `339f512c` | 33 | `--permission-mode` / `--model` empty values exit 2; `accept-edits` scoped-write gate pinned | 8204 / 91728 / 1 / rc 0 |
+| `2bde4114` | 33 | both text tool-call parsers stop fabricating calls from quoted prose; params no longer vanish; PCRE cliff gone | 8299 / 91986 / 1 / rc 0 |
+| `c4718781` | 33 | P3.2 FocusRing/Shift-Tab + P3.5 cell-width padding (+ `candy-core` `CSI Z` decoder) | 8315 / 92077 / 1 / rc 0 |
+| `b009077a` | 34 | **P8.9** — `Grep` gains the `InstructionFileLoader` + `skillNudge` pair | 8331 / 92144 / 1 / rc 0 |
+| `7714675d` | 34 | **P8.4** — compositor rewired to the sub-agent map + liveness filter | **8360 / 93659 / 1 / rc 0** |
+
+**`candy-core` foundation edit is cleared across the whole monorepo**: `affected-libs.php` puts the
+closure at 53/58; the supervisor swept **57 libs, 0 failures, 0 errors, all rc 0.**
+
+⚠️ **P8.4 IS WIRED BUT STILL NOT USER-VISIBLE, AND THAT IS THE HONEST STATE.** The two blocking
+wiring defects are fixed — `liveOutputs()` now derives from the SUB-AGENT map (so workflow agents
+appear) and filters on the same `!isComplete() && !isStopped()` predicate `isWorking()` uses (so they
+leave). But `Chat::workflowRun()` calls `run()` **synchronously** (`Chat.php:6212`) from `update()`
+(`:5480`), and `ProcessExecutor` blocks in a raw `stream_select()`, so the loop cannot tick until the
+run ends — by which time a correct liveness filter has emptied the map. **F5 stays OPEN as "WIRED,
+NOT YET VISIBLE".** The async conversion (issue #79) is a separate item, deliberately not attempted.
+
 
 ⚠️ **`crush-lane-sglang` IS NOT IN ITS REVIEWED STATE.** The interrupted fix agent left
 `src/Providers/ToolCallParser/EnvelopeScanner.php` — new, untracked, 200 lines, `php -l` clean, and
@@ -71,7 +93,7 @@ but the file is untested and must be judged on merit, not adopted because it exi
 vs providers). `docs/ARCHITECTURE.md` is edited by `sglang` and was edited on master by `e1840c13`.
 Both lanes are instructed to STOP on any non-count conflict. `lsp` is barred from every contended doc.
 
-### WHAT LANDED IN ROUND 33 SO FAR (supervisor-only; no lane has committed yet)
+### ROUND 33 — the supervisor-only commits (historical; all three lane bundles landed later, see the table above)
 
 | commit | what |
 |---|---|

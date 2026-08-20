@@ -45,17 +45,35 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 > `App`-vs-`Chat` misreading it was written to prevent.~~ **CLOSED in round 33** — see item 6 below.
 > **Phase 7 is complete at 6 of 6.**
 >
-> **ROUND 33 IS IN FLIGHT AT 3 LANES AND NOTHING BELOW IS MARKED FOR IT YET.** `cmd` holds the
-> `accept-edits` fail-open + P6.6; `sglang` holds the DSML parser + the streaming gap; `lsp` holds
-> P3.2/P3.3/P3.5. **Do not read the absence of a ✅ on those items as evidence they are open** —
-> check `docs/plans/crush_code_RESUME.md` §0-NOW first, which carries each lane's open findings in
-> full. Marking an in-flight item done is the defect this document has committed four times; marking
-> it open while three agents are closing it is the same defect facing the other way.
+> **ROUND 33 IS CLOSED. ROUND 34 IS IN FLIGHT AT 2 LANES AND NOTHING BELOW IS MARKED FOR IT YET.**
+> Round 33 landed `339f512c` (accept-edits fail-open + P6.6), `2bde4114` (DSML/text parsers), and
+> `c4718781` (P3.2 + P3.5; **P3.3 was DESCOPED — its premise was false**, outside clicks do not
+> no-op, they pass through to live backdrop zones). Round 34 landed **P8.9** (`b009077a`) and
+> **P8.4** (`7714675d`). Still running: the headless engine permission approver, and a bundle of
+> **P3.4 + finding #5 + finding #8**.
+>
+> **Do not read the absence of a ✅ on those items as evidence they are open** — check
+> `docs/plans/crush_code_RESUME.md` §0-NOW first, which carries each lane's open findings in full.
+> Marking an in-flight item done is the defect this document has committed four times; marking it
+> open while agents are closing it is the same defect facing the other way.
+>
+> ⚠️ **P8.4 IS WIRED BUT NOT USER-VISIBLE, AND MUST NOT BE MARKED ✅.** Its two blocking wiring
+> defects are fixed, but `Chat::workflowRun()` runs the workflow synchronously inside `update()`, so
+> no frame renders while the agents talk. F5 stays OPEN as "WIRED, NOT YET VISIBLE"; the async
+> conversion (issue #79) is a separate item.
+>
+> ⚠️ **SEVERAL ITEMS BELOW CARRY MEASURED ERRORS — see `RESUME` §"ROUND 35 IS MEASURED".** Known
+> wrong in this document: item P3.4's `/sessions` and LSP-diagnostics targets (**both premises
+> false**), its `candy-sprinkles\Table` spelling (it is `SugarCraft\Sprinkles\Table\Table`);
+> `Help::screen()` described as a 6-line heredoc (it is **145 lines**, `:38-182`); `MATCHUPS.md`
+> cited at the repo root (it is `docs/MATCHUPS.md`); and P6.5's claim that its keybindings half reads
+> `src/Chat.php` (`Chat.php` has **zero** registry calls).
 >
 > Next queue is in `docs/plans/crush_code_RESUME.md` §0-NOW. The item promoted to the FRONT of it is
 > not in this document's phase list at all: **nothing attaches a permission approver**
 > (`EngineBackend::withPermissionApprover()` has no caller in `src/`), which is what keeps the
-> shipped default at `bypass-permissions` — i.e. at "no gate".
+> shipped default at `bypass-permissions` — i.e. at "no gate". **That is the bundle lane `cmd` is
+> implementing right now, scoped to the headless `NonInteractive` path only.**
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage

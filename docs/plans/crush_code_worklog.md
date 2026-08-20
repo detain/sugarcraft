@@ -9251,3 +9251,66 @@ any citation you did not personally take, including one from your own earlier do
 a "BLOCKING closure". It is a `Deferred` plus a TEA state machine that cannot be called from a
 `bool`-returning closure at all. The three agree because they were written from one intent, before
 the implementation diverged. **Consensus among comments measures a shared ancestor, not the code.**
+
+## Round 34 — P8.9 and P8.4, and the item that was wired to nothing
+
+**Landed and supervisor-verified:** `b009077a` (P8.9, 8331 / 92144 / 1 / rc 0) and `7714675d`
+(P8.4, **8360 / 93659 / 1 / rc 0** — the current floor). Two lanes still running at the user's new
+cap of 2: the headless engine permission approver, and a three-item bundle (P3.4 `Table` restyle +
+finding #5 + finding #8).
+
+**P8.9 — `Grep` was the one path-resolving tool that never announced a `CLAUDE.md`.** The interesting
+part was not the wiring but what the wiring falsified. `Grep` was `final readonly implements
+ParallelSafe` with `isParallelSafe(): true` justified by "holds no session-scoped state for a fork to
+strand (contrast `Read`/`Glob`, which carry the announce-once collaborators)". Injecting the loader
+gives it exactly that state. The verdict survived — `ParallelSafe`'s own contract permits it via
+`CarriesSessionState` — but the justification was replaced, and the old parenthetical turned out to
+have been **already false before the change**: `Read` and `Glob` both carry the collaborators and both
+return `true`, so it contrasted `Grep` against two tools that do not contrast.
+
+**Both premises the supervisor handed that lane were wrong, and the lane measured rather than worked
+around them.** `Write`'s `instructionLoader` IS guarded by a test that predates the change; the
+unguarded half was the `skillNudge`, and dropping it moves **not one assertion** across 376 tests.
+"`Write` is constructed apart from the other three" was an artefact of reading one array literal as
+two — the only thing between `Glob` and `Write` was the unwired `new Grep($root)`.
+
+**P8.4 — the compositor was wired to a map its own producer never writes.** The implement report was
+strong: good policy reasoning, honest mutation table, a self-declared surviving mutation, a genuine
+stale-comment correction. Its reviewer took the one claim everything rested on — "it is reachable in
+production today" — walked the citation chain link by link, found every link real, and found that the
+**last link connects to a different map than the compositor reads**. `liveOutputs()` iterates what
+`register()` fills; `WorkflowEngine::executeParallelStage()` only ever files `SubAgent`s. Proven by
+inserting a SubAgent exactly as the production line does and watching `liveOutputs()` return `[]`.
+
+Three layers, each sufficient on its own: it never fired (no shipped workflow names a parallel task
+after a roster agent); it never stopped (no liveness filter, nothing clears the buffer, and
+`removeSubAgent()` has no callers — the tell was that **every existing consumer goes through
+`active()`, which does filter, and the new one was the only one that did not**); and nothing renders
+while agents talk anyway, because the workflow runs synchronously inside `update()`.
+
+The fix closed the first two and **left the third open honestly** — F5 reverted from RESOLVED to
+"WIRED, NOT YET VISIBLE", with the async conversion recorded as a separate item rather than attempted.
+
+### The rules round 34 earned
+
+- 🔴 **A CORRECTION IS WHERE THE NEXT FALSEHOOD GETS WRITTEN.** A paragraph in `src/Renderer.php`
+  claimed `WorkflowEngine` is never constructed. That was genuinely stale and was corrected — and the
+  replacement claim ("a `/workflow run` populates this strip") was **also false**, because the strip
+  reads the same registered-only map. Fourth consecutive round in which the defect appears inside the
+  work correcting it. **Verify a correction in both directions.**
+- 🔴 **THE ASSERTION TOTAL IS NOT COUNTING ASSERT CALLS.** PHPUnit 10 counts
+  `assertLessThanOrEqual`/`assertGreaterThanOrEqual` as **2** — verified with a four-method probe.
+  Repo-wide the distortion is small (142 static sites, ~0.15%, and that is a FLOOR since a static
+  count cannot see loop iterations); per bundle it can be enormous (P8.4's `+1488` is ~880 real
+  calls). **A large assertion delta is evidence of iterations, not of properties pinned** — and the
+  proof is that P8.4's 724-assertion sweep still failed to catch `intdiv($cols,3)` → `round($cols/3)`,
+  because it asserts the SUM, which holds under any sizing policy.
+- **A PRE-FIX FIGURE DESCRIBES THE TREE THE REVIEWER SAW.** Both round-33 fix lanes were briefed with
+  figures describing trees an interrupted agent had since changed — one fataling at exit 255 on an
+  undefined constant while still reporting green, one two tests red. Re-measure the floor.
+- **CHECK WHETHER A THING IS ALREADY COVERED BEFORE CALLING IT A GAP.** The supervisor read a
+  malformed sweep-log line as "the parse missed a lib", re-ran it, and reproduced the result already
+  in the file. True observation, false consequence — made while writing up the identical lesson.
+- **`timeout` DOES NOT RESCUE A PIPED PHPUNIT HERE.** A forked test child can outlive the killed
+  process still holding the write end, so `$( … | grep … )` blocks forever on a process that has
+  already exited. Redirect to a file when backgrounding a suite.
