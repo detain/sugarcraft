@@ -427,9 +427,29 @@ regressed on the foundation change.
 
 | lane | bundle | stage |
 |---|---|---|
-| `crush-lane-cmd` | **P8.9** — `InstructionFileLoader` + `skillNudge` into `Grep` | **FIX** (review: COMMIT AFTER FIXES, 0 blocking, 3 comment-only) |
+| `crush-lane-cmd` | ~~P8.9~~ ✅ `b009077a` → now **HEADLESS ENGINE APPROVER** | **IMPLEMENT** |
 | `crush-lane-lsp` | **P8.4** — wire the split-pane compositor | **FIX** (review: COMMIT AFTER FIXES, **4 BLOCKING**) |
 | `crush-lane-sglang` | — | idle at master, ready |
+
+**P8.9 ✅ `b009077a` — supervisor-verified `8331 / 92144 / 1 / rc 0`.** New suite floor.
+`Grep` now carries the `InstructionFileLoader` + `skillNudge` pair like the other four path-resolving
+tools. The `ParallelSafe` verdict stayed `true` but its JUSTIFICATION was replaced: the interface's
+own point 2 permits session-scoped state that survives the fork via `CarriesSessionState`, and the
+old docblock's "contrast `Read`/`Glob`" **was already false before the change** — both carry the
+collaborators and both return `true`. A **real forked** test now sits beside its `Read` sibling in
+`ParallelToolCallsTest`, over two separately-governed directories so a half-merge is visible.
+**Two premises in the supervisor's brief were wrong and the lane proved it:** `Write`'s
+`instructionLoader` IS guarded (dropping it fails a pre-existing test); the unguarded half was the
+**`skillNudge`**, and dropping THAT moves not one assertion across 376 tests. And "Write is
+constructed apart" was a reading artefact — all eleven built-ins sit in one `$tools = [...]` literal.
+Backlog gained **E55** (`maxOutputBytes` no longer bounds `Grep` — measured **16.8×** the cap) and
+**E56** (`Glob` prepends before clipping, so at cap 200 it lists **0 of 5** matched paths). ⚠️ The
+lane hit an **E-number collision** — master's round-33 commits added E51-E54 while it was open — and
+resolved it by taking upstream's block whole and re-filing as E55/E56. **Master's E51 is a DIFFERENT
+finding from the one the P8.9 brief called E51.** Verified: no duplicate E-numbers in the ledger.
+Also corrected: **`Read` does NOT `use TruncatesOutput`** (only `Bash`, `Glob`, `Grep`, `LspTool`,
+`EnvironmentBlock` do) — it has its own inline cut at `Read.php:209-219`. The conclusion holds anyway:
+`Glob` is still the only tool with the prepend-before-clip shape.
 
 🔴 **P8.4 IS WIRED TO A SOURCE THAT NEVER FIRES. This is the round's most important finding and it
 was PROVEN, not argued.** `AgentManager::liveOutputs()` (`:341-352`) iterates `$this->agents`,
