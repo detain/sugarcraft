@@ -1895,6 +1895,19 @@ docker run --gpus all --rm -p 30000:8000 \
     --scheduler-recv-interval 5 \
     --enable-dynamic-batch-tokenizer \
     --enable-strict-thinking \
+> **SUPERSEDED 2026-08-20 — the deployment this launch command describes no longer exists.** The
+> user repointed `skynet2.interserver.net` from `MiniMax-M2.7` to
+> `deepseek-ai/DeepSeek-V4-Flash-0731`; `GET /v1/models` now reports `max_model_len` **393216**, not
+> the `196608` fixed below. The command is preserved as the record of what was measured on
+> 2026-08-10, because a figure's provenance is part of its domain — read every `196608` and every
+> `MiniMax` in this section as historical. What the port now does is in `crush_code.md` and
+> `docs/plans/crush_code_RESUME.md` §0-DS; the code landed in `ed57d46a`.
+>
+> Two claims in this section are now **wrong about the live server** rather than merely dated:
+> "SGLang converts this into MiniMax's `<tools>` XML block server-side" (DeepSeek-V4's native
+> emission is DSML markup — see `fe947427`), and the D8 recommendation to "use `196608` exactly"
+> (that is now the MiniMax-only branch of a model-aware `contextWindow()`).
+
     --context-length 196608 \
     --host 0.0.0.0 --port 8000
 ```

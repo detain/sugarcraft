@@ -8,10 +8,10 @@ Nothing here depends on a prior conversation's context.
 
 ## 0-NOW. STATE AT ROUND 31 — read this first, then §0 for the standing rules
 
-**`master` = `6d5090ab`** (CI's regenerated `.vhs/*.gif`, on top of `f0585149`). Live tree clean.
-**Suite baseline: `7922 tests / 90961 assertions / 1 skipped / rc 0`**, 3m24.7s — supervisor-measured
-in the live tree at `f0585149` as the post-hoc gate for Phase 6 items 1-2. `6d5090ab` changes only
-binaries no test reads.
+**`master` = `ed57d46a`** (the DeepSeek-V4 sglang default). Live tree clean.
+**Suite baseline: `7975 tests / 91097 assertions / 1 skipped / rc 0`** — the sglang lane's
+post-rebase figure at `ed57d46a`, being re-measured by the supervisor as the post-hoc gate.
+The prior gate was `7922 / 90961 / 1 / rc 0` at `f0585149` (Phase 6 items 1-2).
 **Skips MUST stay 1** — `tests/MCP/McpClientTest.php:106`. A 2 means `vendor/sugarcraft/*` was
 replaced by Packagist copies and every figure since is void.
 
@@ -24,7 +24,7 @@ Phase 7 complete; **Phase 6 items 1-2 complete**.
 |---|---|---|
 | `/home/sites/crush-lane-cmd` | **P6.3 + P6.4** + the argument-scoped permission-rule hole | round 31, implement stage |
 | `/home/sites/crush-lane-lsp` | **P8.10 + P8.11**, both inside `src/Context/` | round 31, implement stage |
-| `/home/sites/crush-lane-sglang` | **DeepSeek-V4 sglang default** (user request, §0-DS) | implement stage, 11 dirty |
+| `/home/sites/crush-lane-sglang` | **LANDED** `ed57d46a`; next: the DSML parser (§0-DS), script ready | free, clean — **hold DSML until `lane-cmd` lands**, both add a `src/` file and would collide on the census literal |
 
 The user authorised **2 concurrent plan lanes** plus the sglang task they asked for by name.
 Four would exceed that.
@@ -96,6 +96,59 @@ script the way the runtime does:** wrap the body in an `async function`, stub
 5. **Phase 2 item 9** (plugins) LAST, then the hardening backlog E1-E50.
 
 ### 0-DS. THE DEEPSEEK-V4 TASK — NOT A PLAN ITEM, and this is its only durable record
+
+**STATUS: LANDED as `ed57d46a` (2026-08-20). Suite 7975 / 91097 / 1 / rc 0.** Everything below is
+kept as the measured record. The ONE piece still outstanding is the DSML parser + streaming gap,
+scripted and ready at `…/workflows/scripts/crush-dsml.js` — see the DSML entry further down.
+
+**What the review round added on top of the implement stage:**
+
+- 🔴 **The MiniMax truncation warning was misfiring on DeepSeek-V4.**
+  `flagTruncationRiskInLatestToolResults()` warned about a MiniMax-M2.x `</parameter>` bug for
+  DeepSeek requests. Now takes `$model` and returns early for the DeepSeek-V4 family; **unmeasured**
+  models are still warned, and the text names the addressed model beside the measured one. Live
+  proof DeepSeek does not have the bug: a body containing
+  `<invoke name="x"><parameter name="y">z</parameter></invoke> DONE` came back **64/64 bytes,
+  identical, `</parameter>` intact**. The decode *diagnosis* stays ungated but no longer asserts
+  causation — `"This is the known MiniMax-M2.x bug"` became `"That matches the signature of…"`,
+  i.e. cause inferred from shape, not from model.
+- **The reviewer's disproof was itself wrong, and the fix agent reversed it.** The reviewer grepped
+  `generateTitle|titleFrom|sessionTitle`, found nothing, and concluded title generation never reaches
+  a provider. It does: `Chat.php:5906` → `Bootstrap::titleBackend()`, and `/compact`'s summaries →
+  `Bootstrap::summaryBackend()`, both via `toollessBackend()` (no `$tools`). So the doc-block's claim
+  was **true and merely uncited**. A reminder that a reviewer's grep is evidence about the grep.
+- **Model-family matching over-matches, deliberately.** `deepseek-v40`, `DeepSeek-V4.5` and
+  `DeepSeek-V4.1-Flash` all take the V4 arm. Accepted, with the asymmetry stated: a MISS costs
+  `reasoning_effort` and the thinking then lands silently in `content`; a wrong sampling number on a
+  probably-similar model does not. Pinned by an 11-row boundary test. Aliases (`dsv4`, `flash`,
+  `local-model`) fall to the MiniMax defaults — mitigated by documentation, not code, because a
+  one-shot warning could not tell an aliased V4 from a genuine MiniMax deployment.
+- ⚠️ **A config value of `1` for `reasoningEffort` throws on EVERY request.** JSON `1` is an int, the
+  DTO is `string|float|null`, the cast makes it `1.0`, and the server's bound is `le: 0.99`. The
+  construction-time guarantee covers the **string tier only** — deliberately, since the name set is a
+  closed pydantic literal while the float bound is one a later SGLang may widen. README now says
+  **"Write `0.99`, not `1`."** Both sides pinned, and the `1.0` test says in its doc-block that it
+  asserts a known-bad value is accepted *locally*, so a future range check fails it rather than
+  passing vacuously.
+- `contextWindow()` is a **transcribed constant, not a live read** — deliberately: it is a
+  render-path accessor and `Chat`'s four context tiers recompute per frame, so a synchronous HTTP
+  round trip would block the TUI on every redraw. Documented as decaying the way the 128,000 it
+  replaced did, with the `curl` to re-verify.
+
+**Two operational facts worth carrying:**
+
+- **The server is not a stable dependency.** `https://skynet2.interserver.net/v1` returned nginx
+  **502 for ~7 minutes** mid-task, on both `/v1/models` and `/v1/chat/completions`, and recovered on
+  its own. Any future agent handed "the server is reachable" should verify rather than assume.
+- **The `base_uri` trailing-slash trap was reproduced by accident and the guard is load-bearing.** A
+  hand-built Guzzle client with `'base_uri' => '…/v1'` (no trailing slash) sent every request to
+  `https://skynet2.interserver.net/chat/completions` — `/v1` silently dropped, per RFC 3986
+  absolute-path resolution. `SglangProvider::openAiCompatible()` already guards it
+  (`rtrim($baseUrl,'/') . '/'` plus a **relative** `'chat/completions'`). Anyone hand-constructing a
+  client for this provider in a test or probe must replicate the trailing slash.
+
+**The census literal is now 279** (`BuiltInToolCorpusTest`, bumped 278→279 by `LayeredSettings.php`).
+
 
 The user switched their self-hosted SGLang server from `MiniMax-M2.7` to
 **`deepseek-ai/DeepSeek-V4-Flash-0731`**. **The old model is GONE from that server**, so the

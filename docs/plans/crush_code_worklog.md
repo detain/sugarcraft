@@ -8779,3 +8779,113 @@ It encodes §5.2c rather than restating it: a dirty lane is never pulled, rebase
 because that is what corrupts a half-finished edit. It also replaced the round-30 monitor, which had
 started reporting my own rebases as lane commits — it compared HEAD rather than the ahead-count, and
 `git status --porcelain` emptiness plus ahead-count is the readiness signal that does not lie.
+
+---
+
+## The DeepSeek-V4 task — landed as `ed57d46a`, 7975 / 91097 / 1 / rc 0
+
+Not a plan item; a user request. `docs/plans/crush_code_RESUME.md` §0-DS holds the full measured
+record. What belongs here is what the round taught.
+
+### My brief was wrong twice, and both corrections were worth more than the feature
+
+**Three model defaults, not four.** I measured `SglangProvider.php:68` and the two
+`config.dev.json`, and missed `ProviderFactory::defaultConfig('sglang')['model']` — which is the one
+`$SUGARCRUSH_PROVIDER=sglang` actually reaches, because `defaultConfig()` is `bin/sugarcrush`'s only
+hook into the provider system. Changing three of four would have left the plain `sglang` provider
+type 404ing on the model name: **the exact failure the task existed to fix, delivered by the fix.**
+`defaultConfig` now reads `SglangProvider::DEFAULT_MODEL` so the two cannot drift again.
+
+**A half-size context window I never looked at.** `contextWindow()` hard-returned `196_608` while the
+live server reports `max_model_len: 393216`, and its doc-block asserted that 196,608 *was* the live
+`--context-length`. All four of `Chat`'s context tiers were sized against half the real budget while
+the comment claimed otherwise. This is the recurring defect found in shipped code rather than in a
+review.
+
+**And then I made the same class of error myself, on that exact finding.** Correcting the plan prose
+for the model switch, I wrote that `Chat::REMINDER_TOKEN_LIMIT` is a flat 100,000, so the compaction
+reminder had gone from firing at ~51% of capacity (against 196,608) to **~25%** (against 393,216) —
+"doubling the window silently halved the trigger point." The arithmetic was correct: 100000/393216 is
+25.4%. The premise was dead. `REMINDER_TOKEN_LIMIT` has **zero occurrences** in `src/` or `tests/`;
+`dispatchTurn()` takes an `int $tokenLimit` documented as the "PROVIDER-COUNTED window", fed by
+`contextTokenLimit()` → `ContextWindow::ofBackend($this->backend)`. The reminder already tracks the
+real window.
+
+Dead for **one day**: `git log -S` puts the removal in `08cc1b6a` (2026-08-19) — **this plan's own
+Phase 5 Bundle B1, "a real context window, and tiers that are actually on."** So I nearly re-opened,
+in the plan document, a finding the plan had closed the previous afternoon, by trusting a quoted
+constant instead of grepping for it. Caught only because I went to verify a number I had *already
+written*. Two lessons, both already stated in every agent brief and both worth restating because the
+supervisor broke them: a quoted constant is a claim, not a measurement; and the file most likely to
+be stale about the code is the audit document describing it.
+
+### The most valuable single act in the round was an agent overruling its reviewer
+
+The reviewer grepped `generateTitle|titleFrom|sessionTitle`, found nothing, and concluded that title
+generation never reaches a provider — so a doc-block claim about tool-less requests was unsupported.
+The fix agent re-measured with the right terms and found `Chat.php:5906` → `Bootstrap::titleBackend()`
+and `/compact` → `Bootstrap::summaryBackend()`, both through `toollessBackend()`. **The claim was
+true and merely uncited.** A reviewer's grep is evidence about the grep. That is now two rounds
+running in which the fix stage corrected the review rather than obeying it, and both times the
+correction was the finding.
+
+### Deliberate imperfections, each with the argument written down
+
+- **Model-family matching over-matches on purpose.** `deepseek-v40`, `DeepSeek-V4.5` and
+  `DeepSeek-V4.1-Flash` all take the V4 arm. Accepted because the asymmetry is real: a MISS costs
+  `reasoning_effort`, and an absent effort makes the model's thinking land silently in `content`; a
+  wrong sampling number on a probably-similar model costs much less. Pinned with an 11-row boundary
+  test rather than left to prose. Aliases (`dsv4`, `flash`, `local-model`) fall through to the
+  MiniMax defaults, mitigated by documentation and not by code — a one-shot warning was declined
+  because it could not distinguish an aliased V4 from a genuine MiniMax deployment, so it would fire
+  on every legitimate MiniMax run.
+- **`reasoningEffort: 1` in config throws on every request.** JSON `1` is an int, the DTO is
+  `string|float|null`, the cast yields `1.0`, and the server's bound is `le: 0.99`. Local validation
+  deliberately covers the **string tier only**: the seven names are a closed pydantic literal, while
+  the float bound is one a later SGLang may widen — and hardcoding `0.99` here would reproduce the
+  exact failure that narrowing to the card's three names would have been. README says "Write `0.99`,
+  not `1`." The `1.0` test's doc-block records that it asserts a known-bad value is accepted
+  *locally*, so a future range check fails that test instead of passing it vacuously.
+- **`contextWindow()` stays a transcribed constant.** A live `/v1/models` read was declined because
+  it is a render-path accessor and `Chat`'s four tiers recompute per frame — a synchronous round trip
+  would block the TUI on every redraw. Documented as decaying the way the 128,000 it replaced did,
+  with the `curl` to re-verify. An honest constant beats a correct-but-blocking read.
+
+### Operational facts worth keeping
+
+- **The sglang server is not a stable dependency.** It returned nginx **502 for ~7 minutes** mid-task
+  on both `/v1/models` and `/v1/chat/completions`, then recovered unaided. Any future agent told
+  "the server is reachable" should verify rather than assume.
+- **The `base_uri` trailing-slash trap was reproduced by accident, which proves the guard earns its
+  keep.** A hand-built Guzzle client with `'base_uri' => '…/v1'` sent every request to
+  `/chat/completions` with `/v1` silently dropped (RFC 3986 absolute-path resolution).
+  `SglangProvider::openAiCompatible()` already guards it with `rtrim($baseUrl,'/') . '/'` plus a
+  **relative** path. Anyone hand-building a client for this provider must replicate the trailing
+  slash — this is the same bug as PR #1399, rediscovered from the other direction.
+
+### The user supplied the finding this round could not have produced
+
+Mid-round the user pointed at the model's own `encoding/README.md`. DeepSeek-V4's **native**
+tool-call emission is DSML markup — `<｜DSML｜tool_calls>` / `<｜DSML｜invoke>` /
+`<｜DSML｜parameter … string="true|false">` — with **fullwidth** U+FF5C vertical bars and U+2581 in
+the sentence tokens, so a pattern written with ASCII pipes matches nothing, silently, and a test
+written with the same wrong bytes passes. I verified the codepoints rather than trusting the render.
+
+The consequence: the tree has **zero** occurrences of `DSML`, and the wired text fallback
+(`MinimaxXmlFallbackToolCallParser`) parses a shape this model never emits. A fallback that exists,
+is wired, and covers the wrong model is the recurring defect at architecture level. It is not
+academic — the deployment returns structured `tool_calls` only because someone passed
+`--tool-call-parser`, which **the HF card's own launch command omits**; a restart without it makes
+the agent silently do nothing on every tool call.
+
+The fix agent was **right to refuse to build it**: its brief forbade a new `src/` file, and it
+stopped and reported rather than exceeding scope. Scripted at `…/workflows/scripts/crush-dsml.js`,
+held until `lane-cmd` lands because both add a `src/` file and would collide on the census literal
+(now **279**, bumped 278→279 by `LayeredSettings.php`). The script also requires Part B — the
+streaming path ignores the injected `ToolCallParserInterface`, so wiring DSML only into the
+non-streaming path would recover nothing in the chat the TUI actually uses.
+
+One correction the encoding page forced on the task's own framing: `reasoning_effort` is implemented
+server-side as a **text prefix before the system message**, with `low` mapping to no prefix at all.
+So the levels are prompt shaping, not a monotonic sampling dial, and the reasoning-token counts in my
+brief should not be read as a budget.
