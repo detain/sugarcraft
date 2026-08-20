@@ -139,6 +139,25 @@ to stop its own servers while able to kill the parent's; an unbounded handshake 
 server that emits valid notifications forever; four spellings of one root giving four clients).
 Deferred with findings recorded: **E40**, **E41**, **E42**.
 
+**Phase 2 item 2 is complete too, and was blocking two later items in the task
+tracker purely by bookkeeping.** Re-measured 2026-08-20 at `07834d99`, all three of
+the item's clauses are satisfied in `src/Cli/Bootstrap.php`: the builder is
+`public static function mcpClient(?string $root = null): ?McpClient` at `:3048`; the
+`Tools\Tool` adapters are built by `public static function mcpTools(?string $root =
+null): array` at `:3159`, one `new McpToolBridge($client, $descriptor)` per advertised
+tool at `:3168`; and they reach the model because `:3355` spreads
+`...self::mcpTools($root)` into the array `tools()` returns at `:3304`. The
+"Complete:" line at the top of this file already counted item 2 — it was the separate
+task-tracker entry that still read "add `Bootstrap::mcpClient()`", and because the
+Phase 7 authoring guides and the Phase 2 item 9 plugin epic were both recorded as
+blocked by it, a stale tracker row and not any real dependency was holding them shut.
+Nothing was implemented to close item 2 here; the only change was to stop asserting it
+was open. **The lesson is the file-scoped one this plan keeps relearning: a status line
+is a claim, and it decays independently of the code it describes.** Two of them decayed
+in opposite directions in the same read — this one understated what was built, while
+the Phase 8 item 12 note below overstated it by claiming `Write` was "deliberately not
+registered" when `:3335` registers it.
+
 **Phase 2 items 1 and 8 are complete** (bundle C1). Item 1 renamed
 `SugarCraft\Crush\McpClient` to `ClaudeCodeMcpClient` so it no longer shares a
 basename with `SugarCraft\Crush\MCP\McpClient`; the seam stays dormant and is
@@ -291,8 +310,14 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
 - **Phase 8 item 6** (VHS demos) is still open; `4e10360b` closed items 1 and 5
   only. `TerminalBackground::observe()` is a dormant seam with verified wiring
   instructions for `App/App.php`.
-- **Phase 8 item 12** (`Write` tool) — the tool exists and is tested, but is
-  **deliberately not registered** in `Bootstrap::tools()`.
+- **Phase 8 item 12** (`Write` tool) — **registered, contradicting the note that used
+  to sit here.** Re-measured 2026-08-20 at `07834d99`: `use …\BuiltIn\Write;` at
+  `src/Cli/Bootstrap.php:55` and `new Write($root, instructionLoader: $loader,
+  skillNudge: $nudge)` at `:3335`, which is inside `public static function tools()`
+  opening at `:3304`. The old "deliberately not registered" claim was false, and it
+  contradicted the item-12 DONE entry ~40 lines above it in this same file. Both
+  entries' line numbers had also drifted (51→`55`, 2498→`3335`) as `Bootstrap.php`
+  grew — a reminder that a bare line number is a claim with a shelf life.
 - **Phase 8 item 15** was a note, not a fix; `9d92bb5a` scoped the gap.
 
 **Sequencing note that still holds:** Phase 2 item 5 and Phase 6 item 4 were
