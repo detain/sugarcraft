@@ -322,6 +322,39 @@ match-arm bodies. Line numbers throughout this plan are stale by many commits.
   across the plan, the worklog, and the code docblock (7 / 5 / 8-plus-2). The
   constructor at HEAD is authoritative; see the hardening ledger.
 
+**ROUND 30's SETTINGS LANE FOUND PHASE 6 ITEM 1 WAS MASKING AN UNCATCHABLE FATAL.** The plan
+framed item 1 as a `__DIR__`-vs-`$root` path preference. It was that, but the branch containing
+the bug could never execute:
+
+- `src/Agents/WorktreeManager.php:32` promotes `private readonly ?WorktreeConfig $config = null`,
+  and the constructor body at `:36` then does `$this->config = WorktreeConfig::new()` — **a second
+  write to a readonly property.** So `new WorktreeManager()` or `WorktreeManager::new($repoRoot)`
+  with no explicit config throws `Error: Cannot modify readonly property`. Supervisor verified this
+  independently on pristine `master`: `WorktreeManager::new("/srv/other-repo")` →
+  `Error … ::$config at WorktreeManager.php:36`.
+- It stayed invisible because **nothing in `src/` constructs one and every test passed an explicit
+  config**, so no suite ever entered the branch. `WorktreeConfig::new()` was therefore unreachable
+  *from* `WorktreeManager` — which is precisely why the cross-domain read the plan describes had
+  never been observed by anyone.
+- The cross-domain read is real once the branch runs, and was measured: `dirname(__DIR__, 3)` is
+  the monorepo root, whose tracked `.sugar-crush/config.json` carries
+  `{"worktreeCleanupPeriodDays": 30, "worktreeIncludeFile": ".worktreeinclude"}`. So
+  `WorktreeManager::new('/srv/other-repo')` took a cleanup period and an include-file name out of
+  **this** repository and resolved that name against the *other* tree. Value from tree A, applied
+  to tree B. Under a real `composer require` the same expression is `vendor/sugarcraft/`, where no
+  such file exists — so the feature was *inert* outside a monorepo checkout. **That asymmetry is
+  what makes it a fix rather than a preference**, and it is the argument the plan's own framing
+  could not have produced.
+
+**The plan's key list for item 2 was also wrong in both directions**, measured against real
+`readUserConfig()` consumers: there is **no `model` user-config key** (`Subcommands.php:423`'s
+`$config['model']` is a *provider* config from `Bootstrap::availableProviders()`), while
+`summaryModel` (`Bootstrap.php:3958`), `parallelToolCalls` and `parallelToolDeadlineSeconds`
+(`EngineBackend.php:420-421`) all have consumers and were omitted. The lane covered the 8 real
+keys and **declined to add `model`**, on the grounds that a key nothing reads looks configurable
+and is inert — the right call, and the same reasoning this plan applies to decorative config
+elsewhere.
+
 **FINDINGS FROM ROUND 30's DOCS LANE — measured while fact-checking, not yet fixed.** A
 documentation pass turns out to be an unusually good bug detector, because writing "here is how
 you configure X" forces someone to find X's consumer. Each of these was measured, and the
