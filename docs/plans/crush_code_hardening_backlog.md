@@ -3018,7 +3018,8 @@ measured the mode only.
 
 ---
 
-**ROUND 39 SCOUT — STILL OPEN, and this entry is ACCURATE as written.** Measured, `settings.json`
+**ROUND 39 SCOUT — was STILL OPEN when stamped; FIXED in round 40, see the stamp below. This entry
+is ACCURATE as written.** Measured, `settings.json`
 carrying `{"permissionMode":"plan"}` in every row:
 
 ```
@@ -3050,6 +3051,43 @@ reach bypass".
 
 **No test locks the current behaviour in** — the mode-precedence tests cover absent/present/invalid but
 not empty-string or null. Test-free to land; needs new coverage. **Size S**, one file region.
+
+**ROUND 40 `sglang` — FIXED.** Every one of the scout's six rows reproduced byte-for-byte before the
+change, and the `permissionRules` half reproduced too (`null` and `""` in `config.json` each dropped a
+`deny` rule configured in `settings.json`, announcing only "no rules were loaded").
+
+**One mechanism covers both keys**, because both keys had the same defect for the same reason.
+`permissionConfigLayers()` now returns its layers through a new
+`Bootstrap::withoutEmptyPermissionOverrides()`, which drops a `null`/`''` value for a
+`PERMISSION_SETTINGS_KEYS` key out of a LATER layer when an EARLIER layer set that key to something
+real, and reports the drop on stderr naming BOTH files — the part the old `permissionRules` message
+never said. Filtering at `permissionConfigLayers()` rather than at either merge site means
+`permissionGate()`, `permissionConfig()` and `permissionKeySource()` all see the same layers, so the
+provenance the gate remembers now names the file that actually won (before: `"permissionMode":""` in
+`config.json` under a `plan` in `settings.json` reported `the built-in default`; after: it reports
+`settings.json`).
+
+**Written against the invariant the ⚠️ named, not against `bypass`.** Nothing in the fix or its tests
+mentions `bypass-permissions` as the thing being avoided; the docblock states why, and the tests assert
+the configured mode AND its source rather than "not bypass", so tightening `DEFAULT_PERMISSION_MODE`
+cannot make them vacuous.
+
+**Deliberately NOT changed, each pinned by a control test:** `"  "` is a value that names no mode and
+still refuses the launch by name; a non-string still refuses; `"permissionRules": []` is a well-formed
+empty list and still outranks `settings.json`; an empty key with nothing beneath it is still read as
+absence, still silent, and `permissionRules`' shipped "present but null" warning still fires for it —
+which is why `testAPresentButNullRulesKeyInThe{SettingsFile,WrittenConfig}IsReported` stay meaningful
+rather than being satisfied by the new message.
+
+**Newly recorded while measuring, NOT fixed:** `{"permissionRules": []}` in `config.json` silently
+discards a `deny` rule configured in `settings.json`. It is the same user-visible surprise, but it is
+NOT the same defect — `[]` is a value of the right type winning documented later-layer precedence, and
+suppressing it would be a precedence change, not an emptiness fix. Left as-is, with a control test that
+says so out loud.
+
+**Coverage:** 9 new tests in `tests/Cli/BootstrapToolAndPermissionSettingsTest.php` (5 that fail against
+the unfixed build — verified by running them against it — and 4 controls that pass on both sides and are
+labelled as controls). `docs/SETTINGS.md` gained the rule under "Which keys are layered at all".
 
 ## E59 — the split-pane compositor now paints running-worker output, but the worker is a SIMULATION STUB
 

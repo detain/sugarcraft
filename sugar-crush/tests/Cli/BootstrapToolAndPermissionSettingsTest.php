@@ -502,6 +502,173 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // E58 — an EMPTY value in a later layer must not displace an earlier one
+    // -------------------------------------------------------------------------
+
+    /**
+     * THE BUG, in its narrowest true statement: `""` is how a user spells "I am
+     * not setting this here", and writing it in `config.json` used to throw away
+     * the `permissionMode` they DID set in `settings.json`.
+     *
+     * Measured before the fix, with exactly this fixture: `bypass-permissions`,
+     * sourced from `the built-in default`.
+     *
+     * THE ASSERTION IS ABOUT DISPLACEMENT, NOT ABOUT BYPASS. It would be
+     * tempting to write this as "must not reach bypass-permissions", because
+     * that is what the fail-open looked like from outside. But the mechanism is
+     * "an empty key falls through to {@see Bootstrap::DEFAULT_PERMISSION_MODE}",
+     * and that default only HAPPENS to be the widest mode today — tighten it and
+     * the identical bug would silently lock a user out instead, and a
+     * bypass-shaped assertion would go on passing through it. So both halves are
+     * asserted: the mode the earlier layer configured, and the file it came
+     * from.
+     */
+    public function testAnEmptyModeInTheWrittenConfigDoesNotDisplaceTheSettingsFile(): void
+    {
+        $this->writeUserConfigFile(['permissionMode' => '']);
+        $this->writeUserSettings(['permissionMode' => 'plan']);
+
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::Plan, $gate->mode());
+        self::assertStringContainsString(LayeredSettings::USER_FILE, (string) $gate->modeSource());
+    }
+
+    /**
+     * The other spelling of the same nothing. `null` and `""` were measured to
+     * behave identically before the fix and must behave identically after it —
+     * a fix that dropped only the empty string would leave the JSON-native way
+     * of writing "no value" still displacing.
+     */
+    public function testANullModeInTheWrittenConfigDoesNotDisplaceTheSettingsFile(): void
+    {
+        $this->writeUserConfigFile(['permissionMode' => null]);
+        $this->writeUserSettings(['permissionMode' => 'plan']);
+
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::Plan, $gate->mode());
+        self::assertStringContainsString(LayeredSettings::USER_FILE, (string) $gate->modeSource());
+    }
+
+    /**
+     * CONTROL — passes before the fix as well as after, and is here to pin the
+     * half of the behaviour that must NOT change. With nothing underneath it,
+     * an empty `permissionMode` is still read as absence and the built-in
+     * default is still what runs. The fix is "an empty value may not displace an
+     * earlier layer", not "an empty value is an error", and without this case
+     * the two tests above would also be satisfied by a fix that refused the
+     * launch on `""` — a change that would break every config that already
+     * carries a blank key.
+     */
+    public function testAnEmptyModeWithNothingBeneathItIsStillReadAsAbsent(): void
+    {
+        $this->writeUserConfigFile(['permissionMode' => '']);
+
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::BypassPermissions, $gate->mode());
+        self::assertSame('the built-in default', $gate->modeSource());
+    }
+
+    /**
+     * CONTROL — the emptiness rule is deliberately narrow. `"  "` is not an
+     * empty value, it is a value that names no mode, and it went on refusing the
+     * launch (loudly, naming the file) both before and after the fix. Widening
+     * "empty" to "blank after trimming" would turn that refusal into a silent
+     * fallback, which is the direction this whole path exists to avoid.
+     */
+    public function testAWhitespaceModeInTheWrittenConfigStillRefusesTheLaunch(): void
+    {
+        $this->writeUserConfigFile(['permissionMode' => '  ']);
+        $this->writeUserSettings(['permissionMode' => 'plan']);
+
+        $this->expectException(PermissionConfigException::class);
+        Bootstrap::permissionGate();
+    }
+
+    /**
+     * The SAME SHAPE on the other permission key, and the reason one mechanism
+     * covers both: `permissionRules` announced its own emptiness on stderr, but
+     * the announcement never said the value it dropped had come from a different
+     * file, so a user reading it had no way to know their `deny` rule was gone.
+     *
+     * Measured before the fix with this fixture: zero rules on the gate.
+     */
+    public function testEmptyRulesInTheWrittenConfigDoNotDisplaceTheSettingsFilesRules(): void
+    {
+        $this->writeUserConfigFile(['permissionRules' => null]);
+        $this->writeUserSettings([
+            'permissionMode' => 'plan',
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']],
+        ]);
+
+        self::assertCount(1, Bootstrap::permissionGate()->rules());
+    }
+
+    /** The empty-string spelling of the case above. */
+    public function testAnEmptyStringRulesKeyInTheWrittenConfigDoesNotDisplaceEither(): void
+    {
+        $this->writeUserConfigFile(['permissionRules' => '']);
+        $this->writeUserSettings([
+            'permissionMode' => 'plan',
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']],
+        ]);
+
+        self::assertCount(1, Bootstrap::permissionGate()->rules());
+    }
+
+    /**
+     * CONTROL, and the boundary of the fix. An explicit `[]` is a WELL-FORMED
+     * VALUE of the right type, not an empty spelling of "unset", so it still
+     * wins over `settings.json` under the documented later-layer-wins
+     * precedence. Measured: zero rules, before and after. Recorded as a test
+     * rather than left to be rediscovered, because "config.json says no rules"
+     * and "config.json says nothing" now differ and that difference is the
+     * whole fix.
+     */
+    public function testAnExplicitlyEmptyRulesListStillOutranksTheSettingsFile(): void
+    {
+        $this->writeUserConfigFile(['permissionRules' => []]);
+        $this->writeUserSettings([
+            'permissionMode' => 'plan',
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']],
+        ]);
+
+        self::assertSame([], Bootstrap::permissionGate()->rules());
+    }
+
+    /**
+     * The displacement is not silent. Before the fix the mode case said nothing
+     * at all and the rules case said only "no rules were loaded" — neither told
+     * the user that a value in a DIFFERENT file had been thrown away, which is
+     * the only part they can act on.
+     */
+    public function testAnIgnoredEmptyOverrideNamesBothFilesOnStderr(): void
+    {
+        $this->writeUserConfigFile(['permissionMode' => '']);
+        $this->writeUserSettings(['permissionMode' => 'plan']);
+
+        $stderr = $this->stderrOfPermissionGate();
+
+        self::assertStringContainsString('permissionMode in ', $stderr);
+        self::assertStringContainsString('config.json', $stderr);
+        self::assertStringContainsString(LayeredSettings::USER_FILE, $stderr);
+    }
+
+    /**
+     * CONTROL for the report above — a `config.json` that carries the empty key
+     * with nothing beneath it displaced nothing, so it must stay silent. Without
+     * this, a warning hardcoded to fire on every empty key would satisfy the
+     * test above.
+     */
+    public function testAnEmptyKeyThatDisplacedNothingIsSilent(): void
+    {
+        $this->writeUserConfigFile(['permissionMode' => '']);
+
+        self::assertStringNotContainsString('permissionMode in ', $this->stderrOfPermissionGate());
+    }
+    // -------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------
 

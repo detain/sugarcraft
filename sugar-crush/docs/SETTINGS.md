@@ -118,6 +118,21 @@ later-wins ordering. Measured: `{"permissionMode":"plan"}` in
 gate to `plan`. What no lower layer can reach is the *project* tier, which is
 the property this section is really about.
 
+**An empty value does not override.** `""` and `null` are how a key is spelled
+when nothing is being set there, so `permissionConfigLayers()` drops such a
+value out of the later layer *before* the merge rather than letting it displace
+what an earlier layer set. Measured: `{"permissionMode":"plan"}` in
+`~/.sugar-crush/settings.json` with `{"permissionMode":""}` in `config.json`
+resolves the gate to `plan`, and the ignored key is reported on stderr naming
+both files. Before that filter existed the same pair resolved to the built-in
+default, silently — and the same shape dropped a `permissionRules` `deny` that
+`settings.json` had configured.
+
+Only those two spellings count as empty, and the narrowness is the point:
+`"permissionMode": "  "` names no mode and still refuses the launch by name,
+and `"permissionRules": []` is a well-formed empty list that still outranks
+`settings.json` under the later-wins rule above.
+
 | Key | Read by | Project may set |
 |---|---|---|
 | `provider` | `Bootstrap::selectedProviderName()`, `backend()` | **no** |

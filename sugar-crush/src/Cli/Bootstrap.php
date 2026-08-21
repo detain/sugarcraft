@@ -3247,10 +3247,96 @@ final class Bootstrap
         $path = self::$configPathOverride ?? $discovered;
         $settingsPath = rtrim($configDir, '/') . '/' . LayeredSettings::USER_FILE;
 
-        return [
+        return self::withoutEmptyPermissionOverrides([
             $settingsPath => self::permissionSettingsLayer($settingsPath),
             $path => self::readPolicyFile($path),
-        ];
+        ]);
+    }
+
+    /**
+     * The layers with every EMPTY LATER VALUE dropped, so that a key written
+     * blank in one file cannot throw away the value another file actually set.
+     *
+     * THE INVARIANT IS ABOUT DISPLACEMENT, NOT ABOUT ANY PARTICULAR OUTCOME.
+     * Measured before this filter existed, with `{"permissionMode":"plan"}` in
+     * `settings.json`:
+     *
+     *     config.json ABSENT                =>  plan
+     *     config.json {}                    =>  plan
+     *     config.json {"permissionMode":""} =>  bypass-permissions, silently
+     *     config.json {"permissionMode":null} => bypass-permissions, silently
+     *
+     * It is tempting to describe those last two rows as "an empty key silently
+     * grants the widest mode", and that is what they did — but it is not the
+     * mechanism. The mechanism is that `array_merge` let a valueless key win the
+     * precedence walk and the merged key then normalised to absent, one step too
+     * late, so {@see permissionGate()} started from
+     * {@see DEFAULT_PERMISSION_MODE}. That default merely HAPPENS to be
+     * `bypass-permissions` today; tighten it and the identical bug would silently
+     * lock the user out of the mode they configured instead. So what is fixed
+     * here is "an empty value must not displace an earlier layer", and a fix
+     * aimed at "must not reach bypass" would have gone stale the day the default
+     * moved.
+     *
+     * EMPTY IS EXACTLY `null` AND `''`, and the narrowness is deliberate rather
+     * than incidental. Those are the two spellings every downstream reader
+     * already treats as "nothing was said" — {@see permissionGate()} normalises
+     * `''` to null, and {@see permissionRules()} loads nothing from either. A
+     * `"  "` names no mode and goes on refusing the launch by name, and a `[]`
+     * is a well-formed rules list that goes on winning: both are VALUES, and
+     * widening this test to cover them would convert a loud refusal and a
+     * documented override into silent fallbacks.
+     *
+     * SCOPED TO {@see PERMISSION_SETTINGS_KEYS}. Today that scope is not
+     * observable — the settings layer carries only those keys, so every other
+     * key of the merged array comes from exactly one layer and has nothing to
+     * displace — but the reasoning above is about the permission keys, and this
+     * says so rather than quietly extending to keys it was never measured on.
+     *
+     * The drop is REPORTED, because the two spellings failed differently and
+     * both failed the user: the mode said nothing at all, and the rules key said
+     * "no rules were loaded" without ever mentioning that the rules it did not
+     * load were configured in another file. That second half is the part a user
+     * can act on. {@see warnPermissionConfigOnce()} rather than
+     * {@see warnPermissionConfig()} because this runs once per
+     * {@see permissionConfigLayers()} call and a launch makes more than one.
+     *
+     * @param array<string, array<string, mixed>> $layers lowest precedence first
+     * @return array<string, array<string, mixed>>
+     */
+    private static function withoutEmptyPermissionOverrides(array $layers): array
+    {
+        // The path of the last layer that set each key to something real. Only
+        // a key that has one of those can be DISPLACED — an empty value with
+        // nothing beneath it is left in place, so the readers downstream go on
+        // seeing it and go on saying what they said about it.
+        $carried = [];
+
+        foreach ($layers as $path => $data) {
+            foreach (self::PERMISSION_SETTINGS_KEYS as $key) {
+                if (!\array_key_exists($key, $data)) {
+                    continue;
+                }
+
+                $value = $data[$key];
+                if ($value !== null && $value !== '') {
+                    $carried[$key] = $path;
+                    continue;
+                }
+
+                if (!isset($carried[$key])) {
+                    continue;
+                }
+
+                unset($layers[$path][$key]);
+                self::warnPermissionConfigOnce(
+                    "{$key} in {$path} is empty, so it was ignored rather than allowed to discard the "
+                    . "{$key} configured in {$carried[$key]}",
+                );
+            }
+        }
+
+        return $layers;
     }
 
     /**
