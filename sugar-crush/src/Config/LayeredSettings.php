@@ -252,12 +252,15 @@ final class LayeredSettings
      *
      * First, a whitelist's effect is defined by what it OMITS, so it is the one
      * shape in which a small, innocuous-looking value deletes almost
-     * everything. `allowedTools: ["Bash"]` removes `Read`, `Edit`, `Write`,
-     * `Grep` and `Glob` in one line — and what the model does next is not "less
-     * work", it is the SAME work through `Bash`, which reaches the permission
-     * gate as opaque shell text instead of as a reviewable path. That is a
-     * privilege escalation by degradation: strictly fewer tools, strictly
-     * coarser review.
+     * everything. In one line, `allowedTools: ["Bash"]` removes ALL TEN of the
+     * others: `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`,
+     * `doctor`, `Skill` and `Lsp`. (This sentence named five of the ten. The
+     * `doctor` is lower-case — matching is case-sensitive `fnmatch()`, so the
+     * capitalised spelling matches no tool.) And what the model does next is
+     * not "less work", it is the SAME work through `Bash`, which reaches the
+     * permission gate as opaque shell text instead of as a reviewable path.
+     * That is a privilege escalation by degradation: strictly fewer tools,
+     * strictly coarser review.
      *
      * AN EARLIER VERSION OF THIS PARAGRAPH ENDED WITH A FALSE CLAIM, and it is
      * corrected here rather than deleted because it was the stated reason for
@@ -275,11 +278,29 @@ final class LayeredSettings
      * So the shape argument DOES NOT survive on its own, and the honest
      * statement of where this key stands is: a project-tier `disabledTools`
      * glob CAN reduce the model to a single tool of the project's choosing,
-     * and the second reason below is what the split actually rests on. This is
-     * a KNOWN, UNCLOSED gap — recorded rather than quietly reworded, because
-     * a reader deciding whether to widen this list needs it. Closing it means
-     * either refusing negated classes in a project-tier `disabledTools` or
-     * moving the key to the user tier; neither is done here.
+     * and the second reason below is what the split actually rests on.
+     *
+     * TWO THINGS NARROW IT, both measured and neither previously written down.
+     * An UNTRUSTED project's `disabledTools` never reaches the merge at all, so
+     * this needs the operator's own {@see PROJECT_SETTINGS_TRUST_KEY} grant
+     * first. And {@see merge()} is KEY-LEVEL rather than a union, so a user who
+     * names any `disabledTools` of their own REPLACES the project's list
+     * outright: a user `["Read"]` against a project `["[!B]*"]` removes exactly
+     * `Read`. The gap is open only for an operator who trusted a repository and
+     * set no `disabledTools` themselves.
+     *
+     * THAT CAPABILITY IS STILL THERE. What changed is that it is no longer
+     * SILENT: {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierToolRemovals()}
+     * reports a trusted project's tool removals at launch, naming this file,
+     * the tools it took and the tools it left. Neither of the two restrictions
+     * this comment used to propose was taken, and the measurement is why —
+     * refusing negated classes closes `[!B]*` and not `["[C-Z]*", "[a-z]*"]`,
+     * which is the same attack without a negation, and restricting the tier to
+     * literal names would delete the `mcp__git__*` use the key was admitted
+     * for. Reaching any of this requires the operator to have listed the
+     * checkout under {@see PROJECT_SETTINGS_TRUST_KEY} first, so the property
+     * worth restoring was the auditability the quoted claim promised, not the
+     * grammar it was reasoning about.
      *
      * Second, a whitelist is what a user reaches for when they want a CEILING,
      * and a ceiling a checkout can rewrite is not one. What makes that hold when
@@ -428,6 +449,30 @@ final class LayeredSettings
      */
     public static function projectLayer(string $projectRoot, bool $trusted): array
     {
+        $layers = [];
+        foreach (self::projectLayerPaths($projectRoot, $trusted) as $path) {
+            $layers[] = self::only(self::readFile($path), self::PROJECT_TIER_KEYS);
+        }
+
+        return array_merge(...[[], ...$layers]);
+    }
+
+    /**
+     * The project settings files this root actually contributes, lowest
+     * precedence first — shared before local, since local is the higher of the
+     * two and the order of this list IS that precedence.
+     *
+     * EXTRACTED FROM {@see projectLayer()} rather than copied beside it. Two
+     * callers now need the same walk — the merge, and
+     * {@see projectKeySource()}, which has to name the file a key came from —
+     * and a second copy of a trust check, a containment pair and a precedence
+     * order is exactly the kind of duplicate that drifts into disagreeing with
+     * the original about which file wins.
+     *
+     * @return list<string>
+     */
+    private static function projectLayerPaths(string $projectRoot, bool $trusted): array
+    {
         if (!$trusted || trim($projectRoot) === '') {
             return [];
         }
@@ -437,19 +482,46 @@ final class LayeredSettings
             return [];
         }
 
-        $layers = [];
-        // Shared first, local second: local is the higher of the two, and the
-        // order of this array IS that precedence.
+        $paths = [];
         foreach ([self::SHARED_PATH, self::LOCAL_PATH] as $relative) {
             $path = rtrim($projectRoot, '/') . '/' . $relative;
             if (!ContainedPath::within($path, $dir)) {
                 continue;
             }
 
-            $layers[] = self::only(self::readFile($path), self::PROJECT_TIER_KEYS);
+            $paths[] = $path;
         }
 
-        return array_merge(...[[], ...$layers]);
+        return $paths;
+    }
+
+    /**
+     * WHICH project settings file last set `$key`, or null when neither did.
+     *
+     * The mirror of `Bootstrap::permissionKeySource()` and written the same
+     * way — the LAST file carrying the key, matching `array_merge`'s
+     * later-wins — because a diagnostic that names the wrong file is worse than
+     * one that names none. `array_key_exists` rather than `?? null` so a file
+     * that set the key to an explicit null is still the file that set it.
+     *
+     * Only {@see PROJECT_TIER_KEYS} can answer: a key this tier may not set is
+     * dropped by {@see only()} before the merge, so reporting a file as its
+     * source would name a file whose value never reached anything.
+     */
+    public static function projectKeySource(string $projectRoot, bool $trusted, string $key): ?string
+    {
+        if (!\in_array($key, self::PROJECT_TIER_KEYS, true)) {
+            return null;
+        }
+
+        $source = null;
+        foreach (self::projectLayerPaths($projectRoot, $trusted) as $path) {
+            if (\array_key_exists($key, self::readFile($path))) {
+                $source = $path;
+            }
+        }
+
+        return $source;
     }
 
     /**

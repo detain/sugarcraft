@@ -501,6 +501,218 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         self::assertStringNotContainsString('unbalanced', $stderr);
     }
 
+
+    // -------------------------------------------------------------------------
+    // E57 — a project tier's tool removals must be visible, whatever the glob
+    // -------------------------------------------------------------------------
+
+    /**
+     * THE FINDING, re-measured in this lane before anything changed: a trusted
+     * project's `{"disabledTools": ["[!B]*"]}` leaves exactly `Bash` out of
+     * eleven, and said nothing about it. Eight characters that read as almost
+     * nothing and mean "everything except Bash".
+     *
+     * WHAT IS ASSERTED IS THE REPORT, NOT A REFUSAL, and the difference is the
+     * fix's whole contract. The capability is unchanged — a project the operator
+     * has listed in `trustedProjectSettings` may still reduce the set, and the
+     * test below this one pins that it still can. What was broken was the
+     * argument the tiering rested on, that a `disabledTools` value "can be seen
+     * when you read the file". A pattern-shape restriction cannot make that true
+     * again: measured, `["[C-Z]*", "[a-z]*"]` uses no negated class and still
+     * leaves only `Bash`. Reporting the EFFECT is closed against every spelling.
+     */
+    public function testATrustedProjectsToolRemovalsAreReportedWhateverTheGlobLooksLike(): void
+    {
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+
+        $stderr = $this->stderrOfToolSet();
+
+        self::assertStringContainsString(LayeredSettings::SHARED_PATH, $stderr);
+        self::assertStringContainsString('disabledTools', $stderr);
+        // The tools it actually took, by name — the list the file did not carry.
+        self::assertStringContainsString('Read', $stderr);
+        self::assertStringContainsString('WebSearch', $stderr);
+        // And what the model is left holding, which is the part that says why
+        // this matters: everything narrow and reviewable is gone and the one
+        // tool that reaches the gate as opaque shell text is not.
+        self::assertStringContainsString('Bash', $stderr);
+    }
+
+    /**
+     * CONTROL, and it is deliberately the SAME fixture as the test above. The
+     * fix reports; it does not restrict. A trusted project can still choose the
+     * tool set, so anyone reading the report knows they are being told about a
+     * grant they made rather than about an attack that was blocked.
+     */
+    public function testATrustedProjectsGlobStillChoosesTheToolSet(): void
+    {
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+        Bootstrap::useProjectRootForSettings($this->projectRoot);
+
+        self::assertSame(['Bash'], $this->toolNames());
+    }
+
+    /**
+     * CONTROL for the report — the trust gate is upstream of everything here,
+     * and it is the reason this finding's blast radius is narrower than it was
+     * first recorded as. An untrusted project's `disabledTools` never reaches
+     * the merge, so there is nothing to report and the launch must stay silent.
+     * Without this case a report hardcoded to fire whenever a project settings
+     * file merely EXISTS would satisfy the test above.
+     */
+    public function testAnUntrustedProjectsDisabledToolsIsNeitherAppliedNorReported(): void
+    {
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+        Bootstrap::useProjectRootForSettings($this->projectRoot);
+
+        self::assertSame(11, count($this->toolNames()));
+        self::assertStringNotContainsString('disabledTools', $this->stderrOfToolSet());
+    }
+
+    /**
+     * CONTROL — the report is about the PROJECT tier. The user's own
+     * `disabledTools` is a choice they made in their own file and is not news to
+     * them; reporting it would be the per-launch noise
+     * {@see LayeredSettings::projectLayer()} explicitly declines to produce.
+     */
+    public function testTheUsersOwnDisabledToolsIsNotReportedAsAProjectRemoval(): void
+    {
+        $this->writeUserSettings(['disabledTools' => ['[!B]*']]);
+
+        $stderr = $this->stderrOfToolSet();
+
+        // The PROJECT ROOT rather than LayeredSettings::SHARED_PATH: the
+        // fixture's user file is `<home>/.sugar-crush/settings.json`, of which
+        // that constant is a literal substring, so a not-contains on it would
+        // be satisfied for the wrong reason the moment anything printed the
+        // user's own path.
+        self::assertStringNotContainsString($this->projectRoot, $stderr);
+        self::assertStringNotContainsString('disabled 10 of', $stderr);
+    }
+
+    /**
+     * A REAL MITIGATION NOBODY HAD RECORDED, and it is the first thing anyone
+     * re-reading E57 should know. `LayeredSettings::merge()` is KEY-LEVEL, not a
+     * union: a user who names any `disabledTools` of their own REPLACES a
+     * trusted project's list outright rather than adding to it. So the
+     * project-tier glob only ever bites an operator who set no `disabledTools`
+     * themselves — which narrows the finding a second time, on top of the trust
+     * grant it already required.
+     *
+     * Measured, and the counts are derived rather than written: `["Read"]` from
+     * the user against `["[!B]*"]` from a trusted project removes exactly `Read`
+     * and leaves everything the project's glob names.
+     */
+    public function testAUsersOwnDisabledToolsReplacesATrustedProjectsRatherThanUnioningWithIt(): void
+    {
+        $ceiling = $this->toolNames();
+
+        $this->trustTheProject();
+        $this->writeUserSettings(['disabledTools' => ['Read']]);
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+        Bootstrap::useProjectRootForSettings($this->projectRoot);
+
+        $names = $this->toolNames();
+
+        self::assertNotContains('Read', $names);
+        // The project's complement glob did nothing: everything it names is
+        // still here. Had the two lists unioned, only `Bash` would remain.
+        self::assertContains('Edit', $names);
+        self::assertContains('WebSearch', $names);
+        self::assertCount(count($ceiling) - 1, $names);
+    }
+
+    /**
+     * THE OVER-REPORT, and it is why the report is a DIFF rather than a
+     * re-match of the project's patterns. Given the replacement above, a
+     * re-match would announce removals the project did not make, precisely when
+     * the operator's own `disabledTools` had already displaced it. Here both
+     * files name `WebSearch`; the project's list never applied, nothing it named
+     * was taken by it, and nothing is said.
+     */
+    public function testAToolTheUsersOwnSettingsAlreadyRemovedIsNotReportedAsTheProjectsDoing(): void
+    {
+        $this->trustTheProject();
+        $this->writeUserSettings(['disabledTools' => ['WebSearch']]);
+        $this->writeProjectSettings(['disabledTools' => ['WebSearch']]);
+
+        self::assertStringNotContainsString('(disabledTools)', $this->stderrOfToolSet());
+    }
+
+    /**
+     * ALSO MEASURED IN ROUND 39 AND NOT PREVIOUSLY RECORDED: `disabledTools`
+     * has no floor. `["*"]` leaves ZERO tools and nothing noticed.
+     *
+     * REPORTED, NOT REFUSED, and the reason is a shipped doc-block rather than a
+     * judgement call: {@see Bootstrap::filterToolSet()} already names
+     * `disabledTools: ["*"]` as the supported way to ask for a toolless agent,
+     * in the paragraph explaining why an empty `allowedTools` means "all"
+     * instead. Refusing it would break a configuration the code documents as
+     * intentional. The direction is fail-safe — a model with no tools can do
+     * nothing — so the only defect was the silence.
+     */
+    public function testATotallyEmptyToolSetIsReportedRatherThanHandedOverSilently(): void
+    {
+        $this->writeUserSettings(['disabledTools' => ['*']]);
+
+        self::assertSame([], $this->toolNames());
+        self::assertStringContainsString('no tools', $this->stderrOfToolSet());
+    }
+
+    /**
+     * CONTROL for the case above — an ordinary filtered launch must not claim an
+     * empty tool set. A report keyed on "disabledTools is set" rather than on
+     * the resulting count would pass the test above and fail this one.
+     */
+    public function testANonEmptyFilteredToolSetIsNotReportedAsEmpty(): void
+    {
+        $this->writeUserSettings(['disabledTools' => ['WebSearch']]);
+
+        self::assertStringNotContainsString('no tools', $this->stderrOfToolSet());
+    }
+
+    /**
+     * Everything `Bootstrap::tools()` writes to stderr for this fixture's
+     * project root, from a CHILD process — same technique and same reason as
+     * {@see stderrOfPermissionGate()}, and the same sentinel so that no
+     * `assertStringNotContainsString` over it can pass by the child having died.
+     */
+    private function stderrOfToolSet(): string
+    {
+        $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = $this->tmpDir . '/toolset.php';
+        $errFile = $this->tmpDir . '/toolset-stderr.txt';
+        $root = var_export($this->projectRoot, true);
+
+        file_put_contents(
+            $script,
+            "<?php\nrequire " . var_export($autoload, true) . ";\n"
+            . "\\SugarCraft\\Crush\\Cli\\Bootstrap::useProjectRootForSettings({$root});\n"
+            . "\\SugarCraft\\Crush\\Cli\\Bootstrap::tools({$root});\n"
+            . "fwrite(STDERR, 'tools-built');\n",
+        );
+
+        exec(sprintf(
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >/dev/null 2>%s',
+            escapeshellarg($this->home),
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($script),
+            escapeshellarg($errFile),
+        ));
+
+        $stderr = is_file($errFile) ? (string) file_get_contents($errFile) : '';
+
+        self::assertStringContainsString(
+            'tools-built',
+            $stderr,
+            'the child process must have reached the end of tools()',
+        );
+
+        return $stderr;
+    }
+
     // -------------------------------------------------------------------------
     // E58 — an EMPTY value in a later layer must not displace an earlier one
     // -------------------------------------------------------------------------

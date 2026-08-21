@@ -54,7 +54,7 @@ Two name classes drive the evaluators:
 - **read-only**: `Read`, `Grep`, `Glob`, `WebFetch`, `Lsp`
 - **write-capable**: `Bash`, `Edit`, `Write`, and anything starting `mcp__`
 
-Note what is in *neither* list: `WebSearch`, `Skill` and `Doctor`. They fall
+Note what is in *neither* list: `WebSearch`, `Skill` and `doctor`. They fall
 through to each mode's default arm — `Ask` under `default` and `plan`, `Deny`
 under `dont-ask`.
 
@@ -183,10 +183,16 @@ on this tree, `bypass-permissions` mode, `Bash{command: "rm -rf build"}`:
 | *(no rules)* with `command: "rm -rf /"` | Deny (step 0, the breaker) |
 
 So write rules against tool names: `Bash`, `Edit`, `Write`, `Read`, `Grep`,
-`Glob`, `WebFetch`, `WebSearch`, `Lsp`, `Skill`, `Doctor`, and
+`Glob`, `WebFetch`, `WebSearch`, `Lsp`, `Skill`, `doctor`, and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*` works, and is the one
 example in the doc-comment that does). To constrain a *command*, use a hook
 matcher instead — see [`HOOKS.md`](HOOKS.md).
+
+**`doctor` is lower-case**, and this list said `Doctor` — not a typo without a
+consequence. Matching is `fnmatch()`, which is case-sensitive, so a rule copied
+from this page as `Doctor` matched no tool and denied nothing, which is the
+exact silent-no-op failure the rules reader warns about elsewhere. Verified by
+executing `PermissionRule::matchesToolName('Doctor', 'doctor')` — `false`.
 
 ### `Ask` needs somewhere to ask
 

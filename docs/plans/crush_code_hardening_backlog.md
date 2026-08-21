@@ -2953,8 +2953,9 @@ still true before designing around it.
 
 ---
 
-**ROUND 39 SCOUT — STILL OPEN, reproduces exactly, but this entry contains a SUBSTANTIVELY FALSE
-claim and every line number it cites is stale.**
+**ROUND 39 SCOUT — was STILL OPEN when stamped; ADDRESSED in round 40, see the stamp below.
+Reproduces exactly, but this entry contains a SUBSTANTIVELY FALSE claim and every line number it
+cites is stale.**
 
 🔴 **"no trust grant required" is FALSE.** `Bootstrap::projectSettingsTrusted()` gates
 `LayeredSettings::projectLayer()`, and an untrusted project's `disabledTools` is discarded whole.
@@ -2982,6 +2983,61 @@ is lowercase **`doctor`**. The parallel passage at `LayeredSettings.php:274-276`
 
 ⚠️ A fix must preserve globs at the user tier —
 `testDisabledToolsAcceptsTheSameGlobDialectAsAPermissionRule` locks the dialect in.
+
+**ROUND 40 `sglang` — ADDRESSED, by reporting the effect rather than restricting the grammar. Read
+the two narrowings below before deciding this needs more.**
+
+Re-measured in the lane, all confirming the round-39 scout and none of the original entry's figures:
+trusted `["[!B]*"]` → 1 tool (`Bash`); untrusted → all 11; `["*"]` → 0 tools; the shipped tool name is
+lower-case `doctor`.
+
+**NEITHER PROPOSED RESTRICTION WAS TAKEN, and one of them is measurably not a fix.** "Refuse negated
+character classes at the project tier" closes `[!B]*` and nothing else: **`["[C-Z]*", "[a-z]*"]` uses no
+negation, is barely longer, and also leaves exactly `Bash` — measured in this lane.** Shipping it would
+have swapped a false claim about the dialect for a false claim about the fix. "Literal names only" does
+close it, but it deletes the one use the key was admitted for (`mcp__git__*` for a checkout with no such
+server) and it costs the operator a capability they granted rather than an attacker one they took.
+
+**What shipped instead:** `Bootstrap::reportProjectTierToolRemovals()` announces a trusted project's tool
+removals at launch — naming the file, the tools taken and the tools left — so the property the tiering
+argument actually needed ("a value you can see when you read the file") holds for **every** spelling,
+including the ones no pattern rule would catch. The capability is unchanged and deliberately so; a
+control test pins that `[!B]*` still yields `['Bash']`.
+
+**Reported by DIFFING, not by re-matching the project's patterns**, computed through a single
+`Bootstrap::mergedConfig()` so there is one copy of the layer precedence. `LayeredSettings` gained
+`projectKeySource()` (mirroring `permissionKeySource()`) so the report can name `settings.json` vs
+`settings.local.json`.
+
+🔴 **A SECOND NARROWING, NOT PREVIOUSLY RECORDED ANYWHERE, and it should change how this entry reads.**
+`LayeredSettings::merge()` is **key-level, not a union**: a user who names ANY `disabledTools` of their
+own **replaces a trusted project's list outright**. Measured: user `["Read"]` against project `["[!B]*"]`
+removes exactly `Read` and leaves all ten others — the project's complement glob does nothing. Combined
+with the trust gate, the gap is open only for an operator who trusted a repository **and** set no
+`disabledTools` themselves. Both narrowings are now written into `docs/SETTINGS.md` and the
+`PROJECT_TIER_KEYS` doc-block, and both have tests.
+
+**The scout's un-recorded `["*"]` → 0 tools: reported, NOT refused.** `filterToolSet()`'s own shipped
+doc-block already names `disabledTools: ["*"]` as the supported way to ask for a toolless agent (it is
+the stated alternative to reading `allowedTools: []` that way), so a refusal would break a configuration
+the code documents as intentional. The direction is fail-safe; only the silence was a defect.
+
+**Doc defects fixed, and one was live rather than cosmetic.** `docs/PERMISSIONS.md` told users to write
+permission rules against a tool named `Doctor`; matching is case-sensitive `fnmatch()` and the tool is
+`doctor`, so a rule copied from that page **matched nothing and denied nothing** — verified by
+executing `PermissionRule::matchesToolName('Doctor', 'doctor') === false`. Fixed in both PERMISSIONS.md
+passages and in `docs/SETTINGS.md`. `LayeredSettings`' parallel passage named five of the ten tools an
+`allowedTools: ["Bash"]` removes; it now names all ten. `ARCHITECTURE.md`'s `Doctor` is correct — that
+list is of CLASS names.
+
+**Coverage:** 8 new tests in `tests/Cli/BootstrapToolAndPermissionSettingsTest.php` (2 fail against the
+unfixed build — verified) and 2 in `tests/Config/LayeredSettingsTest.php`. The diff-not-re-match property
+and `projectKeySource()`'s tier guard were each confirmed by mutating the source and watching the
+specific test go red.
+
+**Still open, deliberately:** a trusted project can still reduce the tool set to one tool of its
+choosing. If a future round decides that capability itself must go, the honest option is moving
+`disabledTools` to the user tier — not a pattern-shape rule.
 
 ## E58 — a `permissionMode` in `settings.json` is silently discarded by an EMPTY key in `config.json`
 

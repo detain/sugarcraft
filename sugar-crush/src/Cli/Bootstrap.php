@@ -1961,13 +1961,30 @@ final class Bootstrap
      */
     public static function readUserConfig(): array
     {
+        return self::mergedConfig(true);
+    }
+
+    /**
+     * {@see readUserConfig()}, with the project tier optionally left out.
+     *
+     * ONE COPY OF THE LAYERING, and that is the whole reason this exists rather
+     * than a second `LayeredSettings::merge(...)` call beside its caller.
+     * {@see reportProjectTierToolRemovals()} needs the same stack MINUS layers
+     * 1+2 so it can diff the two, and a hand-rolled "same thing but without the
+     * project layer" would be free to disagree with this one about which layer
+     * wins — the precedence bug this class has already been bitten by twice.
+     *
+     * @return array<string, mixed>
+     */
+    private static function mergedConfig(bool $withProjectTier): array
+    {
         $root = self::$projectRootForSettings;
         $userSettingsDir = self::userSettingsDirOrNull();
 
         return LayeredSettings::merge(
             self::rawUserConfig(),
             $userSettingsDir === null ? [] : LayeredSettings::userLayer($userSettingsDir),
-            $root === null
+            $root === null || !$withProjectTier
                 ? []
                 : LayeredSettings::projectLayer($root, self::projectSettingsTrusted($root)),
         );
@@ -4459,7 +4476,47 @@ final class Bootstrap
      */
     private static function filterToolSet(array $tools): array
     {
-        $config = self::readUserConfig();
+        $kept = self::toolSetUnder($tools, self::readUserConfig());
+
+        self::reportProjectTierToolRemovals($tools, $kept);
+
+        // NO FLOOR, and there deliberately still is not one. `disabledTools`
+        // reducing the set to nothing is a fail-SAFE direction — a model holding
+        // no tools can do nothing — and the doc-block above names
+        // `disabledTools: ["*"]` as the supported way to ask for exactly that,
+        // so refusing it would break a configuration this class documents as
+        // intentional. What was wrong was only that nobody was told: measured,
+        // `{"disabledTools": ["*"]}` handed the backend an empty tool set and
+        // no line anywhere said so, which from the model's end is
+        // indistinguishable from a launch that failed to wire its tools.
+        if ($kept === [] && $tools !== []) {
+            self::warnPermissionConfigOnce(
+                'allowedTools/disabledTools left no tools at all, so the model will be given an empty '
+                . 'tool set and can do nothing but talk',
+            );
+        }
+
+        return $kept;
+    }
+
+    /**
+     * {@see filterToolSet()}'s predicate, against a GIVEN merged config rather
+     * than against the one this process would read.
+     *
+     * Extracted so {@see reportProjectTierToolRemovals()} can evaluate the SAME
+     * predicate against the stack minus the project tier and diff the two
+     * results. That is not the "two passes" this method's doc-block warns about
+     * — the allow/deny conjunction below is untouched and still decides each
+     * tool in one expression; what runs twice is the whole predicate, over two
+     * different configs, and neither run can re-admit anything the other
+     * removed because neither run sees the other's output.
+     *
+     * @param list<Tool> $tools
+     * @param array<string, mixed> $config
+     * @return list<Tool>
+     */
+    private static function toolSetUnder(array $tools, array $config): array
+    {
         $allow = is_array($config['allowedTools'] ?? null) ? $config['allowedTools'] : [];
         $deny = is_array($config['disabledTools'] ?? null) ? $config['disabledTools'] : [];
 
@@ -4488,6 +4545,97 @@ final class Bootstrap
 
                 return !$matches($deny, $name);
             },
+        ));
+    }
+
+    /**
+     * Say which tools a TRUSTED PROJECT's `disabledTools` took away.
+     *
+     * WHY THIS EXISTS, and what it does and does not fix. The reason
+     * {@see LayeredSettings::PROJECT_TIER_KEYS} admits `disabledTools` while
+     * withholding `allowedTools` was, in the doc's own words, that a deny-list
+     * "can express the same attack, but only by naming every tool it removes —
+     * a value you can see when you read the file". That is false, and it is
+     * false because {@see PermissionRule::matchesToolName()} is bare
+     * `fnmatch()`: measured end-to-end, a project-tier
+     * `{"disabledTools": ["[!B]*"]}` leaves exactly `Bash` out of eleven.
+     *
+     * THE RESTRICTION THE BACKLOG PROPOSED WAS NOT TAKEN, and the measurement
+     * says why. "Refuse negated character classes at the project tier" closes
+     * the eight-character version and nothing else: `["[C-Z]*", "[a-z]*"]`
+     * contains no negation, is barely longer, and also leaves only `Bash`.
+     * Shipping that restriction would have replaced a false claim about the
+     * dialect with a false claim about the fix. Restricting the tier to LITERAL
+     * names closes it completely, but it also deletes the legitimate use the
+     * key was admitted for — a checkout saying "there is no git server here,
+     * stop offering `mcp__git__*`" — and it costs the operator a capability they
+     * had rather than the attacker one they did not, since reaching this code at
+     * all already required the operator to list this checkout under
+     * {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY}.
+     *
+     * So what is repaired is the PROPERTY, not the grammar: the effect is
+     * visible, whatever spelling produced it. The capability is unchanged and
+     * deliberately so — a trusted project may still choose the tool set, and now
+     * the launch says that it did, names the file, and lists both what went and
+     * what is left. That last part is the point: "everything narrow and
+     * reviewable is gone and `Bash` is not" is the sentence an operator needs,
+     * and no pattern-shape rule would have produced it.
+     *
+     * DIFFED RATHER THAN RE-MATCHED, and the reason is stronger than it first
+     * looks. `LayeredSettings::merge()` is key-level, not union: a user who
+     * names ANY `disabledTools` of their own replaces the project's list
+     * outright. MEASURED — a user `["Read"]` against a trusted project
+     * `["[!B]*"]` leaves ten tools, the user's one removal, and the project's
+     * glob does nothing at all. So re-matching the project's patterns would
+     * report removals that never happened, in exactly the case where the
+     * operator had already protected themselves. The comparison is instead
+     * between the set this launch actually offers and the set it would have
+     * offered with layers 1+2 absent — through {@see mergedConfig()}, so there
+     * is exactly one copy of the layer precedence and this cannot drift out of
+     * agreement with {@see readUserConfig()} about which layer wins.
+     *
+     * @param list<Tool> $tools the unfiltered ceiling
+     * @param list<Tool> $kept  what this launch will actually offer
+     */
+    private static function reportProjectTierToolRemovals(array $tools, array $kept): void
+    {
+        $root = self::$projectRootForSettings;
+        if ($root === null) {
+            return;
+        }
+
+        // The FILE, not just "the project": an operator told their tool set was
+        // cut has to know whether to look in the committed `settings.json` or in
+        // the `.gitignore`d `settings.local.json`. Null covers every reason
+        // layers 1+2 contributed nothing — untrusted root, no such file, a file
+        // that does not carry the key — so the untrusted case costs one call and
+        // stays silent, which is what it should do: nothing was removed.
+        $source = LayeredSettings::projectKeySource($root, self::projectSettingsTrusted($root), 'disabledTools');
+        if ($source === null) {
+            return;
+        }
+
+        $names = static function (array $set): array {
+            return array_map(static function (Tool $tool): string {
+                return $tool->name();
+            }, $set);
+        };
+
+        $withoutProject = $names(self::toolSetUnder($tools, self::mergedConfig(false)));
+        $removed = array_values(array_diff($withoutProject, $names($kept)));
+        if ($removed === []) {
+            return;
+        }
+
+        $remaining = array_values(array_diff($withoutProject, $removed));
+
+        self::warnPermissionConfigOnce(sprintf(
+            '%s (disabledTools) disabled %d of the %d tools your own settings left — %s — %s',
+            $source,
+            \count($removed),
+            \count($withoutProject),
+            implode(', ', $removed),
+            $remaining === [] ? 'leaving no tools at all' : 'leaving: ' . implode(', ', $remaining),
         ));
     }
 

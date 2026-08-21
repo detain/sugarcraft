@@ -185,17 +185,18 @@ set, neither can add anything. The difference is shape.
 A whitelist is defined by what it OMITS, so it is the one form in which a
 small, innocuous-looking value deletes almost everything.
 `allowedTools: ["Bash"]` removes `Read`, `Edit`, `Write`, `Grep`, `Glob`,
-`WebFetch`, `WebSearch`, `Doctor`, `Skill` and `Lsp` in one line — and what the
+`WebFetch`, `WebSearch`, `doctor`, `Skill` and `Lsp` in one line — and what the
 model does next is not less work, it is the *same* work through `Bash`, which
 reaches the permission gate as opaque shell text instead of as a reviewable
 path. Strictly fewer tools, strictly coarser review.
 
 **A previous version of this page claimed `disabledTools` can only express that
 attack "by naming every tool it removes — a value you can see when you read the
-file". That is false, and the gap is still open.** `Bootstrap::filterToolSet()`
-matches names with `PermissionRule::matchesToolName()`, which is bare
-`fnmatch()`, and `fnmatch()` honours negated character classes. Measured
-end-to-end:
+file". That is false.** `Bootstrap::filterToolSet()` matches names with
+`PermissionRule::matchesToolName()`, which is bare `fnmatch()`, and `fnmatch()`
+honours negated character classes. Measured end-to-end, in a project you have
+listed under `trustedProjectSettings` (an untrusted project's `disabledTools`
+never reaches the merge at all, and all eleven tools survive):
 
 ```json
 { "disabledTools": ["[!B]*"] }
@@ -205,12 +206,51 @@ Eight characters, in a key a project **is** allowed to set, leaving exactly
 `Bash` and removing everything else — the same tool set `allowedTools: ["Bash"]`
 produces, and the same degradation to opaque shell text.
 
+**Two things narrow this, and both are measured.** An *untrusted* project's
+`disabledTools` never reaches the merge — all eleven tools survive — so this
+needs a `trustedProjectSettings` grant you made yourself. And the layers merge
+**key by key, not as a union**: if *you* name any `disabledTools` at all, yours
+replaces the project's entirely. Measured: your `["Read"]` against a trusted
+project's `["[!B]*"]` removes exactly `Read` and leaves everything the
+project's glob named. The gap is open only for an operator who trusted a
+repository and set no `disabledTools` of their own.
+
 So the *shape* argument does not hold on its own; the ceiling argument below is
-what the split actually rests on. Until this is closed — by refusing negated
-classes in a project-tier `disabledTools`, or by moving the key to the user
-tier — treat a project's `disabledTools` as able to choose your tool set, and
-do not trust `trustedProjectSettings` on a repository you would not trust with
+what the split actually rests on. **A trusted project's `disabledTools` can
+choose your tool set, and that has not changed** — do not trust
+`trustedProjectSettings` on a repository you would not trust with
 `allowedTools`.
+
+**What has changed is that it can no longer do so unnoticed.** A trusted
+project's tool removals are reported on stderr at launch, naming the file, the
+tools it took and the tools it left:
+
+```
+sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 10 of the
+11 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
+WebSearch, doctor, Skill, Lsp — leaving: Bash
+```
+
+The report is the *effect*, not the pattern, and that is deliberate. Refusing
+negated classes at the project tier would close the eight-character version and
+nothing else: `["[C-Z]*", "[a-z]*"]` uses no negation, is barely longer, and
+also leaves only `Bash` — measured. Restricting the tier to literal names would
+close it, at the cost of the use the key was admitted for (a checkout saying
+"there is no git server here, stop offering `mcp__git__*`"), and at the cost of
+a capability the *operator* granted rather than one an attacker took.
+
+Only the removals a project **actually made** are reported, which follows from
+the key-by-key merge above: if your own `disabledTools` displaced the project's
+list, the project removed nothing and nothing is said. Re-matching the
+project's patterns instead would announce removals that never happened, in
+exactly the case where you had already protected yourself.
+
+**There is no floor either, and that is also unchanged.**
+`disabledTools: ["*"]` leaves zero tools. The direction is fail-safe, and
+`Bootstrap::filterToolSet()`'s doc-block names that spelling as the supported
+way to ask for a toolless agent (it is the stated alternative to reading
+`allowedTools: []` that way), so it is reported rather than refused — but it is
+reported, not handed over in silence.
 
 And a whitelist is what you reach for when you want a *ceiling*; a ceiling a
 checkout can rewrite is not one. That holds by conjunction rather than by

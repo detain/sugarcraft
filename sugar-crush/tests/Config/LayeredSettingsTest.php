@@ -179,6 +179,55 @@ final class LayeredSettingsTest extends TestCase
     }
 
     /**
+     * {@see LayeredSettings::projectKeySource()} — WHICH project file set a key,
+     * for a diagnostic that has to name one. It exists because
+     * `Bootstrap::reportProjectTierToolRemovals()` tells an operator that a
+     * checkout cut their tool set, and "a project settings file did it" is not
+     * something they can act on: the two files have different provenance, one
+     * committed and one `.gitignore`d.
+     *
+     * LATER WINS, matching the merge above rather than restating it — a source
+     * that disagreed with `projectLayer()` about which file won would send the
+     * reader to edit the file whose value was discarded.
+     */
+    public function testTheProjectKeySourceNamesTheFileThatActuallyWon(): void
+    {
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['theme' => 'shared', 'titleModel' => 'shared']);
+        $this->writeProject(LayeredSettings::LOCAL_PATH, ['theme' => 'local']);
+
+        self::assertSame(
+            $this->projectRoot . '/' . LayeredSettings::LOCAL_PATH,
+            LayeredSettings::projectKeySource($this->projectRoot, true, 'theme'),
+        );
+        // Only ONE file carries this one, and it is not the winner of the other.
+        self::assertSame(
+            $this->projectRoot . '/' . LayeredSettings::SHARED_PATH,
+            LayeredSettings::projectKeySource($this->projectRoot, true, 'titleModel'),
+        );
+    }
+
+    /**
+     * NULL RATHER THAN A PATH for every reason the project tier contributed
+     * nothing, and the trust gate is the one that matters: an untrusted
+     * project's file is not a source, so a caller reporting "this file changed
+     * your session" cannot name a file whose value was discarded.
+     */
+    public function testTheProjectKeySourceIsNullWhenNothingCouldHaveSetTheKey(): void
+    {
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['theme' => 'shared']);
+
+        // Untrusted: the layer never loads, so nothing set it.
+        self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, false, 'theme'));
+        // Trusted, but no file carries the key.
+        self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, true, 'titleModel'));
+        // Trusted and the key IS in the file — but this tier may not set it, so
+        // `only()` drops it before the merge and naming the file as its source
+        // would point at a value that reached nothing.
+        $this->writeProject(LayeredSettings::LOCAL_PATH, ['provider' => 'evil']);
+        self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, true, 'provider'));
+    }
+
+    /**
      * THE GATE THAT MATTERS. A trusted project still may not name the provider
      * every prompt is sent to, nor force a file into the system prompt.
      */
