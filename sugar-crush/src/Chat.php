@@ -257,6 +257,19 @@ final class Chat implements Model
     private const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
 
     /**
+     * How often {@see driveWorkflowFiber()} resumes a suspended workflow.
+     *
+     * The same 50ms {@see waitForToolChildrenAsync()} polls its children at,
+     * and chosen the same way: it is the interval the loop gets to itself, so
+     * it has to be short enough that a repaint feels immediate and long enough
+     * that resuming is not the thing burning the CPU. It REPLACES the pool's
+     * own 5ms `usleep()` backoff while a fiber is driving
+     * ({@see \SugarCraft\Crush\Agents\AgentWorkerPool::idle()}), so it is also
+     * the granularity at which a finished sub-agent is noticed.
+     */
+    private const WORKFLOW_STEP_INTERVAL_SECONDS = 0.05;
+
+    /**
      * Two Escape presses within this window while a request is in flight
      * abort it (see the Escape arm in {@see update()}). A single Escape
      * never quits the app any more - use /exit, Ctrl+C, or the palette's
@@ -6444,15 +6457,41 @@ final class Chat implements Model
     /**
      * Handle /workflow run command.
      *
-     * KNOWN GAP (issue #79): `run()` below is called SYNCHRONOUSLY, on the
-     * ReactPHP loop, so the TUI is frozen — no repaint, no keystrokes, no
-     * spinner — for as long as the workflow takes; each stage blocks in
-     * `stream_select` until its worker answers or `ProcessExecutor`'s own 300s
-     * timeout expires (that one, not the sub-agent's — the executor is what
-     * enforces a deadline here). The fix is the fork-plus-socket pattern
-     * {@see Backend\EngineBackend::completeAsync()} already uses, and it is its
-     * own change-set rather than part of the wiring that made this command
-     * reachable at all.
+     * ## This used to freeze the whole TUI, and why the obvious fix was wrong
+     *
+     * `WorkflowEngine::run()` was called synchronously from inside `update()`,
+     * so no frame painted, no keystroke was read and no spinner turned until
+     * the last stage was over — for as long as the run took, up to
+     * `ProcessExecutor`'s 300s-per-worker ceiling.
+     *
+     * The fix recorded here for a long time was "the fork-plus-socket pattern
+     * {@see Backend\EngineBackend::completeAsync()} already uses". Measured,
+     * that pattern would have made the command asynchronous and made the
+     * feature it was blocking permanently unreachable: the split-pane
+     * compositor renders from `AgentManager::liveOutputs()`, which reads the
+     * manager's sub-agent map — an object graph in THIS process. Fork the
+     * workflow and every sub-agent it creates lives, and dies, in a child the
+     * renderer cannot see. The parent would repaint a blank pane promptly.
+     *
+     * ## What it does instead
+     *
+     * The run goes into a `\Fiber`, and the driver resumes it from a periodic
+     * timer on the same ReactPHP loop that repaints
+     * ({@see driveWorkflowFiber()}). A fiber suspends its whole call stack, so
+     * one suspension point deep inside the pool
+     * ({@see \SugarCraft\Crush\Agents\AgentWorkerPool::idle()}) yields the
+     * entire `Chat → WorkflowEngine → AgentManager → AgentWorkerPool` chain
+     * back to the loop, and everything stays in this process where the
+     * renderer can see it.
+     *
+     * Nothing runs before this method returns: the fiber is not started here,
+     * only handed to the timer. `update()` returns on the same tick the user
+     * pressed Enter, with the command echoed and `inFlight` set.
+     *
+     * WHAT IS NOT COVERED: the yield granularity is one poll of a parallel
+     * stage's worker pool. A stage type that blocks the PARENT rather than
+     * dispatching to workers still holds the fiber for its duration; it just
+     * no longer holds it for the whole workflow.
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -6474,35 +6513,144 @@ final class Chat implements Model
             }
         }
 
-        try {
-            $result = $this->workflowEngine->run($workflowName, $context);
-            $response = $result->isFailure()
-                ? "**Workflow '{$workflowName}' failed**\n\n"
-                : "**Workflow '{$workflowName}' completed**\n\n";
-            $response .= "ID: `{$result->workflowId}`\n";
-            $response .= "Status: {$result->status->value}\n";
-            $response .= "Stages completed: " . count($result->stageResults) . "\n";
-            $response .= "Total tokens: {$result->totalTokens}\n";
-            $response .= "Total cost: \${$result->totalCost}";
-            // The failing stage's message, or the reason never reaches the
-            // user at all: a failed run used to print the word "completed" in
-            // bold with `Status: failed` under it and nothing else, so a stage
-            // refused for declaring a tool this session's mode denies looked
-            // like a workflow that had simply not worked. The engine puts the
-            // reason on the stage; this is the only place that can show it.
-            $failure = $result->firstFailure();
-            if ($failure !== null && ($failure->error ?? '') !== '') {
-                $response .= "\n\nStage '{$failure->stageName}': {$failure->error}";
+        $engine = $this->workflowEngine;
+
+        // Built here, started by the driver's FIRST timer tick. Everything
+        // inside runs off the main stack.
+        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context): string {
+            try {
+                return self::describeWorkflowResult($workflowName, $engine->run($workflowName, $context));
+            } catch (\Throwable $e) {
+                // One catch, where there used to be three arms
+                // ({@see WorkflowNotFoundException}, {@see WorkflowLoadException},
+                // everything else) that produced the same string: inside a
+                // fiber the distinction matters LESS, not more, because an
+                // uncaught throw here surfaces on the driver's timer tick with
+                // no user-facing context at all.
+                return "**Error:** {$e->getMessage()}";
             }
-        } catch (WorkflowNotFoundException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (WorkflowLoadException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+        });
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)],
+            'inputBuf' => '',
+            // The workflow is a turn: it occupies the session, the spinner
+            // should run, and a second prompt must queue behind it rather than
+            // interleave with it. Cleared by update()'s AssistantMsg arm when
+            // driveWorkflowFiber() settles, on both the success and the error
+            // path -- both resolve, neither rejects.
+            'inFlight' => true,
+        ]);
+
+        return [$next, $next->driveWorkflowFiber($fiber)];
+    }
+
+    /**
+     * Render a finished run as the assistant's reply.
+     *
+     * Static and split out of {@see workflowRun()} so the fiber body closes
+     * over nothing but its arguments: a fiber outlives the `Chat` that created
+     * it (that instance is replaced on the very next `update()`), and capturing
+     * `$this` would pin a stale model for the length of the run.
+     */
+    private static function describeWorkflowResult(string $workflowName, WorkflowResult $result): string
+    {
+        $response = $result->isFailure()
+            ? "**Workflow '{$workflowName}' failed**\n\n"
+            : "**Workflow '{$workflowName}' completed**\n\n";
+        $response .= "ID: `{$result->workflowId}`\n";
+        $response .= "Status: {$result->status->value}\n";
+        $response .= "Stages completed: " . count($result->stageResults) . "\n";
+        $response .= "Total tokens: {$result->totalTokens}\n";
+        $response .= "Total cost: \${$result->totalCost}";
+        // The failing stage's message, or the reason never reaches the
+        // user at all: a failed run used to print the word "completed" in
+        // bold with `Status: failed` under it and nothing else, so a stage
+        // refused for declaring a tool this session's mode denies looked
+        // like a workflow that had simply not worked. The engine puts the
+        // reason on the stage; this is the only place that can show it.
+        $failure = $result->firstFailure();
+        if ($failure !== null && ($failure->error ?? '') !== '') {
+            $response .= "\n\nStage '{$failure->stageName}': {$failure->error}";
         }
 
-        return $this->workflowResponse($inputText, $response);
+        return $response;
+    }
+
+    /**
+     * Step a workflow fiber from the event loop until it terminates, then
+     * deliver its report as the assistant's reply.
+     *
+     * ## The invariant this exists to hold
+     *
+     * BETWEEN two resumes the loop is free. That is the entire point: candy-core's
+     * `Program` repaints from its own periodic timer on this same loop, so a
+     * frame lands in every gap, and `Renderer::renderView()` reads
+     * `AgentManager::liveOutputs()` at that moment — the sub-agents the
+     * suspended fiber has running, in this process, with the partial text
+     * `AgentWorkerPool::pumpProgress()` mirrored onto them on its last poll.
+     *
+     * `start()` therefore happens on the first TICK, never inline: doing it
+     * here would run the workflow up to its first suspension point inside
+     * `update()`, which is the freeze this change is about, only shorter.
+     *
+     * ## Failure and cancellation
+     *
+     * The promise RESOLVES on a throwing fiber rather than rejecting. A
+     * rejection dispatches candy-core's `ExceptionMsg`, which this model does
+     * not handle, so a workflow that died would have cleared nothing and left
+     * `inFlight` latched on forever with no message to explain it. An error
+     * notice through the ordinary AssistantMsg arm both tells the user and
+     * releases the turn.
+     *
+     * The timer is cancelled on every exit, including the throwing one; a live
+     * periodic timer holding a terminated fiber would resume it and raise
+     * `FiberError` on the next tick.
+     *
+     * ⚠️ KNOWN LIMITATION, stated rather than hidden by a generation stamp:
+     * double-Escape releases the TURN (it clears `inFlight` and bumps the
+     * generation) but does NOT stop the workflow — the fiber keeps being
+     * resumed and its report still lands, because this Msg carries no
+     * generation. That is deliberate for now: the run really did happen and
+     * its result is worth showing, and silently dropping it would leave the
+     * user with forked workers they cannot see and no record they ran.
+     * Actually CANCELLING mid-run means threading a `CancellationToken` down
+     * to `AgentWorkerPool::cancelAll()`, which is its own change.
+     */
+    private function driveWorkflowFiber(\Fiber $fiber): \Closure
+    {
+        return Cmd::promise(static function () use ($fiber): PromiseInterface {
+            $deferred = new Deferred();
+            $loop = Loop::get();
+            $timer = null;
+
+            $settle = static function (string $text) use ($deferred): void {
+                $deferred->resolve(new AssistantMsg(Message::assistant($text)));
+            };
+
+            $timer = $loop->addPeriodicTimer(
+                self::WORKFLOW_STEP_INTERVAL_SECONDS,
+                static function () use ($fiber, $loop, &$timer, $settle): void {
+                    try {
+                        $fiber->isStarted() ? $fiber->resume() : $fiber->start();
+                    } catch (\Throwable $e) {
+                        $loop->cancelTimer($timer);
+                        $settle("**Error:** {$e->getMessage()}");
+
+                        return;
+                    }
+
+                    if (!$fiber->isTerminated()) {
+                        return;
+                    }
+
+                    $loop->cancelTimer($timer);
+                    $settle((string) $fiber->getReturn());
+                },
+            );
+
+            return $deferred->promise();
+        });
     }
 
     /**

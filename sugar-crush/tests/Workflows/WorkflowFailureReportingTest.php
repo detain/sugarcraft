@@ -29,6 +29,8 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  */
 final class WorkflowFailureReportingTest extends TestCase
 {
+    use \SugarCraft\Crush\Tests\Support\DrivesWorkflowRunsTrait;
+
     /**
      * A refused declaration reaches the transcript, with the stage that caused
      * it and the mode that refused it.
@@ -108,11 +110,6 @@ final class WorkflowFailureReportingTest extends TestCase
      */
     private function runCommand(string $command, WorkflowEngine $engine): string
     {
-        $chat = new Chat(inputBuf: $command, workflowEngine: $engine);
-        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
-
-        $this->assertCount(2, $next->history, 'the command must produce exactly one reply');
-
-        return $next->history[1]->content;
+        return $this->runWorkflowCommandToReply(new Chat(inputBuf: $command, workflowEngine: $engine));
     }
 }

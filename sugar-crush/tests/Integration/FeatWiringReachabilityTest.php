@@ -55,6 +55,8 @@ use SugarCraft\Mouse\Zone;
  */
 final class FeatWiringReachabilityTest extends TestCase
 {
+    use \SugarCraft\Crush\Tests\Support\DrivesWorkflowRunsTrait;
+
     private string $tempDir;
     private string $originalHome;
     private mixed $originalServerHome;
@@ -915,17 +917,20 @@ final class FeatWiringReachabilityTest extends TestCase
      * the model/provider assertion this test cannot make.
      *
      * Zero stages is deliberate all the same: a real stage here would fork a
-     * worker from a wiring test. And note the limitation it hides — `run()` is
-     * called synchronously inside `Chat::update()`, so a workflow with real
-     * stages would block the whole TUI for its duration (known issue #79).
+     * worker from a wiring test. `run()` is no longer called synchronously
+     * inside `Chat::update()` — it goes into a fiber the loop steps — so this
+     * has to drive the loop to see the reply at all. `Chat::workflowRun()`'s
+     * docblock has the shape; the mid-run frame is proved in
+     * {@see \SugarCraft\Crush\Tests\Workflows\WorkflowLivePaneTest}.
      */
     public function testWorkflowRunOnTheLaunchedChatCompletesAProjectWorkflow(): void
     {
         $this->writeProjectWorkflow('run-reach', "name: run-reach\nstages: []\n");
 
-        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow run run-reach');
-
-        $transcript = $this->transcript($next);
+        $transcript = $this->transcript($this->submitAndSettle(
+            Bootstrap::chat($this->tempDir . '/repo'),
+            '/workflow run run-reach',
+        ));
         $this->assertStringNotContainsString('Workflow engine not configured', $transcript);
         $this->assertStringNotContainsString('**Error:**', $transcript);
         $this->assertStringContainsString("**Workflow 'run-reach' completed**", $transcript);
@@ -966,7 +971,7 @@ final class FeatWiringReachabilityTest extends TestCase
             '.php',
         );
 
-        [$next] = $this->submit(Bootstrap::chat($this->tempDir . '/repo'), '/workflow run pwn');
+        $next = $this->submitAndSettle(Bootstrap::chat($this->tempDir . '/repo'), '/workflow run pwn');
 
         $this->assertFileDoesNotExist($marker);
         $this->assertStringContainsString('**Error:**', $this->transcript($next));
@@ -1088,6 +1093,22 @@ final class FeatWiringReachabilityTest extends TestCase
      * Every message body of a Chat's transcript, joined — what a user would be
      * looking at after the turn.
      */
+    /**
+     * Submit a `/workflow run` and drive the loop until its reply lands.
+     *
+     * The run is asynchronous, so the Chat returned by `submit()` holds the
+     * echoed command and nothing else.
+     */
+    private function submitAndSettle(Chat $chat, string $text): Chat
+    {
+        [$next, $cmd] = $this->submit($chat, $text);
+        $this->assertInstanceOf(\Closure::class, $cmd, 'a /workflow run must return a Cmd');
+
+        [$after] = $next->update($this->settleWorkflowCmd($cmd));
+
+        return $after;
+    }
+
     private function transcript(Chat $chat): string
     {
         return implode("\n", array_map(static fn($m) => $m->content, $chat->history));

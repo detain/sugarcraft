@@ -239,6 +239,9 @@ final class AgentWorkerPool
         foreach (glob($this->resultDir . '/*.result') ?: [] as $leftover) {
             @unlink($leftover);
         }
+        foreach (glob($this->resultDir . '/*.progress') ?: [] as $leftover) {
+            @unlink($leftover);
+        }
         @rmdir($this->resultDir);
     }
 
@@ -499,6 +502,18 @@ final class AgentWorkerPool
      */
     protected function startAgent(SubAgent $agent, CompleteRequest $request, ExecutorInterface $executor): void
     {
+        // Every dispatch starts from a clean progress file, whichever path it
+        // then takes, and BEFORE the work rather than after it.
+        //
+        // A child that is killed or crashes never gets to tidy up, and an
+        // agent id is stable across a retry — so a stale tail left by an
+        // earlier dispatch of the same id on this pool would be mirrored by
+        // the first pumpProgress() as THIS run's live output: a pane showing
+        // the answer to a question that is no longer being asked. Clearing it
+        // in the parent's post-fork branch instead would race the child's
+        // first append.
+        $this->discardProgress($agent->id);
+
         // If a custom executor was injected, run synchronously.
         // PHPUnit mocks do not survive pcntl_fork across process boundaries.
         // The agent stays in $this->active until waitForCompletion extracts its result.
@@ -552,8 +567,7 @@ final class AgentWorkerPool
             // hang waitForCompletion() now closes by settling on the reap:
             // whatever the child fails to say for itself, the parent reports
             // from the exit status.
-            $result = $executor->execute($agent, $request);
-            $this->storeResult($agent->id, $result);
+            $this->storeResult($agent->id, $this->runStreaming($executor, $agent, $request));
             exit(0);
         }
 
@@ -572,6 +586,48 @@ final class AgentWorkerPool
     }
 
     /**
+     * Run one agent in the CHILD, publishing its partials as they arrive and
+     * returning the terminal result.
+     *
+     * `executeStream()` rather than `execute()` because the two differ only in
+     * whether the caller is told about the `Streaming` messages the worker was
+     * already sending — `execute()` accumulates them into a local `$buffer`
+     * that nothing outside that stack frame ever sees. Across a fork, "nothing
+     * outside that stack frame" includes the entire parent process, which is
+     * why a running sub-agent had no observable output at all.
+     *
+     * The LAST result wins: `ProcessExecutor::executeStream()` is documented to
+     * end on a terminal one (complete, error, timeout, or a worker that died),
+     * and `Streaming` results carry a chunk rather than an outcome. A generator
+     * that somehow yielded nothing at all leaves the child with no result file,
+     * which {@see waitForCompletion()} already reports from the exit status.
+     */
+    private function runStreaming(
+        ExecutorInterface $executor,
+        SubAgent $agent,
+        CompleteRequest $request,
+    ): AgentResult {
+        $last = null;
+
+        foreach ($executor->executeStream($agent, $request) as $result) {
+            if ($result->status === AgentStatus::Streaming) {
+                $this->publishProgress($agent->id, $result->output ?? '');
+                continue;
+            }
+
+            $last = $result;
+        }
+
+        return $last ?? new AgentResult(
+            agentId: $agent->id,
+            status: AgentStatus::Failed,
+            error: new \RuntimeException('Worker produced no terminal result'),
+            startedAt: $agent->startedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
      * Wait for at least one child process to complete.
      *
      * Returns the agent ID of the completed agent, or null if no agent
@@ -579,6 +635,11 @@ final class AgentWorkerPool
      */
     protected function waitForCompletion(): ?string
     {
+        // Before the reap, so a child that finishes this cycle still has its
+        // last partial mirrored — and so a caller that renders between polls
+        // has something to render. See pumpProgress().
+        $this->pumpProgress();
+
         // Forked agents settle on the reap, never on a result-file poll. Tying
         // removal to the child's exit is what makes this total: the child is
         // guaranteed to exit exactly once, whereas its result file may never
@@ -645,12 +706,53 @@ final class AgentWorkerPool
             }
         }
 
-        // Nothing completed this cycle — sleep briefly before the caller polls
+        // Nothing completed this cycle — idle briefly before the caller polls
         // again. Without this, the WNOHANG reap above turns executeAll()'s outer
         // loop into a hot CPU spin while forked children are still running.
-        usleep(self::WAIT_POLL_INTERVAL_USEC);
+        $this->idle();
 
         return null;
+    }
+
+    /**
+     * Give up the CPU for one poll interval — to the event loop when there is
+     * one, to the kernel otherwise.
+     *
+     * ## Why this is the seam that unfroze the TUI
+     *
+     * This is the ONLY point at which the parent process is idle while agents
+     * run: everything above it is a WNOHANG reap or a `file_exists()`, and the
+     * blocking `stream_select()` is in the CHILD. So it is also the only place
+     * a synchronous `$engine->run()` can hand control back to anything.
+     *
+     * {@see \SugarCraft\Crush\Chat::workflowRun()} runs the whole workflow
+     * inside a `\Fiber` for exactly this reason. A fiber suspends its entire
+     * call stack, however deep — `Chat` → `WorkflowEngine::run()` →
+     * `executeParallelStage()` → `AgentManager::executeAll()` → here — and
+     * resumes it where it stopped, which is what turns a call chain nobody was
+     * going to rewrite into generators into a cooperatively scheduled one. The
+     * `usleep()` it replaces is what the ReactPHP loop does with the interval
+     * instead: repaint the frame.
+     *
+     * `Fiber::getCurrent()` rather than a constructor flag, because whether
+     * suspending is legal is a property of the CALL, not of the pool: the same
+     * pool instance is driven from a fiber by the TUI and from plain
+     * synchronous code by `bin/` and by tests, and a fiber-less
+     * `Fiber::suspend()` is a `FiberError`.
+     *
+     * A suspension is a yield, not a sleep: the driver resumes on its own
+     * timer, so the poll interval is the driver's, not
+     * {@see WAIT_POLL_INTERVAL_USEC}.
+     */
+    protected function idle(): void
+    {
+        if (\Fiber::getCurrent() !== null) {
+            \Fiber::suspend();
+
+            return;
+        }
+
+        usleep(self::WAIT_POLL_INTERVAL_USEC);
     }
 
     /**
@@ -901,6 +1003,9 @@ final class AgentWorkerPool
 
         $data = file_get_contents($file);
         @unlink($file);
+        // The result supersedes every partial that led to it, and
+        // AgentManager::drain() is about to write it onto the SubAgent.
+        $this->discardProgress($agentId);
 
         if ($data === false || $data === '') {
             return null;
@@ -927,6 +1032,88 @@ final class AgentWorkerPool
     protected function resultFile(string $agentId): string
     {
         return $this->resultDir . '/' . hash('sha256', $agentId) . '.result';
+    }
+
+    /**
+     * Path to the append-only file a forked worker streams its partial output
+     * through, alongside {@see resultFile()} and in the same private dir.
+     */
+    protected function progressFile(string $agentId): string
+    {
+        return $this->resultDir . '/' . hash('sha256', $agentId) . '.progress';
+    }
+
+    /**
+     * Append one chunk of a running agent's output. Called in the CHILD.
+     *
+     * Append-only and unbuffered, because the reader is a live TUI: the point
+     * is that a partial answer is visible before the whole one exists. A
+     * parent that reads mid-write sees a truncated tail, which is the correct
+     * thing for a progress pane to show and is corrected by the next poll —
+     * so no locking, whose cost would be paid on every chunk to prevent a
+     * flicker.
+     */
+    protected function publishProgress(string $agentId, string $chunk): void
+    {
+        if ($chunk === '') {
+            return;
+        }
+
+        $this->ensureResultDir();
+        @file_put_contents($this->progressFile($agentId), $chunk, FILE_APPEND);
+    }
+
+    /**
+     * Mirror every running agent's published progress onto the SubAgent this
+     * pool holds. Called in the PARENT, once per poll.
+     *
+     * ## Why this exists at all
+     *
+     * `SubAgent::$output` had exactly one writer on the pool path:
+     * {@see AgentManager::drain()}, which settles the FINAL text when a result
+     * arrives — and sets the status terminal in the same breath. So a
+     * pool-executed sub-agent was, at every instant of its life, either
+     * running with an empty buffer or finished. Anything filtering for "is
+     * producing text right now" — which is precisely what
+     * {@see AgentManager::liveOutputs()} does, and through it the split-pane
+     * compositor's activation policy — could therefore never see one, no
+     * matter how long the agent ran or how much it said.
+     *
+     * That is why making `/workflow run` asynchronous was necessary but not
+     * sufficient for the pane to appear: a frame that painted mid-run would
+     * have had nothing to paint. This is the other half.
+     *
+     * The whole file is re-read rather than tailed from an offset: a live
+     * agent's buffer is bounded by what it can say in one task, the read is
+     * once per poll per RUNNING agent, and an offset would have to be
+     * invalidated on every path that recycles an id.
+     */
+    protected function pumpProgress(): void
+    {
+        foreach ($this->activePids as $agentId => $_pid) {
+            $agent = $this->active[(string) $agentId] ?? null;
+            if ($agent === null || $agent->isComplete() || $agent->isStopped()) {
+                continue;
+            }
+
+            $published = @file_get_contents($this->progressFile((string) $agentId));
+            if ($published === false || $published === '' || $published === $agent->output) {
+                continue;
+            }
+
+            $agent->output = $published;
+            // Only now, and only for an agent that has actually said
+            // something: `pending` is what settleAbandoned() distinguishes a
+            // never-dispatched task by, and `streaming` is what every
+            // liveness-aware reader means by "working".
+            $agent->status = SubAgent::STATUS_STREAMING;
+        }
+    }
+
+    /** Drop one agent's progress file; its result supersedes it. */
+    protected function discardProgress(string $agentId): void
+    {
+        @unlink($this->progressFile($agentId));
     }
 
     /**

@@ -53,6 +53,8 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 final class ChatTest extends TestCase
 {
+    use \SugarCraft\Crush\Tests\Support\DrivesWorkflowRunsTrait;
+
     use HomeSandboxTrait;
 
     /**
@@ -1697,12 +1699,21 @@ final class ChatTest extends TestCase
         $engine = $this->createFakeWorkflowEngine(['run' => $result]);
         $chat = new Chat(inputBuf: '/workflow run myworkflow', workflowEngine: $engine);
 
-        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        // The submit tick echoes the command and nothing else: the engine has
+        // not been called yet, because the run is a fiber the loop has not
+        // stepped. Asserted rather than skipped past — "history has one entry
+        // here" IS the not-frozen contract.
+        [$next, $cmd] = $this->submitWorkflowCommand($chat);
+        $this->assertCount(1, $next->history);
+        $this->assertTrue($next->inFlight);
 
-        $this->assertCount(2, $next->history);
-        $this->assertSame(Role::Assistant, $next->history[1]->role);
-        $this->assertStringContainsString('myworkflow', $next->history[1]->content);
-        $this->assertStringContainsString('completed', $next->history[1]->content);
+        [$after] = $next->update($this->settleWorkflowCmd($cmd));
+
+        $this->assertCount(2, $after->history);
+        $this->assertSame(Role::Assistant, $after->history[1]->role);
+        $this->assertStringContainsString('myworkflow', $after->history[1]->content);
+        $this->assertStringContainsString('completed', $after->history[1]->content);
+        $this->assertFalse($after->inFlight, 'the settled reply must release the turn');
     }
 
     public function testWorkflowPauseWithEmptyIdShowsUsageError(): void

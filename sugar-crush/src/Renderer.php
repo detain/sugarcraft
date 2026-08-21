@@ -142,10 +142,23 @@ use SugarCraft\Crush\Tui\Pane;
  * `liveOutputs()`, which now derives from the sub-agent map instead; THIS
  * strip has not been changed to match, and doing so is its own decision
  * (`active()` is a registration accessor that four other call sites share).
- * Even if it were, no frame would paint during a run: `Chat::workflowRun()`
- * calls `WorkflowEngine::run()` synchronously from inside `update()`
- * (`Chat.php:6212`, dispatched at `:5480`) — its own docblock records this as
- * KNOWN GAP issue #79.
+ *
+ * The second half of the reason this strip stayed blank — that no frame
+ * painted during a run at all — is GONE. `Chat::workflowRun()` no longer calls
+ * `WorkflowEngine::run()` synchronously from inside `update()`: it hands the
+ * run to a `\Fiber` that a periodic timer on the ReactPHP loop steps, and
+ * `AgentWorkerPool::pumpProgress()` mirrors each running sub-agent's partial
+ * output onto it, so the compositor paints while the workflow is still going.
+ * See `Chat::workflowRun()` and `Chat::driveWorkflowFiber()`.
+ *
+ * ⚠️ Three docblocks (this one, `Tui\Renderer::agentSplitWidth()`, and
+ * `Chat::workflowRun()` itself) used to record that gap as "KNOWN GAP issue
+ * #79", citing `Chat.php:6212` dispatched at `:5480`. Every part of that was
+ * stale: the call sites had drifted to `:6478`/`:6390`, and detain/sugarcraft
+ * #79 is a MERGED pull request titled "Phase 9+: CandyMetrics — telemetry
+ * primitives + CandyWish middleware" that has nothing to do with any of this.
+ * No open issue ever tracked it. Cited here so the next reader does not go
+ * looking for #79 again.
  *
  * What is also still missing is the OTHER route: nothing in `src/` or `bin/`
  * calls `createSubAgent()`/`executeSubAgent()` directly, because there is no

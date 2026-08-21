@@ -128,10 +128,13 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Agents/AgentWorkerPool.php|glob' => [
             'SELF_LOCATED — the pool sweeps its own result directory (makeResultDirPath())',
+            'SELF_LOCATED — the same sweep for the `.progress` siblings a killed worker left',
         ],
         'Agents/AgentWorkerPool.php|file_get_contents' => [
             'SELF_LOCATED — a result file this pool named and a forked child of it wrote',
             'SELF_LOCATED — the same directory, read during the drain loop',
+            'SELF_LOCATED — a running agent\'s progress file, named by progressFile() '
+                . 'from the pool\'s own 0700 random dir and written only by its own child',
         ],
         'Agents/ForeignAgentPresetRegistry.php|glob' => [
             'CONTAINED — `.claude/agents` / `.opencode/agents`, anchored per tier',

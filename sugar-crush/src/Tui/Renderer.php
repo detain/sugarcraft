@@ -700,34 +700,53 @@ final class Renderer
      * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()},
      * which hands its `SubAgent`s to `AgentManager::executeAll()`
      * (`Workflows/WorkflowEngine.php:1296`); that files each one under the
-     * manager's sub-agent map (`Agents/AgentManager.php:681`) and settles
-     * streamed text onto its `output`, and `liveOutputs()` reads that map. It
+     * manager's sub-agent map (`Agents/AgentManager.php:681`), and
+     * `liveOutputs()` reads that map. (An earlier revision added "and settles
+     * streamed text onto its `output`" here. It settles the FINAL text, on
+     * completion — see "NOTHING TO PAINT" below, which is the whole reason
+     * that distinction cost this pane a release.) It
      * did NOT before Phase 8 item 4's follow-up: `liveOutputs()` used to
      * iterate the REGISTERED map, and a workflow's agents are ad-hoc, named
      * `$task->name ?? $task->agentType` (`WorkflowEngine.php:1254`) and never
      * registered — with neither shipped workflow naming a parallel task after
      * a roster entry, that map could never contain one.
      *
-     * WHAT IS STILL MISSING IS A FRAME. `Chat::workflowRun()` calls
-     * `$this->workflowEngine->run()` SYNCHRONOUSLY (`Chat.php:6212`) from
-     * inside `update()` (dispatched at `Chat.php:5480`), and candy-core's
-     * `Program` repaints from a periodic timer on the ReactPHP loop
-     * (`Program.php:387`) while `ProcessExecutor` blocks in a raw
-     * `stream_select()` (`ProcessExecutor.php:81`, `:235`) rather than on that
-     * loop. So the tick cannot fire until the whole workflow is over, and by
-     * then the liveness filter has emptied the map again. `workflowRun()`'s
-     * own docblock records this as KNOWN GAP issue #79 and names the fix — the
-     * fork-plus-socket pattern `Backend\EngineBackend::completeAsync()` already
-     * uses — as its own change-set.
+     * ## The frame, and the text to put in it
      *
-     * So this policy is correct and its data source is correct, and a user
-     * still cannot see the split: not because of a flag or a missing
-     * registration, but because nothing paints between the keystroke and the
-     * workflow's last stage. The other route that would populate it mid-frame,
-     * a Task/Agent tool delegating from a model turn, does not exist
-     * (crush_code.md #45). Until #79 lands, the split is exercised by
+     * Both used to be missing, and they were two separate defects rather than
+     * one. Recording both, because the first was documented here as the whole
+     * story and it was not.
+     *
+     * NO FRAME. `Chat::workflowRun()` called `$this->workflowEngine->run()`
+     * SYNCHRONOUSLY from inside `update()`, and candy-core's `Program`
+     * repaints from a periodic timer on the ReactPHP loop
+     * (`Program.php:387`), so the tick could not fire until the whole workflow
+     * was over. It now runs in a `\Fiber` that a timer on that same loop
+     * steps, suspending at `AgentWorkerPool::idle()` — the one point where the
+     * PARENT is idle while workers run. (The blocking `stream_select()` at
+     * `ProcessExecutor.php:81`/`:235` is in the CHILD, and never was the
+     * obstacle it was described as here.)
+     *
+     * NOTHING TO PAINT. Even with a frame, this map was empty for the whole
+     * of a run: on the pool path `SubAgent::$output` had exactly one writer,
+     * `AgentManager::drain()`, which settles the final text at the same moment
+     * it sets the status terminal. So a pool-executed sub-agent was always
+     * either running-and-silent or finished, and the liveness filter — the
+     * thing that correctly keeps this pane from showing stale tiles — could
+     * never see one. `AgentWorkerPool::pumpProgress()` is the fix: forked
+     * workers publish their `Streaming` chunks to a file in the pool's IPC
+     * directory and the parent mirrors it onto the SubAgent on every poll.
+     *
+     * ⚠️ This paragraph previously cited `Chat.php:6212` dispatched at
+     * `:5480`, and "KNOWN GAP issue #79". All of it was stale: the call sites
+     * had drifted to `:6478`/`:6390`, and detain/sugarcraft #79 is a MERGED
+     * pull request about CandyMetrics telemetry. No open issue tracked this.
+     *
+     * The OTHER route that would populate this map, a Task/Agent tool
+     * delegating from a model turn, still does not exist (crush_code.md #45).
+     * Beyond the live path, the split is exercised by
      * `AgentSplitCompositorTest` and by an embedder driving the manager
-     * directly.
+     * directly; the live one is exercised by `WorkflowLivePaneTest`.
      *
      * ## Width, and why it can still decline
      *
