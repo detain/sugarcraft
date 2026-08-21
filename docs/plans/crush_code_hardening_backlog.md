@@ -2571,6 +2571,51 @@ should not.
 **Blocked on.** `Chat.php` was outside the P3.2/P3.5 lane's granted file set and is held by another
 lane. Not attempted.
 
+🔴 **ROUND 37 SCOUT — TWO OF THIS ENTRY'S OWN CORRECTIONS ARE THEMSELVES WRONG, AND EVERY LINE
+NUMBER ABOVE IS STALE.** Measured by execution against master `4a4ecb98`.
+
+**Stale line numbers.** `Chat.php`: dispatch `:1108`→**`:1123`**, non-`KeyMsg` return `:1110`→**`:1126`**,
+`pendingPermission` guard `:1194`→**`:1209`**, `handleMouse()` `:3555`→**`:3570`**, toolcall dispatch
+`:3639`→**`:3653`**, `toggleToolOutput()` `:4174`→**`:4189`**. `Renderer.php`: `PANE_ZONE_PREFIX`
+`:404`→**`:467`**, `TOOL_CALL_ZONE_PREFIX` `:424`→**`:487`**, `markPane()` `:1684`→**`:1747`**,
+`markPaneHeader()` `:1575`→**`:1853`**. The `Pane::Menu` marking cited at `:1253` is inside
+`renderStatusBar()`, now at **`:1243`**.
+
+**FALSE: "`pane:menu` is destroyed by the modal, not preserved."** It is destroyed by **`inFlight`**.
+Measured across all four states:
+
+| state | surviving zones |
+|---|---|
+| modal only | `toolcall:call_1`, **`pane:menu`** |
+| modal + `inFlight` | `toolcall:call_1` |
+| `inFlight` only | `toolcall:call_1` |
+| neither | `toolcall:call_1`, `pane:menu` |
+
+This is the recurring defect appearing **inside a note written to correct the recurring defect** — a
+fact true of one thing (`inFlight`) written next to a different thing (the modal). And
+prompt-up-and-idle is not a hypothetical state: `Chat.php:1155-1162` argues at length that `update()`
+itself produces it, because the `AssistantMsg` arm writes `'inFlight' => false` without clearing
+`pendingPermission`.
+
+**FALSE: "The only reachable action behind a surviving zone is `toggleToolOutput()`."** A `pane:menu`
+click under a live prompt **opens the command palette** — confirmed by execution, and the keyboard
+equivalent under the identical state is correctly refused:
+
+```
+palette AFTER mouse click under modal:   true
+palette after Ctrl+P (keyboard) under modal: false
+```
+
+The palette overlay does not render in that frame, so no `palette:` item zones are reachable to chain
+further — but the state is set, and it pops open the instant the prompt is answered. **The severity
+verdict above survives** (it still cannot grant, deny or dismiss the permission, so "permission
+bypass" remains the wrong label) — but the hole is strictly larger than recorded, and the real finding
+is sharper than either label: **the two input paths give opposite answers to the same request.**
+
+**Step, restated.** Guard at the top of `handleMouse()` (**`:3570`**) on `pendingPermission !== null`
+— and on `keyHelp !== null`, which the original step omits. The wheel-scroll question above still
+stands and is still a deliberate decision.
+
 ### E52 — `CSI 1;5Z` loses the shift its final byte encodes
 
 **What.** In `InputReader::decodeCsi()` the post-match rebuild replaces the **whole** `KeyMsg` from
@@ -2591,6 +2636,11 @@ always works.
 **Step.** If it ever needs fixing: make the rebuild merge rather than replace, or special-case a `Z`
 final byte to OR the shift flag in. Merging is the more general fix and would want its own test sweep
 across every modified key, so it is not a drive-by.
+
+**ROUND 37 SCOUT — STILL OPEN, confirmed by decoding.** `\e[Z`→shift=1 and `\e[1;2Z`→shift=1, but
+**`\e[1;5Z`→ctrl=1, shift=0**: the `;<mod>` rebuild in `candy-core/src/InputReader.php` replaces the
+`KeyMsg` wholesale and drops the shift the `Z` final byte encodes. Nothing in this tree emits
+`CSI 1;5Z`, so this stays recorded rather than scheduled.
 
 ### E53 — fast and slow width paths diverge on ZWJ sequences
 
@@ -2613,6 +2663,13 @@ same measure. The `visualWidth()` docblock has been softened in-place — it pre
 truncator and the pad "answer to ONE width authority", which is stronger than the code delivers; it
 now says they read the same width *table* and names this divergence.
 
+**ROUND 37 SCOUT — STILL OPEN, and it carries a hazard this entry does not record.** Divergence
+confirmed: `visualWidth(<family emoji>)` = 2 while summing `charWidth()` per codepoint = 6.
+`AgentViewPane::truncate()` (`:171`) walks `preg_split('//u')` summing `charWidth()` (`:232`) while
+`visualWidth()` (`:224`) is grapheme-aware. The truncation direction is **safe** — it under-fills and
+never over-runs. But at budget 4 the truncator emitted `U+1F468 ZWJ …`: a **dangling ZWJ**, which is a
+rendering hazard in its own right, not merely over-truncation.
+
 ### E54 — `AgentViewPane::render($w)` over-runs its caller's budget below 44 columns
 
 **What.** `render(..., $w, ...)` returns rows of **`$w + 4`** cells: `$w` is handed to `Style::width()`,
@@ -2620,10 +2677,10 @@ which sizes the **content box**, and the rounded border (2 cells) plus `padding(
 drawn outside it. Measured in this lane across `$w` = 20/28/40/58/60/98, populated and empty-list alike
 — the `+4` holds in every case. Its two callers do **not** both compensate:
 
-- `Renderer::renderAgentView()` (`sugar-crush/src/Renderer.php:1567`) passes `max(40, $cols - 4)` —
+- `Renderer::renderAgentView()` (`sugar-crush/src/Renderer.php:1630` — was `:1567`, 63 lines stale) passes `max(40, $cols - 4)` —
   **compensates exactly**, at 44 columns and above. Below 44 the `max(40, …)` clamp floors the width
   and the rows run wider than the terminal.
-- `AgentDashboardPane::render()` (`sugar-crush/src/Tui/Components/AgentDashboardPane.php:194`) passes
+- `AgentDashboardPane::render()` (`sugar-crush/src/Tui/Components/AgentDashboardPane.php:193` — was `:194`) passes
   `max(20, $width - 2)` — **does not compensate at all**. Measured, *both* of its paths over-run by
   exactly 2: the empty-list `AgentViewPane::render()` call at `:202`, and the `box()` frame at `:205`,
   which repeats the same `border + padding(0,1) + width($inner)` geometry. Pane width 30 → 32,
@@ -2631,7 +2688,9 @@ drawn outside it. Measured in this lane across `$w` = 20/28/40/58/60/98, populat
 
 **Severity.** Low — real but currently unobservable. Every dashboard frame goes out through
 `clipWidth(clipTail(...), $cols)` in `sugar-crush/src/Tui/Renderer.php` (the `$frame` assignment around
-`:464`), which trims the excess before the diff renderer sees it. The backstop is what makes this a
+`sugar-crush/src/Tui/Renderer.php:490` **and `:561` — there are TWO of them, not one, and neither is
+at the "around `:464`" this entry originally cited), which trims the excess before the diff renderer
+sees it. The backstop is what makes this a
 documentation-grade finding today; it is also what would hide a real regression if the arithmetic
 drifted further.
 
@@ -2646,6 +2705,13 @@ call sites cannot disagree. Pre-existing; predates the P3.2/P3.5 bundle and out 
 Recorded, not fixed: both are pre-existing shapes in tools outside that lane's bundle, surfaced by
 wiring `Grep` for the same pair. Every byte figure below was re-measured in the lane before it was
 written down.
+
+**ROUND 37 SCOUT — STILL OPEN.** The `+4` is invariant, not a below-44 edge case: measured at
+w=20/28/30/40/43/44/58/60/80/98, populated and empty, `Width::string()` of the widest row is **`$w + 4`
+in every case**. The rounded border (2) plus `padding(0,1)` (2) are drawn outside the box
+`Style::width()` sizes. `AgentDashboardPane` lands at `$width + 2` on both of its paths (`:193` `$inner`,
+fed to `AgentViewPane::render()` at `:202` and to `box()` at `:205`). Only the `clipWidth(clipTail(...))`
+backstop keeps it off the screen.
 
 ### E55 — `maxOutputBytes` no longer bounds `Grep`'s result
 
@@ -2841,3 +2907,18 @@ next to a different claim it appears to support.
 `WorkflowLivePaneTest::testAFramePaintsTheRunningAgentsOutputWhileTheWorkflowIsStillRunning` against a
 real worker. It is written against the shipped path (real `pcntl_fork()`, real `proc_open()`), so it
 should need no change — which is the test's own claim, and worth checking rather than assuming.
+
+---
+
+## ROUND 37 SCOUT — E55 and E56 both reproduce; figures restated at master `4a4ecb98`
+
+**E55.** Cap 400 → **7022 bytes returned, 17.6× the cap**; the hit list clipped to one line and a
+6569-byte `CLAUDE.md` appended whole *after* the truncation marker. The entry's original "6700 bytes /
+16.8×" was measured against a 6513-byte instruction file that no longer exists — both figures are
+correct for their fixture, and the difference is not a discrepancy.
+
+**E56.** Cap 200 → 193 bytes, **0 of 5 matched paths listed**, `BIG-RULE` body present, marker fires.
+Reproduces exactly as written; no correction.
+
+**The two are broken in opposite directions** — `Grep` appends *after* the cap and blows through it,
+`Glob` prepends *before* it and starves the results — which is why they are one fix and not two.
