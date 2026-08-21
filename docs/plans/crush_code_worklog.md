@@ -9554,3 +9554,63 @@ missed that it was also over a different set.
 the *opposite* — a SIGWINCH during a 5xx storm put the retry back on the failing upstream having slept
 **120312 µs of 500000 owed**. The implementer refuted me and a reviewer re-derived it from scratch.
 Two agents overturned my briefs this round and both were right.
+
+---
+
+## Round 38 — two lanes, and a network drop that nearly cost 626 uncommitted lines
+
+**Floor: `8820 / 99755 / 1 skipped / rc 0`** at `7771c148`, supervisor-measured in the live tree.
+Master moved 8786 → 8794 (`lsp`) → 8820 (`sglang`). The arithmetic reconciles exactly: `sglang`'s four
+commits were +21 over `49b3f2e8` before its two fix commits added +5, and 8794 + 26 = 8820.
+
+### What landed
+
+- **`lsp` — E53 + E54, `AgentViewPane` width** (`6276c51e`, `24d8aad8`, `70a4efb3`). `truncate()` walked
+  codepoints while `visualWidth()` measured graphemes; the two disagreed on any ZWJ sequence (family
+  emoji: 2 whole-string, 6 summed). Now both ask `Width::string()`. Plus `CHROME_WIDTH` +
+  `contentWidth()` so the two callers of `render()` cannot disagree about the `+4` — `AgentDashboardPane`
+  had never compensated at all (32/62/102 → 30/60/100).
+- **`sglang` — the mouse/keyboard divergence** (`8f845f26`, `8b9a4b7e`, `7771c148` + one). Three review
+  rounds, two of them blocking.
+
+### Rules earned this round
+
+**A "safe direction" argument is a claim about a measure, and measures have exceptions.** E53 was ranked
+Low because the old truncator "cannot emit a row wider than its budget" — over-truncation only. False:
+`Width::string()` charges **+2** for `<emoji> ZWJ` (it credits the emoji it skipped) where the
+per-codepoint sum charges `1+0`, so the whole-string measure can be the *larger* one. Measured on the
+original code: **678–727 over-runs in 400,000** fuzzed calls, and a real 49-cell row where 48 was due.
+The finding was under-ranked for two rounds on an argument nobody had fuzzed. **The fix was better than
+its own documentation claimed** — a direction of error worth checking for deliberately, because nothing
+complains about it.
+
+**A new absolute is more dangerous than an old one.** The `lsp` implementer introduced the word
+*"invariant"* for the `+4` and cited ten widths as evidence. A wide cluster in the operation string
+refutes it at **six of those ten**, via a pre-existing `max(5, …)` floor. The cause was old; the claim
+was new; and the new test's fixtures were ASCII-only, so it pinned the property exactly where it holds.
+**Adding a claim is adding a thing that can be false — verify a new absolute harder than an inherited one.**
+
+**The supervisor-facing copy is the one that survives.** The same implementer corrected a false
+additivity claim in a docblock and left the identical sentence standing in its backlog stamp. The code
+comment gets read by whoever edits that function; the backlog gets read by whoever decides what is still
+open. Correcting one half of a paragraph and corrupting the other, across two files this time.
+
+**Attribution by window is not attribution.** `ChatTest::tearDownAfterClass` globs the shared temp dir
+before and after the class and blames the difference on itself — but `ToolIpcFiles::sweep()`, in the very
+class it calls, documents that files from another process on the box **cannot be told apart** and
+attributes by age for exactly that reason. Recorded as **E63**: false-positive-only, so it cannot hide a
+leak, only invent one — in a certification run, which is worse than it sounds.
+
+**A dropped connection is a `git` hazard, not just a lost turn.** The network died with **626 insertions
+across 4 files uncommitted** in `crush-lane-sglang`. Nothing was lost, but only because the lane was
+snapshotted by file copy and patch *before* anything else touched it. Standing change: **agents commit
+incrementally in-lane rather than saving one commit for the end**, and a resumed agent is told
+explicitly that its working tree is its own work and not something to "clean up".
+
+### Also recorded
+
+**E64** — `AgentViewPane`'s `max(5, …)` operation floor over-runs the pane box on wide clusters
+(pre-existing, masked by `clipWidth()`, now measured across ten widths). E54 is stamped **PARTIALLY
+FIXED**, not FIXED: the `+4` is single-sourced and the dashboard over-run is gone, but the below-44 case
+named in its own heading is untouched. `CHROME_WIDTH`'s docblock and the new geometry test now document
+a known over-run as current behaviour, so both must be updated the day E64 is fixed — said so in E64's Step.
