@@ -1697,8 +1697,23 @@ final class KeyHelpTest extends TestCase
      * both now ({@see Chat::refuseMouseDispatch()},
      * {@see testAClickOnTheMenuHintIsRefusedWhileTheReferenceIsUp()}), so what
      * this sweep still pins is the narrower, renderer-side fact it always
-     * measured: the prompt frame marks nothing clickable at all, so this pair is
-     * out of the mouse's reach twice over.
+     * measured: THIS frame — a prompt with its turn still in flight, which is
+     * what {@see promptRaisedByTheRealGate()} builds — marks nothing clickable
+     * at all, so here the pair is out of the mouse's reach twice over.
+     *
+     * ONCE OVER EVERYWHERE ELSE, and the distinction is worth the sentence
+     * because the state this fixture does NOT cover is the one the guard was
+     * written for. Dispatch a second real `AssistantMsg` and the turn settles
+     * under the same prompt ({@see Chat::update()}'s arm writes
+     * `'inFlight' => false` without clearing `$pendingPermission`); the status
+     * bar's hint comes back with it, and the same sweep over the same fixture
+     * then reports `["pane:menu"]` — measured. A richer transcript at an idle
+     * prompt marks the tabs and the tool-call rows as well. In every one of
+     * those the frame offers the mouse something and
+     * {@see Chat::refuseMouseDispatch()} is the only thing refusing it, which
+     * is what
+     * {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAClickUnderALivePromptIsRefusedExactlyAsTheKeyIs()}
+     * drives.
      */
     public function testWithAPromptUpNeitherKeyReachesItsOverlay(): void
     {
@@ -3451,21 +3466,53 @@ final class KeyHelpTest extends TestCase
      * The whole overlay chain in {@see Renderer::renderView()}, walked end to
      * end: reference → permission prompt → palette → session picker.
      *
-     * Four links make SIX pairs, and NONE of them is reachable through the front
-     * door any more. Five never were — fixed precedence between modals that no
-     * sequence of real input puts up together, which `Chat::update()` states
-     * outright of palette+picker ("even though they cannot both be open"). The
-     * sixth, reference+palette, was reachable by the mouse until the click path
-     * was put under the same capture guards the keyboard has
-     * ({@see Chat::refuseMouseDispatch()}); the click that used to raise it is
-     * now pinned as a refusal by
+     * Four links make SIX pairs, and TWO of them are reachable through the front
+     * door. That number has now been wrong twice in this docblock — "exactly
+     * ONE", then "NONE ... any more" — so this revision enumerates all six and
+     * drives each one instead of reasoning about them. Measured by putting each
+     * overlay up with real keys and then trying to raise the other, in both
+     * orders, on this commit:
+     *
+     *   | pair                | front door?  | how it was driven                 |
+     *   |---------------------|--------------|-----------------------------------|
+     *   | reference + prompt  | NO           | "?" at an idle prompt goes to the |
+     *   |                     |              | prompt arm; with the reference up |
+     *   |                     |              | the first rune closes it, so the  |
+     *   |                     |              | Enter that raises a prompt runs   |
+     *   |                     |              | with no reference on screen       |
+     *   | reference + palette | NO           | neither key order reaches it, and |
+     *   |                     |              | the mouse route it USED to have   |
+     *   |                     |              | is refused now                    |
+     *   | reference + picker  | NO           | neither key order; no zone opens  |
+     *   |                     |              | the picker at all                 |
+     *   | prompt + palette    | YES          | Ctrl+P mid-turn, then a real tool |
+     *   |                     |              | call through a PreToolUse ask     |
+     *   | prompt + picker     | YES          | Ctrl+R mid-turn, same reply       |
+     *   | palette + picker    | NO           | each swallows the other's key,    |
+     *   |                     |              | and the palette's own "Switch     |
+     *   |                     |              | session" row closes the palette   |
+     *   |                     |              | before the picker opens           |
+     *
+     * The two live ones are live BECAUSE the mid-turn split landed: the palette
+     * and the picker now open while a turn runs, and a turn running is exactly
+     * the window in which a prompt appears. `Chat::requestPermission()` closes
+     * neither overlay, so both really are up at once, and both are pinned —
+     * with the prompt winning on both devices — by
+     * {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices()}.
+     * So this chain test is load-bearing for two of its links and a dormant
+     * determinism guarantee for the other four.
+     *
+     * reference+palette is the one that CHANGED: it was reachable by the mouse
+     * until the click path was put under the same capture guards the keyboard
+     * has ({@see Chat::refuseMouseDispatch()}), and the click that used to raise
+     * it is now pinned as a refusal by
      * {@see testAClickOnTheMenuHintIsRefusedWhileTheReferenceIsUp()}. Dormant is
      * not the same as unpinned: a documented order nothing reads back is an order
      * that gets reshuffled by the next person to touch the `if` chain, and
      * swapping the palette and the picker used to change nothing anywhere in this
      * suite.
      *
-     * reference+prompt is one of the five, and a previous revision counted it
+     * reference+prompt is one of the four, and a previous revision counted it
      * among the reachable ones on the strength of
      * {@see testTheReferenceOutranksAPermissionPromptBecauseItOwnsTheKeyboard()} —
      * which reaches that state through {@see blockedOnPermission()}, i.e. by

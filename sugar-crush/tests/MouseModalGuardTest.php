@@ -48,7 +48,14 @@ use SugarCraft\Mouse\Zone;
  *   | `toolcall:*`  | toggled that tool body         | Ctrl+O: nothing      |
  *   | `pane:menu`   | opened the palette             | Ctrl+P: nothing      |
  *   | `pane:agents` | ran `/agents`, +2 history rows | Ctrl+A: nothing      |
- *   | `tab:<id>`    | switched session               | Ctrl+R: nothing      |
+ *   | `tab:<id>`    | switched session               | Ctrl+Tab: nothing    |
+ *
+ * (`Ctrl+Tab` — {@see \SugarCraft\Crush\Commands\KeyBindingRegistry} binds
+ * `Ctrl+R` to "Open the session picker" and `Ctrl+Tab` to "Switch to the next
+ * session", and switching sessions is what a tab click asks for. Two
+ * revisions of this table named `Ctrl+R`; the row's answer held either way,
+ * since both keys are refused by the prompt arm in this state, but the
+ * counterpart was the wrong one.)
  *
  * Not a permission bypass: no surviving zone reaches
  * `Chat::handlePermissionKey()` or the deferred resolution, so a click could
@@ -128,9 +135,10 @@ final class MouseModalGuardTest extends TestCase
             'fixture: the bar keeps its menu hint at an idle prompt, so there is something to click',
         );
 
-        $clicked = $this->click($idle, $zone);
+        [$clicked, $cmd] = $this->clickResult($idle, $zone);
         [$typed] = $idle->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
 
+        self::assertNull($cmd, 'a refused click runs nothing — the second element is part of the answer');
         self::assertNull($typed->palette(), 'Ctrl+P was always refused here — the prompt arm outranks it');
         self::assertNull($clicked->palette(), 'and the click must now be refused the same way');
         self::assertNotNull($clicked->pendingPermission(), 'the prompt is still the thing on screen');
@@ -148,13 +156,28 @@ final class MouseModalGuardTest extends TestCase
     /**
      * For each state in which {@see Chat::update()} captures the keyboard, ask
      * the zone registry what the frame marked and click every single one of
-     * them. Nothing observable may move.
+     * them. Nothing observable may move, and no `Cmd` may come back either.
      *
-     * The palette is the one exception and has its own test below: it OWNS the
-     * `picker-item:` rows §8 E6 exists to make clickable, so those stay live
-     * while the background zones behind the overlay do not.
+     * THE PALETTE IS IN THIS SWEEP, with its own rows excluded by id — and it
+     * was not, which cost the guard a surviving mutation. The palette is the
+     * one capture state with a non-trivial rule (it OWNS the `picker-item:`
+     * rows §8 E6 exists to make clickable, so those stay live and the frame
+     * behind them does not), so leaving it out of the all-zones sweep left the
+     * rule tested only where it says "yes". Measured against the excluded
+     * version: widening the guard's whitelist from `'picker-item:'` to `'p'`
+     * survived the whole 8772-test suite while being behavioural — a
+     * `pane:agents` click under an open palette ran `/agents` and wrote two
+     * history rows. With the palette in the sweep that mutation reds here.
+     * The positive half — a real row still runs — stays in
+     * {@see testThePaletteKeepsItsOwnRowsClickableWhileItSwallowsTheRest()},
+     * which is also why the rows are skipped rather than asserted inert.
      *
-     * @param 'keyHelp'|'prompt'|'picker' $state
+     * THE SECOND ELEMENT IS ASSERTED, not destructured away. A refusal returns
+     * `[$this, null]`; nothing pinned the `null`, so replacing it with
+     * `Cmd::quit()` survived — at best it would have been caught as a hung
+     * suite rather than as a failed assertion.
+     *
+     * @param 'keyHelp'|'prompt'|'picker'|'palette' $state
      *
      * @dataProvider capturingStates
      */
@@ -171,17 +194,30 @@ final class MouseModalGuardTest extends TestCase
             "fixture: the {$state} frame must still mark SOMETHING, or this test proves nothing",
         );
 
+        $swept = 0;
         $before = $this->snapshot($chat);
         foreach ($ids as $id) {
+            if (str_starts_with($id, Renderer::PALETTE_ITEM_ZONE_PREFIX)) {
+                // The overlay's OWN rows, which are live by design.
+                self::assertSame('palette', $state, "a {$state} frame must not mark palette rows");
+
+                continue;
+            }
+
             $zone = Renderer::scanner()->get($id);
             self::assertInstanceOf(Zone::class, $zone);
 
-            $after = $this->click($chat, $zone);
+            [$after, $cmd] = $this->clickResult($chat, $zone);
+            $swept++;
 
             self::assertSame(
                 $before,
                 $this->snapshot($after),
                 "clicking '{$id}' changed state while {$state} was capturing the keyboard",
+            );
+            self::assertNull(
+                $cmd,
+                "clicking '{$id}' under {$state} handed back a Cmd, and a refusal runs nothing",
             );
 
             // The click consumed the frame's tracker state, so re-scan before
@@ -190,6 +226,12 @@ final class MouseModalGuardTest extends TestCase
             Renderer::scanner()->clear();
             $chat->view();
         }
+
+        self::assertGreaterThan(
+            0,
+            $swept,
+            "fixture: the {$state} frame marked nothing but palette rows, so nothing was swept",
+        );
     }
 
     /**
@@ -201,6 +243,7 @@ final class MouseModalGuardTest extends TestCase
             'keybinding reference' => ['keyHelp'],
             'permission prompt' => ['prompt'],
             'session picker' => ['picker'],
+            'command palette' => ['palette'],
         ];
     }
 
@@ -449,8 +492,15 @@ final class MouseModalGuardTest extends TestCase
         // static, so the gesture spans these instances exactly as it spans the
         // frames of a running program.
         $blocked = $this->populated(prompt: $this->ask());
-        [$underPrompt] = $blocked->update($this->release($menu->startCol, $menu->startRow));
+        [$underPrompt, $refusedCmd] = $blocked->update($this->release($menu->startCol, $menu->startRow));
         self::assertNull($underPrompt->palette(), 'the release is refused while the prompt is up');
+        // The one gesture that still reaches {@see Chat::refuseMouseDispatch()}'s
+        // own return value: a press made legally, released under a capture that
+        // arrived in between. (A press made UNDER the capture is thrown away at
+        // the press, so its release never resolves a pair at all.) Both elements
+        // are asserted — returning `Cmd::quit()` from the refusal survived
+        // everything while only the first was read.
+        self::assertNull($refusedCmd, 'a refused click runs no Cmd');
 
         // The prompt is answered, and the abandoned gesture must be gone with
         // it - not waiting for the next release to pair with.
@@ -461,6 +511,185 @@ final class MouseModalGuardTest extends TestCase
             $later->palette(),
             'the press was consumed by the refused release, so nothing is left armed',
         );
+    }
+
+    /**
+     * The MIRROR of the case above, which the placement argument did not cover
+     * until this test: press UNDER the capture, release after it clears.
+     *
+     * The docblock on {@see Chat::refuseMouseDispatch()} rejects a
+     * top-of-method guard because it "would leave that press armed for the
+     * whole life of the prompt and fire it the moment the user answered" — and
+     * measured before this landed, the SHIPPED placement did exactly that in
+     * this direction: press `pane:menu` under a live prompt, answer it with
+     * `n`, release, and the palette opened. The keyboard has no such window; a
+     * key that arrives under a modal is consumed there and then. So the press
+     * is consumed at the press, by {@see Chat::handleMouse()} handing the
+     * tracker a null press zone.
+     */
+    public function testThePressMadeUnderAPromptIsGoneOnceThePromptIs(): void
+    {
+        $blocked = $this->populated(prompt: $this->ask());
+        $blocked->view();
+
+        $menu = Renderer::scanner()->get(Renderer::PANE_ZONE_PREFIX . 'menu');
+        self::assertInstanceOf(
+            Zone::class,
+            $menu,
+            'fixture: the bar keeps its menu hint at an idle prompt, so there is something to press',
+        );
+
+        [$pressed] = $blocked->update($this->press($menu->startCol, $menu->startRow));
+        self::assertNull($pressed->palette(), 'a press under the prompt opens nothing on its own');
+
+        // The user answers the prompt, and only then lets the button up. The
+        // tracker is static, so the gesture spans these instances exactly as
+        // it spans the frames of a running program.
+        $answered = $this->populated();
+        [$later, $cmd] = $answered->update($this->release($menu->startCol, $menu->startRow));
+
+        self::assertNull(
+            $later->palette(),
+            'the press was thrown away under the prompt, so answering it cannot fire the press',
+        );
+        self::assertNull($cmd, 'and a gesture that dispatches nothing hands back no Cmd');
+    }
+
+    // =========================================================================
+    // Mid-turn under an overlay: update()'s precedence, not the reverse
+    // =========================================================================
+
+    /**
+     * `inFlight` is checked ABOVE the palette and the picker in
+     * {@see Chat::update()}, so mid-turn with the palette open `Ctrl+Tab` does
+     * not reach {@see Chat::handlePaletteKey()}: it is refused visibly and the
+     * notice closes the palette. A first revision of
+     * {@see Chat::refuseMouseDispatch()} ordered those two the other way
+     * round, and the two devices diverged again in a quieter register —
+     * measured against it, `Ctrl+Tab` wrote a line and closed the palette
+     * while the `tab:` click under the same open palette did nothing at all
+     * and said nothing. Refusing is not agreeing: this commit's standard is
+     * that what the keyboard refuses VISIBLY, the mouse refuses visibly.
+     */
+    public function testMidTurnUnderAnOpenPaletteTheTabClickIsRefusedAsLOUDLYAsCtrlTab(): void
+    {
+        $chat = $this->openedWith(
+            $this->populated(inFlight: true),
+            new KeyMsg(KeyType::Char, 'p', ctrl: true),
+        );
+        self::assertNotNull($chat->palette(), 'fixture: the palette opens mid-turn — half the bug report');
+        $chat->view();
+
+        $tab = Renderer::scanner()->get(Renderer::SESSION_TAB_ZONE_PREFIX . 'session-a');
+        self::assertInstanceOf(Zone::class, $tab, 'fixture: the tab strip shows through the overlay');
+
+        $clicked = $this->click($chat, $tab);
+        [$typed] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
+
+        self::assertSame('session-b', $typed->currentSessionId(), 'Ctrl+Tab does not switch mid-turn');
+        self::assertSame('session-b', $clicked->currentSessionId(), 'and neither does the click');
+        self::assertSame(
+            $this->lastLine($typed),
+            $this->lastLine($clicked),
+            'and both say so, in the same words — a silent refusal is a third answer',
+        );
+        self::assertNull($typed->palette(), 'the notice closes the overlay it was written under');
+        self::assertNull($clicked->palette(), 'both of them');
+    }
+
+    /**
+     * The same precedence for the other mid-turn refusal, under the other
+     * overlay: `pane:agents` while the session picker is up.
+     */
+    public function testMidTurnUnderTheSessionPickerTheAgentsClickStillSaysWhyItRefused(): void
+    {
+        $chat = $this->openedWith(
+            $this->populated(inFlight: true),
+            new KeyMsg(KeyType::Char, 'r', ctrl: true),
+        );
+        self::assertNotNull($chat->sessionPicker(), 'fixture: Ctrl+R opens the picker mid-turn too');
+        $chat->view();
+
+        $agents = Renderer::scanner()->get(Renderer::PANE_ZONE_PREFIX . 'agents');
+        self::assertInstanceOf(Zone::class, $agents, 'fixture: the bar shows through the picker');
+
+        $clicked = $this->click($chat, $agents);
+
+        self::assertCount(count($chat->history) + 1, $clicked->history, 'the refusal is written down');
+        self::assertStringContainsString('in flight', $this->lastLine($clicked));
+        self::assertStringNotContainsString('reviewer', $this->lastLine($clicked), 'and nothing was listed');
+    }
+
+    // =========================================================================
+    // The one overlay pair real input CAN build, and who wins it
+    // =========================================================================
+
+    /**
+     * A prompt over an OPEN OVERLAY is reachable through the front door, both
+     * with the palette and with the session picker, and neither
+     * {@see Chat::requestPermission()} nor anything else closes the overlay
+     * first. It is reachable BECAUSE the mid-turn split landed: the palette
+     * and the picker now open while a turn is running, and a turn running is
+     * exactly the window in which a prompt appears.
+     *
+     * Driven, not narrated, because the claim it corrects was narrated —
+     * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest::testTheOverlayChainPaintsInRoutingOrderRightDownTheChain()}
+     * said of the four overlays' six pairs that "NONE of them is reachable
+     * through the front door any more", having previously said "exactly ONE".
+     * Measured over all six: two are reachable, and they are these.
+     *
+     * WHO WINS IS THE SAME ON BOTH DEVICES, which is this whole commit's
+     * subject. {@see Chat::update()} tests `$pendingPermission` above the
+     * palette and the picker, so a keystroke answers the prompt rather than
+     * the overlay under it; {@see Chat::refuseMouseDispatch()}'s FIRST arm is
+     * the same rule for the click, and it is not a hypothetical one — the
+     * palette's rows were marked in the frame that was on screen when the
+     * prompt arrived, so the registry still holds them.
+     */
+    public function testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices(): void
+    {
+        $withPalette = $this->openedWith(
+            $this->turnInFlightViaTheRealGate(),
+            new KeyMsg(KeyType::Char, 'p', ctrl: true),
+        );
+        self::assertNotNull($withPalette->palette(), 'fixture: Ctrl+P opens the palette mid-turn');
+
+        // The frame the user is looking at when the ask lands, rows and all.
+        $withPalette->view();
+        $row = Renderer::scanner()->get(Renderer::PALETTE_ITEM_ZONE_PREFIX . '0');
+        self::assertInstanceOf(Zone::class, $row, 'fixture: the open palette marks its first row');
+
+        $blocked = $this->promptRaisedOverATurnInFlight($withPalette);
+        self::assertNotNull($blocked->palette(), 'the prompt does not close the palette under it');
+
+        // The keyboard: the prompt takes the keystroke, the palette does not.
+        [$typed] = $blocked->update(new KeyMsg(KeyType::Char, 'x'));
+        self::assertSame(
+            $blocked->palette()?->query,
+            $typed->palette()?->query,
+            'a rune under the prompt must not filter the buried palette',
+        );
+
+        // The mouse, on the very zone that frame left in the registry.
+        [$clicked, $cmd] = $this->clickResult($blocked, $row);
+        self::assertNull($cmd, 'the buried row runs nothing');
+        self::assertSame(
+            $blocked->palette()?->mode,
+            $clicked->palette()?->mode,
+            'and the row it points at is not confirmed either',
+        );
+        self::assertCount(count($blocked->history), $clicked->history, 'nothing was written under the prompt');
+
+        // The same pair with the other overlay.
+        $withPicker = $this->openedWith(
+            $this->turnInFlightViaTheRealGate(),
+            new KeyMsg(KeyType::Char, 'r', ctrl: true),
+        );
+        self::assertNotNull($withPicker->sessionPicker(), 'fixture: Ctrl+R opens the picker mid-turn');
+
+        $overPicker = $this->promptRaisedOverATurnInFlight($withPicker);
+        self::assertNotNull($overPicker->sessionPicker(), 'the prompt does not close the picker either');
+        self::assertNotNull($overPicker->pendingPermission(), 'and both really are up at once');
     }
 
     // =========================================================================
@@ -541,6 +770,21 @@ final class MouseModalGuardTest extends TestCase
      */
     private function promptUpAndIdleViaTheRealGate(): Chat
     {
+        $blocked = $this->promptRaisedOverATurnInFlight($this->turnInFlightViaTheRealGate());
+
+        [$idle] = $blocked->update(new AssistantMsg(Message::assistant('done')));
+        self::assertNotNull($idle->pendingPermission(), 'fixture: the prompt outlives its turn');
+        self::assertFalse($idle->inFlight, 'fixture: which is the state that keeps the bar hint');
+
+        return $idle;
+    }
+
+    /**
+     * A real turn in flight: an `EchoBackend`, a `PreToolUse` hook that asks
+     * about every tool, two runes typed and a real `Enter`.
+     */
+    private function turnInFlightViaTheRealGate(): Chat
+    {
         $asks = new class implements HookInterface {
             public function name(): string
             {
@@ -565,7 +809,13 @@ final class MouseModalGuardTest extends TestCase
         $hooks = new HookManager(new HookRegistry());
         $hooks->register($asks);
 
-        $chat = (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))
+        $chat = (new Chat(
+            history: [],
+            inputBuf: '',
+            backend: new EchoBackend(),
+            sessionStore: $this->storeWithTwoSessions(),
+            currentSessionId: 'session-b',
+        ))
             ->registerTool('bash', static fn(array $args): string => 'total 0')
             ->withHooks($hooks)
             ->withSize(100, 30);
@@ -574,7 +824,18 @@ final class MouseModalGuardTest extends TestCase
             [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
         }
         [$chat] = $chat->update(new KeyMsg(KeyType::Enter));
-        [$blocked] = $chat->update(new AssistantMsg(
+        self::assertTrue($chat->inFlight, 'fixture: Enter must put a real turn in flight');
+
+        return $chat;
+    }
+
+    /**
+     * The reply that carries a tool call, which the ask hook turns into a
+     * prompt — {@see Chat::requestPermission()} through the front door.
+     */
+    private function promptRaisedOverATurnInFlight(Chat $inFlight): Chat
+    {
+        [$blocked] = $inFlight->update(new AssistantMsg(
             Message::assistant('running')->withToolCalls([
                 new ToolCall('bash', ['cmd' => 'rm -rf build/'], 'call_1'),
             ]),
@@ -582,11 +843,7 @@ final class MouseModalGuardTest extends TestCase
         self::assertNotNull($blocked->pendingPermission(), 'fixture: the ask hook must raise a prompt');
         self::assertTrue($blocked->inFlight, 'fixture: and it holds the turn in flight');
 
-        [$idle] = $blocked->update(new AssistantMsg(Message::assistant('done')));
-        self::assertNotNull($idle->pendingPermission(), 'fixture: the prompt outlives the turn');
-        self::assertFalse($idle->inFlight, 'fixture: which is the state that keeps the bar hint');
-
-        return $idle;
+        return $blocked;
     }
 
     private function ask(): PermissionRequestMsg
@@ -648,10 +905,22 @@ final class MouseModalGuardTest extends TestCase
 
     private function click(Chat $chat, Zone $zone): Chat
     {
-        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
-        [$chat] = $chat->update($this->release($zone->startCol, $zone->startRow));
+        return $this->clickResult($chat, $zone)[0];
+    }
 
-        return $chat;
+    /**
+     * The click's WHOLE result, both elements. A refused click must hand back
+     * `[$chat, null]`, and the second element is worth asserting: with the
+     * suite destructuring `[$chat] = ...` everywhere, returning `Cmd::quit()`
+     * from the refusal was a survivor.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function clickResult(Chat $chat, Zone $zone): array
+    {
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+
+        return $chat->update($this->release($zone->startCol, $zone->startRow));
     }
 
     private function rescan(Chat $chat): void

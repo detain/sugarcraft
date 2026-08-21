@@ -348,6 +348,101 @@ final class PaletteClickTest extends TestCase
     }
 
     // =========================================================================
+    // Mid-turn: the click must refuse whatever Enter refuses
+    // =========================================================================
+
+    /**
+     * §8 E6's rule is "the click dispatches what Enter dispatches", and Enter's
+     * arm BRANCHED on `inFlight` after this click path was written:
+     * {@see Chat::handlePaletteKey()} sends Enter to
+     * `runSelectedPaletteActionWhileInFlight()` mid-turn, while
+     * {@see Chat::selectPaletteItem()} called `runSelectedPaletteAction()`
+     * unconditionally. So mid-turn a click ran what Enter refused — measured
+     * over the root palette, the two devices disagreed on 8 of its 9 rows, and
+     * the one that agreed was `Exit`, the row the mid-turn arm also allows.
+     * `New session` wiped the history a streaming reply was appending to;
+     * `Switch model` opened the providers submenu, the one that swaps the
+     * backend the running agentic loop is about to call next.
+     *
+     * Driven ROW BY ROW rather than on a chosen example, because the defect
+     * was not in any one row: it was one device consulting `inFlight` and the
+     * other not. A row added later is covered without an edit, and the two
+     * arms cannot drift apart again without reddening this.
+     *
+     * This file has 17 other tests and none of them mentioned `inFlight`.
+     */
+    public function testMidTurnEveryPaletteRowAnswersAClickExactlyAsItAnswersEnter(): void
+    {
+        $chat = new Chat(palette: PaletteState::root(), inFlight: true);
+        $rows = $chat->paletteMatches();
+        self::assertGreaterThan(1, count($rows), 'fixture: the root palette must offer several rows');
+
+        $refusals = 0;
+        foreach ($rows as $index => $label) {
+            Renderer::scanner()->clear();
+            $this->resetClickTracker();
+            Renderer::render($chat);
+
+            $zone = Renderer::scanner()->get(Renderer::PALETTE_ITEM_ZONE_PREFIX . $index);
+            self::assertInstanceOf(Zone::class, $zone, "row {$index} ('{$label}') is not clickable");
+
+            [$pressed] = $chat->update($this->press($zone->startCol, $zone->startRow));
+            [$clicked, $clickCmd] = $pressed->update($this->release($zone->startCol, $zone->startRow));
+
+            // The keyboard half, through the same front door: arrow down onto
+            // the row, then Enter.
+            $typed = $chat;
+            for ($step = 0; $step < $index; $step++) {
+                [$typed] = $typed->update(new KeyMsg(KeyType::Down));
+            }
+            self::assertSame($index, $typed->palette()?->selectedIndex, "the arrows reached row {$index}");
+            [$entered, $enterCmd] = $typed->update(new KeyMsg(KeyType::Enter));
+
+            self::assertSame(
+                $this->answer($entered, $enterCmd),
+                $this->answer($clicked, $clickCmd),
+                "'{$label}' answers the mouse differently from the keyboard while a turn is in flight",
+            );
+
+            if (count($clicked->history) > count($chat->history)) {
+                $refusals++;
+                self::assertStringContainsString(
+                    'in flight',
+                    $clicked->history[count($clicked->history) - 1]->content,
+                    "'{$label}' was refused without saying why",
+                );
+            }
+        }
+
+        self::assertGreaterThan(
+            0,
+            $refusals,
+            'fixture: at least one root row must be refused mid-turn, or this proves nothing',
+        );
+    }
+
+    /**
+     * Everything that separates one palette answer from another, as one
+     * comparable value: what the overlay did, what was written, and whether a
+     * `Cmd` came back (`Exit` is the row that hands one back in either state).
+     *
+     * @return array<string, mixed>
+     */
+    private function answer(Chat $chat, ?\Closure $cmd): array
+    {
+        return [
+            'palette' => $chat->palette()?->mode,
+            'selected' => $chat->palette()?->selectedIndex,
+            'historyCount' => count($chat->history),
+            'lastLine' => $chat->history === []
+                ? null
+                : $chat->history[count($chat->history) - 1]->content,
+            'mru' => $chat->paletteMru(),
+            'cmd' => $cmd !== null,
+        ];
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

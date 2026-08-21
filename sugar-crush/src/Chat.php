@@ -1931,15 +1931,19 @@ final class Chat implements Model
         //              "the three KeyHelpTest tests" was short by one BEFORE this
         //              round touched anything (testEachQueuedAskArmsAfresh reaches a
         //              stamped ask through answerPermission()'s resume path and was
-        //              not listed). Measured, row 3 reds these FIVE:
+        //              not listed). Re-measured at THIS commit, row 3 reds these SIX:
         //              KeyHelpTest::testWithAPromptUpNeitherKeyReachesItsOverlay(),
         //              KeyHelpTest::testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(),
         //              KeyHelpTest::testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused(),
-        //              KeyHelpTest::testEachQueuedAskArmsAfresh() and
-        //              MouseModalGuardTest::testAClickUnderALivePromptIsRefusedExactlyAsTheKeyIs(),
-        //              the last of which is the first member from outside KeyHelpTest
-        //              -- it drives a real PreToolUse ask hook to put a modal up for
-        //              the click path to be refused by.
+        //              KeyHelpTest::testEachQueuedAskArmsAfresh(),
+        //              MouseModalGuardTest::testAClickUnderALivePromptIsRefusedExactlyAsTheKeyIs() and
+        //              MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices(),
+        //              the last two being the members from outside KeyHelpTest -- both
+        //              drive a real PreToolUse ask hook to put a modal up, one for the
+        //              click path to be refused by and one to establish that a prompt
+        //              over an open overlay is a state real input can build at all.
+        //              Row 3's raw total is 8: these six, the STALE member, and the
+        //              text pin.
         //              testThePromptAndTheReferenceCannotBothBeRaisedByRealInput() is
         //              NOT a member: it was split into the first two above and now
         //              stops at the in-flight half.
@@ -1957,7 +1961,9 @@ final class Chat implements Model
         // rows, even though they are three fifths of the domain by file count --
         // their asks are UNSTAMPED, and none of these four mutations touches an
         // unstamped ask. The domain is what the rows were measured over; it is not
-        // the set of files that react.
+        // the set of files that react. That silence is a fact about THIS site: the
+        // same mutations at the wrong site (below) red Chat/InFlightInputQueueTest
+        // six times and RendererTest not at all, which is the reverse shape.
         //
         // Every row ALSO reds
         // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(), because
@@ -1974,10 +1980,10 @@ final class Chat implements Model
         // 6 warnings -- so the trio is NOT silent about it, and the rows above are
         // not covering it either. It is the ONE figure in this comment kept as a
         // count, because it is the mis-site tell described below and a tell needs a
-        // magnitude. Re-measured with this comment, over all FIVE files of the
-        // domain: 30 raw / 29 behavioural, composed of 7 in RendererTest, 17 in
+        // magnitude. Re-measured AT THIS COMMIT, over all FIVE files of the
+        // domain: 31 raw / 30 behavioural, composed of 7 in RendererTest, 17 in
         // KeyHelpTest (including the pin), 4 KeyBindingDriftTest data sets, 1 in
-        // Chat/InFlightInputQueueTest and 1 in MouseModalGuardTest. The figure this
+        // Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest. The figure this
         // replaces read "20 raw / 19 behavioural, composed of 5 / 12 / 3"; driven
         // against `995eb257` with none of this round's files present it came out at
         // 29 raw over the four files that then existed, so it had gone stale on its
@@ -1990,28 +1996,49 @@ final class Chat implements Model
         // Nothing else is excluded.
         //
         // That total MUST NOT be read as fixed -- it grows by one for every
-        // prompt-dependent test added to those three files. What is load-bearing is
-        // the rule and the fact that the figure is not zero.
+        // prompt-dependent test added to any of the FIVE files of the domain named
+        // two paragraphs up (it grew by two on this commit, both in
+        // MouseModalGuardTest). The sentence used to say "those three files", which
+        // named the historical trio while sitting under a paragraph that had just
+        // re-declared the domain as five. What is load-bearing is the rule and the
+        // fact that the figure is not zero.
         //
-        // At the WRONG site (update()'s AssistantMsg arm) the same two mutations
-        // give: 2nd-conjunct-dropped -> trio 0 behavioural reds / ChatTest 6
-        // failures, and `if (true)` -> trio 3 behavioural reds / ChatTest 1 error, 36
-        // failures, 6 warnings. Those are close to the figures a previous revision
-        // published as this method's, together with a causal story about mixed-up
-        // rounds that was invented to explain a mis-site.
+        // At the WRONG site (update()'s AssistantMsg arm) the same two mutations,
+        // ALL FOUR figures re-driven at this commit and each stated over BOTH
+        // domains, because the previous revision compared a re-measured right-site
+        // number against a wrong-site number taken over the smaller domain and
+        // flagged only that it carried someone else's date:
+        //
+        //   * 2nd-conjunct-dropped -> 2 raw / 1 behavioural over the five-file
+        //     domain (Chat/InFlightInputQueueTest::testTheDrainedPromptCarriesIts
+        //     OwnGenerationAndCancellationToken), which is 1 raw / 0 behavioural
+        //     when restricted to the historical trio; ChatTest 6 failures.
+        //   * `if (true)` -> 13 raw / 12 behavioural over the five-file domain,
+        //     composed of 5 in KeyHelpTest (including the pin), 6 in
+        //     Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest; restricted
+        //     to the trio that is 5 raw / 4 behavioural. ChatTest 1 error, 37
+        //     failures, 6 warnings, over its 222 tests.
+        //
+        // The previous revision published "trio 3" for that last one. It is 4
+        // behavioural over the trio now, and the reason is the one its own sentence
+        // gave and then failed to apply: it tracks the real-gate group in
+        // KeyHelpTest, and that group became FOUR when testEachQueuedAskArmsAfresh
+        // was added to the CURRENT list above -- a correction made in one half of
+        // this comment and not in the half that cites it.
         //
         // The old tell -- "zero behavioural trio reds means you mutated the wrong
         // place" -- is now HALF TRUE and is corrected rather than repeated: it holds
-        // for 2nd-conjunct-dropped and no longer for `if (true)`, because the three
+        // for 2nd-conjunct-dropped and no longer for `if (true)`, because the
         // KeyHelpTest tests built on promptRaisedByTheRealGate() drive a real
-        // AssistantMsg through update() and so react at BOTH sites (that is why the
-        // wrong-site figure moved from 1 to 3 this round -- it tracks the same
-        // group, not a change in the guard). The tell that does not decay is the
-        // magnitude: at the right site `if (true)` reds the whole prompt-dependent
-        // population of the domain (29 behavioural, re-measured above), at the wrong
-        // site only that group -- recorded as 3 by the round that measured it and
-        // NOT re-measured here, so it is the one figure in this paragraph carrying
-        // someone else's date.
+        // AssistantMsg through update() and so react at BOTH sites. The tell that
+        // does not decay is the magnitude AND the population, both re-measured
+        // above over the SAME five-file domain: at the right site `if (true)` reds
+        // the whole prompt-dependent population (30 behavioural, led by RendererTest
+        // and KeyHelpTest), at the wrong site 12 -- and over half of those are
+        // Chat/InFlightInputQueueTest, which contributes ZERO at the right site. So
+        // the two sites are told apart by WHICH files answer as much as by how many:
+        // a mutation at the right site cannot make the queue tests fail, and one at
+        // the wrong site cannot make RendererTest or KeyBindingDriftTest fail.
         // And the four-site text pin fires at either site, which is the cheapest
         // signal that you edited SOMETHING and must re-read this table.
         //
@@ -3724,8 +3751,27 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        $hit = self::zoneAt($msg->x, $msg->y);
+
         if ($msg instanceof MouseClickMsg) {
             self::$pressGesture = [$msg->x, $msg->y, 0];
+
+            // BOTH DIRECTIONS OF THE GESTURE ARE UNDER THE GUARD, not just
+            // the half that dispatches. The press is recorded in one
+            // update() and read back in a later one, so a press that lands
+            // under a capture used to sit in the static tracker until the
+            // capture cleared and then fire: measured before this line —
+            // press `pane:menu` under a live prompt, answer it with `n`,
+            // release, and the palette opens. The keyboard has no such
+            // window; a key under a modal is consumed the moment it arrives.
+            // Handing the tracker a NULL press zone consumes this one the
+            // same way, through its own documented "Press hit nothing" state
+            // rather than by returning early — the later release still pairs
+            // and is still thrown away, which is the property
+            // {@see refuseMouseDispatch()}'s placement argument rests on.
+            if ($hit !== null && $this->refuseMouseDispatch($hit->id) !== null) {
+                $hit = null;
+            }
         } else {
             self::recordPressDrift($msg->x, $msg->y);
         }
@@ -3738,7 +3784,7 @@ final class Chat implements Model
             self::$pressGesture = null;
         }
 
-        $click = self::clickTracker()->track($event, self::zoneAt($msg->x, $msg->y));
+        $click = self::clickTracker()->track($event, $hit);
         if ($click === null) {
             return [$this, null];
         }
@@ -3812,7 +3858,16 @@ final class Chat implements Model
      *   | `toolcall:*`  | toggled that tool body         | Ctrl+O: nothing      |
      *   | `pane:menu`   | opened the palette             | Ctrl+P: nothing      |
      *   | `pane:agents` | ran `/agents`, +2 history rows | Ctrl+A: nothing      |
-     *   | `tab:<id>`    | switched session, prompt still up | Ctrl+R: nothing   |
+     *   | `tab:<id>`    | switched session, prompt still up | Ctrl+Tab: nothing |
+     *
+     * The last row's keyboard counterpart is `Ctrl+Tab`, not the `Ctrl+R` two
+     * revisions of this table said: {@see Commands\KeyBindingRegistry} binds
+     * `Ctrl+R` to "Open the session picker" and `Ctrl+Tab` to "Switch to the
+     * next session", and switching is what a tab click asks for (the same
+     * name {@see selectSessionTab()}'s own comment uses). The row's ANSWER
+     * was right either way — `Ctrl+Tab` under an idle prompt is refused by
+     * the `$pendingPermission` arm exactly as `Ctrl+R` is — but it was
+     * attached to the wrong key.
      *
      * NOT a permission bypass, and the accurate finding is sharper than that
      * label: no zone that survives the prompt reaches
@@ -3821,28 +3876,57 @@ final class Chat implements Model
      * transcript, the session and the overlay state underneath a modal that
      * is advertised as owning the screen.
      *
+     * THE ORDER OF THE ARMS BELOW IS {@see update()}'S OWN ORDER, and that is
+     * the whole of why `inFlight` is checked between the modals and the
+     * overlays rather than after them. On the keyboard the reference and the
+     * prompt are tested ABOVE the mid-turn block, and the mid-turn block is
+     * tested ABOVE the palette and the picker — so mid-turn, with the palette
+     * open, `Ctrl+Tab` does NOT reach {@see handlePaletteKey()}: it is
+     * refused by {@see refuseWhileInFlight()}, visibly, and the palette is
+     * closed by the notice. A first revision of this method put the overlay
+     * arm first, and measured against that revision the two devices diverged
+     * again in a quieter way: `Ctrl+Tab` wrote a line and closed the palette
+     * while the `tab:` click under the same palette did nothing at all and
+     * said nothing. Refusing is not the same as agreeing; this commit's own
+     * standard is that a refusal the keyboard makes VISIBLY is made visibly
+     * by the mouse too.
+     *
      * WHICH STATES, and why each one:
      *
      *   * {@see $keyHelp} and {@see $pendingPermission} are full modals that
      *     mark no zones of their own, so nothing may dispatch. (`toolcall:`
      *     zones do not survive the reference — it replaces the transcript —
      *     but `pane:menu` does, and clicking it opened the palette.)
-     *   * {@see $sessionPicker} marks no zones either: every zone visible
-     *     while it is up belongs to the frame BEHIND it. Same answer.
+     *   * `inFlight` is NOT a capture state, on either device: {@see update()}
+     *     refuses three named keys mid-turn and lets everything else run. The
+     *     two gestures that reach a turn-starting or session-changing arm
+     *     ({@see selectSessionTab()}, {@see selectPane()}'s Agents arm) are
+     *     let THROUGH this guard on purpose, so they reach their own site and
+     *     are refused there with the keyboard's own notice —
+     *     {@see midTurnRefusalOfItsOwn()} names them, and its docblock says
+     *     why it is a list rather than a rule.
+     *   * {@see $sessionPicker} marks no zones of its own either: every zone
+     *     visible while it is up belongs to the frame BEHIND it. Same answer
+     *     as the full modals.
      *   * {@see $palette} is the one overlay that owns zones —
      *     `picker-item:<n>`, which §8 E6 exists to make clickable. Those stay
-     *     live; everything else is background and is refused. The
-     *     `$this->palette !== null` arm inside {@see selectPane()} covered
-     *     exactly one of those ids (`pane:menu`) and is left in place: it is
-     *     the more specific statement of the same rule, and it also answers a
-     *     stale zone id arriving from a frame this method never scanned.
-     *   * `inFlight` is deliberately ABSENT here. Mid-turn is not a capture
-     *     state on the keyboard either — {@see update()}'s mid-turn block
-     *     refuses three named keys and lets everything else run — so the two
-     *     mouse gestures that reach a turn-starting or session-changing arm
-     *     are refused VISIBLY at their own dispatch sites, the way the
-     *     keyboard refuses them: see {@see selectSessionTab()} and
-     *     {@see selectPane()}.
+     *     live; everything else is background and is refused. Mid-turn a row
+     *     is still live and still refused per-row, by the same method Enter
+     *     reaches ({@see selectPaletteItem()} →
+     *     {@see runSelectedPaletteActionWhileInFlight()}).
+     *
+     * WHAT COUNTS AS ONE OF THE PALETTE'S OWN ROWS is
+     * {@see paletteRowIndex()}, not a bare `str_starts_with()` on the
+     * prefix, and the difference is measured rather than stylistic. With the
+     * bare prefix test, two WIDENING mutations of it survived the whole
+     * suite: `'picker-item:'` → `'p'` (which let every `pane:` zone through
+     * the guard — behavioural: a `pane:agents` click under an open palette
+     * then ran `/agents`) and `'picker-item:'` → `'picker-item'`, which
+     * nothing pinned at all because no zone id distinguishes the two today.
+     * Deriving the answer from the LIVE {@see PaletteState} instead — the id
+     * must be the prefix followed by digits that name a row the palette
+     * actually has — makes both of those refuse a real palette click and die
+     * on the spot, rather than leaving them merely unobserved.
      *
      * THE WHEEL IS NOT ROUTED THROUGH HERE, by decision and by measurement.
      * Reading the transcript while deciding how to answer a prompt is
@@ -3869,23 +3953,106 @@ final class Chat implements Model
      * prompt and fire it the moment the user answered. Refusing after the
      * pair resolves consumes the gesture and throws it away.
      *
+     * THAT ARGUMENT IS ABOUT ONE DIRECTION OF THE GESTURE, and the mirror of
+     * it — press UNDER the capture, release after it clears — is closed at
+     * the press instead, by {@see handleMouse()} handing the tracker a null
+     * press zone for a press this method would refuse. It has to be closed
+     * somewhere: before that line, press `pane:menu` under a live prompt,
+     * answer the prompt, release, and the palette opened — the same
+     * fire-the-moment-they-answered behaviour the paragraph above rejects a
+     * top-of-method guard for. Both halves are pinned:
+     * {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAPressInterruptedByAPromptCannotFireOnceThePromptIsGone()}
+     * for press-outside/release-under, and
+     * `MouseModalGuardTest::testThePressMadeUnderAPromptIsGoneOnceThePromptIs()`
+     * for press-under/release-after. Each direction is killed by exactly the
+     * one test written for it: measured, removing the press-side line reds only
+     * the second, and removing the dispatch-side call reds only the first.
+     *
      * @param string $zoneId the id of the zone the completed click landed in
      *
      * @return array{0:self,1:?\Closure}|null null when the click may proceed
      */
     private function refuseMouseDispatch(string $zoneId): ?array
     {
-        if ($this->keyHelp !== null || $this->pendingPermission !== null || $this->sessionPicker !== null) {
+        if ($this->keyHelp !== null || $this->pendingPermission !== null) {
             return [$this, null];
         }
 
-        if ($this->palette !== null
-            && !str_starts_with($zoneId, Renderer::PALETTE_ITEM_ZONE_PREFIX)
-        ) {
+        if ($this->inFlight && $this->midTurnRefusalOfItsOwn($zoneId)) {
+            return null;
+        }
+
+        if ($this->sessionPicker !== null) {
+            return [$this, null];
+        }
+
+        if ($this->palette !== null && $this->paletteRowIndex($zoneId) === null) {
             return [$this, null];
         }
 
         return null;
+    }
+
+    /**
+     * Does this zone reach a dispatch site that refuses it mid-turn ITSELF,
+     * with the keyboard's own notice — the reason {@see refuseMouseDispatch()}
+     * lets it past an open overlay instead of swallowing it there.
+     *
+     * ENUMERATED, not derived, for the same reason {@see refuseWhileInFlight()}
+     * enumerates its three keys: the property is "this site writes a mid-turn
+     * refusal", which is a fact about the site's body, and a prefix rule that
+     * guessed at it would go quietly wrong the moment a site's answer changed.
+     * The two members are {@see selectSessionTab()} (Ctrl+Tab's own
+     * `refuseInFlightAction('Switch session')`) and {@see selectPane()}'s
+     * `Agents` arm. `pane:menu` is deliberately absent — Ctrl+P opens the
+     * palette mid-turn, so the click that asks for the same thing does too —
+     * and so is `toolcall:`, because Ctrl+O expands mid-turn.
+     *
+     * A palette ROW is absent too, and for a different reason: it is already
+     * let through by the palette arm below, and {@see selectPaletteItem()}
+     * refuses it mid-turn through the same method Enter reaches.
+     */
+    private function midTurnRefusalOfItsOwn(string $zoneId): bool
+    {
+        return str_starts_with($zoneId, Renderer::SESSION_TAB_ZONE_PREFIX)
+            || $zoneId === Renderer::PANE_ZONE_PREFIX . Pane::Agents->value;
+    }
+
+    /**
+     * The row of the LIVE palette this zone id names, or null when it names
+     * none — which is the whitelist {@see refuseMouseDispatch()} keys on.
+     *
+     * Derived from {@see $palette} rather than trusted from the id, because a
+     * whitelist that is only a string prefix is a whitelist two widening
+     * mutations pass unobserved (measured: see that method's docblock). Three
+     * things must hold, and each one kills a mutation on its own: the id
+     * starts with the prefix, the rest of it is digits and nothing else, and
+     * those digits name a row the palette currently HAS.
+     *
+     * The last check is why this returns an index rather than a bool: it is
+     * the same staleness question {@see selectPaletteItem()} asks of the row
+     * it is about to run, deliberately asked twice rather than shared, since
+     * the two are different questions about the same number — "may this click
+     * be delivered at all" here, "is the row it names still the row the user
+     * pointed at" there, and the second survives a frame the first never saw.
+     */
+    private function paletteRowIndex(string $zoneId): ?int
+    {
+        if ($this->palette === null) {
+            return null;
+        }
+
+        $prefix = Renderer::PALETTE_ITEM_ZONE_PREFIX;
+        if (!str_starts_with($zoneId, $prefix)) {
+            return null;
+        }
+
+        $index = substr($zoneId, strlen($prefix));
+        if (preg_match('/\A\d+\z/', $index) !== 1) {
+            return null;
+        }
+
+        return (int) $index < count($this->paletteMatches()) ? (int) $index : null;
     }
 
     /**
@@ -3894,11 +4061,27 @@ final class Chat implements Model
      * §8 E6 asks explicitly for the click to "dispatch the same Msg/Cmd the
      * Enter key currently dispatches" rather than a parallel confirm path, so
      * this only moves `selectedIndex` onto the clicked row and then hands off
-     * to {@see runSelectedPaletteAction()} — the exact method
-     * {@see handlePaletteKey()}'s Enter arm calls. Everything that hangs off a
-     * confirm (mode transitions into the providers/themes list, the §4 E7 MRU
-     * bump, `Cmd::quit()` for Exit) therefore behaves identically whether the
-     * row was chosen with the keyboard or the mouse.
+     * to the exact method {@see handlePaletteKey()}'s Enter arm would reach in
+     * this state. Everything that hangs off a confirm (mode transitions into
+     * the providers/themes list, the §4 E7 MRU bump, `Cmd::quit()` for Exit)
+     * therefore behaves identically whether the row was chosen with the
+     * keyboard or the mouse.
+     *
+     * WHICH METHOD THAT IS DEPENDS ON `inFlight`, and a previous revision of
+     * this docblock named {@see runSelectedPaletteAction()} outright — true
+     * of an idle turn and false of every other, which is how the click came
+     * to run mid-turn what Enter refuses. Enter's arm has branched since
+     * (`$this->inFlight ? runSelectedPaletteActionWhileInFlight() : ...`), and
+     * with the palette open and a turn running the two devices then disagreed
+     * on 8 of the palette's 9 root rows — only `Exit` agreed, because it is
+     * the one row the mid-turn arm also allows. `New session` wiped the
+     * history a streaming reply was appending to; `Switch model` opened the
+     * providers submenu, whose own docblock calls it "the backend the running
+     * agentic loop is about to make its NEXT provider call on". So the branch
+     * is mirrored here rather than described, and
+     * {@see \SugarCraft\Crush\Tests\PaletteClickTest} drives every row
+     * through both devices in both states to keep the two arms from drifting
+     * apart again.
      *
      * The index is re-checked against the CURRENT match list rather than
      * trusted from the zone: zones describe the previously-painted frame, and
@@ -3920,8 +4103,11 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        return $this->mutate(['palette' => $this->palette->withSelectedIndex($row)])
-            ->runSelectedPaletteAction();
+        $onTheRow = $this->mutate(['palette' => $this->palette->withSelectedIndex($row)]);
+
+        return $this->inFlight
+            ? $onTheRow->runSelectedPaletteActionWhileInFlight()
+            : $onTheRow->runSelectedPaletteAction();
     }
 
     /**
@@ -4079,6 +4265,24 @@ final class Chat implements Model
      *   region marked for it. A click is ignored while the palette is
      *   already open: it captures keyboard input while up, so re-rooting it
      *   from underneath would undo navigation the keyboard cannot.
+     *
+     *   THAT ARM IS UNREACHABLE TODAY and is kept as an inner guard, with the
+     *   arithmetic stated rather than asserted. This method has exactly one
+     *   call site — {@see handleMouse()}, below
+     *   {@see refuseMouseDispatch()} — and that guard already refuses every
+     *   zone except the palette's own `picker-item:<n>` rows while the
+     *   palette is up, so `pane:menu` cannot arrive here with
+     *   `$this->palette` set. Measured: deleting this arm's `!== null` test
+     *   and always re-rooting reds NOTHING over the full suite (8778 tests, at
+     *   this commit).
+     *   It stays because it is the same rule stated where the state change
+     *   lives, and it is the arm that would still hold if a second caller
+     *   ever reached this method from somewhere the outer guard does not
+     *   cover. An earlier revision of {@see refuseMouseDispatch()} justified
+     *   keeping it as also answering "a stale zone id arriving from a frame
+     *   this method never scanned"; that was false and is withdrawn — both
+     *   tests read the SAME live `$this->palette` on the same instance, so
+     *   there is no frame one of them can see and the other cannot.
      * - {@see Pane::Agents} → the same `handleAgentsCommand('/agents')` the
      *   Ctrl+A shortcut and the palette's SwitchAgent action already run.
      *
