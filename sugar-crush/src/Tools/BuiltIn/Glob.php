@@ -352,15 +352,15 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // The bodies used to be prepended into this loop, one before each path
         // it governed, and then the whole thing was clipped — so the rules
         // were inside the budget and the paths were what the clip spent it on.
-        // MEASURED at this commit against the fixture in `ToolOutputBudgetTest`:
-        // a 7,211-byte `sub/CLAUDE.md` over five matched `.php` files returned
+        // MEASURED at 4a4ecb98 against the fixture in `ToolOutputBudgetTest`:
+        // a 9,611-byte `sub/CLAUDE.md` over five matched `.php` files returned
         // 195 bytes against a 200-byte cap containing the `BIG-RULE` heading, a
         // truncation marker, and ZERO of the five paths. The tool was asked
         // which files match and answered with a rule book.
         //
         // Grep had the opposite defect at the same commit — it appended the
         // bodies AFTER its clip, so the hits survived but the cap did not (400
-        // -> 7,737 bytes). The two tools answer the same shape of question and
+        // -> 10,096 bytes). The two tools answer the same shape of question and
         // now compose the same way: results, then notes, then a LABELLED
         // instruction section that has its own quarter of the budget and its
         // own marker.
@@ -377,7 +377,7 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
-        $reserve = $this->instructionBudget($this->maxOutputBytes);
+        $ceiling = $this->instructionSectionCeiling($this->maxOutputBytes);
 
         // Probed at the FLOOR — the smallest budget the final list can be
         // given — so every path whose instruction file is loaded below is
@@ -387,50 +387,59 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // `CLAUDE.md` of every matched directory for the whole session while
         // showing the model only the handful of paths that fit the cap.
         // {@see Grep::execute()} takes the same probe for the same reason.
+        // max(1, ...) and not max(0, ...): 0 is truncateOutput()'s "no cap"
+        // sentinel, so a cap small enough that a quarter rounds the floor to
+        // zero handed the probe an UNBOUNDED budget. MEASURED before this
+        // guard: Glob at maxOutputBytes = 1 returned 10,068 bytes — the whole
+        // rule book verbatim — where caps 2 to 8 returned 183.
+        // The floor is computed from instructionSectionCeiling() and NOT from
+        // the reserve, and the difference only shows at small caps: where a
+        // quarter cannot hold one body floor the section is allowed to spend
+        // that floor instead, because a rule governing a path the model was
+        // shown has to be surfaced somewhere. Sizing the floor with the same
+        // ceiling is what keeps the total inside the cap anyway — the result
+        // simply gives up the difference — and what keeps this probe no
+        // tighter than the final clip below, which is the property the
+        // announce-once mark depends on.
         $floor = $this->maxOutputBytes > 0
-            ? max(0, $this->maxOutputBytes - $reserve - 1)
+            ? max(1, $this->maxOutputBytes - $ceiling - 1)
             : 0;
         $probe = $this->truncateOutput($output, $floor);
         $shown = self::pathsIn($probe, $files);
 
-        $section = '';
-        $instructions = [];
-        foreach ($shown as $file) {
-            $loaded = $this->instructionLoader?->loadForPath($file);
-            if ($loaded !== null) {
-                $instructions[] = $loaded;
-            }
-        }
-        if ($instructions !== []) {
-            $label = sprintf(
-                "... [instructions: %d instruction file(s) govern the matched paths. "
-                . "Surfaced once per session, so they are shown here and not repeated.]\n",
-                count($instructions),
-            );
-            // max(1, ...) and not max(0, ...): 0 is this trait's "no cap"
-            // sentinel, so a label that eats the whole reserve would hand the
-            // bodies an UNBOUNDED budget — the exact defect being fixed,
-            // reintroduced by arithmetic.
-            $section = $label . $this->clipInstructionSet(
-                $instructions,
-                $reserve > 0 ? max(1, $reserve - strlen($label)) : 0,
-            );
-        }
+        // Bounded in COUNT as well as in bytes, and the count is decided
+        // BEFORE any body is loaded — see
+        // {@see \SugarCraft\Crush\Tools\Concerns\TruncatesOutput::instructionSection()}.
+        // Glob is where that matters most: `**\/*.php` over a real tree names
+        // hundreds of directories, and one floor-priced entry per directory
+        // is a section that grows without limit however the byte share is
+        // divided.
+        $section = $this->instructionSection($shown, $this->instructionLoader, $this->maxOutputBytes);
 
-        // max($floor, ...) is the guaranteed floor, and it is the property
-        // that actually fixes the reported bug: whatever the instruction
-        // section costs, the answer keeps three quarters of the cap. The
-        // section can exceed its own reserve only at caps small enough that
-        // the label and the marker no longer fit inside a quarter — a fixed
-        // ~210-byte overshoot, not a multiple of the instruction file's size,
-        // which is what it was before.
-        $budget = $this->maxOutputBytes;
-        if ($budget > 0 && $section !== '') {
-            $budget = max($floor, $budget - strlen($section) - 1);
-        }
-        // Clip before the notes and the nudge so those are not what gets cut
-        // off: they are the shortest and most actionable part of the result.
-        $output = $budget === $floor ? $probe : $this->truncateOutput($output, $budget);
+        // Clipped at the FLOOR whenever a rule was surfaced, and NOT at what
+        // the section happened to leave over. Spending the leftover would show
+        // more paths than the probe examined, and the rules of those extra
+        // paths are then neither announced nor spent — harmless, but it makes
+        // "the announce-once mark is spent on exactly what the model receives"
+        // an accident of how big the section came out rather than a law.
+        // MEASURED with the leftover spent, over
+        // `GrepInstructionWiringTest`'s six-directory fixture at cap 1024: the
+        // final clip showed aaa, bbb and fff where the probe had examined only
+        // bbb. Pinning the result at the floor makes probe and final clip the
+        // same cut, so what is ANNOUNCED is drawn from exactly the set that is
+        // VISIBLE. It is a containment and not an equality — the count bound
+        // can still withhold a path the probe examined, and says so in the
+        // result — but the direction that matters is closed: nothing is ever
+        // announced for a path the model cannot see.
+        //
+        // It costs only the calls that actually surface a rule, and only the
+        // difference between the cap and the three-quarter floor the split
+        // promises. Under announce-once that is the first touch of a
+        // directory; every call after it has no section and takes the whole
+        // cap, byte-identical to the same tool built with no loader at all.
+        $output = $section === ''
+            ? $this->truncateOutput($output, $this->maxOutputBytes)
+            : $probe;
 
         // The pruning has to announce itself for the same reason the byte cap
         // and the match cap do: a silently shortened list reads as a complete

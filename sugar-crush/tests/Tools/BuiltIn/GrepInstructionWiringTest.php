@@ -73,7 +73,7 @@ final class GrepInstructionWiringTest extends TestCase
 
         $content = $this->grep(new Grep($this->dir, instructionLoader: new InstructionFileLoader($this->dir)));
 
-        self::assertStringContainsString('... [instructions: 1 instruction file(s) govern the matched paths.', $content);
+        self::assertStringContainsString('... [instructions: 1 file(s) govern the matched paths', $content);
         self::assertTrue(
             strpos($content, '... [instructions:') < strpos($content, 'SUBDIR-RULE-ALPHA'),
             'the label must precede the body it labels',
@@ -182,10 +182,23 @@ final class GrepInstructionWiringTest extends TestCase
      * The names are illustrative and the assertions below do NOT depend on
      * them: `grep -rn` walks in readdir order, and the numbers additionally
      * move with the length of the temp root, since that prefix is repeated on
-     * every hit line. Which is why this asserts the EQUALITY of the two sets
-     * rather than their contents — and why it has to. An earlier version
-     * asserted only that SOME rule was absent from the output, and the
-     * raw-stdout variant passed it.
+     * every hit line.
+     *
+     * THIS ASSERTED SET EQUALITY AND NOW ASSERTS CONTAINMENT, WHICH IS A
+     * WEAKER RELATION AND THE ONLY ONE THAT WAS EVER A LAW. Equality held
+     * because the section happened to be large enough to pull the final clip
+     * down onto the probe; it was an artifact of one fixture's arithmetic, not
+     * a property of the code. The section is now bounded in COUNT as well as
+     * in bytes, so a call can legitimately show three paths and announce one —
+     * MEASURED here at cap 1024: visible [aaa,bbb,fff], announced [bbb], with
+     * `2 further path(s) not examined` said out loud. What must never happen
+     * is the reverse, and that is what containment forbids: the raw-stdout
+     * variant this test was written against announces rules for files the
+     * model cannot see, which puts a name in `announced` that is not in
+     * `visible` and fails below. The two assertions after it close the gap
+     * equality used to cover — the shortfall is COUNTED in the result, and
+     * every unannounced rule is still unspent, which is the thing that
+     * actually matters about a file that was not shown.
      */
     public function testTheAnnouncedRulesAreExactlyTheOnesWhoseHitsSurvivedTheClip(): void
     {
@@ -197,7 +210,7 @@ final class GrepInstructionWiringTest extends TestCase
         }
 
         $loader = new InstructionFileLoader($this->dir);
-        $content = $this->grep(new Grep($this->dir, 500, $loader));
+        $content = $this->grep(new Grep($this->dir, 1024, $loader));
 
         $visible = [];
         $announced = [];
@@ -216,14 +229,22 @@ final class GrepInstructionWiringTest extends TestCase
         self::assertNotSame([], $visible, 'fixture must leave at least one hit visible');
         self::assertNotSame($dirs, $visible, 'fixture must leave at least one hit clipped away');
 
+        self::assertNotSame([], $announced, 'the fixture must actually announce something');
         self::assertSame(
-            $visible,
-            $announced,
+            [],
+            array_values(array_diff($announced, $visible)),
             'a rule may be announced only for a file whose hits the model can actually see',
         );
 
-        // And the ones never shown are still unspent for whoever touches them next.
-        foreach (array_diff($dirs, $visible) as $d) {
+        // The shortfall equality used to cover is not silent: what was not
+        // looked at is counted in the result the model reads.
+        if ($announced !== $visible) {
+            self::assertStringContainsString('further path(s) not examined', $content);
+        }
+
+        // And every rule not announced — whether its file was shown or not —
+        // is still unspent for whoever touches it next.
+        foreach (array_diff($dirs, $announced) as $d) {
             $read = (new Read($this->dir, instructionLoader: $loader))
                 ->execute(['id' => 'r', 'file_path' => $this->dir . '/' . $d . '/' . str_repeat($d[0], 120) . '.php'])
                 ->content();

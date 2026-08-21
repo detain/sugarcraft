@@ -18,27 +18,41 @@ use SugarCraft\Crush\Tools\BuiltIn\Write;
  * Five tools compose a result out of two things: the answer, and the body of
  * the `CLAUDE.md`/`AGENTS.md` governing the paths the answer names. At
  * 4a4ecb98 the two were never budgeted against each other, and BOTH ways of
- * getting that wrong were live at once — measured by running the tools, over
- * the fixture below, with a 7,211-byte `sub/CLAUDE.md` and five matched files:
+ * getting that wrong were live at once.
  *
- *   Grep, cap 400  ->  7,737 bytes returned (19.3x the cap), hits intact:
- *                      the bodies were appended AFTER the clip, so they were
- *                      never inside the budget at all.
- *   Glob, cap 200  ->    195 bytes returned, ZERO of the five matched paths:
- *                      the bodies were prepended BEFORE the clip, so the
- *                      budget was spent on rules and the answer was what the
- *                      truncation marker reported as dropped.
- *   Read, cap 200  ->  7,428 bytes returned (37.1x the cap): same exemption
- *                      as Grep, on a tool whose cap is a per-file read bound.
+ * EVERY FIGURE BELOW IS MEASURED ON THE FIXTURE THIS FILE BUILDS — a 9,611-byte
+ * `sub/CLAUDE.md`, five matched `sub/needle-file-*.php`, and a 39-byte
+ * `sub/target.php` — by running the tools at 4a4ecb98 and again at HEAD. The
+ * first version of this docblock quoted a 7,211-byte `CLAUDE.md` and a
+ * 637-byte target, and reconciled with NEITHER: the two columns had been
+ * measured on two different fixtures and printed as one row.
  *
- * The fixtures here are deliberately ADVERSARIAL in both directions at once —
- * instruction text far larger than the cap AND a result far larger than the
- * cap — because a fixture shaped like the bug hides the bug: an instruction
- * file that happens to fit the budget passes against the broken code.
+ *   tool  cap    at 4a4ecb98                 now
+ *   Grep  400    10,096 B (25.2x), 2 hits    348 B (0.9x), 2 hits
+ *   Glob  200       195 B, 0 of 5 paths      200 B, 0 of 5 paths
+ *   Glob  400       387 B, 0 of 5 paths      321 B, 5 of 5 paths
+ *   Read  200     9,651 B (48.3x)            141 B (0.7x)
+ *   Read  400     9,651 B (24.1x)            141 B (0.4x)
  *
- * Two properties are asserted, and they are different properties that were
- * broken in different tools: the returned bytes stay inside the cap, and at
- * least one real result survives.
+ * Grep appended the bodies AFTER its clip, so they were never inside the
+ * budget at all; Glob prepended them BEFORE it, so the budget was spent on
+ * rules and the answer was what the truncation marker reported as dropped;
+ * Read's cap is a per-file read bound the body sat entirely outside.
+ *
+ * THE FIXTURES ARE ADVERSARIAL IN THREE DIRECTIONS, NOT TWO. Instruction text
+ * an order of magnitude over the cap, a result over the cap — and MANY
+ * GOVERNED DIRECTORIES, which is the shape the first cut of this fix missed
+ * entirely. One instruction file in one directory cannot show a per-file cost
+ * that is paid per file: with the byte share guarded but the count unbounded,
+ * this same code returned 129,517 bytes against its 65,536-byte default at 800
+ * governed directories and 144,245 at 1,500, and before the share was guarded
+ * at all it returned 1,091,833 at 500. Many files per directory does NOT
+ * reproduce it; many directories with few files each does.
+ *
+ * Three properties are asserted, and they were broken in three different
+ * places: the returned bytes stay inside the cap, at least one real result
+ * survives, and no instruction file is spent from the announce-once ledger
+ * without being shown.
  */
 final class ToolOutputBudgetTest extends TestCase
 {
@@ -128,15 +142,30 @@ final class ToolOutputBudgetTest extends TestCase
         }
     }
 
-    /** The other side of the same split: the rules cannot overrun their quarter. */
+    /**
+     * The other side of the same split: the rules cannot overrun their quarter.
+     *
+     * SEEDED WITH MANY GOVERNED DIRECTORIES, and that is the whole difference
+     * between this assertion and the one it replaces. That one used a single
+     * `sub/CLAUDE.md`, whose section came out at 250 bytes against a 1,024-byte
+     * bound — four times the headroom, so it could not have failed however
+     * badly the section was bounded. Here the section runs within tens of bytes
+     * of its quarter at every cap, so the bound is what is actually holding it:
+     * MEASURED at HEAD, 16,358 bytes against 16,384 with 500 governing
+     * directories and 16,363 with 1,500 of them.
+     */
     public function testTheInstructionSectionCannotOverrunItsQuarter(): void
     {
-        $this->seedOversizeInstructions();
-        $this->seedMatches(60);
+        $this->seedGovernedDirs(200);
 
-        foreach ([$this->grep(4096), $this->glob(4096)] as $content) {
-            $section = substr($content, strpos($content, '... [instructions:') ?: 0);
-            self::assertLessThanOrEqual(1024, strlen($section), 'a quarter of 4096');
+        foreach ([2048, 4096, 16384, 65536] as $cap) {
+            foreach (['Grep' => $this->grepAll($cap), 'Glob' => $this->globAll($cap)] as $tool => $content) {
+                self::assertLessThanOrEqual(
+                    intdiv($cap, 4),
+                    strlen(self::instructionSection($content)),
+                    "$tool at cap $cap: the section must stay inside its quarter",
+                );
+            }
         }
     }
 
@@ -169,8 +198,43 @@ final class ToolOutputBudgetTest extends TestCase
         $this->seedOversizeInstructions();
         $this->seedMatches(5);
 
-        self::assertStringContainsString('BIG-RULE', $this->grep(400));
-        self::assertStringContainsString('BIG-RULE', $this->glob(400));
+        self::assertStringContainsString('BIG-RULE', $this->grep(800));
+        self::assertStringContainsString('BIG-RULE', $this->glob(800));
+    }
+
+    /**
+     * Below the cap where a quarter can hold a rule at all, NOTHING is
+     * surfaced — and nothing is spent, which is what makes that acceptable.
+     *
+     * This is the resolution of a genuine conflict rather than an oversight.
+     * "The section spends at most a quarter" and "every governing file is
+     * shown" cannot both hold once the quarter is smaller than one entry, and
+     * the first cut of this change resolved it by quietly dropping the cap.
+     * The cap wins instead: the paths are simply never examined, so the
+     * announce-once ledger is untouched and the very next call with room in
+     * its reserve surfaces the rule in full. Asserted here end-to-end, because
+     * "nothing was lost" is the only thing that makes silence defensible.
+     */
+    public function testACapTooSmallForARuleSurfacesNothingAndSpendsNothing(): void
+    {
+        $this->seedOversizeInstructions();
+        $this->seedMatches(5);
+
+        $loader = new InstructionFileLoader($this->dir);
+        $content = (new Grep($this->dir, 400, $loader))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+
+        self::assertLessThanOrEqual(400, strlen($content));
+        self::assertStringNotContainsString('BIG-RULE', $content);
+        self::assertSame([], $loader->emittedPaths(), 'a rule not shown must not be spent');
+
+        // Still there for the next caller with room for it.
+        $later = (new Read($this->dir, 8192, null, $loader))
+            ->execute(['file_path' => $this->dir . '/sub/needle-file-000.php'])
+            ->content();
+
+        self::assertStringContainsString('BIG-RULE', $later);
     }
 
     // =========================================================================
@@ -218,6 +282,14 @@ final class ToolOutputBudgetTest extends TestCase
             ->content();
 
         self::assertSame($withoutLoader, $withLoader, 'an unused reserve must not shorten the answer');
+
+        // And asserted in ABSOLUTE bytes as well as by comparison. The two
+        // calls above run the same code, so pinning BOTH of them at the
+        // three-quarter floor keeps them identical and passes — MEASURED at
+        // HEAD, 2,011 bytes against a floor of 1,805. Only the absolute
+        // assertion can tell "the reserve was not taken" from "it was taken
+        // from both".
+        self::assertGreaterThan(2048 - 242 - 1, strlen($withLoader), 'the whole cap, not the floor');
     }
 
     /**
@@ -233,6 +305,12 @@ final class ToolOutputBudgetTest extends TestCase
             ->content();
 
         self::assertSame($withoutLoader, $this->glob(2048));
+
+        // Absolute, for the reason the Grep half is: the two calls run the
+        // same code, so clipping BOTH at the three-quarter floor would keep
+        // them identical and pass. MEASURED at HEAD, 2,001 bytes against a
+        // floor of 1,805.
+        self::assertGreaterThan(2048 - 242 - 1, strlen($this->glob(2048)), 'the whole cap, not the floor');
     }
 
     // =========================================================================
@@ -290,7 +368,7 @@ final class ToolOutputBudgetTest extends TestCase
      * for do you get" — so the file's own share is deliberately NOT reduced to
      * pay for the rules. The total is therefore bounded at the cap PLUS the
      * instruction reserve, which is a stated 1.25x where it used to be an
-     * unbounded multiple (37.1x measured).
+     * unbounded multiple (48.3x measured).
      */
     public function testReadBoundsTheInstructionBodyItPrepends(): void
     {
@@ -338,8 +416,347 @@ final class ToolOutputBudgetTest extends TestCase
     }
 
     // =========================================================================
+    // Many governed directories — the shape one directory cannot show
+    // =========================================================================
+
+    /**
+     * THE SHIPPED DEFAULT, THROUGH THE CONSTRUCTOR A CALLER ACTUALLY USES.
+     *
+     * `new Glob($dir, $loader)` with no cap argument is what the tool registry
+     * builds, and it is where the first cut of this fix failed worst: the set
+     * loop handed `intdiv($remaining, $count - $i)` straight into a helper
+     * whose documented "no cap" sentinel is a non-positive budget, so once the
+     * reserve ran out every remaining body was emitted verbatim. MEASURED at
+     * f1fda934, two files and one `CLAUDE.md` per directory:
+     *
+     *   200 dirs ->   199,767 B (3.0x)
+     *   300 dirs ->   551,537 B (8.4x)
+     *   500 dirs -> 1,091,833 B (16.7x)
+     *
+     * Nothing in the suite at that commit failed, because every fixture in it
+     * had one instruction file in one directory.
+     */
+    public function testTheShippedDefaultCapHoldsOverManyGovernedDirectories(): void
+    {
+        $this->seedGovernedDirs(300);
+
+        $glob = (new Glob($this->dir, new InstructionFileLoader($this->dir)))
+            ->execute(['pattern' => '**/*.php', 'path' => $this->dir])
+            ->content();
+        $grep = (new Grep($this->dir, 65536, new InstructionFileLoader($this->dir)))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+
+        self::assertLessThanOrEqual(65536, strlen($glob), 'Glob at the shipped default');
+        self::assertLessThanOrEqual(65536, strlen($grep), 'Grep at the shipped default');
+        self::assertGreaterThanOrEqual(1, $this->pathCount($glob), 'a real result must survive');
+    }
+
+    /**
+     * A BYTE BOUND IS NECESSARY AND IS NOT SUFFICIENT.
+     *
+     * Every entry costs a floor — its heading, its own marker, the newline
+     * between entries — that no byte share is charged for, so a section with
+     * one entry per governing file grows LINEARLY in the number of governing
+     * files whatever the share arithmetic says. MEASURED with the share
+     * guarded and the count unbounded, one file per directory: 800 directories
+     * -> 129,517 B (2.0x the default cap), 1,500 -> 144,245 B (2.2x). The count
+     * is therefore bounded too, and this asserts the consequence: the same cap
+     * holds, and the same handful of entries appears, whether 200 directories
+     * govern the answer or 800.
+     */
+    public function testTheEntryCountIsBoundedSoTheSectionCannotGrowWithTheTree(): void
+    {
+        $sizes = [];
+        foreach ([200, 800] as $dirs) {
+            self::rmrf($this->dir);
+            mkdir($this->dir . '/sub', 0o777, true);
+            $this->seedGovernedDirs($dirs);
+
+            $content = $this->globAll(65536);
+            $sizes[$dirs] = substr_count($content, '# BIG-RULE-D');
+
+            self::assertLessThanOrEqual(65536, strlen($content), "cap at $dirs governed dirs");
+            self::assertLessThanOrEqual(
+                16384,
+                strlen(self::instructionSection($content)),
+                "quarter at $dirs governed dirs",
+            );
+        }
+
+        self::assertSame($sizes[200], $sizes[800], 'the entry count must not track the tree size');
+    }
+
+    /**
+     * The count bound is applied BEFORE the load, and that ordering is the
+     * whole of it.
+     *
+     * {@see InstructionFileLoader::loadForPath()} marks a file emitted AT LOAD
+     * TIME, so bounding the count by loading every body and dropping the ones
+     * that do not fit would retire instruction files for the whole session
+     * that the model never saw — the same defect the bound was added to fix,
+     * wearing a bound. A path that is never EXAMINED is never marked.
+     */
+    public function testNoInstructionFileIsSpentWithoutBeingShown(): void
+    {
+        $this->seedGovernedDirs(300);
+
+        $loader = new InstructionFileLoader($this->dir);
+        $content = (new Glob($this->dir, $loader, [], null, 16384))
+            ->execute(['pattern' => '**/*.php', 'path' => $this->dir])
+            ->content();
+
+        self::assertNotSame([], $loader->emittedPaths(), 'the fixture must spend something');
+
+        foreach ($loader->emittedPaths() as $emitted) {
+            self::assertStringContainsString(
+                '# ' . trim(explode("\n", (string) file_get_contents($emitted))[0], '# '),
+                $content,
+                "instruction file $emitted was retired for the session without being shown",
+            );
+        }
+    }
+
+    /**
+     * What was not looked at is COUNTED, not silently dropped.
+     *
+     * A section that shows five rules out of three hundred and says nothing
+     * about the other two hundred and ninety-five reads as the complete set of
+     * rules governing the answer, which is the same class of wrong-and-
+     * confident that the result truncation marker exists to prevent.
+     */
+    public function testThePathsNotExaminedForRulesAreCounted(): void
+    {
+        $this->seedGovernedDirs(300);
+
+        foreach (['Grep' => $this->grepAll(16384), 'Glob' => $this->globAll(16384)] as $tool => $content) {
+            self::assertStringContainsString('further path(s) not examined', $content, $tool);
+        }
+    }
+
+    /**
+     * The room left is re-read before every entry rather than divided 1/n up
+     * front, so a short rule leaves its unused room to the rules after it.
+     *
+     * MEASURED over the two-directory fixture below at cap 4096: the section
+     * comes to 983 bytes of its 1,024-byte quarter. Handing each of the two
+     * bodies a fixed half instead caps the long one at ~470 and the section at
+     * ~577, which is the arithmetic this assertion rejects.
+     */
+    public function testAShortRuleLeavesItsUnusedRoomToTheNextOne(): void
+    {
+        foreach (['tiny' => "# TINY\n", 'huge' => "# HUGE\n" . str_repeat("RULE: a long instruction line.\n", 600)] as $name => $body) {
+            mkdir($this->dir . '/' . $name);
+            file_put_contents($this->dir . '/' . $name . '/CLAUDE.md', $body);
+            file_put_contents($this->dir . '/' . $name . '/needle-file-00.php', "<?php\n// NEEDLE_TOKEN\n");
+        }
+
+        $section = self::instructionSection($this->globAll(4096));
+
+        self::assertGreaterThanOrEqual(800, strlen($section), 'the unused room must reach the next rule');
+        self::assertLessThanOrEqual(1024, strlen($section), 'and must still stay inside the quarter');
+    }
+
+    /**
+     * A window with NO newline in it is a FRAGMENT of the first line, and the
+     * bounded head beats it.
+     *
+     * The result clip keeps a partial line on purpose — for a hit list a
+     * fragment beats nothing. For a rule it does not: the fallback is there so
+     * a withheld rule NAMES ITS SUBJECT, and 9 bytes of a heading names it no
+     * better than none. Worse, it made a smaller budget produce a BETTER
+     * answer, because only an empty window took the head path at all.
+     *
+     * MEASURED over the fixture below at a $maxBytes of 400: the room left
+     * after the marker is 9 bytes, so the fragment is 9 'H's, where the head
+     * carries 120 and reaches the marker 60 bytes in.
+     */
+    public function testAHeadingLongerThanTheRoomIsKeptToTheHeadNotToTheRoom(): void
+    {
+        file_put_contents(
+            $this->dir . '/sub/CLAUDE.md',
+            str_repeat('H', 60) . 'HEADING-TAIL' . str_repeat('H', 200) . "\n"
+            . str_repeat("RULE line that goes on.\n", 400),
+        );
+        file_put_contents($this->dir . '/sub/target.php', "<?php\n");
+
+        foreach ([400, 800] as $cap) {
+            $content = (new Read($this->dir, $cap, null, new InstructionFileLoader($this->dir)))
+                ->execute(['file_path' => $this->dir . '/sub/target.php'])
+                ->content();
+
+            self::assertStringContainsString('HEADING-TAIL', $content, "at maxBytes $cap");
+            self::assertStringContainsString('instructions truncated:', $content, "at maxBytes $cap");
+        }
+    }
+
+    // =========================================================================
+    // The sentinel that a quarter can round down to
+    // =========================================================================
+
+    /**
+     * A non-positive budget is this trait's "no cap" sentinel throughout, so a
+     * cap small enough for `intdiv($cap, 4)` to round the reserve to ZERO used
+     * to disable the very bound it was computing. MEASURED at f1fda934:
+     * `Glob` at a cap of 1 returned 10,068 bytes — the whole rule book verbatim
+     * — where caps 2 to 8 returned 183; `Read` at a $maxBytes of 1, 2 and 3
+     * returned 9,629, 9,630 and 9,631 where 4 returned 122.
+     */
+    public function testACapWhoseQuarterRoundsToZeroStillBoundsTheRules(): void
+    {
+        $this->seedOversizeInstructions();
+        $this->seedMatches(300);
+        file_put_contents($this->dir . '/sub/target.php', "<?php\n// the file the caller asked for\n");
+
+        // 300 matches, not five: at a cap whose floor rounds to the sentinel
+        // the probe is UNBOUNDED, and a five-file fixture is small enough to
+        // fit inside the cap anyway — it cannot tell a bound from its absence.
+        // MEASURED with the floor guard removed: 16,724 bytes at every one of
+        // these caps, against 187 to 241 with it.
+        //
+        // Bounded against the UNWIRED tool at the same cap rather than against
+        // a round number, because a round number is where this hid: at a cap
+        // of 100 the guarded Grep returns 187 bytes and the unguarded one 298,
+        // and both are under any bound loose enough to be written by hand.
+        // Wiring a loader may not make a result LONGER than the same tool
+        // without one, beyond the cap itself — which is the property, stated
+        // in the units the failure actually moves.
+        foreach ([1, 2, 3, 4, 100, 200, 243] as $cap) {
+            $bareGlob = (new Glob($this->dir, null, [], null, $cap))
+                ->execute(['pattern' => 'sub/*.php', 'path' => $this->dir])
+                ->content();
+            $bareGrep = (new Grep($this->dir, $cap))
+                ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+                ->content();
+
+            self::assertLessThanOrEqual(
+                max($cap, strlen($bareGlob)),
+                strlen($this->glob($cap)),
+                "Glob at cap $cap must not fall through to the no-cap sentinel",
+            );
+            self::assertLessThanOrEqual(
+                max($cap, strlen($bareGrep)),
+                strlen($this->grep($cap)),
+                "Grep at cap $cap must not fall through to the no-cap sentinel",
+            );
+        }
+
+        // Read's quarter rounds to zero the same way, and its body was then
+        // bounded by nothing: MEASURED at f1fda934, 9,629 / 9,630 / 9,631
+        // bytes at $maxBytes 1, 2 and 3 where 4 returned 122.
+        foreach ([1, 2, 3, 4] as $cap) {
+            $read = (new Read($this->dir, $cap, null, new InstructionFileLoader($this->dir)))
+                ->execute(['file_path' => $this->dir . '/sub/target.php'])
+                ->content();
+
+            self::assertLessThanOrEqual(1024, strlen($read), "Read at maxBytes $cap");
+        }
+    }
+
+    // =========================================================================
+    // What the bytes are, not just how many
+    // =========================================================================
+
+    /**
+     * The heading clip is the one cut in this path with no line-boundary
+     * fallback behind it, so a plain byte cut lands inside a UTF-8 sequence
+     * and puts invalid bytes into a result the model reads. MEASURED through
+     * `Read` before the fix, first line 118 'A' then U+2014: the output bytes
+     * at offset 114 were `41 41 41 41 e2 80 0a`, a truncated three-byte
+     * sequence, and `mb_check_encoding()` returned false at first-line offsets
+     * 118 and 119.
+     *
+     * The result clip is swept too. Its newline trim RESCUES a mid-sequence
+     * cut only when the kept window holds a newline, and the case it documents
+     * as keeping a partial line is exactly the case where it does not: a
+     * single-line file returned invalid UTF-8 at caps 439 and 440.
+     */
+    public function testAClippedRuleAndAClippedHitStayValidUtf8(): void
+    {
+        file_put_contents($this->dir . '/sub/target.php', "<?php\n");
+
+        for ($run = 116; $run <= 121; $run++) {
+            file_put_contents(
+                $this->dir . '/sub/CLAUDE.md',
+                str_repeat('A', $run) . "\u{2014}" . str_repeat('B', 60) . "\n"
+                . str_repeat("RULE: a long instruction line that keeps going.\n", 200),
+            );
+
+            $content = (new Read($this->dir, 200, null, new InstructionFileLoader($this->dir)))
+                ->execute(['file_path' => $this->dir . '/sub/target.php'])
+                ->content();
+
+            self::assertTrue(mb_check_encoding($content, 'UTF-8'), "heading cut at first-line offset $run");
+        }
+
+        file_put_contents(
+            $this->dir . '/sub/min.js',
+            'NEEDLE_TOKEN ' . str_repeat('x', 200) . "\u{2014}" . str_repeat('y', 4000) . "\n",
+        );
+
+        // The cut lands at a fixed offset from the START of the hit line, and
+        // a hit line begins with the file's own path — so the caps that split
+        // the sequence move with the length of the temp root and cannot be
+        // written down as constants. MEASURED with the byte cut restored:
+        // invalid UTF-8 at exactly `strlen($path) + 402` and `+ 403`.
+        $offset = strlen($this->dir . '/sub/min.js');
+
+        foreach (range($offset + 400, $offset + 405) as $cap) {
+            $content = (new Grep($this->dir, $cap))
+                ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+                ->content();
+
+            self::assertTrue(mb_check_encoding($content, 'UTF-8'), "hit cut at cap $cap");
+        }
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    /**
+     * MANY DIRECTORIES, FEW FILES EACH — the shape that reproduces a
+     * per-governing-file cost, and the one no fixture in this file had.
+     *
+     * Many files inside ONE directory does not reproduce it: announce-once
+     * means the second file in a directory loads nothing, so a thousand
+     * matches under one `CLAUDE.md` still cost exactly one entry.
+     */
+    private function seedGovernedDirs(int $dirs, int $filesPerDir = 2): void
+    {
+        for ($d = 0; $d < $dirs; $d++) {
+            mkdir($this->dir . "/d$d");
+            file_put_contents(
+                $this->dir . "/d$d/CLAUDE.md",
+                "# BIG-RULE-D$d\n" . str_repeat("RULE: a long instruction line that keeps going.\n", 70),
+            );
+            for ($i = 0; $i < $filesPerDir; $i++) {
+                file_put_contents(sprintf('%s/d%d/needle-file-%02d.php', $this->dir, $d, $i), "<?php\n// NEEDLE_TOKEN\n");
+            }
+        }
+    }
+
+    /** Grep over the whole fixture root, not only `sub/`. */
+    private function grepAll(int $cap): string
+    {
+        return $this->grep($cap);
+    }
+
+    /** Glob over the whole fixture root, not only `sub/`. */
+    private function globAll(int $cap): string
+    {
+        return (new Glob($this->dir, new InstructionFileLoader($this->dir), [], null, $cap))
+            ->execute(['pattern' => '**/*.php', 'path' => $this->dir])
+            ->content();
+    }
+
+    /** Everything from the instruction label onward, i.e. the rules section. */
+    private static function instructionSection(string $content): string
+    {
+        $at = strpos($content, '... [instructions:');
+
+        return $at === false ? '' : substr($content, $at);
+    }
 
     private function seedOversizeInstructions(): void
     {

@@ -251,12 +251,12 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // hit list keeps three quarters of the cap no matter how large the
         // governing CLAUDE.md is.
         //
-        // MEASURED at this commit against the fixture in
-        // `ToolOutputBudgetTest`: a 7,211-byte `sub/CLAUDE.md` over five
-        // matched files returned 7,737 bytes against a 400-byte cap (19.3x)
+        // MEASURED at 4a4ecb98 against the fixture in
+        // `ToolOutputBudgetTest`: a 9,611-byte `sub/CLAUDE.md` over five
+        // matched files returned 10,096 bytes against a 400-byte cap (25.2x)
         // before this reservation existed, because the bodies were appended
         // AFTER the clip and so were never inside the budget at all.
-        $reserve = $this->instructionBudget($this->maxOutputBytes);
+        $ceiling = $this->instructionSectionCeiling($this->maxOutputBytes);
 
         // The probe exists to answer ONE question — which hits will still be
         // in the result once the instruction section has taken its share — and
@@ -271,8 +271,23 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         //
         // See Bash::execute() for why the merge's account is what gets clipped
         // rather than the capture's raw byte totals.
+        // max(1, ...) and not max(0, ...): 0 is truncateMerged()'s "no cap"
+        // sentinel, so a cap small enough that a quarter rounds the floor to
+        // zero would hand the probe an UNBOUNDED budget. Grep is spared the
+        // consequence Glob measured only because its capture is pre-bounded by
+        // runCaptured(); the guard belongs here anyway, since a guarantee that
+        // holds by accident in one tool is not a guarantee.
+        // The floor is computed from instructionSectionCeiling() and NOT from
+        // the reserve, and the difference only shows at small caps: where a
+        // quarter cannot hold one body floor the section is allowed to spend
+        // that floor instead, because a rule governing a path the model was
+        // shown has to be surfaced somewhere. Sizing the floor with the same
+        // ceiling is what keeps the total inside the cap anyway — the result
+        // simply gives up the difference — and what keeps this probe no
+        // tighter than the final clip below, which is the property the
+        // announce-once mark depends on.
         $floor = $this->maxOutputBytes > 0
-            ? max(0, $this->maxOutputBytes - $reserve - 1)
+            ? max(1, $this->maxOutputBytes - $ceiling - 1)
             : 0;
         $probe = $this->truncateMerged($merged, $floor);
 
@@ -281,53 +296,47 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         if ($this->instructionLoader !== null || $this->skillNudge !== null) {
             $hitFiles = self::hitFiles($probe, $path);
 
-            $instructions = [];
-            foreach ($hitFiles as $file) {
-                $loaded = $this->instructionLoader?->loadForPath($file);
-                if ($loaded !== null) {
-                    $instructions[] = $loaded;
-                }
-            }
-
             // LABELLED, where Read emits the body raw. Read puts it where
             // position alone explains it — at the top of the one file being
             // read. Here it lands after a run of `... [note]` lines at the end
             // of a record stream, and an unlabelled markdown blob in that
             // position is indistinguishable from tool output that failed to
-            // parse. Glob labels it the same way, for the same reason and in
-            // the same place: the two tools answer the same shape of question
-            // and used to disagree about where the rules go.
-            if ($instructions !== []) {
-                $label = sprintf(
-                    "... [instructions: %d instruction file(s) govern the matched paths. "
-                    . "Surfaced once per session, so they are shown here and not repeated.]\n",
-                    count($instructions),
-                );
-                // max(1, ...) and not max(0, ...): 0 is this trait's "no cap"
-                // sentinel, so a label that eats the whole reserve would hand
-                // the bodies an UNBOUNDED budget — the exact defect being
-                // fixed, reintroduced by arithmetic.
-                $section = $label . $this->clipInstructionSet(
-                    $instructions,
-                    $reserve > 0 ? max(1, $reserve - strlen($label)) : 0,
-                );
-            }
+            // parse. Glob composes the identical section from the identical
+            // helper, for the same reason and in the same place: the two tools
+            // answer the same shape of question and used to disagree about
+            // where the rules go.
+            //
+            // Bounded in COUNT as well as in bytes, and the count is decided
+            // BEFORE any body is loaded, so a path whose rules do not fit is
+            // not retired for the session — see
+            // {@see \SugarCraft\Crush\Tools\Concerns\TruncatesOutput::instructionSection()}.
+            $section = $this->instructionSection($hitFiles, $this->instructionLoader, $this->maxOutputBytes);
         }
 
-        // max($floor, ...) is the guaranteed floor, and it is the property
-        // that actually fixes the reported bug: whatever the instruction
-        // section costs, the answer keeps three quarters of the cap. The
-        // section can exceed its own reserve only at caps small enough that
-        // the label and the marker no longer fit inside a quarter — a fixed
-        // ~210-byte overshoot, not a multiple of the instruction file's size,
-        // which is what it was before.
-        $budget = $this->maxOutputBytes;
-        if ($budget > 0 && $section !== '') {
-            $budget = max($floor, $budget - strlen($section) - 1);
-        }
-        // Identical to the pre-reservation clip whenever no instruction file
-        // governs a hit, which is every call after the first in a session.
-        $content = $budget === $floor ? $probe : $this->truncateMerged($merged, $budget);
+        // Clipped at the FLOOR whenever a rule was surfaced, and NOT at what
+        // the section happened to leave over. Spending the leftover would show
+        // more paths than the probe examined, and the rules of those extra
+        // paths are then neither announced nor spent — harmless, but it makes
+        // "the announce-once mark is spent on exactly what the model receives"
+        // an accident of how big the section came out rather than a law.
+        // MEASURED with the leftover spent, over
+        // `GrepInstructionWiringTest`'s six-directory fixture at cap 1024: the
+        // final clip showed aaa, bbb and fff where the probe had examined only
+        // bbb. Pinning the result at the floor makes probe and final clip the
+        // same cut, so what is ANNOUNCED is drawn from exactly the set that is
+        // VISIBLE. It is a containment and not an equality — the count bound
+        // can still withhold a path the probe examined, and says so in the
+        // result — but the direction that matters is closed: nothing is ever
+        // announced for a path the model cannot see.
+        //
+        // It costs only the calls that actually surface a rule, and only the
+        // difference between the cap and the three-quarter floor the split
+        // promises. Under announce-once that is the first touch of a
+        // directory; every call after it has no section and takes the whole
+        // cap, byte-identical to the same tool built with no loader at all.
+        $content = $section === ''
+            ? $this->truncateMerged($merged, $this->maxOutputBytes)
+            : $probe;
 
         $skipped = self::presentExcludedDirs($path, $rules);
         if ($skipped !== []) {
@@ -351,14 +360,28 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
-        // The two `... [note]` lines above and the nudge below are the ONE
-        // thing still outside the cap, and that is a bounded, deliberate
-        // exemption rather than the unbounded one this reservation replaced.
-        // Each is a single sentence whose length is set by directory names or
-        // skill names, they are the only place the escape hatch appears, and
-        // an escape hatch the budget sacrifices is not a hatch. The
-        // instruction bodies were the unbounded term — a whole markdown file,
-        // and as many of them as there are matched directories.
+        // The `... [note]` lines above and the nudge below are the ONE thing
+        // still outside the cap. The notes are a bounded exemption: each is a
+        // single sentence whose length is set by directory names drawn from
+        // {@see IgnoreRules::DEFAULT_EXCLUDED_DIRS}, a fixed four-name list —
+        // seeded with 2,000 gitignored directories carrying 180-byte names,
+        // the note measured 46 bytes.
+        //
+        // THE NUDGE IS NOT BOUNDED, AND CALLING IT "ONE SENTENCE SIZED BY
+        // SKILL NAMES" UNDERSTATED IT.
+        // {@see \SugarCraft\Crush\Skills\SkillPathNudge::forPaths()} emits one
+        // line PER MATCHING SKILL, and each line carries that skill's full
+        // `SKILL.md` `description` — arbitrary-length repository content, not
+        // a name. Its real bound is the number of auto-invocable skills whose
+        // `paths:` frontmatter matches, times the length of their
+        // descriptions, and it is announce-once so it is paid on the first
+        // matching call of a session. Recorded as E57 in the hardening backlog
+        // rather than fixed here, because bounding it belongs with the nudge
+        // and not with this reservation.
+        //
+        // What the reservation replaced was a different order of magnitude
+        // again: a whole markdown file, and as many of them as there are
+        // matched directories.
         if ($section !== '') {
             $content = self::separated($content);
             $content .= $section;

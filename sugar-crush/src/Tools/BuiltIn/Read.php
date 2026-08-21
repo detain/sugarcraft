@@ -234,12 +234,12 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
             //
             // BOUNDED, which it was not. $maxBytes is a per-file READ bound —
             // "how much of the file the model asked for does it get" — and the
-            // instruction body was outside it entirely. MEASURED at this
-            // commit against `ToolOutputBudgetTest`'s fixture: a 7,211-byte
-            // `sub/CLAUDE.md` in front of a 637-byte file, read at a 200-byte
-            // cap, returned 7,428 bytes — 37.1x, of which 200 were the file.
+            // instruction body was outside it entirely. MEASURED at 4a4ecb98
+            // against `ToolOutputBudgetTest`'s fixture: a 9,611-byte
+            // `sub/CLAUDE.md` in front of a 39-byte file, read at a 200-byte
+            // cap, returned 9,651 bytes — 48.3x, of which 39 were the file.
             // The body now gets its own quarter of $maxBytes with its own
-            // marker; the same call now returns 318 bytes.
+            // marker; the same call now returns 141 bytes.
             //
             // The FILE's share is deliberately NOT reduced to pay for it. A
             // read that returns less of the file because a sibling CLAUDE.md
@@ -248,11 +248,19 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
             // budget spent on the wrong content. So the total is bounded at
             // $maxBytes plus the instruction reserve rather than at $maxBytes
             // — a stated 1.25x, replacing an unbounded multiple.
+            //
+            // max(1, ...) and not the raw quarter: 0 is clipInstructions()'s
+            // "no cap" sentinel, so a $maxBytes small enough for intdiv() to
+            // round the quarter to zero disabled the bound entirely. MEASURED
+            // before this guard, on the same fixture: $maxBytes of 1, 2 and 3
+            // returned 9,629, 9,630 and 9,631 bytes — the whole rule book —
+            // where 4 returned 122. Glob had the same knife-edge one layer up.
             $nestedContent = $this->instructionLoader?->loadForPath($path);
             if ($nestedContent !== null) {
+                $reserve = $this->instructionBudget($this->maxBytes);
                 $content = $this->clipInstructions(
                     $nestedContent,
-                    $this->instructionBudget($this->maxBytes),
+                    $this->maxBytes > 0 ? max(1, $reserve) : $reserve,
                 ) . "\n" . $content;
             }
 

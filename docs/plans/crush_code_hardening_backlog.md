@@ -2933,22 +2933,27 @@ quarters as a guaranteed floor, and the two sections carry different markers —
 `these project rules are PARTIAL`, because "narrow the query to see the rest" is advice no pattern the
 model can write will act on.
 
-Measured by running the tools, at `4a4ecb98` and again after, over one fixture — a 7,211-byte
-`sub/CLAUDE.md` and five matched `sub/*.php`:
+Measured by running the tools over ONE fixture — the one `ToolOutputBudgetTest` builds: a 9,611-byte
+`sub/CLAUDE.md`, five matched `sub/*.php`, and a 39-byte `sub/target.php`.
 
-| tool | cap | before | after |
-| --- | --- | --- | --- |
-| `Grep` | 400 | 7,737 B (19.3×), 5 hits | 498 B (1.2×), 1 hit |
-| `Glob` | 200 | 195 B, **0 of 5 paths** | 200 B, 0 of 5 paths (the base marker, not the rules — the list alone is 225 B) |
-| `Glob` | 400 | 375 B, **0 of 5 paths** | 462 B (1.2×), **5 of 5 paths** |
-| `Read` | 200 | 7,428 B (37.1×) | 318 B (1.6×) |
-| `Read` | 400 | 7,628 B (19.1×) | 517 B (1.3×) |
+| tool | cap | `4a4ecb98` | `f1fda934` | now |
+| --- | --- | --- | --- | --- |
+| `Grep` | 400 | 10,096 B (25.2×), 2 hits | 503 B (1.3×), 1 hit | 348 B (0.9×), 2 hits |
+| `Glob` | 200 | 195 B, **0 of 5 paths** | 200 B, 0 of 5 | 200 B, 0 of 5 (the base marker, not the rules — the list alone is 225 B) |
+| `Glob` | 400 | 387 B, **0 of 5 paths** | 530 B, 2 of 5 | 321 B, **5 of 5 paths** |
+| `Read` | 200 | 9,651 B (48.3×) | 141 B | 141 B |
+| `Read` | 400 | 9,651 B (24.1×) | 140 B | 141 B |
 
-At a realistic cap the split lands where it is designed to: on the same fixture, cap 8,000 returns
-2,332 B of which the instruction section is 1,978 B against its 2,000-byte quarter (cap 2,000 → 832 B,
-section 478 B against a 500-byte quarter). With no instruction file to surface
-the result is byte-identical to the same tool built with no loader at all, so the reserve costs nothing
-on the calls (almost all of them, under announce-once) that have nothing to put in it.
+**The `f1fda934` row of that table was wrong in BOTH columns, and both errors were the recurring
+defect.** It quoted a 7,211-byte `CLAUDE.md` and a 637-byte target in five places while the fixture it
+cited is 9,611 and 39 bytes; the "before" column reconciled with neither (7,428 against 7,412 for a
+7,211-byte body and 9,812 for the shipped one), and the "after" column had been measured on a
+different, larger target file again — 318 B where the shipped fixture returns 141. Two fixtures, one
+row. Re-measured above at all three revisions in a single run.
+
+With no instruction file to surface the result is byte-identical to the same tool built with no loader
+at all, so the reserve costs nothing on the calls (almost all of them, under announce-once) that have
+nothing to put in it.
 
 Two further findings from the sweep, both fixed here:
 
@@ -2961,16 +2966,61 @@ Two further findings from the sweep, both fixed here:
   `CLAUDE.md` for the whole session while showing the model only the paths that fit. It now probes at
   the result floor first and loads only for paths that survive — the doctrine `Grep` already followed.
 
-Residual, stated rather than hidden: the `... [skipped: …]`, `... [gitignored: …]`, `... [pruned: …]`,
-`... [symlinks: …]` notes and the skill nudge remain outside the cap. Each is one sentence sized by
-directory or skill names, and each is the only place its escape hatch appears — an escape hatch the
-budget sacrifices is not a hatch. Below a cap of roughly 700 bytes the instruction label and marker no
-longer fit inside a quarter and the section overruns its reserve by a fixed ~210 bytes; the result
-floor still holds, because the result budget is `max(floor, cap - section)`.
+### ROUND 37 `lsp` — REVIEW FIX. The cap was unbounded at the shipped default
 
-Tests: `sugar-crush/tests/Tools/ToolOutputBudgetTest.php` (13 tests, 59 assertions), fixtures
-adversarial in both directions at once. Three stale claims corrected while here:
-`GrepInstructionWiringTest`'s docblock contrasting itself with a prepending `Glob`,
+`f1fda934` split the cap and then handed the split's arithmetic straight into the helper whose
+documented "no cap" sentinel is a non-positive budget — the exact trap its own docblock names, thirty
+lines above the loop that walked into it. Once the reserve ran out `intdiv(0, n)` hit the sentinel and
+every remaining body came back verbatim. Measured through `new Glob($dir, $loader)` at the shipped
+65,536-byte default, one `CLAUDE.md` and two files per directory: **200 directories → 199,767 B,
+300 → 551,537 B, 500 → 1,091,833 B (16.7×)**. Worse than the exemption the commit closed, and no test
+in the suite noticed, because every fixture in it had one instruction file in one directory.
+
+A byte guard alone does not fix it. Each entry costs a floor no share is charged for, so the section
+grows linearly in the number of governing files: measured with the share guarded and the count
+unbounded, one file per directory, 800 directories returned **129,517 B (2.0×)** and 1,500 returned
+**144,245 B (2.2×)**. It plateaus there only because `Glob::DEFAULT_MAX_MATCHES` stops the walk at a
+thousand paths — a ceiling on a different quantity, in one of the two tools. The count is now bounded too — and it is
+bounded **before `loadForPath()`**, because that call marks a file emitted at load time, so
+loading-then-dropping retires a rule the model never saw. A path never examined is never spent, and the
+next call with room surfaces it in full. What was not looked at is counted in the result.
+
+At 500 dirs the same call now returns 65,500 B with a 16,358-byte section against its 16,384-byte
+quarter; at 1,500 dirs, 65,500 B and 16,363. **There is no residual.** The earlier statement of one —
+"below a cap of roughly 700 bytes the section overruns its reserve by a fixed ~210 bytes" — was wrong
+in both bound and magnitude (Glob went over at 800, and the overrun reached 247 with a 120-byte
+heading, because the section is label + heading + marker rather than a constant). The section is now
+held inside `instructionSectionCeiling()` at every cap and the result floor is computed from that same
+ceiling, so the total lands inside the cap wherever the cap exceeds the base truncation marker's own
+185 bytes — which `truncateOutput()` pays with or without a loader wired.
+
+Also fixed here: `Glob` at `maxOutputBytes` 1 returned 10,068 B (the whole rule book) because a
+quarter of 1 rounds to the no-cap sentinel, and `Read` did the same at 1, 2 and 3 (9,629 / 9,630 /
+9,631 B) — the second of those was not in the review and is the same defect one layer down. And a new
+multibyte cut site: the heading clip had no line-boundary fallback, so `substr()` split UTF-8
+mid-sequence at first-line offsets 118 and 119; `clipToLine()`'s own `substr()` did the same at caps
+439 and 440 on a single-line file, which is the case its docblock says it keeps a fragment for. Both
+are `mb_strcut()` now.
+
+**E57 — `SkillPathNudge::forPaths()` is unbounded, and the exemption note understated it.** The note
+said the exemptions are "one sentence sized by directory or skill names". `SkillPathNudge.php:79`
+emits `- {$skill->name}: {$skill->description}` — one line per matching auto-invocable skill, each
+carrying that skill's full `SKILL.md` description, which is arbitrary-length repository content. Its
+real bound is (matching skills × description length), paid on the first matching call of a session.
+The comment now states that bound instead of denying it. Not fixed here: bounding it belongs with the
+nudge, not with this reservation.
+
+Tests: `ToolOutputBudgetTest` 13 → 22 tests, 59 → 153 assertions, and the fixtures are adversarial in
+a third direction the first cut had none for — MANY GOVERNED DIRECTORIES. Many files per directory
+does not reproduce any of this: announce-once means the second file under a `CLAUDE.md` loads nothing.
+Twenty mutations of the load-bearing lines were applied one at a time; eighteen die. The two that
+survive — the `max(1, …)` share guard and `clipInstructions()`'s `$budget <= 0` sentinel — were
+instrumented and the whole suite run: **zero calls reach either with a non-positive budget.** They are
+unreachable, not untested, and they stay documented as guards because this arithmetic has now silently
+disabled this bound twice.
+
+Three stale claims corrected in `f1fda934` and still correct: `GrepInstructionWiringTest`'s docblock
+contrasting itself with a prepending `Glob`,
 `GlobTest::testNestedInstructionFileContentIsStillPrependedPerMatch`'s name, and `Glob::description()`'s
 promise that a governing file is "surfaced above that path".
 
