@@ -6,20 +6,39 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 34 IS IN FLIGHT AT 2 LANES — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 34 IS IN FLIGHT — CONCURRENCY DROPS TO **1** AS THESE LAND. Read this first, then §0 for the standing rules
 
 **Written mid-round so a compact cannot lose it.** Round 33 is CLOSED and verified; round 34 is
 half-landed with two lanes still running; round 35 is already measured further down. §0-NOW-32 below
 is an older round's block and remains the authority for the standing rules and the DeepSeek record.
 
-### CONCURRENCY: **2**, BY USER INSTRUCTION (superseding the earlier 3)
+### CONCURRENCY: **1**, BY USER INSTRUCTION (superseding 3, then 2)
 
-**CURRENT STANDING INSTRUCTION — concurrency is 2.** The user raised it 2 → 3 on resume ("resume..
-concurrency of 3"), then lowered it back: *"after these lanes finish their review/fixes switch to 2
-lanes at a time for now"*. **The step down takes effect as the in-flight round-34 lanes complete
-their review/fix cycles — do not kill anything mid-cycle to reach 2, and do not launch a third lane
-once they land.** `crush-lane-sglang` is the lane that stays parked; keep it clean at master so it can
-take over the instant either active lane is released.
+🔴 **CURRENT STANDING INSTRUCTION — concurrency is 1.** Given 2026-08-20 while round 34's lanes were
+in flight, with the reason stated: *"switch to 1 agent at a time when these come back im at 90%
+session limit they'll finish im sure but after that do 1 at a time jsut in case"*.
+
+**Take it literally: let the IN-FLIGHT work finish, then drop to one.** Do not kill anything to reach
+1 sooner — the user expects the running agents to complete. "When these come back" means after
+`crush-lane-cmd`'s review/fix cycle AND `crush-lane-lsp`'s implement/review/fix cycle have landed.
+From the next bundle onward, **exactly one writing lane at a time.**
+
+At concurrency 1 the file-collision rules stop binding, so the bundle queue no longer has to be
+filtered for disjoint file sets — pick the next item on merit alone. That also unblocks items parked
+purely for collision: **P8.9-style `Bootstrap.php` work, finding #7 (`/permissions`), P8.8 and P8.13
+can now be scheduled in any order** (P8.8/P8.13 still collide with EACH OTHER on the census token, so
+never bundle those two together — that is a same-lane conflict, not a cross-lane one).
+
+A read-only measurement/scout agent does NOT count against the lane budget — it holds no files, makes
+no writes, and cannot collide. Only lanes that write count. **One reviewer for the one active lane is
+part of that lane's cycle, not a second lane.**
+
+### CONCURRENCY HISTORY (superseded — kept so the reasoning is not re-litigated)
+
+Superseded: the user raised it 2 → 3 on resume ("resume.. concurrency of 3"), then lowered it to 2
+(*"after these lanes finish their review/fixes switch to 2 lanes at a time for now"*), then to 1 (see
+above). Each step down used the same rule: it takes effect as the in-flight cycles complete, never by
+killing work. `crush-lane-sglang` and, from now on, one of `cmd`/`lsp` stay parked clean at master.
 
 A read-only measurement/scout agent does NOT count against the lane budget — it holds no files, makes
 no writes, and cannot collide. Only lanes that write count.
@@ -654,7 +673,7 @@ reaches the first three by reflection only. Say so rather than implying one list
 - **P6.5 — OPEN, both halves currently blocked on lane-held files.** ⚠️ `crush_code.md:800-808`'s own
   conflict claim is **FALSE**: it says the keybindings half "reads `src/Chat.php`", but `Chat.php` has
   **zero** registry calls — only three doc-comment mentions (`:106`, `:1407`, `:2313`). Real call
-  sites are `Tui/KeyboardHandler.php:49,98,344` and `Renderer.php:3270,3296`. ⚠️ **`candy-kit/src/StatusLine.php`
+  sites are `Tui/KeyboardHandler.php:49,98,344` and `Renderer.php:**3314** `live()` / **3340** `grouped()` — ⚠️ **this file previously repeated the PLAN's `:3270`/`:3296` as if it had verified them; those two lines are doc-comment prose, not calls. Re-measured 2026-08-20.** The `Chat.php`-has-zero-calls half WAS correct: three occurrences (`:106`, `:1407`, `:2313`), all comments. ⚠️ **`candy-kit/src/StatusLine.php`
   EXISTS** and is a rendering primitive, not this feature — an implementer greping `statusLine` will
   find it and may think the work is half-done.
 
@@ -662,8 +681,8 @@ reaches the first three by reflection only. Say so rather than implying one list
 `crush_code.md:751` (`Help.php:36-41` → `:38-182`) · `:1359`/`:1414` (env block `:40-45`/"three" →
 `:106-170`/seven+, stale, closed by Phase 4 item 4) · `:864` + `AGENTS.md` (**`MATCHUPS.md` is at
 `docs/MATCHUPS.md`, not root**) · `:749` (`candy-sprinkles\Table` → `SugarCraft\Sprinkles\Table\Table`)
-· `:800-808` (false Chat.php conflict) · this file's `ARCHITECTURE.md:192` (prompt assembly is
-`:224-241`) · this file's `Bootstrap::tools()` `:3925-3965` (→ `:4041-4098`) · this file's P3.4
+· `:800-808` (false Chat.php conflict) · ✅ this file's `ARCHITECTURE.md:192` (prompt assembly is `:224-241` — confirmed: the heading
+"### The system prompt, in assembly order" is at `:224`) · this file's `Bootstrap::tools()` `:3925-3965` (→ `:4041-4098`) · this file's P3.4
 "reaches into Chat.php" · ✅ `src/Renderer.php:117` "`WorkflowEngine` is never constructed" — **the
 scout measured at `aae62989` and `7714675d` had already corrected it**; the paragraph now carries the
 both-directions correction. **Verify a scout finding against CURRENT master before recording it.**
@@ -698,7 +717,7 @@ traps that would make an implementer get each one wrong:
   holds the *code*. Do not close this on the docblock.
 - **P8.8 (repo-map) — OPEN, zero hits for `repo-map` in `src/` or `tests/`.** New
   `src/Context/RepoMap.php` (~150-250 lines) + a system-prompt block; precedent is
-  `src/Context/EnvironmentBlock.php` and `ARCHITECTURE.md:192` documents where a block slots in.
+  `src/Context/EnvironmentBlock.php` and `ARCHITECTURE.md:224-241` (**not `:192`**) documents where a block slots in.
   ⚠️ Its two halves take **different inputs** (a single lib reads `vendor/composer/autoload_*.php`;
   the monorepo root reads `MATCHUPS.md`/`PROJECT_NAMES.md`), so a one-root implementation half-closes
   it. **Adds a `src/` file → needs the census token.**
@@ -882,7 +901,7 @@ the plan named is necessary and **not** sufficient: the symbol can be gone while
    every render without blocking the loop, a timeout/hang policy, and stripping raw SGR from stdout.
    `keybindings`: **a small redesign, not an addition** — `KeyBindingRegistry` is 611 lines and
    entirely static ("a pure function of a constant", its own docblock), so an instance has to be
-   threaded through `Renderer.php:3270`/`:3296` and `KeyboardHandler.php:49,98` **without** adding the
+   threaded through `Renderer.php:3314`/`:3340` (corrected from `:3270`/`:3296`) and `KeyboardHandler.php:49,98` **without** adding the
    static setter that docblock warns against. Note the plan's claim that this half conflicts with
    `src/Chat.php` is imprecise: `Chat.php` only comments on the registry; the real call sites — and
    the real concurrency conflict with any other lane — are in `KeyboardHandler.php`.
