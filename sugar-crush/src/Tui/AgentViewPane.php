@@ -64,9 +64,10 @@ final class AgentViewPane
      * `$width`; the body no longer fitted the box `Style::width()` was sizing,
      * and where the cut fell inside a 2-cell cluster the row came back wider
      * than the box's own border. Measured with a 3-cell name and a skin-toned
-     * thumb or a flag in the operation, that was 6 of the 10 widths above --
-     * 20, 28, 30, 40, 43 and 44 -- and over a 20..140 sweep every width from
-     * 20 to 45 inclusive (excess +2 through 44, +1 at 45). It was
+     * thumb or a flag in the operation, that was 6 of the 10 widths E54 stated
+     * the `+4` over (20, 28, 30, 40, 43, 44, 58, 60, 80, 98) -- the first six
+     * -- and over a 20..140 sweep every width from 20 to 45 inclusive (excess
+     * +2 through 44, +1 at 45). It was
      * byte-for-byte the same at 087a3179, so it was this pane's pre-existing
      * floor policy and not the chrome arithmetic; it is recorded as E64.
      *
@@ -197,12 +198,16 @@ final class AgentViewPane
             // "abc" with an acute accent on the a got 16, for the same three
             // cells on screen.
             //
-            // This is an ESTIMATE and always was -- the 60 is the comment above
-            // added up and rounded, and the floor of 5 is a wish that a narrow
-            // pane still shows some operation text. Neither is measured against
-            // what this particular row actually has left, which is what the
-            // clamp below is for; the estimate is kept as-is so that every
-            // width where it already fitted renders byte-for-byte as before.
+            // This is an ESTIMATE and always was: the terms in the comment
+            // directly above add to 58, rounded to 60, and the name is charged
+            // twice over -- once as the ~12 in that 60 and again as the real
+            // Width::string($name) -- which is what makes the estimate
+            // conservative rather than tight. The floor of 5 is a wish that a
+            // narrow pane still shows some operation text. Neither is measured
+            // against what this particular row actually has left, which is what
+            // the clamp below is for; the estimate is kept exactly as-is so
+            // that every width where it already fitted renders byte-for-byte as
+            // before.
             $opBudget = max(5, $width - Width::string($name) - 60);
             $operation = self::truncate($agent->operation, $opBudget);
 

@@ -2770,13 +2770,20 @@ where the entry says they are.
 invariant. It is not one; it is a **domain**. It holds whenever the composed row body fits `$width`,
 and every measurement behind the "invariant" wording used an **ASCII** operation — which is exactly
 the case that always fits, because ASCII truncates to whole cells and wraps on cell boundaries. Put a
-wide cluster in the operation and 6 of those 10 widths break: with a skin-toned thumb (U+1F44D
-U+1F3FD) or a flag (U+1F1E6 U+1F1F8) and a 3-cell agent name, `render()` returns `$w + 6` at
+wide cluster in the operation and 6 of those 10 widths broke: with a skin-toned thumb (U+1F44D
+U+1F3FD) or a flag (U+1F1E6 U+1F1F8) and a 3-cell agent name, `render()` returned `$w + 6` at
 w=**20/28/30/40/43/44** (26/34/36/46/49/50 against 24/32/34/44/47/48 due) and `$w + 4` at
-w=58/60/80/98. The cause is `render()`'s `$opBudget = max(5, $width - name - 60)` floor, it is
-**pre-existing** — the identical ten numbers come out of `087a3179`, so it is not a regression of this
-change — and it is now recorded separately as **E64**. `AgentViewPaneGeometryTest` asserts the
-wide-cluster bound rather than sweeping only the ASCII fixture that made the invariant look true.
+w=58/60/80/98. The cause was `render()`'s `$opBudget = max(5, $width - name - 60)` floor, it was
+**pre-existing** — the identical ten numbers came out of `087a3179`, so it was not a regression of
+this change — and it was recorded separately as **E64**. *Past tense as of the ROUND 39 `lsp` lane:
+**E64 is fixed**, `render()` now clamps the composed label to the cells left after the metrics, and
+the ten numbers above are 24/32/34/44/47/48/62/64/84/102 — `$w + 4` at every one.
+`AgentViewPaneGeometryTest` asserts the wide-cluster bound (now
+`testAWideClusterOperationNoLongerOverrunsTheChromeGeometryAtTheOperationFloor`, which keeps the six
+broken numbers in-test and asserts they are gone) rather than sweeping only the ASCII fixture that
+made the invariant look true. **This does not close E54's heading**: the `max(40, …)` floor in
+`Renderer::renderAgentView()` is still deliberately kept, so below 44 columns the strip is still wider
+than the terminal and `clipWidth()` is still the backstop for it.*
 
 The overhead is now `AgentViewPane::CHROME_WIDTH` (a public const, 4) and the subtraction is
 `AgentViewPane::contentWidth($outerWidth, $minimum)`. `render()`'s `$width` parameter keeps its
@@ -2794,9 +2801,15 @@ implying the over-run is gone.
 
 *Byte-identity, proved not asserted.* `Renderer::renderAgentView()`'s output was captured from the
 pre-change tree at 44/60/80/120 columns and is pinned base64 in
-`tests/Tui/AgentViewPaneGeometryTest::testRenderAgentViewIsByteIdenticalAtAndAbove44Columns()`. That
-test is the one new test that passes BEFORE the change as well as after — correctly, since its job is
-to catch a change, not to reproduce a bug. The other six all fail before and pass after.
+`tests/Tui/AgentViewPaneGeometryTest`. That test is the one new test that passes BEFORE the change as
+well as after — correctly, since its job is to catch a change, not to reproduce a bug. The other six
+all fail before and pass after. *ROUND 39: it is now
+`testRenderAgentViewIsByteIdenticalAtAndAbove60Columns()`, and the rename is the finding. 44 columns
+is `contentWidth(44, 40)` = a content width of **40**, which is inside the band E64's operation floor
+was breaking — so fixing E64 moved the 44-column capture and only that one. 60/80/120 are still
+byte-identical to the pre-CHROME_WIDTH tree. The 44 capture is kept and is the BEFORE half of
+`testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64()`, which asserts both that the strip is
+no longer those bytes and that it is exactly the new ones.*
 
 ### E55 — `maxOutputBytes` no longer bounds `Grep`'s result
 
@@ -3566,6 +3579,37 @@ that, restrict the diff to files this process could own and state the residual h
 **Supervisor protocol until this is fixed:** a certification run that fails ONLY on
 `ChatTest::tearDownAfterClass` is not a red suite. Re-run `--filter ChatTest` alone to disambiguate
 before drawing any conclusion, and prefer to take floor measurements when no lane is running a suite.
+*Superseded — see the ROUND 39 stamp below. A `ChatTest::tearDownAfterClass` failure is now a real
+strand and should be read as one.*
+
+**ROUND 39 (`lsp` lane) — FIXED.** Reproduced first, independently of the round-38 sighting: with the
+committed `ChatTest` in place and a single `: > /tmp/sc_chat_tool_<random>.json` created four seconds
+into the class window, `--filter ChatTest` fails on `tearDownAfterClass` and names that foreign file
+as this run's strand. Every figure in this entry re-checked; nothing was stale.
+
+The fix attributes by identity, as the Step asked. `ToolIpcFiles` gains an **opt-in ledger** —
+`recordReservations(bool)` arms it, `reserve()` appends the path it hands out, and
+`strandedReservations()` reports which of *those* paths (or their `.partial` siblings) are still on
+disk. It is unarmed by default and nothing in `src/` calls it, so a real run records nothing and pays
+nothing. `ChatTest::setUpBeforeClass()` arms it and `tearDownAfterClass()` asserts on it; the
+`glob(sys_get_temp_dir() . '/sc_chat_tool_*')` window snapshot and its private helper are gone.
+
+The `sys_get_temp_dir()` reasoning this entry says must survive did survive, structurally: `reserve()`
+still builds every path from `sys_get_temp_dir()`, so the detector still sees the developer's real
+`/tmp`, and the docblock explaining why the TMPDIR sandbox would have blinded it now sits on
+`tearDownAfterClass()`.
+
+*Residual, stated rather than hidden.* Identity attribution can only see payloads whose path came from
+`reserve()` **in this process**. That covers every one today — `Chat::forkToolCalls()` and
+`Runtime::executeConcurrently()` are the only callers and both go through it, and a `pcntl_fork()`
+child is covered because the parent reserves the name before the fork — but a payload written by a
+separate process this suite *spawns* is not. Those are exactly the files nothing can tell apart from
+another developer's, which is the whole point.
+
+*Both directions driven, not argued.* Foreign file created mid-window against the old `ChatTest` →
+`Errors: 1`; the same interference against the new one → `OK (223 tests)`; a throwaway test that
+deliberately strands a reserved payload → `Errors: 1`, naming that payload. Five committed tests
+(four in `ToolIpcFilesTest`, one in `ChatTest`) all fail before the change and pass after.
 
 ---
 
@@ -3599,9 +3643,15 @@ that E54 pinned. Measured with a 3-cell agent name (`abc`), an operation of thre
 | 80 | 84 | 84 |
 | 98 | 102 | 102 |
 
-Six of ten. The excess is **exactly +2** (one wide cluster) in every case, and over a 20→140 sweep of
-121 content widths it is gone from **46** upward — above that the floor stops binding and the body
-fits. An **ASCII** operation never reproduces it: it truncates to whole cells and wraps on cell
+Six of ten. The excess is **exactly +2** (one wide cluster) at each of those six, and over a 20→140
+sweep of 121 content widths it is gone from **46** upward — above that the floor stops binding and the
+body fits. *Corrected in ROUND 39: "in every case" was written here and is false over the sweep. The
+sweep over-runs at **every** width from 20 to 45 inclusive — 26 of the 121, not 6 — and the excess is
++2 through 44 and **+1 at 45**. A 20,000-case fuzz over an emoji-heavy alphabet (random names,
+statuses and operations, widths 1–200) put **2,211** rows off the `+4` with a worst excess of **8**
+cells, so "+2, one wide cluster" is a property of the 3-cell-name fixture and not of the defect. This
+is the same shape as the finding above it: a number true of the tabulated cases, written as though
+true of the sweep.* An **ASCII** operation never reproduces it: it truncates to whole cells and wraps on cell
 boundaries, so it comes back `+4` at every one of the 121 widths. That is why E54's original
 "invariant" wording survived review — the fixture was ASCII-shaped like the property.
 
@@ -3629,7 +3679,53 @@ actually left after `rightSection` and truncate it there, so `render()` never ha
 body longer than `$width`, and the wrap that produces the over-run never happens. That wants its own
 before/after capture of `renderAgentView()` at 20/28/30/40/43/44 columns, since it changes what those
 narrow panes print. `AgentViewPaneGeometryTest::testAWideClusterOperationOverrunsTheChromeGeometryAtTheOperationFloor()`
-pins the current numbers, so the change will be visible rather than silent.
+pins the current numbers, so the change will be visible rather than silent. *(That test no longer
+exists under that name — the fix inverted it into
+`testAWideClusterOperationNoLongerOverrunsTheChromeGeometryAtTheOperationFloor()`, which keeps the six
+numbers and asserts they are gone. See the stamp below.)*
+
+**ROUND 39 (`lsp` lane) — FIXED.** The ten tabulated numbers reproduced exactly
+(26/34/36/46/49/50/62/64/84/102 against 24/32/34/44/47/48/62/64/84/102 due), as did "gone from 46 up"
+and the `087a3179` byte-identity. The two figures that did **not** reproduce are corrected in place
+above: the excess is not +2 in every case, and the over-run is not confined to those six widths.
+
+*What changed.* `render()` now measures the right section instead of estimating it, degrades the
+metrics when identity + metrics will not fit `$width` (usage first, then elapsed), and clamps the
+composed label — everything after the styled dot, so `truncate()` cannot cut an SGR sequence in half —
+to `$width - rightWidth - 1`. The body therefore fits by construction and the wrap that produced the
+over-run never happens.
+
+*What deliberately did NOT change.* `$opBudget = max(5, $width - name - 60)` is untouched. The Step
+above says not to raise or drop the floor, and re-deriving the budget from what actually remains would
+have been worse than either: it widens the operation column at every width from **47 to 68**, which is
+output movement nowhere near the bug. Keeping the estimate and clamping the result is what confines
+the change to widths that were already broken.
+
+*The floor's purpose, answered.* What a 5-cell operation column buys at width 20 is **nothing**: 20
+content cells cannot hold `● abc [working]` (15) plus any operation plus 24 cells of
+`42s  1,234 tok | $0.0042`, so the floor's promise that a narrow pane still shows some operation text
+was never keepable there. The allocation now says which column loses instead of letting all of them
+overflow: **the metrics give first** — a row that cannot say WHICH agent it is has nothing left to
+say, and a mid-token clip of `$0.0042` reads as a smaller cost rather than as a truncated one — and
+below even that the label itself is truncated. The visible consequence at width 20 is
+`● abc [working] …42s`: identity intact, operation gone, usage gone, elapsed kept.
+
+*Visible-output change, established rather than asserted.* `render()` was captured at widths 1–140
+over six agent fixtures plus the empty list, before and after. For the fixture E64 was measured on
+(3-cell name, wide-cluster operation) output differs at widths **2–45 and nothing at 46 or above**.
+The empty-list placeholder is byte-identical at all 140. Across all seven fixtures there is **not one
+width whose output changed while its old body already fitted** — checked by recomputing the old
+`max(leftW, $w - rightW - 1) + rightW` for every fixture × width and cross-tabulating against the
+diff. A long-name fixture changes as high as width 79, correctly: the floor binds for long names at
+wider panes too, and those rows over-ran.
+
+The 20,000-case fuzz that found 2,211 over-runs on the old code finds **0** on the new one.
+
+`AgentViewPaneGeometryTest` gains four tests that fail before and pass after — the inverted pin (which
+keeps the six broken numbers in-test and asserts they are gone, so the fix cannot be reverted into a
+test that only says "+4"), a 20→140 sweep over four payload shapes, the narrow-pane degradation order,
+and the one `renderAgentView()` width that moved. See the E54 stamp for why that width is 44 and only
+44.
 
 ---
 

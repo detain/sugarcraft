@@ -215,13 +215,15 @@ final class AgentViewPaneGeometryTest extends TestCase
      *
      * The fixture is ASCII **on purpose**, and the purpose is worth naming so
      * the next reader does not mistake it for the whole property. The `+4` is
-     * not unconditional: it holds whenever the composed row body fits
-     * `$width`, and an ASCII operation always makes it fit here because it
+     * not unconditional as ARITHMETIC: it holds whenever the composed row body
+     * fits `$width`, and an ASCII operation always made it fit here because it
      * truncates to whole cells and wraps on cell boundaries. When the body
-     * outgrows the box AND carries a wide cluster, the row comes back wider —
-     * which is what {@see
-     * testAWideClusterOperationOverrunsTheChromeGeometryAtTheOperationFloor()}
-     * measures rather than avoids.
+     * outgrew the box AND carried a wide cluster, the row came back wider.
+     * `render()` now clamps the body so it cannot outgrow the box (E64), which
+     * is what {@see
+     * testAWideClusterOperationNoLongerOverrunsTheChromeGeometryAtTheOperationFloor()}
+     * measures — over the payloads that used to break it rather than over the
+     * one that never could.
      */
     public function testARenderedPaneIsExactlyChromeWidthWiderThanTheContentWidthItWasHanded(): void
     {
