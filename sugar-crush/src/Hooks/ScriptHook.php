@@ -250,29 +250,49 @@ final readonly class ScriptHook implements BoundedHookInterface
     private const MIN_REWRITE_BYTES = 16384;
 
     /**
-     * Longest `NAME=VALUE\0` one environment entry may be.
+     * A GUESS AT the longest `NAME=VALUE\0` one environment entry may be, used
+     * for diagnosis and for nothing else.
      *
-     * LINUX ENFORCES THIS IN THE KERNEL and there is no way to widen it:
-     * `MAX_ARG_STRLEN` is `PAGE_SIZE * 32` = 131,072, and `execve()` fails the
-     * whole call with `E2BIG` when any single entry exceeds it. Because
-     * {@see execute()} used to hand the tool input over as `CRUSH_TOOL_INPUT`
-     * and nothing else, that made the CEILING ON A HOOK'S ENVIRONMENT a ceiling
-     * on the TOOL CALL: with any script hook registered, a `Write` of a 128 KB
-     * file could not run. MEASURED at afe3c26b against a hook whose whole script
-     * is `exit(0)`: 131,054 bytes of value allowed, 131,055 denied — exactly
+     * NOTHING BRANCHES ON THIS NUMBER ANY MORE, and that is the point.
+     * {@see executeStaged()} offers the OS the real bytes and only moves a
+     * payload out of the environment when the exec is ACTUALLY refused, so the
+     * transport needs no per-platform table and cannot be wrong about a
+     * platform nobody here has.
+     *
+     * WHERE THE FIGURE COMES FROM, and how narrowly it holds. On Linux with
+     * 4 KiB pages `MAX_ARG_STRLEN` is `PAGE_SIZE * 32` = 131,072, and
+     * `execve()` fails the whole call with `E2BIG` when any single entry
+     * exceeds it. Because {@see execute()} used to hand the tool input over as
+     * `CRUSH_TOOL_INPUT` and nothing else, that made the CEILING ON A HOOK'S
+     * ENVIRONMENT a ceiling on the TOOL CALL: with any script hook registered, a
+     * `Write` of a 128 KB file could not run. MEASURED at afe3c26b on THIS host
+     * (`getconf PAGESIZE` = 4096) against a hook whose whole script is
+     * `exit(0)`: 131,054 bytes of value allowed, 131,055 denied — exactly
      * `strlen('CRUSH_TOOL_INPUT') + 1 + value + 1 <= 131072` — and 200,000 and
      * 1,000,000 denied identically with "Hook audit could not be executed".
-     * `CRUSH_TOOL_OUTPUT` measured the same, one line down.
+     * `CRUSH_TOOL_OUTPUT` has a name one byte longer, so its boundary is one
+     * byte LOWER: 131,053 fits and 131,054 does not.
      *
      * That failed CLOSED, so it was never a hole — it was a daily-driver
      * blocker whose refusal named neither the size nor the cause.
      *
-     * WHAT THIS FIGURE IS NOT: a portable total. Other platforms cap the whole
-     * environment instead of one entry (macOS: 256 KiB for argv and environ
-     * together), and that total is not modelled here — a payload pair that fits
-     * every per-entry check can still be refused by an exec on such a system.
-     * That case is not silent any more: the refusal from {@see executeStaged()}
-     * prints both payload sizes.
+     * WHAT THIS FIGURE IS NOT — and every one of these is a reason not to
+     * branch on it:
+     * - Not the limit on a 64 KiB-page Linux (ppc64le, and the aarch64 kernels
+     *   RHEL and SLES ship), where `PAGE_SIZE * 32` is 2 MiB. Substituting a
+     *   marker at 131,055 there would hand a guard a marker on a call the
+     *   kernel would have carried verbatim.
+     * - Not the limit on macOS or the BSDs, which cap the whole environment
+     *   instead of one entry (macOS: 256 KiB for argv and environ together).
+     *   A payload pair that fits every per-entry check can still be refused
+     *   there — which the retry handles, because it is triggered by the
+     *   refusal and not by a size.
+     * - Not the limit on Windows, which is SMALLER: 32,767 bytes for one
+     *   variable. A guess this high would never fire; the refusal does.
+     *
+     * What it is still good for is saying WHICH payload probably broke the
+     * exec when both routes are gone — see {@see stagePayloads()}'s `unbacked`
+     * and {@see execRefused()}.
      */
     private const MAX_ENV_ENTRY_BYTES = 131072;
 
@@ -485,31 +505,16 @@ final readonly class ScriptHook implements BoundedHookInterface
      * {@see execute()} with the payload files already on disk and guaranteed to
      * be cleaned up after it, whatever it returns or throws.
      *
-     * @param array{env: array<string, string>, files: list<string>, unreachable: list<string>} $payload
+     * @param array{env: array<string, string>, fallback: ?array<string, string>, files: list<string>, unbacked: list<string>} $payload
      */
     private function executeStaged(HookContext $context, ?string $cwd, array $payload): HookResult
     {
-        if ($payload['unreachable'] !== []) {
-            // Neither route worked: the value is too big for the environment
-            // AND no temp file could be written. FAIL CLOSED, for the same
-            // reason an unusable `cwd` does — a hook that was never shown the
-            // call has not approved it.
-            return HookResult::deny(sprintf(
-                'Hook %s could not be given %s (no temporary file could be created, and the value is '
-                . 'too large for one environment entry — %d bytes for name, value and NUL together); '
-                . 'a hook that has not seen the call has not allowed it.',
-                $this->name,
-                implode(' or ', $payload['unreachable']),
-                self::MAX_ENV_ENTRY_BYTES,
-            ));
-        }
-
-        $env = [
+        $fixed = [
             'CRUSH_SESSION_ID' => $context->sessionId,
             'CRUSH_TOOL_NAME' => $context->toolName,
             'CRUSH_MODEL' => $context->model,
             'CRUSH_PROVIDER' => $context->provider,
-        ] + $payload['env'];
+        ];
 
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -517,13 +522,23 @@ final readonly class ScriptHook implements BoundedHookInterface
             2 => ['pipe', 'w'],
         ];
 
-        $process = proc_open(
-            $this->command,
-            $descriptors,
-            $pipes,
-            $cwd,
-            $env
-        );
+        // THE REAL BYTES ARE OFFERED FIRST AND THE OS DECIDES — see
+        // MAX_ENV_ENTRY_BYTES for why this is an attempt rather than a
+        // calculation. `@` because the refusal is REPORTED, below, as a deny
+        // that names the sizes: the bare call emits
+        // `proc_open(): posix_spawn() failed: Argument list too long`, which in
+        // the TUI lands mid-frame over whatever candy-core last painted, and
+        // under `failOnWarning="true"` turns this suite's own coverage of the
+        // refusal path into a failure.
+        $process = @proc_open($this->command, $descriptors, $pipes, $cwd, $fixed + $payload['env']);
+
+        if (!is_resource($process) && $payload['fallback'] !== null) {
+            // The exec was refused with the payloads IN the environment, so try
+            // again with everything that has a file moved OUT of it. The hook
+            // has not run — `proc_open()` returning false means no child was
+            // started — so this is a retry, never a second execution.
+            $process = @proc_open($this->command, $descriptors, $pipes, $cwd, $fixed + $payload['fallback']);
+        }
 
         if (!is_resource($process)) {
             // NAMES THE SIZES. This branch's old message — "Hook X could not be
@@ -531,14 +546,10 @@ final readonly class ScriptHook implements BoundedHookInterface
             // call hit `MAX_ARG_STRLEN` (see stagePayloads()), and it reads as
             // "your hook is broken" rather than as a size. The two payload
             // figures are the only inputs to this call that scale, so they are
-            // the two worth printing.
-            return HookResult::deny(sprintf(
-                'Hook %s could not be executed (proc_open() refused to start it; tool input %d bytes, '
-                . 'tool output %d bytes)',
-                $this->name,
-                strlen($context->toolInput),
-                strlen($context->toolOutput),
-            ));
+            // the two worth printing — and when a payload had no file to be
+            // moved into, saying so is the difference between "your hook is
+            // broken" and "your temp directory is".
+            return HookResult::deny($this->execRefused($context, $payload['unbacked']));
         }
 
         fclose($pipes[0]);
@@ -622,8 +633,45 @@ final readonly class ScriptHook implements BoundedHookInterface
     }
 
     /**
+     * What a refused `proc_open()` says, with the two figures that scale.
+     *
+     * ONE MESSAGE FOR BOTH REFUSALS, because after the retry in
+     * {@see executeStaged()} they are the same event: the OS would not start
+     * the process with the environment we could build for it. The old pair
+     * split "no file could be written" from "proc_open() refused" and only the
+     * second named a size, which put the E65 complaint — a refusal naming
+     * neither the size nor the cause — back on one of the two branches.
+     *
+     * @param list<string> $unbacked payload variables that had no file to be moved into
+     */
+    private function execRefused(HookContext $context, array $unbacked): string
+    {
+        $message = sprintf(
+            'Hook %s could not be executed (the operating system refused to start it; tool input %d bytes, '
+            . 'tool output %d bytes)',
+            $this->name,
+            strlen($context->toolInput),
+            strlen($context->toolOutput),
+        );
+
+        if ($unbacked === []) {
+            return $message;
+        }
+
+        // FAIL CLOSED, and say which half of the transport was missing. A hook
+        // that was never shown the call has not approved it — the same rule an
+        // unusable `cwd` follows.
+        return $message . sprintf(
+            '; no temporary file could be created for %s, so %s could not be moved out of the environment. '
+            . 'A hook that has not seen the call has not allowed it.',
+            implode(' or ', $unbacked),
+            count($unbacked) === 1 ? 'it' : 'they',
+        );
+    }
+
+    /**
      * Put the two payload variables where the child can reach them BOTH ways,
-     * and report which ones it could not be given at all.
+     * and build the environment to fall back to if the OS refuses the first.
      *
      * EVERY PAYLOAD GETS A FILE WHENEVER ONE CAN BE WRITTEN — not only the
      * oversize ones. "Present only when the value is large" is a conditional
@@ -631,76 +679,94 @@ final readonly class ScriptHook implements BoundedHookInterface
      * that dereferences an unset path on exactly the calls this change exists
      * to make possible. The one case where the variable is absent is a temp
      * directory that will not take a file at all ({@see writePayloadFile()}
-     * returning null), and that case is handled rather than hidden: a payload
-     * that then also does not fit in the environment is reported through
-     * `unreachable` and denied.
+     * returning null); `docs/HOOKS.md` tells hook authors how to write a guard
+     * that fails closed rather than blind when it happens.
      *
-     * THE ENVIRONMENT VALUE IS UNCHANGED WHENEVER IT FITS, which is the
-     * compatibility guarantee. `CRUSH_TOOL_INPUT` is a documented public
-     * contract (`docs/HOOKS.md`) that user-authored scripts already read;
-     * moving the payload wholesale onto the file would have been a silent
-     * breaking change for every hook that works today, in exchange for nothing
-     * on the 99.9% of calls that never came near {@see MAX_ENV_ENTRY_BYTES}.
-     * So the file is an ADDITION, and only a value the kernel would refuse is
-     * replaced — by {@see OVERSIZE_ENV_MARKER}, never by a prefix of itself.
+     * THE ENVIRONMENT VALUE IS ALWAYS THE REAL BYTES — that is the whole `env`
+     * array, and it is what {@see executeStaged()} offers the OS first.
+     * `CRUSH_TOOL_INPUT` is a documented public contract (`docs/HOOKS.md`) that
+     * user-authored scripts already read; substituting a marker on a size THIS
+     * code guessed at would be a silent breaking change on every platform whose
+     * real limit is higher than the guess. So the substitution is not a guess:
+     * `fallback` is only reached after an exec the OS actually refused.
+     *
+     * WHAT `fallback` REPLACES, and what it does not. Every payload that has a
+     * file and something to say becomes {@see OVERSIZE_ENV_MARKER} — never a
+     * prefix of itself, never the empty string, and never a payload that has no
+     * file to be read from instead. Those are the `unbacked` ones: nothing can
+     * shrink them, so if one of them is what the OS refused, the retry fails
+     * too and {@see execRefused()} names it.
      *
      * THE HONEST COST, stated rather than buried: a hook that reads only
-     * `CRUSH_TOOL_INPUT` and never the file now RUNS on an oversize call and
-     * sees a marker where it used to see arguments, whereas before the call was
-     * denied outright. For an argument-inspecting guard that is a change in the
-     * unsafe direction — but only over calls that previously could not happen
-     * at all, since the deny was unconditional. `CRUSH_TOOL_NAME` and the
-     * matcher, which is what most guards actually key on, are unaffected.
+     * `CRUSH_TOOL_INPUT` and never the file sees a marker where it used to see
+     * arguments — but only on a call the OS refused to start with the arguments
+     * in the environment, which is a call that previously did not run at all.
+     * `CRUSH_TOOL_NAME` and the matcher, which is what most guards actually key
+     * on, are unaffected either way.
      *
      * @param array<string, string> $payloads variable name => the bytes it carries
      *
-     * @return array{env: array<string, string>, files: list<string>, unreachable: list<string>}
-     *     [what to add to the child's environment; every file to delete
-     *     afterwards; the variables that could reach the child by NEITHER
-     *     route, which {@see executeStaged()} turns into a fail-closed deny]
+     * @return array{env: array<string, string>, fallback: ?array<string, string>, files: list<string>, unbacked: list<string>}
+     *     [the environment carrying the real bytes; the same environment with
+     *     every file-backed payload moved out of it, or null when there is
+     *     nothing to move; every file to delete afterwards; the payloads that
+     *     have no file to be moved into]
      */
     private static function stagePayloads(array $payloads): array
     {
         $env = [];
+        $fallback = [];
         $files = [];
-        $unreachable = [];
+        $unbacked = [];
+        $movable = false;
 
         foreach ($payloads as $name => $value) {
             $pathVariable = $name . '_FILE';
             $path = self::writePayloadFile($value);
 
-            if ($path !== null) {
-                $files[] = $path;
-                $env[$pathVariable] = $path;
-            }
-
-            if (strlen($name) + strlen($value) + 2 <= self::MAX_ENV_ENTRY_BYTES) {
-                $env[$name] = $value;
-
-                continue;
-            }
+            $env[$name] = $value;
+            $fallback[$name] = $value;
 
             if ($path === null) {
-                // The value cannot go in the environment and there is no file:
-                // the exec would fail with E2BIG and the hook would see
-                // nothing. Recorded rather than papered over with an empty
-                // value, because a guard handed no arguments is a guard that
-                // allows what it would have denied.
-                $unreachable[] = $name;
-                $env[$name] = '';
+                // No file to move it into. Only report it when it is big enough
+                // to plausibly BE what a refused exec is complaining about —
+                // MAX_ENV_ENTRY_BYTES is a diagnostic guess here and nothing
+                // more, so a wrong guess costs a less specific message and
+                // never a wrong verdict.
+                if (strlen($name) + strlen($value) + 2 > self::MAX_ENV_ENTRY_BYTES) {
+                    $unbacked[] = $name;
+                }
 
                 continue;
             }
 
-            $env[$name] = sprintf(
+            $files[] = $path;
+            $env[$pathVariable] = $path;
+            $fallback[$pathVariable] = $path;
+
+            if ($value === '') {
+                // Already as small as a value gets, and the file still exists
+                // for a hook that reads only the file — see the `env` table in
+                // `docs/HOOKS.md`, where the empty payload's `_FILE` is present
+                // and the payload variable itself is not printed by `env`.
+                continue;
+            }
+
+            $fallback[$name] = sprintf(
                 '%s %d bytes; read $%s',
                 self::OVERSIZE_ENV_MARKER,
                 strlen($value),
                 $pathVariable,
             );
+            $movable = true;
         }
 
-        return ['env' => $env, 'files' => $files, 'unreachable' => $unreachable];
+        return [
+            'env' => $env,
+            'fallback' => $movable ? $fallback : null,
+            'files' => $files,
+            'unbacked' => $unbacked,
+        ];
     }
 
     /**

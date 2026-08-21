@@ -1107,18 +1107,30 @@ final class ScriptHookTest extends TestCase
      * THE BOUNDARY ITSELF, because every other test in this group probes at
      * 200 KB and would stay green if the fit computation drifted by 100 KB.
      *
-     * The kernel's check is on `NAME=VALUE\0` TOGETHER, not on the value:
-     * `strlen('CRUSH_TOOL_INPUT') + 1 + value + 1 <= 131072`, which puts the
-     * last value that fits at **131,054** bytes. Measured at afe3c26b against
-     * the old env-only transport by bisection: 131,054 allowed, 131,055 denied.
-     * The same two lengths now separate "handed over verbatim" from "replaced
-     * by the marker", which is the same arithmetic on the safe side of it.
+     * IT IS THE KERNEL'S BOUNDARY AND NOT ONE OF OURS, which is what makes it
+     * worth pinning: {@see ScriptHook::executeStaged()} offers the real bytes
+     * and substitutes the marker only when the exec is refused, so the length
+     * at which this test flips is `MAX_ARG_STRLEN` as the running kernel
+     * enforces it, with no constant of ours in the path. The expectation is
+     * therefore DERIVED from the page size rather than typed in: Linux defines
+     * `MAX_ARG_STRLEN` as `PAGE_SIZE * 32`, and the check is on `NAME=VALUE\0`
+     * TOGETHER, so the last value that fits is
+     * `PAGE_SIZE * 32 - strlen($name) - 2`. On this host (`getconf PAGESIZE`
+     * = 4096) that is 131,054 for `CRUSH_TOOL_INPUT` and — because the name is
+     * one byte longer — 131,053 for `CRUSH_TOOL_OUTPUT`, which is the figure a
+     * comment on {@see ScriptHook} used to round to "the same, one line down".
+     *
+     * Measured at afe3c26b against the old env-only transport by bisection:
+     * 131,054 allowed, 131,055 denied. The same two lengths now separate
+     * "handed over verbatim" from "replaced by the marker".
      *
      * `wc -c` counts what the hook actually received, so an off-by-one in
      * either direction shows up as a length rather than as a verdict.
      */
     public function testTheEnvironmentIsUsedUpToTheKernelBoundaryAndNotPastIt(): void
     {
+        $limit = self::perEntryEnvironmentLimit();
+
         $hook = new ScriptHook(
             name: 'boundary',
             event: HookEvent::PreToolUse,
@@ -1127,16 +1139,68 @@ final class ScriptHookTest extends TestCase
             description: '',
         );
 
-        $fits = $hook->execute($this->createContext()->withToolInput(str_repeat('B', 131_054)));
-        $this->assertSame('131054', $fits->message, 'the last value that fits was not passed verbatim');
+        $fits = $limit - \strlen('CRUSH_TOOL_INPUT') - 2;
 
-        $overflows = $hook->execute($this->createContext()->withToolInput(str_repeat('B', 131_055)));
-        $this->assertNotSame('131055', $overflows->message, 'a value the kernel refuses was passed anyway');
+        $allowed = $hook->execute($this->createContext()->withToolInput(str_repeat('B', $fits)));
+        $this->assertSame((string) $fits, $allowed->message, 'the last value that fits was not passed verbatim');
+
+        $overflows = $hook->execute($this->createContext()->withToolInput(str_repeat('B', $fits + 1)));
+        $this->assertNotSame((string) ($fits + 1), $overflows->message, 'a value the kernel refuses was passed anyway');
         $this->assertSame(
-            (string) \strlen('@@CRUSH_PAYLOAD_IN_FILE@@ 131055 bytes; read $CRUSH_TOOL_INPUT_FILE'),
+            (string) \strlen('@@CRUSH_PAYLOAD_IN_FILE@@ ' . ($fits + 1) . ' bytes; read $CRUSH_TOOL_INPUT_FILE'),
             $overflows->message,
             'one byte over the boundary did not fall back to the marker',
         );
+
+        // ...and one byte LOWER for the longer name, which is the correction
+        // this test also carries: the two boundaries are not the same number.
+        $post = new ScriptHook(
+            name: 'boundary_out',
+            event: HookEvent::PostToolUse,
+            matcher: '.*',
+            command: 'printf "%s" "$CRUSH_TOOL_OUTPUT" | wc -c | tr -d " \n"',
+            description: '',
+        );
+
+        $fitsOut = $limit - \strlen('CRUSH_TOOL_OUTPUT') - 2;
+        $this->assertSame($fits - 1, $fitsOut, 'the output boundary is not one byte below the input boundary');
+
+        $allowedOut = $post->execute($this->createContext()->withToolOutput(str_repeat('C', $fitsOut)));
+        $this->assertSame((string) $fitsOut, $allowedOut->message, 'the last output that fits was not passed verbatim');
+
+        $overflowsOut = $post->execute($this->createContext()->withToolOutput(str_repeat('C', $fitsOut + 1)));
+        $this->assertNotSame(
+            (string) ($fitsOut + 1),
+            $overflowsOut->message,
+            'an output the kernel refuses was passed anyway',
+        );
+    }
+
+    /**
+     * `MAX_ARG_STRLEN` as the RUNNING kernel computes it, or a skip.
+     *
+     * Hardcoding 131,072 is the assumption this round removed from `src/`, and
+     * a test that hardcodes it puts it straight back: on a 64 KiB-page Linux
+     * (ppc64le, the aarch64 kernels RHEL and SLES ship) the real figure is
+     * 2 MiB, and the boundary test above would then be asserting that the
+     * kernel refuses something it happily carries. Off Linux there is no
+     * per-entry limit to probe at all — macOS and the BSDs cap the whole
+     * environment instead — so the boundary this test exists to pin does not
+     * exist there and the test says so rather than inventing a number.
+     */
+    private static function perEntryEnvironmentLimit(): int
+    {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            self::markTestSkipped('MAX_ARG_STRLEN is a Linux per-entry limit; this platform caps the total instead');
+        }
+
+        $pageSize = (int) trim((string) @shell_exec('getconf PAGESIZE'));
+
+        if ($pageSize <= 0) {
+            self::markTestSkipped('getconf PAGESIZE did not report a page size to derive MAX_ARG_STRLEN from');
+        }
+
+        return $pageSize * 32;
     }
 
     /**
@@ -1219,6 +1283,48 @@ final class ScriptHookTest extends TestCase
         $this->assertTrue($result->isAllowed(), $result->message);
         $this->assertNotSame('', $result->message, 'no input file was handed to the hook at all');
         $this->assertFileDoesNotExist($result->message);
+    }
+
+    /**
+     * A REFUSED `proc_open()` STARTED NO CHILD, which is what makes the retry
+     * in {@see ScriptHook::executeStaged()} a retry and not a second run.
+     *
+     * The retry exists because the per-entry environment limit is not a number
+     * this code can know (see {@see ScriptHook}'s `MAX_ENV_ENTRY_BYTES`): the
+     * real bytes are offered, and only a refusal moves them onto the file. That
+     * is only safe if a refusal means nothing ran — a hook with a side effect
+     * that fired twice would double every `git commit`, every notification and
+     * every audit-log line a hook writes.
+     *
+     * Counted rather than reasoned: the hook appends one byte per run to a file
+     * of its own, on a payload big enough that the first attempt IS refused on
+     * this host (200 KB against a 131,072-byte per-entry limit). One byte means
+     * one exec. The same test would read two if `proc_open()` ever forked
+     * before it failed.
+     */
+    public function testAnEnvironmentTheKernelRefusesDoesNotRunTheHookTwice(): void
+    {
+        $counter = tempnam(sys_get_temp_dir(), 'scripthook_runs_');
+        self::assertIsString($counter);
+
+        $hook = new ScriptHook(
+            name: 'counted',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf "x" >> ' . escapeshellarg($counter) . '; exit 0',
+            description: '',
+        );
+
+        try {
+            $result = $hook->execute($this->createContext()->withToolInput(
+                json_encode(['body' => str_repeat('A', 200_000)], JSON_THROW_ON_ERROR),
+            ));
+
+            $this->assertTrue($result->isAllowed(), $result->message);
+            $this->assertSame('x', file_get_contents($counter), 'the hook ran a number of times other than once');
+        } finally {
+            @unlink($counter);
+        }
     }
 
     /**
