@@ -50,7 +50,7 @@ export SUGARCRUSH_MODEL=gpt-4o          # optional; provider default otherwise
 ./bin/sugarcrush
 ```
 
-`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Write/Glob/Grep/WebFetch/WebSearch/Doctor/Skill/Lsp) and the safety hooks automatically.
+`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Write/Glob/Grep/WebFetch/WebSearch/`doctor`/Skill/Lsp) and the safety hooks automatically. These are **runtime tool names**, and `doctor` is lower-case: `allowedTools`, `disabledTools` and every `permissionRules` pattern match them with case-sensitive `fnmatch()`, so a rule written `Doctor` matches no tool at all. (The class is `Tools\BuiltIn\Doctor`; the capitalised spelling below, in the Capabilities section, is that class and not this name.)
 
 Every environment variable SugarCrush reads is documented in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 

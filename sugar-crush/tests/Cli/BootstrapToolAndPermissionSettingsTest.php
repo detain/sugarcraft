@@ -1022,6 +1022,258 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         Bootstrap::permissionGate();
     }
 
+    // -------------------------------------------------------------------------
+    // F1 — the E57 report has to be readable from INSIDE the alternate screen
+    // -------------------------------------------------------------------------
+
+    /**
+     * THE DEFECT F1 NAMES, at the seam that fixes it. Before this, the report
+     * existed only as an `fwrite(STDERR, …)`, and on the interactive path that
+     * is a surface the operator does not have: measured on a real
+     * `bin/sugarcrush` launch under a pty, the line printed 0.47s before
+     * `\e[?1049h` and replaying the captured stream through a `candy-vt`
+     * `Terminal(120, 40)` found no trace of it on the visible screen.
+     *
+     * THIS TEST IS NOT THE EVIDENCE FOR THAT, and it should not be read as such.
+     * A string reaching a static list is not a user seeing a line; the captured
+     * launch in the commit message is the evidence. What this pins is the half a
+     * unit test can pin — that the launch RECORDS the sentence for the
+     * transcript, in the child process where {@see Bootstrap::tools()} really
+     * runs, so a refactor cannot quietly take the transcript half away and leave
+     * stderr looking fine.
+     */
+    public function testATrustedProjectsToolRemovalsAreRecordedForTheTranscriptToo(): void
+    {
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+
+        $notices = $this->launchNoticesOfToolSet();
+
+        self::assertCount(1, $notices);
+        self::assertStringContainsString(LayeredSettings::SHARED_PATH, $notices[0]);
+        self::assertStringContainsString('disabledTools', $notices[0]);
+        self::assertStringContainsString('leaving: Bash', $notices[0]);
+    }
+
+    /**
+     * BOTH CHANNELS, never one instead of the other. `-p` and the scrollback a
+     * user gets back after quitting are real consumers of the stderr line, and
+     * ~ten sibling launch warnings still share that channel — so the transcript
+     * seam had to be additive. The same child run is asserted on twice here
+     * rather than in two tests, because "the same launch said it in both places"
+     * is the property, and two launches could each say it in one.
+     */
+    public function testTheSameLaunchStillSaysItOnStderr(): void
+    {
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+
+        [$stderr, $notices] = $this->toolSetLaunchOutput();
+
+        self::assertStringContainsString('leaving: Bash', $stderr);
+        self::assertCount(1, $notices);
+    }
+
+    /**
+     * CONTROL. A launch with nothing to report seeds nothing — the transcript of
+     * an ordinary session must not gain a row for the absence of a warning, and
+     * {@see Chat::withLaunchNotices()} must not be handed an empty sentence to
+     * render.
+     */
+    public function testALaunchWithNothingToReportRecordsNoNotice(): void
+    {
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+
+        self::assertSame([], $this->launchNoticesOfToolSet());
+    }
+
+    /**
+     * SAID ONCE, THOUGH IT IS RAISED TWICE. {@see Bootstrap::app()} builds the
+     * tool set a SECOND time for the shell's displayed tool list, after
+     * {@see Bootstrap::chat()} has already built it — so the report is raised
+     * twice per launch with an identical message. stderr is spared that by
+     * {@see Bootstrap::warnPermissionConfigOnce()}'s per-process map; the
+     * transcript needs its own guard, because that map is not reset per launch
+     * and this list is.
+     */
+    public function testARepeatedReportIsRecordedOnlyOnce(): void
+    {
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+
+        self::assertCount(1, $this->launchNoticesOfToolSet(buildTwice: true));
+    }
+
+    /**
+     * The end of the seam a user actually reaches: a real
+     * {@see Bootstrap::chat()} in a trusted checkout comes up with the report
+     * already in its transcript, as a system row.
+     *
+     * A CHILD PROCESS, for the reason {@see stderrOfToolSet()} uses one —
+     * `chat()` opens a session store and registers a shutdown hook, and doing
+     * that in-process would leave both behind for every later test in the file.
+     */
+    public function testTheBuiltChatComesUpWithTheReportInItsTranscript(): void
+    {
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+
+        $history = $this->chatHistoryOfLaunch();
+
+        self::assertCount(1, $history);
+        self::assertSame('system', $history[0]['role']);
+        self::assertStringContainsString(LayeredSettings::SHARED_PATH, $history[0]['content']);
+        self::assertStringContainsString('leaving: Bash', $history[0]['content']);
+    }
+
+    /**
+     * CONTROL for the one above, and the one that would catch a seam wired to
+     * fire unconditionally: an ordinary launch still opens on an EMPTY
+     * transcript, which is what {@see \SugarCraft\Crush\Renderer}'s
+     * "(empty conversation …)" placeholder is keyed off.
+     */
+    public function testAnOrdinaryLaunchStillOpensOnAnEmptyTranscript(): void
+    {
+        self::assertSame([], $this->chatHistoryOfLaunch());
+    }
+
+    /**
+     * The keys {@see Bootstrap::permissionSettingsLayer()} may emit are a subset
+     * of {@see Bootstrap::PERMISSION_SETTINGS_KEYS} — N3.
+     *
+     * WHY THIS IS WORTH A TEST WHEN THE METHOD LITERALLY LOOPS OVER THAT
+     * CONSTANT. {@see Bootstrap::withoutEmptyPermissionOverrides()} scopes its
+     * "an empty value must not displace an earlier layer" rule to the same
+     * constant, and states in its doc-block that the scope is not observable
+     * today BECAUSE the settings layer carries only those keys. That is an
+     * argument about two pieces of code 3,000 lines apart, and nothing enforced
+     * it: widen the layer's reader without widening the constant (or the other
+     * way round) and a new key silently acquires — or silently loses — the
+     * displacing behaviour, with no test going red.
+     *
+     * Asserted against a file carrying a SUPERSET, so the subset relation is
+     * measured rather than restated: the extra keys are real, tolerated
+     * `settings.json` keys, not invented ones.
+     */
+    public function testThePermissionSettingsLayerEmitsNothingOutsideItsWhitelist(): void
+    {
+        $this->writeUserSettings([
+            'permissionMode' => 'plan',
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'allow']],
+            'theme' => 'dark',
+            'model' => 'gpt-4',
+            'disabledTools' => ['Read'],
+            LayeredSettings::PROJECT_SETTINGS_TRUST_KEY => ['/anywhere'],
+        ]);
+
+        $layer = new \ReflectionMethod(Bootstrap::class, 'permissionSettingsLayer');
+        $whitelist = new \ReflectionClassConstant(Bootstrap::class, 'PERMISSION_SETTINGS_KEYS');
+
+        /** @var array<string, mixed> $emitted */
+        $emitted = $layer->invoke(null, $this->configDir . '/' . LayeredSettings::USER_FILE);
+        /** @var list<string> $keys */
+        $keys = $whitelist->getValue();
+
+        self::assertSame([], array_diff(array_keys($emitted), $keys));
+        // …and not vacuously: the file above really does carry both of them, so
+        // an emptied-out reader could not pass this by emitting nothing.
+        self::assertSame($keys, array_keys($emitted));
+    }
+
+    /**
+     * {@see Bootstrap::launchNotices()} after a child process built the tool
+     * set, decoded from the child's stdout.
+     *
+     * @return list<string>
+     */
+    private function launchNoticesOfToolSet(bool $buildTwice = false): array
+    {
+        return $this->toolSetLaunchOutput($buildTwice)[1];
+    }
+
+    /**
+     * One child launch, reported as `[stderr, launchNotices]` so a single run
+     * can be asserted on from both sides.
+     *
+     * @return array{0: string, 1: list<string>}
+     */
+    private function toolSetLaunchOutput(bool $buildTwice = false): array
+    {
+        $root = var_export($this->projectRoot, true);
+        $body = "\\SugarCraft\\Crush\\Cli\\Bootstrap::tools({$root});\n";
+
+        $out = $this->runInChildLaunch(
+            'toolset',
+            "\\SugarCraft\\Crush\\Cli\\Bootstrap::useProjectRootForSettings({$root});\n"
+            . $body
+            . ($buildTwice ? $body : '')
+            . "echo json_encode(\\SugarCraft\\Crush\\Cli\\Bootstrap::launchNotices());\n",
+        );
+
+        /** @var list<string> $notices */
+        $notices = json_decode($out[0], true, 512, JSON_THROW_ON_ERROR);
+
+        return [$out[1], $notices];
+    }
+
+    /**
+     * The `role`/`content` of every message a real {@see Bootstrap::chat()}
+     * comes up with, from a child process.
+     *
+     * @return list<array{role: string, content: string}>
+     */
+    private function chatHistoryOfLaunch(): array
+    {
+        $root = var_export($this->projectRoot, true);
+
+        $out = $this->runInChildLaunch(
+            'chatlaunch',
+            "\$chat = \\SugarCraft\\Crush\\Cli\\Bootstrap::chat({$root});\n"
+            . "\$rows = [];\n"
+            . "foreach (\$chat->history as \$m) { \$rows[] = ['role' => \$m->role->value, 'content' => \$m->content]; }\n"
+            . "echo json_encode(\$rows);\n",
+        );
+
+        /** @var list<array{role: string, content: string}> $rows */
+        $rows = json_decode($out[0], true, 512, JSON_THROW_ON_ERROR);
+
+        return $rows;
+    }
+
+    /**
+     * Run $body in a child PHP process under this fixture's sandboxed HOME.
+     *
+     * A CHILD, for {@see stderrOfToolSet()}'s reason and one more: this file's
+     * launches have to start from a clean {@see Bootstrap} — the notice list is
+     * reset per LAUNCH rather than per process, so an in-process assertion on it
+     * would be reading whatever earlier tests in the run had left there.
+     *
+     * @return array{0: string, 1: string} stdout, stderr
+     */
+    private function runInChildLaunch(string $name, string $body): array
+    {
+        $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = $this->tmpDir . '/' . $name . '.php';
+        $errFile = $this->tmpDir . '/' . $name . '-stderr.txt';
+        $outFile = $this->tmpDir . '/' . $name . '-stdout.txt';
+
+        file_put_contents($script, "<?php\nrequire " . var_export($autoload, true) . ";\n" . $body);
+
+        exec(sprintf(
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >%s 2>%s',
+            escapeshellarg($this->home),
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($script),
+            escapeshellarg($outFile),
+            escapeshellarg($errFile),
+        ));
+
+        return [
+            is_file($outFile) ? (string) file_get_contents($outFile) : '',
+            is_file($errFile) ? (string) file_get_contents($errFile) : '',
+        ];
+    }
+
     private function writeUserConfigFile(array $data): void
     {
         file_put_contents($this->configDir . '/config.json', (string) json_encode($data));

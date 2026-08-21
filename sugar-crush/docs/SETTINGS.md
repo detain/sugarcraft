@@ -222,14 +222,35 @@ choose your tool set, and that has not changed** — do not trust
 `allowedTools`.
 
 **What has changed is that it can no longer do so unnoticed.** A trusted
-project's tool removals are reported on stderr at launch, naming the file, the
-tools it took and the tools it left:
+project's tool removals are reported at launch, naming the file, the tools it
+took and the tools it left:
 
 ```
 sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 10 of the
 11 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
 WebSearch, doctor, Skill, Lsp — leaving: Bash
 ```
+
+**In two places, because one of them you cannot read.** The line above goes to
+stderr, which is the right channel for `-p` and for the scrollback you get back
+after quitting — and which an interactive session cannot show you. Measured on
+a real launch under a pty: it printed **0.47 s** before the terminal entered the
+alternate screen, and replaying the captured byte stream through a virtual
+terminal found no trace of it on the visible screen. The alternate buffer had
+painted over it, and the primary buffer does not come back until the session
+ENDS — so the warning that your tools had been cut to `Bash` arrived after the
+`Bash`-only session was over.
+
+So the same sentence is also seeded into the **transcript**, as a system row,
+before the first frame paints. That is the copy an interactive operator reads;
+the stderr copy is unchanged and is not going away. Note that the transcript
+copy is part of the conversation, so the model is told as well — which is the
+honest state of affairs, since the model is the party whose tools were taken.
+
+Nothing else has moved: the other launch warnings (an unusable provider, a
+skipped hook file, a rejected permission pattern) are still stderr-only, and are
+still invisible in an interactive session for the same reason. The seam they
+would migrate through is `Chat::withLaunchNotices()`.
 
 The report is the *effect*, not the pattern, and that is deliberate. Refusing
 negated classes at the project tier would close the eight-character version and
@@ -251,6 +272,16 @@ exactly the case where you had already protected yourself.
 way to ask for a toolless agent (it is the stated alternative to reading
 `allowedTools: []` that way), so it is reported rather than refused — but it is
 reported, not handed over in silence.
+
+**That sentence is written about YOU, and the code applies it to a trusted
+project as well.** `disabledTools` is a project-tier key, so `["*"]` in a
+checkout's `settings.json` reaches the same branch and yields the same empty
+tool set — a "supported way to ask for a toolless agent" that the repository,
+not the operator, asked for. It is deliberately left that way: both warnings
+fire (the removal report names the file, and the empty-set report follows), and
+reaching the branch at all needs your own `trustedProjectSettings` grant. But
+the justification's authority comes from it being *your* choice, so do not read
+it as covering the project tier by itself — the trust grant is what covers that.
 
 And a whitelist is what you reach for when you want a *ceiling*; a ceiling a
 checkout can rewrite is not one. That holds by conjunction rather than by

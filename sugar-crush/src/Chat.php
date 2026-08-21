@@ -5168,6 +5168,59 @@ final class Chat implements Model
         ]);
     }
 
+    /**
+     * Seed the transcript with the warnings a LAUNCH produced, so they are
+     * readable from inside the alt screen.
+     *
+     * THE SEAM EXISTS BECAUSE stderr IS NOT A SURFACE AN INTERACTIVE USER HAS.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfig()} writes to
+     * stderr, which is the right channel for `-p` and for post-exit scrollback
+     * and is the ONLY channel roughly ten launch warnings have. MEASURED on a
+     * real `bin/sugarcrush` launch under a pty: the line lands 0.47s before
+     * `\e[?1049h`, and replaying the captured stream through a `candy-vt`
+     * `Terminal(120, 40)` finds no trace of it on the visible screen — the
+     * alternate buffer painted over it, and the primary buffer it was written
+     * into is not shown again until the session ENDS. An operator whose tool set
+     * a checkout just cut to `Bash` could not see that it had happened.
+     *
+     * A TRANSCRIPT ROW, not a new render surface, and the choice is the cheap
+     * one on purpose: {@see Renderer} already lays out, wraps and scrolls
+     * {@see Role::System} rows — `/compact`'s report, `/branch`'s confirmation
+     * and the background-session status notices are all this shape — so a
+     * warning routed here inherits a surface that is already scrollable and
+     * already correct at every width, instead of a banner that would have to
+     * learn all of that again.
+     *
+     * ONLY {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierToolRemovals()}
+     * IS ROUTED THROUGH IT TODAY. The other launch warnings are still
+     * stderr-only; each of them is a separate judgement about whether a user who
+     * did not ask deserves a transcript row, and making that judgement for ten
+     * messages at once is how a useful notice becomes a wall a user scrolls
+     * past. The seam is built wide enough for them to migrate one at a time.
+     *
+     * @param list<string> $notices sentences, without trailing punctuation
+     */
+    public function withLaunchNotices(array $notices): self
+    {
+        $messages = [];
+        foreach ($notices as $notice) {
+            $notice = trim($notice);
+            if ($notice === '') {
+                continue;
+            }
+            $messages[] = Message::system($notice);
+        }
+
+        // $this, not a clone, when there is nothing to say: a launch with no
+        // warnings is the common one, and an identical-but-new instance would
+        // make the caller's `$chat` a different object for no reason.
+        if ($messages === []) {
+            return $this;
+        }
+
+        return $this->mutate(['history' => [...$this->history, ...$messages]]);
+    }
+
     public function isStreaming(): bool
     {
         return $this->streaming;

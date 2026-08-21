@@ -172,6 +172,27 @@ final class Bootstrap
     private static array $reportedPermissionConfigWarnings = [];
 
     /**
+     * Launch warnings this LAUNCH wants shown INSIDE the TUI, in the order they
+     * were raised — {@see Chat::withLaunchNotices()}'s input.
+     *
+     * SCOPED TO THE LAUNCH, and deliberately NOT keyed the way
+     * {@see $reportedPermissionConfigWarnings} is. That map answers "has this
+     * process already printed this sentence", which stays true across a second
+     * {@see chat()} in the same process; this list answers "what does the
+     * transcript being built right now need to carry", which does not. The
+     * asymmetry is the same one {@see $projectTierRefusals} keeps against the
+     * same map, and {@see chat()} resets both in the same place.
+     *
+     * De-duplicated on VALUE because the launch raises some of these more than
+     * once — {@see app()} builds the tool set a second time for the shell's
+     * tool list, so {@see reportProjectTierToolRemovals()} runs twice with an
+     * identical message and the transcript must not say it twice.
+     *
+     * @var list<string>
+     */
+    private static array $launchNotices = [];
+
+    /**
      * The config FILE `--config` named, or null to discover
      * `~/.sugar-crush/config.json` — see {@see useConfigPath()}.
      */
@@ -489,6 +510,12 @@ final class Bootstrap
         // is a fact about the launch being built.
         self::$projectTierRefusals = [];
 
+        // Reset HERE, for {@see $projectTierRefusals}'s reason and in the same
+        // breath: what the transcript being built has to carry is a fact about
+        // this launch. It has to happen before `backend()` below, which is what
+        // reaches {@see filterToolSet()} and raises the notice.
+        self::$launchNotices = [];
+
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell
         // whose home it is in, which is what stops the launch reading policy
@@ -669,7 +696,10 @@ final class Bootstrap
         // states.
         self::reportProjectTierRefusals();
 
-        return $chat;
+        // LAST, so every warning the build raised is in hand — including
+        // reportProjectTierRefusals() above, whichever of these later migrates
+        // onto the transcript seam. See {@see Chat::withLaunchNotices()}.
+        return $chat->withLaunchNotices(self::$launchNotices);
     }
 
     /**
@@ -3738,6 +3768,55 @@ final class Bootstrap
     }
 
     /**
+     * {@see warnPermissionConfigOnce()}, AND a row in the transcript the launch
+     * is about to build.
+     *
+     * THE ONE WARNING THAT HAS TO BE SEEN WHILE THE SESSION RUNS, rather than
+     * before it or after it. stderr is the right channel for every other
+     * launch warning this class raises and it is not being taken away from
+     * them — `-p` reads it, and so does the scrollback a user gets back when
+     * they quit. But an interactive launch enters the alternate screen roughly
+     * half a second later (MEASURED: 0.47s on a real pty run) and paints over
+     * it, and the primary buffer does not come back until the session is over.
+     * A warning that says "this checkout cut your tools to `Bash`" arriving
+     * after the Bash-only session is not the warning.
+     *
+     * BOTH CHANNELS, never one instead of the other. See
+     * {@see Chat::withLaunchNotices()} for why the transcript is the surface and
+     * why only {@see reportProjectTierToolRemovals()} is routed here today.
+     *
+     * The stderr half keeps {@see warnPermissionConfigOnce()}'s per-process
+     * de-duplication and the transcript half keeps its own per-LAUNCH one, so a
+     * second {@see chat()} in one process still seeds its transcript even
+     * though stderr has already said it. Recording BEFORE the delegation rather
+     * than after is what makes that true — the Once() call returns early on the
+     * repeat.
+     */
+    private static function warnPermissionConfigInTranscript(string $message): void
+    {
+        if (!\in_array($message, self::$launchNotices, true)) {
+            self::$launchNotices[] = $message;
+        }
+
+        self::warnPermissionConfigOnce($message);
+    }
+
+    /**
+     * The launch warnings {@see chat()} seeds the transcript with — see
+     * {@see warnPermissionConfigInTranscript()}.
+     *
+     * Public so a test can read what a launch decided to say without capturing
+     * stderr, and so an embedder building its own Chat can route them into
+     * whatever surface it has.
+     *
+     * @return list<string>
+     */
+    public static function launchNotices(): array
+    {
+        return self::$launchNotices;
+    }
+
+    /**
      * The project's MCP config file name — the SAME file Claude Code reads, and
      * the same `mcpServers` key {@see McpClient::loadConfig()} already parsed
      * before anything built one.
@@ -4461,6 +4540,19 @@ final class Bootstrap
      * a silently toolless agent, and a user who wants that has
      * `disabledTools: ["*"]`.
      *
+     * THAT LAST CLAUSE NAMES A USER AND THIS METHOD APPLIES IT TO A PROJECT.
+     * `disabledTools` is in {@see LayeredSettings::PROJECT_TIER_KEYS}, so a
+     * trusted checkout's `["*"]` reaches this same branch and produces the same
+     * empty set — a "supported way to ask for a toolless agent" asked for by the
+     * repository rather than by its operator. Left as it is, deliberately: both
+     * reports fire ({@see reportProjectTierToolRemovals()} names the file, and
+     * the empty-set warning below follows it), and reaching the branch at all
+     * requires the operator's own
+     * {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY} grant. It is written
+     * down because the sentence's authority is "the user chose this", and that
+     * authority does not transfer to the project tier on its own — the trust
+     * grant is what carries it there.
+     *
      * A NON-LIST VALUE IS IGNORED rather than coerced, matching
      * {@see permissionRules()}'s discipline: `"disabledTools": "Bash"` is a
      * mistake whose charitable reading (a one-element list) is a guess, and
@@ -4505,11 +4597,15 @@ final class Bootstrap
      *
      * Extracted so {@see reportProjectTierToolRemovals()} can evaluate the SAME
      * predicate against the stack minus the project tier and diff the two
-     * results. That is not the "two passes" this method's doc-block warns about
-     * — the allow/deny conjunction below is untouched and still decides each
-     * tool in one expression; what runs twice is the whole predicate, over two
-     * different configs, and neither run can re-admit anything the other
-     * removed because neither run sees the other's output.
+     * results. That is not the "two passes" {@see filterToolSet()}'s doc-block
+     * warns about: the allow/deny conjunction below is untouched and still
+     * decides each tool in one expression; what runs twice is the whole
+     * predicate, over two different configs, and neither run can re-admit
+     * anything the other removed because neither run sees the other's output.
+     *
+     * (This sentence used to say "this method's doc-block", which pointed at the
+     * paragraph you are reading — the one place the warning is NOT. It is in
+     * {@see filterToolSet()}'s block, above the predicate the warning is about.)
      *
      * @param list<Tool> $tools
      * @param array<string, mixed> $config
@@ -4629,7 +4725,10 @@ final class Bootstrap
 
         $remaining = array_values(array_diff($withoutProject, $removed));
 
-        self::warnPermissionConfigOnce(sprintf(
+        // BOTH CHANNELS — see {@see warnPermissionConfigInTranscript()}. On the
+        // interactive path stderr alone is a warning nobody can read: measured,
+        // this line printed 0.47s before the alternate screen opened over it.
+        self::warnPermissionConfigInTranscript(sprintf(
             '%s (disabledTools) disabled %d of the %d tools your own settings left — %s — %s',
             $source,
             \count($removed),
