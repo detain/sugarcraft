@@ -464,9 +464,11 @@ final readonly class ScriptHook implements BoundedHookInterface
         $cwd = is_dir($context->projectRoot) ? $context->projectRoot : null;
 
         // THE TWO PAYLOAD VARIABLES ARE STAGED, NOT ASSIGNED — see
-        // stagePayloads(). Everything below this line has to reach the
-        // `discardPayloadFiles()` in the `finally`, which is why the rest of
-        // this method is a try block.
+        // stagePayloads(). The rest of the run lives in executeStaged() purely
+        // so that every one of its returns — the two fail-closed denies, the
+        // timeout, the verdict — passes through this `finally` and deletes the
+        // files. Inlining it would put a `finally` around a hundred lines whose
+        // early returns are the whole point of them.
         $payload = self::stagePayloads([
             'CRUSH_TOOL_INPUT' => $context->toolInput,
             'CRUSH_TOOL_OUTPUT' => $context->toolOutput,
@@ -493,9 +495,9 @@ final readonly class ScriptHook implements BoundedHookInterface
             // reason an unusable `cwd` does — a hook that was never shown the
             // call has not approved it.
             return HookResult::deny(sprintf(
-                'Hook %s could not be given %s (no temporary file could be created and the value is '
-                . 'over the %d-byte environment ceiling); a hook that has not seen the call has not '
-                . 'allowed it.',
+                'Hook %s could not be given %s (no temporary file could be created, and the value is '
+                . 'too large for one environment entry — %d bytes for name, value and NUL together); '
+                . 'a hook that has not seen the call has not allowed it.',
                 $this->name,
                 implode(' or ', $payload['unreachable']),
                 self::MAX_ENV_ENTRY_BYTES,

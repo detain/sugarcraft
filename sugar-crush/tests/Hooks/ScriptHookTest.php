@@ -1185,6 +1185,81 @@ final class ScriptHookTest extends TestCase
         $this->assertFileDoesNotExist($result->message);
     }
 
+    /**
+     * NEITHER ROUTE AVAILABLE IS A DENY, not a hook that runs blind.
+     *
+     * The environment cannot hold the value and the filesystem will not give us
+     * a file, so the child would either fail to exec or start with the payload
+     * missing — and a guard handed no arguments allows what it would have
+     * denied. Same fail-closed rule as an unusable `cwd`.
+     *
+     * `TMPDIR` is pointed at a REGULAR FILE rather than at an unwritable
+     * directory, deliberately: `tempnam()` into a path that is a file fails for
+     * root as well, so this needs no `posix_geteuid()` guard and cannot turn
+     * into a conditional skip on a CI runner that happens to be root.
+     *
+     * It runs in a CHILD because `sys_get_temp_dir()` caches its answer on the
+     * first call, so a `putenv()` inside a suite that has already used a temp
+     * file changes nothing.
+     */
+    public function testAPayloadThatFitsNeitherRouteFailsClosed(): void
+    {
+        $notADirectory = tempnam(sys_get_temp_dir(), 'scripthook_notadir_');
+        self::assertIsString($notADirectory);
+
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = <<<PHP
+            <?php
+            declare(strict_types=1);
+            require {$this->export($autoload)};
+
+            \$hook = new SugarCraft\Crush\Hooks\ScriptHook(
+                'starved_hook',
+                SugarCraft\Crush\Hooks\HookEvent::PreToolUse,
+                '.*',
+                'exit 0',
+                '',
+            );
+
+            \$result = \$hook->execute(new SugarCraft\Crush\Hooks\HookContext(
+                'sid', 'Bash', [], str_repeat('B', 200000), '',
+                'test-model', 'test-provider', '/tmp',
+            ));
+
+            fwrite(STDOUT, json_encode(['action' => \$result->action, 'message' => \$result->message]));
+            PHP;
+
+        $file = tempnam(sys_get_temp_dir(), 'scripthook_starved_');
+        self::assertIsString($file);
+        file_put_contents($file, $script);
+
+        try {
+            $process = proc_open(
+                [PHP_BINARY, $file],
+                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                null,
+                ['TMPDIR' => $notADirectory, 'PATH' => (string) getenv('PATH')],
+            );
+            self::assertIsResource($process);
+
+            $stdout = (string) stream_get_contents($pipes[1]);
+            stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($process);
+        } finally {
+            @unlink($file);
+            @unlink($notADirectory);
+        }
+
+        $decoded = json_decode($stdout, true);
+        self::assertIsArray($decoded, "the child reported nothing: {$stdout}");
+        $this->assertSame('deny', $decoded['action']);
+        $this->assertStringContainsString('CRUSH_TOOL_INPUT', (string) $decoded['message']);
+        $this->assertStringContainsString('no temporary file could be created', (string) $decoded['message']);
+    }
+
     // =========================================================================
     // Non-DENY output bounds — E60. ASK is clipped, MODIFY is refused
     // =========================================================================
