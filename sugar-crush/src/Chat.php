@@ -4075,8 +4075,17 @@ final class Chat implements Model
      * digits and nothing else, and those digits name a row the palette
      * currently HAS.
      *
-     * WHAT EACH ONE IS WORTH, measured over the 867-test mouse/palette domain
-     * at this commit rather than asserted. A previous revision said "each one
+     * WHAT EACH ONE IS WORTH, measured at this commit rather than asserted,
+     * over the MOUSE/PALETTE DOMAIN — named by the rule that produces it, not
+     * by its size, since the size is the half that goes stale without saying
+     * so. The rule is `grep -rl` over `tests/` for `MouseClickMsg`,
+     * `PALETTE_ITEM_ZONE_PREFIX`, `paletteMatches` or `PaletteState`; at this
+     * commit it yields SIXTEEN files running 867 tests / 51906 assertions
+     * green. Re-derive it rather than trusting those numbers. NOTE what it is
+     * NOT: it is not every mouse-capable test file — `ChatScrollTest`,
+     * `MouseWiringTest` and `Integration/FeatWiringReachabilityTest` deliver
+     * mouse events and are outside it, which is why {@see selectPane()}'s
+     * measurement unions them in rather than reusing this domain. A previous revision said "each one
      * kills a mutation on its own"; driven, each of the three individually
      * red NOTHING, and the sentence could not have been right anyway — three
      * checks, two widening mutations. What is true is narrower and is stated
@@ -4398,8 +4407,22 @@ final class Chat implements Model
      *   zone except the palette's own `picker-item:<n>` rows while the
      *   palette is up, so `pane:menu` cannot arrive here with
      *   `$this->palette` set. Measured: deleting this arm's `!== null` test
-     *   and always re-rooting reds NOTHING over the full suite (8778 tests, at
-     *   this commit).
+     *   and always re-rooting reds NOTHING.
+     *
+     *   OVER WHAT, stated as a reachability argument rather than as a suite
+     *   size, because the size is the part that goes stale. The figure this
+     *   replaces read "the full suite (8778 tests, at this commit)" — a count
+     *   taken on base `995eb257`, three master commits and 29 `tests/Tools/*`
+     *   tests before the commit whose docblock asserted it. A count cannot be
+     *   re-verified by reading it, so it is replaced by a scope that can be
+     *   re-derived: this method is reachable ONLY from {@see handleMouse()}'s
+     *   `pane:` dispatch, so only a test that delivers a mouse event can red
+     *   it, and the mutation was driven over every test file that names any
+     *   mouse `Msg`, `MouseButton`, `MouseAction`, `MouseEvent`,
+     *   `selectPane`, `handleMouse` or `PANE_ZONE_PREFIX`, unioned with the
+     *   mouse/palette domain of {@see paletteRowIndex()} — 20 files, 935
+     *   tests, 52355 assertions, green before and after. Re-derive the file
+     *   list with that grep; do not trust this paragraph's `20`.
      *   It stays because it is the same rule stated where the state change
      *   lives, and it is the arm that would still hold if a second caller
      *   ever reached this method from somewhere the outer guard does not

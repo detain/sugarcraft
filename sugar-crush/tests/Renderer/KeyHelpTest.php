@@ -3507,7 +3507,7 @@ final class KeyHelpTest extends TestCase
      * a negative nobody drives is a negative that quietly becomes a positive
      * when somebody widens a key arm elsewhere. The three remaining negatives
      * are driven in both orders by
-     * {@see testTheFourUnreachableOverlayPairsStayUnreachableFromEitherEnd()},
+     * {@see testTheThreeUnpinnedUnreachableOverlayPairsStayUnreachableFromEitherEnd()},
      * and reference+prompt by
      * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}. So
      * this chain test is load-bearing for two of its links and a determinism
@@ -3609,17 +3609,21 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The FOUR unreachable pairs of the six, driven in both orders — the half
-     * of the table above that was prose.
+     * THREE of the table's four unreachable pairs, driven in both orders — the
+     * three that were read back by nothing at all.
      *
-     * The two reachable pairs are pinned by
-     * {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices()}
-     * and reference+prompt by
-     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}; the
-     * other three negatives were read back by nothing at all. That is how the
-     * count in that table came to be wrong twice ("exactly ONE", then "NONE"):
-     * a claim nobody drives is a claim that decays silently, and unreachability
-     * is exactly the kind of claim that turns into reachability when someone
+     * Not four: reference+prompt is the fourth and it keeps its own test,
+     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}, which
+     * builds a real turn and a real `PreToolUse` ask because that is the only
+     * way to raise a prompt through the front door. Nothing here covers it, so
+     * nothing here claims to. (The two REACHABLE pairs are pinned by
+     * {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices()}.)
+     *
+     * That leaves no cell of the `front door?` column unread, which is the
+     * point: the count in that table has been wrong twice ("exactly ONE", then
+     * "NONE"), and both times the wrong half was the narrated half. A claim
+     * nobody drives is a claim that decays silently, and unreachability is
+     * exactly the kind of claim that turns into reachability when someone
      * widens a key arm two files away. Every assertion here is the same shape —
      * raise one overlay through the front door, press the key that raises the
      * other, and require the second to still be absent.
@@ -3628,7 +3632,7 @@ final class KeyHelpTest extends TestCase
      * up it is consumed by that overlay (the palette files it into its query),
      * which is what makes these pairs unreachable rather than merely unusual.
      */
-    public function testTheFourUnreachableOverlayPairsStayUnreachableFromEitherEnd(): void
+    public function testTheThreeUnpinnedUnreachableOverlayPairsStayUnreachableFromEitherEnd(): void
     {
         $idle = $this->chat();
 
@@ -3662,14 +3666,6 @@ final class KeyHelpTest extends TestCase
         $this->assertNull($e->sessionPicker(), 'the palette swallows Ctrl+R');
         [$f] = $picker->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         $this->assertNull($f->palette(), 'and the picker swallows Ctrl+P');
-
-        // reference + prompt is the fourth, and it has its own driven test
-        // because building a real prompt takes a real turn and a real hook.
-        $this->assertNull(
-            $reference->pendingPermission(),
-            'the reference fixture carries no prompt — see testThePromptAndTheReferenceCannotBothBe'
-            . 'RaisedByRealInput() for that pair, driven end to end through a PreToolUse ask',
-        );
     }
 
     /**
