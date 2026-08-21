@@ -419,16 +419,40 @@ because `liveOutputs()` reports exactly the agents with a non-terminal
 sub-agent that has produced text, so it is empty both before work starts and
 after it finishes.
 
-**It is wired, and it is not yet visible.** The only production producer of
-that data is a workflow's parallel stage, and `Chat::workflowRun()` calls
-`WorkflowEngine::run()` synchronously from inside `update()` — the ReactPHP
-loop is blocked in `ProcessExecutor`'s `stream_select()` for the whole run, so
-candy-core's render tick never fires between the keystroke and the last stage,
-and by the time it does the agents are finished and the map is empty again.
-That is issue #79 (`Chat::workflowRun()`'s own docblock), not a gap in the
-compositor. Until it lands the split is exercised by
-`tests/Tui/AgentSplitCompositorTest.php` and by an embedder driving
-`AgentManager` directly.
+**It is wired, and it is now visible** — but it took two fixes, not one, and
+the first was documented here as the whole story. The only production producer
+of that data is a workflow's parallel stage, and that stage was invisible for
+two independent reasons:
+
+- **No frame.** `Chat::workflowRun()` called `WorkflowEngine::run()`
+  synchronously from inside `update()`, so candy-core's render tick could not
+  fire between the keystroke and the last stage. It now hands the run to a
+  `\Fiber` that a periodic timer on the ReactPHP loop steps, suspending at
+  `AgentWorkerPool::idle()`. (The `stream_select()` this paragraph used to
+  blame runs in the forked CHILD; it never blocked the parent.)
+- **Nothing to paint.** Even with a frame, the map was empty for the whole of
+  a run: on the pool path `SubAgent::$output` had exactly one writer,
+  `AgentManager::drain()`, which settles the final text at the same instant it
+  makes the status terminal. A pool-executed sub-agent was therefore always
+  either running-and-silent or finished, and `liveOutputs()`'s liveness filter
+  could never see one. Forked workers now publish each streamed chunk to a
+  file in the pool's IPC directory and `AgentWorkerPool::pumpProgress()`
+  mirrors it onto the SubAgent once per poll.
+
+Fixing only the first would have produced a pane that painted promptly and
+blank, which is why the second is worth stating separately.
+
+⚠️ This paragraph used to close by citing "issue #79". No open issue ever
+tracked any of it — detain/sugarcraft #79 is a MERGED pull request titled
+"Phase 9+: CandyMetrics — telemetry primitives + CandyWish middleware".
+
+The live path is exercised by `tests/Workflows/WorkflowLivePaneTest.php`; the
+compositor in isolation by `tests/Tui/AgentSplitCompositorTest.php` and by an
+embedder driving `AgentManager` directly. What is still NOT live: the three
+dispatch paths that do not fork — an injected `ExecutorInterface`, a build
+without `pcntl`, and a failed `fork()` — call `execute()` synchronously in the
+parent and publish no progress, so they block the loop and leave the pane
+blank for their duration.
 
 `WindowSizeMsg` is the size truth. Mouse tracking is on by default and has two
 escape hatches (`SUGARCRUSH_DISABLE_MOUSE`, `SUGARCRUSH_DISABLE_MOUSE_CLICKS`)

@@ -489,7 +489,21 @@ final class AgentWorkerPool
     }
 
     // -------------------------------------------------------------------------
-    // Protected helpers — overridable for testing
+    // Internal helpers
+    //
+    // `protected`, NOT overridable. This banner used to say "overridable for
+    // testing" and that was never true: the class is `final` (see the class
+    // declaration), so no subclass can exist to override any of them, and
+    // nothing in `src/`, `tests/` or `bin/` extends it. Thirteen methods sat
+    // under a promise the type system forbids — five of them added by the
+    // progress-publishing work without anyone re-reading the heading.
+    //
+    // `protected` rather than `private` is kept deliberately, for the one
+    // thing it still buys: these are the seam a future non-final variant
+    // would specialise, and demoting them to `private` would be a silent
+    // narrowing of that option. Tests reach them through the public surface
+    // or through reflection, never by subclassing. If you drop `final`, this
+    // comment is what you have to update first.
     // -------------------------------------------------------------------------
 
     /**
@@ -499,6 +513,41 @@ final class AgentWorkerPool
      * in the same process. When using the default ProcessExecutor, forks a child
      * process for true parallelism. The pool's concurrency management (dispatch
      * up to maxConcurrent, result collection, cancellation) is identical either way.
+     *
+     * ## FOUR DISPATCH PATHS, ONE OF WHICH IS LIVE
+     *
+     * Only the `pcntl_fork()` path publishes progress. It runs
+     * {@see runStreaming()}, which mirrors each `Streaming` chunk into the
+     * agent's progress file for {@see pumpProgress()} to pick up — the whole
+     * mechanism behind the live split pane. The other three (an injected
+     * `customExecutor`, a build without `pcntl`, and a failed `fork()`) call
+     * `$executor->execute()` SYNCHRONOUSLY IN THE PARENT.
+     *
+     * Two consequences, and the second is the one that matters:
+     *
+     *  1. No progress is published, so `AgentManager::liveOutputs()` stays
+     *     empty and the pane shows nothing for the agent.
+     *  2. The parent is inside `execute()` for its whole duration, so the
+     *     ReactPHP loop does not turn and {@see idle()} — the only
+     *     `Fiber::suspend()` in `src/` — is never reached. Measured on the
+     *     shipped workflow shapes: a parallel stage on the FORKING executor
+     *     suspends ~111k times over a run; the same stage on an injected
+     *     executor suspends ZERO times. So making the parent's `execute()`
+     *     publish would write a file nothing gets a chance to read: there is
+     *     no repaint to feed until the call returns, by which point
+     *     `AgentManager::drain()` has settled the final text anyway.
+     *
+     * That is why this is documented rather than "fixed" by routing the
+     * synchronous paths through `executeStream()`. Doing so would buy no
+     * visible output while changing the interface method every injected
+     * executor must implement — the pool's own tests inject mocks that stub
+     * `execute()`. The blocking is the defect; publishing is not the fix for
+     * it, and an asynchronous in-parent executor is its own change.
+     *
+     * USER-FACING because the README tells you to inject an
+     * `ExecutorInterface` to reach a real model — which silently opts you out
+     * of the live pane. Stated under *Limitations* there too, so the person
+     * who follows that advice is told before they wonder.
      */
     protected function startAgent(SubAgent $agent, CompleteRequest $request, ExecutorInterface $executor): void
     {

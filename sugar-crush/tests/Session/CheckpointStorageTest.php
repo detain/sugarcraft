@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Session;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 
 /**
@@ -503,17 +504,17 @@ final class CheckpointStorageTest extends TestCase
         $store = new EnhancedSessionStore($this->dbPath);
         $store->createSession('s', 'p', 'm');
 
-        $first = $this->countingMessage('one');
-        $second = $this->countingMessage('two');
-        $third = $this->countingMessage('three');
+        [$first, $firstEncodes] = $this->countingMessage('one');
+        [$second, $secondEncodes] = $this->countingMessage('two');
+        [$third, $thirdEncodes] = $this->countingMessage('three');
 
         $store->saveCheckpoint('s', ['messages' => [$first]]);
         $store->saveCheckpoint('s', ['messages' => [$first, $second]]);
         $store->saveCheckpoint('s', ['messages' => [$first, $second, $third]]);
 
-        $this->assertSame(1, $first->encodes, 'The oldest message was re-encoded on every later turn.');
-        $this->assertSame(1, $second->encodes, 'A message carried into the next turn was re-encoded.');
-        $this->assertSame(1, $third->encodes);
+        $this->assertSame(1, $firstEncodes->encodes, 'The oldest message was re-encoded on every later turn.');
+        $this->assertSame(1, $secondEncodes->encodes, 'A message carried into the next turn was re-encoded.');
+        $this->assertSame(1, $thirdEncodes->encodes);
     }
 
     /**
@@ -621,7 +622,7 @@ final class CheckpointStorageTest extends TestCase
         // on its last save. Without that, "the checkpoint reads back" would
         // pass just as well on a build that had re-encoded it from scratch,
         // and the branch under test would never be entered.
-        $second = $this->countingMessage('reply 1');
+        [$second, $secondEncodes] = $this->countingMessage('reply 1');
 
         $terminalOne->saveCheckpoint('s', ['messages' => [$first]]);
         $terminalOne->saveCheckpoint('s', ['messages' => [$first, $second]]);
@@ -650,7 +651,7 @@ final class CheckpointStorageTest extends TestCase
         // hash would show 1 here — and would be holding a second copy of every
         // message in the history to buy it, which is the trade
         // {@see EnhancedSessionStore::$messageHashes} declines to make.
-        $this->assertSame(2, $second->encodes);
+        $this->assertSame(2, $secondEncodes->encodes);
 
         $this->assertSame(
             3,
@@ -668,9 +669,12 @@ final class CheckpointStorageTest extends TestCase
     }
 
     /**
-     * A body that is NOT an object takes the encode path every time, exactly
-     * as before — WeakMap has no key for it. Asserted so the `is_object()`
-     * guard is not mistaken for dead weight and removed.
+     * A body that is NOT a {@see Message} takes the encode path every time,
+     * exactly as before — the memo has no key for it. Asserted so the
+     * `instanceof Message` guard is not mistaken for dead weight and widened
+     * back to `is_object()`; see
+     * {@see testAMutableNonMessageBodyIsNeverMemoised()} for what widening it
+     * costs.
      */
     public function testArrayBodiesStillRoundTripAlongsideObjectOnes(): void
     {
@@ -688,24 +692,95 @@ final class CheckpointStorageTest extends TestCase
     }
 
     /**
-     * A message body that counts how many times it has been encoded.
+     * The memo must not extend past the type its soundness proof covers.
      *
-     * @return object{encodes: int}
+     * {@see EnhancedSessionStore::$messageHashes} is keyed on object identity,
+     * and identity is only a safe stand-in for content because `Message` is
+     * deeply immutable. `EnhancedSessionStore` is a PUBLIC seam, though —
+     * `Chat` happens to hand it `list<Message>`, but nothing in the signature
+     * of {@see EnhancedSessionStore::saveCheckpoint()} says so, and an
+     * embedder may checkpoint whatever it likes.
+     *
+     * Under an `is_object()` guard such a body was pinned to its first-seen
+     * encoding for the life of the process: the sequence below wrote 'BEFORE',
+     * mutated the object to 'AFTER', wrote again — and the SECOND checkpoint
+     * read back as 'BEFORE'. Silent, unbounded, and a regression against the
+     * pre-memo code, which re-encoded every body on every save and got this
+     * right by construction.
+     *
+     * The mutable object is the whole test. Do not replace it with a `Message`
+     * "for realism" — a `Message` cannot exhibit the bug, which is exactly why
+     * the memo is sound for one and not the other.
      */
-    private function countingMessage(string $content): object
+    public function testAMutableNonMessageBodyIsNeverMemoised(): void
     {
-        return new class ($content) implements \JsonSerializable {
-            public int $encodes = 0;
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s', 'p', 'm');
 
-            public function __construct(private readonly string $content) {}
+        $body = new class {
+            public string $content = 'BEFORE';
+        };
+
+        $before = $store->saveCheckpoint('s', ['messages' => [$body]]);
+        $body->content = 'AFTER';
+        $after = $store->saveCheckpoint('s', ['messages' => [$body]]);
+
+        $this->assertSame(
+            'BEFORE',
+            $store->getCheckpoint('s', $before)['messages'][0]['content'],
+            'The checkpoint taken before the mutation did not survive it.',
+        );
+        $this->assertSame(
+            'AFTER',
+            $store->getCheckpoint('s', $after)['messages'][0]['content'],
+            'A mutated body was memoised: the later checkpoint restored the EARLIER contents.',
+        );
+
+        // The two checkpoints must also be distinguishable on disk. A memo
+        // that collapsed them onto one hash would store a single blob, and an
+        // assertion on content alone could still pass if both reads happened
+        // to hit the surviving body.
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $this->assertSame(
+            2,
+            (int) $pdo->query('SELECT COUNT(*) FROM checkpoint_blobs')->fetchColumn(),
+            'Two distinct bodies collapsed onto one content-addressed blob.',
+        );
+    }
+
+    /**
+     * A REAL {@see Message} whose every encoding is counted.
+     *
+     * The counted object has to BE a `Message`, because that is what
+     * {@see EnhancedSessionStore::messageFingerprint()} memoises. An earlier
+     * revision of this helper returned a bare anonymous `JsonSerializable`
+     * and the memo guard was `is_object()`, so it worked — and in working, it
+     * hid the defect that the guard was wider than the immutability proof it
+     * rests on. Under the corrected `instanceof Message` guard a stand-in is
+     * not memoised at all, and a test built on one would assert the opposite
+     * of what it claims.
+     *
+     * The counter rides in `attachments`, which `json_encode()` walks, so it
+     * increments exactly once per encode of the whole message. That slot is
+     * `list<Attachment>` by docblock only — no runtime type — so an arbitrary
+     * `JsonSerializable` is accepted, and none of this leaves the test.
+     *
+     * @return array{0: Message, 1: object{encodes: int}}
+     */
+    private function countingMessage(string $content): array
+    {
+        $counter = new class implements \JsonSerializable {
+            public int $encodes = 0;
 
             public function jsonSerialize(): mixed
             {
                 $this->encodes++;
 
-                return ['role' => 'user', 'content' => $this->content];
+                return [];
             }
         };
+
+        return [new Message(Role::User, $content, 0, [$counter]), $counter];
     }
 
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Session;
 
 use PDO;
+use SugarCraft\Crush\Message;
 
 /**
  * SQLite session persistence with enhanced metadata tracking and checkpointing.
@@ -326,6 +327,19 @@ final class EnhancedSessionStore
      * 38 ms of `sha256` — 52 ms of dead time on every prompt, ~10 s over the
      * session. A hit here costs 25 µs for the same 400 messages.
      *
+     * ⚠️ MEASURE THE ENCODE THE WAY THE LOOP DOES IT. A review re-measured
+     * this and reported the encode half as 7.5 ms, i.e. half what is recorded
+     * above. That benchmark encoded and threw the payload away;
+     * {@see internMessages()} KEEPS it (`$fresh[$hash] = $payload`), so it can
+     * insert the bytes for a missing blob without a second encode. Retaining
+     * 400 × 32 KB is the other ~7 ms, and it is real work this path performs.
+     * Re-measured three ways on the same box: encode-and-discard 7.40 ms,
+     * encode-and-retain 14.38 ms, and the faithful
+     * encode+`sha256`+retain loop 49.72 ms against `sha256` alone at
+     * 37.89 ms — 11.8 ms of encode attributable inside the real loop. The
+     * figures above stand; do not "correct" them to the discarded-payload
+     * number.
+     *
      * ## Why object identity is a sound key
      *
      * {@see Message} is `final` and every property is `readonly`, as is every
@@ -339,9 +353,22 @@ final class EnhancedSessionStore
      *   - REWINDING replaces the history list wholesale; the instances that
      *     fall out take their entries with them, because a `WeakMap` holds its
      *     keys weakly.
-     *   - A non-object element (tests and embedders may checkpoint plain
-     *     arrays) is simply not memoised; it takes the encode path every time,
-     *     exactly as before.
+     *   - Anything that is NOT a `Message` — a plain array, or an arbitrary
+     *     object an embedder checkpoints — is not memoised; it takes the
+     *     encode path every time, exactly as before.
+     *
+     * THE GUARD MUST MATCH THE PROOF, and for one revision it did not: the
+     * memo was written under `is_object()` while the argument above is about
+     * `Message`. Every clause of the proof is a claim about THAT type, and
+     * nothing constrains an object an embedder hands to
+     * {@see saveCheckpoint()} — `EnhancedSessionStore` is a public seam, and
+     * `Chat` merely happens to pass `list<Message>`. A mutable object was
+     * therefore pinned to its first-seen encoding for the rest of the
+     * process: checkpoint, mutate, checkpoint again, and the second
+     * checkpoint restored the FIRST value, silently. That is a corruption the
+     * pre-memo code could not produce. `messageFingerprint()` now tests
+     * `instanceof Message`, and `CheckpointStorageTest` pins it with a
+     * mutable object whose two checkpoints must differ.
      *
      * ## Why the HASH and not the payload
      *
@@ -515,7 +542,16 @@ final class EnhancedSessionStore
      */
     private function messageFingerprint(mixed $message): array
     {
-        $memo = is_object($message) ? ($this->messageHashes[$message] ?? null) : null;
+        // `instanceof Message`, NOT `is_object()`. The memo's soundness proof
+        // is a proof about {@see Message} specifically — that type and every
+        // type reachable from it is deeply immutable, so an instance's
+        // encoding is fixed for its lifetime. `is_object()` extended the memo
+        // to objects that proof says nothing about, and a MUTABLE one was
+        // then silently checkpointed at its first-seen contents forever:
+        // save, mutate the object, save again, and the second checkpoint
+        // restored the FIRST value. That is a corruption the pre-memo code
+        // could not produce, because it re-encoded every message every time.
+        $memo = $message instanceof Message ? ($this->messageHashes[$message] ?? null) : null;
         if ($memo !== null) {
             return [$memo, null];
         }
@@ -523,7 +559,7 @@ final class EnhancedSessionStore
         $payload = self::encodeJson($message);
         $hash = hash('sha256', $payload);
 
-        if (is_object($message)) {
+        if ($message instanceof Message) {
             $this->messageHashes[$message] = $hash;
         }
 

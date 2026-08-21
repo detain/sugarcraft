@@ -196,8 +196,14 @@ use SugarCraft\Crush\Tui\Pane;
  * The two are not redundant: this one is a line in the transcript, the
  * compositor's is a column beside it, and a session that has no `App` shell
  * around it — or a terminal under 80 columns — still gets this one and only
- * this one. Neither is visible during a workflow yet, for the issue-#79
- * reason above; the compositor's docblock
+ * this one. Their VISIBILITY during a workflow now differs, and this is the
+ * line that used to get it wrong — it still said "neither is visible … for
+ * the issue-#79 reason above" fifty lines BELOW the paragraph that records
+ * that reason as gone. The compositor's column DOES paint during a run
+ * (fiber-driven frames plus `pumpProgress()`, per that paragraph); this
+ * in-transcript strip still does not, for the entirely separate reason at the
+ * top of this block — it reads `active()`, the REGISTERED map, and a
+ * workflow's parallel agents are never registered. The compositor's docblock
  * ({@see \SugarCraft\Crush\Tui\Renderer::agentSplitWidth()}) carries the
  * measurement.
  * `src/Tui/Components/AgentsPane.php` — also in R20's file list

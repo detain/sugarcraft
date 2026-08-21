@@ -6616,6 +6616,20 @@ final class Chat implements Model
      * user with forked workers they cannot see and no record they ran.
      * Actually CANCELLING mid-run means threading a `CancellationToken` down
      * to `AgentWorkerPool::cancelAll()`, which is its own change.
+     *
+     * WHAT THAT LIMITATION USED TO IMPLY, and no longer does: because the
+     * released turn accepts input again, a user could type a SECOND
+     * `/workflow run` while the first was still stepping, and get it. Measured
+     * — two runs live at once, exiting in an order unrelated to the order they
+     * started, each popping the other's SIGINT/SIGTERM frame off
+     * `WorkflowEngine`'s LIFO handler stack, and both collapsing onto one
+     * `$resultsByName` slot when they shared a name (so `/workflow pause` on
+     * run A's own printed id persisted run B). `WorkflowEngine` now REFUSES a
+     * run that would interleave with a live one and says so; see
+     * `WorkflowEngine::$liveRunOwners`. Nesting — a stage re-entering `run()`
+     * on the same call stack — is unaffected and still works. So the turn is
+     * still released without stopping the run; what changed is that the
+     * released turn can no longer start a second one on top of it.
      */
     private function driveWorkflowFiber(\Fiber $fiber): \Closure
     {

@@ -111,18 +111,104 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * restore are a matched pair around one stage-execution loop, and the value
      * has no meaning to anybody else.
      *
-     * A STACK rather than one frame, because runs nest. `runFromPhp(callable)`
-     * invokes arbitrary caller code to produce its Workflow, and that callable
-     * may itself call `run()` on this same engine; a single frame meant the
-     * inner restore installed the OUTER run's handler (correct so far) and then
-     * cleared the array, so the outer restore found nothing captured and fell
-     * back to `SIG_DFL` — reinstating, one level in, the exact defect
+     * A STACK rather than one frame, because runs NEST: a STAGE can re-enter
+     * `run()` on this same engine — the executor a stage dispatches to is
+     * caller-supplied code, and it may. A single frame meant the inner restore
+     * installed the OUTER run's handler (correct so far) and then cleared the
+     * array, so the outer restore found nothing captured and fell back to
+     * `SIG_DFL` — reinstating, one level in, the exact defect
      * {@see restoreInterruptHandlers()} exists to fix. Push/pop keeps each
-     * run's frame with that run.
+     * run's frame with that run. Exercised by
+     * `WorkflowEngineTest::testNestedRunsEachRestoreTheirOwnCallersSignalHandler()`.
+     *
+     * (This paragraph used to name `runFromPhp(callable)` as the nesting case.
+     * It is not one: that callable is invoked to PRODUCE the Workflow, before
+     * {@see runFromWorkflow()} is entered, so a `run()` it makes has already
+     * finished by the time the outer run captures anything. Sequential, not
+     * nested.)
+     *
+     * ⚠️ A STACK IS ONLY CORRECT FOR NESTING, and nesting stopped being the
+     * only way two runs can be live. A nested run shares its parent's call
+     * stack, so it necessarily finishes first and LIFO is exactly right.
+     * INTERLEAVED runs do not: since `Chat::workflowRun()` drives a run from a
+     * `\Fiber`, two runs can be live in two fibers, suspend at
+     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::idle()}, and finish in
+     * an order with NO relationship to the order they started in. Each pop
+     * then reinstates whichever frame happens to be on top — measured as the
+     * second-most-recently-installed one, which with three overlapping runs is
+     * not even the other run's — so the handler live during the overlap
+     * belongs to a run that has already finished.
+     *
+     * That is not cosmetic, and it is not a leak either. Measured both ways:
+     * the ORIGINAL disposition IS correctly restored once the last run exits
+     * (push and pop are balanced 1:1, and the true pre-run frame sits at the
+     * bottom), including when a suspended fiber is abandoned and collected —
+     * PHP unwinds it, so the `finally` still runs. There is no
+     * process-lifetime leak. But INSIDE the window, a delivered SIGINT was
+     * observed to write a pause file for the run that had already ENDED —
+     * `alpha.json`, with alpha's stages — and to discard the live run's
+     * progress entirely before `exit(130)`. Wrong data persisted, not just a
+     * stale closure. (Mitigating: raw mode clears `ISIG`, so an interactive
+     * Ctrl-C is a byte rather than a signal — this needs an external
+     * `kill -INT`/`-TERM`, or a caller not in raw mode.)
+     *
+     * {@see $liveRunOwners} refuses that case outright rather than trying to
+     * make the stack interleave-safe; see there for why refusing is the right
+     * answer and not merely the cheap one.
      *
      * @var list<array<int, callable|int>>
      */
     private array $previousSignalHandlers = [];
+
+    /**
+     * The owner of every run currently live on this engine, innermost last —
+     * the `\Fiber` it is executing in, or `null` for the main call stack.
+     *
+     * This is the state that tells NESTING (fine, and supported: see
+     * {@see $previousSignalHandlers}) apart from INTERLEAVING (refused). A
+     * nested run is entered from inside its parent, so it sees its own owner
+     * already on this list and is allowed through. An interleaved run is
+     * entered from a different fiber, sees a DIFFERENT owner, and is refused.
+     *
+     * WHY REFUSE RATHER THAN MAKE THE ENGINE RE-ENTRANT. The signal-handler
+     * stack is the sharpest symptom but not the worst one. {@see run()} keys
+     * {@see $resultsByName} by workflow NAME and {@see rememberResult()}
+     * overwrites that slot unconditionally, so two live runs of ONE name
+     * collapse into a single entry, last writer wins, while
+     * {@see $runKeysById} maps BOTH distinct run IDs onto it. Measured
+     * consequence: `/workflow pause <run-A-id>` — the exact id the transcript
+     * printed for run A — writes a pause file recording run B's workflowId
+     * and B's stage results, `getStatus()` answers identically for both ids,
+     * and run A becomes unreachable by any identifier at all. The interrupt
+     * handler calls `rememberResult()` with the same key and collides the same
+     * way.
+     *
+     * Making all of that genuinely concurrent is a design change with a
+     * user-visible surface — which run does `/workflow pause <name>` mean? —
+     * and it is not the change this item is. Refusing costs one error line and
+     * leaves every existing single-run behaviour exactly as it was.
+     *
+     * The refusal is reachable from the TUI today, and only there. Measured:
+     * WITHOUT the double-Escape a second `/workflow run` is queued behind the
+     * `inFlight` latch and no second run starts. Double-Escape clears
+     * `inFlight` without stopping the workflow (documented on
+     * {@see \SugarCraft\Crush\Chat::driveWorkflowFiber()}), and THEN the
+     * second submit dispatches against a live first one. They now get told,
+     * instead of quietly getting two runs that corrupt each other's
+     * bookkeeping.
+     *
+     * Note also what has to be true for the first run to still be live:
+     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::idle()} is the ONLY
+     * `Fiber::suspend()` in `src/`, and it is reached only from
+     * `executeParallelStage()` on the FORKING executor. A workflow of
+     * sequential/pipeline/verification stages suspends zero times and runs to
+     * completion inside one `start()`, so it cannot be interleaved with
+     * anything. Only the first run needs a parallel stage, though — the second
+     * may be of any shape.
+     *
+     * @var list<?\Fiber>
+     */
+    private array $liveRunOwners = [];
 
     /**
      * @param string $model    The model every stage's agent runs on. A workflow
@@ -658,6 +744,73 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @return WorkflowResult
      */
     private function runFromWorkflow(
+        Workflow $workflow,
+        array $context,
+        int $currentStageIndex,
+        ?string $workflowIdOverride,
+        ?string $pauseId = null,
+        ?string $loadPath = null,
+    ): WorkflowResult {
+        // The concurrency gate sits HERE rather than inside
+        // installInterruptHandlers(), even though the signal-handler stack is
+        // the sharpest symptom: that method returns early on a build without
+        // pcntl, and $resultsByName/$runKeysById are corrupted by interleaved
+        // runs whether or not signals are available. This is also the single
+        // funnel every entry point goes through — run(), runFromPhp() and
+        // resume() all land here — so there is one place to keep correct.
+        $this->enterRun();
+
+        try {
+            return $this->runGuardedFromWorkflow(
+                $workflow,
+                $context,
+                $currentStageIndex,
+                $workflowIdOverride,
+                $pauseId,
+                $loadPath,
+            );
+        } finally {
+            // In a finally so a throwing run cannot strand its slot and wedge
+            // the engine against every later run.
+            array_pop($this->liveRunOwners);
+        }
+    }
+
+    /**
+     * Refuse a run that would INTERLEAVE with one already live on this engine.
+     *
+     * See {@see $liveRunOwners} for the state and {@see $previousSignalHandlers}
+     * for what interleaving breaks. Nested runs — same fiber, or both on the
+     * main call stack — are allowed through untouched.
+     *
+     * @throws \RuntimeException When a run owned by a different fiber is live.
+     */
+    private function enterRun(): void
+    {
+        $current = \Fiber::getCurrent();
+
+        foreach ($this->liveRunOwners as $owner) {
+            if ($owner !== $current) {
+                throw new \RuntimeException(
+                    'A workflow is already running on this engine. '
+                    . 'Wait for it to finish before starting another — this engine keeps one '
+                    . 'result slot per workflow name and one signal-handler frame per run, so '
+                    . 'two runs at once would overwrite each other\'s bookkeeping. '
+                    . '(Pressing Escape releases the prompt but does not stop the run.)'
+                );
+            }
+        }
+
+        $this->liveRunOwners[] = $current;
+    }
+
+    /**
+     * {@see runFromWorkflow()}'s body, entered only once the concurrency gate
+     * above has admitted this run.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function runGuardedFromWorkflow(
         Workflow $workflow,
         array $context,
         int $currentStageIndex,
@@ -1786,9 +1939,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
             return;
         }
 
-        // This run's own frame, popped so a run nested inside it (see the
-        // property) leaves the outer run's frame untouched for the outer
-        // restore to find.
+        // This run's own frame. Popped, and a pop is correct because the only
+        // other run that can be live on this engine is one NESTED inside this
+        // one — which shares this call stack and has therefore already
+        // restored and popped its own frame. Runs that could finish in the
+        // other order (two fibers interleaving) are refused before they start;
+        // see {@see $liveRunOwners}. Without that refusal this pop would hand
+        // back the other run's frame and leave a Ctrl-C pausing the wrong
+        // workflow.
         $frame = array_pop($this->previousSignalHandlers) ?? [];
 
         foreach ([\SIGINT, \SIGTERM] as $signo) {

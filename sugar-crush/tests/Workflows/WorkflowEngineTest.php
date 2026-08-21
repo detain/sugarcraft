@@ -1902,6 +1902,187 @@ final class WorkflowEngineTest extends TestCase
     }
 
     // =========================================================================
+    // Concurrency: a run driven from a Fiber can INTERLEAVE with another, and
+    // the engine's per-run bookkeeping is single-slot. Nesting (same call
+    // stack) stays supported; interleaving is refused.
+    //
+    // @see WorkflowEngine::$liveRunOwners
+    // =========================================================================
+
+    /**
+     * Two runs in two fibers must not both be live.
+     *
+     * This is reachable from the shipped TUI: `Chat::workflowRun()` drives its
+     * run from a `\Fiber`, and double-Escape clears `inFlight` without
+     * stopping that run, so a user can type a second `/workflow run` while the
+     * first is still stepping. The suspension here stands in for
+     * `AgentWorkerPool::idle()`, which is where a real run yields.
+     *
+     * What the refusal protects is NOT hypothetical: with both runs live,
+     * `$previousSignalHandlers` is a LIFO stack being exited FIFO, so each run
+     * pops the other's SIGINT/SIGTERM frame and a Ctrl-C pauses the wrong
+     * workflow — and `$resultsByName`/`$runKeysById` hold one slot per
+     * workflow NAME, so two runs of one name overwrite each other outright.
+     */
+    public function testASecondRunInAnotherFiberIsRefusedWhileOneIsSuspended(): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('concurrent')
+                ->description('Suspends inside its only stage')
+                ->stage('only', Tasks::agent('coder')->prompt('Work'))
+                ->build(),
+        );
+
+        // Suspends the FIRST time it is called, so run #1 is parked mid-stage
+        // with its interrupt frame pushed when run #2 tries to start.
+        $suspended = false;
+        $this->mockExecutor
+            ->method('execute')
+            ->willReturnCallback(function () use (&$suspended) {
+                if (!$suspended) {
+                    $suspended = true;
+                    \Fiber::suspend();
+                }
+
+                return $this->successfulAgentResult('done');
+            });
+
+        $first = new \Fiber(fn () => $this->engine->run('concurrent', []));
+        $first->start();
+
+        $this->assertTrue($first->isSuspended(), 'Setup is wrong: run #1 is not parked inside a stage.');
+
+        $second = new \Fiber(fn () => $this->engine->run('concurrent', []));
+
+        try {
+            $second->start();
+            $this->fail('A second run started alongside a live one instead of being refused.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('already running', $e->getMessage());
+        }
+
+        // The refusal must not have consumed run #1's slot or its handler
+        // frame — the live run has to be able to finish normally.
+        $first->resume();
+        $this->assertTrue($first->getReturn()->isSuccess(), 'The refusal broke the run it was protecting.');
+        $this->assertSignalHandlerStackEmpty($this->engine, 'a refused interleaved run');
+    }
+
+    /**
+     * The refusal is not permanent: once the live run finishes, the next one
+     * is admitted. A gate that latched would turn one double-Escape into a
+     * session where `/workflow run` never works again.
+     */
+    public function testARunIsAdmittedAgainOnceTheLiveOneFinishes(): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('sequential-pair')
+                ->description('Runs twice, one after the other')
+                ->stage('only', Tasks::agent('coder')->prompt('Work'))
+                ->build(),
+        );
+
+        $this->mockExecutor
+            ->method('execute')
+            ->willReturnCallback(fn () => $this->successfulAgentResult('done'));
+
+        $this->assertTrue($this->engine->run('sequential-pair', [])->isSuccess());
+        $this->assertTrue($this->engine->run('sequential-pair', [])->isSuccess());
+        $this->assertSignalHandlerStackEmpty($this->engine, 'two sequential runs');
+    }
+
+    /**
+     * A throwing run must release its slot.
+     *
+     * The gate is entered before the run and released in a `finally`. Released
+     * on the success path only, one failed workflow would wedge the engine for
+     * the rest of the process.
+     *
+     * TWO assertions, because either alone is passed by a mutant. Asserting
+     * only that a LATER run is admitted is vacuous on the main call stack: a
+     * stranded slot there has owner `null`, the next main-stack run also has
+     * owner `null`, and `$owner !== $current` is false — so the gate lets it
+     * through and a permanently stranded slot looks exactly like a released
+     * one. The reflective read is what actually sees the leak; the
+     * from-a-fiber run is what proves the gate is genuinely open afterwards.
+     *
+     * The workflow throws from a stage type no executor handles — the one
+     * shape that leaves `runFromWorkflow()` by throwing rather than returning
+     * a Failed result, which is exactly the path the `finally` exists for. A
+     * failure that comes back as a WorkflowResult never tests it.
+     */
+    public function testAThrowingRunReleasesItsConcurrencySlot(): void
+    {
+        $this->registry->register(new Workflow(
+            name: 'unsupported',
+            description: 'Its stage type reaches no executor',
+            stages: [['type' => 'nonsense', 'name' => 'nope']],
+        ));
+
+        try {
+            $this->engine->run('unsupported', []);
+            $this->fail('Setup is wrong: the run returned instead of throwing.');
+        } catch (UnsupportedStageTypeException) {
+            // expected — what matters is what it left behind.
+        }
+
+        $this->assertLiveRunSlotsEmpty($this->engine, 'a run that threw mid-loop');
+
+        // And the gate really is open: a run from a FIBER would be refused by
+        // any slot left behind, since its owner cannot match a stranded null.
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('after-throw')
+                ->description('Must still run')
+                ->stage('only', Tasks::agent('coder')->prompt('Work'))
+                ->build(),
+        );
+        $this->mockExecutor
+            ->method('execute')
+            ->willReturnCallback(fn () => $this->successfulAgentResult('done'));
+
+        $later = new \Fiber(fn () => $this->engine->run('after-throw', []));
+        $later->start();
+
+        $this->assertTrue($later->getReturn()->isSuccess(), 'A run that threw stranded its slot.');
+    }
+
+    /**
+     * The engine's live-run slots, read reflectively.
+     *
+     * Reflective for the same reason {@see assertSignalHandlerStackEmpty()}
+     * is: the list is bookkeeping, not API, and inferring its state from
+     * whether a later run is admitted cannot see a stranded main-stack slot at
+     * all — which is precisely the mutant this catches.
+     */
+    private function assertLiveRunSlotsEmpty(WorkflowEngine $engine, string $after): void
+    {
+        $slots = (new \ReflectionProperty(WorkflowEngine::class, 'liveRunOwners'))->getValue($engine);
+
+        $this->assertSame(
+            [],
+            $slots,
+            "the live-run slot list must be empty after {$after}; an entry left on it refuses "
+            . 'every later run from a different fiber for the life of the process',
+        );
+    }
+
+    // NESTING (a stage that re-enters run() on the same engine) must keep
+    // working, and the gate tells it apart from interleaving by the OWNING
+    // FIBER rather than by a depth count. That case already has a test —
+    // testNestedRunsEachRestoreTheirOwnCallersSignalHandler() above — which
+    // fails if this gate is narrowed to "refuse any re-entry". Not duplicated
+    // here.
+    //
+    // Note runFromPhp(callable) is NOT the nesting case, despite the
+    // $previousSignalHandlers docblock citing it: the callable is invoked to
+    // produce the Workflow BEFORE runFromWorkflow() is entered, so a run() it
+    // makes is sequential and has already finished by the time the outer run
+    // takes its slot.
+
+    // =========================================================================
     // Helpers for the block above
     // =========================================================================
 
