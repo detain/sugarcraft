@@ -2779,9 +2779,16 @@ this change — and it was recorded separately as **E64**. *Past tense as of the
 **E64 is fixed**, `render()` now clamps the composed label to the cells left after the metrics, and
 the ten numbers above are 24/32/34/44/47/48/62/64/84/102 — `$w + 4` at every one.
 `AgentViewPaneGeometryTest` asserts the wide-cluster bound (now
-`testAWideClusterOperationNoLongerOverrunsTheChromeGeometryAtTheOperationFloor`, which keeps the six
-broken numbers in-test and asserts they are gone) rather than sweeping only the ASCII fixture that
-made the invariant look true. **This does not close E54's heading**: the `max(40, …)` floor in
+`testAWideClusterOperationNoLongerOverrunsTheChromeGeometryAtTheOperationFloor`) rather than sweeping
+only the ASCII fixture that made the invariant look true. *This sentence used to add "which keeps the
+six broken numbers in-test and asserts they are gone", and that was false — corrected in round 39.*
+The guard doing the "asserts they are gone" was `assertNotSame($beforeE64[$w], $widest)` placed after
+`assertSame($w + CHROME_WIDTH, $widest)`; once the first passes, `$widest` **is** `$w + 4`, so the
+second could not fail on the six widths where the two differ and was skipped on the other four.
+Twelve assertions that could never fire. The six numbers are kept as documentation — carried into the
+assertion's failure message — because a suite holding only the fixed pane cannot re-derive what the
+broken one returned. What the test actually earns is driving the `+4` bound over the wide-cluster
+payloads the ASCII sweep cannot reach. **This does not close E54's heading**: the `max(40, …)` floor in
 `Renderer::renderAgentView()` is still deliberately kept, so below 44 columns the strip is still wider
 than the terminal and `clipWidth()` is still the backstop for it.*
 
@@ -3579,8 +3586,24 @@ that, restrict the diff to files this process could own and state the residual h
 **Supervisor protocol until this is fixed:** a certification run that fails ONLY on
 `ChatTest::tearDownAfterClass` is not a red suite. Re-run `--filter ChatTest` alone to disambiguate
 before drawing any conclusion, and prefer to take floor measurements when no lane is running a suite.
-*Superseded — see the ROUND 39 stamp below. A `ChatTest::tearDownAfterClass` failure is now a real
-strand and should be read as one.*
+*Still LIVE, and deliberately not marked superseded.* The ROUND 39 fix below makes a
+`ChatTest::tearDownAfterClass` failure a real strand **on a tree that carries the fix**, and there the
+protocol above is unnecessary. It is not unnecessary anywhere else, and it is a cross-lane protocol.
+Two reasons to keep it standing until *every* lane carries the fix:
+
+1. The new `ChatTest::testTheStrandedPayloadDetectorAttributesByIdentityNotByWindow()` and
+   `ToolIpcFilesTest::testAConcurrentWritersPayloadCannotEnterTheStrandedList()` deliberately create
+   real `sc_chat_tool_*` files in the **shared** temp dir — correct for what they test, since the
+   whole point is that a foreign writer's file must not be attributed. A sibling lane still running
+   the **old** glob-based `ChatTest` can be tripped by them. So running this branch's suite can turn a
+   sibling lane red through no fault of that lane's diff.
+2. Conversely, a lane on an old tree can trip *this* one. Until the fix is everywhere, "fails only on
+   `tearDownAfterClass`" still needs the `--filter ChatTest` disambiguation before anyone draws a
+   conclusion from it.
+
+And the E63 hazard it was written about is unchanged in its worst form: the response to a suspected
+strand is **never** `rm -f /tmp/sc_chat_tool_*`. That glob is another lane's live IPC. Delete by exact
+path or not at all.
 
 **ROUND 39 (`lsp` lane) — FIXED.** Reproduced first, independently of the round-38 sighting: with the
 committed `ChatTest` in place and a single `: > /tmp/sc_chat_tool_<random>.json` created four seconds
@@ -3693,17 +3716,28 @@ above: the excess is not +2 in every case, and the over-run is not confined to t
 metrics when identity + metrics will not fit `$width` (usage first, then elapsed), and clamps the
 composed label — everything after the styled dot, so `truncate()` cannot cut an SGR sequence in half —
 to `$width - rightWidth - 1`. The body therefore fits by construction and the wrap that produced the
-over-run never happens.
+over-run never happens — **fits by `Width::string`**, which is the qualification that matters and was
+missing. `Width::string` is not the measure the box ends up using: `Style::render()` expands a tab to
+four spaces (`candy-sprinkles/src/Style.php:969-970`) **after** the clamp has scored it 0. Delta-
+debugged to a two-codepoint minimum, `operation = "\t" . U+1F3FD` makes the fixed pane return
+`$width + 6` at **117 of the 121 widths 20-140**. The pre-clamp pane at `70a4efb3` returns `$width + 6`
+at **120** of the same 121, so this is not a regression and E64 stays fixed — but "by construction" is
+a claim about a width authority that disagrees with the renderer consuming it, and that divergence is
+recorded on its own account as **E69** below.
 
 *What deliberately did NOT change.* `$opBudget = max(5, $width - name - 60)` is untouched. The Step
 above says not to raise or drop the floor, and re-deriving the budget from what actually remains would
 have been worse than either: for the fixture this entry is measured on (3-cell name, `working`,
-`42s  1,234 tok | $0.0042`) the exact remaining budget exceeds `max(5, …)` at every width from **47 to
-68**, so the operation column would have widened there — output movement nowhere near the bug, at
-widths that were never broken. The 47 and the 68 are that fixture's; the *shape* is general, since the
-floor of 5 binds until `$width > Width::string($name) + 65` while the exact budget passes 5 as soon as
-`$width` exceeds identity + metrics + 5. Keeping the estimate and clamping the result is what confines
-the change to widths that were already broken.
+`42s  1,234 tok | $0.0042`) the exact remaining budget first exceeds `max(5, …)` at width **47** and
+exceeds it at **every width above 47** — not, as this sentence said until round 39's review, "at every
+width from 47 to 68". 68 is merely where `max()` stops returning 5 and starts returning
+`$width - name - 60`; past that the two both grow with `$width` and the gap settles at a constant
+**22** from width 69 up (measured to 200). So re-deriving the budget would have widened the operation
+column at every pane wider than 46, not at 22 of them — output movement nowhere near the bug, at
+widths that were never broken, and far more of it than the old wording implied. The 47 is that
+fixture's; the *shape* is general, since the floor of 5 binds until `$width > Width::string($name) + 65`
+while the exact budget passes 5 as soon as `$width` exceeds identity + metrics + 5. Keeping the
+estimate and clamping the result is what confines the change to widths that were already broken.
 
 *The floor's purpose, answered.* What a 5-cell operation column buys at width 20 is **nothing**: 20
 content cells cannot hold `● abc [working]` (15) plus any operation plus 24 cells of
@@ -3721,15 +3755,36 @@ The empty-list placeholder is byte-identical at all 140. Across all seven fixtur
 width whose output changed while its old body already fitted** — checked by recomputing the old
 `max(leftW, $w - rightW - 1) + rightW` for every fixture × width and cross-tabulating against the
 diff. A long-name fixture changes as high as width 79, correctly: the floor binds for long names at
-wider panes too, and those rows over-ran.
+wider panes too, and those rows over-ran. *Which fixture, added in round 39 — the sentence named none,
+in the same paragraph as the `acd27570` correction that exists to stop exactly that.* The top width at
+which old and new output differ is `identity + 5 + rightWidth - 1`, where `identity` is
+`7 + Width::string($name) + Width::string($status)`. With `working` (7 cells) and
+`42s  1,234 tok | $0.0042` (24 cells) that is `nameWidth + 42`, so **79 is a 37-cell ASCII name**;
+measured, 3 cells → 45, 29 cells → 71, 37 cells → 79. A 29-cell name reaches 71 and no further, so
+"as high as 79" needs the 37-cell fixture and is not a property of long names generally.
 
-The 20,000-case fuzz that found 2,211 over-runs on the old code finds **0** on the new one.
+The 20,000-case fuzz that found 2,211 over-runs on the old code finds **0** on the new one — over an
+**emoji-heavy, TAB-FREE** alphabet, which is the qualification this sentence needed and did not have.
+Re-run in round 39 over ASCII + accents + emoji + skin-tone modifiers + regional indicators + ZWJ +
+combining marks (still no tab), old = 684 off-by, new = **0**. Admit a TAB to the same alphabet and
+the new pane goes to **1,569 of 20,000** (old 2,122, worst ±8). "Finds 0" is therefore a property of
+one alphabet, not of the pane, and the alphabet has to be named for the figure to mean anything.
 
-`AgentViewPaneGeometryTest` gains four tests that fail before and pass after — the inverted pin (which
-keeps the six broken numbers in-test and asserts they are gone, so the fix cannot be reverted into a
-test that only says "+4"), a 20→140 sweep over four payload shapes, the narrow-pane degradation order,
-and the one `renderAgentView()` width that moved. See the E54 stamp for why that width is 44 and only
-44.
+`AgentViewPaneGeometryTest` gains four tests that fail before and pass after — the inverted pin, a
+20→140 sweep over four payload shapes, the narrow-pane degradation order, and the one
+`renderAgentView()` width that moved. See the E54 stamp for why that width is 44 and only 44.
+*Round 39 correction: this sentence also claimed the inverted pin "keeps the six broken numbers
+in-test and asserts they are gone, so the fix cannot be reverted into a test that only says +4". It
+did not. The `assertNotSame` doing that work sat after `assertSame($w + CHROME_WIDTH, $widest)` and
+was therefore unfalsifiable — see the E54 stamp for the full derivation. The numbers are kept as
+documentation in the failure message; the enforcement claim is withdrawn.*
+
+**ROUND 39 review — one figure held under challenge.** The `$w + 6` in this entry and in the E54
+stamp was read as a claimed *excess* of +6 and challenged as "never +6; the excess is +2 through 44
+and +1 at 45". Re-measured against `70a4efb3`: at `$w` = 20 the widest row is **26 cells**, i.e.
+`$w + 6` ABSOLUTE and `+2` over the `$w + 4` due. Both figures are right and they are the same
+measurement in two units, so the `+6` stands and the units are now spelled out wherever it appears.
+
 
 ---
 
@@ -3814,3 +3869,103 @@ this is a latent trap for the next caller; if one does, auto-invocation is broke
 (`src/Runtime.php:857`, `src/Chat.php:3250`). Runtime's comment — *a hook is OBSERVABILITY, not the
 answer* — makes this deliberate. Flagged only because a user writing a PostToolUse hook that returns
 DENY gets silence. A documentation gap at most.
+---
+
+### E68 — `AgentDashboardPane` over-runs its caller's width on a single emoji
+
+**Recorded 2026-08-21 in the ROUND 39 `lsp` lane, by the reviewer of the E64 fix.** Pre-existing and
+**not fixed here** — it is a different pane from E64's and deserves an isolated diff.
+
+**What.** `AgentDashboardPane::row()` holds a row to its `$inner` cell budget with
+`Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line`, and
+**`Width::truncateAnsi()` does not honour the budget it is given**. It counts cells to decide where to
+stop but slices at codepoints, so a wide cluster straddling the cut is emitted whole and the result
+comes back over budget. Measured directly: over 20,000 random cluster-heavy strings at budgets 1–8 it
+returned something WIDER than its budget **3,425 times, worst +8** —
+`Width::truncateAnsi(U+1F44D U+1F3FD . 'xy', 3)` returns **5 cells**. It also appends no ellipsis, so
+there is no visible sign the row was cut. `clip()` (same file) uses the same call on its "N more"
+trailer.
+
+It is not a fuzz-only defect, and it reaches the screen. Driven end to end — an `Agent` whose
+`description` carries emoji, through `AgentDashboardPane::render($app, $width, 12)`, sweeping
+`$width` = 24..100 and asking whether the widest returned row is `$width`:
+
+| description | over-wide at | excess |
+|---|---|---|
+| `Reviews code for bugs` (the existing guard's fixture) | **0** of 77 widths | — |
+| `Reviews 👍🏽 code for bugs` | **35** of 77 (39–73) | +2, +1 |
+| `Reviews 🇦🇸 code for bugs` | **34** of 77 (38–71) | +1 |
+| `Editing 👍🏽 src/Chat.php and running the suite again` | **41** of 77 (39–79) | +2, +1 |
+
+One emoji in one agent description is enough. That is the same shape as E64 — a pane handed an outside
+budget returning more than it — in the class E64's fix did not touch. *(The reviewer who found this
+reported 3,551 of 8,000 `row()` cases worst +15, and 40 of 77 widths end to end; the table above is
+this lane's independent re-measurement with the fixtures named, and the two agree in shape and
+mechanism while differing in count, which is what differing fixtures do. The named fixtures are the
+ones to re-derive from.)*
+
+**Where.** `sugar-crush/src/Tui/Components/AgentDashboardPane.php:326` (`row()`) and `:348` (`clip()`),
+reached from `AgentDashboardPane::render()`; root cause in
+`candy-core/src/Util/Width.php::truncateAnsi()`.
+
+**Severity.** Medium. Masked today by `clipWidth(clipTail(...), $cols)` in
+`sugar-crush/src/Tui/Renderer.php`, exactly as E64 was — which is the argument for recording it, not
+against. A backstop is not a budget, and this is now the third width defect in this pane family that
+the same backstop hid.
+
+**Why the existing guard misses it.** `AgentViewPaneGeometryTest::testTheAgentDashboardPaneFitsTheOutsideWidthItWasHanded()`
+(`sugar-crush/tests/Tui/AgentViewPaneGeometryTest.php:546`) already asserts precisely this property
+and passes, because its fixture's description is `'Reviews code for bugs'` — **ASCII**. The same
+ASCII-fixture blindness that let E54's `+4` be written up as an invariant, in the file whose subject
+is that blindness. That guard is where the fix's regression test belongs.
+
+**Step.** Fix `Width::truncateAnsi()` to stop before a cluster it cannot fit rather than emitting it
+whole — the same rule `AgentViewPane::clusters()` already implements locally, which is the argument for
+fixing it in `Width` instead of growing a third copy. Widen the existing guard's fixture from
+`'Reviews code for bugs'` to the four descriptions tabulated above **before** touching production
+code, so the guard goes red first. Note E69 below when choosing the authority: a clamp against
+`Width::string` is not a clamp against what `Style::render()` finally lays out. Do this in its own
+diff — it is a foundation change with callers outside this pane.
+
+---
+
+### E69 — `Width::string()` scores a tab 0; `Style::render()` expands it to four spaces
+
+**Recorded 2026-08-21 in the ROUND 39 `lsp` lane, while qualifying E64's "fits by construction".**
+Foundation-level and **not fixed here**.
+
+**What.** `Width::string("\t")` returns **0**. `Style::render()` replaces every tab with
+`str_repeat(' ', $tabWidth)` — default 4 — and does it *before* any of its own width measurement
+(`candy-sprinkles/src/Style.php:969-970`, comment: "Tab expansion (before any width measurements)").
+So a caller that budgets with `Width` and lays out with `Style` is using two measures that disagree by
+4 cells per tab, and the disagreement is invisible to every assertion written in terms of `Width`.
+
+This is a **width authority disagreeing with the renderer that consumes it**, which is why it is filed
+on its own account rather than as a footnote under E64: any pane that clamps with `Width::string` and
+renders with `Style` inherits it, and there is no per-pane fix that does not amount to each pane
+re-deriving the tab rule for itself — the mistake `AgentViewPane` already made once with a local width
+table.
+
+**Where.** `candy-core/src/Util/Width.php` (`string()`, and every measure built on it) against
+`candy-sprinkles/src/Style.php:969-970`.
+
+**Measured consequence, in the pane E64 was fixed in.** Delta-debugged to a **two-codepoint** minimum:
+`operation = "\t" . U+1F3FD` (a TAB plus a lone skin-tone modifier) makes the **fixed**
+`AgentViewPane::render()` return `$width + 6` at **117 of the 121 widths 20–140**. The clamp
+guarantees the body fits *by `Width::string`*, and that is not the measure the box uses.
+
+**Not a regression, and E64 stays fixed.** The pre-clamp pane at `70a4efb3` returns `$width + 6` at
+**120** of the same 121 widths on the same input — the clamp made this input slightly better, not
+worse. What it refutes is the unqualified phrase "fits by construction", which has been qualified in
+place in the E64 stamp above.
+
+**Severity.** Medium, and broad. Low visibility (a tab inside an agent name, status or operation is
+uncommon), but it silently falsifies every geometry invariant in the repo that is stated in terms of
+`Width::string` and enforced against `Style`-rendered output, which by now is several.
+
+**Step.** Decide which one is the authority and make the other agree, rather than patching callers:
+either `Width::string()` charges a tab `$tabWidth` cells (needs the tab width to be reachable, which
+today it is not — it is `Style` state), or `Style::render()` stops rewriting content before measuring
+and the expansion moves to the caller that knows both. Whichever way it goes, land it with a test that
+renders a tab-bearing string through `Style` and asserts `Width::string()` of the result equals
+`Width::string()` of the input, which is the property that is false today.
