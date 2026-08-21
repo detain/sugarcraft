@@ -6,7 +6,44 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 37 IS IN FLIGHT — TWO BUNDLES LANDED, ONE LANE STILL IN FIX — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 38 IS CLOSED — NOTHING IN FLIGHT, ALL LANES CLEAN — read this first, then §0 for the standing rules
+
+**SUITE FLOOR: `8820 / 99755 / 1 skipped / rc 0` at `7771c148`**, supervisor-measured in the live tree.
+Supersedes every earlier figure (8786 held the round-37 boundary; 8794 was the round-38 midpoint).
+**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was
+replaced by Packagist copies and every figure since is void. 18 symlinks;
+`md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
+`php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
+
+**Round 38 landed both lanes, supervisor-verified by my own full-suite runs:**
+- **`lsp` — E53 + E54, `AgentViewPane` width** (`6276c51e`, `24d8aad8`, `70a4efb3`). Grapheme-aware
+  truncation; `CHROME_WIDTH` + `contentWidth()` so both callers agree about the `+4`. **E54 is stamped
+  PARTIALLY FIXED** — the dashboard over-run is gone (32/62/102 → 30/60/100) but the below-44 case in its
+  own heading is untouched. New **E64** for the `max(5, …)` operation floor that refutes the `+4` at six
+  of ten widths on wide clusters (pre-existing, masked by `clipWidth()`).
+- **`sglang` — mouse/keyboard divergence** (`8f845f26`, `8b9a4b7e`, `7771c148` + one). Three review
+  rounds, two blocking.
+
+⚠️ **NEW — E63 changes how a red suite is read.** `ChatTest::tearDownAfterClass` globs the SHARED temp
+dir and attributes any concurrent process's `sc_chat_tool_*` files to itself, so two lanes running suites
+at once can trip it. **A run that fails ONLY on that assertion is not a red suite** — re-run
+`vendor/bin/phpunit --filter ChatTest` alone to disambiguate, and prefer to take floor measurements when
+no lane is running a suite. It is false-positive-only: it cannot hide a leak, only invent one.
+
+⚠️ **STANDING CHANGE — agents commit incrementally in-lane.** A network drop killed both round-38 agents
+mid-flight, one holding **626 uncommitted insertions across 4 files**. Nothing was lost only because the
+lane was snapshotted by **file copy + `git diff` patch** before anything else touched it. Never
+`git checkout --`/`git restore`/`git stash` a lane to "clean up"; a resumed agent must be told its dirty
+tree is its own work. Several small commits on a branch cost nothing — the supervisor squashes at merge.
+
+**Remaining measured queue:** E52 (recorded only), E57 (`SkillPathNudge` genuinely unbounded), E58, E59,
+E60 (hook ALLOW/ASK/MODIFY prompt text still unbounded — four actions, four failure modes, not one
+constant), E61 (an all-PHP hook chain is bounded by nothing without a fiber or a fork), E63, E64,
+`statusLine` (greenfield M — ⚠️ `Chat::budgetStatusLine()` will bait a future grep into thinking it
+exists), `keybindings` (L, DEFER). Then **Phase 9** (interactive-prompt containment, decided: layered
+A+C, parameter not second tool, **no askpass**), then the deferred security pass.
+
+### SUPERSEDED — round 37's block, kept for its reasoning
 
 **Written between rounds so a compact cannot lose it.** Rounds 33 through 36 are all CLOSED and
 supervisor-verified. **Nothing is in flight; all three lanes are clean at master.** Round 37 is
