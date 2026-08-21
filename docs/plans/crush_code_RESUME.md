@@ -6,12 +6,13 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUNDS 34 AND 35 ARE CLOSED AND VERIFIED. ROUND 36 IS BEING SCOPED — read this first, then §0 for the standing rules
+## 0-NOW. ROUNDS 34, 35 AND 36 ARE ALL CLOSED AND VERIFIED. ROUND 37 IS UNSCOPED — read this first, then §0 for the standing rules
 
-**Written between rounds so a compact cannot lose it.** Rounds 33, 34 and 35 are all CLOSED and
-supervisor-verified. Round 36 is being scoped by a read-only scout — see "WHERE THINGS STAND" below
-for why its items are being re-measured rather than taken from the plan. §0-NOW-32 further down is an
-older round's block and remains the authority for the standing rules and the DeepSeek record.
+**Written between rounds so a compact cannot lose it.** Rounds 33 through 36 are all CLOSED and
+supervisor-verified. **Nothing is in flight; all three lanes are clean at master.** Round 37 is
+unscoped — start it by running the scout pass described under "ROUND 36 SCOPE" below, not by reading
+the plan. §0-NOW-32 further down is an older round's block and remains the authority for the standing
+rules and the DeepSeek record.
 
 ### CONCURRENCY: **2**, BY USER INSTRUCTION
 
@@ -50,10 +51,10 @@ mechanics.
 sync daemon were stopped mid-flight and every agent was confirmed killed before the pause. That pause
 is why the `sglang` lane holds a partial artefact — see below.
 
-### WHERE THINGS STAND — as of master `f3d59e1a`
+### WHERE THINGS STAND — as of master `8185ea89`
 
-**SUITE FLOOR: `8673 / 95005 / 1 skipped / rc 0` — supervisor-measured in the live tree at `f3d59e1a`.**
-Supersedes every earlier figure (8464 held the round-34/35 boundary; 8508, 8527 were intermediate).
+**SUITE FLOOR: `8708 / 95199 / 1 skipped / rc 0` — supervisor-measured in the live tree at `8185ea89`.**
+Supersedes every earlier figure (8673 held the round-35/36 boundary; 8684, 8687, 8690 were intermediate).
 **Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`,
 `testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`); a 2 means `vendor/sugarcraft/*` was
 replaced by Packagist copies and every figure since is void.
@@ -63,18 +64,18 @@ replaced by Packagist copies and every figure since is void.
 
 ⚠️ **Assertion totals are NOT assert-call counts** — PHPUnit 10 counts the `…OrEqual` family as 2.
 
-**ROUND 36 IS BEING SCOPED.** All three lanes are clean at master. A read-only scout is measuring 13
-candidate items, because the plan's own text has repeatedly been wrong about what is still open —
-round 35 found two candidates (`Glob` globstar, `Edit`'s `'bool'` schema) that look **already fixed**
-despite being listed as open, and two plan-cited line numbers that had drifted by hundreds of lines.
-**Do not launch a bundle off this plan's text without re-measuring the item first.**
+**ROUND 37 IS UNSCOPED AND NOTHING IS RUNNING.** All three lanes (`cmd`, `lsp`, `sglang`) are clean at
+master with 18 vendor symlinks each. **Start round 37 with a read-only scout pass, not by reading the
+plan** — round 36's scout measured 13 plan candidates and found **8 already CLOSED**, i.e. the plan is
+unreliable at roughly 2:1. A scout holds no files, costs no lane slot, and saves an entire
+implement/review/fix cycle per stale item. The surviving open queue is in "ROUND 36 SCOPE" below.
 
 ⚠️ **CI PUSHES TO MASTER WHILE LANES WORK.** A `vhs: regenerate demo GIFs` commit landed mid-round and
 broke a lane's fast-forward. It touches only `.gif` files, so a lane rebase is clean — but the
 supervisor must `git fetch` and re-check `origin/master` before every merge, and be ready to rebase a
 lane that had already rebased once.
 
-### WHAT LANDED — rounds 33 to 35, all supervisor-verified by my own suite runs in the live tree
+### WHAT LANDED — rounds 33 to 36, all supervisor-verified by my own suite runs in the live tree
 
 | commit | round | what | verified |
 |---|---|---|---|
@@ -88,7 +89,12 @@ lane that had already rebased once.
 | `bc7b17f6` | 35 | **P8.8 repo-map** — generic sub-package detector, not the plan's markdown parser | 8508 / 94353 |
 | `6c33705c` | 35 | P8.8 fix — **the ungated walk**, `packages/*` support, 6 mutation survivors killed | 8527 / 94400 |
 | `c9d846e8` | 35 | **finding #7 `/permissions`** — a reserved name that answered nothing | 8514 (pre-rebase) |
-| `f3d59e1a` | 35 | `/permissions` fix — **line forgery**, and 3 of 6 mode descriptions false | **8673 / 95005** |
+| `f3d59e1a` | 35 | `/permissions` fix — **line forgery**, and 3 of 6 mode descriptions false | 8673 / 95005 |
+| `3846f901` | 36 | **both shell-out backends** stopped blocking the loop — 0 → 36 ticks per completion | 8684 / 95046 |
+| `44ee41df` | 36 | backend fix — idle deadline measured **silence since spawn**; `complete()` deadlock closed | 8687 / 95053 |
+| `4b36ba89` | 36 | **checkpoint memo** — 52.78 ms → 4.11 ms of blocking CPU per turn | (bundled) |
+| `0a4a375f` | 36 | **async workflow + live pane** — the compositor was invisible for **two** reasons | 8690 / 95139 |
+| `8185ea89` | 36 | workflow fix — 5 stale sites, memo guard, concurrent-run signal-stack corruption | **8708 / 95199** |
 
 **ROUND 35 IS CLOSED. Both bundles landed, each after a review that found BLOCKING security defects.**
 
@@ -116,6 +122,36 @@ The fix was not sharper rows. It was making the table **total**: 15 probes × 6 
 completeness asserted against `cases() × probes()`, plus a clause→probe map requiring every clause of
 every sentence to point at a real cell. **A partial anchor table lets an author anchor the claims they
 are confident about — which are the true ones.**
+
+### 🔴 ROUND 36's CLOSING LESSONS — three, and two are about SEARCHING for the wrong thing
+
+**1. A grep for the identifier finds the sentence ABOUT the identifier.** I relayed a cross-lane
+finding that two docblocks (`Chat.php:6452`, `Tui/Renderer.php:720`) still recommended the
+fork-plus-socket pattern. They do not — both cite it **only to refute it**, and had already been
+corrected. The reporting lane's grep for `completeAsync` found the refutation and read it as the
+recommendation. ⚠️ **And I passed it on without checking** — one message after recording the rule that
+a correction is a claim and must be verified before the record changes. *That rule applies to
+cross-lane routing, not only to edits of this file.*
+
+**2. Sweep the BEHAVIOUR, not the token.** The fifth stale site (`README.md:861`, a parenthetical
+"`/workflow run` also blocks the TUI while it runs") was found only because the lane searched for what
+the sentence *says* rather than for `#79`. An identifier grep would have missed it — four rounds
+running of "corrects N, misses N+1", and the first time the sweep method actually caught the N+1.
+
+**3. A benchmark must measure what the CODE does, not what the operation does.** A reviewer measured
+`json_encode` at 7.56 ms and called the lane's 14 ms a 2× overstatement. The lane defended it and was
+right: `internMessages()` **retains** every fresh payload so a missing blob inserts without re-encoding,
+so encode-and-**discard** is not the shipped path. Measured three ways — discard 7.40 ms (reproducing
+the reviewer exactly), **retain 14.38 ms**, and 11.8 ms attributable inside the faithful loop. The
+docblock now records this to stop the next re-litigation. **Reproducing a number is not the same as
+measuring the right thing.**
+
+**Two more findings that came back SHARPER than reported.** Concurrent workflow runs do not exit FIFO
+— a 3-way overlap started `alpha,beta,gamma` and exited `alpha,gamma,beta`, so pop order is *unrelated*
+to push order; a SIGINT in that window wrote a pause file for the **already-finished** run and
+discarded the live one's progress. And the checkpoint memo-guard bug survived partly because the
+suite's own helper returned a bare anonymous `JsonSerializable`, which **passed under the wrong
+guard** — the fixture was shaped like the bug.
 
 ### 🔴 A FALSE CORRECTION IS WORSE THAN A STALE NUMBER — round 36, and it was aimed at THIS file
 

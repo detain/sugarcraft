@@ -9422,3 +9422,60 @@ pre-existing assertions iterate.
 **Fix agents should be told the reviewer can be wrong, and it pays.** Both fix agents this round
 refuted or corrected a finding by measurement, and one retracted its own earlier defence of a mutation
 survivor unprompted. A fix brief that presents review findings as gospel loses that.
+
+## Round 36 — the two blocking shell-out backends, and the split pane that was invisible for two reasons
+
+Floor 8673 → **8708 / 95199 / 1 / rc 0**, supervisor-measured in the live tree after all five commits.
+Both bundles landed after reviews that found real regressions.
+
+**Scoped by a scout, not by the plan.** A read-only measurement pass over 13 plan candidates found
+**8 already CLOSED** — the plan is unreliable at roughly 2:1. That pass cost one agent and saved an
+implement/review/fix cycle per stale item. It is now the documented way to open a round.
+
+**`sglang`** made both shell-out backends' `completeAsync()` non-blocking — measured 0 → 36 loop ticks
+across a 1.81 s completion, token instants unchanged, content byte-identical. It rejected the fork
+pattern I pointed it at with a good argument (those backends already had pipes from `proc_open`;
+forking would spawn a PHP process whose only job is to shuttle bytes from a descriptor already in
+hand) and hoisted the read loop into one `pump()` driven by two drivers.
+
+**`cmd`** made workflow execution async with Fibers and — the substantive part — found that async
+alone paints a **blank** pane.
+
+### Rules earned
+
+**A feature with one known blocker is not a feature with one blocker.** My brief said the compositor
+was "complete except for the synchrony". `SubAgent::$output` had exactly one writer, which sets the
+final text and the terminal status in the same breath, so no pool sub-agent was ever both non-terminal
+and non-empty and `liveOutputs()` was structurally empty for the whole of every run. Round 34's honest
+"WIRED, NOT YET VISIBLE" label was more right than it knew.
+
+**Check what a fix has to be able to SEE.** I proposed the fork+socket pattern for the workflow too.
+`liveOutputs()` reads an object graph in the *parent*; forking would have put every sub-agent
+somewhere the renderer cannot see — permanently unreachable, not merely slower. A pattern that solved
+one blocking problem is not a pattern for every blocking problem.
+
+**A false correction is worse than a stale number.** A lane reported one of this audit's own citations
+stale and gave a replacement that was never right at any point in the round. A stale number is caught
+by whoever follows it; a false correction is *trusted*. Corrections are claims and get measured — and
+the same lane's other three corrections were right, which is exactly what makes this dangerous.
+
+**A grep for the identifier finds the sentence about the identifier.** Two docblocks were reported as
+recommending a pattern they in fact refute. I relayed it without checking, one message after writing
+the rule above.
+
+**Sweep the behaviour, not the token.** The fifth stale doc site was a parenthetical no `#79` grep
+would ever hit.
+
+**A benchmark must measure what the code does.** A reviewer's `json_encode` figure was reproducible
+and still wrong for the shipped path, because the real code retains the payload it encodes.
+
+**A test fixture shaped like the bug hides the bug.** The checkpoint memo guarded on `is_object()`
+while its soundness proof was `Message` immutability — and the suite's own helper returned a bare
+anonymous class, so it passed under the wrong guard. Likewise every existing idleTimeout test passed
+an **empty history**, which is why six of them could not see a deadline regression that killed healthy
+children mid-transfer.
+
+**Rejecting a deferral is sometimes right.** A lane deferred a deadlock fix claiming it would cost the
+one-shot path a 0 %-CPU park. Told to prove it, it measured: blocking `stream_select()` 0.04 % vs the
+old 0.03 %, against 0.33 % for the poll loop it feared. The trade did not exist and the deadlock is
+gone.

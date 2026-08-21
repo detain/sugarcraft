@@ -57,23 +57,34 @@ The **Executive Summary** and **Implementation Plan** below are the actionable p
 > Marking an in-flight item done is the defect this document has committed four times; marking it
 > open while agents are closing it is the same defect facing the other way.
 >
-> ⚠️ **P8.4 IS WIRED BUT NOT USER-VISIBLE, AND MUST NOT BE MARKED ✅.** Its two blocking wiring
-> defects are fixed, but `Chat::workflowRun()` runs the workflow synchronously inside `update()`, so
-> no frame renders while the agents talk. F5 stays OPEN as "WIRED, NOT YET VISIBLE"; the async
-> conversion (issue #79) is a separate item.
+> ⚠️ **P8.4 IS NOW USER-VISIBLE — closed in round 36, and it was blocked by TWO things, not one.**
+> The synchronous `workflowRun()` was only half of it. `SubAgent::$output` had exactly one writer,
+> `AgentManager::drain()`, which sets the final text and the terminal status in the same breath — so no
+> pool sub-agent was ever both non-terminal and non-empty, and `liveOutputs()` was **structurally empty
+> for the whole of every run**. Fixing only the async would have painted a blank pane. Both halves are
+> now fixed (fiber-driven run + `publishProgress`/`pumpProgress` IPC) and a test drives the shipped
+> path — real `pcntl_fork()`, real `proc_open()` worker — asserting a frame carries a **running**
+> agent's output mid-run. ⚠️ **But see backlog E59:** `ProcessExecutor`'s worker is still a simulation
+> stub by its own comment, so the pane paints real bytes from a real worker that is not yet talking to
+> a model. **The compositor is closed; agent execution is not.** Do not read the first as evidence of
+> the second.
 >
-> ⚠️ **SEVERAL ITEMS BELOW CARRY MEASURED ERRORS — see `RESUME` §"ROUND 35 IS MEASURED".** Known
-> wrong in this document: item P3.4's `/sessions` and LSP-diagnostics targets (**both premises
-> false**), its `candy-sprinkles\Table` spelling (it is `SugarCraft\Sprinkles\Table\Table`);
-> `Help::screen()` described as a 6-line heredoc (it is **145 lines**, `:38-182`); `MATCHUPS.md`
-> cited at the repo root (it is `docs/MATCHUPS.md`); and P6.5's claim that its keybindings half reads
-> `src/Chat.php` (`Chat.php` has **zero** registry calls).
+> 🔴 **DO NOT TRUST THIS DOCUMENT ABOUT WHAT IS STILL OPEN.** A read-only scout measured 13 of its
+> candidate items against master in round 36 and **8 were already CLOSED** — roughly 2:1 unreliable.
+> Among them: the malformed-tool-arg crash (guarded on both paths; the cited line was 250 off), `Glob`'s
+> `**` non-recursion (a real recursive walker exists — proven by execution), `Edit`'s `'bool'` schema,
+> the unindexed `sessions.updated_at` query (**wrong on all three sub-claims, including the directory —
+> the class is `src/Session/` singular**), fake streaming, missing `connect_timeout`, the `-p`
+> `EchoProvider` degradation, and `loadRoot()`'s monorepo blindness. **Open a round with a scout pass,
+> not by reading this file.** The measured open queue lives in `docs/plans/crush_code_RESUME.md`
+> §"ROUND 36 SCOPE".
 >
-> Next queue is in `docs/plans/crush_code_RESUME.md` §0-NOW. The item promoted to the FRONT of it is
-> not in this document's phase list at all: **nothing attaches a permission approver**
-> (`EngineBackend::withPermissionApprover()` has no caller in `src/`), which is what keeps the
-> shipped default at `bypass-permissions` — i.e. at "no gate". **That is the bundle lane `cmd` is
-> implementing right now, scoped to the headless `NonInteractive` path only.**
+> ⚠️ **OTHER MEASURED ERRORS IN THIS DOCUMENT** (each verified, none yet swept): item P3.4's
+> `/sessions` and LSP-diagnostics targets are **both false premises**; `Help::screen()` is described as
+> a 6-line heredoc and is **145 lines** (`:38-182`); `MATCHUPS.md` is cited at the repo root and lives
+> at `docs/MATCHUPS.md`; P6.5's claim that its keybindings half reads `src/Chat.php` is **false**
+> (`Chat.php` has zero `KeyBindingRegistry` calls — the 11 `keybinding` hits are the `?` reference
+> overlay, a different feature).
 
 Items completed in the tree carry a **✅ … — DONE** marker inline below. The
 authoritative, resumable record — including every review finding, the sabotage
