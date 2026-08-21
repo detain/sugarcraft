@@ -191,7 +191,16 @@ final class AgentDashboardPane
      */
     public static function render(App $a, int $width, int $rows): string
     {
-        $inner = max(20, $width - 2);
+        // Four columns go to the box's border AND its padding(0, 1), not two.
+        // This used to subtract 2 -- the border alone -- and so over-ran its
+        // caller's budget by exactly the padding on BOTH paths: the empty-list
+        // AgentViewPane::render() call below and the box() frame, which draws
+        // the same border-plus-padding geometry around a populated list. Pane
+        // width 30 came back 32, 60 came back 62, 100 came back 102. Nothing
+        // showed, because the shell renderer clips every frame to $cols before
+        // the diff renderer sees it; a backstop is not a budget, and the
+        // arithmetic is now AgentViewPane's to get right for both callers.
+        $inner = AgentViewPane::contentWidth($width, 20);
         // Two rows go to the box's own top and bottom border.
         $budget = max(1, $rows - 2);
 
@@ -348,6 +357,10 @@ final class AgentDashboardPane
      */
     private static function box(string $body, App $a, int $inner, Theme $theme): string
     {
+        // Same rounded border + padding(0, 1) + width($inner) geometry as
+        // {@see AgentViewPane::render()}, so this frame is
+        // `$inner + AgentViewPane::CHROME_WIDTH` cells wide too. That is why
+        // one subtraction in render() covers both of this pane's paths.
         $style = Style::new()
             ->border(Border::rounded()->withTitle(' agents '))
             ->padding(0, 1)

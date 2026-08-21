@@ -265,26 +265,18 @@ final class CellWidthPaddingTest extends TestCase
      * outside it — so `render(..., $width, ...)` returns rows of `$width + 4`
      * cells, for ASCII and multibyte alike, empty list included.
      *
-     * ONE of the two callers subtracts that overhead; the other does not, and
-     * saying "both do" would be this project's most-repeated defect — a number
-     * true of one thing written next to a different thing.
-     * {@see \SugarCraft\Crush\Renderer::renderAgentView()} passes
-     * `max(40, $cols - 4)`, which compensates exactly at 44 columns and above.
+     * The two callers used to write that overhead out as a literal each, and
+     * one of them wrote the wrong literal — {@see
+     * \SugarCraft\Crush\Renderer::renderAgentView()} subtracted 4 and
      * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::render()}
-     * passes `max(20, $width - 2)`, which does not compensate at all: measured,
-     * both of its paths — the empty-list `AgentViewPane::render()` call and the
-     * `box()` frame around a populated list, which repeats the same
-     * border-plus-padding geometry — return `$width + 2` cells for the
-     * `$width` they were handed (pane width 30 -> 32, 60 -> 62, 100 -> 102).
-     *
-     * That over-run is real but not observable: every dashboard frame goes out
-     * through `clipWidth()` at {@see \SugarCraft\Crush\Tui\Renderer} (the
-     * `clipWidth(clipTail(...), $cols)` call that builds `$frame`), which
-     * trims the two cells back off before the diff renderer ever sees them.
-     * Recorded rather than fixed here on purpose — this file is about the
-     * PADDING measure, and widening it into the dashboard's width arithmetic
-     * would be a different change. See
-     * docs/plans/crush_code_hardening_backlog.md.
+     * subtracted 2, having charged for the border and forgotten the padding,
+     * so both of the dashboard's paths came back `$width + 2` (pane width 30
+     * -> 32, 60 -> 62, 100 -> 102) and only `clipWidth()` kept it off the
+     * screen. Both now subtract {@see AgentViewPane::contentWidth()}, and
+     * {@see \SugarCraft\Crush\Tests\Tui\AgentViewPaneGeometryTest} is
+     * where that is pinned. What survives here is only the `$width + 4`
+     * relationship itself, which is unchanged: `render()` still takes a
+     * CONTENT width.
      *
      * Pinning the exact `+4` rather than a `<=` bound is the point: a `<=`
      * assertion would keep passing if the pad started under-filling again,
@@ -308,7 +300,7 @@ final class CellWidthPaddingTest extends TestCase
             );
 
             $this->assertSame(
-                array_fill(0, count($widths), $width + 4),
+                array_fill(0, count($widths), $width + AgentViewPane::CHROME_WIDTH),
                 $widths,
                 sprintf('rows disagreed about their width at content width %d', $width),
             );

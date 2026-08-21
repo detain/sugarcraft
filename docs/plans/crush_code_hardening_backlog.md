@@ -2670,6 +2670,32 @@ confirmed: `visualWidth(<family emoji>)` = 2 while summing `charWidth()` per cod
 never over-runs. But at budget 4 the truncator emitted `U+1F468 ZWJ …`: a **dangling ZWJ**, which is a
 rendering hazard in its own right, not merely over-truncation.
 
+**ROUND 38 — FIXED, with one scout figure corrected.** `AgentViewPane::truncate()` now steps over a
+new private `clusters()` and measures each unit with `visualWidth()`, so both paths ask
+`Width::string()` and a ZWJ sequence is taken whole or dropped whole. `clusters()` joins four things
+to the unit before them — anything after a ZWJ, any zero-width codepoint, a skin-tone modifier
+(U+1F3FB..U+1F3FF) and a regional indicator following exactly one other — over `preg_split('//u')`,
+which needs no extension: `grapheme_str_split()` is PHP 8.4+ and this tree is 8.3, and `intl` is not a
+declared dependency of sugar-crush or candy-core, so branching on it would give the truncator two
+behaviours. It is not full UAX #29 and the docblock says so: Hangul syllables and Indic conjuncts are
+still split at codepoint boundaries, which costs the glyph but not a cell (`Width::string()` scores
+those additively either way).
+
+*Corrected figure.* The scout's "at budget 4 the truncator emitted `U+1F468 ZWJ …`" does NOT
+reproduce on the bare family emoji: it is 2 cells whole-string, so `truncate()`'s
+`$visualWidth <= $maxWidth` early return hands it back verbatim and the loop never runs. The dangling
+ZWJ needs trailing context, so the whole string exceeds the budget — measured,
+`truncate(FAMILY . 'cde', 4)` returned `U+1F468 ZWJ …` (3 cells), and after the fix returns
+`FAMILY . 'c' . '…'` (4 cells). Stated without the context the reproduction is a fixture shaped like
+the property rather than like the bug, and it passes before the fix as well as after. The regression
+test uses the context.
+
+The `visualWidth()` docblock, softened in an earlier round to *name* the divergence, has been turned
+back the other way now the divergence is closed — it would otherwise understate the code, which is
+this project's recurring defect with the sign flipped. `charWidth()` is not deleted: `truncate()` no
+longer sums it, but `joinsPrevious()` reads it for the one bit it needs (does this codepoint own a
+cell), and its docblock now says so.
+
 ### E54 — `AgentViewPane::render($w)` over-runs its caller's budget below 44 columns
 
 **What.** `render(..., $w, ...)` returns rows of **`$w + 4`** cells: `$w` is handed to `Style::width()`,
@@ -2712,6 +2738,31 @@ in every case**. The rounded border (2) plus `padding(0,1)` (2) are drawn outsid
 `Style::width()` sizes. `AgentDashboardPane` lands at `$width + 2` on both of its paths (`:193` `$inner`,
 fed to `AgentViewPane::render()` at `:202` and to `box()` at `:205`). Only the `clipWidth(clipTail(...))`
 backstop keeps it off the screen.
+
+**ROUND 38 — FIXED. Every scout figure above re-measured and confirmed; none was stale.** `+4` holds
+at w=20/28/30/40/43/44/58/60/80/98, populated and empty; `Renderer.php:1630`, `AgentDashboardPane.php`
+`:193`/`:202`/`:205` and the two `clipWidth(clipTail(...), $cols)` `$frame` assignments at
+`src/Tui/Renderer.php:490` and `:561` are all where the entry says they are.
+
+The overhead is now `AgentViewPane::CHROME_WIDTH` (a public const, 4) and the subtraction is
+`AgentViewPane::contentWidth($outerWidth, $minimum)`. `render()`'s `$width` parameter keeps its
+meaning — it is still a CONTENT width — because changing it to an outside width would have moved the
+`+4` that `CellWidthPaddingTest::testEveryAgentRowIsTheSameCellWidthWhateverTheEncoding()` exists to
+pin, and that relationship is worth keeping pinned. `Renderer::renderAgentView()` now calls
+`contentWidth($cols, 40)`, which is `max(40, $cols - 4)` unchanged; `AgentDashboardPane::render()`
+calls `contentWidth($width, 20)`, which is the actual fix — it was `max(20, $width - 2)`.
+
+*What did NOT change, deliberately.* The floors stay. Below `minimum + CHROME_WIDTH` columns the floor
+still wins and the rows are still wider than the terminal — for `renderAgentView` that is still under
+44 columns — because a pane cannot be both at least `$minimum` wide and narrower than the terminal.
+`clipWidth()` remains the backstop for that case and `contentWidth()`'s docblock says so rather than
+implying the over-run is gone.
+
+*Byte-identity, proved not asserted.* `Renderer::renderAgentView()`'s output was captured from the
+pre-change tree at 44/60/80/120 columns and is pinned base64 in
+`tests/Tui/AgentViewPaneGeometryTest::testRenderAgentViewIsByteIdenticalAtAndAbove44Columns()`. That
+test is the one new test that passes BEFORE the change as well as after — correctly, since its job is
+to catch a change, not to reproduce a bug. The other six all fail before and pass after.
 
 ### E55 — `maxOutputBytes` no longer bounds `Grep`'s result
 

@@ -1627,7 +1627,14 @@ final class Renderer
         );
 
         $cols = $chat->cols();
-        $width = max(40, $cols - 4);
+        // `render()` is handed a CONTENT width and draws its border and
+        // padding outside it, so the 4 that comes off here is that chrome and
+        // nothing else -- named now, because the dashboard's copy of this
+        // arithmetic subtracted 2 and was wrong by exactly the padding.
+        // The 40 floor is unchanged and still costs what it always did: under
+        // 44 columns the floor wins, the strip is wider than the terminal, and
+        // the shell renderer's clipWidth() is what keeps it off the screen.
+        $width = AgentViewPane::contentWidth($cols, 40);
 
         // The status bar's first row is this pane's header, so it carries the
         // `pane:agents` click zone (crush_feat.md §8 E3) — clicking it runs

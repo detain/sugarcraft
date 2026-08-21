@@ -47,12 +47,54 @@ final class AgentViewPane
     ];
 
     /**
+     * Cells this pane draws OUTSIDE the width {@see render()} is handed.
+     *
+     * `$width` goes to `Style::width()`, which sizes the CONTENT box; the
+     * rounded border adds a column on each side and `padding(0, 1)` one more
+     * on each side, so a finished row is `$width + CHROME_WIDTH` cells. That
+     * is an invariant, not a narrow-terminal edge case -- measured at
+     * `$width` = 20, 28, 30, 40, 43, 44, 58, 60, 80 and 98, populated list and
+     * empty placeholder alike, it is `+4` in every one.
+     *
+     * It exists as a named constant because the two callers each used to
+     * write their own literal for it and one of them wrote the wrong one:
+     * {@see \SugarCraft\Crush\Renderer::renderAgentView()} subtracted 4 and
+     * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::render()}
+     * subtracted 2, having charged for the border and forgotten the padding.
+     * Both now go through {@see contentWidth()}.
+     */
+    public const CHROME_WIDTH = 4;
+
+    /**
+     * Content width to hand {@see render()} for an OUTSIDE budget of
+     * `$outerWidth` cells, floored at `$minimum`.
+     *
+     * `$minimum` stays the caller's to choose -- the in-transcript strip
+     * floors at 40 and the full-pane dashboard at 20, and those floors are
+     * about legibility, not geometry. Note what the floor costs: when
+     * `$outerWidth` is under `$minimum + CHROME_WIDTH` the floor wins and the
+     * rendered rows are wider than the budget after all. Nothing here can fix
+     * that -- a pane cannot be both at least `$minimum` wide and narrower than
+     * the terminal -- so the shell renderer's `clipWidth()` remains the
+     * backstop for terminals that narrow, exactly as before.
+     */
+    public static function contentWidth(int $outerWidth, int $minimum): int
+    {
+        return max($minimum, $outerWidth - self::CHROME_WIDTH);
+    }
+
+    /**
      * Render the agent list pane.
      *
      * @param list<AgentDisplayState> $agents        Ordered list of agents to display.
      * @param int                     $selectedIndex Index of the currently-selected agent (passed
      *                                               from App state; -1 means no selection).
-     * @param int                     $width        Available terminal columns for the pane.
+     * @param int                     $width        CONTENT columns for the pane -- the width of the
+     *                                               box inside the border and padding, not the
+     *                                               columns the finished pane occupies. A rendered
+     *                                               row is `$width + CHROME_WIDTH` cells; callers
+     *                                               working from an outside budget should reach
+     *                                               this through {@see contentWidth()}.
      * @param int                     $maxRows      Maximum rows to render before clipping (longer
      *                                               lists are silently truncated at render time;
      *                                               scrolling is handled by the caller).
@@ -164,9 +206,18 @@ final class AgentViewPane
     }
 
     /**
-     * Truncate $text to at most $maxWidth characters, appending "…" when
-     * it does not fit.  Preserves multibyte characters.  Returns the text
-     * verbatim when it already fits.
+     * Truncate $text to at most $maxWidth CELLS, appending "…" when it does
+     * not fit. Returns the text verbatim when it already fits.
+     *
+     * The loop steps over {@see clusters()}, not over codepoints, and that is
+     * the whole point of it. Summing {@see charWidth()} per codepoint scored
+     * the family emoji U+1F468 ZWJ U+1F469 ZWJ U+1F467 as 6 cells where
+     * {@see visualWidth()} scores the same string 2 -- the truncator and the
+     * pad disagreeing about one string. The over-count on its own was
+     * harmless (the loop under-filled and cut early; it could never over-run),
+     * but cutting BETWEEN the codepoints of that sequence emitted a joiner
+     * with nothing after it, which is a rendering hazard in its own right.
+     * A cluster is now taken whole or not at all.
      */
     private static function truncate(string $text, int $maxWidth): string
     {
@@ -179,47 +230,149 @@ final class AgentViewPane
             return $text;
         }
 
-        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $result = '';
         $w = 0;
 
-        foreach ($chars as $char) {
-            $charWidth = self::charWidth($char);
-            if ($w + $charWidth > $maxWidth - 1) { // leave room for "…"
+        foreach (self::clusters($text) as $cluster) {
+            $clusterWidth = self::visualWidth($cluster);
+            if ($w + $clusterWidth > $maxWidth - 1) { // leave room for "…"
                 break;
             }
-            $result .= $char;
-            $w += $charWidth;
+            $result .= $cluster;
+            $w += $clusterWidth;
         }
 
         return $result . "\u{2026}";
     }
 
     /**
+     * Split $text into units {@see truncate()} may not cut apart: a base
+     * codepoint plus everything that renders as part of the same glyph.
+     *
+     * Hand-rolled rather than delegated, for a version reason rather than a
+     * taste one. {@see Width} is this class's width authority and it IS
+     * grapheme-aware, but its splitter is private, and the intl function that
+     * would replace this outright -- `grapheme_str_split()` -- is PHP 8.4+
+     * while this tree targets 8.3. `grapheme_extract()` does ship with intl
+     * on 8.3, but intl is not a declared dependency of sugar-crush or of
+     * candy-core, so reaching for it would make the truncator behave one way
+     * on a build that has it and another on a build that does not. This runs
+     * on `preg_split('//u')`, which needs no extension at all and so cannot
+     * fatal anywhere PHP itself runs.
+     *
+     * Four things join the unit before them:
+     *
+     * 1. anything following a zero-width joiner -- the joiner's entire job;
+     * 2. any zero-width codepoint (combining mark, variation selector, the
+     *    joiner itself), which has no cell of its own to be cut into;
+     * 3. an emoji skin-tone modifier, U+1F3FB..U+1F3FF;
+     * 4. a regional indicator following exactly one other regional indicator,
+     *    which is how a flag is spelled -- "exactly one" because a run of four
+     *    is two flags, not one.
+     *
+     * Widths still come from {@see charWidth()}/{@see visualWidth()}, so this
+     * adds a segmentation rule and NOT a second width table -- the mistake
+     * this class already made once, when its truncator carried a local width
+     * table that disagreed with `Width`. Nor does the grouping move any total:
+     * `Width::string()` scores a flag 1+1 and a skin-toned thumb 2+2, the same
+     * either way, so grouping changes what may be SPLIT, never how wide
+     * anything measures.
+     *
+     * This is not full UAX #29 and does not claim to be. Hangul syllables,
+     * Indic conjuncts and prepend marks are still split at codepoint
+     * boundaries, exactly as they were before.
+     *
+     * @return list<string>
+     */
+    private static function clusters(string $text): array
+    {
+        $units = [];
+
+        foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+            $last = $units === [] ? null : $units[array_key_last($units)];
+
+            if ($last !== null && self::joinsPrevious($char, $last)) {
+                $units[array_key_last($units)] = $last . $char;
+                continue;
+            }
+
+            $units[] = $char;
+        }
+
+        return $units;
+    }
+
+    /**
+     * Whether $char renders as part of the unit $previous, per the four rules
+     * on {@see clusters()}.
+     *
+     * The two emoji ranges are matched on UTF-8 BYTES rather than on a decoded
+     * codepoint so that this needs neither mbstring's `mb_ord()` nor a second
+     * copy of candy-core's hand-rolled decoder. U+1F3FB..U+1F3FF encode as
+     * `F0 9F 8F BB..BF` and U+1F1E6..U+1F1FF as `F0 9F 87 A6..BF`; both are
+     * four bytes behind a fixed three-byte prefix, so the prefix plus a range
+     * check on the final byte identifies them exactly.
+     */
+    private static function joinsPrevious(string $char, string $previous): bool
+    {
+        if (str_ends_with($previous, "\u{200D}") || self::charWidth($char) === 0) {
+            return true;
+        }
+
+        if (strlen($char) !== 4 || !str_starts_with($char, "\xf0\x9f")) {
+            return false;
+        }
+
+        $third = $char[2];
+        $final = ord($char[3]);
+
+        // Skin-tone modifier: attaches to whatever emoji it follows.
+        if ($third === "\x8f" && $final >= 0xbb && $final <= 0xbf) {
+            return true;
+        }
+
+        // Regional indicator: pairs with a SINGLE preceding regional
+        // indicator. Against a unit that is already a pair this answers
+        // false, which is what starts the next flag.
+        return $third === "\x87" && $final >= 0xa6 && $final <= 0xbf
+            && strlen($previous) === 4
+            && str_starts_with($previous, "\xf0\x9f\x87");
+    }
+
+    /**
      * Compute visual width of a string in terminal cells.
      *
      * Delegates to {@see Width::string()}, so this class's truncator and its
-     * right-pad now read the same width TABLE. They did not: the pad counted
-     * bytes while the truncator walked a local table, and that table disagreed
-     * with Width on real codepoints (emoji scored 1 here, 2 there; a combining
+     * right-pad read the same width table. They did not: the pad counted bytes
+     * while the truncator walked a local table, and that table disagreed with
+     * Width on real codepoints (emoji scored 1 here, 2 there; a combining
      * accent scored 1 here, 0 there). Two tables cannot hold a column still
      * however carefully either is written.
      *
-     * One table is not quite one ANSWER, and the difference is worth stating
-     * exactly rather than rounding up to "one width authority". This function
-     * measures a whole string, so it is grapheme-aware; {@see truncate()}
-     * still sums {@see charWidth()} one codepoint at a time. On a ZWJ sequence
-     * the two therefore diverge — measured, the family emoji U+1F468 ZWJ
-     * U+1F469 ZWJ U+1F467 is 2 cells whole-string and 6 summed per codepoint.
+     * One table was not yet one ANSWER, and for a while this comment said so:
+     * `Width::string()` runs a ZWJ state machine across a WHOLE string, while
+     * {@see truncate()} summed {@see charWidth()} one codepoint at a time, and
+     * the two scored the family emoji U+1F468 ZWJ U+1F469 ZWJ U+1F467 as 2 and
+     * as 6. That gap is closed: the truncator now steps over
+     * {@see clusters()} and measures each unit through THIS function, so both
+     * paths ask `Width::string()` and a ZWJ sequence gets one answer.
      *
-     * The divergence is bounded in the SAFE direction: the per-codepoint sum
-     * is the larger of the two, so the loop spends its budget early and
-     * truncates sooner than it had to. It can drop a character that would have
-     * fit; it cannot emit a row wider than the budget, which is the failure
-     * this file's tests exist to prevent. Recorded in
-     * docs/plans/crush_code_hardening_backlog.md rather than fixed here —
-     * making the loop grapheme-aware is a change to the truncator, not to the
-     * padding measure this bundle is about.
+     * What that does and does not buy is worth keeping straight. Agreement is
+     * per unit, and units are grouped by {@see clusters()}'s four rules rather
+     * than by UAX #29 — so a sequence outside those rules (conjoining Hangul
+     * jamo, an Indic conjunct) is still split at a codepoint boundary. On this
+     * tree's PHP 8.3 that costs no width error at all: `Width` splits with
+     * `mb_str_split()` there, one codepoint per cluster, so the whole-string
+     * measure IS the per-codepoint sum for anything without a ZWJ in it —
+     * measured, L+V+T is 4 either way. On a PHP 8.4 build `Width` would split
+     * with `grapheme_str_split()` and score that syllable by its first
+     * codepoint, 2, where the sum here is still 4.
+     *
+     * That residual gap runs in the same safe direction the ZWJ one did: the
+     * per-unit sum is the LARGER, so the loop spends its budget early and cuts
+     * sooner than it had to. It can drop a character that would have fit; it
+     * cannot emit a row wider than its budget, which is the failure this
+     * file's tests exist to prevent, and which was never reachable from here.
      */
     private static function visualWidth(string $text): int
     {
@@ -227,7 +380,15 @@ final class AgentViewPane
     }
 
     /**
-     * Visual width of a single codepoint: 0 for control, 1 for regular, 2 for wide.
+     * Visual width of a single codepoint: 0 for control, 1 for regular, 2 for
+     * wide.
+     *
+     * {@see truncate()} no longer sums this — it measures whole clusters with
+     * {@see visualWidth()} instead. What still reads it is
+     * {@see joinsPrevious()}, and it reads it for one bit of information only:
+     * whether a codepoint has a cell of its own. A zero answer means a
+     * combining mark, a variation selector or the joiner itself, none of which
+     * can be cut away from what they attach to.
      */
     private static function charWidth(string $char): int
     {
