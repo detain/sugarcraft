@@ -177,7 +177,7 @@ final readonly class SglangProvider implements ProviderInterface
      * Treat the date above as part of the value. Re-verify BOTH endpoints -
      * `/v1/models` alone would have left this constant six tokens high and,
      * more importantly, reading the wrong field. Re-verify with
-     * `curl -s https://skynet2.interserver.net/v1/models`, whose
+     * `curl -s http://skynet2.interserver.net:30000/v1/models`, whose
      * `data[0].max_model_len` is this number.
      *
      * Over five times the MiniMax figure below, which is why

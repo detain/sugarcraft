@@ -841,7 +841,7 @@ final class SglangProviderTest extends TestCase
 
     public function testOpenAiCompatibleWithPathSuffixResolvesRequestsUnderThatPath(): void
     {
-        $provider = SglangProvider::openAiCompatible('https://skynet2.interserver.net/v1');
+        $provider = SglangProvider::openAiCompatible('http://skynet2.interserver.net:30000/v1');
 
         /** @var Client $client */
         $client = $this->getPrivateProperty($provider, 'httpClient');
@@ -849,7 +849,7 @@ final class SglangProviderTest extends TestCase
 
         $resolved = \GuzzleHttp\Psr7\UriResolver::resolve($baseUri, \GuzzleHttp\Psr7\Utils::uriFor('chat/completions'));
 
-        $this->assertSame('https://skynet2.interserver.net/v1/chat/completions', (string) $resolved);
+        $this->assertSame('http://skynet2.interserver.net:30000/v1/chat/completions', (string) $resolved);
     }
 
     // -------------------------------------------------------------------------

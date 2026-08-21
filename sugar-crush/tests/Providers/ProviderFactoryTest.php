@@ -793,7 +793,7 @@ final class ProviderFactoryTest extends TestCase
         // id (and named the same MiniMax id before, so this assertion never
         // distinguished the two sources). `baseUrl` does: the built-in schema
         // says http://localhost:30000 and only the project config says skynet2.
-        $this->assertSame('https://skynet2.interserver.net/v1', $config['baseUrl']);
+        $this->assertSame('http://skynet2.interserver.net:30000/v1', $config['baseUrl']);
         $this->assertNotSame('http://localhost:30000', $config['baseUrl']);
     }
 
