@@ -548,12 +548,116 @@ final class TransientFailureTest extends TestCase
         TransientFailure::backoff(1);
         $elapsed = (microtime(true) - $started) * 1_000_000;
 
-        // Generous lower bound (90%) because usleep may return marginally early
-        // on a loaded box; the point is that it slept at all, roughly to scale.
-        $this->assertGreaterThan(
-            TransientFailure::backoffMicroseconds(1) * 0.9,
+        // The bound used to be 90% of the debt, "because usleep may return
+        // marginally early on a loaded box". It cannot any more: backoff() now
+        // re-sleeps against a `microtime(true)` deadline and only returns once
+        // that deadline has PASSED, so the full debt is a property of the
+        // implementation rather than a hope about the scheduler.
+        $this->assertGreaterThanOrEqual(
+            TransientFailure::backoffMicroseconds(1),
             $elapsed,
         );
+    }
+
+    /**
+     * THE BACKOFF SURVIVES A SIGNAL, which is the whole reason it is a loop.
+     *
+     * MEASURED on this host, PHP 8.3.6: `usleep(1_000_000)` with a caught
+     * signal delivered 200ms in returns after 0.2017s — PHP does not restart
+     * the sleep across EINTR. Driven through this class before the fix, with
+     * the empty SIGWINCH handler `SugarCraft\Core\Program` installs for the
+     * whole TUI and a SIGWINCH raised 120ms into `backoff(1)`: 500000µs owed,
+     * 119896µs slept. Three quarters of the wait gone.
+     *
+     * Those handlers are INHERITED ACROSS `EngineBackend::completeAsync()`'s
+     * fork and nothing in the child resets them, so this is not a contrived
+     * shape — a terminal resize during a 5xx retry storm is a user reaching for
+     * their window, and it silently put the retry back on the failing upstream
+     * with no wait at all.
+     *
+     * Run in a child process because the signal has to arrive while THIS call
+     * is parked, and installing TUI signal handlers in the suite's own process
+     * would leak into every test after it.
+     */
+    public function testBackoffSleepsItsWholeDebtEvenWhenASignalInterruptsTheSleep(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_async_signals')) {
+            $this->markTestSkipped('pcntl is required to deliver a signal mid-sleep');
+        }
+
+        $owed = TransientFailure::backoffMicroseconds(1);
+        $slept = $this->backoffSleptWithSignalAt(120_000);
+
+        $this->assertGreaterThanOrEqual(
+            $owed,
+            $slept,
+            'a signal truncated the backoff, putting the retry straight back on the failing upstream',
+        );
+        // And it did not turn one interrupted sleep into many: the deadline is
+        // re-read from the clock, so the handler's own cost comes OUT of the
+        // backoff rather than being added to it.
+        $this->assertLessThan($owed * 3, $slept, 'the re-sleep loop overshot its deadline');
+    }
+
+    /**
+     * Run `TransientFailure::backoff(1)` in a child that has the TUI's SIGWINCH
+     * handler installed and a grandchild raising it mid-sleep; report the
+     * microseconds actually slept.
+     */
+    private function backoffSleptWithSignalAt(int $afterMicroseconds): int
+    {
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+
+        $script = <<<PHP
+            <?php
+            declare(strict_types=1);
+            require {$this->export($autoload)};
+
+            pcntl_async_signals(true);
+            pcntl_signal(SIGWINCH, static function (): void {});
+
+            \$parent = getmypid();
+            \$pid = pcntl_fork();
+            if (\$pid === 0) {
+                usleep({$afterMicroseconds});
+                posix_kill(\$parent, SIGWINCH);
+                exit(0);
+            }
+
+            \$started = microtime(true);
+            SugarCraft\Crush\Providers\TransientFailure::backoff(1);
+            \$slept = (int) round((microtime(true) - \$started) * 1_000_000);
+
+            \$status = 0;
+            pcntl_waitpid(\$pid, \$status);
+            fwrite(STDOUT, (string) \$slept);
+            PHP;
+
+        $file = tempnam(sys_get_temp_dir(), 'backoff_signal_');
+        self::assertIsString($file);
+        file_put_contents($file, $script);
+
+        try {
+            $process = proc_open([PHP_BINARY, $file], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            self::assertIsResource($process);
+            $out = (string) stream_get_contents($pipes[1]);
+            $err = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($process);
+        } finally {
+            @unlink($file);
+        }
+
+        self::assertSame('', trim($err), 'the backoff child wrote to stderr');
+        self::assertMatchesRegularExpression('/^\d+$/', trim($out), 'the child reported no sleep figure');
+
+        return (int) trim($out);
+    }
+
+    private function export(string $value): string
+    {
+        return var_export($value, true);
     }
 
     public function testTheLastAttemptCostsNoWait(): void

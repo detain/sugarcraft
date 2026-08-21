@@ -257,6 +257,21 @@ final class Chat implements Model
     private const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
 
     /**
+     * How long {@see reapKilledToolChild()} spends collecting one SIGKILLed
+     * tool child before giving up on it for this pass.
+     *
+     * 100ms is two loop frames at the 50ms tick this routine polls on, which
+     * is the budget that matters: it has to be long enough that the ordinary
+     * case (the child is already gone) never reaches the end of it, and short
+     * enough that a child which cannot be reaped at all does not become a
+     * visible stall in the TUI.
+     */
+    private const REAP_BUDGET_SECONDS = 0.1;
+
+    /** How often {@see reapKilledToolChild()} re-asks. */
+    private const REAP_POLL_MICROSECONDS = 5_000;
+
+    /**
      * How often {@see driveWorkflowFiber()} resumes a suspended workflow.
      *
      * The same 50ms {@see waitForToolChildrenAsync()} polls its children at,
@@ -3313,8 +3328,7 @@ final class Chat implements Model
                 if (function_exists('posix_kill')) {
                     posix_kill($jobs[$index]['pid'], SIGKILL);
                 }
-                $status = 0;
-                pcntl_waitpid($jobs[$index]['pid'], $status);
+                self::reapKilledToolChild($jobs[$index]['pid']);
             }
 
             $settled = true;
@@ -3323,6 +3337,48 @@ final class Chat implements Model
         });
 
         return $deferred->promise();
+    }
+
+    /**
+     * Collect a tool child we have just SIGKILLed, over a bounded `WNOHANG`
+     * window.
+     *
+     * This was an unflagged `pcntl_waitpid()`, which is the same defect
+     * {@see \SugarCraft\Crush\Runtime::reapKilled()} already carries the fix
+     * and the reasoning for: `posix_kill()` above is guarded because ext-posix
+     * is not guaranteed, and in exactly the build where that guard skips,
+     * NOTHING KILLED THE CHILD — so the wait that follows is unbounded on a
+     * tool that had already refused to finish.
+     *
+     * It is worse here than there by one degree, and that is why this fix is
+     * in this bundle. {@see Runtime::executeConcurrently()} runs inside the
+     * forked completion child, on nobody's event loop; this loop body is a
+     * {@see \React\EventLoop\LoopInterface::addPeriodicTimer()} callback in
+     * the TUI PROCESS. A blocking wait here does not stall a turn, it stalls
+     * the render and the keyboard — including the Escape-Escape that reaches
+     * this same routine through $cancellation.
+     *
+     * @param int $pid
+     */
+    private static function reapKilledToolChild(int $pid): void
+    {
+        $status = 0;
+        $deadline = microtime(true) + self::REAP_BUDGET_SECONDS;
+
+        while (true) {
+            if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) {
+                return;
+            }
+
+            if (microtime(true) >= $deadline) {
+                // Left for the next pass of this same timer, or for the
+                // process to outlive: a zombie is a slot in the process table,
+                // while a blocked loop is a dead terminal.
+                return;
+            }
+
+            usleep(self::REAP_POLL_MICROSECONDS);
+        }
     }
 
     /**

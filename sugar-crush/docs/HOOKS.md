@@ -49,12 +49,13 @@ hooks:
       command: ./hooks/confirm-deploy.sh
       description: Ask before anything touches production
       disabled: false                 # optional; true keeps it out of the chain
+      timeout: 30                     # optional seconds; default 60
   PostToolUse:
     - matcher: 'Read|Write/Edit'
       command: ./hooks/log-touch.sh
 ```
 
-Those five are the **only** keys an entry may carry. An unrecognised key is
+Those six are the **only** keys an entry may carry. An unrecognised key is
 refused rather than ignored.
 
 `name` matters because `HookRegistry` keys hooks by name: without it, two
@@ -322,8 +323,26 @@ during a hook returns EINTR: breaking there truncated deny reasons, half of an
 `exit 3` question, and — worst — a partial `exit 4` rewrite, which is invalid
 JSON and therefore a deny of a call the hook meant to permit differently.
 
-**There is no timeout.** A hook that never exits parks the CLI on a `null`-timeout
-select. Keep hook scripts fast and self-bounding.
+### The timeout
+
+**A hook run is bounded, drain and reap together.** 60 seconds by default;
+`timeout:` on the entry overrides it, and a non-positive value is refused
+rather than read as "no timeout".
+
+It used to be unbounded in two independent places, and either one alone was
+enough to freeze the CLI — no spinner, no Escape. Measured at `4a4ecb98`, each
+under a 5-second external clock and each returning exit 124:
+
+| Hook command | Where it parked |
+|---|---|
+| `sleep 30` | the drain's `stream_select()`, called with a `null` timeout |
+| `printf hi; exec 1>&- 2>&-; sleep 30` | `proc_close()`, which waits — the drain had already finished at EOF |
+
+Past the deadline the child gets SIGTERM, half a second, then signal 9, and the
+hook is reported as a **DENY**: an expired hook has answered nothing, and
+letting the call through would silently skip the guard that was written to stop
+it. On `PostToolUse` that verdict is discarded by both consumers, so the only
+effect there is that the tool result stops waiting.
 
 ---
 

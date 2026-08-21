@@ -50,6 +50,200 @@ final class BackgroundSessionRunnerTest extends TestCase
         );
     }
 
+    // =========================================================================
+    // Stopping the worker. supervise() used to send SIGTERM and then call a
+    // bare pcntl_waitpid(), which a worker that traps TERM never returns from.
+    // =========================================================================
+
+    /**
+     * A worker that IGNORES SIGTERM is escalated to signal 9 and reaped.
+     *
+     * MEASURED against the bare wait this replaced: a forked child that
+     * installs an empty SIGTERM handler and loops leaves
+     * `pcntl_waitpid($pid, $status)` unreturned — `timeout 5 php` exits 124.
+     *
+     * The consequence was not confined to the daemon. The supervisor's only
+     * completion signal is a DEAD PID
+     * ({@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::reapFinishedDaemon()}),
+     * so a `supervise()` parked in that wait means the session reports
+     * "running" for the life of the process, the unix socket is never unlinked,
+     * and both processes leak.
+     *
+     * Run in a CHILD PHP PROCESS under an external clock, for the reason
+     * {@see \SugarCraft\Crush\Tests\Hooks\ScriptHookTest} runs its drain
+     * cases there: the failure being pinned is a HANG, and an in-process
+     * assertion after a hang is never reached — it takes the whole suite out on
+     * whatever external timeout CI happens to have, naming no test.
+     */
+    public function testAWorkerThatIgnoresSigtermIsEscalatedAndReaped(): void
+    {
+        $report = $this->stopWorkerBounded(trapsTerm: true);
+
+        $this->assertTrue($report['reaped'], 'the worker was left running after stopWorker() returned');
+        $this->assertLessThan(20.0, $report['elapsed'], 'stopWorker() did not return in bounded time');
+        $this->assertStringContainsString('[session:task:escalate]', $report['log']);
+        $this->assertStringNotContainsString('[session:task:unreaped]', $report['log']);
+    }
+
+    /**
+     * The ordinary worker — no handler, dies on the default disposition — is
+     * reaped on SIGTERM alone, without paying the escalation grace.
+     *
+     * This is the case that actually runs in production, and it is the one an
+     * escalation can most easily make worse: a `stopWorker()` that always slept
+     * out its grace before checking would satisfy the test above and add a
+     * two-second stall to every `/stop`.
+     */
+    public function testAnOrdinaryWorkerIsReapedOnSigtermWithoutTheEscalationGrace(): void
+    {
+        $report = $this->stopWorkerBounded(trapsTerm: false);
+
+        $this->assertTrue($report['reaped']);
+        $this->assertLessThan(
+            BackgroundSessionRunner::TERMINATE_GRACE_SECONDS,
+            $report['elapsed'],
+            'a well-behaved worker waited out the grace meant for one that ignores TERM',
+        );
+        $this->assertStringNotContainsString('[session:task:escalate]', $report['log']);
+    }
+
+    /**
+     * Fork a worker, ask {@see BackgroundSessionRunner::stopWorker()} to stop
+     * it, and report how that went — all inside a child PHP process bounded by
+     * an external clock.
+     *
+     * @return array{elapsed: float, reaped: bool, log: string}
+     */
+    private function stopWorkerBounded(bool $trapsTerm): array
+    {
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $buffer = $this->bufferPath();
+        $ready = $buffer . '.ready';
+        $this->paths[] = $ready;
+        $trap = $trapsTerm ? 'true' : 'false';
+
+        $script = <<<PHP
+            <?php
+            declare(strict_types=1);
+            require {$this->export($autoload)};
+
+            \$runner = new SugarCraft\Crush\Sessions\BackgroundSessionRunner(
+                sessionId: 'sess_stop_1',
+                socketPath: {$this->export($buffer . '.sock')},
+                bufferPath: {$this->export($buffer)},
+                task: 'ship the thing',
+            );
+
+            \$worker = pcntl_fork();
+            if (\$worker === 0) {
+                if ({$trap}) {
+                    pcntl_async_signals(true);
+                    pcntl_signal(SIGTERM, static function (): void {});
+                }
+                // Announced only AFTER the handler is installed: signalled any
+                // earlier and the default disposition kills the worker, which
+                // is the well-behaved case wearing the other case's name.
+                file_put_contents({$this->export($ready)}, 'y');
+                while (true) {
+                    usleep(50000);
+                }
+            }
+
+            // `!== 'y'` and not `=== ''`: the file does not exist yet, and
+            // `file_get_contents()` answers FALSE for that — a test that read
+            // false as "ready" signalled the worker before its handler was
+            // installed and so measured the well-behaved case twice.
+            while (@file_get_contents({$this->export($ready)}) !== 'y') {
+                usleep(10000);
+            }
+
+            \$method = new ReflectionMethod(\$runner, 'stopWorker');
+            \$started = microtime(true);
+            \$method->invoke(\$runner, \$worker);
+            \$elapsed = microtime(true) - \$started;
+
+            \$status = 0;
+            // -1 is "not ours any more", i.e. already reaped by stopWorker();
+            // 0 would mean it is still running.
+            \$reaped = pcntl_waitpid(\$worker, \$status, WNOHANG) !== 0;
+            if (!\$reaped) {
+                posix_kill(\$worker, 9);
+                pcntl_waitpid(\$worker, \$status);
+            }
+
+            fwrite(STDOUT, json_encode([
+                'elapsed' => \$elapsed,
+                'reaped' => \$reaped,
+                'log' => (string) @file_get_contents({$this->export($buffer)}),
+            ]));
+            PHP;
+
+        $file = tempnam(sys_get_temp_dir(), 'bg_stop_');
+        self::assertIsString($file);
+        $this->paths[] = $file;
+        file_put_contents($file, $script);
+
+        $decoded = json_decode($this->runBounded([PHP_BINARY, $file], 20.0), true);
+
+        self::assertIsArray($decoded, 'the bounded child did not report a stopWorker() outcome');
+        self::assertIsFloat($decoded['elapsed'] ?? null);
+        self::assertIsBool($decoded['reaped'] ?? null);
+        self::assertIsString($decoded['log'] ?? null);
+
+        return $decoded;
+    }
+
+    /**
+     * @param list<string> $argv
+     */
+    private function runBounded(array $argv, float $seconds): string
+    {
+        $process = proc_open($argv, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $deadline = microtime(true) + $seconds;
+        $out = '';
+        $err = '';
+
+        while (true) {
+            $out .= (string) stream_get_contents($pipes[1]);
+            $err .= (string) stream_get_contents($pipes[2]);
+
+            if (proc_get_status($process)['running'] === false) {
+                break;
+            }
+
+            if (microtime(true) >= $deadline) {
+                proc_terminate($process, 9);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
+
+                self::fail("stopWorker() did not finish within {$seconds}s — it wedged");
+            }
+
+            usleep(10_000);
+        }
+
+        $out .= (string) stream_get_contents($pipes[1]);
+        $err .= (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        self::assertSame('', trim($err), 'the bounded child wrote to stderr');
+
+        return $out;
+    }
+
+    private function export(string $value): string
+    {
+        return var_export($value, true);
+    }
+
     public function testExecuteTaskWritesTheAssistantAnswerIntoTheBuffer(): void
     {
         $buffer = $this->bufferPath();

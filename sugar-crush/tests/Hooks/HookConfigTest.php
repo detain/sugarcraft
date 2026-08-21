@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Hooks;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Hooks\HookConfig;
+use SugarCraft\Crush\Hooks\ScriptHook;
 
 /**
  * @see HookConfig
@@ -495,7 +496,7 @@ YAML;
     {
         return [
             'a misspelled matcher silently became the .* default' => ["mather: '^Bash$'"],
-            'an unsupported timeout was accepted and ignored' => ['timeout: 5'],
+            'a misspelled timeout is not the timeout key' => ['timeut: 5'],
             'an event field is the key this entry is nested under' => ['event: PostToolUse'],
             'enabled: false read as "off" and the hook ran' => ['enabled: false'],
         ];
@@ -601,5 +602,98 @@ YAML;
     public function testAValuelessHooksKeyConfiguresNothing(): void
     {
         $this->assertSame([], HookConfig::parse("hooks:\n"));
+    }
+
+    /**
+     * `timeout` IS a key this format has, as of the round that gave
+     * {@see ScriptHook} a deadline at all. It was previously refused as
+     * unknown — see {@see unknownEntryKeys()}, which used to carry it and now
+     * carries a MISSPELLING of it instead, because "the key is not real" and
+     * "the key is real and you typed it wrong" are different failures and only
+     * the second one is still true.
+     */
+    public function testParseCarriesTimeoutThrough(): void
+    {
+        $result = HookConfig::parse(
+            "hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      timeout: 5\n",
+        );
+
+        $this->assertSame(5.0, $result[0]['timeout']);
+    }
+
+    /** A fractional timeout is a number too — sub-second hooks are a real shape. */
+    public function testParseAcceptsAFractionalTimeout(): void
+    {
+        $result = HookConfig::parse(
+            "hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      timeout: 0.25\n",
+        );
+
+        $this->assertSame(0.25, $result[0]['timeout']);
+    }
+
+    /**
+     * An entry that says nothing gets {@see ScriptHook::DEFAULT_TIMEOUT_SECONDS},
+     * asserted against the constant rather than the literal 60 so the two
+     * cannot drift apart.
+     */
+    public function testParseDefaultsTimeoutToTheScriptHookDefault(): void
+    {
+        $result = HookConfig::parse(
+            "hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n",
+        );
+
+        $this->assertSame(ScriptHook::DEFAULT_TIMEOUT_SECONDS, $result[0]['timeout']);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function unusableTimeouts(): array
+    {
+        return [
+            'zero is the unbounded wait wearing a number' => ['0'],
+            'negative is a deadline already in the past' => ['-1'],
+            'prose is not a number of seconds' => ["'none'"],
+            'YAML yes decodes to true, and true > 0 is true' => ['yes'],
+            'an empty value decodes to null' => [''],
+        ];
+    }
+
+    /**
+     * A NON-POSITIVE TIMEOUT IS REFUSED, NOT READ AS "NO TIMEOUT". Every value
+     * here is one a user writes MEANING "do not time this hook out", and
+     * honouring any of them restores exactly the unbounded wait the timeout was
+     * added to remove — a hook that never exits with nothing to end it.
+     *
+     * `yes` is in the list because it is the trap the `disabled` check next to
+     * it does not have: `is_int(true)` is false, but `true > 0` is TRUE, so an
+     * ordering that tested the comparison first would have accepted it and
+     * cast it to 1.0.
+     *
+     * @dataProvider unusableTimeouts
+     */
+    public function testParseRefusesATimeoutThatIsNotAPositiveNumber(string $value): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/positive number of seconds/');
+
+        HookConfig::parse(
+            "hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      timeout: {$value}\n",
+        );
+    }
+
+    /**
+     * The parsed entry is what {@see ScriptHook::fromConfig()} consumes, so the
+     * round trip is the property that matters — a `timeout` carried through the
+     * parser and dropped by the constructor would leave every assertion above
+     * passing over a hook that still runs on the default.
+     */
+    public function testAParsedTimeoutReachesTheHookItConfigures(): void
+    {
+        $result = HookConfig::parse(
+            "hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      timeout: 3\n",
+        );
+
+        $this->assertSame(3.0, ScriptHook::fromConfig($result[0])->timeoutSeconds());
     }
 }

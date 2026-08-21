@@ -61,6 +61,34 @@ final class BackgroundSessionRunner
     /** Seconds a single accept() may block before the worker is re-checked. */
     private const ACCEPT_TIMEOUT_SECS = 0.5;
 
+    /**
+     * How long {@see stopWorker()} gives SIGTERM before it sends signal 9.
+     *
+     * The point of asking first is to let the worker finish the buffer line it
+     * is mid-write on: a SIGKILLed worker leaves the answer truncated, and a
+     * `/stop` is a user deciding they have seen enough, not a user asking for
+     * the transcript to be corrupted.
+     *
+     * Two seconds and not more, because in practice this grace is never spent:
+     * the worker is {@see run()}'s `exit($this->executeTask($backend))` fork
+     * and installs no SIGTERM handler at all, so it dies on the default
+     * disposition immediately. The window is defensive — it covers a backend
+     * or a tool that has installed one — and on the `/stop` path there is a
+     * user watching, for whom every second of it is a stall.
+     *
+     * Public for the same reason {@see HEARTBEAT_INTERVAL_SECS} is: a test
+     * asserts that the ordinary worker is reaped INSIDE this window rather
+     * than paying it, and a literal on the test side would stop tracking the
+     * constant the first time it moved.
+     */
+    public const TERMINATE_GRACE_SECONDS = 2.0;
+
+    /** How long signal 9 gets before the daemon exits without having reaped. */
+    private const KILL_GRACE_SECONDS = 2.0;
+
+    /** How often {@see reapWithin()} re-asks with `WNOHANG`. */
+    private const REAP_POLL_MICROSECONDS = 10_000;
+
     public function __construct(
         public readonly string $sessionId,
         public readonly string $socketPath,
@@ -378,8 +406,7 @@ final class BackgroundSessionRunner
             }
 
             if (\time() > $deadline) {
-                @\posix_kill($worker, \SIGTERM);
-                \pcntl_waitpid($worker, $status);
+                $this->stopWorker($worker);
                 $result = 'timeout';
                 $this->log('[session:task:timeout]');
                 break;
@@ -396,8 +423,7 @@ final class BackgroundSessionRunner
             }
 
             if ($stopped) {
-                @\posix_kill($worker, \SIGTERM);
-                \pcntl_waitpid($worker, $status);
+                $this->stopWorker($worker);
                 $result = 'stopped';
                 $this->log('[session:task:stopped]');
                 break;
@@ -417,6 +443,102 @@ final class BackgroundSessionRunner
         $this->log('[session:daemon:exit]');
 
         return $result === 'completed' ? 0 : 1;
+    }
+
+    /**
+     * Ask the worker to stop, then MAKE it stop.
+     *
+     * Both callers used to be `posix_kill(SIGTERM)` followed by an unflagged
+     * `pcntl_waitpid()`, and a worker that traps or ignores TERM parks the
+     * supervisor in that wait for good. MEASURED on this host: a forked child
+     * that installs an empty `SIGTERM` handler and then loops leaves
+     * `pcntl_waitpid($pid, $status)` unreturned — `timeout 5 php` exited 124.
+     *
+     * The damage is not confined to the daemon. The supervisor's completion
+     * signal is a DEAD PID
+     * ({@see BackgroundSupervisor::reapFinishedDaemon()}), so a supervise()
+     * that never returns means the session reports "running" forever, the unix
+     * socket at {@see $socketPath} is never unlinked by the tail of that
+     * method, and both processes leak for the life of the machine. A `/stop`
+     * that leaves the session running is the whole feature failing at the one
+     * thing the user asked it to do.
+     *
+     * Escalation, not force: SIGTERM, a bounded `WNOHANG` window, then signal
+     * 9. SIGNAL 9 AS AN INTEGER LITERAL, never the `SIGKILL` constant — that
+     * constant is ext-pcntl's, and while this method is only reached from
+     * inside the `function_exists('pcntl_fork')` gate in {@see run()}, naming
+     * the constant here would make the shape wrong to copy. Same literal, and
+     * the same reason, as
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()} and
+     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::terminateAndReap()}.
+     *
+     * If signal 9 is also unreaped — an uninterruptible kernel wait, or a
+     * build with no ext-posix to signal with at all — the daemon EXITS ANYWAY
+     * and records that it did. That leaves an orphan, which is worse than a
+     * reap and much better than the alternative: the supervisor sees the dead
+     * daemon, settles the session, and unlinks nothing it did not create.
+     */
+    private function stopWorker(int $worker): void
+    {
+        $this->signalWorker($worker, \defined('SIGTERM') ? \SIGTERM : 15);
+
+        if ($this->reapWithin($worker, self::TERMINATE_GRACE_SECONDS)) {
+            return;
+        }
+
+        $this->log('[session:task:escalate] worker did not stop on SIGTERM pid=' . $worker);
+        $this->signalWorker($worker, 9);
+
+        if ($this->reapWithin($worker, self::KILL_GRACE_SECONDS)) {
+            return;
+        }
+
+        $this->log('[session:task:unreaped] worker survived signal 9 pid=' . $worker);
+    }
+
+    /**
+     * Send one signal to the worker, or do nothing at all.
+     *
+     * `posix_kill()` is ext-posix while the fork above is ext-pcntl, and the
+     * two are separately compilable. In a build with only the latter there is
+     * nothing to signal the worker WITH — which is exactly the build in which
+     * an unflagged wait would hang forever, so the guard and the bounded reap
+     * are the same fix seen from two sides.
+     */
+    private function signalWorker(int $worker, int $signal): void
+    {
+        if (\function_exists('posix_kill')) {
+            @\posix_kill($worker, $signal);
+        }
+    }
+
+    /**
+     * Collect the worker over a bounded `WNOHANG` window; true if it was
+     * reaped.
+     *
+     * Never an unflagged `pcntl_waitpid()`, for the reason
+     * {@see \SugarCraft\Crush\Runtime::reapKilled()} gives at its own call
+     * site: the wait is only bounded if the signal landed, and whether it
+     * landed is not something this process can assume.
+     */
+    private function reapWithin(int $worker, float $seconds): bool
+    {
+        $deadline = \microtime(true) + $seconds;
+        $status = 0;
+
+        while (true) {
+            // 0 is "still running"; the pid is "reaped"; -1 is "not ours any
+            // more" — and only the first of those is worth waiting on.
+            if (\pcntl_waitpid($worker, $status, \WNOHANG) !== 0) {
+                return true;
+            }
+
+            if (\microtime(true) >= $deadline) {
+                return false;
+            }
+
+            \usleep(self::REAP_POLL_MICROSECONDS);
+        }
     }
 
     /** Collapse a message to one line so it cannot corrupt the buffer's line protocol. */

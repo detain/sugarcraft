@@ -20,10 +20,20 @@ use Symfony\Component\Yaml\Yaml;
  *       command: ./hooks/confirm-deploy.sh
  *       description: Ask before anything touches production
  *       disabled: false           # optional; true keeps the entry out of the chain
+ *       timeout: 30               # optional seconds; default
+ *                                 # ScriptHook::DEFAULT_TIMEOUT_SECONDS
  * ```
  *
- * Those five are the ONLY keys an entry may carry, and an unrecognised one is
+ * Those six are the ONLY keys an entry may carry, and an unrecognised one is
  * refused rather than ignored — see the entry-key check in {@see parse()}.
+ *
+ * `timeout` bounds ONE hook run, drain and reap together. It is a per-entry
+ * figure because the right bound is a hook author's to know: a minute is
+ * generous for a policy check and short for a repo-wide linter, and the only
+ * alternative to naming it here is a constant somebody eventually raises for
+ * every hook at once. Non-positive is REFUSED rather than read as "no
+ * timeout" — see {@see ScriptHook::execute()} for why a hook with no bound is
+ * a frozen CLI.
  *
  * What the script's EXIT CODE means — 0 allow, 1/2 deny, 3 ask, 4 modify — is
  * documented in full on {@see ScriptHook}, which is the class that reads it.
@@ -53,7 +63,7 @@ final class HookConfig
      * Every key a single hook entry may carry. Exact, not advisory — see the
      * check in {@see parse()} for why an unrecognised one is refused.
      */
-    private const ENTRY_KEYS = ['name', 'matcher', 'command', 'description', 'disabled'];
+    private const ENTRY_KEYS = ['name', 'matcher', 'command', 'description', 'disabled', 'timeout'];
 
     /**
      * The candidate PCRE delimiters, tried in order, for wrapping a
@@ -99,7 +109,7 @@ final class HookConfig
     /**
      * Load hooks from a YAML file, or nothing at all when there is no file.
      *
-     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}>
+     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float}>
      *
      * @throws \RuntimeException when the file exists and cannot be read
      * @throws \InvalidArgumentException when the file exists and cannot be used
@@ -140,7 +150,7 @@ final class HookConfig
      *        a path when there is one, so the report names the file the user
      *        has to go and fix
      *
-     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}>
+     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float}>
      *
      * @throws \InvalidArgumentException when the content is not a usable hook file
      */
@@ -241,8 +251,9 @@ final class HookConfig
                 // A TYPO'D ENTRY KEY IS THE SAME FAILURE AS A TYPO'D TOP-LEVEL
                 // ONE, one level down, and it was the shape that survived the
                 // top-level check. `mather:` fell back to the `.*` default and
-                // ran the hook on every tool call; `timeout: 5` and
-                // `event: PostToolUse` were accepted and ignored; `disabled:
+                // ran the hook on every tool call; `event: PostToolUse` was
+                // accepted and ignored (so was `timeout: 5`, back when it was
+                // not a key of this format — it is one now); `disabled:
                 // true` and `enabled: false` were accepted and the hook RAN
                 // — which is the worst of them, because {@see HookRegistry}
                 // has a first-class disable()/isDisabled() pair, so `disabled`
@@ -300,6 +311,33 @@ final class HookConfig
                     );
                 }
 
+                // A TIMEOUT IS THE ONE FIELD WHERE THE PERMISSIVE READING IS
+                // THE DANGEROUS ONE. `timeout: 0`, `timeout: -1` and
+                // `timeout: 'none'` are all things a user writes MEANING "do
+                // not time this out", and honouring any of them puts back the
+                // unbounded wait {@see ScriptHook::DEFAULT_TIMEOUT_SECONDS}
+                // documents as a frozen CLI. A bool is excluded explicitly
+                // because `is_int(true)` is false but `true > 0` is not, and
+                // `timeout: yes` is YAML for `true`.
+                // `array_key_exists` and not `??`, so `timeout:` WRITTEN WITH
+                // NOTHING AFTER IT is refused rather than silently becoming the
+                // default. YAML decodes a valueless key to null, which is the
+                // same shape as an absent one and is not the same INTENT: the
+                // user reached for this field and did not finish the thought.
+                // Same treatment a blank `command:` already gets — key present,
+                // value unusable — rather than the `disabled: ` case's, which
+                // stays lenient because it is not being changed in this bundle.
+                $timeout = \array_key_exists('timeout', $config)
+                    ? $config['timeout']
+                    : ScriptHook::DEFAULT_TIMEOUT_SECONDS;
+                if (is_bool($timeout) || (!is_int($timeout) && !is_float($timeout)) || $timeout <= 0) {
+                    throw new \InvalidArgumentException(
+                        "{$source}: hook '{$name}' has a 'timeout' that is not a positive number of "
+                        . 'seconds; a hook with no bound freezes the whole CLI, so there is no way to '
+                        . 'ask for one.',
+                    );
+                }
+
                 $disabled = $config['disabled'] ?? false;
                 if (!is_bool($disabled)) {
                     // Not coerced. `disabled: 'no'` is a truthy string, and a
@@ -330,6 +368,7 @@ final class HookConfig
                     'command' => $command,
                     'description' => $description,
                     'disabled' => $disabled,
+                    'timeout' => (float) $timeout,
                 ];
             }
         }

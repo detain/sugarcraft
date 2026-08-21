@@ -537,12 +537,23 @@ final class ScriptHookTest extends TestCase
      *        SIGWINCH handler the way `Program` does and has a grandchild
      *        raise it that far into the hook run
      *
-     * @return array{action: string, message: string, length: int}
+     * @param float|null $hookTimeoutSeconds the hook's OWN budget, distinct
+     *        from $seconds, which is this test's external clock on the whole
+     *        child process
+     *
+     * @return array{action: string, message: string, length: int, elapsed: float}
      */
-    private function runHookBounded(string $command, ?int $signalAfterMicroseconds = null, float $seconds = 30.0): array
-    {
+    private function runHookBounded(
+        string $command,
+        ?int $signalAfterMicroseconds = null,
+        float $seconds = 30.0,
+        ?float $hookTimeoutSeconds = null,
+    ): array {
         $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
         $signal = $signalAfterMicroseconds === null ? 'null' : (string) $signalAfterMicroseconds;
+        $timeout = $hookTimeoutSeconds === null
+            ? 'SugarCraft\Crush\Hooks\ScriptHook::DEFAULT_TIMEOUT_SECONDS'
+            : \var_export($hookTimeoutSeconds, true);
 
         $script = <<<PHP
             <?php
@@ -568,8 +579,10 @@ final class ScriptHookTest extends TestCase
                 '.*',
                 {$this->export($command)},
                 '',
+                {$timeout},
             );
 
+            \$started = microtime(true);
             \$result = \$hook->execute(new SugarCraft\Crush\Hooks\HookContext(
                 'test_session_123', 'TestTool', [], 'test input', 'test output',
                 'test-model', 'test-provider', '/tmp',
@@ -579,6 +592,7 @@ final class ScriptHookTest extends TestCase
                 'action' => \$result->action,
                 'message' => \$result->message,
                 'length' => strlen(\$result->message),
+                'elapsed' => microtime(true) - \$started,
             ]));
             PHP;
 
@@ -596,6 +610,7 @@ final class ScriptHookTest extends TestCase
         self::assertIsString($decoded['action'] ?? null);
         self::assertIsString($decoded['message'] ?? null);
         self::assertIsInt($decoded['length'] ?? null);
+        self::assertIsFloat($decoded['elapsed'] ?? null);
 
         return $decoded;
     }
@@ -689,6 +704,167 @@ final class ScriptHookTest extends TestCase
         ]);
 
         $this->assertSame('./hooks/confirm.sh', $hook->name());
+    }
+
+    // =========================================================================
+    // The deadline. Every case here HUNG before it — the drain's
+    // stream_select() was passed a null timeout and proc_close() below it
+    // waits, so the two halves of the wait were unbounded independently.
+    // =========================================================================
+
+    /**
+     * A hook that simply does not exit is killed at its deadline and DENIED.
+     *
+     * The unbounded half being pinned is the DRAIN: `sleep` holds both pipes
+     * open and writes nothing, so the old `stream_select($read, $write,
+     * $except, null)` never woke at all. Measured against the pre-fix class,
+     * this command under a 5-second external clock returned exit 124.
+     *
+     * The verdict is the security half of the fix and is asserted as such: an
+     * expired hook has answered nothing, and the only readings other than DENY
+     * are "allow", which silently skips the guard that was written to stop this
+     * call, and "ask", which puts a question to a user who may not exist.
+     */
+    public function testAHookThatNeverExitsIsKilledAndDenied(): void
+    {
+        $result = $this->runHookBounded('sleep 30', hookTimeoutSeconds: 0.4);
+
+        $this->assertSame('deny', $result['action']);
+        $this->assertStringContainsString('did not finish within', $result['message']);
+        $this->assertLessThan(
+            5.0,
+            $result['elapsed'],
+            'the hook outlived its deadline by more than the escalation could account for',
+        );
+    }
+
+    /**
+     * The OTHER unbounded half: a hook that closes both pipes and keeps
+     * running. The drain finishes at EOF on its first iteration and every
+     * remaining second is spent inside `proc_close()`, which waits.
+     *
+     * This is not an exotic shape — `hook.sh >/dev/null 2>&1` is how a hook
+     * whose only product is its exit code gets written. Bounding only the
+     * drain would leave this case exactly as broken as it was, which is why
+     * one deadline spans both.
+     */
+    public function testAHookThatClosesItsPipesAndKeepsRunningIsAlsoKilled(): void
+    {
+        $result = $this->runHookBounded(
+            'printf hi; exec 1>&- 2>&-; sleep 30',
+            hookTimeoutSeconds: 0.4,
+        );
+
+        $this->assertSame('deny', $result['action']);
+        $this->assertLessThan(5.0, $result['elapsed'], 'proc_close() held the call past the deadline');
+    }
+
+    /**
+     * A hook that TRAPS SIGTERM is still killed, because the expiry path
+     * escalates to signal 9.
+     *
+     * Without the escalation the timeout is theatre: `proc_terminate()` on a
+     * process that ignores TERM changes nothing, and the `proc_close()` that
+     * follows waits for it anyway — the bounded path would be unbounded again,
+     * one layer down.
+     */
+    public function testAHookThatTrapsSigtermIsStillKilled(): void
+    {
+        $result = $this->runHookBounded(
+            "trap '' TERM; sleep 30",
+            hookTimeoutSeconds: 0.4,
+        );
+
+        $this->assertSame('deny', $result['action']);
+        $this->assertLessThan(5.0, $result['elapsed'], 'the TERM-ignoring hook was never escalated to signal 9');
+    }
+
+    /**
+     * Whatever the hook managed to say before it wedged is carried into the
+     * deny message.
+     *
+     * A timed-out gate is the case where the user most needs to know WHICH
+     * hook stopped them and how far it got; discarding a half-written reason
+     * because the run did not finish would report "denied" with no subject.
+     */
+    public function testATimedOutHookStillReportsWhatItManagedToSay(): void
+    {
+        $result = $this->runHookBounded(
+            'printf "deploy window is closed" >&2; sleep 30',
+            hookTimeoutSeconds: 0.4,
+        );
+
+        $this->assertSame('deny', $result['action']);
+        $this->assertStringContainsString('bounded_hook', $result['message']);
+        $this->assertStringContainsString('deploy window is closed', $result['message']);
+    }
+
+    /**
+     * A hook that finishes well inside its budget is untouched — same verdict,
+     * same message, and no wait for the deadline.
+     *
+     * The deadline is a ceiling, not a schedule: an implementation that slept
+     * out the whole budget before answering would satisfy every assertion
+     * above and make every hook cost 60 seconds.
+     */
+    public function testAHookWellInsideItsBudgetIsNotDelayedByIt(): void
+    {
+        $result = $this->runHookBounded('printf ok', hookTimeoutSeconds: 10.0);
+
+        $this->assertSame('allow', $result['action']);
+        $this->assertSame('ok', $result['message']);
+        $this->assertLessThan(5.0, $result['elapsed'], 'a fast hook waited on its own ceiling');
+    }
+
+    /**
+     * The default is a real bound rather than the absence of one, and it is the
+     * constant {@see \SugarCraft\Crush\Hooks\HookConfig} documents.
+     */
+    public function testTheDefaultTimeoutIsPositiveAndFinite(): void
+    {
+        $this->assertGreaterThan(0.0, ScriptHook::DEFAULT_TIMEOUT_SECONDS);
+        $this->assertSame(
+            ScriptHook::DEFAULT_TIMEOUT_SECONDS,
+            ScriptHook::fromConfig(['command' => 'guard.sh'])->timeoutSeconds(),
+        );
+    }
+
+    /**
+     * @return array<string, array{0: mixed}>
+     */
+    public static function unusableConfigTimeouts(): array
+    {
+        return [
+            'zero' => [0],
+            'negative' => [-1],
+            'prose' => ['none'],
+            'true' => [true],
+            'null' => [null],
+        ];
+    }
+
+    /**
+     * `fromConfig()` NEVER reads a bad timeout as "no timeout".
+     *
+     * The parser refuses these loudly; this constructor also serves callers
+     * that never saw a file, and there the fallback has to be the default
+     * rather than the value — the one thing this field must not be able to
+     * express is the unbounded wait it was added to remove.
+     *
+     * @dataProvider unusableConfigTimeouts
+     */
+    public function testFromConfigFallsBackToTheDefaultForAnUnusableTimeout(mixed $value): void
+    {
+        $hook = ScriptHook::fromConfig(['command' => 'guard.sh', 'timeout' => $value]);
+
+        $this->assertSame(ScriptHook::DEFAULT_TIMEOUT_SECONDS, $hook->timeoutSeconds());
+    }
+
+    /** A usable one is honoured, ints and floats alike. */
+    public function testFromConfigHonoursAPositiveTimeout(): void
+    {
+        $this->assertSame(5.0, ScriptHook::fromConfig(['command' => 'g', 'timeout' => 5])->timeoutSeconds());
+        $this->assertSame(0.5, ScriptHook::fromConfig(['command' => 'g', 'timeout' => 0.5])->timeoutSeconds());
     }
 
     private function createContext(string $projectRoot = '/tmp'): HookContext

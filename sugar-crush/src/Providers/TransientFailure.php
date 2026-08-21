@@ -102,14 +102,41 @@ use Psr\Http\Client\NetworkExceptionInterface;
  * derives that sum so a test can assert the relationship rather than a
  * literal.
  *
- * The sleep is a plain `usleep()` and is NOT interruptible. On the interactive
- * path that is harmless: completion runs inside the forked child (see
- * `runCompleteInChild()`), so the sleep is in the child and the TEA loop keeps
- * turning. On a build without ext-pcntl,
+ * THE SLEEP IS SLICED AGAINST A DEADLINE, BECAUSE `usleep()` IS INTERRUPTIBLE
+ * ---------------------------------------------------------------------------
+ * This paragraph used to read "the sleep is a plain `usleep()` and is NOT
+ * interruptible", and it had the fact backwards. MEASURED on this host, PHP
+ * 8.3.6: `usleep(1_000_000)` with a caught signal delivered 200ms in returns
+ * after 0.2017s — PHP does not restart the sleep across EINTR. Measured
+ * through this class, with `pcntl_async_signals(true)` and the empty SIGWINCH
+ * handler {@see \SugarCraft\Core\Program} installs for the whole TUI, and a
+ * SIGWINCH raised 120ms into `backoff(1)`: 500000µs owed, 119896µs slept.
+ * Three quarters of the backoff gone.
+ *
+ * Which is not cosmetic. Those handlers are INHERITED ACROSS THE COMPLETION
+ * FORK — nothing in `EngineBackend::runCompleteInChild()` resets them — and a
+ * terminal resize during a retry storm is precisely the moment a user reaches
+ * for the window. A backoff that collapses to nothing puts the retry back on
+ * the still-failing upstream immediately, which is the single thing a backoff
+ * exists to prevent, and it does it silently.
+ *
+ * So {@see backoff()} re-sleeps the remainder until its deadline is actually
+ * reached. Signals are still delivered PROMPTLY — the handler runs on the
+ * EINTR, between slices — so nothing that used to respond quickly responds any
+ * slower; what changed is that the wait now lasts as long as it claims to.
+ *
+ * IT STAYS SYNCHRONOUS, deliberately, and it is not a request deadline. On the
+ * interactive path the blocking is harmless: completion runs inside the forked
+ * child (see `runCompleteInChild()`), so the sleep is in the child and the TEA
+ * loop keeps turning. On a build without ext-pcntl,
  * `EngineBackend::completeAsyncBlocking()` runs the completion inline and the
  * sleep DOES block the loop's thread — which is why the total is kept to
  * {@see totalBackoffMicroseconds()} rather than the tens of seconds a
- * server-side retry budget would use.
+ * server-side retry budget would use. Handing this to the event loop instead
+ * would mean re-entering the provider from a timer callback, i.e. restructuring
+ * both retry loops that call this ({@see \SugarCraft\Crush\Runtime} and
+ * {@see \SugarCraft\Crush\Agents\AgentManager}); the bound above is what
+ * makes that unnecessary.
  *
  * DOMAIN OF THAT FIGURE, because it was first written next to the wrong noun:
  * `totalBackoffMicroseconds()` is per PROVIDER CALL, not per turn.
@@ -291,9 +318,30 @@ final class TransientFailure
      */
     public static function backoff(int $attempt): void
     {
-        $micros = self::backoffMicroseconds($attempt);
-        if ($micros > 0) {
+        $owed = self::backoffMicroseconds($attempt);
+        if ($owed <= 0) {
+            return;
+        }
+
+        // A DEADLINE RATHER THAN ONE `usleep()`, because one `usleep()` is not
+        // a wait, it is a wait UNTIL THE NEXT SIGNAL — see the class docblock
+        // for the measurement. Re-armed from the clock rather than by summing
+        // what was slept, so a handler that itself takes time is paid for out
+        // of the backoff instead of being added to it.
+        $deadline = microtime(true) + $owed / 1_000_000;
+        $micros = $owed;
+
+        while (true) {
             usleep($micros);
+
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0.0) {
+                return;
+            }
+
+            // `ceil`, so a remainder under a microsecond still asks for one and
+            // the loop cannot become a spin on a value that rounds to zero.
+            $micros = (int) ceil($remaining * 1_000_000);
         }
     }
 
