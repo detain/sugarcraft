@@ -324,6 +324,44 @@ final class PaletteClickTest extends TestCase
         self::assertSame([], $after->paletteMru());
     }
 
+    /**
+     * The same staleness question asked of the OTHER malformed id: a row index
+     * that is not a number at all.
+     *
+     * Two checks stand between this zone and a confirmed action —
+     * {@see Chat::paletteRowIndex()}'s `\A\d+\z` test, which is the delivery
+     * whitelist, and {@see Chat::selectPaletteItem()}'s own copy of it one
+     * call later. NEITHER is pinned on its own, and that is a measured fact
+     * rather than an oversight: drop either alone and `(int) 'abc'` is 0, so
+     * the other one still refuses; this test reds only when BOTH are gone,
+     * at which point a click on a malformed id confirms row 0. That is the
+     * same joint shape as {@see testAnOutOfRangePickerIndexRunsNothing()},
+     * and both are reported as such in this commit's survivor list rather
+     * than claimed as individual kills.
+     *
+     * Nothing PRODUCES such an id today — {@see Renderer::recordPaletteItemZones()}
+     * builds `(string) $id` from an `array<int, string>` key — which is why
+     * the id is hand-marked here, exactly as the out-of-range sibling
+     * hand-marks `picker-item:99`.
+     */
+    public function testANonNumericPickerIndexRunsNothing(): void
+    {
+        $chat = $this->openPalette();
+        Renderer::scanner()->scan(Mark::zone(Renderer::PALETTE_ITEM_ZONE_PREFIX . 'abc', 'bogus row'), 40);
+        $zone = Renderer::scanner()->get(Renderer::PALETTE_ITEM_ZONE_PREFIX . 'abc');
+        self::assertInstanceOf(Zone::class, $zone);
+
+        $before = $chat->paletteMatches();
+        self::assertNotSame([], $before, 'fixture: row 0 must exist, or "confirms row 0" proves nothing');
+
+        [$after] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$after, $cmd] = $after->update($this->release($zone->startCol, $zone->startRow));
+
+        self::assertNull($cmd);
+        self::assertSame('root', $after->palette()?->mode);
+        self::assertSame([], $after->paletteMru());
+    }
+
     public function testClickIsIgnoredWhenClicksAreDisabled(): void
     {
         [$chat, $zone] = $this->renderAndLocate($this->openPalette(), 'Switch theme');
@@ -348,7 +386,7 @@ final class PaletteClickTest extends TestCase
     }
 
     // =========================================================================
-    // Mid-turn: the click must refuse whatever Enter refuses
+    // The click must dispatch whatever Enter dispatches — in EITHER state
     // =========================================================================
 
     /**
@@ -369,11 +407,25 @@ final class PaletteClickTest extends TestCase
      * other not. A row added later is covered without an edit, and the two
      * arms cannot drift apart again without reddening this.
      *
-     * This file has 17 other tests and none of them mentioned `inFlight`.
+     * DRIVEN IN BOTH STATES, and that is a correction rather than a flourish.
+     * The revision that added this test drove `inFlight: true` only, while
+     * {@see Chat::selectPaletteItem()}'s docblock said it drove "both states";
+     * idle parity did hold when it was measured, but a property nothing reads
+     * back is a property the next edit is free to break. Idle is also the half
+     * that proves the mid-turn half is about `inFlight` and not about the
+     * mouse: with the state parameterised, a guard that refused every click
+     * would red the idle rows instead of passing them.
+     *
+     * This file had 17 other tests when the mid-turn half was written, and
+     * none of them mentioned `inFlight`.
+     *
+     * @param bool $inFlight the state the whole row sweep is driven in
+     *
+     * @dataProvider turnStates
      */
-    public function testMidTurnEveryPaletteRowAnswersAClickExactlyAsItAnswersEnter(): void
+    public function testEveryPaletteRowAnswersAClickExactlyAsItAnswersEnter(bool $inFlight): void
     {
-        $chat = new Chat(palette: PaletteState::root(), inFlight: true);
+        $chat = new Chat(palette: PaletteState::root(), inFlight: $inFlight);
         $rows = $chat->paletteMatches();
         self::assertGreaterThan(1, count($rows), 'fixture: the root palette must offer several rows');
 
@@ -405,20 +457,46 @@ final class PaletteClickTest extends TestCase
             );
 
             if (count($clicked->history) > count($chat->history)) {
-                $refusals++;
-                self::assertStringContainsString(
-                    'in flight',
-                    $clicked->history[count($clicked->history) - 1]->content,
-                    "'{$label}' was refused without saying why",
-                );
+                $written = $clicked->history[count($clicked->history) - 1]->content;
+                if (str_contains($written, 'in flight')) {
+                    $refusals++;
+                } else {
+                    self::assertFalse(
+                        $inFlight,
+                        "'{$label}' wrote a line mid-turn that does not say why it was refused: {$written}",
+                    );
+                }
             }
         }
 
-        self::assertGreaterThan(
-            0,
-            $refusals,
-            'fixture: at least one root row must be refused mid-turn, or this proves nothing',
-        );
+        if ($inFlight) {
+            self::assertGreaterThan(
+                0,
+                $refusals,
+                'fixture: at least one root row must be refused mid-turn, or this proves nothing',
+            );
+        } else {
+            // Idle rows may still write — 'New session' says the store is not
+            // configured on this bare fixture — but none of them may write the
+            // MID-TURN refusal, which would be this defect pointing the other
+            // way: a click refusing on a turn that is not running.
+            self::assertSame(
+                0,
+                $refusals,
+                'idle, no root row may write an in-flight refusal',
+            );
+        }
+    }
+
+    /**
+     * The two states {@see Chat::selectPaletteItem()} branches on, which is
+     * the whole of what the sweep above is parameterised over.
+     *
+     * @return array<string, array{0: bool}>
+     */
+    public static function turnStates(): array
+    {
+        return ['idle' => [false], 'mid-turn' => [true]];
     }
 
     /**

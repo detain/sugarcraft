@@ -2034,11 +2034,15 @@ final class Chat implements Model
         // does not decay is the magnitude AND the population, both re-measured
         // above over the SAME five-file domain: at the right site `if (true)` reds
         // the whole prompt-dependent population (30 behavioural, led by RendererTest
-        // and KeyHelpTest), at the wrong site 12 -- and over half of those are
-        // Chat/InFlightInputQueueTest, which contributes ZERO at the right site. So
-        // the two sites are told apart by WHICH files answer as much as by how many:
-        // a mutation at the right site cannot make the queue tests fail, and one at
-        // the wrong site cannot make RendererTest or KeyBindingDriftTest fail.
+        // and KeyHelpTest), at the wrong site 12. The population tell is a RATIO,
+        // not a zero, and the previous revision wrote it as a zero fifty lines below
+        // its own enumeration, which had already said otherwise:
+        // Chat/InFlightInputQueueTest is 1 of the right site's 30 and 6 of the wrong
+        // site's 12 -- three percent against half. So the two sites are told apart
+        // by WHICH files answer as much as by how many: a mutation at the right site
+        // can make at most one queue test fail while one at the wrong site makes six,
+        // and one at the wrong site cannot make RendererTest or KeyBindingDriftTest
+        // fail at all.
         // And the four-site text pin fires at either site, which is the cheapest
         // signal that you edited SOMETHING and must re-read this table.
         //
@@ -3968,6 +3972,25 @@ final class Chat implements Model
      * one test written for it: measured, removing the press-side line reds only
      * the second, and removing the dispatch-side call reds only the first.
      *
+     * ONE GESTURE THE KEYBOARD CANNOT MAKE SURVIVES BOTH HALVES, and it is
+     * recorded rather than closed. `inFlight` is not a capture, so a press on
+     * `tab:<id>` mid-turn is NOT nulled at the press — it is let past by
+     * {@see midTurnRefusalOfItsOwn()} so that its own dispatch site can refuse
+     * it with the keyboard's notice. If the turn then SETTLES before the
+     * button comes up, the release resolves against an idle model and the
+     * session switches, silently. Driven: pressed mid-turn on the other tab,
+     * `inFlight` cleared, released — `currentSessionId` moves and `+0` history
+     * rows; the identical gesture completed wholly mid-turn is refused with
+     * `+1`. Both ENDPOINTS evaluate correctly — this is not a stale answer,
+     * it is two correct answers to a gesture that spanned a state change — and
+     * the keyboard has no analogue, because a key is consumed the instant it
+     * arrives. Left alone deliberately: a click is only made on the release,
+     * the state at the release is idle, and refusing it would mean refusing a
+     * legal request because of a condition that has since gone away. The
+     * comparable prompt case is NOT left alone, and the asymmetry is the
+     * point — a prompt is a capture, so its press is nulled and the gesture is
+     * consumed.
+     *
      * @param string $zoneId the id of the zone the completed click landed in
      *
      * @return array{0:self,1:?\Closure}|null null when the click may proceed
@@ -4011,6 +4034,29 @@ final class Chat implements Model
      * A palette ROW is absent too, and for a different reason: it is already
      * let through by the palette arm below, and {@see selectPaletteItem()}
      * refuses it mid-turn through the same method Enter reaches.
+     *
+     * THE `tab:` MEMBER IS A PREFIX, AND ONE ID UNDER IT DOES NOT WRITE A
+     * NOTICE — the tab that is already current, which {@see selectSessionTab()}
+     * answers with a silent no-op at its first validity gate. So the property
+     * this method's name states holds of the ZONE FAMILY, not of every id in
+     * it, and the exception is by decision rather than by oversight: see that
+     * method for why a click naming the session you are already in is not a
+     * request to change sessions, and {@see refuseInFlightAction()} for why an
+     * answer that writes nothing leaves the overlay alone.
+     *
+     * Narrowing the member to "a tab that is not the current one" would move
+     * that decision into the delivery whitelist and change no observable
+     * answer, which is arithmetic and not a hope: both branches end in
+     * `[$this, null]`. Refused here, the click is answered by the palette or
+     * picker arm below, or falls out of the guard and is answered by
+     * {@see selectSessionTab()}'s first validity gate; let through, it is
+     * answered by that gate in every case. Driven mid-turn in all three
+     * overlay states (none / palette / picker): `+0` history rows, session
+     * unchanged, no `Cmd`, and the overlay exactly as it was, all three times.
+     * Measured as a mutation over the mouse/palette domain, the narrowing reds
+     * nothing. It is not adopted because the enumeration reads better as a
+     * statement about which SITES carry the keyboard's notice than as one with
+     * a per-id exception folded into it.
      */
     private function midTurnRefusalOfItsOwn(string $zoneId): bool
     {
@@ -4025,16 +4071,56 @@ final class Chat implements Model
      * Derived from {@see $palette} rather than trusted from the id, because a
      * whitelist that is only a string prefix is a whitelist two widening
      * mutations pass unobserved (measured: see that method's docblock). Three
-     * things must hold, and each one kills a mutation on its own: the id
-     * starts with the prefix, the rest of it is digits and nothing else, and
-     * those digits name a row the palette currently HAS.
+     * things must hold: the id starts with the prefix, the rest of it is
+     * digits and nothing else, and those digits name a row the palette
+     * currently HAS.
      *
-     * The last check is why this returns an index rather than a bool: it is
-     * the same staleness question {@see selectPaletteItem()} asks of the row
-     * it is about to run, deliberately asked twice rather than shared, since
-     * the two are different questions about the same number — "may this click
-     * be delivered at all" here, "is the row it names still the row the user
-     * pointed at" there, and the second survives a frame the first never saw.
+     * WHAT EACH ONE IS WORTH, measured over the 867-test mouse/palette domain
+     * at this commit rather than asserted. A previous revision said "each one
+     * kills a mutation on its own"; driven, each of the three individually
+     * red NOTHING, and the sentence could not have been right anyway — three
+     * checks, two widening mutations. What is true is narrower and is stated
+     * per check:
+     *
+     *   * THE PREFIX is load-bearing on its own, and is pinned. Drop it and
+     *     the two remaining checks read `substr($id, 12)` off whatever
+     *     arrives, so any id whose twelfth character onwards is a short run
+     *     of digits is delivered as a palette row. The tails of the two other
+     *     zone families are not this code's to promise anything about — `tab:`
+     *     is 4 characters, so offset 12 lands in the middle of a SESSION id,
+     *     and `toolcall:` is 9, so it lands in the middle of a PROVIDER's
+     *     tool-call id. Measured with ids chosen to collide (`alphabet0`,
+     *     `abc0`): the mutation switches session and expands a tool body
+     *     THROUGH an open palette. Reds
+     *     {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAnIdThatCollidesWithTheRowWhitelistPastItsPrefixIsStillSwallowed()},
+     *     which exists because the suite's ordinary fixtures (`session-a`,
+     *     `call_1`) land on non-digits there and cannot see it.
+     *   * THE DIGIT TEST reds nothing alone, and neither does
+     *     {@see selectPaletteItem()}'s copy of it — `(int) 'abc'` is 0, so
+     *     whichever one survives still refuses. Dropping BOTH reds
+     *     `PaletteClickTest::testANonNumericPickerIndexRunsNothing()`. The
+     *     pair is load-bearing; neither half is, and this is reported as a
+     *     survivor rather than claimed as a kill. Nothing produces such an id
+     *     today by construction — {@see Renderer::recordPaletteItemZones()}
+     *     builds `(string) $id` from an `array<int, string>` key — which is
+     *     why the test hand-marks one.
+     *   * THE RANGE TEST is the same shape: nothing alone, and dropping it
+     *     together with {@see selectPaletteItem()}'s range check reds
+     *     `PaletteClickTest::testAnOutOfRangePickerIndexRunsNothing()`.
+     *
+     * WHY THE RANGE QUESTION IS ASKED TWICE, corrected. A previous revision
+     * said the second asking "survives a frame the first never saw"; that is
+     * false and is withdrawn in place, for the same arithmetic that withdrew
+     * the identical claim at {@see selectPane()}: {@see handleMouse()} calls
+     * {@see refuseMouseDispatch()} and then the dispatch arm on the SAME
+     * `$this`, so both reads see the same live {@see $palette} and there is no
+     * frame one of them can see and the other cannot. They are kept as two
+     * because they answer to two different callers — this one is the delivery
+     * whitelist and has to say "not a palette row" about ids that are not
+     * palette rows at all, while the other is a dispatch method that must be
+     * safe for any caller, including one arriving with the palette already
+     * closed. Their measured value is joint, not individual, and it is
+     * reported that way above rather than as two kills.
      */
     private function paletteRowIndex(string $zoneId): ?int
     {
@@ -4079,9 +4165,11 @@ final class Chat implements Model
      * providers submenu, whose own docblock calls it "the backend the running
      * agentic loop is about to make its NEXT provider call on". So the branch
      * is mirrored here rather than described, and
-     * {@see \SugarCraft\Crush\Tests\PaletteClickTest} drives every row
-     * through both devices in both states to keep the two arms from drifting
-     * apart again.
+     * `PaletteClickTest::testEveryPaletteRowAnswersAClickExactlyAsItAnswersEnter()`
+     * drives every row through both devices in both states — a data provider
+     * over `inFlight`, which it is because the revision that added it drove
+     * mid-turn only while this sentence already claimed both. Idle parity held
+     * when it was measured; it is now read back, which is a different thing.
      *
      * The index is re-checked against the CURRENT match list rather than
      * trusted from the zone: zones describe the previously-painted frame, and
@@ -4089,6 +4177,23 @@ final class Chat implements Model
      * re-filtered list) would otherwise confirm whatever action drifted into
      * that slot. Out-of-range, or a click arriving after the palette closed,
      * is a no-op — the safe answer for a stale click is to run nothing.
+     *
+     * THIS GUARD'S THREE CONDITIONS OVERLAP, and the overlap is arithmetic
+     * rather than defensive habit, so it is stated as such. `paletteMatches()`
+     * answers `[]` for a null palette ({@see paletteMatchResults()}'s first
+     * line), so `$row >= count(...)` is already true whenever the palette is
+     * gone: the range test alone refuses every case the null test refuses.
+     * Measured — dropping the null test reds nothing, and dropping the range
+     * test reds nothing, because each covers the other. Only dropping the
+     * range test HERE and in {@see paletteRowIndex()} together reds anything
+     * (`PaletteClickTest::testAnOutOfRangePickerIndexRunsNothing()`), and the
+     * same is true of the digit test and
+     * `PaletteClickTest::testANonNumericPickerIndexRunsNothing()`. All three
+     * conditions are therefore reported as survivors in this commit's own
+     * mutation list; they stay because this method is reachable with the
+     * palette CLOSED — {@see refuseMouseDispatch()}'s palette arm only applies
+     * while it is open — and because a dispatch method that is safe only by
+     * virtue of its caller is one refactor away from not being safe.
      *
      * @return array{0:self,1:?\Closure}
      */
@@ -4239,8 +4344,28 @@ final class Chat implements Model
         //
         // Checked AFTER the two validity gates above, not before: a click on
         // the tab that is already current, or on an id no store knows, was
-        // going to be a no-op either way, and announcing a refusal of nothing
-        // would be noise the keyboard never makes.
+        // going to be a no-op either way, so it is answered with a no-op.
+        //
+        // THAT IS A DELIBERATE DIVERGENCE FROM Ctrl+Tab, and the reason a
+        // previous revision gave for it — "announcing a refusal of nothing
+        // would be noise the keyboard never makes" — is FALSE and is withdrawn
+        // in place. The keyboard makes exactly that noise: Ctrl+Tab is refused
+        // at the head of {@see update()}'s mid-turn block by
+        // {@see refuseWhileInFlight()}, ABOVE {@see cycleSessionTab()}, so it
+        // never learns whether a switch was available. Driven mid-turn on a
+        // store holding ONE session, where cycling is a no-op: +1 history row,
+        // '"Switch session" does not run while a turn is in flight'.
+        //
+        // The divergence stands anyway, because the two gestures do not make
+        // the same request. Ctrl+Tab asks for "the next session", which mid-turn
+        // is always a session change to refuse; a click NAMES its target, and a
+        // click on the tab you are already on asks for no change at all.
+        // Refusing it would attach the sentence "Switch session does not run"
+        // to a switch the user did not ask for. The palette staying up over it
+        // is the same rule read forwards: nothing was written, so there is
+        // nothing for an overlay to hide ({@see refuseInFlightAction()}). Both
+        // halves are pinned, keyboard and mouse in the identical state, by
+        // {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testMidTurnAClickOnTheCurrentTabRefusesNothingWhileCtrlTabStillDoes()}.
         if ($this->inFlight) {
             return $this->refuseInFlightAction('Switch session');
         }
@@ -5371,6 +5496,21 @@ final class Chat implements Model
      * $what is the row label, or the picker's action, so the notice names what
      * was refused rather than announcing that something was.
      *
+     * THE OVERLAY RULE THIS METHOD ESTABLISHES, stated here because it is the
+     * one place all four mid-turn refusal routes now agree on and because a
+     * previous revision left one of them out of it: A MID-TURN REFUSAL CLOSES
+     * THE OVERLAY IT IS WRITTEN UNDER, AND A GESTURE THAT WRITES NOTHING
+     * CLOSES NOTHING. The four routes are this method, its two dispatch-site
+     * callers ({@see selectSessionTab()}, {@see selectPane()}'s Agents arm),
+     * and Ctrl+A, which reaches {@see refuseInFlightCommand()} instead and so
+     * clears the two overlay fields at its own arm in
+     * {@see refuseWhileInFlight()} — measured before that line, mid-turn under
+     * an open palette OR picker, `Ctrl+A` left the overlay up over its notice
+     * while the `pane:agents` click that asks for the same thing closed it.
+     * The converse half of the rule is why a click on the ALREADY-CURRENT
+     * session tab leaves the palette up: it writes no notice, so there is
+     * nothing under the overlay to see ({@see selectSessionTab()}).
+     *
      * @return array{0:self,1:?\Closure}
      */
     private function refuseInFlightAction(string $what): array
@@ -5399,7 +5539,9 @@ final class Chat implements Model
      *
      *   * Ctrl+A. Its arm is `withInputBuf('/agents')->submit()`, so it both
      *     DESTROYS the draft and submits a command. Routed to the same refusal a
-     *     typed `/agents` gets, from `$this` — the draft never moves.
+     *     typed `/agents` gets, from `$this` — the draft never moves. It also
+     *     closes any open overlay, for the reason spelled out at its arm below
+     *     and stated as one rule at {@see refuseInFlightAction()}.
      *   * Ctrl+Tab / Ctrl+Shift+Tab. {@see cycleSessionTab()} adopts another
      *     session's history and id wholesale, which is the running turn's
      *     transcript replaced under it.
@@ -5424,7 +5566,26 @@ final class Chat implements Model
     private function refuseWhileInFlight(KeyMsg $msg): ?array
     {
         if ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a') {
-            return $this->refuseInFlightCommand('/agents');
+            // The overlay is cleared HERE and not inside
+            // {@see refuseInFlightCommand()}, on arithmetic rather than taste:
+            // that method's other caller is {@see submit()}, which
+            // {@see update()} reaches only BELOW its palette and picker arms,
+            // so neither field can be set there and the line would be dead at
+            // that call site. It is not dead at this one — this arm sits
+            // ABOVE those same two arms, which is exactly why Ctrl+A can be
+            // pressed with an overlay up.
+            //
+            // Without it the two devices diverged in the direction nobody
+            // checked: the `pane:agents` CLICK is let past the overlay by
+            // {@see midTurnRefusalOfItsOwn()} and refused at its own site
+            // through {@see refuseInFlightAction()}, which closes both overlay
+            // fields, while Ctrl+A refused through the command notice and
+            // closed nothing. Measured, both overlays: overlay-after-KEY true,
+            // overlay-after-CLICK false. The notice TEXT still differs, and
+            // that difference is deliberate and argued at {@see selectPane()};
+            // the overlay was not a difference anybody chose.
+            return $this->mutate(['palette' => null, 'sessionPicker' => null])
+                ->refuseInFlightCommand('/agents');
         }
 
         if ($msg->type === KeyType::Tab && $msg->ctrl) {

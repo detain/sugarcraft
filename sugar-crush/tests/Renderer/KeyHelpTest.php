@@ -31,6 +31,7 @@ use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Tui\SessionPicker;
 
 /**
@@ -3499,8 +3500,18 @@ final class KeyHelpTest extends TestCase
      * neither overlay, so both really are up at once, and both are pinned —
      * with the prompt winning on both devices — by
      * {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices()}.
-     * So this chain test is load-bearing for two of its links and a dormant
-     * determinism guarantee for the other four.
+     *
+     * ALL SIX CELLS OF THE `front door?` COLUMN ARE NOW READ BACK BY A TEST,
+     * which they were not: the two YES rows were driven and the four NO rows
+     * were prose. That asymmetry is how this count came to be wrong twice —
+     * a negative nobody drives is a negative that quietly becomes a positive
+     * when somebody widens a key arm elsewhere. The three remaining negatives
+     * are driven in both orders by
+     * {@see testTheFourUnreachableOverlayPairsStayUnreachableFromEitherEnd()},
+     * and reference+prompt by
+     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}. So
+     * this chain test is load-bearing for two of its links and a determinism
+     * guarantee for the other four — dormant as a STATE, not as a claim.
      *
      * reference+palette is the one that CHANGED: it was reachable by the mouse
      * until the click path was put under the same capture guards the keyboard
@@ -3595,6 +3606,70 @@ final class KeyHelpTest extends TestCase
                 default => $all,
             };
         }
+    }
+
+    /**
+     * The FOUR unreachable pairs of the six, driven in both orders — the half
+     * of the table above that was prose.
+     *
+     * The two reachable pairs are pinned by
+     * {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices()}
+     * and reference+prompt by
+     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}; the
+     * other three negatives were read back by nothing at all. That is how the
+     * count in that table came to be wrong twice ("exactly ONE", then "NONE"):
+     * a claim nobody drives is a claim that decays silently, and unreachability
+     * is exactly the kind of claim that turns into reachability when someone
+     * widens a key arm two files away. Every assertion here is the same shape —
+     * raise one overlay through the front door, press the key that raises the
+     * other, and require the second to still be absent.
+     *
+     * `?` on a blank draft is the reference's own front door; with any overlay
+     * up it is consumed by that overlay (the palette files it into its query),
+     * which is what makes these pairs unreachable rather than merely unusual.
+     */
+    public function testTheFourUnreachableOverlayPairsStayUnreachableFromEitherEnd(): void
+    {
+        $idle = $this->chat();
+
+        [$reference] = $idle->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertSame(0, $reference->keyHelp(), 'fixture: "?" on a blank draft opens the reference');
+
+        [$palette] = $idle->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($palette->palette(), 'fixture: Ctrl+P opens the palette');
+
+        $withStore = $idle->withSessionStore(new SessionStore(':memory:'));
+        $withStore->sessionStore()?->createSession('session-a', 'echo', 'echo-1', null, 'Alpha');
+        [$picker] = $withStore->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertNotNull($picker->sessionPicker(), 'fixture: Ctrl+R opens the session picker');
+
+        // reference + palette
+        [$a] = $reference->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($a->palette(), 'Ctrl+P must not raise the palette under the reference');
+        [$b] = $palette->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertNull($b->keyHelp(), '"?" is the palette\'s query character while the palette is up');
+
+        // reference + picker
+        [$c] = $reference->withSessionStore($withStore->sessionStore())
+            ->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertNull($c->sessionPicker(), 'Ctrl+R must not raise the picker under the reference');
+        [$d] = $picker->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertNull($d->keyHelp(), 'and the picker swallows "?" rather than passing it on');
+
+        // palette + picker
+        [$e] = $palette->withSessionStore($withStore->sessionStore())
+            ->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertNull($e->sessionPicker(), 'the palette swallows Ctrl+R');
+        [$f] = $picker->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($f->palette(), 'and the picker swallows Ctrl+P');
+
+        // reference + prompt is the fourth, and it has its own driven test
+        // because building a real prompt takes a real turn and a real hook.
+        $this->assertNull(
+            $reference->pendingPermission(),
+            'the reference fixture carries no prompt — see testThePromptAndTheReferenceCannotBothBe'
+            . 'RaisedByRealInput() for that pair, driven end to end through a PreToolUse ask',
+        );
     }
 
     /**

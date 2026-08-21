@@ -164,18 +164,41 @@ final class MouseModalGuardTest extends TestCase
      * rows §8 E6 exists to make clickable, so those stay live and the frame
      * behind them does not), so leaving it out of the all-zones sweep left the
      * rule tested only where it says "yes". Measured against the excluded
-     * version: widening the guard's whitelist from `'picker-item:'` to `'p'`
-     * survived the whole 8772-test suite while being behavioural — a
-     * `pane:agents` click under an open palette ran `/agents` and wrote two
-     * history rows. With the palette in the sweep that mutation reds here.
+     * version, whose whitelist was a bare `str_starts_with()`: widening it
+     * from `'picker-item:'` to `'p'` survived the whole suite of the day while
+     * being behavioural — a `pane:agents` click under an open palette ran
+     * `/agents` and wrote two history rows. With the palette in the sweep that
+     * mutation reds here.
+     *
+     * IT IS THE BARE-PREFIX SHAPE THAT THIS SWEEP CATCHES, and the distinction
+     * is worth keeping because the whitelist has since grown a digit test
+     * ({@see Chat::paletteRowIndex()}). Re-measured over this file's domain at
+     * this commit: `'p'` ALONE now reds seven tests and this sweep is not among
+     * them — with the digit test still in place it is the palette's OWN rows
+     * that stop working, so the positive-half tests fail instead. `'p'` WITH
+     * the digit test dropped — the shape this paragraph is about — reds exactly
+     * one test, and it is this one. So the sweep is the net under the bare
+     * prefix specifically; it is not a second net under the derived whitelist.
      * The positive half — a real row still runs — stays in
      * {@see testThePaletteKeepsItsOwnRowsClickableWhileItSwallowsTheRest()},
      * which is also why the rows are skipped rather than asserted inert.
      *
-     * THE SECOND ELEMENT IS ASSERTED, not destructured away. A refusal returns
-     * `[$this, null]`; nothing pinned the `null`, so replacing it with
+     * THE SECOND ELEMENT IS ASSERTED, not destructured away: a refusal returns
+     * `[$this, null]`, nothing pinned the `null`, and replacing it with
      * `Cmd::quit()` survived — at best it would have been caught as a hung
-     * suite rather than as a failed assertion.
+     * suite rather than as a failed assertion. THAT ASSERTION IS NOT WHAT KILLS
+     * THAT MUTATION, and saying otherwise was the previous revision's error.
+     * The press-side half of the guard nulls the press zone for a gesture this
+     * state refuses, so in every state this sweep drives the release resolves
+     * no pair at all and `handleMouse()` returns from its "no click" line —
+     * never from {@see Chat::refuseMouseDispatch()}'s return value. Measured:
+     * returning `Cmd::quit()` from all three of that method's refusals reds
+     * exactly ONE test, and it is
+     * {@see testAPressInterruptedByAPromptCannotFireOnceThePromptIsGone()},
+     * the only gesture that still reaches that return value — pressed legally,
+     * released under a capture that arrived in between. The assertion here is
+     * kept as the cheap invariant it is, not credited with a kill it does not
+     * make.
      *
      * @param 'keyHelp'|'prompt'|'picker'|'palette' $state
      *
@@ -281,6 +304,69 @@ final class MouseModalGuardTest extends TestCase
 
         self::assertSame([], $typed->expanded(), 'Ctrl+O is swallowed by the palette');
         self::assertSame([], $behind->expanded(), 'and so is the click that asks for the same thing');
+    }
+
+    /**
+     * The palette's whitelist reads a PREFIX before it reads digits, and this
+     * is the test that makes that first check load-bearing rather than
+     * decorative.
+     *
+     * {@see Chat::paletteRowIndex()} is `str_starts_with('picker-item:')`,
+     * then `substr($id, 12)` must be digits, then those digits must name a
+     * live row. Drop the prefix test and the remaining two still accept any id
+     * at all whose twelfth character onwards happens to be a short run of
+     * digits — and the two zone families whose tails this code does not choose
+     * are exactly the ones that can produce that. `tab:` is four characters,
+     * so offset 12 lands on the ninth character of a SESSION id; `toolcall:`
+     * is nine, so it lands on the fourth character of a PROVIDER's tool-call
+     * id. Neither is ours to promise anything about.
+     *
+     * So the fixture is built to collide on purpose: session `alphabet0` marks
+     * `tab:alphabet0`, and a tool call `abc0` marks `toolcall:abc0`. Both read
+     * as row `0` of the palette once the prefix check is gone, and row 0 is
+     * live, so both would be delivered THROUGH an open palette to their own
+     * dispatch arms — one switching session, the other expanding a tool body.
+     * Measured with the prefix check removed and these ids in place: that is
+     * what happens. With it, both are swallowed like any other background
+     * zone.
+     *
+     * The suite's ordinary fixtures cannot see this. `session-a` and `call_1`
+     * both land on non-digits at offset 12, which is why the state-by-state
+     * sweep above passes against the mutation and this test does not.
+     */
+    public function testAnIdThatCollidesWithTheRowWhitelistPastItsPrefixIsStillSwallowed(): void
+    {
+        $chat = $this->openedWith(
+            $this->collidingIds(),
+            new KeyMsg(KeyType::Char, 'p', ctrl: true),
+        );
+        self::assertNotNull($chat->palette(), 'fixture: the palette is what makes the whitelist apply');
+        self::assertNotSame([], $chat->paletteMatches(), 'fixture: and row 0 must exist to be collided with');
+        $chat->view();
+
+        $tab = Renderer::scanner()->get(Renderer::SESSION_TAB_ZONE_PREFIX . 'alphabet0');
+        self::assertInstanceOf(Zone::class, $tab, 'fixture: the colliding tab id is marked');
+        self::assertSame(
+            '0',
+            substr(Renderer::SESSION_TAB_ZONE_PREFIX . 'alphabet0', strlen(Renderer::PALETTE_ITEM_ZONE_PREFIX)),
+            'fixture: and it really does read as a row index past the palette prefix length',
+        );
+
+        $clickedTab = $this->click($chat, $tab);
+        self::assertSame('session-b', $clickedTab->currentSessionId(), 'a tab click under the palette is refused');
+        self::assertNotNull($clickedTab->palette(), 'and the palette it was refused by is still up');
+
+        $this->rescan($chat);
+        $tool = Renderer::scanner()->get(Renderer::TOOL_CALL_ZONE_PREFIX . 'abc0');
+        self::assertInstanceOf(Zone::class, $tool, 'fixture: the colliding tool-call id is marked');
+        self::assertSame(
+            '0',
+            substr(Renderer::TOOL_CALL_ZONE_PREFIX . 'abc0', strlen(Renderer::PALETTE_ITEM_ZONE_PREFIX)),
+            'fixture: same collision, other family',
+        );
+
+        $clickedTool = $this->click($chat, $tool);
+        self::assertSame([], $clickedTool->expanded(), 'and neither does a tool row expand under it');
     }
 
     /**
@@ -401,12 +487,32 @@ final class MouseModalGuardTest extends TestCase
     }
 
     /**
-     * The already-current tab is the case where a notice would be noise: the
-     * click was going to be a no-op whichever way the turn was going, so the
-     * refusal is checked after {@see Chat::selectSessionTab()}'s own validity
-     * gates rather than before them.
+     * The already-current tab is the ONE id under the `tab:` prefix whose
+     * dispatch site does not write a mid-turn notice, and the divergence from
+     * `Ctrl+Tab` that creates is deliberate. Both devices are driven here so
+     * that it is read back rather than narrated.
+     *
+     * A click NAMES its target; `Ctrl+Tab` asks for "the next session". So a
+     * click on the tab you are already on asks for no change at all, and
+     * {@see Chat::selectSessionTab()} answers it at its first validity gate,
+     * before the `inFlight` check. `Ctrl+Tab` is refused higher up still — at
+     * the head of {@see Chat::update()}'s mid-turn block, ABOVE
+     * {@see Chat::cycleSessionTab()} — so it never learns whether a switch was
+     * even available.
+     *
+     * That last point is measured here rather than asserted, because the
+     * reason a previous revision gave for the divergence was that "announcing
+     * a refusal of nothing would be noise the keyboard never makes", and the
+     * keyboard makes exactly that noise: on a store holding ONE session, where
+     * cycling is a no-op, mid-turn `Ctrl+Tab` still writes its refusal. The
+     * divergence stands on the request being different, not on the keyboard
+     * being quiet.
+     *
+     * The palette half is the same rule read forwards
+     * ({@see Chat::refuseInFlightAction()}): a refusal closes the overlay it is
+     * written under, and an answer that writes nothing closes nothing.
      */
-    public function testMidTurnAClickOnTheCurrentTabRefusesNothingAndSaysNothing(): void
+    public function testMidTurnAClickOnTheCurrentTabRefusesNothingWhileCtrlTabStillDoes(): void
     {
         $chat = $this->populated(inFlight: true);
         $chat->view();
@@ -415,9 +521,43 @@ final class MouseModalGuardTest extends TestCase
         self::assertInstanceOf(Zone::class, $tab);
 
         $clicked = $this->click($chat, $tab);
+        [$typed] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
 
         self::assertSame('session-b', $clicked->currentSessionId());
         self::assertCount(count($chat->history), $clicked->history, 'no notice for a no-op');
+        self::assertCount(
+            count($chat->history) + 1,
+            $typed->history,
+            'while Ctrl+Tab in the identical state does write one — the divergence, pinned',
+        );
+
+        // Under an open palette: the click still says nothing and so leaves the
+        // overlay alone; Ctrl+Tab writes and so takes it down.
+        $open = $this->openedWith($chat, new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        self::assertNotNull($open->palette(), 'fixture: the palette opens mid-turn');
+        $this->rescan($open);
+
+        $tab = Renderer::scanner()->get(Renderer::SESSION_TAB_ZONE_PREFIX . 'session-b');
+        self::assertInstanceOf(Zone::class, $tab, 'fixture: the tab strip shows through the overlay');
+
+        $clickedUnder = $this->click($open, $tab);
+        [$typedUnder] = $open->update(new KeyMsg(KeyType::Tab, ctrl: true));
+
+        self::assertCount(count($open->history), $clickedUnder->history, 'still nothing written');
+        self::assertNotNull($clickedUnder->palette(), 'so still nothing hidden, and the palette stays up');
+        self::assertCount(count($open->history) + 1, $typedUnder->history, 'the keyboard writes');
+        self::assertNull($typedUnder->palette(), 'and closes what it wrote under');
+
+        // And the keyboard's refusal really is issued without knowing whether a
+        // switch was available: one session, cycling is a no-op, notice anyway.
+        $alone = $this->oneSessionOnly(inFlight: true);
+        [$typedAlone] = $alone->update(new KeyMsg(KeyType::Tab, ctrl: true));
+        self::assertCount(
+            count($alone->history) + 1,
+            $typedAlone->history,
+            'Ctrl+Tab announces a refusal of nothing when there is nothing to switch to',
+        );
+        self::assertStringContainsString('in flight', $this->lastLine($typedAlone));
     }
 
     public function testMidTurnAnAgentsPaneClickIsRefusedRatherThanRun(): void
@@ -499,7 +639,10 @@ final class MouseModalGuardTest extends TestCase
         // arrived in between. (A press made UNDER the capture is thrown away at
         // the press, so its release never resolves a pair at all.) Both elements
         // are asserted — returning `Cmd::quit()` from the refusal survived
-        // everything while only the first was read.
+        // everything while only the first was read. Measured at this commit,
+        // that mutation reds this test and NOTHING else: every other refused
+        // gesture in the suite is thrown away at the press, so its release
+        // resolves no pair and never reaches the refusal's return value.
         self::assertNull($refusedCmd, 'a refused click runs no Cmd');
 
         // The prompt is answered, and the abandoned gesture must be gone with
@@ -598,26 +741,88 @@ final class MouseModalGuardTest extends TestCase
     }
 
     /**
-     * The same precedence for the other mid-turn refusal, under the other
-     * overlay: `pane:agents` while the session picker is up.
+     * The other mid-turn refusal, under BOTH overlays, on BOTH devices —
+     * `pane:agents` versus `Ctrl+A`.
+     *
+     * The keyboard half is here because leaving it out is what hid a real
+     * divergence: the revision that reordered {@see Chat::refuseMouseDispatch()}
+     * claimed a click "refuses as loudly as Ctrl+Tab/Ctrl+A", and it was true
+     * of Ctrl+Tab and false of Ctrl+A. The click is let past the overlay by
+     * {@see Chat::midTurnRefusalOfItsOwn()} and refused at its own site through
+     * {@see Chat::refuseInFlightAction()}, which CLOSES the overlay; Ctrl+A was
+     * refused through {@see Chat::refuseInFlightCommand()}, which closed
+     * nothing, so the notice was written underneath an overlay the user was
+     * still looking at. Measured against that revision, both overlays:
+     * `overlay after KEY = true, overlay after CLICK = false`. The sibling test
+     * above compared both devices and caught nothing here only because it
+     * drove a different zone.
+     *
+     * WHAT MUST AGREE AND WHAT MUST NOT, asserted separately rather than
+     * folded into one `assertSame`:
+     *
+     *   * The overlay state must agree. Nothing chose that difference; it fell
+     *     out of a reorder, and it is fixed rather than described.
+     *   * The transcript must grow by exactly one on both, and neither may run
+     *     the listing (`reviewer` is the fixture's registered agent).
+     *   * The WORDS must differ, and that difference is deliberate — see
+     *     {@see Chat::selectPane()}, which routes the click through the ACTION
+     *     notice precisely because the COMMAND notice ends "your draft is still
+     *     in the box: press Enter again", a sentence about a draft no click
+     *     ever touched. Asserted as a difference so that collapsing the two
+     *     notices into one is a decision someone has to make on purpose.
+     *
+     * @param string $rune the Ctrl-key that raises the overlay this runs under
+     *
+     * @dataProvider overlaysThatOpenMidTurn
      */
-    public function testMidTurnUnderTheSessionPickerTheAgentsClickStillSaysWhyItRefused(): void
-    {
+    public function testMidTurnUnderAnOverlayTheAgentsClickAndCtrlAAgreeOnEverythingButTheirWords(
+        string $rune,
+    ): void {
         $chat = $this->openedWith(
             $this->populated(inFlight: true),
-            new KeyMsg(KeyType::Char, 'r', ctrl: true),
+            new KeyMsg(KeyType::Char, $rune, ctrl: true),
         );
-        self::assertNotNull($chat->sessionPicker(), 'fixture: Ctrl+R opens the picker mid-turn too');
+        self::assertTrue(
+            $chat->palette() !== null || $chat->sessionPicker() !== null,
+            'fixture: the overlay must really be up — both of these open mid-turn',
+        );
         $chat->view();
 
         $agents = Renderer::scanner()->get(Renderer::PANE_ZONE_PREFIX . 'agents');
-        self::assertInstanceOf(Zone::class, $agents, 'fixture: the bar shows through the picker');
+        self::assertInstanceOf(Zone::class, $agents, 'fixture: the bar shows through the overlay');
 
         $clicked = $this->click($chat, $agents);
+        [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'a', ctrl: true));
 
         self::assertCount(count($chat->history) + 1, $clicked->history, 'the refusal is written down');
+        self::assertCount(count($chat->history) + 1, $typed->history, 'by the keyboard too');
         self::assertStringContainsString('in flight', $this->lastLine($clicked));
+        self::assertStringContainsString('in flight', $this->lastLine($typed));
         self::assertStringNotContainsString('reviewer', $this->lastLine($clicked), 'and nothing was listed');
+        self::assertStringNotContainsString('reviewer', $this->lastLine($typed), 'by either device');
+
+        self::assertNull($typed->palette(), 'the notice closes the overlay it was written under');
+        self::assertNull($typed->sessionPicker(), 'both fields, since either may be the one that is up');
+        self::assertNull($clicked->palette(), 'and the click agrees');
+        self::assertNull($clicked->sessionPicker(), 'on both fields');
+
+        self::assertNotSame(
+            $this->lastLine($typed),
+            $this->lastLine($clicked),
+            'the two notices are deliberately different — see Chat::selectPane() for which sentence '
+            . 'belongs to a typed command and cannot be said to a click',
+        );
+    }
+
+    /**
+     * The two overlays that {@see Chat::update()} lets a user raise WHILE a
+     * turn is in flight, keyed by the Ctrl-rune that raises each.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function overlaysThatOpenMidTurn(): array
+    {
+        return ['command palette' => ['p'], 'session picker' => ['r']];
     }
 
     // =========================================================================
@@ -731,6 +936,53 @@ final class MouseModalGuardTest extends TestCase
             currentSessionId: 'session-b',
             agentManager: $manager,
             pendingPermission: $prompt,
+        );
+    }
+
+    /**
+     * A store holding a SINGLE session, so that cycling to "the next" one is a
+     * no-op — the fixture that shows `Ctrl+Tab`'s mid-turn refusal is issued
+     * above {@see Chat::cycleSessionTab()} and not by it.
+     */
+    private function oneSessionOnly(bool $inFlight = false): Chat
+    {
+        $dir = sys_get_temp_dir() . '/crush_mouse_modal_' . uniqid('', true);
+        mkdir($dir, 0755, true);
+        $this->tempDirs[] = $dir;
+
+        $store = new SessionStore($dir . '/sessions.db');
+        $store->createSession('session-b', 'echo', 'echo-1', null, 'Beta');
+
+        return new Chat(
+            history: [Message::user('only one')],
+            inFlight: $inFlight,
+            sessionStore: $store,
+            currentSessionId: 'session-b',
+        );
+    }
+
+    /**
+     * The same shape as {@see populated()}, with the two ids chosen so that
+     * their zone strings collide with the palette's row whitelist past the
+     * prefix — see
+     * {@see testAnIdThatCollidesWithTheRowWhitelistPastItsPrefixIsStillSwallowed()}
+     * for the arithmetic. Session `alphabet0` and tool call `abc0` both put a
+     * `0` at offset `strlen('picker-item:')`.
+     */
+    private function collidingIds(): Chat
+    {
+        $dir = sys_get_temp_dir() . '/crush_mouse_modal_' . uniqid('', true);
+        mkdir($dir, 0755, true);
+        $this->tempDirs[] = $dir;
+
+        $store = new SessionStore($dir . '/sessions.db');
+        $store->createSession('alphabet0', 'echo', 'echo-1', null, 'Colliding');
+        $store->createSession('session-b', 'echo', 'echo-1', null, 'Beta');
+
+        return new Chat(
+            history: [Message::assistant('')->withToolResults([ToolResult::ok('grep', "alpha\nbeta", 'abc0')])],
+            sessionStore: $store,
+            currentSessionId: 'session-b',
         );
     }
 
