@@ -117,6 +117,34 @@ completeness asserted against `cases() × probes()`, plus a clause→probe map r
 every sentence to point at a real cell. **A partial anchor table lets an author anchor the claims they
 are confident about — which are the true ones.**
 
+### 🔴 A FALSE CORRECTION IS WORSE THAN A STALE NUMBER — round 36, and it was aimed at THIS file
+
+A lane reported that this file's `saveCheckpoint()` citation was stale: *"it is at `:414`, not `:368`"*.
+Its reviewer checked. **`:368` was correct** — at `dcb98051`, `public function saveCheckpoint` is on
+line 368 exactly as recorded here; line 414 is a docblock line reading *"checkpoint tests do, with
+`assertSame`) see identical key order."* Post-change it is at 427, so `:414` was never right at any
+point in the round.
+
+**A stale number is discovered by anyone who follows it. A false correction is TRUSTED, and it
+overwrites something that was right.** This one was aimed at the RESUME, i.e. at the record the whole
+audit resumes from, and the only reason it did not land is that a reviewer re-derived a number nobody
+had asked it to doubt.
+
+**Rules:**
+1. **A correction is a claim and gets measured like any other.** Round after round these briefs have
+   said "report a wrong premise rather than routing around it" — this is the other half: *a reported
+   wrong premise must itself be verified before the record is changed.*
+2. **Never edit the record straight from a lane's correction.** Confirm it first, or route it through
+   the reviewer.
+3. Note the same lane's OTHER corrections in the same breath were **right** (`Chat.php:6478` sync
+   `run()`, `:6390` dispatch, `:6459` `workflowRun()`; the recorded `:6479` was a genuine off-by-one).
+   **A source that is right three times out of four still has to be checked the fourth time** — being
+   mostly right is what makes a false correction dangerous.
+
+⚠️ **The corrected figures, now double-checked:** `EnhancedSessionStore::saveCheckpoint()` at
+`dcb98051` = **`:368`** (unchanged, the RESUME was right). `Chat.php` sync `run()` = **`:6478`**
+(RESUME's `:6479` was off by one, now fixed). Dispatch `:6390` ✓. `workflowRun()` `:6459` ✓.
+
 ### 🔴 ROUND 36's LESSON — my own brief's central premise was FALSE, and the fix I suggested would have made the feature permanently unreachable
 
 Two supervisor errors in one brief, both caught by the lane and reported rather than worked around.
@@ -167,7 +195,7 @@ The plan is unreliable at roughly **2:1** on what is still open. Measured agains
 |---|---|---|---|
 | **`CommandBackend`/`StreamingCommandBackend::completeAsync()` block the loop** | OPEN | M | `CommandBackend.php:140-155` (sync call at `:149`); `StreamingCommandBackend.php:461-484` (defers via `futureTick()` `:464`, then blocks at `:471`) |
 | **checkpoint re-encodes + re-hashes the whole history every turn** | PARTIAL | XS | `Chat.php:5188-5202` (unconditional, no throttle) → `EnhancedSessionStore.php:368`. ⚠️ **Disk is already FIXED** — content-addressed blobs, `INSERT OR IGNORE`, O(N). Only **CPU** is O(N²) (`:428-430` encode, `:534` sha256, every message every turn). Do not repeat the plan's "writes the full history" headline |
-| **async workflow execution — the compositor blocker** | OPEN | L | `Chat.php:6459` `workflowRun()` calls `run()` synchronously at `:6479`, dispatched `:6390` |
+| **async workflow execution — the compositor blocker** | OPEN | L | `Chat.php:6459` `workflowRun()` calls `run()` synchronously at `:6478` (corrected from `:6479`), dispatched `:6390` |
 | `statusLine` config | OPEN | M | greenfield, zero occurrences in `src/`/`bin/`. Adds a `src/` file |
 | `keybindings` remap | OPEN | L | **DEFER.** `KeyBindingRegistry` is `final`, never instantiated, entirely static, with two static memo caches and a test trait existing only to reset them; 4 production consumers incl. `Chat.php`. An L refactor for a preference feature |
 
