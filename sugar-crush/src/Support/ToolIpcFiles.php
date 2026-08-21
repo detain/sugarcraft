@@ -28,7 +28,8 @@ namespace SugarCraft\Crush\Support;
  * Escape-Escape cancel, or {@see \SugarCraft\Crush\Backend\EngineBackend}'s
  * idle timeout — because the orphaned tool grandchildren keep running and
  * write payloads nobody is left to collect. {@see sweep()} is the reaper of
- * last resort for exactly those.
+ * last resort for exactly those — and, since it is the only reaper this
+ * program has, for {@see HOOK_PAYLOAD_PREFIX} as well.
  *
  * @see \SugarCraft\Crush\Tools\ParallelSafe for the orphan lifecycle itself
  */
@@ -39,6 +40,21 @@ final class ToolIpcFiles
 
     /** {@see \SugarCraft\Crush\Chat::forkToolCalls()}'s payloads. */
     public const CHAT_PREFIX = 'sc_chat_tool_';
+
+    /**
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook}'s payload files — the same
+     * class of leak from a different direction, which is why they are swept
+     * here rather than given a reaper of their own.
+     *
+     * These are NOT written by this class: `ScriptHook` makes them with
+     * `tempnam()` and deletes them in a `finally` that covers every in-process
+     * exit it has, the timeout and the SIGKILL escalation included (measured:
+     * zero left behind over a full suite run). What no `finally` covers is the
+     * process dying under it — a SIGKILL to sugar-crush itself, or a PHP fatal
+     * — and what is stranded then is a 0600 copy of the tool call's arguments
+     * in a world-listable directory, with nothing that would ever reap it.
+     */
+    public const HOOK_PAYLOAD_PREFIX = 'crush-hook-payload-';
 
     /**
      * Written first and renamed into place, because rename(2) is atomic within
@@ -255,8 +271,9 @@ final class ToolIpcFiles
     /**
      * Remove abandoned payloads from $dir, returning how many were unlinked.
      *
-     * Both prefixes, and their `.partial` siblings, because a cancel strands
-     * either shape. Deliberately conservative: only regular files, only ones
+     * All three prefixes, and the `.partial` siblings of the two this class
+     * writes, because a cancel strands either dispatcher's shape and a killed
+     * process strands a hook's. Deliberately conservative: only regular files, only ones
      * this uid owns, only ones older than $olderThanSeconds — a sweep that
      * deleted a live run's payload would turn a leak into a lost tool result.
      *
@@ -278,7 +295,7 @@ final class ToolIpcFiles
         $now = time();
 
         $removed = 0;
-        foreach ([self::RUNTIME_PREFIX, self::CHAT_PREFIX] as $prefix) {
+        foreach ([self::RUNTIME_PREFIX, self::CHAT_PREFIX, self::HOOK_PAYLOAD_PREFIX] as $prefix) {
             foreach (glob($dir . '/' . $prefix . '*') ?: [] as $path) {
                 $stat = @lstat($path);
                 if ($stat === false || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_FILE) {

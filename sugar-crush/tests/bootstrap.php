@@ -72,8 +72,8 @@ putenv('COLORFGBG');
  * ToolIpcFiles::sweepOnce() is wired into Bootstrap::backend()/backendFor(),
  * and a dozen test files reach those — so whichever one PHPUnit happened to run
  * first spent the process's one sweep on the REAL sys_get_temp_dir(), unlinking
- * every sc_chat_tool_* / sc_runtime_tool_* payload over an hour old that this
- * uid owns. Harmless for the suite, hostile to the machine: running the tests
+ * every sc_chat_tool_* / sc_runtime_tool_* / crush-hook-payload-* file over an
+ * hour old that this uid owns. Harmless for the suite, hostile to the machine: running the tests
  * is not a request to reap another sugar-crush's files.
  *
  * 1. The latch is per-process and idempotent, so tripping it here leaves no

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Hooks;
 
+use SugarCraft\Crush\Support\ToolIpcFiles;
+
 /**
  * A hook that executes an external script.
  *
@@ -797,7 +799,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private static function writePayloadFile(string $value): ?string
     {
-        $path = @tempnam(sys_get_temp_dir(), 'crush-hook-payload-');
+        $path = @tempnam(sys_get_temp_dir(), ToolIpcFiles::HOOK_PAYLOAD_PREFIX);
 
         if (!is_string($path) || $path === '') {
             return null;

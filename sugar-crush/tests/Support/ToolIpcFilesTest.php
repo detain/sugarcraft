@@ -153,6 +153,29 @@ final class ToolIpcFilesTest extends TestCase
     }
 
     /**
+     * A HOOK'S PAYLOAD FILE IS THE SAME LEAK FROM A DIFFERENT DIRECTION, and
+     * until now it was in no sweep at all.
+     *
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook} writes the tool call's
+     * arguments to a `crush-hook-payload-*` file so a hook can read a payload
+     * the environment cannot carry, and deletes it in a `finally` that covers
+     * every in-process exit it has — the timeout and the SIGKILL escalation
+     * included. What no `finally` covers is sugar-crush itself being killed, and
+     * what is left then is a 0600 copy of whatever the model asked to write,
+     * sitting in a world-listable directory with nothing that would ever reap
+     * it. That is the same class of defect the two dispatcher prefixes are
+     * swept for, so it is swept with them.
+     */
+    public function testSweepRemovesAHookPayloadStrandedByAKilledProcess(): void
+    {
+        $hookPayload = $this->stale(ToolIpcFiles::HOOK_PAYLOAD_PREFIX . 'dddd');
+
+        self::assertSame(1, ToolIpcFiles::sweep($this->dir, 3600));
+
+        self::assertFileDoesNotExist($hookPayload);
+    }
+
+    /**
      * The whole safety of an age-based sweep. A payload belonging to a LIVE
      * run — this process's, or another sugar-crush on the same box, which is
      * indistinguishable from here — must survive, or a leak becomes a lost
