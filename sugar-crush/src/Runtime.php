@@ -1495,10 +1495,13 @@ final class Runtime
      * {@see App::$root} (`--root`), falling back to the process directory
      * for an App that was never given one.
      *
-     * Single seam for both consumers — the environment block the model reads
-     * and the {@see HookContext::$projectRoot} every PreToolUse/PostToolUse
-     * hook gates on — because the whole defect in crush_code.md Phase 0
-     * item 6 was those two disagreeing with the tools' own root.
+     * Single seam for every consumer, because the whole defect in
+     * crush_code.md Phase 0 item 6 was two of them disagreeing with the tools'
+     * own root. There are three today — the {@see HookContext::$projectRoot}
+     * every PreToolUse/PostToolUse hook gates on, the environment block the
+     * model reads, and the repo map beside it — and the enumeration is
+     * deliberately not a count any more: it said "both consumers" and the
+     * third arrived in the same commit that wrote the sentence.
      */
     private static function projectRoot(App $app): string
     {

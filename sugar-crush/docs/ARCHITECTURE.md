@@ -248,8 +248,12 @@ Items 2 and 3 are the derived-fact half and 4 and 5 the authored-convention
 half, which is why the map sits where it does: every line in it is a path
 relative to the cwd item 2 names, and the conventions in item 4 talk about both.
 `RepoMapBlock` is deliberately generic — it reads `composer.json` files, not
-this repository's `docs/MATCHUPS.md`, so it maps any Composer workspace rather
-than only this one; its own docblock records that decision and what it costs.
+this repository's `docs/MATCHUPS.md`. It maps a flat Composer workspace (this
+repository's shape), a single library, and a `packages/*` monorepo whose root
+manifest declares those packages as path repositories. Its floor is that it
+never *searches* for manifests: it opens the root's immediate children and the
+directories the root manifest names, so a nested layout that does not declare
+itself is not found. Its own docblock records that decision and what it costs.
 
 Note the prompt-caching consequence stated in `MemoryBlock`'s own source:
 `EnvironmentBlock::render()` polls `git status --porcelain` and sits **ahead** of

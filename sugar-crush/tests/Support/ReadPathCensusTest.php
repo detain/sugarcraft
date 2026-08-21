@@ -226,16 +226,35 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — a walked-to instruction file',
             'CONTAINED — a configured `instructions:` glob match',
         ],
-        // Three sinks, one gate, and the split between them is the point: only
-        // ONE of the three follows a path the repository chose.
+        // Three sinks and THREE gates, which is the correction. This row set
+        // shipped saying only one of the three followed a path the repository
+        // chose, on the reasoning that a scandir() entry holds no separator and
+        // that the composer.json path was therefore assembled entirely by the
+        // caller. Both sentences were about the path STRING; the escape was in
+        // the file it RESOLVED to. A committed directory symlink (git mode
+        // 120000, materialised by clone) put an out-of-root manifest's psr-4
+        // prefix and description into the system prompt. See
+        // Context/RepoMapBlock's ON PATHS THAT COME FROM CONTENT.
         'Context/RepoMapBlock.php|scandir' => [
-            'NAMES_ONLY — the immediate children of the root, enumerated to find sub-packages. A '
-                . 'scandir() entry cannot contain a separator, so nothing here can leave the root',
+            'NAMES_ONLY — the immediate children of the root, enumerated as CANDIDATE sub-package '
+                . 'directories. A scandir() entry cannot contain a separator, but the directory it '
+                . 'names can be a symlink out of the tree, so the name is not the gate: each '
+                . 'candidate is refused unless ContainedPath::below() puts it strictly inside the '
+                . 'root, and the manifest read below is gated again at its own sink',
+        ],
+        'Context/RepoMapBlock.php|glob' => [
+            'NAMES_ONLY — expansion of a `repositories: {type: path}` url from the ROOT manifest, '
+                . 'which is content; a match outside the root is dropped here for want of a '
+                . 'relative name and refused again by the ContainedPath::below() gate on each '
+                . 'candidate',
         ],
         'Context/RepoMapBlock.php|file_get_contents' => [
-            'CALLER_SUPPLIED — a composer.json at `$root` or `$root/<entry>`, where the root is '
-                . 'App::$root (`--root`) and <entry> came from the scandir() above; no part of the '
-                . 'path is chosen by model output or by file content',
+            'CONTAINED — a composer.json at `$root` or under a candidate directory. The path is '
+                . 'assembled from App::$root (`--root`) and a scandir()/glob() entry, and NONE OF '
+                . 'THAT MAKES THE READ SAFE: is_file(), is_readable() and file_get_contents() all '
+                . 'follow symlinks, so a committed link is what chooses the file. '
+                . 'ContainedPath::within() sits inside readManifest() itself, at the sink rather '
+                . 'than at its callers, so a third caller cannot ship without it',
         ],
         'Context/RepoMapBlock.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the one path in this file that CONTENT steers: a manifest\'s '

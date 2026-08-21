@@ -179,7 +179,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Commands/CommandSpec.php' => 1,
         'Config/LayeredSettings.php' => 2,
         'Context/InstructionFileLoader.php' => 6,
-        'Context/RepoMapBlock.php' => 1,
+        'Context/RepoMapBlock.php' => 3,
         'Memory/ForeignMemoryImporter.php' => 2,
         'Providers/ProviderFactory.php' => 2,
         'Skills/SkillLoader.php' => 3,
@@ -233,7 +233,7 @@ final class ContainedPathInventoryTest extends TestCase
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
-     * "THIRTY-TWO call sites in FOURTEEN files", per file — the sum and the key
+     * "THIRTY-FOUR call sites in FOURTEEN files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
      * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",
@@ -244,6 +244,15 @@ final class ContainedPathInventoryTest extends TestCase
      * rather than quietly corrected.) Each count is one read
      * decision, so a dropped gate shows up as the file's number falling — which
      * is the half of #89 an instrument like this genuinely covers.
+     *
+     * A THIRD RESTATEMENT OF THIS SENTENCE EXISTS, and it was five call sites
+     * and three files behind when this round found it: the class doc-block of
+     * {@see \SugarCraft\Crush\Support\ContainedPath} itself, which still said
+     * "TWENTY-SEVEN call sites in ELEVEN files". The paragraph above says a
+     * restatement no test asserts is the defect, and then left one unasserted
+     * one file away. {@see testContainedPathsOwnDocBlockRestatesThisInventory()}
+     * now reads the sentence back out of that file and compares it to this
+     * array, so the two cannot drift apart again.
      *
      * `Cli/Bootstrap.php` is the eleventh file, and it arrived with the READ it
      * gates: `mcpClient()` resolves `$root/.mcp.json`, a repository-chosen file
@@ -293,6 +302,53 @@ final class ContainedPathInventoryTest extends TestCase
         $this->assertSame(
             self::ROUTED_CALL_SITES,
             $this->countPerFile($this->routedCalls(...), skip: 'Support/ContainedPath.php'),
+        );
+    }
+
+    /**
+     * The sentence at the head of `ContainedPath`'s own inventory paragraph,
+     * read back out of the file and compared to {@see ROUTED_CALL_SITES}.
+     *
+     * Written because that restatement drifted for three rounds while sitting
+     * six lines under "THE INVENTORY BELOW IS NOT MAINTAINED BY HAND" — it read
+     * "TWENTY-SEVEN call sites in ELEVEN files" against a derived thirty-two in
+     * fourteen. Both halves are spelled in WORDS there, which is the form that
+     * makes a stale number read as prose rather than as a figure, so both are
+     * parsed rather than eyeballed. The per-file breakdown in that paragraph is
+     * deliberately NOT asserted: it is an argument about which file gates what,
+     * and pinning its wording would make every legitimate edit red.
+     */
+    public function testContainedPathsOwnDocBlockRestatesThisInventory(): void
+    {
+        $words = [
+            'ELEVEN' => 11, 'TWELVE' => 12, 'THIRTEEN' => 13, 'FOURTEEN' => 14,
+            'FIFTEEN' => 15, 'SIXTEEN' => 16, 'SEVENTEEN' => 17, 'EIGHTEEN' => 18,
+            'TWENTY-SEVEN' => 27, 'TWENTY-EIGHT' => 28, 'TWENTY-NINE' => 29,
+            'THIRTY' => 30, 'THIRTY-ONE' => 31, 'THIRTY-TWO' => 32,
+            'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,
+            'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38,
+        ];
+
+        $source = (string) file_get_contents($this->srcDir . '/Support/ContainedPath.php');
+
+        $this->assertSame(
+            1,
+            preg_match('/([A-Z]+(?:-[A-Z]+)?) call sites in ([A-Z]+(?:-[A-Z]+)?) files ask this class/', $source, $m),
+            'ContainedPath must still restate its inventory in the shape this test can read',
+        );
+
+        $this->assertArrayHasKey($m[1], $words, 'unrecognised number word for the call-site count: ' . $m[1]);
+        $this->assertArrayHasKey($m[2], $words, 'unrecognised number word for the file count: ' . $m[2]);
+
+        $this->assertSame(
+            array_sum(self::ROUTED_CALL_SITES),
+            $words[$m[1]],
+            'ContainedPath\'s doc-block disagrees with the derived call-site total',
+        );
+        $this->assertSame(
+            count(self::ROUTED_CALL_SITES),
+            $words[$m[2]],
+            'ContainedPath\'s doc-block disagrees with the derived file count',
         );
     }
 

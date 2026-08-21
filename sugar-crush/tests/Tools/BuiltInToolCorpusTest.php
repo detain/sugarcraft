@@ -415,6 +415,26 @@ final class BuiltInToolCorpusTest extends TestCase
             array_sum(array_map('count', $secondary)),
             'and the two figures must stay consistent with the per-file census above',
         );
+
+        // `src/Context/RepoMapBlock` argues about the size of a per-class
+        // listing and about how far under MAX_SOURCE_FILES a normal package
+        // sits, so it restates BOTH figures — and it shipped restating 284/303
+        // in the very commit that moved them to 285/304 thirty lines away in
+        // its own message. A restated census no test asserts is this file's
+        // recurring defect; the restatement is asserted here rather than
+        // deleted, because the argument it supports needs the number.
+        $block = (string) file_get_contents($this->srcDir . '/Context/RepoMapBlock.php');
+
+        $this->assertStringContainsString(
+            sprintf('`src/` here declares %d top-level', $declarations),
+            $block,
+            'RepoMapBlock restates the declaration census and has drifted from it',
+        );
+        $this->assertStringContainsString(
+            sprintf('`src/` here is %d files', count($files)),
+            $block,
+            'RepoMapBlock restates the file census and has drifted from it',
+        );
     }
 
     /**

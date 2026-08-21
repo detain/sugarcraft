@@ -64,7 +64,7 @@ use SugarCraft\Crush\Support\ContainedPath;
  * WHAT WAS DELIBERATELY NOT BUILT
  * -------------------------------
  *   - A per-CLASS listing. The declaration-line regex the item offers as an
- *     alternative is cheap to run, but `src/` here declares 303 top-level
+ *     alternative is cheap to run, but `src/` here declares 304 top-level
  *     types; at one line each that is several times this whole block's budget,
  *     emitted on every step, to tell the model things `Glob 'src/&#42;&#42;/&#42;.php'`
  *     tells it on demand. The map stops at the directory.
@@ -84,12 +84,47 @@ use SugarCraft\Crush\Support\ContainedPath;
  *
  * ON PATHS THAT COME FROM CONTENT
  * -------------------------------
- * Almost nothing here takes a path from the repository. The sub-package scan
- * only ever joins a `scandir()` entry to the root, and a directory entry cannot
- * contain a separator, so it cannot escape. The one exception is a manifest's
- * `autoload.psr-4` VALUES, which the repository's author writes and which
- * {@see scanSourceDirectories()} would otherwise follow anywhere — so each one
- * is refused unless {@see ContainedPath::within()} puts it inside the root.
+ * EVERY path this class opens comes from the repository, and the first
+ * revision of this paragraph said the opposite. It read: "the sub-package scan
+ * only ever joins a `scandir()` entry to the root, and a directory entry
+ * cannot contain a separator, so it cannot escape." The premise is true and
+ * the conclusion does not follow. A directory ENTRY cannot contain a
+ * separator; the directory it NAMES can be a symlink, git stores one as a tree
+ * entry of mode `120000`, and `git clone` materialises it. So a repository
+ * committing one line —
+ *
+ *     peek -> ../victim-private
+ *
+ * — put that outside package's `autoload.psr-4` prefix and its `description`,
+ * an unbounded string its author wrote, into every system prompt of the
+ * session. MEASURED against the ungated build from a real `git clone`:
+ *
+ *     - peek/  ->  Victim\Private\  INTERNAL ONLY - acme-bank settlement …
+ *
+ * The gate that shipped with that sentence covered the `autoload.psr-4` VALUES
+ * and not the WALK, which is the distinction the sentence talked itself out
+ * of: the path STRING was caller-supplied, and the file it RESOLVES TO was
+ * repository-chosen. Three paths are repository-chosen here and all three are
+ * now gated:
+ *
+ *   - a `scandir()` entry under the root, and each `repositories: {type:
+ *     path}` url the root manifest names — the candidate sub-package
+ *     directories, each refused unless {@see ContainedPath::below()} puts it
+ *     strictly inside the root. `below()` and not `within()` because a
+ *     sub-package cannot BE the root: `peek -> .` would otherwise list the
+ *     root as a member of itself.
+ *   - every `composer.json` opened, gated inside {@see readManifest()} rather
+ *     than at its two callers, so the compare cannot be forgotten by a third.
+ *     This is what closes the escape above even where the directory gate does
+ *     not apply — `alpha/composer.json -> ../../outside/composer.json` is the
+ *     same attack one level down.
+ *   - a manifest's `autoload.psr-4` VALUES, which {@see
+ *     scanSourceDirectories()} would otherwise follow anywhere. `within()`
+ *     here and not `below()`, because a prefix mapped to `""` legitimately
+ *     means the package root itself.
+ *
+ * `RecursiveDirectoryIterator` is not given `FOLLOW_SYMLINKS`, so once a
+ * source root is admitted the walk beneath it cannot leave either.
  *
  * ON THE MISSING AND THE UNREADABLE
  * ---------------------------------
@@ -132,7 +167,10 @@ final readonly class RepoMapBlock
      * 6,878 B of package lines at the {@see MAX_ENTRY_BYTES} clip below —
      * 1,314 B of headroom, about eleven more packages at this repository's
      * mean line. `sugar-crush` itself as a single-package root renders 33
-     * source-directory lines in 1,915 B, a quarter of the cap. DOMAIN: those
+     * source-directory lines in 1,915 B, a quarter of the cap. Both figures
+     * are the sum of the LINES, which is what this constant is compared
+     * against; the joined strings are 57 and 32 bytes longer, because the
+     * newline separators are outside the budget (see {@see renderSection()}). DOMAIN: those
      * are two real repositories, not a property of monorepos; a workspace with
      * several hundred packages will be truncated, and the header says so in
      * that case rather than pretending the list is complete.
@@ -152,7 +190,10 @@ final readonly class RepoMapBlock
      *
      * 120 leaves ~70 B for the description after a typical
      * `- candy-core/  ->  SugarCraft\Core\  ` prefix. MEASURED on this
-     * repository's 58 manifests, whose descriptions run to a 160 B median: 49
+     * repository's 58 manifests, whose descriptions have a 159 B median (the
+     * sorted middle pair is 158 and 160) and a 165 B mean — an earlier
+     * revision said "a 160 B median", which is the upper of the two middle
+     * values and not their midpoint: 49
      * of the 58 lines clip, for 6,878 B. Raising the cap buys progressively
      * less — 140 costs +947 B to un-clip four more lines, 160 costs +1,836 B
      * for seven and lands at 8,714 B, over {@see MAX_SECTION_BYTES}, at which
@@ -172,6 +213,19 @@ final readonly class RepoMapBlock
      * thousand files in a root somebody pointed at their home directory. The
      * two are deliberately not derived from each other — the byte cap can be
      * retuned without changing how much of the disk is touched.
+     *
+     * OPENED, not FOUND, and the first revision counted the wrong one: it
+     * broke on `count($packages) >= MAX_PACKAGES`, so a root of ten thousand
+     * manifest-less directories opened ten thousand `composer.json` paths and
+     * found nothing, which is the exact cost the sentence above says this
+     * bound exists to refuse. It also bounds how many `repositories` entries
+     * are glob-expanded, for the same reason on the other input.
+     *
+     * This constant's VALUE is not what its argument turns on — the argument
+     * is that there is a bound at all — so {@see
+     * \SugarCraft\Crush\Tests\Context\RepoMapBlockTest} pins it as a literal
+     * rather than deriving the cap test's expectation from it and calling that
+     * coverage. {@see MAX_ENTRY_BYTES} is the one whose value IS the argument.
      */
     public const MAX_PACKAGES = 256;
 
@@ -182,8 +236,19 @@ final readonly class RepoMapBlock
      * entry mapping a prefix to `""` or `"."` is legal and points the walk at
      * the whole repository, so this is the bound that keeps a malformed
      * manifest from turning prompt assembly into a full-tree crawl. Generous
-     * because it is a backstop and not a policy: `src/` here is 284 files, so
-     * a normal package is two orders of magnitude under it.
+     * because it is a backstop and not a policy: `src/` here is 285 files, so
+     * a normal package is about SEVENTY times under it — not the "two orders
+     * of magnitude" an earlier revision of this sentence claimed, which was
+     * the arithmetic being rounded in the direction that flattered the bound.
+     *
+     * Both figures in this file that restate `src/`'s census — 285 files here
+     * and 304 top-level types above — are asserted against the derivation by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()},
+     * because they shipped STALE: they were written as 284/303 in the same
+     * commit that moved the census to 285/304 thirty lines away in its own
+     * message. A restated number no test asserts is the recurring defect of
+     * this codebase, and this one occurred inside the file that caused the
+     * bump.
      */
     public const MAX_SOURCE_FILES = 20000;
 
@@ -243,8 +308,9 @@ final readonly class RepoMapBlock
     }
 
     /**
-     * Sub-packages found in the immediate subdirectories of the root, ordered
-     * by directory name and before any cap is applied.
+     * Sub-packages found under the root — its immediate subdirectories and the
+     * path repositories its manifest names — ordered by directory name,
+     * relative to the root, and before any render cap is applied.
      *
      * @return list<array{dir: string, name: string, namespace: ?string, description: string}>
      */
@@ -287,8 +353,9 @@ final readonly class RepoMapBlock
         ));
 
         if ($packages !== null) {
-            $sections[] = 'Packages in the immediate subdirectories of the workspace root — directory, the '
-                . 'PSR-4 namespace prefix its composer.json declares, and its composer description. Read '
+            $sections[] = 'Packages in this workspace — each immediate subdirectory of the root, plus every '
+                . 'directory a path repository in the root composer.json names. Directory, the PSR-4 '
+                . 'namespace prefix its composer.json declares first, and its composer description. Read '
                 . "from those manifests only; nothing here was checked against the code.\n\n"
                 . $packages;
         }
@@ -332,6 +399,16 @@ final readonly class RepoMapBlock
      * first line, which is what makes {@see MAX_SECTION_BYTES} a ceiling
      * rather than a ceiling-plus-one-entry; `MAX_ENTRY_BYTES` is far below it,
      * so the first line always fits and the exemption would protect nothing.
+     * The comparison is `>` and not `>=`, so a section landing EXACTLY on the
+     * budget keeps its last entry — pinned by
+     * `RepoMapBlockTest::testASectionEndingExactlyOnTheByteBudgetKeepsItsLastEntry()`,
+     * because that is the one byte the paragraph above argues about and a
+     * `>=` mutation survived the suite this file shipped with.
+     *
+     * The budget counts LINES, not the joined string: the `\n` separators and
+     * the omission notice are outside it, so an N-line section renders N-1
+     * bytes over the constant. The header says "bytes of entries" for that
+     * reason.
      * A line that does not fit ENDS the section rather than being skipped over
      * in favour of a shorter one further down, so the alphabetical order the
      * header implies survives the cap.
@@ -390,41 +467,65 @@ final readonly class RepoMapBlock
     }
 
     /**
-     * Immediate subdirectories of `$root` that carry a `composer.json` naming
-     * a package.
+     * Directories under `$root` that carry a `composer.json` naming a package.
      *
-     * IMMEDIATE only, not recursive. A `packages/*` or `src/*` layout is
-     * therefore not found, and that is a deliberate floor rather than an
-     * oversight: recursing to find manifests means walking a tree of unknown
-     * size before knowing whether it holds any, which is the cost this block
-     * exists to avoid paying on every session start. The root's OWN manifest
-     * is excluded too — it is the subject of the map, not a member of it, and
-     * its autoload is what {@see scanSourceDirectories()} reads instead.
+     * TWO SOURCES OF CANDIDATES, and the second one is why this is not
+     * "immediate children" any more. The first revision looked at immediate
+     * children only and wrote that a `packages/*` layout is "a deliberate
+     * floor": recursing to find manifests means walking a tree of unknown size
+     * before knowing whether it holds any. That reasoning is sound and the
+     * floor it justified was still the wrong one, because `packages/*` is the
+     * DOMINANT Composer monorepo convention — it is the shape in Composer's
+     * own `repositories` documentation — and a block whose whole justification
+     * for rejecting this item's literal form was "generic, not repo-specific"
+     * cannot then render the empty string for it. MEASURED before this change:
+     * a workspace with `packages/alpha` and `packages/beta`, both with PSR-4,
+     * both named by the root's `repositories`, rendered nothing at all.
+     *
+     * So the second source is the root manifest's own `repositories` entries
+     * of `{"type": "path"}`, whose `url` is expanded with {@see glob()}. That
+     * keeps the floor the reasoning above actually asked for — nothing here
+     * walks a tree looking for manifests; it opens exactly the directories the
+     * repository DECLARED, which is a bounded list the root manifest states in
+     * one place. A `packages/*` layout that does NOT declare itself in
+     * `repositories` is still not found, and that remains the seam: the next
+     * step would be a bounded fixed-depth probe, not a recursive search.
+     *
+     * The root's OWN manifest is excluded either way — it is the subject of
+     * the map, not a member of it, and its autoload is what
+     * {@see scanSourceDirectories()} reads instead.
      *
      * @return list<array{dir: string, name: string, namespace: ?string, description: string}>
      */
     private static function scanPackages(string $root): array
     {
-        $entries = scandir($root);
-
-        if ($entries === false) {
-            return [];
-        }
-
         $packages = [];
+        $opened = 0;
 
-        // scandir() is already sorted, so this order is deterministic without
-        // a further sort and matches the order the header claims.
-        foreach ($entries as $entry) {
-            if (count($packages) >= self::MAX_PACKAGES) {
+        foreach (self::packageCandidates($root) as $relative) {
+            // The bound is on manifests OPENED, which is what MAX_PACKAGES'
+            // doc-block says it is; counting packages FOUND instead would let
+            // a root full of manifest-less directories open without limit.
+            if ($opened >= self::MAX_PACKAGES) {
                 break;
             }
 
-            if (!self::isScannableDir($root . '/' . $entry, $entry)) {
+            $dir = $root . '/' . $relative;
+
+            if (!self::isScannableDir($dir, basename($relative))) {
                 continue;
             }
 
-            $manifest = self::readManifest($root . '/' . $entry . '/composer.json');
+            // See ON PATHS THAT COME FROM CONTENT: the entry NAME cannot hold
+            // a separator, the directory it names can be a symlink out of the
+            // tree, and a `git clone` materialises one.
+            if (!ContainedPath::below($dir, $root)) {
+                continue;
+            }
+
+            ++$opened;
+
+            $manifest = self::readManifest($dir . '/composer.json', $root);
 
             if ($manifest === null || !is_string($manifest['name'] ?? null) || $manifest['name'] === '') {
                 continue;
@@ -433,14 +534,99 @@ final readonly class RepoMapBlock
             $prefixes = array_keys(self::psr4($manifest));
 
             $packages[] = [
-                'dir' => $entry,
+                'dir' => $relative,
                 'name' => $manifest['name'],
+                // The FIRST prefix a manifest declares, not the only one. A
+                // package may declare several; this column answers "what will
+                // I find in here", and the first is the one a `composer.json`
+                // conventionally leads with. The rest are reachable from the
+                // manifest itself, which the model can read.
                 'namespace' => $prefixes === [] ? null : (string) $prefixes[0],
                 'description' => self::oneLine(is_string($manifest['description'] ?? null) ? $manifest['description'] : ''),
             ];
         }
 
         return $packages;
+    }
+
+    /**
+     * Candidate sub-package directories, relative to `$root`, sorted and
+     * deduplicated — every immediate child, plus every path-repository url the
+     * root manifest globs to.
+     *
+     * Sorted explicitly rather than relying on `scandir()`'s own order, which
+     * only covers half the list now; `SORT_STRING` because that is the
+     * comparison `scandir()` uses, so a flat workspace's order is unchanged.
+     *
+     * TWO COSTS, both known and both bounded by what a repository can write
+     * rather than by what it holds. The root manifest is read here and again by
+     * {@see scanSourceDirectories()} — two `file_get_contents()` of one small
+     * file per capture, which is cheaper than threading a decoded manifest
+     * through a class with no instance state to hold it. And a pattern of
+     * `*&#47;*&#47;*&#47;*&#47;*` costs one deep `glob()`: {@see MAX_PACKAGES}
+     * bounds how many patterns are expanded, not how wide any one of them is.
+     * That is the same trade the block already makes for `autoload.psr-4`, and
+     * the backstop there — {@see MAX_SOURCE_FILES} — is on the walk rather
+     * than on the glob.
+     *
+     * @return list<string>
+     */
+    private static function packageCandidates(string $root): array
+    {
+        $candidates = [];
+
+        foreach (scandir($root) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                $candidates[$entry] = true;
+            }
+        }
+
+        $manifest = self::readManifest($root . '/composer.json', $root);
+        $repositories = $manifest === null ? null : ($manifest['repositories'] ?? null);
+        $expanded = 0;
+
+        if (is_array($repositories)) {
+            foreach ($repositories as $repository) {
+                // Bounded by the same constant as the manifest reads: a
+                // `repositories` block is content, and one with ten thousand
+                // entries must not cost ten thousand glob() calls.
+                if ($expanded >= self::MAX_PACKAGES) {
+                    break;
+                }
+
+                if (!is_array($repository) || ($repository['type'] ?? null) !== 'path' || !is_string($repository['url'] ?? null)) {
+                    continue;
+                }
+
+                $pattern = trim(str_replace('\\', '/', $repository['url']), '/');
+
+                if ($pattern === '') {
+                    continue;
+                }
+
+                ++$expanded;
+
+                foreach (glob($root . '/' . $pattern, GLOB_ONLYDIR) ?: [] as $match) {
+                    // glob() substitutes wildcards into the pattern it was
+                    // given and resolves nothing, so every match still carries
+                    // the literal `$root . '/'` this call prepended — which is
+                    // why the relative name is taken by offset and NOT by a
+                    // prefix compare. A pattern of `../*` therefore yields a
+                    // relative name of `../sibling`, and the one thing standing
+                    // between that and the prompt is the ContainedPath::below()
+                    // gate in the caller. Writing a prefix compare here would
+                    // read like a second gate while gating nothing.
+                    $candidates[substr($match, strlen($root) + 1)] = true;
+                }
+            }
+        }
+
+        // array_keys() hands back an INT for a directory named `123`, and
+        // `basename()` under strict_types will not take one.
+        $relative = array_map(strval(...), array_keys($candidates));
+        sort($relative, SORT_STRING);
+
+        return $relative;
     }
 
     /**
@@ -451,7 +637,7 @@ final readonly class RepoMapBlock
      */
     private static function scanSourceDirectories(string $root): array
     {
-        $manifest = self::readManifest($root . '/composer.json');
+        $manifest = self::readManifest($root . '/composer.json', $root);
 
         if ($manifest === null) {
             return [];
@@ -578,13 +764,35 @@ final readonly class RepoMapBlock
     }
 
     /**
-     * A decoded `composer.json`, or null when it is absent, unreadable, not
-     * valid JSON, or not a JSON object.
+     * A decoded `composer.json` OBJECT, or null when it is absent, outside
+     * `$root`, unreadable, not valid JSON, or not a JSON object.
+     *
+     * THE CONTAINMENT COMPARE LIVES HERE, at the sink, rather than at the two
+     * callers. `is_file()`, `is_readable()` and `file_get_contents()` all
+     * follow symlinks, so this one function is where a repository-chosen path
+     * turns into somebody else's bytes; putting the gate at the callers is how
+     * the third caller ships without one. See ON PATHS THAT COME FROM CONTENT
+     * on the class for the escape this closes and the sentence that denied it.
+     *
+     * "NOT A JSON OBJECT" USED TO BE A PROMISE THIS DID NOT KEEP. The test was
+     * `is_array($decoded)`, and `json_decode('[1,2,3]', true)` is an array — so
+     * a manifest holding a JSON ARRAY was returned as one. Harmless at both
+     * call sites (`$m['name'] ?? null` is null on a list, and `psr4()` refuses
+     * it), which is precisely why it survived: the existing test covered a
+     * SCALAR, the one shape the old check did reject. `array_is_list()` is the
+     * distinction PHP has for "decoded from `[]` rather than `{}`" — an empty
+     * `{}` decodes to `[]` and is a list, and is also an object with no keys,
+     * so it is admitted and drops on the `name` check one line later exactly
+     * as a `{"foo":1}` manifest does.
      *
      * @return ?array<string, mixed>
      */
-    private static function readManifest(string $path): ?array
+    private static function readManifest(string $path, string $root): ?array
     {
+        if (!ContainedPath::within($path, $root)) {
+            return null;
+        }
+
         if (!is_file($path) || !is_readable($path)) {
             return null;
         }
@@ -597,7 +805,11 @@ final readonly class RepoMapBlock
 
         $decoded = json_decode($raw, true);
 
-        return is_array($decoded) ? $decoded : null;
+        if (!is_array($decoded) || ($decoded !== [] && array_is_list($decoded))) {
+            return null;
+        }
+
+        return $decoded;
     }
 
     /**

@@ -94,7 +94,26 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - TWENTY-SEVEN call sites in ELEVEN files ask this class. The ELEVENTH is
+ *   - THIRTY-FOUR call sites in FOURTEEN files ask this class. THIS SENTENCE
+ *     WAS FIVE SITES AND THREE FILES STALE when a reviewer measured it — it
+ *     read "TWENTY-SEVEN in ELEVEN" while
+ *     {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}'s
+ *     derived map, one file away, summed to thirty-two across fourteen. The
+ *     paragraph directly above says "THE INVENTORY BELOW IS NOT MAINTAINED BY
+ *     HAND", and this restatement of it was, and drifted for three rounds
+ *     exactly as the tier count above it had. It is now read back out of this
+ *     file and compared to the derived map by
+ *     `ContainedPathInventoryTest::testContainedPathsOwnDocBlockRestatesThisInventory()`,
+ *     which is the only thing that has ever stopped a number here from rotting.
+ *     The three files it was missing are
+ *     {@see \SugarCraft\Crush\Config\LayeredSettings} (2 — the project
+ *     `.sugar-crush` directory and the settings file inside it),
+ *     {@see \SugarCraft\Crush\Commands\CommandSpec} (1) and
+ *     {@see \SugarCraft\Crush\Context\RepoMapBlock} (3 — each candidate
+ *     sub-package DIRECTORY, every `composer.json` opened, and each
+ *     `autoload.psr-4` source root; the first two arrived a round after the
+ *     third, when the walk turned out to be ungated while the values were
+ *     gated). The ELEVENTH to arrive was
  *     {@see \SugarCraft\Crush\Cli\Bootstrap} (1 — `$root/.mcp.json`, the MCP
  *     server config, against the root that named it), and it is the first entry
  *     here that arrived WITH its read rather than after it: nothing in `src/`
@@ -113,7 +132,7 @@ namespace SugarCraft\Crush\Support;
  *     anchor, skill asset), {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}
  *     (3 — the same pair, plus `load()`'s single-file arm),
  *     {@see \SugarCraft\Crush\Commands\CommandLoader} (2),
- *     {@see \SugarCraft\Crush\Context\InstructionFileLoader} (5 — one per read
+ *     {@see \SugarCraft\Crush\Context\InstructionFileLoader} (6 — one per read
  *     decision it makes),
  *     {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} (2 — entry,
  *     directory anchor), {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}

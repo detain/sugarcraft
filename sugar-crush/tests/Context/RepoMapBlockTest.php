@@ -146,6 +146,188 @@ final class RepoMapBlockTest extends TestCase
         );
     }
 
+    /**
+     * THE ESCAPE THE FIRST REVISION SAID COULD NOT HAPPEN, in the exact shape a
+     * `git clone` produces it: git stores a symlink as a tree entry of mode
+     * `120000` and a clone materialises it, so this needs no local tampering by
+     * anybody. The doc-block reasoned that a `scandir()` entry cannot contain a
+     * separator and concluded the walk could not leave the root — true of the
+     * NAME, false of the directory it names.
+     *
+     * What crossed was not a file listing: it was the outside manifest's
+     * `description`, an unbounded string its author wrote, rendered into every
+     * system prompt of the session.
+     */
+    public function testASubPackageDirectorySymlinkedOutOfTheRootIsRefused(): void
+    {
+        $outside = $this->workspace([
+            'composer.json' => [
+                'name' => 'victim/private',
+                'description' => 'INTERNAL ONLY - acme-bank settlement client, staging creds in .env',
+                'autoload' => ['psr-4' => ['Victim\\Private\\' => 'src/']],
+            ],
+            'src/Client.php' => '<?php',
+        ]);
+        $root = $this->workspace(['composer.json' => ['name' => 'acme/root', 'type' => 'metapackage']]);
+
+        if (!@symlink($outside, $root . '/peek')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertSame([], RepoMapBlock::capture($root)->packages());
+        $this->assertSame('', RepoMapBlock::capture($root)->render());
+        // The control: the same manifest IS mapped when it really is inside.
+        rename($outside, $root . '/inside');
+        $this->assertSame(
+            ['inside'],
+            array_column(RepoMapBlock::capture($root)->packages(), 'dir'),
+        );
+    }
+
+    /**
+     * The same attack one level down, which is why the compare lives inside
+     * `readManifest()` rather than beside the directory scan: the directory is
+     * real and inside the root, and only the `composer.json` in it is a link.
+     */
+    public function testASubPackageManifestSymlinkedOutOfTheRootIsRefused(): void
+    {
+        $outside = $this->workspace([
+            'composer.json' => ['name' => 'victim/private', 'description' => 'staging creds in .env'],
+        ]);
+        $root = $this->workspace(['alpha/.keep' => '']);
+
+        if (!@symlink($outside . '/composer.json', $root . '/alpha/composer.json')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertSame([], RepoMapBlock::capture($root)->packages());
+    }
+
+    /**
+     * And the root's OWN manifest, which is the read `scanSourceDirectories()`
+     * starts from. Nothing outside can be walked through it — the `psr-4` gate
+     * sees to that — but its declared PREFIXES would still have reached the
+     * prompt for any directory name that happened to exist inside the root.
+     */
+    public function testTheRootsOwnManifestSymlinkedOutOfTheRootIsRefused(): void
+    {
+        $outside = $this->workspace([
+            'composer.json' => ['name' => 'victim/private', 'autoload' => ['psr-4' => ['Victim\\Private\\' => 'src/']]],
+        ]);
+        $root = $this->workspace(['src/One.php' => '<?php']);
+
+        if (!@symlink($outside . '/composer.json', $root . '/composer.json')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertSame([], RepoMapBlock::capture($root)->sourceDirectories());
+        $this->assertSame('', RepoMapBlock::capture($root)->render());
+    }
+
+    /**
+     * `below()` and not `within()` on a candidate directory, which is the whole
+     * difference between the two predicates: a sub-package cannot BE the root.
+     * `within()` accepts a path resolving ONTO the boundary, so `peek -> .`
+     * would have listed the root as a member of itself under a second name —
+     * contradicting {@see testTheRootsOwnManifestIsTheSubjectOfTheMapAndNotAMemberOfIt()}
+     * one line at a time.
+     */
+    public function testADirectorySymlinkedOntoTheRootItselfIsNotListedAsASubPackage(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/root', 'description' => 'the subject of the map'],
+        ]);
+
+        if (!@symlink('.', $root . '/peek')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertSame([], RepoMapBlock::capture($root)->packages());
+    }
+
+    // =========================================================================
+    // capture() — path repositories, the `packages/*` half
+    // =========================================================================
+
+    public function testAPackagesGlobDeclaredAsAPathRepositoryIsMapped(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/mono', 'repositories' => [['type' => 'path', 'url' => 'packages/*']]],
+            'packages/alpha/composer.json' => ['name' => 'acme/alpha', 'description' => 'The alpha package.', 'autoload' => ['psr-4' => ['Acme\\Alpha\\' => 'src/']]],
+            'packages/beta/composer.json' => ['name' => 'acme/beta', 'description' => 'The beta package.', 'autoload' => ['psr-4' => ['Acme\\Beta\\' => 'src/']]],
+            // An immediate child as well, sorting AFTER the globbed pair: the
+            // two candidate sources are merged and sorted as one list, so the
+            // rendered order stays the alphabetical one the header claims and
+            // is not "children first, then whatever the glob returned".
+            'zeta/composer.json' => ['name' => 'acme/zeta', 'description' => 'an immediate child'],
+        ]);
+
+        $this->assertSame(
+            ['packages/alpha', 'packages/beta', 'zeta'],
+            array_column(RepoMapBlock::capture($root)->packages(), 'dir'),
+        );
+        $this->assertStringContainsString(
+            "\n- packages/alpha/  ->  Acme\\Alpha\\  The alpha package.\n",
+            RepoMapBlock::capture($root)->render() . "\n",
+        );
+    }
+
+    public function testAPathRepositoryNamingOneDirectoryWithoutAGlobIsMappedToo(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/mono', 'repositories' => [['type' => 'path', 'url' => 'libs/one']]],
+            'libs/one/composer.json' => ['name' => 'acme/one', 'description' => 'a member'],
+            'libs/two/composer.json' => ['name' => 'acme/two', 'description' => 'not declared, so not found'],
+        ]);
+
+        $this->assertSame(
+            ['libs/one'],
+            array_column(RepoMapBlock::capture($root)->packages(), 'dir'),
+        );
+    }
+
+    public function testAPathRepositoryPointingOutsideTheRootFindsNothing(): void
+    {
+        $parent = $this->workspace([
+            'sibling/composer.json' => ['name' => 'acme/sibling', 'description' => 'outside the root'],
+            'root/composer.json' => ['name' => 'acme/root', 'repositories' => [
+                ['type' => 'path', 'url' => '../*'],
+                ['type' => 'path', 'url' => '../sibling'],
+            ]],
+        ]);
+
+        $block = RepoMapBlock::capture($parent . '/root');
+
+        $this->assertSame([], $block->packages());
+        $this->assertStringNotContainsString('sibling', $block->render());
+    }
+
+    public function testANonPathRepositoryEntryIsIgnoredRatherThanGlobbed(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/mono', 'repositories' => [
+                ['type' => 'vcs', 'url' => 'https://example.invalid/acme/alpha'],
+                'not-even-an-array',
+            ]],
+            'packages/alpha/composer.json' => ['name' => 'acme/alpha', 'description' => 'a member'],
+        ]);
+
+        $this->assertSame([], RepoMapBlock::capture($root)->packages());
+    }
+
+    public function testADirectoryNamedByBothAGlobAndTheChildScanIsListedOnce(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/mono', 'repositories' => [['type' => 'path', 'url' => '*']]],
+            'alpha/composer.json' => ['name' => 'acme/alpha', 'description' => 'a member'],
+        ]);
+
+        $this->assertSame(
+            ['alpha'],
+            array_column(RepoMapBlock::capture($root)->packages(), 'dir'),
+        );
+    }
+
     public function testTheScanStopsAtMaxPackagesManifests(): void
     {
         $root = $this->workspace([]);
@@ -163,6 +345,118 @@ final class RepoMapBlockTest extends TestCase
         // last one kept proves the cut is at the constant and not one either
         // side of it.
         $this->assertSame(sprintf('pkg-%04d', RepoMapBlock::MAX_PACKAGES - 1), end($packages)['dir']);
+    }
+
+    /**
+     * MANIFESTS OPENED, not packages FOUND — which is what the constant's
+     * doc-block says it bounds and what the first revision did not do. It broke
+     * on `count($packages) >= MAX_PACKAGES`, so the directories below (none of
+     * which yields a package) cost a `composer.json` open each and none of them
+     * counted, leaving the I/O bound unenforced in exactly the "somebody
+     * pointed it at their home directory" case it is written for.
+     */
+    public function testTheBoundIsOnManifestsOpenedAndNotOnPackagesFound(): void
+    {
+        $root = $this->workspace([]);
+
+        for ($i = 0; $i < RepoMapBlock::MAX_PACKAGES; ++$i) {
+            mkdir(sprintf('%s/dir-%04d', $root, $i));
+        }
+
+        // Sorts last, so it is only reached if the empty directories above did
+        // not spend the budget.
+        mkdir($root . '/zzz-package');
+        file_put_contents($root . '/zzz-package/composer.json', (string) json_encode(['name' => 'acme/zzz']));
+
+        $this->assertSame([], RepoMapBlock::capture($root)->packages());
+    }
+
+    /**
+     * The FIRST prefix a manifest declares, which was undocumented and untested
+     * — a mutation to `end($prefixes)` survived the whole suite.
+     */
+    public function testAPackageDeclaringSeveralPsr4PrefixesShowsTheFirstOneItDeclares(): void
+    {
+        $root = $this->workspace([
+            'alpha/composer.json' => ['name' => 'acme/alpha', 'autoload' => ['psr-4' => [
+                'Zeta\\Alpha\\' => 'src/',
+                'Acme\\Alpha\\' => 'lib/',
+            ]]],
+        ]);
+
+        $this->assertSame('Zeta\\Alpha\\', RepoMapBlock::capture($root)->packages()[0]['namespace']);
+    }
+
+    /**
+     * `is_array()` alone was the test behind a doc-block promising "not a JSON
+     * object", and `json_decode('[1,2,3]', true)` is an array. The existing
+     * coverage was a SCALAR, the one shape that check did reject.
+     */
+    public function testAManifestHoldingAJsonArrayRatherThanAnObjectIsAlsoDropped(): void
+    {
+        $root = $this->workspace([
+            'alpha/composer.json' => '[1,2,3]',
+            'beta/composer.json' => '[{"name":"acme/beta"}]',
+            'gamma/composer.json' => ['name' => 'acme/gamma'],
+        ]);
+
+        $this->assertSame(
+            ['gamma'],
+            array_column(RepoMapBlock::capture($root)->packages(), 'dir'),
+        );
+    }
+
+    /**
+     * `readManifest()`'s contract asserted where it is WRITTEN, by reflection,
+     * because it is not observable from the public surface: a JSON array has no
+     * `name`, no `autoload` and no `repositories` key, so every caller drops it
+     * either way. That is exactly why the doc-block could promise null "when it
+     * is … not a JSON object" while the code tested `is_array($decoded)` — and
+     * `json_decode('[1,2,3]', true)` is an array — for a whole round without a
+     * red test. The behaviour-level test above covers the same shapes through
+     * the public surface; this one covers the sentence.
+     */
+    public function testReadManifestRefusesAJsonArrayExactlyAsItsDocBlockPromises(): void
+    {
+        $root = $this->workspace([]);
+        $path = $root . '/composer.json';
+
+        $read = new \ReflectionMethod(RepoMapBlock::class, 'readManifest');
+        $read->setAccessible(true);
+        $call = function (string $raw) use ($read, $path, $root): ?array {
+            file_put_contents($path, $raw);
+
+            /** @var ?array<string, mixed> */
+            return $read->invoke(null, $path, $root);
+        };
+
+        $this->assertNull($call('[1,2,3]'), 'a JSON array is not a JSON object');
+        $this->assertNull($call('[{"name":"acme/x"}]'));
+        $this->assertNull($call('"acme/scalar"'));
+        $this->assertNull($call('{ "name": '));
+        $this->assertSame([], $call('{}'), 'an empty object is an object');
+        $this->assertSame(['name' => 'acme/x'], $call('{"name":"acme/x"}'));
+    }
+
+    /**
+     * `{}` decodes to `[]`, which `array_is_list()` calls a list — so the array
+     * refusal above has to make room for it. It is an OBJECT with no keys, and
+     * it drops one line later on the missing `name` exactly as `{"foo":1}` does,
+     * which is what this pins: the two must not diverge.
+     */
+    public function testAnEmptyJsonObjectIsTreatedAsAManifestWithNoNameRatherThanAsAnArray(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => '{}',
+            'src/One.php' => '<?php',
+            'alpha/composer.json' => '{}',
+            'beta/composer.json' => '{"foo":1}',
+        ]);
+
+        $block = RepoMapBlock::capture($root);
+
+        $this->assertSame([], $block->packages());
+        $this->assertSame([], $block->sourceDirectories());
     }
 
     // =========================================================================
@@ -372,6 +666,29 @@ final class RepoMapBlockTest extends TestCase
         );
     }
 
+    /**
+     * `.PHP` counts. The extension test is `strtolower(...) === 'php'`, and
+     * dropping the `strtolower()` survived the whole suite: on a case-sensitive
+     * filesystem an uppercase-extension file simply stopped counting, and on a
+     * case-INSENSITIVE one (macOS, Windows) it would stop counting files PHP
+     * itself will happily `require`.
+     */
+    public function testAPhpFileWithAnUppercaseExtensionIsCountedLikeAnyOther(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/lib', 'autoload' => ['psr-4' => ['Acme\\Lib\\' => 'src/']]],
+            'src/One.PHP' => '<?php',
+            'src/Two.PhP' => '<?php',
+            'src/Three.php' => '<?php',
+            'src/notes.txt' => 'not code',
+        ]);
+
+        $this->assertSame(
+            [['path' => 'src', 'namespace' => 'Acme\\Lib\\', 'files' => 3]],
+            RepoMapBlock::capture($root)->sourceDirectories(),
+        );
+    }
+
     public function testTheFileVisitBudgetIsSpentAcrossEveryRootRatherThanRefilledPerRoot(): void
     {
         $root = $this->workspace([
@@ -426,6 +743,16 @@ final class RepoMapBlockTest extends TestCase
         $this->assertSame([], RepoMapBlock::capture('/')->sourceDirectories());
     }
 
+    /**
+     * The `src/`-shaped fixture this started as could not see the `rtrim()` it
+     * exists to pin: with a psr-4 value of `src`, the doubled separator lands
+     * INSIDE the joined path (`<root>//src`) and every later offset is taken
+     * from that same string, so removing the `rtrim()` changed nothing and the
+     * mutation survived. The load-bearing shape is a prefix mapped to `""`,
+     * where the walk's base IS the root and the relative path is cut at
+     * `strlen($base) + 1` — one byte too far when the base carries a trailing
+     * slash, which silently renames `sub/` to `ub/`.
+     */
     public function testATrailingSlashOnTheRootDoesNotChangeWhatIsCaptured(): void
     {
         $root = $this->workspace([
@@ -437,6 +764,21 @@ final class RepoMapBlockTest extends TestCase
         $this->assertSame(
             RepoMapBlock::capture($root)->render(),
             RepoMapBlock::capture($root . '/')->render(),
+        );
+
+        $atRoot = $this->workspace([
+            'composer.json' => ['name' => 'acme/lib', 'autoload' => ['psr-4' => ['Acme\\Lib\\' => '']]],
+            'One.php' => '<?php',
+            'sub/Two.php' => '<?php',
+        ]);
+
+        $this->assertSame(
+            ['.', 'sub'],
+            array_column(RepoMapBlock::capture($atRoot . '/')->sourceDirectories(), 'path'),
+        );
+        $this->assertSame(
+            RepoMapBlock::capture($atRoot)->render(),
+            RepoMapBlock::capture($atRoot . '/')->render(),
         );
     }
 
@@ -495,7 +837,7 @@ final class RepoMapBlockTest extends TestCase
 
         $rendered = RepoMapBlock::capture($root)->render();
 
-        $packagesAt = strpos($rendered, 'Packages in the immediate subdirectories');
+        $packagesAt = strpos($rendered, 'Packages in this workspace');
         $sourcesAt = strpos($rendered, "Directories under this package's own PSR-4");
 
         $this->assertIsInt($packagesAt);
@@ -512,7 +854,7 @@ final class RepoMapBlockTest extends TestCase
 
         $rendered = RepoMapBlock::capture($root)->render();
 
-        $this->assertStringContainsString('Packages in the immediate subdirectories', $rendered);
+        $this->assertStringContainsString('Packages in this workspace', $rendered);
         $this->assertStringNotContainsString("Directories under this package's own PSR-4", $rendered);
     }
 
@@ -525,7 +867,7 @@ final class RepoMapBlockTest extends TestCase
 
         $rendered = RepoMapBlock::capture($root)->render();
 
-        $this->assertStringNotContainsString('Packages in the immediate subdirectories', $rendered);
+        $this->assertStringNotContainsString('Packages in this workspace', $rendered);
         $this->assertStringContainsString("Directories under this package's own PSR-4", $rendered);
     }
 
@@ -547,6 +889,63 @@ final class RepoMapBlockTest extends TestCase
         );
     }
 
+    /**
+     * The two bounds pinned as LITERALS, which is the coverage the cap tests
+     * cannot give: every one of them derives its expectation from the constant,
+     * so a mutation of the constant moves the expectation with it and survives.
+     * Measured: `MAX_ENTRY_BYTES 120 -> 119` and `MAX_PACKAGES 256 -> 255` both
+     * survived the suite as it shipped.
+     *
+     * `MAX_ENTRY_BYTES` is the one that matters, and the first review of this
+     * file defended the `MAX_PACKAGES` survivor with an argument that fits only
+     * this constant: a bound whose DOC-BLOCK REASONS ABOUT ITS VALUE has to be
+     * pinned, because deriving the test from the value asserts nothing about
+     * the measurement the value came from. 120 is exactly that — it is chosen
+     * against 140 and 160 on a measured trade (+947 B to un-clip four more
+     * lines, +1,836 B for seven and over the section cap), and the whole
+     * paragraph is void if the figure moves. `MAX_PACKAGES`'s doc-block argues
+     * only that a bound EXISTS, so its literal is pinned here for symmetry
+     * rather than because 256 carries an argument.
+     */
+    public function testTheTwoMeasuredBoundsAreTheLiteralsTheirDocBlocksArgueFor(): void
+    {
+        $this->assertSame(120, RepoMapBlock::MAX_ENTRY_BYTES);
+        $this->assertSame(256, RepoMapBlock::MAX_PACKAGES);
+        $this->assertSame(8192, RepoMapBlock::MAX_SECTION_BYTES);
+        $this->assertSame(20000, RepoMapBlock::MAX_SOURCE_FILES);
+    }
+
+    /**
+     * The boundary the section budget's doc-block argues about — "a ceiling
+     * rather than a ceiling-plus-one-entry" — asserted at the byte where `>`
+     * and `>=` differ, which nothing did before: 128 lines of exactly 64 B land
+     * on {@see RepoMapBlock::MAX_SECTION_BYTES} to the byte, and the last one
+     * must be KEPT.
+     */
+    public function testASectionEndingExactlyOnTheByteBudgetKeepsItsLastEntry(): void
+    {
+        // `- pkg-000/` is 10 B, the two-space description join is 2 B.
+        $files = [];
+        $lines = intdiv(RepoMapBlock::MAX_SECTION_BYTES, 64);
+
+        for ($i = 0; $i < $lines; ++$i) {
+            $files[sprintf('pkg-%03d/composer.json', $i)] = [
+                'name' => 'acme/pkg',
+                'description' => str_repeat('d', 52),
+            ];
+        }
+
+        $entries = $this->entryLines(RepoMapBlock::capture($this->workspace($files))->render());
+
+        $this->assertCount($lines, $entries, 'the last entry lands exactly on the budget and must survive it');
+        $this->assertSame(64, strlen($entries[0]), 'the fixture must be 64 B per line for this boundary to bite');
+        $this->assertSame(
+            RepoMapBlock::MAX_SECTION_BYTES,
+            array_sum(array_map(strlen(...), $entries)),
+        );
+        $this->assertStringNotContainsString('omitted by the size limit', implode("\n", $entries));
+    }
+
     public function testALineOverTheEntryCapIsCutToExactlyThatCapMarkerIncluded(): void
     {
         $root = $this->workspace([
@@ -560,6 +959,34 @@ final class RepoMapBlockTest extends TestCase
         // The marker is paid for OUT of the budget: a cap that admitted
         // marker-on-top would leave a line longer than the constant.
         $this->assertStringStartsWith('- alpha/  ->  ', $line);
+    }
+
+    /**
+     * The `rtrim()` before the marker, which survived being deleted because
+     * every clip fixture in this file cut mid-word. A line whose cut lands
+     * exactly after a space renders `…d […truncated]` without it — a stray
+     * space the reader has no way to distinguish from part of the description.
+     * The whole string is asserted, not its length, because the un-rtrimmed
+     * form is still under the cap and a length assertion cannot see it.
+     */
+    public function testTheClipDropsTrailingSpaceRatherThanCarryingItIntoTheMarker(): void
+    {
+        // Room before the marker is MAX_ENTRY_BYTES - 13; the `- alpha/  `
+        // prefix is 10 B, so the description's 97th byte is the cut point.
+        $room = RepoMapBlock::MAX_ENTRY_BYTES - strlen(' […truncated]');
+        $keep = $room - strlen('- alpha/  ') - 1;
+
+        $root = $this->workspace([
+            'alpha/composer.json' => [
+                'name' => 'acme/alpha',
+                'description' => str_repeat('a', $keep) . ' ' . str_repeat('b', 40),
+            ],
+        ]);
+
+        $this->assertSame(
+            '- alpha/  ' . str_repeat('a', $keep) . ' […truncated]',
+            $this->entryLines(RepoMapBlock::capture($root)->render())[0],
+        );
     }
 
     public function testALineExactlyAtTheEntryCapIsLeftAlone(): void

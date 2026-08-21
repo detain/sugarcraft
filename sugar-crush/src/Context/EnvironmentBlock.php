@@ -65,8 +65,11 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * rendered 598 B then 615 B and first differs at byte **524**. Those four
  * figures are of that one two-edit fixture, not of this repository. The
  * consequence is not local to the block: on
- * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} it precedes the
- * instruction documents, the memory block and the skill listing, and on
+ * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} it precedes the repo
+ * map, the instruction documents, the memory block and the skill listing —
+ * {@see RepoMapBlock} was inserted DIRECTLY after this block and is now the
+ * first thing this paragraph's argument re-prefills, so it is named first —
+ * and on
  * {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()} it is the TAIL of the
  * system message with the entire conversation behind it — so on either path a
  * step that touched one file re-prefills everything downstream.
@@ -157,10 +160,13 @@ final readonly class EnvironmentBlock
      * What a third block DOES change is the total, which no single constant
      * here bounds: the unconditional prompt now costs up to this block's
      * 24,576 B of capped fields (below), plus `MemoryBlock`'s 4,096, plus
-     * `RepoMapBlock`'s 2 x 8,192 — about 45 KiB of capped block text if every
-     * bound were struck at once. In practice `RepoMapBlock`'s two sections are
-     * near mutually exclusive (see its own docblock), so a real ceiling is
-     * closer to 37 KiB.
+     * `RepoMapBlock`'s 2 x 8,192 — 45,056 B, exactly 44 KiB, of capped block
+     * text if every bound were struck at once. In practice `RepoMapBlock`'s
+     * two sections are near mutually exclusive (see its own docblock), so a
+     * real ceiling is 36,864 B, exactly 36 KiB. The arithmetic was right the
+     * first time and the UNITS were not: those two totals were written "about
+     * 45 KiB" and "closer to 37 KiB", which are the byte counts divided by
+     * 1000 while the same paragraph spells 8192 and 4096 as KiB correctly.
      *
      * DOMAIN OF THE BOUND: per SECTION. {@see render()} emits two independently
      * capped sections (staged, unstaged), so the block's diff contribution is
