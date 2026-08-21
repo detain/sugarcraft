@@ -45,8 +45,14 @@ use SugarCraft\Crush\Tui\Renderer as ShellRenderer;
  * **E54 — `render(..., $width, ...)` returns `$width + 4` cells.**
  * `$width` is handed to `Style::width()`, which sizes the CONTENT box; the
  * rounded border (2 cells) and `padding(0, 1)` (2 more) are drawn outside it.
- * That is an invariant, not a narrow-terminal edge case: measured here at
- * `$width` = 20/28/30/40/43/44/58/60/80/98, populated and empty alike. The
+ * That holds whenever the composed row body FITS `$width`, which is the domain
+ * the sweeps below now state instead of claiming an invariant: with an ASCII
+ * operation it is `+4` at `$width` = 20/28/30/40/43/44/58/60/80/98, populated
+ * and empty alike, and with a wide-cluster operation it is `+6` at six of those
+ * ten, because `render()`'s `$opBudget = max(5, $width - name - 60)` floor lets
+ * the body outgrow the box and the wrap then falls inside a 2-cell cluster.
+ * That second half is pre-existing — the same ten numbers come out of
+ * `087a3179` — and is recorded as E64; the sweep asserts it. The
  * overhead is now named — {@see AgentViewPane::CHROME_WIDTH} — and both
  * callers subtract it through {@see AgentViewPane::contentWidth()} instead of
  * each writing its own literal, which is how they came to disagree.
@@ -61,6 +67,12 @@ final class AgentViewPaneGeometryTest extends TestCase
     private const FAMILY = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
 
     private const ZWJ = "\u{200D}";
+
+    /** U+1F44D + U+1F3FD — thumbs-up with a skin-tone modifier, 4 cells on 8.3. */
+    private const THUMB = "\u{1F44D}\u{1F3FD}";
+
+    /** U+1F1E6 U+1F1F8 — a regional-indicator pair, 2 cells on 8.3. */
+    private const FLAG = "\u{1F1E6}\u{1F1F8}";
 
     /** Content widths every geometry assertion below is stated over. */
     private const WIDTHS = [20, 28, 30, 40, 43, 44, 58, 60, 80, 98];
@@ -200,6 +212,16 @@ final class AgentViewPaneGeometryTest extends TestCase
     /**
      * The `+4` stated against the constant rather than a literal, so the
      * constant cannot drift away from the geometry it describes.
+     *
+     * The fixture is ASCII **on purpose**, and the purpose is worth naming so
+     * the next reader does not mistake it for the whole property. The `+4` is
+     * not unconditional: it holds whenever the composed row body fits
+     * `$width`, and an ASCII operation always makes it fit here because it
+     * truncates to whole cells and wraps on cell boundaries. When the body
+     * outgrows the box AND carries a wide cluster, the row comes back wider —
+     * which is what {@see
+     * testAWideClusterOperationOverrunsTheChromeGeometryAtTheOperationFloor()}
+     * measures rather than avoids.
      */
     public function testARenderedPaneIsExactlyChromeWidthWiderThanTheContentWidthItWasHanded(): void
     {
@@ -222,6 +244,60 @@ final class AgentViewPaneGeometryTest extends TestCase
                         $list === [] ? 'empty' : 'populated',
                         implode('/', $widths),
                     ),
+                );
+            }
+        }
+    }
+
+    /**
+     * The same sweep with a wide-cluster operation, which is where the `+4`
+     * stops being an invariant — pinned at the bound it actually has.
+     *
+     * The sweep above ran an ASCII fixture over these widths and came back
+     * `+4` at every one, and an ASCII fixture over an ASCII-shaped property is
+     * the trap this file was written to avoid elsewhere. Swap in a skin-toned
+     * thumb or a flag and 6 of the 10 widths break it.
+     *
+     * The cause is `render()`'s `$opBudget = max(5, $width - name - 60)`. With
+     * a 3-cell name the floor of 5 binds below 69 content columns, so
+     * `leftSection` plus `rightSection` can exceed `$width`; `Style::width()`
+     * then wraps a body whose 2-cell clusters do not land on the boundary and
+     * the wrapped row measures `$width + 6` instead of `$width + 4`. Measured,
+     * the excess is exactly +2 and it is gone from 46 columns up.
+     *
+     * This is PRE-EXISTING and not a regression of the CHROME_WIDTH work:
+     * running the same sweep against `087a3179`'s AgentViewPane gives the same
+     * ten numbers. It is recorded as **E64**, `clipWidth(clipTail(...))` is
+     * still what keeps it off the screen, and this test exists so that a fix
+     * to E64 — or a drift in the floor — is visible rather than silent.
+     */
+    public function testAWideClusterOperationOverrunsTheChromeGeometryAtTheOperationFloor(): void
+    {
+        // Content width => measured widest row. +6 where the operation floor
+        // lets the body outgrow the box, +4 (i.e. CHROME_WIDTH) above it.
+        $expected = [
+            20 => 26, 28 => 34, 30 => 36, 40 => 46, 43 => 49,
+            44 => 50, 58 => 62, 60 => 64, 80 => 84, 98 => 102,
+        ];
+        $this->assertSame(self::WIDTHS, array_keys($expected), 'the sweep and the expectation map must agree');
+
+        foreach ([self::THUMB, self::FLAG] as $label => $payload) {
+            foreach (self::WIDTHS as $width) {
+                $agent = AgentDisplayState::new('abc', 'working', str_repeat($payload, 3), 42, 1234, 0.0042);
+                $rows = explode("\n", AgentViewPane::render([$agent], 0, $width, 6, self::theme()));
+                $widest = max(array_map(static fn(string $row): int => Width::string($row), $rows));
+
+                $this->assertSame(
+                    $expected[$width],
+                    $widest,
+                    sprintf('payload #%d at content width %d: widest row was %d', $label, $width, $widest),
+                );
+                // Whatever the wrap does, it never costs more than one wide
+                // cluster on top of the chrome.
+                $this->assertLessThanOrEqual(
+                    $width + AgentViewPane::CHROME_WIDTH + 2,
+                    $widest,
+                    sprintf('payload #%d at content width %d over-ran by more than one wide cluster', $label, $width),
                 );
             }
         }

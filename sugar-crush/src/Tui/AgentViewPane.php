@@ -51,10 +51,25 @@ final class AgentViewPane
      *
      * `$width` goes to `Style::width()`, which sizes the CONTENT box; the
      * rounded border adds a column on each side and `padding(0, 1)` one more
-     * on each side, so a finished row is `$width + CHROME_WIDTH` cells. That
-     * is an invariant, not a narrow-terminal edge case -- measured at
+     * on each side, so a finished row is `$width + CHROME_WIDTH` cells
+     * WHENEVER THE ROW BODY FITS `$width`. State the domain rather than call
+     * it an invariant: with an ASCII operation the `+4` holds at
      * `$width` = 20, 28, 30, 40, 43, 44, 58, 60, 80 and 98, populated list and
-     * empty placeholder alike, it is `+4` in every one.
+     * empty placeholder alike, but an ASCII operation is precisely the case
+     * that always fits.
+     *
+     * What can break it is {@see render()}'s
+     * `$opBudget = max(5, $width - Width::string($name) - 60)`. The floor of 5
+     * binds below roughly 69 content columns for a 3-cell name, so
+     * `leftSection` plus `rightSection` can exceed `$width`; `Style::width()`
+     * then wraps a body whose 2-cell clusters do not land on the boundary, and
+     * the row comes back `$width + 6`. Measured with a skin-toned thumb or a
+     * flag in the operation, that is 6 of those 10 widths -- 20, 28, 30, 40,
+     * 43 and 44 -- with the excess exactly +2 and gone from 46 up. It is
+     * byte-for-byte the same at 087a3179, so it is this pane's pre-existing
+     * floor policy and not the chrome arithmetic; it is recorded as E64 and
+     * the shell renderer's `clipWidth()` is still what keeps it off the
+     * screen.
      *
      * It exists as a named constant because the two callers each used to
      * write their own literal for it and one of them wrote the wrong one:

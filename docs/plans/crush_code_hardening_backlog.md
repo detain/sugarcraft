@@ -2754,10 +2754,29 @@ in every case**. The rounded border (2) plus `padding(0,1)` (2) are drawn outsid
 fed to `AgentViewPane::render()` at `:202` and to `box()` at `:205`). Only the `clipWidth(clipTail(...))`
 backstop keeps it off the screen.
 
-**ROUND 38 — FIXED. Every scout figure above re-measured and confirmed; none was stale.** `+4` holds
-at w=20/28/30/40/43/44/58/60/80/98, populated and empty; `Renderer.php:1630`, `AgentDashboardPane.php`
-`:193`/`:202`/`:205` and the two `clipWidth(clipTail(...), $cols)` `$frame` assignments at
-`src/Tui/Renderer.php:490` and `:561` are all where the entry says they are.
+**ROUND 38 — PARTIALLY FIXED. Every scout figure above re-measured and confirmed; none was stale.**
+Which half is closed, plainly: the **Step** this entry records is discharged — the `+4` overhead is
+named once and both callers subtract it through one function, so they can no longer disagree, and the
+dashboard's real 2-cell over-run (30 → 32, 60 → 62, 100 → 102) is gone. The **heading's condition is
+not**: `AgentViewPane::render($w)` still over-runs an outside budget below 44 columns, because the
+`max(40, …)` floor in `Renderer::renderAgentView()` is deliberately kept (see *What did NOT change*
+below). Read the heading as still open and the Step as done.
+
+`Renderer.php:1630`, `AgentDashboardPane.php` `:193`/`:202`/`:205` and the two
+`clipWidth(clipTail(...), $cols)` `$frame` assignments at `src/Tui/Renderer.php:490` and `:561` are all
+where the entry says they are.
+
+*Correction to the scout figure, and to the first draft of this stamp.* The `+4` was written up as an
+invariant. It is not one; it is a **domain**. It holds whenever the composed row body fits `$width`,
+and every measurement behind the "invariant" wording used an **ASCII** operation — which is exactly
+the case that always fits, because ASCII truncates to whole cells and wraps on cell boundaries. Put a
+wide cluster in the operation and 6 of those 10 widths break: with a skin-toned thumb (U+1F44D
+U+1F3FD) or a flag (U+1F1E6 U+1F1F8) and a 3-cell agent name, `render()` returns `$w + 6` at
+w=**20/28/30/40/43/44** (26/34/36/46/49/50 against 24/32/34/44/47/48 due) and `$w + 4` at
+w=58/60/80/98. The cause is `render()`'s `$opBudget = max(5, $width - name - 60)` floor, it is
+**pre-existing** — the identical ten numbers come out of `087a3179`, so it is not a regression of this
+change — and it is now recorded separately as **E64**. `AgentViewPaneGeometryTest` asserts the
+wide-cluster bound rather than sweeping only the ASCII fixture that made the invariant look true.
 
 The overhead is now `AgentViewPane::CHROME_WIDTH` (a public const, 4) and the subtraction is
 `AgentViewPane::contentWidth($outerWidth, $minimum)`. `render()`'s `$width` parameter keeps its
@@ -3348,6 +3367,8 @@ reduced from "the fix" to "defence in depth", which is the right weight for it.
 **Do not treat Phase 9 step 1 (detach the controlling terminal) as blocked on this.** Step 1 REMOVES a
 leak and adds no surface; it should ship regardless of when (C) is scheduled.
 
+---
+
 ### E63 — `ChatTest`'s stranded-payload detector attributes every writer's files to itself
 
 **Found by the round-38 `lsp` implement agent, then verified by the supervisor.** Not a security
@@ -3396,3 +3417,67 @@ that, restrict the diff to files this process could own and state the residual h
 **Supervisor protocol until this is fixed:** a certification run that fails ONLY on
 `ChatTest::tearDownAfterClass` is not a red suite. Re-run `--filter ChatTest` alone to disambiguate
 before drawing any conclusion, and prefer to take floor measurements when no lane is running a suite.
+
+---
+
+### E64 — `AgentViewPane::render()`'s `max(5, …)` operation floor over-runs the pane box on wide clusters
+
+**Recorded 2026-08-21 in the ROUND 38 lane, while making E54's `+4` claim true.** Pre-existing, not a
+regression of that change; measured on both trees.
+
+**What.** `render()` sizes the operation column with
+`$opBudget = max(5, $width - Width::string($name) - 60)`. The **floor of 5** is unconditional, so on a
+narrow pane `leftSection` (dot + name + status badge + operation) plus `rightSection`
+(elapsed + usage) can add up to **more than `$width`** — `Width::padRight()` is a no-op once the
+section already meets its target, and nothing else trims. `Style::width()` then wraps the over-long
+body, and if the wrap falls inside a **2-cell cluster** the wrapped line comes back one cell wider
+than the box.
+
+Result: `render(..., $w, ...)` returns rows of **`$w + 6`** instead of the `$w + CHROME_WIDTH` = `$w + 4`
+that E54 pinned. Measured with a 3-cell agent name (`abc`), an operation of three skin-toned thumbs
+(`U+1F44D U+1F3FD`) or three flags (`U+1F1E6 U+1F1F8`), across the ten widths E54 was stated over:
+
+| content width `$w` | due (`$w + 4`) | measured widest row |
+|---|---|---|
+| 20 | 24 | **26** |
+| 28 | 32 | **34** |
+| 30 | 34 | **36** |
+| 40 | 44 | **46** |
+| 43 | 47 | **49** |
+| 44 | 48 | **50** |
+| 58 | 62 | 62 |
+| 60 | 64 | 64 |
+| 80 | 84 | 84 |
+| 98 | 102 | 102 |
+
+Six of ten. The excess is **exactly +2** (one wide cluster) in every case, and over a 20→140 sweep of
+121 content widths it is gone from **46** upward — above that the floor stops binding and the body
+fits. An **ASCII** operation never reproduces it: it truncates to whole cells and wraps on cell
+boundaries, so it comes back `+4` at every one of the 121 widths. That is why E54's original
+"invariant" wording survived review — the fixture was ASCII-shaped like the property.
+
+The sufficient condition is stated positively and holds without exception in that sweep: **if
+`Width::string($leftSection) + Width::string($rightSection) <= $width`, the row is exactly
+`$width + CHROME_WIDTH`.** Over 2,904 (width × payload × name) combinations there were 0 cases where
+the body fit and the row still over-ran.
+
+**Where.** `sugar-crush/src/Tui/AgentViewPane.php` — the `$opBudget = max(5, …)` assignment in
+`render()`, and the `Width::padRight($leftSection, $width - Width::string($rightSection) - 1)` that
+cannot claw the excess back. Identical at `087a3179`: the same ten numbers come out of that tree's
+`AgentViewPane`, so this predates `CHROME_WIDTH`/`contentWidth()` and is untouched by them.
+
+**Severity.** Low, and currently **masked**. Every agent-view frame goes out through
+`clipWidth(clipTail(...), $cols)` in `sugar-crush/src/Tui/Renderer.php` (both `$frame` assignments,
+`:490` and `:561`), which trims the two cells before the diff renderer — which paints one line per
+terminal row — ever sees them. So it is not visible today. It is also the second backstop-masked
+width bug found in this one class, which is the argument for recording it rather than shrugging: the
+backstop is what would hide the next arithmetic drift too.
+
+**Step.** Do **not** simply raise or drop the floor — the floor exists so a narrow pane still shows
+*some* operation text, and changing it is a visible-output change with its own golden. The shape of a
+real fix is to make the row a **budget** rather than a hope: compute `leftSection` against the space
+actually left after `rightSection` and truncate it there, so `render()` never hands `Style::width()` a
+body longer than `$width`, and the wrap that produces the over-run never happens. That wants its own
+before/after capture of `renderAgentView()` at 20/28/30/40/43/44 columns, since it changes what those
+narrow panes print. `AgentViewPaneGeometryTest::testAWideClusterOperationOverrunsTheChromeGeometryAtTheOperationFloor()`
+pins the current numbers, so the change will be visible rather than silent.
