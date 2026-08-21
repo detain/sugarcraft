@@ -1925,17 +1925,24 @@ final class Chat implements Model
         //              way of building one:
         //              KeyHelpTest::testASupersededAskNeverPutsUpAPrompt().
         //   CURRENT -- every test that reaches a stamped ask AT ALL, whoever built
-        //              it. Open-ended by construction, and it grew by three this
-        //              round; today it is the three KeyHelpTest tests that build
-        //              their prompt through a PreToolUse hook rather than by hand
-        //              (KeyHelpTest::promptRaisedByTheRealGate()):
-        //              testWithAPromptUpNeitherKeyReachesItsOverlay(),
-        //              testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses()
-        //              and testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused().
-        //              The single member the previous round listed,
-        //              testThePromptAndTheReferenceCannotBothBeRaisedByRealInput(),
-        //              was SPLIT into the first two of those and no longer reaches
-        //              a stamped ask itself -- it now stops at the in-flight half.
+        //              it. Open-ended by construction, and RE-ENUMERATED by running
+        //              row 3 and reading the reds back rather than by reasoning about
+        //              who ought to be in it, because the previous revision's list of
+        //              "the three KeyHelpTest tests" was short by one BEFORE this
+        //              round touched anything (testEachQueuedAskArmsAfresh reaches a
+        //              stamped ask through answerPermission()'s resume path and was
+        //              not listed). Measured, row 3 reds these FIVE:
+        //              KeyHelpTest::testWithAPromptUpNeitherKeyReachesItsOverlay(),
+        //              KeyHelpTest::testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(),
+        //              KeyHelpTest::testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused(),
+        //              KeyHelpTest::testEachQueuedAskArmsAfresh() and
+        //              MouseModalGuardTest::testAClickUnderALivePromptIsRefusedExactlyAsTheKeyIs(),
+        //              the last of which is the first member from outside KeyHelpTest
+        //              -- it drives a real PreToolUse ask hook to put a modal up for
+        //              the click path to be refused by.
+        //              testThePromptAndTheReferenceCannotBothBeRaisedByRealInput() is
+        //              NOT a member: it was split into the first two above and now
+        //              stops at the in-flight half.
         //
         // Rows 1 and 2 are bounded, rows 3 and 4 are not, and that difference is the
         // whole content of the table. Row 2 is the honest bound on OBSERVABILITY:
@@ -1945,11 +1952,12 @@ final class Chat implements Model
         // ChatTest column is the loud one: the stamped-and-current path is what
         // ChatTest exercises.
         //
-        // Measured with this comment: RendererTest and Commands/KeyBindingDriftTest
-        // contribute ZERO behavioural reds to all four rows, even though they are
-        // two thirds of the "trio" by file count -- their asks are UNSTAMPED, and
-        // none of these four mutations touches an unstamped ask. The trio is the
-        // domain the rows were measured over; it is not the set of files that react.
+        // Measured with this comment: RendererTest, Commands/KeyBindingDriftTest and
+        // Chat/InFlightInputQueueTest contribute ZERO behavioural reds to all four
+        // rows, even though they are three fifths of the domain by file count --
+        // their asks are UNSTAMPED, and none of these four mutations touches an
+        // unstamped ask. The domain is what the rows were measured over; it is not
+        // the set of files that react.
         //
         // Every row ALSO reds
         // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(), because
@@ -1966,13 +1974,16 @@ final class Chat implements Model
         // 6 warnings -- so the trio is NOT silent about it, and the rows above are
         // not covering it either. It is the ONE figure in this comment kept as a
         // count, because it is the mis-site tell described below and a tell needs a
-        // magnitude. Re-measured with this comment: 20 raw / 19 behavioural,
-        // composed of 5 in RendererTest (the permission-modal render tests), 12 in
-        // KeyHelpTest (including the pin), and 3 KeyBindingDriftTest data sets
-        // (permission.once / .always / .deny). It was 17 / 16 with 9 in KeyHelpTest
-        // one round ago; the three tests split out of / added to KeyHelpTest's
-        // real-gate group are the difference, which is the growth this figure's own
-        // caveat below predicts. The EXCLUSION RULE that produces the
+        // magnitude. Re-measured with this comment, over all FIVE files of the
+        // domain: 30 raw / 29 behavioural, composed of 7 in RendererTest, 17 in
+        // KeyHelpTest (including the pin), 4 KeyBindingDriftTest data sets, 1 in
+        // Chat/InFlightInputQueueTest and 1 in MouseModalGuardTest. The figure this
+        // replaces read "20 raw / 19 behavioural, composed of 5 / 12 / 3"; driven
+        // against `995eb257` with none of this round's files present it came out at
+        // 29 raw over the four files that then existed, so it had gone stale on its
+        // own before the fifth file was written -- exactly the growth its own caveat
+        // below predicts, recorded here as a re-measurement rather than as a delta.
+        // The EXCLUSION RULE that produces the
         // second number, stated because the revision before last recorded a total no
         // rule produced ("14 behavioural (16 raw)"): raw MINUS exactly one, the
         // text-reading pin, testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods.
@@ -1997,33 +2008,43 @@ final class Chat implements Model
         // wrong-site figure moved from 1 to 3 this round -- it tracks the same
         // group, not a change in the guard). The tell that does not decay is the
         // magnitude: at the right site `if (true)` reds the whole prompt-dependent
-        // population of the trio (19), at the wrong site only that group (3).
+        // population of the domain (29 behavioural, re-measured above), at the wrong
+        // site only that group -- recorded as 3 by the round that measured it and
+        // NOT re-measured here, so it is the one figure in this paragraph carrying
+        // someone else's date.
         // And the four-site text pin fires at either site, which is the cheapest
         // signal that you edited SOMETHING and must re-read this table.
         //
-        // Domains: "trio" is tests/RendererTest.php +
+        // Domains: "trio" is the historical name for tests/RendererTest.php +
         // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
         // the three files that CONSTRUCTED a PermissionRequestMsg when the rows
-        // below were measured -- asserted, not narrated, and by a token scan for
+        // below were first measured; the set is FIVE today (see the paragraph after
+        // next) -- asserted, not narrated, and by a token scan for
         // `new …PermissionRequestMsg` rather than by the
         // `grep -rl PermissionRequestMsg tests/` this line used to cite, which also
         // matches files that merely mention the class in a comment:
         // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(),
         // whose docblock states what that instrument can and cannot see. PHP 8.3.6.
         //
-        // A FOURTH file now builds one and the name "trio" is kept anyway, because
-        // it names the domain the rows below were measured over and that domain did
-        // not change: W2's tests/Chat/InFlightInputQueueTest.php raises an
-        // UNSTAMPED ask (to reach answerPermission()'s denial path, which is one of
-        // the four places a queued prompt is released), and no row of this table
-        // touches an unstamped ask -- the same reason two of the original three
-        // contribute nothing. Re-measuring is due only when a file joins the set
+        // A FOURTH file joined without costing a re-measurement: W2's
+        // tests/Chat/InFlightInputQueueTest.php raises an UNSTAMPED ask (to reach
+        // answerPermission()'s denial path, which is one of the four places a queued
+        // prompt is released), and no row of this table touches an unstamped ask --
+        // the same reason two of the original three contribute nothing.
+        //
+        // A FIFTH did cost one, and the rows above are the re-measurement.
+        // tests/MouseModalGuardTest.php hand-builds an unstamped ask for most of its
+        // states, but ONE of its tests raises a prompt through a real PreToolUse ask
+        // hook and so reaches a stamped, current one. That is the rule this comment
+        // already stated, applied: re-measuring is due when a file joins the set
         // with a STAMPED ask.
         //
-        // ChatTest is measured separately BECAUSE rows 3 and 4 show the trio's
-        // silence does not cover it -- and note that the trio's reds in all four
-        // rows come from KeyHelpTest ALONE: RendererTest and KeyBindingDriftTest
-        // build UNSTAMPED asks, which no row of this table touches.
+        // ChatTest is measured separately BECAUSE rows 3 and 4 show the domain's
+        // silence does not cover it. Rows 1 and 2 red inside KeyHelpTest alone; rows
+        // 3 and 4 red there AND in MouseModalGuardTest, which is what stopped
+        // "KeyHelpTest ALONE" being true. RendererTest, KeyBindingDriftTest and
+        // InFlightInputQueueTest build UNSTAMPED asks, which no row of this table
+        // touches.
         //
         // So this is not what makes the reference-over-prompt state
         // unreachable, and the sentence claiming it was "the one way that state
@@ -3732,6 +3753,15 @@ final class Chat implements Model
 
         $zoneId = $click->zone->id;
 
+        // The capture guards the keyboard has had all along, now applied to
+        // the click that asks for the same thing. Placed HERE rather than at
+        // the top of this method - see {@see refuseMouseDispatch()} for both
+        // the divergence table and why the tracker has to see the pair first.
+        $refused = $this->refuseMouseDispatch($zoneId);
+        if ($refused !== null) {
+            return $refused;
+        }
+
         $tabPrefix = Renderer::SESSION_TAB_ZONE_PREFIX;
         if (str_starts_with($zoneId, $tabPrefix)) {
             return $this->selectSessionTab(substr($zoneId, strlen($tabPrefix)));
@@ -3761,6 +3791,101 @@ final class Chat implements Model
         }
 
         return [$this, null];
+    }
+
+    /**
+     * Should this click be refused because something on screen is capturing
+     * input, and what does refusing it look like — or null to let it through.
+     *
+     * WHY THIS EXISTS. {@see update()} dispatches a `MouseMsg` above its
+     * `if (!$msg instanceof KeyMsg)` early return, and every capture guard in
+     * that method sits BELOW that return. So all of them — the keybinding
+     * reference, the permission prompt, the palette, the session picker —
+     * were on the keyboard path only, and the mouse answered the same request
+     * the opposite way. Measured at `995eb257`, the commit this is written
+     * against, with a prompt up and idle (`pendingPermission` set,
+     * `inFlight` false — the state {@see update()}'s own `AssistantMsg` arm
+     * produces, argued at length above its `keyHelp` arm):
+     *
+     *   | click on      | did                            | keyboard, same state |
+     *   |---------------|--------------------------------|----------------------|
+     *   | `toolcall:*`  | toggled that tool body         | Ctrl+O: nothing      |
+     *   | `pane:menu`   | opened the palette             | Ctrl+P: nothing      |
+     *   | `pane:agents` | ran `/agents`, +2 history rows | Ctrl+A: nothing      |
+     *   | `tab:<id>`    | switched session, prompt still up | Ctrl+R: nothing   |
+     *
+     * NOT a permission bypass, and the accurate finding is sharper than that
+     * label: no zone that survives the prompt reaches
+     * {@see handlePermissionKey()} or the deferred resolution, so a click can
+     * neither grant, deny nor dismiss it. What it could do is mutate the
+     * transcript, the session and the overlay state underneath a modal that
+     * is advertised as owning the screen.
+     *
+     * WHICH STATES, and why each one:
+     *
+     *   * {@see $keyHelp} and {@see $pendingPermission} are full modals that
+     *     mark no zones of their own, so nothing may dispatch. (`toolcall:`
+     *     zones do not survive the reference — it replaces the transcript —
+     *     but `pane:menu` does, and clicking it opened the palette.)
+     *   * {@see $sessionPicker} marks no zones either: every zone visible
+     *     while it is up belongs to the frame BEHIND it. Same answer.
+     *   * {@see $palette} is the one overlay that owns zones —
+     *     `picker-item:<n>`, which §8 E6 exists to make clickable. Those stay
+     *     live; everything else is background and is refused. The
+     *     `$this->palette !== null` arm inside {@see selectPane()} covered
+     *     exactly one of those ids (`pane:menu`) and is left in place: it is
+     *     the more specific statement of the same rule, and it also answers a
+     *     stale zone id arriving from a frame this method never scanned.
+     *   * `inFlight` is deliberately ABSENT here. Mid-turn is not a capture
+     *     state on the keyboard either — {@see update()}'s mid-turn block
+     *     refuses three named keys and lets everything else run — so the two
+     *     mouse gestures that reach a turn-starting or session-changing arm
+     *     are refused VISIBLY at their own dispatch sites, the way the
+     *     keyboard refuses them: see {@see selectSessionTab()} and
+     *     {@see selectPane()}.
+     *
+     * THE WHEEL IS NOT ROUTED THROUGH HERE, by decision and by measurement.
+     * Reading the transcript while deciding how to answer a prompt is
+     * legitimate, and refusing it would create a NEW divergence rather than
+     * close one: `PageUp`/`PageDown` ({@see update()}'s arm, above the
+     * prompt/palette/picker guards and below the reference's) already scroll
+     * in every one of these states, and {@see scrollTranscript()} already
+     * redirects the wheel onto the reference when that is what is up. Driven
+     * under a live prompt at `995eb257`: a wheel notch moved `scrollOffset`
+     * 0 → 3 ({@see SCROLL_WHEEL_LINES}) and `PageUp` moved it 0 → 1 (a page
+     * clamped by {@see Renderer::maxScrollOffset()}). Different distances,
+     * same answer — which is the property this method is about.
+     *
+     * WHY AT THE DISPATCH POINT AND NOT AT THE TOP OF {@see handleMouse()}.
+     * Two reasons, one of them measured. The zone id is what decides the
+     * palette case, and it does not exist until the tracker has resolved a
+     * pair — a guard above that could only be all-or-nothing and would take
+     * §8 E6's clickable palette rows down with it. And the press/release
+     * tracker is STATIC state that outlives any modal: driven at `995eb257`,
+     * a press with no matching release still pairs with an arbitrarily later
+     * one (press on `pane:menu`, skip the release entirely, release again →
+     * the palette opens). A guard that returned before {@see clickTracker()}
+     * saw the release would leave that press armed for the whole life of the
+     * prompt and fire it the moment the user answered. Refusing after the
+     * pair resolves consumes the gesture and throws it away.
+     *
+     * @param string $zoneId the id of the zone the completed click landed in
+     *
+     * @return array{0:self,1:?\Closure}|null null when the click may proceed
+     */
+    private function refuseMouseDispatch(string $zoneId): ?array
+    {
+        if ($this->keyHelp !== null || $this->pendingPermission !== null || $this->sessionPicker !== null) {
+            return [$this, null];
+        }
+
+        if ($this->palette !== null
+            && !str_starts_with($zoneId, Renderer::PALETTE_ITEM_ZONE_PREFIX)
+        ) {
+            return [$this, null];
+        }
+
+        return null;
     }
 
     /**
@@ -3920,6 +4045,20 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // Mid-turn a tab click is the request Ctrl+Tab makes, and
+        // {@see refuseWhileInFlight()} answers that one with a visible notice
+        // instead of a switch — so this answers it with the SAME notice, by
+        // the same method and the same label, rather than switching sessions
+        // out from under a reply that is still streaming into this one.
+        //
+        // Checked AFTER the two validity gates above, not before: a click on
+        // the tab that is already current, or on an id no store knows, was
+        // going to be a no-op either way, and announcing a refusal of nothing
+        // would be noise the keyboard never makes.
+        if ($this->inFlight) {
+            return $this->refuseInFlightAction('Switch session');
+        }
+
         return [$this->withCurrentSessionId($id), null];
     }
 
@@ -3961,7 +4100,18 @@ final class Chat implements Model
             Pane::Menu => $this->palette !== null
                 ? [$this, null]
                 : [$this->mutate(['palette' => PaletteState::root()]), null],
-            Pane::Agents => $this->handleAgentsCommand('/agents'),
+            // Mid-turn, refused rather than run: the arm below appends the
+            // echo and the listing to the very history the turn is about to
+            // write to, which is what the keyboard's own Ctrl+A refusal
+            // exists to prevent. Through {@see refuseInFlightAction()} and
+            // not the {@see refuseInFlightCommand()} that Ctrl+A uses,
+            // because that notice ends "your draft is still in the box:
+            // press Enter again" — true of a typed command, and a sentence
+            // about a draft that a click never touched would be a claim
+            // attached to the wrong thing.
+            Pane::Agents => $this->inFlight
+                ? $this->refuseInFlightAction('/agents')
+                : $this->handleAgentsCommand('/agents'),
             default => [$this, null],
         };
     }

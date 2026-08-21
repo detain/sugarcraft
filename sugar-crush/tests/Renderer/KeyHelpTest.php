@@ -1689,11 +1689,16 @@ final class KeyHelpTest extends TestCase
      * split out so its assertions can be the REPORTED failure of a mutation — see
      * that method's docblock for the measurement that forced the split.
      *
-     * The zone sweep is the load-bearing half here: the reference+palette pair is
-     * reachable precisely because the status bar keeps its `pane:menu` zone under
-     * the overlay ({@see testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()}),
-     * so "no zones at all" is what distinguishes this pair from that one rather
-     * than a detail.
+     * The zone sweep is the load-bearing half here, and it says something
+     * different now than when it was written. The reference+palette pair used to
+     * be reachable precisely because the status bar keeps its `pane:menu` zone
+     * under the overlay, and the sweep distinguished the two pairs by the ZONE:
+     * that frame had one to click, this frame has none. The click is refused at
+     * both now ({@see Chat::refuseMouseDispatch()},
+     * {@see testAClickOnTheMenuHintIsRefusedWhileTheReferenceIsUp()}), so what
+     * this sweep still pins is the narrower, renderer-side fact it always
+     * measured: the prompt frame marks nothing clickable at all, so this pair is
+     * out of the mouse's reach twice over.
      */
     public function testWithAPromptUpNeitherKeyReachesItsOverlay(): void
     {
@@ -1722,8 +1727,8 @@ final class KeyHelpTest extends TestCase
         $this->assertSame(
             [],
             array_keys($zones),
-            'and the prompt frame marks no click zones at all, so the mouse route that reaches '
-            . 'reference+palette has nothing to click here',
+            'and the prompt frame marks no click zones at all, so the click path has nothing to '
+            . 'offer here even before Chat::refuseMouseDispatch() refuses it',
         );
     }
 
@@ -2940,12 +2945,17 @@ final class KeyHelpTest extends TestCase
      * The table's first column is "the files that construct a
      * `PermissionRequestMsg` at all" — three when this test was written, FOUR since
      * W2 added `Chat/InFlightInputQueueTest.php`, which builds one to drive the
-     * permission-DENIAL drain point. A further file building one puts a further
-     * file's tests inside the measured universe, so every row of the table becomes
-     * a figure taken over the wrong domain. (The W2 addition changed no row: like
-     * `RendererTest` and `KeyBindingDriftTest` its ask is UNSTAMPED, and no
-     * mutation in that table touches an unstamped ask — which is why the count
-     * moving from three to four is a domain edit and not a re-measurement.) Stated in prose it had already gone
+     * permission-DENIAL drain point, and FIVE since `MouseModalGuardTest.php` began
+     * building one to put a modal up for the click path to be refused by. A further
+     * file building one puts a further file's tests inside the measured universe, so
+     * every row of the table becomes a figure taken over the wrong domain. (The W2
+     * addition changed no row: like `RendererTest` and `KeyBindingDriftTest` its ask
+     * is UNSTAMPED, and no mutation in that table touches an unstamped ask — which
+     * is why the count moving from three to four is a domain edit and not a
+     * re-measurement. The FIFTH is not free in the same way: its hand-built ask is
+     * unstamped too, but the same file ALSO raises one through a real `PreToolUse`
+     * ask hook, so it joins the CURRENT class and adds a red to rows 3 and 4 —
+     * re-measured where those rows live.) Stated in prose it had already gone
      * stale once as a test COUNT — 265 written where the trio then held 268, in the
      * same commit that added three tests to it (both figures historical, round 4's
      * trio) — and the file set is the part of that claim a test can hold, so here it
@@ -3013,11 +3023,12 @@ final class KeyHelpTest extends TestCase
             [
                 'Chat/InFlightInputQueueTest.php',
                 'Commands/KeyBindingDriftTest.php',
+                'MouseModalGuardTest.php',
                 'Renderer/KeyHelpTest.php',
                 'RendererTest.php',
             ],
             $found,
-            "the set column in Chat::requestPermission()'s mutation table is exactly these files; a fifth "
+            "the set column in Chat::requestPermission()'s mutation table is exactly these files; a sixth "
             . 'one CONSTRUCTING a PermissionRequestMsg widens the universe every row of that table was '
             . 'measured over. Merely naming the class in a comment does not, which is the half the grep '
             . 'this replaces got wrong',
@@ -3384,17 +3395,26 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The reference and the palette CAN both be open, so the chain's order
-     * matters for this pair too — it is not the unreachable case.
+     * The reference and the palette can no longer BOTH be raised, and this is
+     * what closed the one route that could raise them.
      *
-     * The route is the mouse: the box is bounded off the last two rows, so the
-     * status bar's `pane:` click zone stays live underneath it, and clicking
-     * "Ctrl+P menu" opens the palette with `keyHelp` untouched. The reference
-     * then keeps both the slot and the keyboard, which is the invariant
-     * {@see Renderer::renderView()}'s chain exists to hold; before the chain was
-     * ordered by routing, the palette painted while the reference ate the keys.
+     * The route was the mouse. The box is bounded off the last two rows, so
+     * the status bar's `pane:menu` click zone stays live underneath it —
+     * asserted below, because the refusal is only interesting if the zone is
+     * still there to click. Driven at `995eb257`, before
+     * {@see Chat::refuseMouseDispatch()} existed, this exact click opened the
+     * palette with `keyHelp` left at 0, while Ctrl+P in the identical state
+     * did nothing at all: two devices, one request, opposite answers. Both
+     * halves are asserted here, so the property under test is the AGREEMENT
+     * rather than either answer on its own.
+     *
+     * The pair's paint order therefore moved to
+     * {@see testTheOverlayChainPaintsInRoutingOrderRightDownTheChain()}, which
+     * grafts all four overlays — the treatment the other pairs already get,
+     * and the reason that test's `graft()` helper exists. Losing the front
+     * door is not losing the guarantee.
      */
-    public function testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference(): void
+    public function testAClickOnTheMenuHintIsRefusedWhileTheReferenceIsUp(): void
     {
         [$open] = $this->chat()->update(new KeyMsg(KeyType::Char, '?'));
         $open->view();
@@ -3414,28 +3434,36 @@ final class KeyHelpTest extends TestCase
         [$clicked] = $open->update(new MouseClickMsg($col, $row, MouseButton::Left, MouseAction::Press));
         [$clicked] = $clicked->update(new MouseReleaseMsg($col, $row, MouseButton::Left, MouseAction::Release));
 
-        $this->assertNotNull($clicked->palette(), 'the click opened the palette');
-        $this->assertSame(0, $clicked->keyHelp(), 'and left the reference open');
+        $this->assertNull($clicked->palette(), 'the click must not open the palette under the reference');
+        $this->assertSame(0, $clicked->keyHelp(), 'and must leave the reference exactly as it was');
+
+        // The keyboard half of the same request, in the same state.
+        [$typed] = $open->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($typed->palette(), 'Ctrl+P was already refused here — the click now agrees');
 
         $frame = $this->body($clicked);
         $this->assertStringContainsString(self::TITLE, $frame, 'the reference keeps the slot');
         // renderPalette()'s query line is the palette's own signature.
-        $this->assertStringNotContainsString('🔍', $frame, 'and the palette does not paint under it');
+        $this->assertStringNotContainsString('🔍', $frame, 'and no palette was raised to paint under it');
     }
 
     /**
      * The whole overlay chain in {@see Renderer::renderView()}, walked end to
      * end: reference → permission prompt → palette → session picker.
      *
-     * Four links make SIX pairs. Exactly ONE of them is reachable through the
-     * front door — reference+palette, by the mouse route
-     * ({@see testAMouseOpenedPaletteDoesNotTakeTheSlotFromTheReference()}) — and
-     * the other five are fixed precedence between modals that no sequence of real
-     * input puts up together, which `Chat::update()` states outright of
-     * palette+picker ("even though they cannot both be open"). Dormant is not the
-     * same as unpinned: a documented order nothing reads back is an order that
-     * gets reshuffled by the next person to touch the `if` chain, and swapping the
-     * palette and the picker used to change nothing anywhere in this suite.
+     * Four links make SIX pairs, and NONE of them is reachable through the front
+     * door any more. Five never were — fixed precedence between modals that no
+     * sequence of real input puts up together, which `Chat::update()` states
+     * outright of palette+picker ("even though they cannot both be open"). The
+     * sixth, reference+palette, was reachable by the mouse until the click path
+     * was put under the same capture guards the keyboard has
+     * ({@see Chat::refuseMouseDispatch()}); the click that used to raise it is
+     * now pinned as a refusal by
+     * {@see testAClickOnTheMenuHintIsRefusedWhileTheReferenceIsUp()}. Dormant is
+     * not the same as unpinned: a documented order nothing reads back is an order
+     * that gets reshuffled by the next person to touch the `if` chain, and
+     * swapping the palette and the picker used to change nothing anywhere in this
+     * suite.
      *
      * reference+prompt is one of the five, and a previous revision counted it
      * among the reachable ones on the strength of
