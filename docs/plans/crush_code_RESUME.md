@@ -90,6 +90,38 @@ report if it concludes otherwise.
 | `3837b49f` | 34 | **headless permission approver** — `withPermissionApprover()` finally has a `src/` caller | 8393 / 93728 / 1 / rc 0 |
 | `8de875d3` | 34 | **P3.4 `Table` + finding #5 (16-field carry) + finding #8 (fourth trust grant)** | **8464 / 94225 / 1 / rc 0** |
 
+### 🔴 ROUND 35's SECURITY LESSON — the gate went on the VALUES and not on the WALK
+
+`P8.8`'s implementer did unprompted security work and did it well: `autoload.psr-4` values are
+repository content, so it gated every source root through `ContainedPath::within()`. Its reviewer threw
+**24 attacks** at that gate — `../../..`, `/etc`, `.`, `""`, null byte, backslash separators,
+`a/../a/../a/../../outside`, symlink-then-`..`, symlink chains, symlinked source roots, psr-4 as
+string/list/array, manifest as a JSON array, invalid JSON, `chmod 000`, root-is-a-symlink,
+trailing-slash root — **nothing escaped and nothing threw.**
+
+**And the sub-package WALK that finds the manifests in the first place had no gate at all.**
+`isScannableDir()` uses `is_dir()` and `readManifest()` uses `is_file()`/`file_get_contents()`, all of
+which follow symlinks. A directory symlink among the root's immediate children — **committed to the
+repo, since git stores symlinks as mode `120000` and a clone materialises them** — leads the manifest
+read outside the checkout, and that manifest's `psr-4` prefix and `description` render into **every
+system prompt of the session**. `../` is a fully predictable target and `description` is an unbounded
+attacker-authored string, so this is prompt injection, not merely disclosure.
+
+Three sentences shipped in the same commit asserted it could not happen ("a directory entry cannot
+contain a separator, so it cannot escape"; "nothing here can leave the root"; "no part of the path is
+chosen by model output or by file content"). **The path STRING is caller-supplied; the FILE it
+resolves to is repository-chosen.** That distinction is exactly what `ContainedPath`'s own docblock
+was written about — "THE TENTH WAS ARBITRARY CODE EXECUTION AND ITS INVENTORY ROW WAS GREEN".
+
+**The rule: securing the data a walk RETURNS is not securing the walk. Gate the traversal and the
+values separately, and never let a census row answer "is this path safe?" with a sentence about the
+string rather than about what it resolves to.**
+
+⚠️ **There is a THIRD hand-maintained containment inventory** the round-34/35 briefs did not know
+about: `src/Support/ContainedPath.php:97` ("TWENTY-SEVEN call sites in ELEVEN files"), which is 5 sites
+and 3 files behind the two that ARE derived-and-asserted. A commit claiming "both censuses carry its
+rows" was true of the two it named and silent about this one.
+
 ### 🔴 A NEW `src/` FILE MOVES **THREE** CENSUSES, NOT TWO — put this in every implement brief
 
 Round 35's `sglang` lane reported this as a premise my brief got wrong, and it is the kind of thing
