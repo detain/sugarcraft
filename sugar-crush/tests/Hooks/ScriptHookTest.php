@@ -1015,6 +1015,321 @@ final class ScriptHookTest extends TestCase
         }
     }
 
+    // =========================================================================
+    // Payload transport — E65. The tool input reaches the child through a FILE
+    // as well as the environment, because one env entry is capped by the kernel
+    // =========================================================================
+
+    /**
+     * THE REGRESSION THIS PINS IS A DENY, AND IT IS THE ONE NOBODY READS AS A
+     * SIZE PROBLEM.
+     *
+     * `execute()` used to hand the tool input to the child through
+     * `CRUSH_TOOL_INPUT` and nothing else. Linux caps ONE environment entry at
+     * `MAX_ARG_STRLEN` (131,072 bytes for `NAME=VALUE\0` together), so past that
+     * `proc_open()` fails with `E2BIG`, the hook never runs, and
+     * {@see ScriptHook::execute()}'s fail-closed branch denies the call.
+     * MEASURED at afe3c26b, against a hook whose whole script is `exit(0)`:
+     * 131,054 bytes of value allowed, 131,055 denied, and 200,000 and 1,000,000
+     * denied identically with `Hook audit could not be executed`.
+     *
+     * That is fail-CLOSED and so not a hole, but it is a daily-driver blocker:
+     * with any script hook installed, a `Write` of a 128 KB file — or a `Bash`
+     * heredoc that size — cannot run, and the refusal names neither the size nor
+     * the cause.
+     */
+    public function testAToolInputOverTheEnvironmentCeilingStillRunsTheHook(): void
+    {
+        $hook = new ScriptHook(
+            name: 'oversize_input',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'exit 0',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolInput(
+            json_encode(['body' => str_repeat('A', 200_000)], JSON_THROW_ON_ERROR),
+        ));
+
+        $this->assertTrue(
+            $result->isAllowed(),
+            'a 200 KB tool input denied the call before the hook could say anything: ' . $result->message,
+        );
+    }
+
+    /**
+     * ...and the hook can still SEE it. Running is not enough — a guard that is
+     * handed no arguments allows things it would have denied, so the bytes the
+     * environment cannot carry have to arrive somewhere the hook can read.
+     */
+    public function testAnOversizeToolInputIsReadableFromTheFileTheChildIsPointedAt(): void
+    {
+        $input = json_encode(['body' => str_repeat('A', 200_000)], JSON_THROW_ON_ERROR);
+
+        $hook = new ScriptHook(
+            name: 'oversize_reader',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'wc -c < "$CRUSH_TOOL_INPUT_FILE" | tr -d " \n"',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolInput($input));
+
+        $this->assertTrue($result->isAllowed(), $result->message);
+        $this->assertSame((string) \strlen($input), $result->message);
+    }
+
+    /**
+     * A tool input that FITS is still handed over in `CRUSH_TOOL_INPUT`
+     * verbatim. Every hook anyone has already written reads that variable —
+     * `docs/HOOKS.md` documents it — so the file is an ADDITION, and a fix that
+     * moved the payload wholesale would be a silent breaking change to a public
+     * contract for the 99% of calls that never came near the ceiling.
+     */
+    public function testAToolInputThatFitsIsStillPassedInTheEnvironmentVerbatim(): void
+    {
+        $hook = new ScriptHook(
+            name: 'env_reader',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf "%s" "$CRUSH_TOOL_INPUT"',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolInput('{"file_path":"/etc/hosts"}'));
+
+        $this->assertSame('{"file_path":"/etc/hosts"}', $result->message);
+    }
+
+    /**
+     * What an OVERSIZE `CRUSH_TOOL_INPUT` carries instead, and why it is not
+     * the empty string and not a prefix of the JSON.
+     *
+     * A prefix is the dangerous one: truncated JSON is not smaller JSON, and a
+     * hook that decodes it leniently judges a call that does not exist. Empty
+     * is merely indistinguishable from "this event has no input". So the value
+     * is a marker that cannot parse as JSON and says, in the value itself, how
+     * many bytes there are and which variable holds them.
+     */
+    public function testAnOversizeToolInputLeavesANonJsonMarkerInTheEnvironment(): void
+    {
+        $input = json_encode(['body' => str_repeat('A', 200_000)], JSON_THROW_ON_ERROR);
+
+        $hook = new ScriptHook(
+            name: 'marker_reader',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf "%s" "$CRUSH_TOOL_INPUT"',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolInput($input));
+
+        $this->assertNull(json_decode($result->message, true), 'the marker decoded as JSON');
+        $this->assertStringContainsString((string) \strlen($input), $result->message);
+        $this->assertStringContainsString('CRUSH_TOOL_INPUT_FILE', $result->message);
+    }
+
+    /**
+     * `CRUSH_TOOL_OUTPUT` is the SAME env entry on the SAME line and it has the
+     * same kernel ceiling — measured at afe3c26b, a 200,000-byte tool output
+     * denied the PostToolUse chain exactly as an oversize input denied the pre
+     * chain. A fix that bounded only the input would have left the identical
+     * defect one line down, which is the recurring defect of this audit.
+     *
+     * A tool's own `maxOutputBytes` default is 65,536
+     * ({@see \SugarCraft\Crush\Tools\Concerns\TruncatesOutput}), so this is
+     * reachable only from a tool constructed with a larger cap or none — which
+     * is a constructor argument, not an invariant.
+     */
+    public function testAnOversizeToolOutputTakesTheSameRouteAsTheInput(): void
+    {
+        $output = str_repeat('C', 200_000);
+
+        $hook = new ScriptHook(
+            name: 'post_reader',
+            event: HookEvent::PostToolUse,
+            matcher: '.*',
+            command: 'wc -c < "$CRUSH_TOOL_OUTPUT_FILE" | tr -d " \n"',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolOutput($output));
+
+        $this->assertTrue($result->isAllowed(), $result->message);
+        $this->assertSame((string) \strlen($output), $result->message);
+    }
+
+    /**
+     * The payload files are the hook's, not the session's: they hold whatever
+     * the model asked to write, which is the one place a secret is most likely
+     * to be, and leaving them behind turns every hook run into a copy of the
+     * tool call in the shared temp directory.
+     */
+    public function testThePayloadFilesAreRemovedOnceTheHookHasRun(): void
+    {
+        $hook = new ScriptHook(
+            name: 'path_reporter',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf "%s" "$CRUSH_TOOL_INPUT_FILE"',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext());
+
+        $this->assertTrue($result->isAllowed(), $result->message);
+        $this->assertNotSame('', $result->message, 'no input file was handed to the hook at all');
+        $this->assertFileDoesNotExist($result->message);
+    }
+
+    // =========================================================================
+    // Non-DENY output bounds — E60. ASK is clipped, MODIFY is refused
+    // =========================================================================
+
+    /**
+     * AN `exit 3` QUESTION IS PROMPT TEXT AND IS NOW CLIPPED LIKE A DENY REASON.
+     *
+     * Measured at afe3c26b through the live path
+     * (`HookManager::preToolUse()` → `HookRegistry::executeHooks()`): a hook
+     * printing 200,000 bytes and exiting 3 produced a 200,000-byte
+     * `HookResult::message`, and it reaches two places from there — the TUI's
+     * permission modal, and {@see \SugarCraft\Crush\Runtime::settleAsk()},
+     * which on a run with NO approver attached interpolates it whole into
+     * `"Permission required and no approver is attached to this run: …"` and
+     * hands that to the model as the tool result.
+     *
+     * The objection the old docblock raised — "clipping it changes what the
+     * human is answering" — is real and is answered rather than ignored: the
+     * clip announces itself, so the human and the model both see that the
+     * question was cut, which is strictly more than a 200 KB modal tells
+     * anybody. What is NOT answered by clipping is a question whose operative
+     * clause is at the end; that is the accepted cost, and it is the same one
+     * the deny path already accepts.
+     */
+    public function testALargeAskQuestionIsClipped(): void
+    {
+        $result = $this->runHookBounded('printf "%0262144d" 0; exit 3');
+
+        $this->assertSame('ask', $result['action']);
+        $this->assertMatchesRegularExpression(
+            '/truncated: 16384 of 262144 bytes shown/',
+            $result['message'],
+            'the drain has to have read all 262144 bytes for the clip to be able to count them',
+        );
+        $this->assertLessThan(20000, $result['length'], 'a 256 KiB question went into the prompt whole');
+    }
+
+    /**
+     * A question that FITS is untouched — the clip must not be a tax on every
+     * hook that explains what it is asking.
+     */
+    public function testAnOrdinaryAskQuestionIsNotClipped(): void
+    {
+        $result = $this->runHookBounded('printf "Allow this write to /etc/hosts?"; exit 3');
+
+        $this->assertSame('ask', $result['action']);
+        $this->assertSame('Allow this write to /etc/hosts?', $result['message']);
+    }
+
+    /**
+     * AN `exit 4` REWRITE IS REFUSED OVER ITS CEILING, NEVER CLIPPED — and the
+     * two are not interchangeable here the way they are for a deny reason.
+     *
+     * `modifiedInput` is not prompt text. It is the ARGUMENT MAP that executes:
+     * {@see \SugarCraft\Crush\Runtime::rewrittenArguments()} and
+     * {@see \SugarCraft\Crush\Chat::applyRewrite()} decode it and run the tool
+     * with it. Truncating it does not produce smaller arguments — it produces
+     * invalid JSON, which {@see HookResult::rewrittenArgs()} reports as null,
+     * and every consumer then falls back to the ORIGINAL arguments. That is
+     * precisely the outcome {@see ScriptHook::modifyOrDeny()} exists to
+     * prevent: a hook that meant to replace dangerous arguments having the
+     * untouched originals run in its place.
+     *
+     * So the assertion is on BOTH halves: the call is denied, and the result
+     * carries no rewrite at all.
+     */
+    public function testARewriteOverTheCeilingIsRefusedAndCarriesNoTruncatedArguments(): void
+    {
+        $hook = new ScriptHook(
+            name: 'inflating_rewriter',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf \'{"command":"%0200000d"}\' 0; exit 4',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolInput('{"command":"ls"}'));
+
+        $this->assertTrue($result->isDenied(), 'a 200 KB rewrite of a 16-byte call was accepted');
+        $this->assertNull($result->modifiedInput, 'a refused rewrite still carried arguments');
+        $this->assertStringContainsString('200014', $result->message, 'the refusal does not name the size');
+    }
+
+    /**
+     * ...and the ceiling is DERIVED, not invented: a rewrite may be as large as
+     * the arguments it replaces, or 16,384 bytes, whichever is larger.
+     *
+     * A flat 16 KiB cap would have broken the legitimate case outright — a
+     * sanitiser that changes the `file_path` of a 300 KB `Write` and leaves the
+     * body alone has to emit the body back, so its rewrite is necessarily about
+     * the size of the call it replaces. Bounding it by that size instead stops
+     * a hook turning a small call into an enormous one while leaving the large
+     * call the hook was written for alone; and because the bound tracks the
+     * input, the re-scan in {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()}
+     * cannot ratchet it upward across passes.
+     *
+     * This test is also the one that would still be red if only E60 had been
+     * fixed: 300 KB of tool input cannot reach a child through the environment
+     * at all.
+     */
+    public function testARewriteNoLargerThanTheCallItReplacesIsAccepted(): void
+    {
+        $original = json_encode(['body' => str_repeat('A', 300_000)], JSON_THROW_ON_ERROR);
+
+        $hook = new ScriptHook(
+            name: 'sanitising_rewriter',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf \'{"body":"%0299000d"}\' 0; exit 4',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolInput($original));
+
+        $this->assertTrue($result->isModified(), 'a same-size rewrite was refused: ' . $result->message);
+
+        // The WHOLE rewrite survived — asserted through the decode rather than
+        // on a byte count written out here, since a hand-copied length next to
+        // a `printf` width is the exact class of stale figure this audit hunts.
+        $rewritten = $result->rewrittenArgs();
+        $this->assertIsArray($rewritten);
+        $this->assertSame(299_000, \strlen((string) ($rewritten['body'] ?? '')));
+    }
+
+    /**
+     * An ordinary small rewrite is unaffected — the floor is what keeps the
+     * common case (a hook rewriting a two-line `Bash` call) from depending on
+     * how long the original happened to be.
+     */
+    public function testAnOrdinarySmallRewriteIsAccepted(): void
+    {
+        $hook = new ScriptHook(
+            name: 'small_rewriter',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf \'{"command":"ls -l --safe"}\'; exit 4',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext()->withToolInput('{"command":"ls"}'));
+
+        $this->assertTrue($result->isModified(), $result->message);
+        $this->assertSame('{"command":"ls -l --safe"}', $result->modifiedInput);
+    }
+
     private function createContext(string $projectRoot = '/tmp'): HookContext
     {
         return new HookContext(

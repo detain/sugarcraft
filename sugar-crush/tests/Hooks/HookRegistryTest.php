@@ -1784,6 +1784,55 @@ final class HookRegistryTest extends TestCase
         $this->assertTrue($result->permitsExecution(), 'an unbounded chain still runs');
     }
 
+    // =========================================================================
+    // E60 x E65 — the re-scan carries a rewrite back through the SAME transport
+    // =========================================================================
+
+    /**
+     * THE TWO FINDINGS MEET HERE, WHICH IS WHY THEY WERE FIXED TOGETHER.
+     *
+     * {@see HookRegistry::executeHooks()} feeds an accepted rewrite back as the
+     * NEXT pass's `toolInput` — so a rewrite has to survive the payload
+     * transport a second time, as input. While that transport was a single
+     * environment entry, a rewrite could never exceed `MAX_ARG_STRLEN`
+     * (131,072 bytes for `NAME=VALUE\0`) no matter what the hook printed: pass 2
+     * died with `E2BIG` and the chain denied. MEASURED at afe3c26b through this
+     * exact path — `ScriptHook::execute()` called DIRECTLY returned a
+     * 200,014-byte rewrite, and the same hook through `executeHooks()` returned
+     * `deny  "Hook audit could not be executed"`.
+     *
+     * That is why "bound the rewrite" and "fix the transport" could not be two
+     * changes. A rewrite ceiling under 128 KiB would have made the E2BIG path
+     * unreachable from this direction and the transport fix would have arrived
+     * against a premise that was no longer true; fixing only the transport
+     * would have lifted a de-facto 128 KiB bound off `modifiedInput` — which is
+     * not prompt text but THE ARGUMENTS THAT EXECUTE — with nothing put back.
+     *
+     * So this pins the combined behaviour: a large call is rewritten, the
+     * rewrite is re-scanned at its full size, and the chain settles on it.
+     */
+    public function testAChainReScansARewriteTooLargeForOneEnvironmentEntry(): void
+    {
+        $original = json_encode(['body' => str_repeat('A', 250_000)], JSON_THROW_ON_ERROR);
+
+        $this->registry->register(new \SugarCraft\Crush\Hooks\ScriptHook(
+            name: 'bulk-rewriter',
+            event: HookEvent::PreToolUse,
+            matcher: '^Bash$',
+            command: 'printf \'{"body":"%0200000d"}\' 0; exit 4',
+            description: '',
+            timeoutSeconds: 30.0,
+        ));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash', $original));
+
+        $this->assertTrue($result->isModified(), 'the chain refused a large rewrite: ' . $result->message);
+
+        $rewritten = $result->rewrittenArgs();
+        $this->assertIsArray($rewritten);
+        $this->assertSame(200_000, \strlen((string) ($rewritten['body'] ?? '')));
+    }
+
     /** A ScriptHook that will not finish inside the budget it is given. */
     private function hangingScriptHook(
         string $name,

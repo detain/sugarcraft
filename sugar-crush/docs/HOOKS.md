@@ -184,15 +184,43 @@ sequential interleave.
 
 `src/Hooks/ScriptHook.php`:
 
-`ScriptHook::execute()` resolves the exit code with a four-arm `match` (line
-181): `0`, `3`, `4`, and `default`.
+`ScriptHook::execute()` resolves the exit code with a four-arm `match`: `0`,
+`3`, `4`, and `default`. (No line number here on purpose — the one that used to
+be printed, `line 181`, had drifted by more than a hundred lines by the time
+anybody checked it.)
 
 | Exit | Verdict | stdout means |
 |---|---|---|
-| `0` | **allow** | the result message |
-| `3` | **ask** | the question put to the user |
-| `4` | **modify** | a JSON **object** replacing the tool's arguments |
-| `1`, `2`, or **any** other non-zero | **deny** | — (stderr is the reason; stdout is discarded) |
+| `0` | **allow** | the result message — *on `ScriptHook` only; see below* |
+| `3` | **ask** | the question put to the user, clipped at 16 KiB |
+| `4` | **modify** | a JSON **object** replacing the tool's arguments, **refused** over its ceiling rather than clipped |
+| `1`, `2`, or **any** other non-zero | **deny** | — (stderr is the reason, clipped at 16 KiB; stdout is discarded) |
+
+**"stdout becomes the result message" is true of `ScriptHook` and false of the
+live path, for exit 0.** `HookRegistry::executeHooks()` ends
+`return $modified ?? $inertRewrite ?? HookResult::allow();`, rebuilding a
+permitting verdict with an **empty** message, and both live gates interpolate
+`$hookResult->message` only into `"Hook denied: …"`. Measured: a hook printing
+200,000 bytes and exiting 0 yields a 0-byte message at
+`HookManager::preToolUse()`. An exit-0 hook's stdout is for *your* debugging, not
+for the model — if you want the model to read something, deny or ask.
+
+**How much a hook may say, per exit code.** Measured through
+`HookManager::preToolUse()` with a 200,000-byte payload:
+
+| Exit | What is bounded | Bound | Over the bound |
+|---|---|---|---|
+| `0` | nothing reaches the model | — | — |
+| `3` | the question | 16,384 bytes | clipped, with a marker naming both figures |
+| `4` | the rewrite (`modifiedInput`) | the larger of 16,384 bytes and the byte length of the arguments it replaces | **denied**, naming the size and the ceiling |
+| `1`/`2`/other | the deny reason | 16,384 bytes | clipped, with a marker |
+
+A rewrite is **refused, never truncated**, and the two are not
+interchangeable: a truncated rewrite is invalid JSON, `rewrittenArgs()` reports
+that as null, and every consumer then runs the **original** arguments — the one
+outcome a rewriting hook definitely did not ask for. The ceiling tracks the call
+because a sanitiser that edits the `file_path` of a 300 KB `Write` has to print
+the body back; a flat cap would break that outright.
 
 **Do not read `1` and `2` as two different denials.** They land on the same
 `default =>` arm and produce the same `HookResult::deny()`. Measured, running one
@@ -240,38 +268,96 @@ Notes that matter in practice:
 ### Environment handed to the script
 
 `ScriptHook::execute()` builds the `$env` array it hands `proc_open()` from
-exactly **six** `CRUSH_*` keys (`ScriptHook.php` lines 143-150), and it
-**replaces** the environment rather than adding to it:
+**eight** `CRUSH_*` keys, and it **replaces** the environment rather than adding
+to it:
 
 ```
-CRUSH_SESSION_ID  CRUSH_TOOL_NAME  CRUSH_TOOL_INPUT
-CRUSH_TOOL_OUTPUT CRUSH_MODEL      CRUSH_PROVIDER
+CRUSH_SESSION_ID       CRUSH_TOOL_NAME   CRUSH_TOOL_INPUT
+CRUSH_TOOL_OUTPUT      CRUSH_MODEL       CRUSH_PROVIDER
+CRUSH_TOOL_INPUT_FILE  CRUSH_TOOL_OUTPUT_FILE
 ```
+
+#### The two `_FILE` variables, and why they exist
+
+**Linux caps one environment entry at 131,072 bytes** (`MAX_ARG_STRLEN`, for
+`NAME=VALUE\0` together) and fails the whole `execve()` with `E2BIG` past that.
+While `CRUSH_TOOL_INPUT` was the only route the payload had, that kernel limit
+was a limit on **the tool call**: with any script hook registered, a `Write`
+whose JSON arguments exceeded ~128 KB could not run at all. Measured against a
+hook whose entire script is `exit(0)`: 131,054 bytes of value allowed, 131,055
+denied, 200,000 and 1,000,000 denied identically — with a refusal reading
+`Hook <name> could not be executed`, which names neither the size nor the cause
+and reads as *"your hook is broken"*. `CRUSH_TOOL_OUTPUT` behaved the same.
+
+So the payload now travels **both** ways:
+
+- `CRUSH_TOOL_INPUT_FILE` and `CRUSH_TOOL_OUTPUT_FILE` point at a `0600` temp
+  file holding the **complete** bytes, and are set on every run in which such a
+  file could be created — which is every run short of an unwritable temp
+  directory, and in *that* case an oversize payload is a fail-closed deny rather
+  than a hook that silently sees nothing. The files are deleted as soon as the
+  hook exits: read them, do not stash the path.
+- `CRUSH_TOOL_INPUT` / `CRUSH_TOOL_OUTPUT` are **unchanged whenever the value
+  fits**, which is every call that works today. Nothing already written breaks.
+- When the value does **not** fit, the variable carries a marker instead:
+
+  ```
+  @@CRUSH_PAYLOAD_IN_FILE@@ 200011 bytes; read $CRUSH_TOOL_INPUT_FILE
+  ```
+
+  Not a prefix of the JSON — truncated JSON is not smaller JSON, and a hook that
+  decodes it leniently judges a call that does not exist. Not empty either, since
+  an absent `CRUSH_*` already means "empty" here.
+
+**If your hook inspects arguments, read the file, not the variable.** A hook that
+reads only `CRUSH_TOOL_INPUT` will now *run* on an oversize call and see the
+marker where it used to see arguments — whereas before, the call was denied
+outright. For a guard that keys on the argument text, that is a change in the
+permissive direction, over calls that previously could not happen at all.
+`CRUSH_TOOL_NAME` and your `matcher:` are unaffected.
+
+```sh
+# portable, and correct at every size
+input="$(cat "$CRUSH_TOOL_INPUT_FILE")"
+```
+
+One limit is **not** modelled: platforms that cap the whole environment rather
+than one entry (macOS: 256 KiB for argv and environ together). A payload pair
+that passes every per-entry check can still be refused there — but the refusal
+now prints both payload sizes rather than saying only that the hook could not
+be executed.
 
 Nothing from your shell survives — no `HOME`, no `LANG`, no `VIRTUAL_ENV`, and
 none of the `SUGARCRUSH_*` variables that configured the launch.
 
-Those six are what the hook *sets*. What a hook actually *sees* is a different
-list, and counting it is the only way to find out — so, measured on this tree
+Those eight are what the hook *sets*. What a hook actually *sees* is a different
+list, and counting it is the only way to find out — so, re-measured on this tree
 with `command: 'env | sort'` and the project root as `cwd`, twice, varying only
 `toolOutput`:
 
 | `toolOutput` | `env` lines | Which |
 |---|---|---|
-| `''` (empty) | **6** | 5 × `CRUSH_*` + `PWD` |
-| `'RESULT-TEXT'` | **7** | 6 × `CRUSH_*` + `PWD` |
+| `''` (empty) | **8** | 7 × `CRUSH_*` + `PWD` |
+| `'RESULT-TEXT'` | **9** | 8 × `CRUSH_*` + `PWD` |
 
 ```
 CRUSH_MODEL=…
 CRUSH_PROVIDER=…
 CRUSH_SESSION_ID=…
 CRUSH_TOOL_INPUT=…
+CRUSH_TOOL_INPUT_FILE=/tmp/crush-hook-payload-…
 CRUSH_TOOL_NAME=…
-CRUSH_TOOL_OUTPUT=…     ← only in the second run
+CRUSH_TOOL_OUTPUT=…          ← only in the second run
+CRUSH_TOOL_OUTPUT_FILE=/tmp/crush-hook-payload-…
 PWD=/…/sugar-crush
 ```
 
-Two things fall out of that, and neither is the "six" above.
+Note that `CRUSH_TOOL_OUTPUT_FILE` appears in **both** runs while
+`CRUSH_TOOL_OUTPUT` appears in only one: the file is written even for an empty
+payload, and an empty file is still a file, whereas `env` does not print an
+empty value.
+
+Two things fall out of that, and neither is the count above.
 
 `CRUSH_TOOL_OUTPUT` vanishes from the listing when it is empty — the variable is
 implemented and always passed, but an empty value is not something `env` prints.

@@ -15,12 +15,30 @@ namespace SugarCraft\Crush\Hooks;
  * {@see \SugarCraft\Crush\Renderer} already implement, so the entire prompt UI
  * was unreachable from configuration.
  *
- *   0  ALLOW   — stdout becomes the result message.
+ *   0  ALLOW   — stdout becomes the result message. ON THIS CLASS ONLY; see
+ *                below.
  *   1  DENY    — non-blocking deny. See the note below.
  *   2  DENY    — hard block.
- *   3  ASK     — stdout is the question put to the user.
- *   4  MODIFY  — stdout is a JSON object replacing the tool's arguments.
- *   *  DENY    — any other non-zero exit, as before.
+ *   3  ASK     — stdout is the question put to the user, clipped at
+ *                {@see MAX_ASK_PROMPT_BYTES}.
+ *   4  MODIFY  — stdout is a JSON object replacing the tool's arguments, and it
+ *                is REFUSED rather than clipped above its ceiling
+ *                ({@see modifyOrDeny()}).
+ *   *  DENY    — any other non-zero exit, as before, clipped at
+ *                {@see MAX_DENY_REASON_BYTES}.
+ *
+ * "STDOUT BECOMES THE RESULT MESSAGE" IS TRUE OF THIS CLASS AND FALSE OF THE
+ * LIVE PATH, and the difference matters because a reader who bounds the hook
+ * output problem from this table bounds the wrong thing. An ALLOW's message
+ * reaches nobody in a shipped run: {@see HookRegistry::executeHooks()} ends
+ * `return $modified ?? $inertRewrite ?? HookResult::allow();`, which rebuilds a
+ * permitting verdict with an EMPTY message, and both live gates
+ * ({@see \SugarCraft\Crush\Runtime::gate()} and
+ * {@see \SugarCraft\Crush\Chat::gateToolCall()}) interpolate
+ * `$hookResult->message` only into `"Hook denied: …"`. MEASURED at afe3c26b:
+ * a hook printing 200,000 bytes and exiting 0 produced a message of 0 bytes at
+ * `HookManager::preToolUse()`. It survives only through {@see HookDispatcher},
+ * which nothing in `src/` constructs.
  *
  * 0/1/2 are NOT this class's invention and were NOT free to renumber: they are
  * already the documented, tested contract of {@see HookDispatcher} and
@@ -153,17 +171,125 @@ final readonly class ScriptHook implements BoundedHookInterface
      * truncated reason reads as truncated to the model instead of as a hook
      * that stopped talking mid-sentence.
      *
-     * ONLY THE DENY PATH IS CAPPED, and the other three are left alone on
-     * purpose. An `EXIT_MODIFY`'s stdout is machine-readable JSON that must
-     * round-trip — truncating it turns a rewrite the hook meant to permit into
-     * a deny, which is the failure {@see modifyOrDeny()} exists to avoid. An
-     * `EXIT_ASK`'s stdout is a question put to a human. An `EXIT_ALLOW`'s is
-     * the hook's PRODUCT on the path where it succeeded, and its size is what
-     * the author chose to emit. That last one is still unbounded prompt text
-     * and it is recorded as such in the hardening backlog rather than fixed by
-     * widening this constant's reach past what was measured.
+     * THE OTHER THREE EXITS ARE NOT GOVERNED BY THIS CONSTANT, and the
+     * paragraph that used to stand here said they were governed by nothing —
+     * which was wrong about two of them and wrong about the third for a reason
+     * it never gave. Measured, and each now handled where its own failure mode
+     * is:
+     *
+     * - `EXIT_ASK` was UNBOUNDED and is now clipped at its own
+     *   {@see MAX_ASK_PROMPT_BYTES}. The old text declined to clip "a question
+     *   put to a human"; what it did not weigh is that the same question also
+     *   reaches the MODEL whole through
+     *   {@see \SugarCraft\Crush\Runtime::settleAsk()}'s no-approver arm.
+     * - `EXIT_MODIFY` was UNBOUNDED, and the old text is right that it must
+     *   never be truncated — so it is REFUSED over a ceiling instead
+     *   ({@see modifyOrDeny()}, {@see MIN_REWRITE_BYTES}). It was also
+     *   mis-described: the unbounded quantity is `modifiedInput`, which is not
+     *   prompt text at all but the ARGUMENTS THAT EXECUTE.
+     * - `EXIT_ALLOW` carries nothing anywhere in a shipped run — see the class
+     *   docblock. It is left as-is because there is no exposure to fix, not
+     *   because its size is "what the author chose to emit".
      */
     private const MAX_DENY_REASON_BYTES = 16384;
+
+    /**
+     * Bytes of an {@see EXIT_ASK} script's question that reach a human and the
+     * model.
+     *
+     * A SEPARATE DECISION FROM {@see MAX_DENY_REASON_BYTES}, and separate for a
+     * reason even though the two numbers agree: a deny reason is an
+     * explanation, while a question is a thing somebody is about to ANSWER, and
+     * the old docblock on the deny constant declined to clip this path on
+     * exactly that ground — "clipping it changes what the human is answering".
+     *
+     * That objection is answered rather than dropped. MEASURED at afe3c26b
+     * through the live path (`HookManager::preToolUse()` →
+     * {@see HookRegistry::executeHooks()}): a hook printing 200,000 bytes and
+     * exiting 3 produced a 200,000-byte {@see HookResult::$message}, and it
+     * lands in two places from there — the permission modal
+     * {@see \SugarCraft\Crush\Chat} renders, and
+     * {@see \SugarCraft\Crush\Runtime::settleAsk()}, which on a run with NO
+     * approver attached interpolates it WHOLE into "Permission required and no
+     * approver is attached to this run: …" and hands that to the model as the
+     * tool result. Neither a modal nor a tool result is improved by 200 KB, and
+     * the clip announces itself, so the reader sees that the question was cut
+     * instead of seeing a question that merely stops. What clipping does NOT
+     * fix is a question whose operative clause is at the end; that is the
+     * accepted cost, and it is the one the deny path already accepts.
+     */
+    private const MAX_ASK_PROMPT_BYTES = 16384;
+
+    /**
+     * The floor under an {@see EXIT_MODIFY} rewrite's ceiling — see
+     * {@see modifyOrDeny()}, which allows the LARGER of this and the byte
+     * length of the arguments the rewrite replaces.
+     *
+     * THE CEILING IS DERIVED AND THIS IS ONLY ITS FLOOR, which is the whole
+     * reason a rewrite bound is defensible at all. A flat cap breaks the
+     * legitimate case outright: a sanitiser that changes the `file_path` of a
+     * 300 KB `Write` and leaves the body alone has to print the body back, so
+     * its rewrite is necessarily about the size of the call it replaces.
+     * Bounding a rewrite BY that size stops a hook turning a 16-byte call into
+     * a 200 KB one and leaves the large call the hook was written for alone.
+     *
+     * The floor exists so the common case does not depend on how long the
+     * original happened to be — a hook rewriting a two-line `Bash` call gets
+     * room to work. 16 KiB, the figure
+     * {@see \SugarCraft\Crush\Commands\CommandSpec::MAX_SUBSTITUTION_BYTES}
+     * already uses for a local program's output crossing into the agent, rather
+     * than a number invented here.
+     *
+     * THE CEILING CANNOT RATCHET ACROSS THE RE-SCAN. {@see HookRegistry::executeHooks()}
+     * feeds an accepted rewrite back as the next pass's `toolInput`, so pass N+1's
+     * ceiling is `max(16384, len(rewrite_N))` — and `len(rewrite_N)` was itself
+     * bounded by pass N's ceiling. The ceiling is therefore non-increasing above
+     * the floor, and the whole chain is bounded by
+     * `max(16384, len(the model's own arguments))` however many passes it takes.
+     */
+    private const MIN_REWRITE_BYTES = 16384;
+
+    /**
+     * Longest `NAME=VALUE\0` one environment entry may be.
+     *
+     * LINUX ENFORCES THIS IN THE KERNEL and there is no way to widen it:
+     * `MAX_ARG_STRLEN` is `PAGE_SIZE * 32` = 131,072, and `execve()` fails the
+     * whole call with `E2BIG` when any single entry exceeds it. Because
+     * {@see execute()} used to hand the tool input over as `CRUSH_TOOL_INPUT`
+     * and nothing else, that made the CEILING ON A HOOK'S ENVIRONMENT a ceiling
+     * on the TOOL CALL: with any script hook registered, a `Write` of a 128 KB
+     * file could not run. MEASURED at afe3c26b against a hook whose whole script
+     * is `exit(0)`: 131,054 bytes of value allowed, 131,055 denied — exactly
+     * `strlen('CRUSH_TOOL_INPUT') + 1 + value + 1 <= 131072` — and 200,000 and
+     * 1,000,000 denied identically with "Hook audit could not be executed".
+     * `CRUSH_TOOL_OUTPUT` measured the same, one line down.
+     *
+     * That failed CLOSED, so it was never a hole — it was a daily-driver
+     * blocker whose refusal named neither the size nor the cause.
+     *
+     * WHAT THIS FIGURE IS NOT: a portable total. Other platforms cap the whole
+     * environment instead of one entry (macOS: 256 KiB for argv and environ
+     * together), and that total is not modelled here — a payload pair that fits
+     * every per-entry check can still be refused by an exec on such a system.
+     * That case is not silent any more: the refusal from {@see executeStaged()}
+     * prints both payload sizes.
+     */
+    private const MAX_ENV_ENTRY_BYTES = 131072;
+
+    /**
+     * What an oversize `CRUSH_TOOL_INPUT` / `CRUSH_TOOL_OUTPUT` says instead of
+     * carrying the bytes — see {@see stagePayloads()}.
+     *
+     * DELIBERATELY NOT A PREFIX OF THE VALUE, and deliberately not empty.
+     * A prefix is the dangerous one: truncated JSON is not smaller JSON, and a
+     * hook that decodes it leniently ends up judging a call that does not
+     * exist. Empty is merely indistinguishable from "this event carries no
+     * input" — `docs/HOOKS.md` already tells hook authors to read an absent
+     * `CRUSH_*` as empty. A marker that cannot parse as JSON, and that names
+     * both the byte count and the variable holding the bytes, is the only one
+     * of the three a hook cannot mistake for the call.
+     */
+    private const OVERSIZE_ENV_MARKER = '@@CRUSH_PAYLOAD_IN_FILE@@';
 
     /** Grace given to SIGTERM before {@see terminateAndEscalate()} sends signal 9. */
     private const TERMINATE_GRACE_SECONDS = 0.5;
@@ -337,14 +463,51 @@ final readonly class ScriptHook implements BoundedHookInterface
         // smaller loss than not running it at all.
         $cwd = is_dir($context->projectRoot) ? $context->projectRoot : null;
 
+        // THE TWO PAYLOAD VARIABLES ARE STAGED, NOT ASSIGNED — see
+        // stagePayloads(). Everything below this line has to reach the
+        // `discardPayloadFiles()` in the `finally`, which is why the rest of
+        // this method is a try block.
+        $payload = self::stagePayloads([
+            'CRUSH_TOOL_INPUT' => $context->toolInput,
+            'CRUSH_TOOL_OUTPUT' => $context->toolOutput,
+        ]);
+
+        try {
+            return $this->executeStaged($context, $cwd, $payload);
+        } finally {
+            self::discardPayloadFiles($payload['files']);
+        }
+    }
+
+    /**
+     * {@see execute()} with the payload files already on disk and guaranteed to
+     * be cleaned up after it, whatever it returns or throws.
+     *
+     * @param array{env: array<string, string>, files: list<string>, unreachable: list<string>} $payload
+     */
+    private function executeStaged(HookContext $context, ?string $cwd, array $payload): HookResult
+    {
+        if ($payload['unreachable'] !== []) {
+            // Neither route worked: the value is too big for the environment
+            // AND no temp file could be written. FAIL CLOSED, for the same
+            // reason an unusable `cwd` does — a hook that was never shown the
+            // call has not approved it.
+            return HookResult::deny(sprintf(
+                'Hook %s could not be given %s (no temporary file could be created and the value is '
+                . 'over the %d-byte environment ceiling); a hook that has not seen the call has not '
+                . 'allowed it.',
+                $this->name,
+                implode(' or ', $payload['unreachable']),
+                self::MAX_ENV_ENTRY_BYTES,
+            ));
+        }
+
         $env = [
             'CRUSH_SESSION_ID' => $context->sessionId,
             'CRUSH_TOOL_NAME' => $context->toolName,
-            'CRUSH_TOOL_INPUT' => $context->toolInput,
-            'CRUSH_TOOL_OUTPUT' => $context->toolOutput,
             'CRUSH_MODEL' => $context->model,
             'CRUSH_PROVIDER' => $context->provider,
-        ];
+        ] + $payload['env'];
 
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -361,7 +524,19 @@ final readonly class ScriptHook implements BoundedHookInterface
         );
 
         if (!is_resource($process)) {
-            return HookResult::deny("Hook {$this->name} could not be executed");
+            // NAMES THE SIZES. This branch's old message — "Hook X could not be
+            // executed" — was the whole of what a user saw when a 128 KB tool
+            // call hit `MAX_ARG_STRLEN` (see stagePayloads()), and it reads as
+            // "your hook is broken" rather than as a size. The two payload
+            // figures are the only inputs to this call that scale, so they are
+            // the two worth printing.
+            return HookResult::deny(sprintf(
+                'Hook %s could not be executed (proc_open() refused to start it; tool input %d bytes, '
+                . 'tool output %d bytes)',
+                $this->name,
+                strlen($context->toolInput),
+                strlen($context->toolOutput),
+            ));
         }
 
         fclose($pipes[0]);
@@ -410,7 +585,10 @@ final readonly class ScriptHook implements BoundedHookInterface
                 . 'has not answered has not allowed anything. %s',
                 $this->name,
                 rtrim(rtrim(number_format($budget, 3, '.', ''), '0'), '.'),
-                self::clip(trim($errors) !== '' ? trim($errors) : trim($output)),
+                self::clip(
+                    trim($errors) !== '' ? trim($errors) : trim($output),
+                    self::MAX_DENY_REASON_BYTES,
+                ),
             )));
         }
 
@@ -418,16 +596,178 @@ final readonly class ScriptHook implements BoundedHookInterface
         $errors = trim($errors);
 
         return match ($exitCode) {
+            // NOT CLIPPED, and that is a statement about where this value goes
+            // rather than about how big it is allowed to be: on the live path
+            // it goes NOWHERE. {@see HookRegistry::executeHooks()} rebuilds a
+            // permitting verdict as `HookResult::allow()` with an empty
+            // message, and both gates
+            // ({@see \SugarCraft\Crush\Runtime::gate()} and
+            // {@see \SugarCraft\Crush\Chat::gateToolCall()}) interpolate
+            // `$hookResult->message` only into `"Hook denied: …"`. It survives
+            // solely through {@see HookDispatcher}, which nothing in `src/`
+            // constructs. See MAX_DENY_REASON_BYTES.
             self::EXIT_ALLOW => HookResult::allow($output),
-            self::EXIT_ASK => HookResult::ask($output !== '' ? $output : $this->defaultQuestion()),
-            self::EXIT_MODIFY => $this->modifyOrDeny($output),
-            default => HookResult::deny(self::clip($errors) ?: "Hook exited with code $exitCode"),
+            self::EXIT_ASK => HookResult::ask(
+                $output !== ''
+                    ? self::clip($output, self::MAX_ASK_PROMPT_BYTES)
+                    : $this->defaultQuestion(),
+            ),
+            self::EXIT_MODIFY => $this->modifyOrDeny($output, strlen($context->toolInput)),
+            default => HookResult::deny(
+                self::clip($errors, self::MAX_DENY_REASON_BYTES) ?: "Hook exited with code $exitCode",
+            ),
         };
     }
 
     /**
-     * Bound a hook's own words before they become prompt text — see
-     * {@see MAX_DENY_REASON_BYTES}.
+     * Put the two payload variables where the child can reach them BOTH ways,
+     * and report which ones it could not be given at all.
+     *
+     * EVERY PAYLOAD GETS A FILE WHENEVER ONE CAN BE WRITTEN — not only the
+     * oversize ones. "Present only when the value is large" is a conditional
+     * contract, and a hook author who tested on small calls would ship a hook
+     * that dereferences an unset path on exactly the calls this change exists
+     * to make possible. The one case where the variable is absent is a temp
+     * directory that will not take a file at all ({@see writePayloadFile()}
+     * returning null), and that case is handled rather than hidden: a payload
+     * that then also does not fit in the environment is reported through
+     * `unreachable` and denied.
+     *
+     * THE ENVIRONMENT VALUE IS UNCHANGED WHENEVER IT FITS, which is the
+     * compatibility guarantee. `CRUSH_TOOL_INPUT` is a documented public
+     * contract (`docs/HOOKS.md`) that user-authored scripts already read;
+     * moving the payload wholesale onto the file would have been a silent
+     * breaking change for every hook that works today, in exchange for nothing
+     * on the 99.9% of calls that never came near {@see MAX_ENV_ENTRY_BYTES}.
+     * So the file is an ADDITION, and only a value the kernel would refuse is
+     * replaced — by {@see OVERSIZE_ENV_MARKER}, never by a prefix of itself.
+     *
+     * THE HONEST COST, stated rather than buried: a hook that reads only
+     * `CRUSH_TOOL_INPUT` and never the file now RUNS on an oversize call and
+     * sees a marker where it used to see arguments, whereas before the call was
+     * denied outright. For an argument-inspecting guard that is a change in the
+     * unsafe direction — but only over calls that previously could not happen
+     * at all, since the deny was unconditional. `CRUSH_TOOL_NAME` and the
+     * matcher, which is what most guards actually key on, are unaffected.
+     *
+     * @param array<string, string> $payloads variable name => the bytes it carries
+     *
+     * @return array{env: array<string, string>, files: list<string>, unreachable: list<string>}
+     *     [what to add to the child's environment; every file to delete
+     *     afterwards; the variables that could reach the child by NEITHER
+     *     route, which {@see executeStaged()} turns into a fail-closed deny]
+     */
+    private static function stagePayloads(array $payloads): array
+    {
+        $env = [];
+        $files = [];
+        $unreachable = [];
+
+        foreach ($payloads as $name => $value) {
+            $pathVariable = $name . '_FILE';
+            $path = self::writePayloadFile($value);
+
+            if ($path !== null) {
+                $files[] = $path;
+                $env[$pathVariable] = $path;
+            }
+
+            if (strlen($name) + strlen($value) + 2 <= self::MAX_ENV_ENTRY_BYTES) {
+                $env[$name] = $value;
+
+                continue;
+            }
+
+            if ($path === null) {
+                // The value cannot go in the environment and there is no file:
+                // the exec would fail with E2BIG and the hook would see
+                // nothing. Recorded rather than papered over with an empty
+                // value, because a guard handed no arguments is a guard that
+                // allows what it would have denied.
+                $unreachable[] = $name;
+                $env[$name] = '';
+
+                continue;
+            }
+
+            $env[$name] = sprintf(
+                '%s %d bytes; read $%s',
+                self::OVERSIZE_ENV_MARKER,
+                strlen($value),
+                $pathVariable,
+            );
+        }
+
+        return ['env' => $env, 'files' => $files, 'unreachable' => $unreachable];
+    }
+
+    /**
+     * One payload file, or null when the filesystem would not give us one.
+     *
+     * `tempnam()` creates the file 0600 and returns a name nothing else holds,
+     * which is what this needs: the file carries whatever the model asked to
+     * write, so it is as sensitive as the tool call itself and it lives in a
+     * directory every account on the box can list. The `chmod()` is not
+     * redundant belt-and-braces — it is the only line that still holds if a
+     * future caller swaps the name source.
+     *
+     * Failure is a NULL and not an exception, because a hook whose payload
+     * fits in the environment does not need a file at all and must not be
+     * blocked by a full `/tmp`.
+     */
+    private static function writePayloadFile(string $value): ?string
+    {
+        $path = @tempnam(sys_get_temp_dir(), 'crush-hook-payload-');
+
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+
+        @chmod($path, 0o600);
+
+        if (@file_put_contents($path, $value) === false) {
+            @unlink($path);
+
+            return null;
+        }
+
+        return $path;
+    }
+
+    /**
+     * Delete every staged payload file.
+     *
+     * Called from a `finally` in {@see execute()} so it runs on the timeout
+     * path, the fail-closed paths and any throw as well as on the ordinary
+     * return: a hook chain re-scanned {@see HookRegistry::MAX_REWRITE_PASSES}
+     * times would otherwise leave a copy of the tool call in the shared temp
+     * directory for every hook of every pass.
+     *
+     * @param list<string> $files
+     */
+    private static function discardPayloadFiles(array $files): void
+    {
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+    }
+
+    /**
+     * Bound a hook's own words before they become prompt text.
+     *
+     * $limit IS A REQUIRED ARGUMENT AND HAS NO DEFAULT, deliberately. Two
+     * different bounds cross this method — {@see MAX_DENY_REASON_BYTES} for a
+     * refusal and {@see MAX_ASK_PROMPT_BYTES} for a question — and they are
+     * separate decisions that happen to hold the same number today. A default
+     * would let a third caller inherit whichever one was written first and
+     * quietly acquire a bound nobody chose for it.
+     *
+     * NOT EVERY NON-DENY PATH IS CLIPPED, and the exception is the important
+     * one: an {@see EXIT_MODIFY} rewrite is REFUSED over its ceiling rather
+     * than cut ({@see modifyOrDeny()}), because truncating machine-readable
+     * arguments does not make smaller arguments — it makes invalid JSON, which
+     * {@see HookResult::rewrittenArgs()} reports as null and every consumer
+     * answers by running the ORIGINALS the rewrite existed to replace.
      *
      * The HEAD is kept and the tail dropped, because a hook explains itself
      * first and repeats itself afterwards: the sentence naming the file or the
@@ -436,17 +776,17 @@ final readonly class ScriptHook implements BoundedHookInterface
      * deliberately — this is arbitrary program output, not guaranteed UTF-8,
      * and the marker that follows makes the seam visible either way.
      */
-    private static function clip(string $text): string
+    private static function clip(string $text, int $limit): string
     {
         $length = strlen($text);
-        if ($length <= self::MAX_DENY_REASON_BYTES) {
+        if ($length <= $limit) {
             return $text;
         }
 
-        return substr($text, 0, self::MAX_DENY_REASON_BYTES)
+        return substr($text, 0, $limit)
             . sprintf(
                 ' … [hook output truncated: %d of %d bytes shown; this reason is PARTIAL]',
-                self::MAX_DENY_REASON_BYTES,
+                $limit,
                 $length,
             );
     }
@@ -673,8 +1013,24 @@ final readonly class ScriptHook implements BoundedHookInterface
      * caller that ever forgets the trim would otherwise turn every rewrite
      * whose JSON is indented into a deny.
      */
-    private function modifyOrDeny(string $output): HookResult
+    private function modifyOrDeny(string $output, int $replacedBytes): HookResult
     {
+        $ceiling = max(self::MIN_REWRITE_BYTES, $replacedBytes);
+        $size = strlen($output);
+
+        if ($size > $ceiling) {
+            return HookResult::deny(sprintf(
+                'Hook %s proposed a %d-byte rewrite of the tool input, over the %d-byte ceiling for '
+                . 'this call (the larger of the %d bytes it replaces and %d); a rewrite cannot be '
+                . 'truncated, so it is refused rather than cut.',
+                $this->name,
+                $size,
+                $ceiling,
+                $replacedBytes,
+                self::MIN_REWRITE_BYTES,
+            ));
+        }
+
         $decoded = json_decode($output, true);
 
         if (!is_array($decoded) || !str_starts_with(ltrim($output), '{')) {
