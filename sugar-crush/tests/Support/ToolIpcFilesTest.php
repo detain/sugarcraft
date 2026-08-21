@@ -350,4 +350,136 @@ final class ToolIpcFilesTest extends TestCase
 
         @rmdir($dir);
     }
+
+    // =========================================================================
+    // The reservation ledger (E63)
+    // =========================================================================
+
+    /**
+     * Production must not pay for the ledger, and must not accumulate one
+     * either: unarmed, a reservation is recorded nowhere and
+     * {@see ToolIpcFiles::strandedReservations()} answers "nothing" even for a
+     * payload that really is sitting on disk uncollected.
+     *
+     * Stated as a property of the DEFAULT state rather than of a disarmed one,
+     * because that is what a real run is: nothing in `src/` calls
+     * `recordReservations()`.
+     */
+    public function testAnUnarmedLedgerRecordsNothing(): void
+    {
+        $this->assertNull(
+            (new \ReflectionProperty(ToolIpcFiles::class, 'reserved'))->getValue(),
+            'the ledger must be unarmed by default',
+        );
+
+        $file = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+
+        try {
+            ToolIpcFiles::write($file, '{}');
+            self::assertFileExists($file);
+            self::assertSame([], ToolIpcFiles::strandedReservations());
+        } finally {
+            ToolIpcFiles::discard($file);
+        }
+    }
+
+    /**
+     * The direction that matters for the leak: a payload this process reserved
+     * and never collected is reported, and collecting it clears the report.
+     */
+    public function testAnArmedLedgerReportsAReservedPayloadNobodyCollected(): void
+    {
+        ToolIpcFiles::recordReservations(true);
+        $file = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+
+        try {
+            self::assertSame([], ToolIpcFiles::strandedReservations(), 'a reserved name is not yet a file');
+
+            ToolIpcFiles::write($file, '{}');
+            self::assertSame([$file], ToolIpcFiles::strandedReservations());
+
+            ToolIpcFiles::discard($file);
+            self::assertSame([], ToolIpcFiles::strandedReservations());
+        } finally {
+            ToolIpcFiles::discard($file);
+            ToolIpcFiles::recordReservations(false);
+        }
+    }
+
+    /**
+     * The E63 reproduction. A `sc_chat_tool_*` payload written by something
+     * that is not this process appears in the shared temp dir inside the
+     * window, so the window-diff detector this replaced counted it as this
+     * run's strand -- the `glob()` assertion pins that the fixture really is
+     * such a file, so a green result means the attribution changed rather than
+     * that the fixture missed.
+     *
+     * Identity attribution cannot see it at all: it was never reserved here,
+     * so no amount of concurrent activity in `/tmp` can put it in the list.
+     */
+    public function testAConcurrentWritersPayloadCannotEnterTheStrandedList(): void
+    {
+        ToolIpcFiles::recordReservations(true);
+
+        $foreign = sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX
+            . bin2hex(random_bytes(8)) . '.json';
+        $mine = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+
+        try {
+            file_put_contents($foreign, '{}');
+            ToolIpcFiles::write($mine, '{}');
+
+            $window = glob(sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX . '*') ?: [];
+            self::assertContains($foreign, $window, 'the fixture must be a file the old window diff would have counted');
+
+            self::assertSame([$mine], ToolIpcFiles::strandedReservations());
+        } finally {
+            @unlink($foreign);
+            ToolIpcFiles::discard($mine);
+            ToolIpcFiles::recordReservations(false);
+        }
+    }
+
+    /**
+     * A child SIGKILLed mid-write leaves the `.partial` and never the payload,
+     * so identity attribution has to look for both names or it would go blind
+     * to exactly the abandonment {@see ToolIpcFiles::sweep()} was written for.
+     */
+    public function testAStrandedPartialIsReportedUnderItsOwnName(): void
+    {
+        ToolIpcFiles::recordReservations(true);
+        $file = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+        $partial = $file . '.partial';
+
+        try {
+            file_put_contents($partial, '{"half');
+            self::assertFileDoesNotExist($file);
+            self::assertSame([$partial], ToolIpcFiles::strandedReservations());
+        } finally {
+            ToolIpcFiles::discard($file);
+            ToolIpcFiles::recordReservations(false);
+        }
+    }
+
+    /**
+     * Arming clears whatever was there, so one class's ledger can never be
+     * read as another's -- and disarming clears it too, so a suite that
+     * forgets to disarm cannot leave a later caller holding stale paths.
+     */
+    public function testRecordReservationsClearsTheLedgerInBothDirections(): void
+    {
+        $ledger = new \ReflectionProperty(ToolIpcFiles::class, 'reserved');
+
+        ToolIpcFiles::recordReservations(true);
+        $first = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+        self::assertSame([$first], $ledger->getValue());
+
+        ToolIpcFiles::recordReservations(true);
+        self::assertSame([], $ledger->getValue());
+
+        ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+        ToolIpcFiles::recordReservations(false);
+        self::assertNull($ledger->getValue());
+        self::assertSame([], ToolIpcFiles::strandedReservations());
+    }
 }

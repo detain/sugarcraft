@@ -64,20 +64,11 @@ final class ChatTest extends TestCase
      */
     private array $tempPaths = [];
 
-    /**
-     * The `sc_chat_tool_*` payloads already in the temp dir when this class
-     * started, so {@see tearDownAfterClass()} can tell what this run stranded
-     * from what was already lying around.
-     *
-     * @var list<string>
-     */
-    private static array $toolIpcFilesAtStart = [];
-
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
 
-        self::$toolIpcFilesAtStart = self::toolIpcFiles();
+        ToolIpcFiles::recordReservations(true);
     }
 
     /**
@@ -88,18 +79,87 @@ final class ChatTest extends TestCase
      * an hour, which makes the leak self-limiting rather than acceptable:
      * running this suite is not a request to litter.
      *
-     * Checked once for the whole class rather than per test, because the
-     * matching glob has to scan the entire temp directory and a developer's
-     * /tmp is routinely tens of thousands of entries — 50ms a call, which per
-     * test would cost more than the rest of this file put together.
+     * Attribution is by IDENTITY: the ledger
+     * ({@see ToolIpcFiles::recordReservations()}) records the paths this
+     * process reserved, and only those paths are checked. It used to be by
+     * WINDOW — a `glob(sys_get_temp_dir() . '/sc_chat_tool_*')` snapshot at
+     * `setUpBeforeClass()` diffed against another at teardown — and that
+     * measures something else entirely: every payload that appeared anywhere
+     * in the SHARED temp dir while this class ran, from any process on the
+     * box. A sibling lane running this same suite, or the developer's own
+     * `sugar-crush` session, fails it. That is not a hypothetical; it fired
+     * during round 38 (backlog E63), and
+     * {@see ToolIpcFiles::strandedReservations()} carries the argument for why
+     * the ledger is the only place identity exists at all.
+     *
+     * The `sys_get_temp_dir()` choice the old glob made was nonetheless the
+     * right one and is preserved by construction: {@see ToolIpcFiles::reserve()}
+     * builds every path from `sys_get_temp_dir()`, and PHP resolves and caches
+     * that once per process — so tests/bootstrap.php setting TMPDIR moves it
+     * for the CHILDREN this suite spawns and not for this process. An
+     * in-process reservation still lands in the developer's real /tmp, which
+     * is exactly the litter this assertion exists to catch, and pointing the
+     * detector at the sandbox would have blinded it to that.
+     *
+     * Checked once for the whole class rather than per test: the ledger is
+     * cheap now (no directory scan at all), but a payload is legitimately on
+     * disk for the moments between a child writing it and its parent reaping
+     * it, so a per-test check would race the collection it is meant to
+     * verify.
      */
     public static function tearDownAfterClass(): void
     {
-        $stranded = array_values(array_diff(self::toolIpcFiles(), self::$toolIpcFilesAtStart));
+        $stranded = ToolIpcFiles::strandedReservations();
+
+        ToolIpcFiles::recordReservations(false);
 
         parent::tearDownAfterClass();
 
-        self::assertSame([], $stranded, 'a forked tool child was abandoned with its IPC payload uncollected');
+        self::assertSame(
+            [],
+            $stranded,
+            'a forked tool child was abandoned with its IPC payload uncollected: ' . implode(', ', $stranded),
+        );
+    }
+
+    /**
+     * Both directions of {@see tearDownAfterClass()}'s detector, driven rather
+     * than argued, against this class's own live ledger.
+     *
+     * The foreign file is the E63 reproduction: a `sc_chat_tool_*` payload
+     * created mid-window by something that is not this process. The glob
+     * assertion is there to keep the fixture shaped like the BUG — it proves
+     * the file really is one the window-diff detector would have counted, so
+     * a green result here means the attribution changed and not that the
+     * fixture missed.
+     *
+     * The reserved payload is the other direction: a real strand still trips
+     * it, and collecting it clears it. It is discarded before this test
+     * returns, so the class-level assertion it feeds stays honest.
+     */
+    public function testTheStrandedPayloadDetectorAttributesByIdentityNotByWindow(): void
+    {
+        $foreign = sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX
+            . bin2hex(random_bytes(8)) . '.json';
+        file_put_contents($foreign, '{}');
+
+        try {
+            $window = glob(sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX . '*') ?: [];
+            $this->assertContains($foreign, $window, 'the fixture must be a file the old window diff would have counted');
+            $this->assertNotContains($foreign, ToolIpcFiles::strandedReservations());
+
+            $mine = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+            $this->assertNotContains($mine, ToolIpcFiles::strandedReservations(), 'a reserved name is not yet a file');
+
+            ToolIpcFiles::write($mine, '{}');
+            $this->assertContains($mine, ToolIpcFiles::strandedReservations());
+
+            ToolIpcFiles::discard($mine);
+            $this->assertNotContains($mine, ToolIpcFiles::strandedReservations());
+            $this->assertSame([], ToolIpcFiles::strandedReservations());
+        } finally {
+            @unlink($foreign);
+        }
     }
 
     protected function setUp(): void
@@ -2472,25 +2532,6 @@ final class ChatTest extends TestCase
         $this->tempPaths[] = $path;
 
         return $path;
-    }
-
-    /**
-     * Every `sc_chat_tool_*` payload currently in the temp dir.
-     *
-     * `sys_get_temp_dir()` deliberately, not the suite's TMPDIR sandbox: PHP
-     * resolves and caches the temp dir once per process, so tests/bootstrap.php
-     * setting TMPDIR moves it for the CHILDREN this suite spawns and not for
-     * this process — {@see \SugarCraft\Crush\Support\ToolIpcFiles::reserve()}
-     * running in-process still lands in the real one.
-     *
-     * @return list<string>
-     */
-    private static function toolIpcFiles(): array
-    {
-        $found = glob(sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX . '*') ?: [];
-        sort($found);
-
-        return $found;
     }
 
     /**

@@ -86,13 +86,102 @@ final class ToolIpcFiles
     private static bool $swept = false;
 
     /**
+     * Paths {@see reserve()} has handed out since {@see recordReservations()}
+     * armed the ledger, or null when it is not armed -- which is production,
+     * always, so a long session pays nothing for this at all.
+     *
+     * A payload's name is `prefix . bin2hex(random_bytes(8))`: it carries no
+     * pid, no run id, nothing that ties a file to the process that reserved
+     * it. {@see STALE_AFTER_SECONDS} records that as a deliberate constraint
+     * rather than an oversight -- `sweep()` attributes by AGE precisely
+     * because identity is not recoverable from a file lying in a shared
+     * `/tmp`.
+     *
+     * The one place identity does exist is the parent that chose the name,
+     * and that is here. A ledger written at reservation time is therefore the
+     * only way a caller can ask "did the payloads *I* reserved get collected"
+     * instead of the much weaker "did any `sc_chat_tool_*` file appear in the
+     * temp dir while I was running", which a sibling process on the same box
+     * answers yes to.
+     *
+     * @var list<string>|null
+     */
+    private static ?array $reserved = null;
+
+    /**
+     * Arm or disarm the reservation ledger, clearing it either way.
+     *
+     * This exists for the test suite, in the same spirit as {@see sweep()}'s
+     * `$dir` parameter: {@see \SugarCraft\Crush\Tests\ChatTest} strands a
+     * payload if any of its tests drops the Cmd that collects one, and the
+     * only honest way to detect that is to compare against the paths this
+     * process actually reserved.
+     *
+     * Off by default and never armed in production: nothing on a real run
+     * calls this, so `reserve()` keeps appending to nothing.
+     */
+    public static function recordReservations(bool $record): void
+    {
+        self::$reserved = $record ? [] : null;
+    }
+
+    /**
+     * Of the paths reserved since the ledger was armed, those still on disk --
+     * either the payload itself or the `.partial` a child SIGKILLed mid-write
+     * leaves beside it.
+     *
+     * Attribution is by identity, not by window. A file this process did not
+     * reserve cannot enter this list whatever else is happening in the temp
+     * dir, so a concurrent `sugar-crush` run (or a sibling test lane) is
+     * structurally incapable of turning this into a false positive. The
+     * converse residual is worth stating: this can only see payloads whose
+     * path came from {@see reserve()} IN THIS PROCESS. That covers every one
+     * of them today -- the two dispatchers are the only callers
+     * ({@see \SugarCraft\Crush\Chat::forkToolCalls()},
+     * {@see \SugarCraft\Crush\Runtime::executeConcurrently()}) and both go
+     * through here -- and a `pcntl_fork()` child is covered too, because the
+     * parent reserves the name before the fork. A payload written by a
+     * SEPARATE process this suite spawns is not, and that is the deliberate
+     * trade: those are exactly the files nothing can distinguish from another
+     * developer's.
+     *
+     * @return list<string>
+     */
+    public static function strandedReservations(): array
+    {
+        $stranded = [];
+
+        foreach (self::$reserved ?? [] as $path) {
+            foreach ([$path, $path . self::PARTIAL_SUFFIX] as $candidate) {
+                if (file_exists($candidate)) {
+                    $stranded[] = $candidate;
+                }
+            }
+        }
+
+        sort($stranded);
+
+        return $stranded;
+    }
+
+    /**
      * Reserve a payload path. Nothing is created here: the name is chosen in
      * the PARENT, before the fork, so both sides agree on it, and only the
      * child ever writes.
+     *
+     * The path is recorded when {@see recordReservations()} has armed the
+     * ledger, so a caller can later ask which of its OWN payloads went
+     * uncollected -- see {@see strandedReservations()}.
      */
     public static function reserve(string $prefix, string $extension): string
     {
-        return sys_get_temp_dir() . '/' . $prefix . bin2hex(random_bytes(8)) . '.' . $extension;
+        $path = sys_get_temp_dir() . '/' . $prefix . bin2hex(random_bytes(8)) . '.' . $extension;
+
+        if (self::$reserved !== null) {
+            self::$reserved[] = $path;
+        }
+
+        return $path;
     }
 
     /**
