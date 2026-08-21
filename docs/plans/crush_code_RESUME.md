@@ -6,7 +6,7 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUNDS 34, 35 AND 36 ARE ALL CLOSED AND VERIFIED. ROUND 37 IS UNSCOPED — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 37 IS IN FLIGHT — TWO BUNDLES LANDED, ONE LANE STILL IN FIX — read this first, then §0 for the standing rules
 
 **Written between rounds so a compact cannot lose it.** Rounds 33 through 36 are all CLOSED and
 supervisor-verified. **Nothing is in flight; all three lanes are clean at master.** Round 37 is
@@ -64,11 +64,35 @@ replaced by Packagist copies and every figure since is void.
 
 ⚠️ **Assertion totals are NOT assert-call counts** — PHPUnit 10 counts the `…OrEqual` family as 2.
 
-**ROUND 37 IS UNSCOPED AND NOTHING IS RUNNING.** All three lanes (`cmd`, `lsp`, `sglang`) are clean at
-master with 18 vendor symlinks each. **Start round 37 with a read-only scout pass, not by reading the
-plan** — round 36's scout measured 13 plan candidates and found **8 already CLOSED**, i.e. the plan is
-unreliable at roughly 2:1. A scout holds no files, costs no lane slot, and saves an entire
-implement/review/fix cycle per stale item. The surviving open queue is in "ROUND 36 SCOPE" below.
+**ROUND 37 STATUS — master `ec3b6d68`, suite floor `8786 / 99189 / 1 skipped / rc 0`,
+supervisor-measured in the live tree.** Two bundles landed and verified:
+
+- `fc597e81` + `995eb257` — **`cmd`, unbounded waits.** `ScriptHook::drain()` was unbounded in TWO
+  places (NULL-timeout `stream_select()` AND a following `proc_close()`), on the TUI's own path, so a
+  hook that never closed stdout froze the CLI with no spinner and no Escape. Plus SIGTERM→SIGKILL
+  escalation in `BackgroundSessionRunner`, a deadline-based retry backoff, and a swept-up bare
+  `pcntl_waitpid` inside a periodic-timer callback. The fix round then found `timeout: .inf` reopened
+  the whole thing behind an error message promising it could not be asked for.
+- `cc3bfeaf` + `2993aee7` + `ec3b6d68` — **`lsp`, tool output budget.** Five tools, not the two
+  recorded: `Read` was worst at 37.1×, and `Edit`/`Write` had no cap parameter at all. Took TWO review
+  rounds — the first cut shipped a **45× regression worse than the bug it fixed** (see the worklog).
+
+**STILL IN FLIGHT: `sglang`, branch `ai/crush-mouse-modal-guard`, at `2c4fab93` + an unpushed fix.**
+Its reviewer returned BLOCKING. It is based on `8e3d6076` and **needs a rebase onto `ec3b6d68`**
+before merge. The reviewer's own caveat applies: the in-tree remediation post-dates its review, so
+findings 4 and 5 (press-fires-after-capture-clears; inFlight-vs-overlay precedence inverted between
+devices) and the guard-body mutation results **need re-driving against whatever lands**.
+
+**Round 37's scout re-measured E51–E56 and found ALL SIX still open.** Unlike round 36 (8 of 13 already
+closed), the backlog was accurate about open/closed here — but wrong in its details at a rate of 11
+stale line numbers in E51 alone, plus two substantively false claims. `d7919902` fixed the record.
+
+**Remaining measured queue:** E52 (recorded, nothing emits `CSI 1;5Z`), E53+E54 (bundle them — same
+file, same width question; E53's truncator emits a dangling ZWJ at budget 4), E57 (`SkillPathNudge`
+genuinely unbounded), E58, E59, E60 (hook ALLOW/ASK/MODIFY messages still unbounded prompt text — four
+actions with four different failure modes, not one constant), E61 (an all-PHP hook chain is bounded by
+nothing without a fiber or a fork), `statusLine` (greenfield M — ⚠️ `Chat::budgetStatusLine()` will
+bait a future grep into thinking it exists), `keybindings` (L, DEFER).
 
 ⚠️ **CI PUSHES TO MASTER WHILE LANES WORK.** A `vhs: regenerate demo GIFs` commit landed mid-round and
 broke a lane's fast-forward. It touches only `.gif` files, so a lane rebase is clean — but the
