@@ -3942,9 +3942,15 @@ Tests: `ScriptHookTest::testAToolInputOverTheEnvironmentCeilingStillRunsTheHook`
 `::testAToolInputThatFitsIsStillPassedInTheEnvironmentVerbatim`,
 `::testAnOversizeToolInputLeavesANonJsonMarkerInTheEnvironment`,
 `::testAnOversizeToolOutputTakesTheSameRouteAsTheInput`,
-`::testThePayloadFilesAreRemovedOnceTheHookHasRun`, and
-`HookRegistryTest::testAChainReScansARewriteTooLargeForOneEnvironmentEntry` — the last one is the
+`::testThePayloadFilesAreRemovedOnceTheHookHasRun`,
+`::testTheEnvironmentIsUsedUpToTheKernelBoundaryAndNotPastIt` (added at e20382d4 — the others all
+probe at 200 KB and would survive a 100 KB drift in the fit computation; this one is mutation-checked
+against `+ 2` → `+ 1`), `::testAPayloadThatFitsNeitherRouteFailsClosed` (added at fe7c39d9), and
+`HookRegistryTest::testAChainReScansARewriteTooLargeForOneEnvironmentEntry` — that last one is the
 E60xE65 seam and was red at afe3c26b with `Hook bulk-rewriter could not be executed`.
+
+Suite: **8834 / 99811 / 1 skipped / rc 0**, against a measured pre-change baseline of
+**8820 / 99755 / 1 skipped / rc 0**.
 
 ### E66 — `SkillPathNudge` is unbounded, and it is filed under a number that belongs to a different finding
 
