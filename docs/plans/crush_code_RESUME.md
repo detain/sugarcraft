@@ -6,7 +6,67 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 38 IS CLOSED — NOTHING IN FLIGHT, ALL LANES CLEAN — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 39 IS CLOSED — NOTHING IN FLIGHT, ALL LANES CLEAN — read this first, then §0 for the standing rules
+
+**SUITE FLOOR: `8879 / 100396 / 1 skipped / rc 0` at `3737f506`**, supervisor-measured in the live tree.
+Supersedes every earlier figure (8820 held the round-38 boundary; 8831 and 8848 were round-39 midpoints).
+**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was
+replaced by Packagist copies and every figure since is void. 18 symlinks;
+`md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
+`php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
+
+### 🔴 CONCURRENCY IS NOW **3**, BY USER INSTRUCTION (raised mid-round-39)
+
+Supersedes the "concurrency is 2" block further down, which is kept only for its reasoning. A read-only
+scout does NOT count against the budget; a reviewer or fix agent for an active lane is part of that lane's
+cycle, not a fourth lane. ⚠️ **P8.8 and P8.13 still collide with each other** — never bundle those two.
+
+**Round 39 landed all three lanes, each supervisor-verified by my own full-suite run:**
+- **`lsp` — E63 + E64.** Identity-based stranded-payload attribution (an opt-in ledger in
+  `ToolIpcFiles`); `AgentViewPane::render()` measures its right section and degrades metrics instead of
+  letting the body outgrow the box.
+- **`cmd` — E60 + E65.** Hook ASK clipped, MODIFY **refused** (a truncated rewrite is not a smaller
+  rewrite), and the payload transport **asks the OS** instead of assuming a 4 KiB page.
+- **`sglang` — E57 + E58.** An empty `permissionMode` no longer displaces an earlier layer; a trusted
+  project's tool removals are reported **inside the alt screen** via a new `Chat::withLaunchNotices()`.
+
+### ⚠️ THINGS THAT CHANGE HOW YOU WORK — read before briefing any agent
+
+**Put the `/tmp` prohibition in EVERY brief.** The agent that *fixed* E63 ran
+`rm -f /tmp/sc_chat_tool_*.json` — the exact hazard E63 records — while two sibling lanes were live. Every
+brief must carry: never glob-delete `/tmp/sc_chat_tool_*` or `/tmp/crush-hook-payload-*`; unique probe
+names, exact-path deletes only.
+
+**Agents commit INCREMENTALLY in-lane.** Standing since round 38's network drops. A dropped connection
+with an uncommitted tree is the only thing that can truly be lost; several small commits cost nothing.
+Before resuming any killed agent, check the lane's dirty state and **snapshot by file copy + `git diff`
+patch** — never `git checkout --`/`restore`/`stash`.
+
+**`Chat::withLaunchNotices()` is a NEW SEAM and nine warnings still need it.** `warnPermissionConfig()`'s
+stderr line is swallowed by the alt screen ~0.47 s after it prints. Only the E57 report was migrated; the
+other ~9 launch warnings are still invisible in interactive use. **That is open work.**
+
+**E63's supervisor protocol stays LIVE until every lane carries the fix.** A certification run that fails
+ONLY on `ChatTest::tearDownAfterClass` is not a red suite — re-run `--filter ChatTest` alone. The new
+tests deliberately write real `sc_chat_tool_*` files to the shared temp dir.
+
+**Cite SYMBOLS, not line numbers, in the backlog.** E57 carried stale line numbers **four** rounds running
+— the last time because its own fix inserted ~100 lines above them. Its corrections are now marked
+*as of round 39* rather than re-corrected.
+
+**Remaining measured queue:** E52 (recorded only), E59 (**L, do not bundle** — its Step is wrong: the test
+asserts on the simulation stub's own literal `"Processing:"` string, so it WILL need rewriting), E61
+(**must not share a lane with hook work** — it changes E60's premise; L as a fix, S if scoped to correcting
+the denial message that names neither the spender nor that the bounded hook never ran), E66
+(`SkillPathNudge` unbounded to 10 MB; the `Grep.php` cross-reference to "E57" must be corrected to E66),
+E67 (verify against callers first — recorded at reasoned-not-verified strength), E68
+(`AgentDashboardPane`; root cause is `Width::truncateAnsi()` in **candy-core**, so it is a foundation-lib
+fix), E69 (`Width::string()` scores a tab 0, `Style::render()` expands it to four spaces), the nine
+un-migrated launch warnings, `statusLine` (greenfield M — ⚠️ `Chat::budgetStatusLine()` will bait a future
+grep into thinking it exists), `keybindings` (L, DEFER). Then **Phase 9** (interactive-prompt containment:
+layered A+C, parameter not second tool, **no askpass**), then the deferred security pass.
+
+### SUPERSEDED — round 38's block, kept for its reasoning
 
 **SUITE FLOOR: `8820 / 99755 / 1 skipped / rc 0` at `7771c148`**, supervisor-measured in the live tree.
 Supersedes every earlier figure (8786 held the round-37 boundary; 8794 was the round-38 midpoint).
