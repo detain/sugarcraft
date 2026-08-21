@@ -77,11 +77,49 @@ supervisor-measured in the live tree.** Two bundles landed and verified:
   recorded: `Read` was worst at 37.1×, and `Edit`/`Write` had no cap parameter at all. Took TWO review
   rounds — the first cut shipped a **45× regression worse than the bug it fixed** (see the worklog).
 
-**STILL IN FLIGHT: `sglang`, branch `ai/crush-mouse-modal-guard`, at `2c4fab93` + an unpushed fix.**
-Its reviewer returned BLOCKING. It is based on `8e3d6076` and **needs a rebase onto `ec3b6d68`**
-before merge. The reviewer's own caveat applies: the in-tree remediation post-dates its review, so
-findings 4 and 5 (press-fires-after-capture-clears; inFlight-vs-overlay precedence inverted between
-devices) and the guard-body mutation results **need re-driving against whatever lands**.
+**STILL IN FLIGHT: `sglang`, branch `ai/crush-mouse-modal-guard`, at `6b6435cb`, rebased onto
+`49b3f2e8`, with a THIRD fix agent running.** It has had implement → review (BLOCKING) → fix →
+re-review (BLOCKING) → fix-in-flight. Its own measured suite at `6b6435cb` is **8807 / 99386 / 1 /
+rc 0**. Not merged; nothing of it is on master.
+
+The second review upheld the substance — the HIGH fix passes (0 of 9 palette rows disagree mid-turn,
+plus 8/8 on the `providers` submenu) and the new press-consumption path passes nine driven scenarios in
+**both** directions (nothing illegitimate fires; nothing legitimate is eaten). What blocks is that the
+fix's own **precedence reorder created a new divergence in the direction nobody checked**: mid-turn
+under an overlay, a `pane:agents` click closes the overlay and `Ctrl+A` does not. The test that would
+have caught it drives only one device — its palette sibling compares both, and the agents test never
+touches the keyboard. Same family, second instance: a click on the CURRENT session tab returns silently
+while `Ctrl+Tab` writes a notice and closes the overlay.
+
+⚠️ **A lane's suite total can be stale even when its domain figures are right.** `6b6435cb` cites
+8778 / 95616 under a heading reading "FIGURES RE-MEASURED AT THIS COMMIT, EVERY ONE" — measured on the
+older base `995eb257`, before master's three tool-output commits added +29 tests / +3770 assertions.
+Its domain-scoped numbers are unaffected because those commits touched only `tests/Tools/*`. **One of
+the stale figures is baked into source at `src/Chat.php:4276`.** Re-measure lane figures after every
+supervisor rebase.
+
+### 🔴 PHASE 9 ADDED TO THE PLAN — interactive-prompt containment, DECIDED
+
+**From a live incident on 2026-08-21.** A user authorised `sudo` believing passwordless was configured;
+it was not; the password prompt rendered **at column 0 outside the chat pane** while the tool hung.
+
+**The mechanism, measured:** stdin is already handled — `CapturesProcessOutput` closes it, so a
+stdin-reading command already gets EOF. `sudo` never reads stdin; it opens **`/dev/tty`** directly for
+both the prompt and the reply, bypassing every pipe and every output guard in this tree. That is why
+the text never passed through the renderer. **Detaching the controlling terminal is a PREREQUISITE for
+the display fix, not an alternative to it.**
+
+**Decided by the user:** layered — **(A) detach always**, **(C) PTY opt-in**. The opt-in is an
+**optional parameter, NOT a second tool**, because `PermissionGate`, `HookManager`, every `PreToolUse`
+matcher and every user rule match on the **tool name**; a `BashInteractive` would silently stop being
+covered by all of them while still passing. That is this tree's most common defect and round 37 alone
+produced three instances of it.
+
+Sequenced **after the remaining functional fixes, before the deferred security pass**. Security finding
+**E62** recorded (a PTY in the pane is a credential-entry surface driven by model output), with a
+same-day correction: `SUDO_ASKPASS` only keeps plaintext out of the app **if the helper can reach the
+user without routing back through it** — what survives regardless is that askpass is an
+**authenticated** prompt channel and a PTY is not. **Phase 9 step 1 is explicitly NOT blocked on E62.**
 
 **Round 37's scout re-measured E51–E56 and found ALL SIX still open.** Unlike round 36 (8 of 13 already
 closed), the backlog was accurate about open/closed here — but wrong in its details at a rate of 11
