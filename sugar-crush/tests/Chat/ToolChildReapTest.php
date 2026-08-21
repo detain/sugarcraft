@@ -40,7 +40,7 @@ final class ToolChildReapTest extends TestCase
     {
         $report = $this->reapBounded(killFirst: false);
 
-        $this->assertFalse($report['reaped'], 'a running child cannot have been reaped');
+        $this->assertSame(0, $report['reaped'], 'a running child cannot have been reaped');
         $this->assertLessThan(
             2.0,
             $report['elapsed'],
@@ -56,7 +56,7 @@ final class ToolChildReapTest extends TestCase
     {
         $report = $this->reapBounded(killFirst: true);
 
-        $this->assertTrue($report['reaped'], 'the killed child was left a zombie');
+        $this->assertSame(1, $report['reaped'], 'the killed child was left a zombie');
         $this->assertLessThan(
             0.5,
             $report['elapsed'],
@@ -65,13 +65,64 @@ final class ToolChildReapTest extends TestCase
     }
 
     /**
-     * Fork a child, optionally SIGKILL it, then reflect into
-     * `Chat::reapKilledToolChild()` and report how long it took and whether the
-     * child was collected.
+     * THE BUDGET IS PER SITE, NOT PER CHILD — the loop that gives up on the
+     * stragglers must not stall the render loop in proportion to how many of
+     * them there are.
      *
-     * @return array{elapsed: float, reaped: bool}
+     * `Chat::waitForToolChildrenAsync()`'s give-up branch called the singular
+     * reap once per pending pid, so the TUI-thread stall was N x
+     * `REAP_BUDGET_SECONDS`. MEASURED at fc597e81: 1 child 0.101s, 4 children
+     * 0.405s, 8 children 0.810s — and `PARALLEL_TOOL_TIMEOUT_SECONDS` is a
+     * FAN-OUT timeout, so several children at once is the ordinary shape of
+     * this branch, not the exotic one. Eight tenths of a second of dead
+     * keyboard is exactly what the 100ms figure was chosen to stay under.
+     *
+     * Eight unkilled children, so nothing can be collected and the whole budget
+     * is genuinely spent.
      */
-    private function reapBounded(bool $killFirst): array
+    public function testTheBudgetIsSpentOncePerSiteAndNotOncePerChild(): void
+    {
+        $report = $this->reapBounded(killFirst: false, children: 8);
+
+        $this->assertSame(0, $report['reaped'], 'nothing killed them, so nothing can be collected');
+        $this->assertLessThan(
+            0.4,
+            $report['elapsed'],
+            'the reap budget was spent once per child: ' . sprintf('%.3fs for 8', $report['elapsed']),
+        );
+    }
+
+    /**
+     * ...and sharing that budget must not mean the FIRST child eats it.
+     *
+     * The give-up branch cancels its own timer on the way out, so there is no
+     * next pass: a batch drained one pid at a time would leave every child after
+     * the first a zombie the moment child one needed the window. Every pid is
+     * therefore polled on every turn of the loop.
+     */
+    public function testEveryChildInABatchIsCollectedAndNotJustTheFirst(): void
+    {
+        $report = $this->reapBounded(killFirst: true, children: 8);
+
+        $this->assertSame(8, $report['reaped'], 'the batch left zombies behind');
+        $this->assertLessThan(0.5, $report['elapsed'], 'collecting dead children waited on the budget');
+    }
+
+    /**
+     * Fork $children workers, optionally SIGKILL them, then reflect into
+     * `Chat`'s reap and report how long it took and how many were collected.
+     *
+     * THE WORKERS SELF-TERMINATE, and that is a property of this harness rather
+     * than a detail. `runBounded()`'s failure path kills only the direct child,
+     * so a worker forked by it is orphaned — and one holding this run's
+     * inherited stdout open wedges any `$(...)` capture of the suite for as long
+     * as it lives, which used to be forever. They now close the inherited
+     * descriptors immediately and die on their own clock, so the worst a failed
+     * assertion can leave behind is a process that is already on its way out.
+     *
+     * @return array{elapsed: float, reaped: int}
+     */
+    private function reapBounded(bool $killFirst, int $children = 1): array
     {
         if (!\function_exists('pcntl_fork')) {
             $this->markTestSkipped('pcntl is required to fork a tool child');
@@ -79,34 +130,54 @@ final class ToolChildReapTest extends TestCase
 
         $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
         $kill = $killFirst ? 'true' : 'false';
+        $method = $children === 1 ? 'reapKilledToolChild' : 'reapKilledToolChildren';
+        $argument = $children === 1 ? '$pids[0]' : '$pids';
 
         $script = <<<PHP
             <?php
             declare(strict_types=1);
             require {$this->export($autoload)};
 
-            \$pid = pcntl_fork();
-            if (\$pid === 0) {
-                while (true) {
-                    usleep(50000);
+            \$pids = [];
+            for (\$i = 0; \$i < {$children}; \$i++) {
+                \$pid = pcntl_fork();
+                if (\$pid === 0) {
+                    // Never outlive this run, and never hold its stdout open:
+                    // an orphan doing either wedges a capture of the suite.
+                    fclose(STDOUT);
+                    fclose(STDERR);
+                    \$until = microtime(true) + 30.0;
+                    while (microtime(true) < \$until) {
+                        usleep(50000);
+                    }
+                    exit(0);
                 }
+                \$pids[] = \$pid;
             }
 
             if ({$kill}) {
-                posix_kill(\$pid, 9);
-                // Give the kernel a moment to deliver it, so "already dead" is
+                foreach (\$pids as \$pid) {
+                    posix_kill(\$pid, 9);
+                }
+                // Give the kernel a moment to deliver them, so "already dead" is
                 // what is being measured rather than a race with the signal.
                 usleep(100000);
             }
 
-            \$method = new ReflectionMethod(SugarCraft\Crush\Chat::class, 'reapKilledToolChild');
+            \$method = new ReflectionMethod(SugarCraft\Crush\Chat::class, '{$method}');
             \$started = microtime(true);
-            \$method->invoke(null, \$pid);
+            \$method->invoke(null, {$argument});
             \$elapsed = microtime(true) - \$started;
 
             \$status = 0;
-            \$reaped = pcntl_waitpid(\$pid, \$status, WNOHANG) !== 0;
-            if (!\$reaped) {
+            \$reaped = 0;
+            foreach (\$pids as \$pid) {
+                if (pcntl_waitpid(\$pid, \$status, WNOHANG) !== 0) {
+                    \$reaped++;
+
+                    continue;
+                }
+
                 posix_kill(\$pid, 9);
                 pcntl_waitpid(\$pid, \$status);
             }
@@ -126,7 +197,7 @@ final class ToolChildReapTest extends TestCase
 
         self::assertIsArray($decoded, 'the bounded child did not report a reap outcome');
         self::assertIsFloat($decoded['elapsed'] ?? null);
-        self::assertIsBool($decoded['reaped'] ?? null);
+        self::assertIsInt($decoded['reaped'] ?? null);
 
         return $decoded;
     }

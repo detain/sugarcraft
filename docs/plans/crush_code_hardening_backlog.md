@@ -2922,3 +2922,47 @@ Reproduces exactly as written; no correction.
 
 **The two are broken in opposite directions** — `Grep` appends *after* the cap and blows through it,
 `Glob` prepends *before* it and starves the results — which is why they are one fix and not two.
+
+---
+
+## E60 — a hook's non-DENY output is still unbounded prompt text (recorded, not fixed)
+
+**Found by round 37's `cmd` reviewer on the timeout work; fixed only where it was measured.**
+
+`ScriptHook`'s DENY reasons are now clipped at `MAX_DENY_REASON_BYTES` (16 KiB, the figure
+`CommandSpec::MAX_SUBSTITUTION_BYTES` already uses for the same kind of seam). MEASURED before the
+clip: a hook writing 200 KB to stderr and then wedging produced a 200 KB deny message, quoted verbatim
+into the model's tool result by both live gates.
+
+**What is deliberately still unbounded, and why the clip was not simply widened to cover it:**
+
+- **`EXIT_ALLOW` stdout** becomes the tool result message. It is the hook SUCCEEDING, and its size is
+  what the author chose to emit — but it is still unbounded prompt text on a path a runaway hook can
+  reach, and it has not been measured.
+- **`EXIT_ASK` stdout** is a question put to a human; clipping it changes what the human is answering.
+- **`EXIT_MODIFY` stdout** is machine-readable JSON that MUST round-trip. Clipping it turns a rewrite
+  the hook meant to permit into a DENY, which is the failure `modifyOrDeny()` exists to prevent, so
+  this one must never be clipped — it needs a *refusal* above some size, not a truncation.
+
+**Step.** Measure each of the three, then decide per path: clip (ALLOW), refuse-over-size (MODIFY),
+leave (ASK). Do not reach for one constant across all four actions — the four have different failure
+modes and that is the whole content of this entry.
+
+## E61 — a chain of hand-written PHP hooks is bounded by nothing
+
+**Same review, same round; named rather than guessed at.**
+
+`HookRegistry::executeHooks()` now holds a whole-chain deadline and charges every
+`BoundedHookInterface` against it. Only `ScriptHook` implements that interface, because a hand-written
+`HookInterface` is a synchronous method call in this process and there is no portable way to put a
+deadline on one. So:
+
+- a chain of only hand-written hooks gets **no deadline at all** (`chainBudgetSeconds()` returns null
+  rather than zero — arming zero would deny every call the built-in chain ever sees);
+- a hand-written hook **spends** the chain's clock without **contributing** to it, which is deliberate
+  and tested, on the reasoning that the budget bounds the terminal's frozen time and it does not
+  matter to the user which hook spent it.
+
+**Step.** If a hand-written hook ever needs bounding, the mechanism is a fiber or a fork, not another
+constant — and that is a design decision with its own cost, not a follow-up edit. Recorded so a later
+round reads "the chain is bounded" as the qualified claim it is.

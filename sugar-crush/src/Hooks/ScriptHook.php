@@ -42,7 +42,7 @@ namespace SugarCraft\Crush\Hooks;
  * than to an ALLOW: a hook that meant to rewrite dangerous arguments and
  * failed must not have the ORIGINAL arguments run in its place.
  */
-final readonly class ScriptHook implements HookInterface
+final readonly class ScriptHook implements BoundedHookInterface
 {
     /** Action proceeds; stdout is the message. */
     public const EXIT_ALLOW = 0;
@@ -91,13 +91,30 @@ final readonly class ScriptHook implements HookInterface
      * `printf hi; exec 1>&- 2>&-; sleep 30` (the drain finishes at EOF on the
      * first iteration and `proc_close()` holds the CLI for the sleep).
      *
-     * 60 seconds rather than the 10 of
-     * {@see \SugarCraft\Crush\Commands\CommandSpec::SHELL_BUDGET_SECONDS}:
-     * a command file's shell substitution is prompt decoration, while a hook
-     * legitimately shells out to a linter or a policy checker over a whole
-     * repo. It is a DEFAULT and not a cap — an entry that needs longer says so
-     * with `timeout:`, which is the reason the value is configurable at all
-     * rather than being a private constant.
+     * 60 seconds, because a hook legitimately shells out to a linter or a
+     * policy checker over a whole repo. It is a DEFAULT and not a cap — an
+     * entry that needs longer says so with `timeout:`, which is the reason the
+     * value is configurable at all rather than being a private constant.
+     *
+     * THIS IS A PER-HOOK FIGURE AND IT IS NOT ON ITS OWN THE FREEZE BOUND.
+     * The docblock used to reach for
+     * {@see \SugarCraft\Crush\Commands\CommandSpec::SHELL_BUDGET_SECONDS} as
+     * its benchmark ("60 rather than the 10 of…"), and that comparison was
+     * category-wrong in the direction that flatters this number: those 10
+     * seconds are a WHOLE-OPERATION budget — `expandTemplate()` holds them for
+     * the entire expansion and charges each `` !`…` `` the wall time it took —
+     * while 60 here is spent by ONE hook. {@see HookRegistry::executeHooks()}
+     * runs every matching hook in the chain and re-scans it up to
+     * {@see HookRegistry::MAX_REWRITE_PASSES} times, so the CLI freeze this
+     * constant is written to bound was really hooks x passes x 60.
+     *
+     * That is now fixed where it belongs rather than argued away here:
+     * `executeHooks()` holds a WHOLE-CHAIN deadline of its own — the sum of the
+     * matching bounded hooks' declared timeouts, armed once and shared across
+     * every re-scan — and charges each hook against it through
+     * {@see BoundedHookInterface::withTimeoutSeconds()}. So the bound a user can
+     * actually predict is "the total of what my entries asked for, once",
+     * whatever the chain does about rewrites.
      */
     public const DEFAULT_TIMEOUT_SECONDS = 60.0;
 
@@ -113,6 +130,40 @@ final readonly class ScriptHook implements HookInterface
      * nothing wakes the select when the only thing that changed is the clock.
      */
     private const DRAIN_SLICE_SECONDS = 0.2;
+
+    /**
+     * Bytes of the hook's own words a DENY may carry back.
+     *
+     * A DENY REASON GOES STRAIGHT INTO THE MODEL'S CONTEXT. Both live gates
+     * ({@see \SugarCraft\Crush\Chat::gateToolCall()} and
+     * {@see \SugarCraft\Crush\Runtime::gate()}) quote it verbatim into the tool
+     * result, so it is prompt text paid for per token — and it is written by
+     * the process this class has just decided it cannot trust to finish.
+     * MEASURED at fc597e81: a hook that writes 200 KB to stderr and then wedges
+     * produced a 200 KB deny message. The expiry path is the one where a
+     * runaway hook is EXPECTED to be verbose, which is why it is the path that
+     * found this, but the cap is applied to every deny for the plain reason
+     * that `exit 2` with 200 KB of stderr costs exactly the same.
+     *
+     * 16 KiB, the figure
+     * {@see \SugarCraft\Crush\Commands\CommandSpec::MAX_SUBSTITUTION_BYTES}
+     * already uses for the closest thing in the codebase — the bounded seam a
+     * local program's output crosses on its way into a prompt — rather than a
+     * number invented here. Like that one, the clip announces itself, so a
+     * truncated reason reads as truncated to the model instead of as a hook
+     * that stopped talking mid-sentence.
+     *
+     * ONLY THE DENY PATH IS CAPPED, and the other three are left alone on
+     * purpose. An `EXIT_MODIFY`'s stdout is machine-readable JSON that must
+     * round-trip — truncating it turns a rewrite the hook meant to permit into
+     * a deny, which is the failure {@see modifyOrDeny()} exists to avoid. An
+     * `EXIT_ASK`'s stdout is a question put to a human. An `EXIT_ALLOW`'s is
+     * the hook's PRODUCT on the path where it succeeded, and its size is what
+     * the author chose to emit. That last one is still unbounded prompt text
+     * and it is recorded as such in the hardening backlog rather than fixed by
+     * widening this constant's reach past what was measured.
+     */
+    private const MAX_DENY_REASON_BYTES = 16384;
 
     /** Grace given to SIGTERM before {@see terminateAndEscalate()} sends signal 9. */
     private const TERMINATE_GRACE_SECONDS = 0.5;
@@ -130,11 +181,12 @@ final readonly class ScriptHook implements HookInterface
 
     /**
      * $timeoutSeconds is the wall clock this hook's whole run — drain AND
-     * reap — has to finish inside; see {@see DEFAULT_TIMEOUT_SECONDS}. A
-     * non-positive value is NOT "no timeout": {@see execute()} reads it as
-     * "unset" and applies the default, because the one thing this parameter
-     * must not be able to express is the unbounded wait it was added to
-     * remove.
+     * reap — has to finish inside; see {@see DEFAULT_TIMEOUT_SECONDS}. A value
+     * that is not positive AND FINITE is NOT "no timeout":
+     * {@see timeoutSeconds()} reads it as "unset" and applies the default,
+     * because the one thing this parameter must not be able to express is the
+     * unbounded wait it was added to remove — and `INF` expressed it exactly,
+     * being a float that is greater than zero.
      */
     public function __construct(
         private string $name,
@@ -177,16 +229,60 @@ final readonly class ScriptHook implements HookInterface
             matcher: $config['matcher'] ?? '.*',
             command: $config['command'] ?? '',
             description: $config['description'] ?? '',
-            timeoutSeconds: (is_int($timeout) || is_float($timeout)) && $timeout > 0
-                ? (float) $timeout
-                : self::DEFAULT_TIMEOUT_SECONDS,
+            timeoutSeconds: (is_int($timeout) || is_float($timeout))
+                && $timeout > 0
+                && is_finite((float) $timeout)
+                    ? (float) $timeout
+                    : self::DEFAULT_TIMEOUT_SECONDS,
         );
     }
 
-    /** The wall clock one run of this hook gets, in seconds. */
+    /**
+     * The wall clock one run of this hook gets, in seconds.
+     *
+     * FINITE AS WELL AS POSITIVE, and the finite half is load-bearing for a
+     * caller that never went through {@see HookConfig::parse()}: `INF > 0.0` is
+     * true, so `new ScriptHook(..., timeoutSeconds: INF)` produced a deadline of
+     * `microtime(true) + INF` — an instant no clock reaches — and the unbounded
+     * wait this whole class was changed to remove was back. `NAN` fails every
+     * comparison and so reached the default by accident; it now reaches it by
+     * this test, which is the same answer arrived at deliberately.
+     */
     public function timeoutSeconds(): float
     {
-        return $this->timeoutSeconds > 0.0 ? $this->timeoutSeconds : self::DEFAULT_TIMEOUT_SECONDS;
+        return $this->timeoutSeconds > 0.0 && is_finite($this->timeoutSeconds)
+            ? $this->timeoutSeconds
+            : self::DEFAULT_TIMEOUT_SECONDS;
+    }
+
+    /**
+     * The same hook with a shorter bound — see {@see BoundedHookInterface}.
+     *
+     * The clamp is here and not at the caller so that this class keeps the last
+     * word on its own invariant: a chain may only ever SHORTEN a hook's budget,
+     * and a non-finite or non-positive value can no more arrive through this
+     * door than through the constructor.
+     *
+     * THE FLOOR IS NOT DECORATION. {@see timeoutSeconds()} reads a value of
+     * zero as "unset" and answers {@see DEFAULT_TIMEOUT_SECONDS} — so a caller
+     * that handed this method the nothing it had left would have been given
+     * SIXTY SECONDS back, which is the fail-open direction. One
+     * {@see EXIT_POLL_MICROSECONDS} is the shortest bound this class can tell
+     * apart from zero anyway, so it is the floor rather than an invented epsilon.
+     */
+    public function withTimeoutSeconds(float $seconds): self
+    {
+        $floor = self::EXIT_POLL_MICROSECONDS / 1_000_000;
+        $requested = is_finite($seconds) ? max($floor, $seconds) : $floor;
+
+        return new self(
+            $this->name,
+            $this->event,
+            $this->matcher,
+            $this->command,
+            $this->description,
+            min($this->timeoutSeconds(), $requested),
+        );
     }
 
     public function name(): string
@@ -314,7 +410,7 @@ final readonly class ScriptHook implements HookInterface
                 . 'has not answered has not allowed anything. %s',
                 $this->name,
                 rtrim(rtrim(number_format($budget, 3, '.', ''), '0'), '.'),
-                trim($errors) !== '' ? trim($errors) : trim($output),
+                self::clip(trim($errors) !== '' ? trim($errors) : trim($output)),
             )));
         }
 
@@ -325,8 +421,34 @@ final readonly class ScriptHook implements HookInterface
             self::EXIT_ALLOW => HookResult::allow($output),
             self::EXIT_ASK => HookResult::ask($output !== '' ? $output : $this->defaultQuestion()),
             self::EXIT_MODIFY => $this->modifyOrDeny($output),
-            default => HookResult::deny($errors ?: "Hook exited with code $exitCode"),
+            default => HookResult::deny(self::clip($errors) ?: "Hook exited with code $exitCode"),
         };
+    }
+
+    /**
+     * Bound a hook's own words before they become prompt text — see
+     * {@see MAX_DENY_REASON_BYTES}.
+     *
+     * The HEAD is kept and the tail dropped, because a hook explains itself
+     * first and repeats itself afterwards: the sentence naming the file or the
+     * rule is at the top of a linter's output, and the ten thousand lines under
+     * it are instances of it. Cut on a byte boundary and not a character one,
+     * deliberately — this is arbitrary program output, not guaranteed UTF-8,
+     * and the marker that follows makes the seam visible either way.
+     */
+    private static function clip(string $text): string
+    {
+        $length = strlen($text);
+        if ($length <= self::MAX_DENY_REASON_BYTES) {
+            return $text;
+        }
+
+        return substr($text, 0, self::MAX_DENY_REASON_BYTES)
+            . sprintf(
+                ' … [hook output truncated: %d of %d bytes shown; this reason is PARTIAL]',
+                self::MAX_DENY_REASON_BYTES,
+                $length,
+            );
     }
 
     /**

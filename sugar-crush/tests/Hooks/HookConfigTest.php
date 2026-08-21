@@ -656,6 +656,10 @@ YAML;
             'prose is not a number of seconds' => ["'none'"],
             'YAML yes decodes to true, and true > 0 is true' => ['yes'],
             'an empty value decodes to null' => [''],
+            'infinity IS a float greater than zero' => ['.inf'],
+            'a literal that overflows to infinity' => ['1e400'],
+            'negative infinity' => ['-.inf'],
+            'NaN fails every comparison, including <= 0' => ['.nan'],
         ];
     }
 
@@ -670,12 +674,29 @@ YAML;
      * ordering that tested the comparison first would have accepted it and
      * cast it to 1.0.
      *
+     * `.inf` AND `1e400` ARE THE ONES THAT GOT THROUGH, and they are the reason
+     * the guard is `is_finite()` and not just `> 0`. `is_float(INF)` is true and
+     * `INF > 0` is true, so `$deadline = microtime(true) + INF` is an instant
+     * no clock ever reaches — the unbounded wait this key exists to remove, put
+     * back behind an error message that said it could not be asked for.
+     * MEASURED at fc597e81: `timeout: .inf` parsed to `INF`, and a real
+     * ScriptHook on `sleep 300` under an 8-second external clock returned exit
+     * 124 having never returned at all.
+     *
+     * `.nan` is here as a REFUSAL and not a coercion. It fails every
+     * comparison, so it fell past `<= 0` here and then past
+     * {@see ScriptHook::timeoutSeconds()}'s `> 0.0`, arriving at the 60-second
+     * default by two accidents in a row with nothing printed — a number
+     * silently substituted for one the user typed, which is what
+     * `disabled: 'no'` is refused for and worse here because the substituted
+     * value is a security bound.
+     *
      * @dataProvider unusableTimeouts
      */
     public function testParseRefusesATimeoutThatIsNotAPositiveNumber(string $value): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/positive number of seconds/');
+        $this->expectExceptionMessageMatches('/positive, FINITE number/');
 
         HookConfig::parse(
             "hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      timeout: {$value}\n",
@@ -695,5 +716,21 @@ YAML;
         );
 
         $this->assertSame(3.0, ScriptHook::fromConfig($result[0])->timeoutSeconds());
+    }
+
+    /**
+     * The refusal has to reach the WHOLE parse, not just the entry — a hook file
+     * carrying one `.inf` must stop the launch rather than register the hooks
+     * around it.
+     */
+    public function testAnInfiniteTimeoutAnywhereInTheFileStopsTheLoad(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        HookConfig::parse(
+            "hooks:\n  PreToolUse:\n"
+            . "    - name: fine\n      command: 'a.sh'\n      timeout: 5\n"
+            . "    - name: forever\n      command: 'b.sh'\n      timeout: .inf\n",
+        );
     }
 }

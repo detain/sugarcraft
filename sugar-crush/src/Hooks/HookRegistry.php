@@ -281,14 +281,44 @@ final class HookRegistry
      * PostToolUse and so never re-scanned, and a guard being consulted twice
      * is a far smaller problem than a guard being consulted about arguments
      * that are not the ones about to run.
+     *
+     * THE OTHER COST OF THAT RE-SCAN IS WALL CLOCK, AND IT IS BOUNDED HERE.
+     * {@see ScriptHook::DEFAULT_TIMEOUT_SECONDS} bounds ONE hook run; this loop
+     * runs every matching hook and does it again up to
+     * {@see self::MAX_REWRITE_PASSES} times, so "a hook cannot freeze the CLI"
+     * was true of one hook and merely rate-limiting for a chain — hooks x
+     * passes x 60 seconds, on the TUI's own thread. A chain deadline is armed
+     * ONCE, before the first pass, and every bounded hook is charged against
+     * what is left of it: the same shape
+     * {@see \SugarCraft\Crush\Commands\CommandSpec::expandTemplate()} uses for
+     * its shell budget, and for the same reason — a budget that resets per item
+     * is not a budget.
+     *
+     * A CHAIN THAT RUNS OUT IS A DENY, which is the one decision this adds and
+     * it is the same one {@see ScriptHook::execute()} already made for a single
+     * expired hook: the guards still queued behind the expiry have said nothing,
+     * and "allow" would skip them invisibly. It costs the model one retry and
+     * names the budget it exceeded.
      */
     public function executeHooks(string $event, HookContext $context): HookResult
     {
         $modified = null;
         $passes = 0;
 
+        // ARMED ONCE, OUTSIDE THE LOOP — see chainBudgetSeconds(). Inside it,
+        // every re-scan would get a fresh budget and the multiplication by
+        // MAX_REWRITE_PASSES this exists to remove would still be there.
+        $chainBudget = $this->chainBudgetSeconds($event, $context->toolName);
+        $chainDeadline = $chainBudget === null ? null : microtime(true) + $chainBudget;
+
         while (true) {
-            [$blocking, $rewrite, $inertRewrite] = $this->scan($event, $context, $modified?->modifiedInput);
+            [$blocking, $rewrite, $inertRewrite] = $this->scan(
+                $event,
+                $context,
+                $modified?->modifiedInput,
+                $chainDeadline,
+                $chainBudget,
+            );
 
             if ($blocking !== null && !$blocking->isAsk()) {
                 // DENY, or an action this class does not recognise as
@@ -371,6 +401,44 @@ final class HookRegistry
     }
 
     /**
+     * What the WHOLE chain for this event+tool gets, in seconds — or null when
+     * there is nothing here a deadline could be charged to.
+     *
+     * THE SUM OF THE DECLARED TIMEOUTS, and that figure is derived rather than
+     * invented, which is the whole reason it is defensible. Every other
+     * candidate is a guess: a fresh constant is a number somebody eventually
+     * raises for every chain at once (the objection
+     * {@see ScriptHook::DEFAULT_TIMEOUT_SECONDS} already makes about being a
+     * default and not a cap), and reusing the 60-second default as a chain cap
+     * would silently break the legitimate two-hook file whose entries each
+     * asked for 60. Summing honours every author's per-entry figure EXACTLY on
+     * a single pass and takes away only the multiplication by
+     * {@see self::MAX_REWRITE_PASSES} — which no author asked for and none can
+     * see. So the sentence a user can rely on is "at worst, the total of what I
+     * wrote, once".
+     *
+     * NULL RATHER THAN ZERO when no hook in the chain implements
+     * {@see BoundedHookInterface}. A hand-written PHP hook is a synchronous
+     * call in this process with no deadline to honour, so a chain of those is
+     * bounded by nothing here — exactly as it always was — and arming a
+     * zero-second deadline over them would deny every call in the built-in
+     * chain instead. The gap is real and it is named rather than papered over:
+     * see {@see BoundedHookInterface}.
+     */
+    private function chainBudgetSeconds(string $event, string $toolName): ?float
+    {
+        $budget = null;
+
+        foreach ($this->findMatches($event, $toolName) as $hook) {
+            if ($hook instanceof BoundedHookInterface) {
+                $budget = ($budget ?? 0.0) + $hook->timeoutSeconds();
+            }
+        }
+
+        return $budget;
+    }
+
+    /**
      * One full pass over the matching hooks, reporting what it found rather
      * than ranking it: {@see executeHooks()} owns the precedence, because a
      * rewrite and a question found in the SAME pass are not two candidates for
@@ -406,20 +474,52 @@ final class HookRegistry
      *
      * @param ?string $settled the `modifiedInput` the loop has already settled
      *        on, or null on the first pass
+     * @param ?float $chainDeadline `microtime(true)`-based instant the WHOLE
+     *        chain — every hook, every re-scan — has to be finished by. Null
+     *        when no hook in the chain has a bound to charge (see
+     *        {@see chainBudgetSeconds()}).
+     * @param ?float $chainBudget what that deadline was armed with, carried
+     *        only so the refusal can name a number the user recognises
      *
      * @return array{0: ?HookResult, 1: ?HookResult, 2: ?HookResult} [the
      *     result that blocks the call outright — a DENY, or the pass's first
      *     ASK; the pass's first USABLE rewrite, preferring one that is not
      *     already $settled; the pass's first inert rewrite]
      */
-    private function scan(string $event, HookContext $context, ?string $settled = null): array
-    {
+    private function scan(
+        string $event,
+        HookContext $context,
+        ?string $settled = null,
+        ?float $chainDeadline = null,
+        ?float $chainBudget = null,
+    ): array {
         $pendingAsk = null;
         $pendingModify = null;
         $pendingFixedPoint = null;
         $pendingInertModify = null;
 
         foreach ($this->findMatches($event, $context->toolName) as $hook) {
+            if ($chainDeadline !== null && $hook instanceof BoundedHookInterface) {
+                $remaining = $chainDeadline - microtime(true);
+
+                if ($remaining <= 0.0) {
+                    // A DENY, and for the same reason one expired hook is a
+                    // DENY ({@see ScriptHook::execute()}): a chain that has run
+                    // out of clock has not approved anything, and letting the
+                    // call through would silently skip whatever guards are
+                    // still queued behind this point.
+                    return [HookResult::deny(sprintf(
+                        'Hooks for %s did not finish within the %s seconds their timeouts add up to '
+                        . 'and were stopped; a hook chain that has not answered has not allowed anything.',
+                        $context->toolName,
+                        rtrim(rtrim(number_format((float) $chainBudget, 3, '.', ''), '0'), '.'),
+                    )), null, null];
+                }
+
+                // Charged, not granted: withTimeoutSeconds() only ever shortens.
+                $hook = $hook->withTimeoutSeconds($remaining);
+            }
+
             $result = $hook->execute($context);
 
             if (!$result->isAsk() && !$result->permitsExecution()) {

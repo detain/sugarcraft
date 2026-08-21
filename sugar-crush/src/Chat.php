@@ -257,18 +257,22 @@ final class Chat implements Model
     private const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
 
     /**
-     * How long {@see reapKilledToolChild()} spends collecting one SIGKILLed
-     * tool child before giving up on it for this pass.
+     * How long {@see reapKilledToolChildren()} spends collecting a batch of
+     * SIGKILLed tool children before giving up on whatever is left of it.
      *
      * 100ms is two loop frames at the 50ms tick this routine polls on, which
      * is the budget that matters: it has to be long enough that the ordinary
-     * case (the child is already gone) never reaches the end of it, and short
-     * enough that a child which cannot be reaped at all does not become a
+     * case (the children are already gone) never reaches the end of it, and
+     * short enough that a child which cannot be reaped at all does not become a
      * visible stall in the TUI.
+     *
+     * THE WHOLE BATCH, not each child — see
+     * {@see reapKilledToolChildren()} for why that distinction is the fix and
+     * not a detail.
      */
     private const REAP_BUDGET_SECONDS = 0.1;
 
-    /** How often {@see reapKilledToolChild()} re-asks. */
+    /** How often {@see reapKilledToolChildren()} re-asks. */
     private const REAP_POLL_MICROSECONDS = 5_000;
 
     /**
@@ -3324,12 +3328,19 @@ final class Chat implements Model
                 return;
             }
 
+            // Signal them ALL first, then collect them TOGETHER against one
+            // shared budget: killing and reaping pid-by-pid made the stall
+            // proportional to the number of children, which is not what
+            // REAP_BUDGET_SECONDS says.
+            $stragglers = [];
             foreach ($pendingIndexes as $index => $_) {
                 if (function_exists('posix_kill')) {
                     posix_kill($jobs[$index]['pid'], SIGKILL);
                 }
-                self::reapKilledToolChild($jobs[$index]['pid']);
+                $stragglers[] = $jobs[$index]['pid'];
             }
+
+            self::reapKilledToolChildren($stragglers);
 
             $settled = true;
             $loop->cancelTimer($timer);
@@ -3340,8 +3351,9 @@ final class Chat implements Model
     }
 
     /**
-     * Collect a tool child we have just SIGKILLed, over a bounded `WNOHANG`
-     * window.
+     * Collect ONE tool child we have just SIGKILLed, over a bounded `WNOHANG`
+     * window — the single-child spelling of
+     * {@see reapKilledToolChildren()}, which is what the live call site uses.
      *
      * This was an unflagged `pcntl_waitpid()`, which is the same defect
      * {@see \SugarCraft\Crush\Runtime::reapKilled()} already carries the fix
@@ -3362,18 +3374,51 @@ final class Chat implements Model
      */
     private static function reapKilledToolChild(int $pid): void
     {
+        self::reapKilledToolChildren([$pid]);
+    }
+
+    /**
+     * Collect a whole batch of just-SIGKILLed tool children over ONE bounded
+     * `WNOHANG` window.
+     *
+     * THE BUDGET IS PER SITE, NOT PER CHILD, and the singular spelling above
+     * could not deliver that. The give-up branch of
+     * {@see waitForToolChildrenAsync()} calls it once per pending pid, so the
+     * stall it produced was N x {@see REAP_BUDGET_SECONDS}: MEASURED on this
+     * host at fc597e81, 1 child 0.101s, 4 children 0.405s, 8 children 0.810s.
+     * `PARALLEL_TOOL_TIMEOUT_SECONDS` is a fan-out timeout, so "several
+     * children at once" is the ordinary shape of this branch and not the
+     * exotic one — and eight tenths of a second of frozen render and dead
+     * keyboard is exactly the visible stall the 100ms figure was chosen to
+     * stay under.
+     *
+     * Every pid is polled on every turn of the loop rather than one being
+     * drained before the next is looked at, so the budget is SHARED and not
+     * SPENT BY THE FIRST: a batch where child one needs the whole window
+     * would otherwise leave every other child a zombie, this branch having
+     * cancelled its own timer on the way out. A pid still unreaped when the
+     * window closes is left as a zombie deliberately — a slot in the process
+     * table, against a blocked loop being a dead terminal.
+     *
+     * @param list<int> $pids
+     */
+    private static function reapKilledToolChildren(array $pids): void
+    {
+        if ($pids === []) {
+            return;
+        }
+
         $status = 0;
         $deadline = microtime(true) + self::REAP_BUDGET_SECONDS;
 
         while (true) {
-            if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) {
-                return;
+            foreach ($pids as $slot => $pid) {
+                if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) {
+                    unset($pids[$slot]);
+                }
             }
 
-            if (microtime(true) >= $deadline) {
-                // Left for the next pass of this same timer, or for the
-                // process to outlive: a zombie is a slot in the process table,
-                // while a blocked loop is a dead terminal.
+            if ($pids === [] || microtime(true) >= $deadline) {
                 return;
             }
 

@@ -472,6 +472,19 @@ final class BackgroundSessionRunner
      * {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()} and
      * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::terminateAndReap()}.
      *
+     * `\SIGTERM` IS NAMED PLAINLY, and that is the one story this file tells
+     * about ext-pcntl rather than two. It was written `\defined('SIGTERM') ?
+     * \SIGTERM : 15`, two lines above a `\pcntl_waitpid(..., \WNOHANG)` that is
+     * not guarded at all — and the two cannot both be right. The gate at
+     * {@see run()} requires `pcntl_fork` AND `pcntl_waitpid` before anything
+     * here is reachable, and `SIGTERM` comes from the same extension as both,
+     * so either the gate holds and the ternary is unreachable, or it does not
+     * and `\WNOHANG` fatals first. The gate holds; the ternary was decoration
+     * that made the file look as if it doubted its own precondition. What is
+     * genuinely uncertain is ext-POSIX, which is separately compilable — and
+     * that doubt is expressed once, where it is real, in
+     * {@see signalWorker()}.
+     *
      * If signal 9 is also unreaped — an uninterruptible kernel wait, or a
      * build with no ext-posix to signal with at all — the daemon EXITS ANYWAY
      * and records that it did. That leaves an orphan, which is worse than a
@@ -480,7 +493,7 @@ final class BackgroundSessionRunner
      */
     private function stopWorker(int $worker): void
     {
-        $this->signalWorker($worker, \defined('SIGTERM') ? \SIGTERM : 15);
+        $this->signalWorker($worker, \SIGTERM);
 
         if ($this->reapWithin($worker, self::TERMINATE_GRACE_SECONDS)) {
             return;

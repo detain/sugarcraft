@@ -326,8 +326,40 @@ JSON and therefore a deny of a call the hook meant to permit differently.
 ### The timeout
 
 **A hook run is bounded, drain and reap together.** 60 seconds by default;
-`timeout:` on the entry overrides it, and a non-positive value is refused
-rather than read as "no timeout".
+`timeout:` on the entry overrides it, and anything that is not a **positive
+finite** number is refused at load rather than read as "no timeout".
+
+That last word is the whole guard, and it was one word short. `0`, `-1` and
+`'none'` were refused from the start; `.inf` was not — `is_float(INF)` is true
+and `INF > 0` is true, so `timeout: .inf` set a deadline of
+`microtime(true) + INF` and put back exactly the unbounded wait the key exists
+to remove, behind an error message that promised it could not be asked for.
+Measured at `fc597e81`: `timeout: .inf` parsed to `INF`, and a real
+`ScriptHook` on `sleep 300` under an 8-second external clock returned exit 124.
+Every literal that overflows to infinity (`1e400`) did the same, and `.nan`
+fell past the `<= 0` test to be *silently* coerced to 60. All of them are
+refused now, and `.nan` is refused rather than coerced because substituting a
+number for one a user typed is what `disabled: 'no'` is refused for.
+
+**A hook CHAIN is bounded too**, at the sum of its matching entries' timeouts,
+armed once and shared across every re-scan pass. A per-hook bound alone was
+"one hook cannot freeze the CLI" — the chain runs every matching hook and
+re-scans up to `MAX_REWRITE_PASSES` times, so the real freeze was
+hooks x passes x 60. The sum is used rather than a new constant because it is
+the only figure derived from what you already wrote: on a single pass every
+entry gets exactly the budget it asked for, and what is taken away is the
+multiplication nobody asked for. A chain that runs out is a **DENY**, naming
+the budget. Hand-written PHP hooks (`HookInterface` implementations that are
+not `ScriptHook`) are a synchronous call in this process with no deadline to
+honour: they neither contribute to that budget nor are charged against it, and
+a chain made only of those is bounded by nothing here, as it always was.
+
+**A deny reason is clipped at 16 KiB**, with the clip announcing itself. A deny
+message is quoted verbatim into the model's tool result, so it is prompt text
+paid for per token — written by a process this class has just decided it cannot
+trust to finish. `EXIT_MODIFY` JSON, an `EXIT_ASK` question and an `EXIT_ALLOW`
+message are not clipped: the first must round-trip or it becomes a deny of a
+call the hook meant to permit, and the other two are the hook succeeding.
 
 It used to be unbounded in two independent places, and either one alone was
 enough to freeze the CLI — no spinner, no Escape. Measured at `4a4ecb98`, each

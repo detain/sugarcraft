@@ -168,7 +168,16 @@ environment.
 **My `exit 4` rewrite was denied.** Its stdout was not a JSON **object**. A list
 or a scalar is rejected, and the test is on the opening brace of the text.
 
-**The CLI hangs during a hook.** There is no timeout on a hook. Keep them fast.
+**The CLI hangs during a hook.** It should not any more — a hook run is bounded,
+drain and reap together, at 60 seconds by default. `timeout:` on the entry
+overrides it, and anything that is not a positive **finite** number is refused
+at load (`0`, `-1`, `.inf`, `1e400`, `.nan`), because every one of those is how
+somebody asks for the unbounded wait that froze the CLI. A whole **chain** is
+bounded too, at the sum of its entries' timeouts, held across the re-scan passes.
+An expired hook is reported as a **DENY** with whatever it managed to write
+(clipped to 16 KiB), not as an allow. See
+[`HOOKS.md`](HOOKS.md#the-timeout). Keep hooks fast anyway: a hook runs on the
+TUI's own thread, so every second of one is a second the terminal is frozen.
 
 ---
 

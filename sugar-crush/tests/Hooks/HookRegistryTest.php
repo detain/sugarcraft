@@ -1625,6 +1625,181 @@ final class HookRegistryTest extends TestCase
         };
     }
 
+    // =========================================================================
+    // The chain's own deadline
+    // =========================================================================
+
+    /**
+     * THE BUDGET IS THE SUM OF THE BOUNDED ENTRIES' TIMEOUTS.
+     *
+     * Derived and not invented, which is why it is defensible: a fresh constant
+     * is a number somebody eventually raises for every chain at once, and
+     * reusing the 60-second default as a cap would break the legitimate
+     * two-entry file whose hooks each asked for 60. Hand-written hooks name no
+     * figure, so they contribute nothing — and a chain of only those gets no
+     * deadline at all rather than a zero-second one.
+     */
+    public function testTheChainBudgetIsTheSumOfTheBoundedHooksTimeouts(): void
+    {
+        $budget = new \ReflectionMethod(HookRegistry::class, 'chainBudgetSeconds');
+
+        $this->assertNull($budget->invoke($this->registry, 'PreToolUse', 'Bash'), 'nothing registered');
+
+        $this->registry->register($this->createHook('plain', HookEvent::PreToolUse, 'ok', '.*'));
+        $this->assertNull(
+            $budget->invoke($this->registry, 'PreToolUse', 'Bash'),
+            'a hand-written hook has no bound to contribute, and must not arm a zero-second one',
+        );
+
+        $this->registry->register($this->hangingScriptHook('a', 0.5));
+        $this->registry->register($this->hangingScriptHook('b', 1.5));
+        $this->assertSame(2.0, $budget->invoke($this->registry, 'PreToolUse', 'Bash'));
+
+        $this->assertNull(
+            $budget->invoke($this->registry, 'PreToolUse', 'NoSuchTool'),
+            'only the hooks that actually match are budgeted for',
+        );
+    }
+
+    /**
+     * A HOOK IS CHARGED WHAT THE CHAIN HAS LEFT, not what it asked for.
+     *
+     * This is the half that makes the sum a bound rather than an aspiration.
+     * `ScriptHook::DEFAULT_TIMEOUT_SECONDS` bounds ONE hook run, and its
+     * docblock claimed that bound as the answer to "a hook cannot freeze the
+     * CLI" — it is not, because this loop runs every matching hook and re-scans
+     * up to `MAX_REWRITE_PASSES` times, so the real freeze was hooks x passes x
+     * 60 on the TUI's own thread.
+     *
+     * Measured against the hook's OWN report: 200ms is burned before the script
+     * hook is reached, so a hook that asked for half a second is given the three
+     * tenths that are left and says so when it expires. Remove the clamp and the
+     * expiry message reads "0.5 seconds" and the wall clock is 0.7 instead of
+     * 0.5.
+     */
+    public function testABoundedHookIsChargedWhatIsLeftOfTheChainRatherThanItsOwnFigure(): void
+    {
+        $this->registry->register($this->slowAllowingHook('warmup', 300_000));
+        $this->registry->register($this->hangingScriptHook('charged', 0.9));
+
+        $started = microtime(true);
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+        $elapsed = microtime(true) - $started;
+
+        $this->assertTrue($result->isDenied(), 'a hook that has not answered has not allowed anything');
+        $this->assertStringNotContainsString(
+            'within 0.9 seconds',
+            $result->message,
+            'the hook started its own clock instead of being charged the chain\'s',
+        );
+        $this->assertMatchesRegularExpression('/did not finish within 0\.[56]\d* seconds/', $result->message);
+        $this->assertLessThan(
+            1.05,
+            $elapsed,
+            sprintf('the chain ran past its 0.9s budget: %.3fs', $elapsed),
+        );
+    }
+
+    /**
+     * A bounded hook that arrives with nothing left is refused WITHOUT BEING
+     * RUN, and the refusal names the budget rather than the hook — the same
+     * shape `expandTemplate()` uses when a `` !`…` `` arrives after the shell
+     * budget is gone.
+     *
+     * THE CLOCK IS SPENT BY THE WHOLE CHAIN, not only by the hooks that
+     * contributed to it, and this test is that asymmetry stated deliberately. A
+     * hand-written hook cannot name a timeout, so it adds nothing to the budget
+     * — but it shares the one terminal the budget exists to keep responsive, so
+     * it spends it like everything else. A chain whose unbounded hooks have
+     * already burned more than its script hooks asked for has produced exactly
+     * the freeze being bounded, and running the script hook on top of it would
+     * add to a stall that is already over budget.
+     */
+    public function testAChainThatRunsOutOfClockDeniesNamingItsBudgetWithoutRunningTheHook(): void
+    {
+        $this->registry->register($this->slowAllowingHook('warmup', 400_000));
+        $this->registry->register($this->hangingScriptHook('never-reached', 0.2));
+
+        $started = microtime(true);
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+        $elapsed = microtime(true) - $started;
+
+        $this->assertTrue($result->isDenied());
+        $this->assertStringContainsString('0.2 seconds', $result->message);
+        $this->assertLessThan(
+            1.0,
+            $elapsed,
+            'the script hook was run anyway: it sleeps 30s, so reaching it at all shows here',
+        );
+    }
+
+    /** A plain HookInterface that costs wall clock and then permits the call. */
+    private function slowAllowingHook(string $name, int $microseconds): HookInterface
+    {
+        return new class($name, $microseconds) implements HookInterface {
+            public function __construct(
+                private string $name,
+                private int $microseconds,
+            ) {}
+
+            public function name(): string
+            {
+                return $this->name;
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return '.*';
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                usleep($this->microseconds);
+
+                return HookResult::allow();
+            }
+        };
+    }
+
+    /**
+     * NO BOUNDED HOOK, NO DEADLINE — and that is the arm that keeps the whole
+     * built-in chain working.
+     *
+     * A hand-written `HookInterface` is a synchronous call in this process with
+     * no deadline to honour, so a chain of those contributes nothing to the
+     * budget and is charged nothing. Arming a zero-second deadline over them
+     * instead would deny every call the built-ins ever see.
+     */
+    public function testAChainWithNoBoundedHookIsNotGivenADeadlineAtAll(): void
+    {
+        $this->registry->register($this->createHook('plain', HookEvent::PreToolUse, 'ok', '.*'));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->permitsExecution(), 'an unbounded chain still runs');
+    }
+
+    /** A ScriptHook that will not finish inside the budget it is given. */
+    private function hangingScriptHook(
+        string $name,
+        float $timeout,
+        string $matcher = '^Bash$',
+    ): \SugarCraft\Crush\Hooks\ScriptHook {
+        return new \SugarCraft\Crush\Hooks\ScriptHook(
+            name: $name,
+            event: HookEvent::PreToolUse,
+            matcher: $matcher,
+            command: 'sleep 30',
+            description: '',
+            timeoutSeconds: $timeout,
+        );
+    }
+
     private function createContext(string $toolName, string $toolInput = 'input'): HookContext
     {
         return new HookContext(

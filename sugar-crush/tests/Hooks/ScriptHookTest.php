@@ -483,16 +483,79 @@ final class ScriptHookTest extends TestCase
     }
 
     /**
-     * Same pipe pressure, but on the branch that reports stderr back: a
-     * denying hook's message must survive the drain intact rather than being
-     * truncated at the first read.
+     * Same pipe pressure, but on the branch that reports stderr back: a denying
+     * hook's message must survive the DRAIN intact — and is then clipped, once,
+     * on its way into the model's context.
+     *
+     * The two halves are asserted separately because they have separate
+     * mutations, and the second is why this test no longer asserts a length of
+     * 262144. The drain reading everything is what the marker's own byte count
+     * proves: `ScriptHook::clip()` can only name 262144 if 262144 bytes reached
+     * it, so a drain that truncated at the first read would print a smaller
+     * total there and red this test. The clip itself is what stops a hook that
+     * writes a quarter of a megabyte and denies from spending a quarter of a
+     * megabyte of prompt on saying so.
      */
-    public function testALargeStderrMessageIsReportedInFull(): void
+    public function testALargeStderrMessageSurvivesTheDrainAndIsThenClipped(): void
     {
         $result = $this->runHookBounded('printf "%0262144d" 0 >&2; exit 2');
 
         $this->assertSame('deny', $result['action']);
-        $this->assertSame(262144, $result['length']);
+        $this->assertMatchesRegularExpression(
+            '/truncated: 16384 of 262144 bytes shown/',
+            $result['message'],
+            'the drain has to have read all 262144 bytes for the clip to be able to count them',
+        );
+        $this->assertLessThan(
+            20000,
+            $result['length'],
+            'a 256 KiB deny reason went into the prompt whole',
+        );
+    }
+
+    /**
+     * A deny reason that FITS is not touched — the clip must not be a tax on
+     * every hook that explains itself.
+     */
+    public function testAnOrdinaryDenyReasonIsNotClipped(): void
+    {
+        $result = $this->runHookBounded('printf "policy: /etc/passwd is off limits" >&2; exit 2');
+
+        $this->assertSame('deny', $result['action']);
+        $this->assertSame('policy: /etc/passwd is off limits', $result['message']);
+    }
+
+    /**
+     * THE DRAIN MUST NOT BUSY-WAIT while it waits out a silent hook.
+     *
+     * This is the assertion `DRAIN_SLICE_SECONDS` did not have, and without it
+     * the constant survives being mutated to `0.0`: every deadline assertion in
+     * this file still passes, because a zero slice expires ON TIME — it just
+     * spends the entire budget in a `stream_select()` that returns instantly,
+     * at 100% of a core, on the TUI's own thread, for up to sixty seconds.
+     * "Bounded" and "not spinning" are two properties and only one of them was
+     * being tested.
+     *
+     * Measured in the CHILD, around `execute()` itself, so the figure is this
+     * drain's CPU and not the harness's: the hook sleeps for two seconds and
+     * writes nothing, so at the shipped 200ms slice the parent wakes about ten
+     * times and does nothing else at all.
+     */
+    public function testTheDrainWaitsWithoutSpinning(): void
+    {
+        $result = $this->runHookBounded('sleep 2; printf "ok"; exit 0');
+
+        $this->assertSame('allow', $result['action']);
+        $this->assertGreaterThan(1.5, $result['elapsed'], 'the hook has to have actually been waited for');
+        $this->assertLessThan(
+            0.3,
+            $result['cpu'],
+            sprintf(
+                'the drain span instead of waiting: %.3fs CPU over %.3fs wall',
+                $result['cpu'],
+                $result['elapsed'],
+            ),
+        );
     }
 
     /**
@@ -541,7 +604,7 @@ final class ScriptHookTest extends TestCase
      *        from $seconds, which is this test's external clock on the whole
      *        child process
      *
-     * @return array{action: string, message: string, length: int, elapsed: float}
+     * @return array{action: string, message: string, length: int, elapsed: float, cpu: float}
      */
     private function runHookBounded(
         string $command,
@@ -582,6 +645,14 @@ final class ScriptHookTest extends TestCase
                 {$timeout},
             );
 
+            \$cpu = static function (): float {
+                \$u = getrusage() ?: [];
+
+                return (\$u['ru_utime.tv_sec'] ?? 0) + ((\$u['ru_utime.tv_usec'] ?? 0) / 1e6)
+                    + (\$u['ru_stime.tv_sec'] ?? 0) + ((\$u['ru_stime.tv_usec'] ?? 0) / 1e6);
+            };
+
+            \$cpuBefore = \$cpu();
             \$started = microtime(true);
             \$result = \$hook->execute(new SugarCraft\Crush\Hooks\HookContext(
                 'test_session_123', 'TestTool', [], 'test input', 'test output',
@@ -593,6 +664,7 @@ final class ScriptHookTest extends TestCase
                 'message' => \$result->message,
                 'length' => strlen(\$result->message),
                 'elapsed' => microtime(true) - \$started,
+                'cpu' => \$cpu() - \$cpuBefore,
             ]));
             PHP;
 
@@ -611,6 +683,7 @@ final class ScriptHookTest extends TestCase
         self::assertIsString($decoded['message'] ?? null);
         self::assertIsInt($decoded['length'] ?? null);
         self::assertIsFloat($decoded['elapsed'] ?? null);
+        self::assertIsFloat($decoded['cpu'] ?? null);
 
         return $decoded;
     }
@@ -840,6 +913,9 @@ final class ScriptHookTest extends TestCase
             'prose' => ['none'],
             'true' => [true],
             'null' => [null],
+            'infinity' => [INF],
+            'negative infinity' => [-INF],
+            'NaN' => [NAN],
         ];
     }
 
@@ -865,6 +941,78 @@ final class ScriptHookTest extends TestCase
     {
         $this->assertSame(5.0, ScriptHook::fromConfig(['command' => 'g', 'timeout' => 5])->timeoutSeconds());
         $this->assertSame(0.5, ScriptHook::fromConfig(['command' => 'g', 'timeout' => 0.5])->timeoutSeconds());
+    }
+
+    /**
+     * THE CONSTRUCTOR IS A DOOR TOO, and `INF` walked through it.
+     *
+     * {@see HookConfig::parse()} now refuses `timeout: .inf`, but this class is
+     * constructed directly by callers that never saw a file — and `INF > 0.0` is
+     * true, so `timeoutSeconds()` handed it straight back and
+     * `microtime(true) + INF` is an instant no clock reaches. The double cover
+     * is deliberate: the parser is where a user's file is judged, and this is
+     * where the invariant lives.
+     *
+     * @dataProvider nonFiniteConstructorTimeouts
+     */
+    public function testANonFiniteConstructedTimeoutIsReadAsUnset(float $value): void
+    {
+        $hook = new ScriptHook(
+            name: 'g',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'true',
+            description: '',
+            timeoutSeconds: $value,
+        );
+
+        $this->assertSame(ScriptHook::DEFAULT_TIMEOUT_SECONDS, $hook->timeoutSeconds());
+    }
+
+    /**
+     * @return array<string, array{0: float}>
+     */
+    public static function nonFiniteConstructorTimeouts(): array
+    {
+        return ['INF' => [INF], '-INF' => [-INF], 'NAN' => [NAN]];
+    }
+
+    /**
+     * A chain may take budget away from a hook and may never grant it more —
+     * see {@see \SugarCraft\Crush\Hooks\BoundedHookInterface}.
+     */
+    public function testWithTimeoutSecondsOnlyEverShortens(): void
+    {
+        $hook = ScriptHook::fromConfig(['command' => 'g', 'timeout' => 5]);
+
+        $this->assertSame(2.0, $hook->withTimeoutSeconds(2.0)->timeoutSeconds());
+        $this->assertSame(5.0, $hook->withTimeoutSeconds(9.0)->timeoutSeconds(), 'a hook cannot be granted more');
+        $this->assertSame(5.0, $hook->timeoutSeconds(), 'the original is untouched');
+    }
+
+    /**
+     * ZERO REMAINING MUST NOT BECOME SIXTY SECONDS.
+     *
+     * `timeoutSeconds()` reads a zero as "unset" and answers the default, so a
+     * chain handing over the nothing it had left would have been given a full
+     * minute back — the fail-open direction. The floor is one
+     * `EXIT_POLL_MICROSECONDS`, which is the shortest bound this class can tell
+     * apart from zero anyway.
+     */
+    public function testAnExhaustedBudgetFloorsRatherThanRestoringTheDefault(): void
+    {
+        $hook = ScriptHook::fromConfig(['command' => 'g', 'timeout' => 5]);
+
+        foreach ([0.0, -3.0, NAN, -INF] as $exhausted) {
+            $clamped = $hook->withTimeoutSeconds($exhausted)->timeoutSeconds();
+
+            $this->assertGreaterThan(0.0, $clamped);
+            $this->assertLessThan(
+                1.0,
+                $clamped,
+                'an exhausted chain budget was read as "unset" and restored the default',
+            );
+        }
     }
 
     private function createContext(string $projectRoot = '/tmp'): HookContext

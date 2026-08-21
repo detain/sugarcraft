@@ -31,9 +31,11 @@ use Symfony\Component\Yaml\Yaml;
  * figure because the right bound is a hook author's to know: a minute is
  * generous for a policy check and short for a repo-wide linter, and the only
  * alternative to naming it here is a constant somebody eventually raises for
- * every hook at once. Non-positive is REFUSED rather than read as "no
- * timeout" — see {@see ScriptHook::execute()} for why a hook with no bound is
- * a frozen CLI.
+ * every hook at once. Anything that is not a POSITIVE FINITE number is REFUSED
+ * rather than read as "no timeout" — `0`, `-1`, `.inf`, `1e400` and `.nan`
+ * alike; see {@see ScriptHook::execute()} for why a hook with no bound is a
+ * frozen CLI, and the guard in {@see parse()} for what each of those did before
+ * the check was finite as well as positive.
  *
  * What the script's EXIT CODE means — 0 allow, 1/2 deny, 3 ask, 4 modify — is
  * documented in full on {@see ScriptHook}, which is the class that reads it.
@@ -259,7 +261,7 @@ final class HookConfig
                 // has a first-class disable()/isDisabled() pair, so `disabled`
                 // is the natural thing for a user to reach for and it did
                 // exactly nothing. Same exact-key check as the top level: this
-                // format defines five keys and no more.
+                // format defines the six keys in self::ENTRY_KEYS and no more.
                 $unknownKeys = array_diff(array_keys($config), self::ENTRY_KEYS);
                 if ($unknownKeys !== []) {
                     $hint = match (true) {
@@ -327,14 +329,39 @@ final class HookConfig
                 // Same treatment a blank `command:` already gets — key present,
                 // value unusable — rather than the `disabled: ` case's, which
                 // stays lenient because it is not being changed in this bundle.
+                //
+                // `is_finite()` IS THE HALF THAT MAKES THE SENTENCE BELOW TRUE.
+                // Without it `timeout: .inf` — and every literal that overflows
+                // to infinity, `1e400` among them — walked straight through:
+                // `is_float(INF)` is true and `INF > 0` is true, so
+                // `$deadline = microtime(true) + INF` is an instant nothing ever
+                // reaches and the unbounded wait this key exists to remove is
+                // back, behind an error message promising it could not be asked
+                // for. MEASURED at fc597e81: `timeout: .inf` parsed to INF and
+                // a real ScriptHook on `sleep 300` under an 8-second external
+                // clock returned exit 124, never at all.
+                //
+                // `.nan` is REFUSED here rather than coerced, and that is the
+                // decision and not the default. NAN fails every comparison, so
+                // it fell past `<= 0` and then past {@see
+                // ScriptHook::timeoutSeconds()}'s `> 0.0` — arriving at the
+                // 60-second default by two accidents in a row, with nothing
+                // printed. Silently substituting a number for one a user typed
+                // is what `disabled: 'no'` is refused for, and it is worse here
+                // because the substituted value is a SECURITY bound.
                 $timeout = \array_key_exists('timeout', $config)
                     ? $config['timeout']
                     : ScriptHook::DEFAULT_TIMEOUT_SECONDS;
-                if (is_bool($timeout) || (!is_int($timeout) && !is_float($timeout)) || $timeout <= 0) {
+                if (
+                    is_bool($timeout)
+                    || (!is_int($timeout) && !is_float($timeout))
+                    || !is_finite((float) $timeout)
+                    || $timeout <= 0
+                ) {
                     throw new \InvalidArgumentException(
-                        "{$source}: hook '{$name}' has a 'timeout' that is not a positive number of "
-                        . 'seconds; a hook with no bound freezes the whole CLI, so there is no way to '
-                        . 'ask for one.',
+                        "{$source}: hook '{$name}' has a 'timeout' that is not a positive, FINITE number "
+                        . 'of seconds (so `.inf`, `1e400` and `.nan` are refused alongside `0` and `-1`); '
+                        . 'a hook with no bound freezes the whole CLI, so there is no way to ask for one.',
                     );
                 }
 

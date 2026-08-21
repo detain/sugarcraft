@@ -247,22 +247,30 @@ final class BuiltInToolCorpusTest extends TestCase
     /**
      * The doc-block's symbol-kind census, derived. The load-bearing number is the
      * LAST one: `abstract` is the only shape the old `class_exists()`-only guard
-     * classified correctly, and there are none — while the 17 interfaces and 6
+     * classified correctly, and there are none — while the 18 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 285 files declare
-     * 304 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 286 files declare
+     * 305 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
-     * The most recent file is `Context/RepoMapBlock` — the `<repo-map>` system
-     * prompt block that maps a workspace's Composer sub-packages and PSR-4
-     * source directories (crush_code.md P8.8). One `final readonly class` and
-     * nothing else, so this bump is +1 on the file count and +1 on `concrete`,
-     * with every other kind and the whole per-file map below unmoved; its 19
-     * SECONDARY declarations in 8 files are untouched by it.
+     * The most recent file is `Hooks/BoundedHookInterface` — the narrow seam
+     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} charges
+     * against its whole-chain deadline, which only a hook that runs something
+     * OUT of process can honour. One `interface` and nothing else, so this bump
+     * is +1 on the file count and +1 on `interface` — the FIRST bump in a while
+     * that does not land on `concrete`, which is the reason this paragraph says
+     * which kind moved rather than assuming; every other kind and the whole
+     * per-file map below are unmoved, and its 19 SECONDARY declarations in 8
+     * files are untouched by it.
      *
-     * Before it, THREE files arrived at once from three lanes that landed in
+     * Before it, `Context/RepoMapBlock` — the `<repo-map>` system prompt block
+     * that maps a workspace's Composer sub-packages and PSR-4 source
+     * directories (crush_code.md P8.8). One `final readonly class`, so a +1 on
+     * `concrete`.
+     *
+     * Before that, THREE files arrived at once from three lanes that landed in
      * the same window, for a +3 rather than the usual +1:
      * `Tui/Components/AgentSplitColumn` — the live-agent pane the split-pane
      * compositor lays beside the shell band (crush_code.md Phase 8 item 4);
@@ -316,9 +324,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(285, $files, 'php files under src/');
+        $this->assertSame(286, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 236, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
+            ['concrete' => 236, 'enum' => 26, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -347,8 +355,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 285 `.php`
-     * files, 304 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names: 286 `.php`
+     * files, 305 top-level declarations, 19 of them secondary in 8 files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *
@@ -408,8 +416,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(285, count($files), 'php files under src/');
-        $this->assertSame(304, $declarations, 'top-level declarations in them');
+        $this->assertSame(286, count($files), 'php files under src/');
+        $this->assertSame(305, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),
