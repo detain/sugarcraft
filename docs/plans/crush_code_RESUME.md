@@ -117,6 +117,143 @@ completeness asserted against `cases() × probes()`, plus a clause→probe map r
 every sentence to point at a real cell. **A partial anchor table lets an author anchor the claims they
 are confident about — which are the true ones.**
 
+### 🔴 ROUND 36 SCOPE — a scout measured 13 candidates and **8 WERE ALREADY CLOSED**
+
+The plan is unreliable at roughly **2:1** on what is still open. Measured against master at `f3d59e1a`.
+**Do not launch a bundle off this plan's text without re-measuring the item first.**
+
+**CLOSED — do not spend a lane on these. Each is listed as open in the plan and is not:**
+
+| plan claim | reality |
+|---|---|
+| malformed tool-arg crashes a turn (`Runtime.php:195`, no try/catch) | **CLOSED.** Method is at `:446`, not `:195`. Serial path guards at `:562-566`; concurrent path via `executeGuarded()` `:996-1003`. The comment at `:560` says the guard is now *wider* than `Chat::invokeTool()`, not absent |
+| `Glob`'s `**` does not recurse | **CLOSED, proven by execution** — `**/*.php` over `src/Tools` returns 33 results, 11 in nested dirs. Real recursive walker at `Glob.php:301` + `:426-600`; `glob()` kept only as the non-globstar fast path |
+| `Edit` schema `'type' => 'bool'` | **CLOSED, and the never-checked part too** — a repo-wide sweep for `'bool'`/`'int'`/`'str'`/`'number'` as JSON-Schema types returns **zero**. No other tool has it |
+| unindexed `sessions.updated_at` at 60fps; orphan `pruneSessions()` | **CLOSED, all three sub-claims wrong.** The class is `src/Session/SessionStore.php` (**singular** — `src/Sessions/` holds `BackgroundSession*` only); the index exists at `:152-153`; `pruneSessions()` is called from `Bootstrap.php:4538`; and `listSessions()` `:301-306` memoises on a `sessionListStamp()` key, so the render path does not re-query |
+| streaming fake end-to-end | **CLOSED.** `$onToken` fires inside the chunk loop at `Runtime.php:271-274`; `Bootstrap::chat()` passes `streaming: true` at `:598`. The buffer survives only to build the transcript message, documented as deliberate at `:263-268` |
+| no `connect_timeout`; blocking `pcntl_waitpid` | **CLOSED.** `connect_timeout` centralised at `Providers/Concerns/HttpClientDefaults.php:191` — and correctly, **no blanket total timeout** on the curl path. The plan's `EngineBackend.php:357` is `withRoot()`; the real teardown is `reapChild()` `:916-933`, `function_exists` guard plus `WNOHANG`. ⚠️ Residual, different concern: unguarded blocking waitpids DO remain at `Sessions/BackgroundSessionRunner.php:382`,`:400` and `Chat.php:3304` |
+| `-p` degrades to `EchoProvider`, exits 0 | **CLOSED.** Misconfigured provider hard-fails with `EXIT_CONFIG` (`NonInteractive.php:236-247`, `:314`). *No* provider configured still warns and exits 0 — deliberate, documented at `:321-338` as the zero-config offline smoke test |
+| `loadRoot()` monorepo-blind | **CLOSED, and `loadAncestorRoots()` closed THIS item** — not a different concern, as this file previously suspected. Executed: `loadRoot()` from the `sugar-crush` sub-root returns the monorepo `CLAUDE.md`, 25,110 bytes |
+
+**STILL OPEN — the round-36 queue:**
+
+| item | verdict | size | where |
+|---|---|---|---|
+| **`CommandBackend`/`StreamingCommandBackend::completeAsync()` block the loop** | OPEN | M | `CommandBackend.php:140-155` (sync call at `:149`); `StreamingCommandBackend.php:461-484` (defers via `futureTick()` `:464`, then blocks at `:471`) |
+| **checkpoint re-encodes + re-hashes the whole history every turn** | PARTIAL | XS | `Chat.php:5188-5202` (unconditional, no throttle) → `EnhancedSessionStore.php:368`. ⚠️ **Disk is already FIXED** — content-addressed blobs, `INSERT OR IGNORE`, O(N). Only **CPU** is O(N²) (`:428-430` encode, `:534` sha256, every message every turn). Do not repeat the plan's "writes the full history" headline |
+| **async workflow execution — the compositor blocker** | OPEN | L | `Chat.php:6459` `workflowRun()` calls `run()` synchronously at `:6479`, dispatched `:6390` |
+| `statusLine` config | OPEN | M | greenfield, zero occurrences in `src/`/`bin/`. Adds a `src/` file |
+| `keybindings` remap | OPEN | L | **DEFER.** `KeyBindingRegistry` is `final`, never instantiated, entirely static, with two static memo caches and a test trait existing only to reset them; 4 production consumers incl. `Chat.php`. An L refactor for a preference feature |
+
+🔴 **`src/Renderer.php:141-148` POINTS AT THE WRONG ISSUE.** It documents the compositor blocker
+as "KNOWN GAP issue #79", citing `Chat.php:6212`/`:5480`. All three are stale: the real lines are
+`:6479`/`:6390`, and **issue #79 is "Phase 9+: CandyMetrics", state MERGED** — an unrelated closed PR.
+`gh issue list --state open` finds **no issue tracking this at all.** The audit trail points at nothing.
+
+**LANE COLLISION MAP** (`Chat.php` is 10,661 lines — the hottest conflict surface in the tree):
+- `statusLine` + `keybindings` collide (both `Renderer.php` and `Bootstrap.php`).
+- checkpoint-throttle + async-workflow + `keybindings` all collide (all `Chat.php`). **Only one
+  `Chat.php` item per PAIR of lanes** — two `Chat.php` items in the SAME lane is fine, and is what
+  round 36 does.
+- **Safe pairs:** backend-async + `statusLine`; backend-async + any single `Chat.php` bundle.
+
+### 🔴 ROUND 35's SECURITY LESSON — the gate went on the VALUES and not on the WALK
+
+`P8.8`'s implementer did unprompted security work and did it well: `autoload.psr-4` values are
+repository content, so it gated every source root through `ContainedPath::within()`. Its reviewer threw
+**24 attacks** at that gate — `../../..`, `/etc`, `.`, `""`, null byte, backslash separators,
+`a/../a/../a/../../outside`, symlink-then-`..`, symlink chains, symlinked source roots, psr-4 as
+string/list/array, manifest as a JSON array, invalid JSON, `chmod 000`, root-is-a-symlink,
+trailing-slash root — **nothing escaped and nothing threw.**
+
+**And the sub-package WALK that finds the manifests in the first place had no gate at all.**
+`isScannableDir()` uses `is_dir()` and `readManifest()` uses `is_file()`/`file_get_contents()`, all of
+which follow symlinks. A directory symlink among the root's immediate children — **committed to the
+repo, since git stores symlinks as mode `120000` and a clone materialises them** — leads the manifest
+read outside the checkout, and that manifest's `psr-4` prefix and `description` render into **every
+system prompt of the session**. `../` is a fully predictable target and `description` is an unbounded
+attacker-authored string, so this is prompt injection, not merely disclosure.
+
+Three sentences shipped in the same commit asserted it could not happen ("a directory entry cannot
+contain a separator, so it cannot escape"; "nothing here can leave the root"; "no part of the path is
+chosen by model output or by file content"). **The path STRING is caller-supplied; the FILE it
+resolves to is repository-chosen.** That distinction is exactly what `ContainedPath`'s own docblock
+was written about — "THE TENTH WAS ARBITRARY CODE EXECUTION AND ITS INVENTORY ROW WAS GREEN".
+
+**The rule: securing the data a walk RETURNS is not securing the walk. Gate the traversal and the
+values separately, and never let a census row answer "is this path safe?" with a sentence about the
+string rather than about what it resolves to.**
+
+⚠️ **There is a THIRD hand-maintained containment inventory** the round-34/35 briefs did not know
+about: `src/Support/ContainedPath.php:97` ("TWENTY-SEVEN call sites in ELEVEN files"), which is 5 sites
+and 3 files behind the two that ARE derived-and-asserted. A commit claiming "both censuses carry its
+rows" was true of the two it named and silent about this one.
+
+
+### 🔴 ROUND 35's SECOND LESSON — a guard test written around the RESIDUE instead of the THREAT
+
+`/permissions` exists so the app cannot tell you that you are in `plan` while `bypass-permissions`
+runs — its docblock says exactly that. Its reviewer made it tell the **opposite**, using nothing but
+the config file it reads.
+
+`Sanitize::untrusted()` **deliberately preserves LF and CR** (`candy-core/src/Util/Sanitize.php:124`
+strips `[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, excluding 0x09/0x0a/0x0d). The report joins its lines
+with `implode("\n", …)`. So a newline inside a rule pattern or a config path **forges report lines** —
+measured, through the real `Chat::update()`, producing a fake `Permission mode: bypass-permissions`
+row under a gate that was actually `Default`. A CR does overwrite instead.
+
+**The guard test could not have caught it.** It asserted
+`preg_match_all('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', $text) === 0` — a strict SUBSET of what
+`untrusted()` already strips, omitting exactly the bytes that get through. It asserted only what
+calling `untrusted()` at all already guarantees.
+
+**The rule: a guard test written from the sanitiser's byte class tests the sanitiser, not the
+surface.** Write it from the property the surface needs — here, *a report has exactly the number of
+lines the renderer intended, whatever the fields contain* — and it fails for any escape, including the
+ones the sanitiser was never meant to cover.
+
+**Corollary, and it is the same shape as the walk-vs-values lesson above:** both round-35 lanes did
+real, competent security work and both left a hole beside it. One gated the values and not the walk;
+the other sanitised the bytes and not the structure. **Ask what the surface guarantees, not what the
+helper strips.**
+
+
+### 🔴 A NEW `src/` FILE MOVES **THREE** CENSUSES, NOT TWO — put this in every implement brief
+
+Round 35's `sglang` lane reported this as a premise my brief got wrong, and it is the kind of thing
+that reds a lane at the very end of its run. Adding any file under `sugar-crush/src/` moves:
+
+1. `tests/Tools/BuiltInToolCorpusTest.php` — the file/declaration/concrete census (the "census token").
+2. `tests/Integration/BinSugarcrushWiringTest.php` — its provider data-provides one case per file under
+   `src/` plus `bin/sugarcrush`, so one new file silently adds exactly **one test**. Account for it in
+   the delta reconciliation rather than being surprised by it.
+3. **`tests/…/ReadPathCensusTest.php` and `tests/…/ContainedPathInventoryTest.php`** — these red **by
+   construction** the moment a new file introduces a read/execute sink (`scandir`,
+   `file_get_contents`, `RecursiveDirectoryIterator`, …) without naming its containment gate. Both are
+   derived-and-asserted, so this is not optional and cannot be worked around: the sink must declare
+   its gate.
+
+⚠️ **`ContainedPathInventoryTest`'s prose was ALREADY stale before round 35 touched it** — it read
+"THIRTY call sites in THIRTEEN files" while the map it restates summed to **31** across 13. The lane
+corrected it to 32-in-14 and recorded the pre-existing drift in place rather than quietly folding it
+into its own bump. That is the right handling: a number you did not cause is still a number you are
+now standing next to.
+
+
+### PATHS AND LINE NUMBERS CORRECTED BY ROUND-35 LANES — the tree moves under a brief
+
+- **`ARCHITECTURE.md` is at `sugar-crush/docs/ARCHITECTURE.md`**, not `docs/ARCHITECTURE.md`. Its
+  "### The system prompt, in assembly order" section is at **`:226`** — NOT `:192` (long-known wrong)
+  and NOT `:224` (which I asserted as verified last round; it had moved again by one lane's commit).
+- **`Agent::$source` is at `:72`**, not `:69`.
+- **`Chat::helpListing()` DOES NOT EXIST.** The width derivation is at `Chat.php:5705` but inside
+  **`handleHelpCommand()`**. I put the wrong name in a brief and a lane propagated it into four
+  docblocks before its own `{@see}` resolver caught it.
+
+**The rule this earns: a brief's figures are measurements with a timestamp, not facts.** State them as
+claims to check, and tell the lane that reporting a wrong premise is worth more than routing around it
+silently. Both round-35 lanes did exactly that, which is the only reason these are known.
+
 ### ROUND 34's TWO LESSONS — both lanes shipped a test that asserted PRESENCE rather than TRUTH
 
 This is the round's most transferable finding, and it happened **twice, independently, in unrelated
