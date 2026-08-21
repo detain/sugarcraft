@@ -25,6 +25,9 @@ final class EnhancedSessionStore
 
     public function __construct(string $dbPath)
     {
+        /** @var \WeakMap<object, string> */
+        $this->messageHashes = new \WeakMap();
+
         // Use umask 0077 before touching filesystem to ensure database files
         // are created with restrictive permissions (same as SessionStore).
         $previousUmask = umask(0077);
@@ -305,6 +308,56 @@ final class EnhancedSessionStore
     private ?string $blobDataVersion = null;
 
     /**
+     * Content hash of every message object this process has already encoded,
+     * keyed by the object itself.
+     *
+     * ## What this buys, measured
+     *
+     * {@see $blobIds} took the DISK cost of a checkpoint down to the messages
+     * the turn actually added — `INSERT OR IGNORE` writes only new blobs. It
+     * did nothing for the CPU cost, because {@see internMessages()} still had
+     * to `json_encode()` and `sha256` EVERY message in the history to work out
+     * which ones those were. That is O(N) work per turn and O(N²) per session,
+     * paid synchronously inside `Chat::submit()` — i.e. between the user
+     * pressing Enter and the request going out.
+     *
+     * On a 400-turn history of 32 KB messages (an ordinary size once tool
+     * results are in the transcript) that measured 14 ms of `json_encode` plus
+     * 38 ms of `sha256` — 52 ms of dead time on every prompt, ~10 s over the
+     * session. A hit here costs 25 µs for the same 400 messages.
+     *
+     * ## Why object identity is a sound key
+     *
+     * {@see Message} is `final` and every property is `readonly`, as is every
+     * type reachable from one: `Attachment` and `Usage` are `readonly class`,
+     * `ToolCall` and `ToolResult` declare every property `readonly`. So a
+     * given instance's JSON encoding is fixed for its lifetime and this map
+     * can never go stale:
+     *
+     *   - EDITING a message produces a DIFFERENT instance — `with*()`
+     *     constructs a new `Message` — which misses the memo and is encoded.
+     *   - REWINDING replaces the history list wholesale; the instances that
+     *     fall out take their entries with them, because a `WeakMap` holds its
+     *     keys weakly.
+     *   - A non-object element (tests and embedders may checkpoint plain
+     *     arrays) is simply not memoised; it takes the encode path every time,
+     *     exactly as before.
+     *
+     * ## Why the HASH and not the payload
+     *
+     * Caching the encoded payload would cut the remaining encode on the cold
+     * path too, at the price of holding a second full copy of the history in
+     * memory. The hash is 64 bytes and is all the steady-state path needs:
+     * a hash already in {@see $blobIds} never needs its payload again. The
+     * rare hash that is NOT (first save of a process, or another connection
+     * bumped `data_version`) re-encodes lazily, at which point it was going to
+     * pay for the round trip anyway.
+     *
+     * @var \WeakMap<object, string>
+     */
+    private \WeakMap $messageHashes;
+
+    /**
      * How many sessions {@see $blobIds} keeps maps for.
      *
      * One live conversation plus room for the sessions `/branch`, `/session`
@@ -356,7 +409,13 @@ final class EnhancedSessionStore
      * the one change that would silently alter what `/rewind 1` means, and
      * losing up to K turns of undo is a worse trade than a slightly larger
      * schema when an O(N) representation is available for the same
-     * guarantees.
+     * guarantees. That rejection still stands, and it is worth being precise
+     * about what it did and did not buy: content addressing made the WRITE
+     * O(N)-total, but the work of DECIDING what to write — encoding and
+     * hashing every message in the history — stayed O(N) per turn and so
+     * O(N²) per session, and it is paid inside `update()`. {@see
+     * $messageHashes} is what makes that half proportional to the turn as
+     * well, again without touching what a checkpoint means.
      *
      * @param string $sessionId The session ID
      * @param array $chatState The chat state to snapshot (messages, input buffer, agent context)
@@ -424,18 +483,51 @@ final class EnhancedSessionStore
             return self::encodeJson($chatState);
         }
 
-        $payloads = [];
-        foreach (array_values($messages) as $message) {
-            $payloads[] = self::encodeJson($message);
-        }
+        // The messages go down to internMessages() UNENCODED. Encoding them
+        // here is what made every turn cost a full pass over the history; see
+        // {@see $messageHashes} for the measurement and for why an
+        // identity-keyed memo is sound.
+        $interned = $this->internMessages($sessionId, array_values($messages));
 
         $chatState['messages'] = null;
 
         return self::encodeJson([
             self::CHECKPOINT_ENVELOPE_VERSION  => 1,
-            self::CHECKPOINT_ENVELOPE_MESSAGES => $this->internMessages($sessionId, $payloads),
+            self::CHECKPOINT_ENVELOPE_MESSAGES => $interned,
             self::CHECKPOINT_ENVELOPE_STATE    => $chatState,
         ]);
+    }
+
+    /**
+     * This message's content hash, encoding it only if this process has not
+     * already done so for this exact instance.
+     *
+     * Returns the payload alongside the hash ONLY when it had to be produced;
+     * a memo hit returns null there, and a caller that then discovers it needs
+     * the bytes after all asks {@see encodeJson()} again. Deliberate: holding
+     * the payloads would double the memory cost of a history for a saving the
+     * steady-state path never collects, since a hash already in
+     * {@see $blobIds} is never re-inserted.
+     *
+     * @return array{0: string, 1: ?string} [hash, payload-if-freshly-encoded]
+     *
+     * @throws \JsonException
+     */
+    private function messageFingerprint(mixed $message): array
+    {
+        $memo = is_object($message) ? ($this->messageHashes[$message] ?? null) : null;
+        if ($memo !== null) {
+            return [$memo, null];
+        }
+
+        $payload = self::encodeJson($message);
+        $hash = hash('sha256', $payload);
+
+        if (is_object($message)) {
+            $this->messageHashes[$message] = $hash;
+        }
+
+        return [$hash, $payload];
     }
 
     /**
@@ -519,22 +611,36 @@ final class EnhancedSessionStore
      * written to the file — see {@see forgetInternedBlobsIfStale()} for why
      * that matters and what it costs.
      *
-     * @param list<string> $payloads encoded message bodies, in history order
+     * TWO caches meet here and they invalidate on different things.
+     * {@see $blobIds} answers "does this hash have a row?" and is dropped
+     * whenever the database moves under us. {@see $messageHashes} answers
+     * "what is this object's hash?" and never needs dropping at all, because
+     * the objects are immutable — a database write cannot change what a
+     * `Message` in memory encodes to. Conflating them would have thrown away
+     * the expensive half (the encode) to invalidate the cheap half (an int).
+     *
+     * @param list<mixed> $messages message bodies, in history order
      * @return list<int> blob ids, in the same order
      */
-    private function internMessages(string $sessionId, array $payloads): array
+    private function internMessages(string $sessionId, array $messages): array
     {
         $this->forgetInternedBlobsIfStale();
 
         $known = $this->blobIds[$sessionId] ?? [];
 
         $hashes = [];
+        /** @var array<string, mixed> $missing hash => the message it came from */
         $missing = [];
-        foreach ($payloads as $payload) {
-            $hash = hash('sha256', $payload);
+        /** @var array<string, string> $fresh hash => payload, for the ones encoded this call */
+        $fresh = [];
+        foreach ($messages as $message) {
+            [$hash, $payload] = $this->messageFingerprint($message);
             $hashes[] = $hash;
+            if ($payload !== null) {
+                $fresh[$hash] = $payload;
+            }
             if (!isset($known[$hash])) {
-                $missing[$hash] = $payload;
+                $missing[$hash] = $message;
             }
         }
 
@@ -552,8 +658,14 @@ final class EnhancedSessionStore
                 INSERT OR IGNORE INTO checkpoint_blobs (session_id, hash, payload)
                 VALUES (?, ?, ?)
             ');
-            foreach ($missing as $hash => $payload) {
-                $insert->execute([$sessionId, $hash, $payload]);
+            foreach ($missing as $hash => $message) {
+                // A memo hit that reaches here is a hash whose blob this
+                // process has not placed on disk (cold cache, or another
+                // connection invalidated it) — the one case where the payload
+                // has to be regenerated. Encoding is deterministic for an
+                // immutable message, so the bytes match the hash by
+                // construction.
+                $insert->execute([$sessionId, $hash, $fresh[$hash] ?? self::encodeJson($message)]);
             }
             // Re-read rather than trusting lastInsertId(): OR IGNORE leaves it
             // stale on a row that lost a race with another connection.

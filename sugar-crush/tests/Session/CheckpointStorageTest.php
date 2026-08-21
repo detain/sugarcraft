@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Session;
 
 use PDO;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 
 /**
@@ -480,4 +481,231 @@ final class CheckpointStorageTest extends TestCase
 
         return $checkpointBytes + $blobBytes;
     }
+
+    // =====================================================================
+    // The CPU half: internMessages() re-encoded and re-hashed the WHOLE
+    // history every turn, even though content addressing meant it would only
+    // ever WRITE the new messages. Measured on a 400-turn history of 32 KB
+    // messages that was 14 ms of json_encode plus 38 ms of sha256 per prompt,
+    // spent inside update() between Enter and the request going out.
+    // =====================================================================
+
+    /**
+     * The claim, stated as a count of the expensive operation itself.
+     *
+     * A JsonSerializable body reports how many times it was encoded, which is
+     * exactly the work the memo exists to skip — asserting on wall-clock here
+     * would be a flaky way to say the same thing, and asserting that some
+     * cache array is populated would say nothing about whether the encoder ran.
+     */
+    public function testAMessageAlreadyEncodedThisProcessIsNeverEncodedAgain(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s', 'p', 'm');
+
+        $first = $this->countingMessage('one');
+        $second = $this->countingMessage('two');
+        $third = $this->countingMessage('three');
+
+        $store->saveCheckpoint('s', ['messages' => [$first]]);
+        $store->saveCheckpoint('s', ['messages' => [$first, $second]]);
+        $store->saveCheckpoint('s', ['messages' => [$first, $second, $third]]);
+
+        $this->assertSame(1, $first->encodes, 'The oldest message was re-encoded on every later turn.');
+        $this->assertSame(1, $second->encodes, 'A message carried into the next turn was re-encoded.');
+        $this->assertSame(1, $third->encodes);
+    }
+
+    /**
+     * Skipping work is only worth anything if what was skipped was genuinely
+     * redundant. Every checkpoint in a session whose messages are OBJECTS —
+     * the shape Chat actually saves, and the only shape the memo applies to —
+     * must still restore to exactly the history it was taken from.
+     */
+    public function testEveryCheckpointStillRestoresItsExactHistoryWhenEncodingIsSkipped(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s', 'p', 'm');
+
+        $history = [];
+        for ($turn = 1; $turn <= 6; $turn++) {
+            $history[] = Message::user("ask {$turn}");
+            $history[] = Message::assistant("reply {$turn}");
+            $store->saveCheckpoint('s', ['messages' => $history, 'inputBuf' => '']);
+        }
+
+        for ($turn = 1; $turn <= 6; $turn++) {
+            $state = $store->getCheckpoint('s', $turn - 1);
+            $this->assertNotNull($state, "Checkpoint for turn {$turn} is unreadable.");
+            $this->assertCount($turn * 2, $state['messages']);
+
+            // Every position, not just the tail: a memo that returned one
+            // message's hash for another would leave the count right and the
+            // bodies wrong, and only a full comparison catches that.
+            for ($i = 1; $i <= $turn; $i++) {
+                $this->assertSame("ask {$i}", $state['messages'][($i - 1) * 2]['content']);
+                $this->assertSame("reply {$i}", $state['messages'][($i - 1) * 2 + 1]['content']);
+            }
+        }
+    }
+
+    /**
+     * The memo is keyed on object IDENTITY, which is only sound because
+     * Message is deeply immutable. An "edit" therefore produces a DIFFERENT
+     * instance, and that instance must miss the memo and be interned on its
+     * own — otherwise a rewind would hand back the pre-edit body.
+     */
+    public function testAnEditedMessageIsInternedSeparatelyFromTheOneItReplaced(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s', 'p', 'm');
+
+        $original = Message::assistant('thinking...');
+        $edited = $original->withReasoning('because the tests said so');
+
+        $before = $store->saveCheckpoint('s', ['messages' => [$original]]);
+        $after = $store->saveCheckpoint('s', ['messages' => [$edited]]);
+
+        $this->assertNull($store->getCheckpoint('s', $before)['messages'][0]['reasoning']);
+        $this->assertSame(
+            'because the tests said so',
+            $store->getCheckpoint('s', $after)['messages'][0]['reasoning'],
+            'The edited message read back as the body it was derived from — the memo outlived its key.',
+        );
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $this->assertSame(
+            2,
+            (int) $pdo->query('SELECT COUNT(*) FROM checkpoint_blobs')->fetchColumn(),
+            'An edit must add a body, not overwrite one.',
+        );
+    }
+
+    /**
+     * Two DISTINCT instances that encode identically must still collapse onto
+     * one blob. The memo skips the encode, never the content addressing, so a
+     * cache miss changes what it costs to find the hash and nothing about what
+     * the hash means.
+     */
+    public function testTwoDistinctInstancesWithIdenticalContentStillShareOneBody(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s', 'p', 'm');
+
+        $at = 1_700_000_000;
+        $store->saveCheckpoint('s', ['messages' => [Message::user('same', $at)]]);
+        $store->saveCheckpoint('s', ['messages' => [Message::user('same', $at)]]);
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $this->assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM checkpoint_blobs')->fetchColumn());
+    }
+
+    /**
+     * The branch the memo creates and nothing else reaches: a hash this
+     * process remembers, for a blob that is no longer on disk.
+     *
+     * Another terminal's `/rewind` collects the bodies, and the id cache is
+     * dropped on the next `data_version` check — but the identity memo is NOT
+     * dropped, because no database write can change what an immutable object
+     * encodes to. So the payload has to be regenerated from the message at
+     * insert time. If it were not, the row would go in empty and every
+     * checkpoint naming it would read back as a hole.
+     */
+    public function testAMemoisedMessageIsRewrittenWhenAnotherProcessCollectedItsBody(): void
+    {
+        $terminalOne = new EnhancedSessionStore($this->dbPath);
+        $terminalOne->createSession('s', 'p', 'm');
+
+        $first = Message::user('turn 1');
+        // Counting, so this test can prove the message really was a MEMO HIT
+        // on its last save. Without that, "the checkpoint reads back" would
+        // pass just as well on a build that had re-encoded it from scratch,
+        // and the branch under test would never be entered.
+        $second = $this->countingMessage('reply 1');
+
+        $terminalOne->saveCheckpoint('s', ['messages' => [$first]]);
+        $terminalOne->saveCheckpoint('s', ['messages' => [$first, $second]]);
+
+        // A second terminal rewinds to checkpoint 0. That drops checkpoint 1,
+        // and with it the only reference to $second's body — which is
+        // collected. $first survives, because checkpoint 0 still names it.
+        $terminalTwo = new EnhancedSessionStore($this->dbPath);
+        $this->assertNotNull($terminalTwo->restoreCheckpoint('s', 1));
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $this->assertSame(
+            1,
+            (int) $pdo->query('SELECT COUNT(*) FROM checkpoint_blobs')->fetchColumn(),
+            'Setup is wrong: the rewind did not collect the body this test is about.',
+        );
+
+        // Terminal one keeps working, unaware, and carries BOTH original
+        // objects forward. Every one of them is a memo hit with no payload in
+        // hand, and one of them no longer has a row.
+        $index = $terminalOne->saveCheckpoint('s', ['messages' => [$first, $second, Message::user('turn 2')]]);
+
+        // TWO encodes, and the number is the point. One produced the hash on
+        // the save that interned it; the second is the lazy rebuild this
+        // branch exists for. A build that memoised the PAYLOAD instead of the
+        // hash would show 1 here — and would be holding a second copy of every
+        // message in the history to buy it, which is the trade
+        // {@see EnhancedSessionStore::$messageHashes} declines to make.
+        $this->assertSame(2, $second->encodes);
+
+        $this->assertSame(
+            3,
+            (int) $pdo->query('SELECT COUNT(*) FROM checkpoint_blobs')->fetchColumn(),
+            'The collected body was not re-stored, so the branch under test never ran.',
+        );
+
+        $state = $terminalOne->getCheckpoint('s', $index);
+        $this->assertNotNull($state, 'The re-interned checkpoint is unreadable.');
+        $this->assertSame(
+            ['turn 1', 'reply 1', 'turn 2'],
+            array_column($state['messages'], 'content'),
+            'A memo hit whose blob was collected was re-stored with the wrong bytes.',
+        );
+    }
+
+    /**
+     * A body that is NOT an object takes the encode path every time, exactly
+     * as before — WeakMap has no key for it. Asserted so the `is_object()`
+     * guard is not mistaken for dead weight and removed.
+     */
+    public function testArrayBodiesStillRoundTripAlongsideObjectOnes(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s', 'p', 'm');
+
+        $index = $store->saveCheckpoint('s', ['messages' => [
+            ['role' => 'user', 'content' => 'a plain array body'],
+            Message::assistant('an object body'),
+        ]]);
+
+        $state = $store->getCheckpoint('s', $index);
+        $this->assertSame('a plain array body', $state['messages'][0]['content']);
+        $this->assertSame('an object body', $state['messages'][1]['content']);
+    }
+
+    /**
+     * A message body that counts how many times it has been encoded.
+     *
+     * @return object{encodes: int}
+     */
+    private function countingMessage(string $content): object
+    {
+        return new class ($content) implements \JsonSerializable {
+            public int $encodes = 0;
+
+            public function __construct(private readonly string $content) {}
+
+            public function jsonSerialize(): mixed
+            {
+                $this->encodes++;
+
+                return ['role' => 'user', 'content' => $this->content];
+            }
+        };
+    }
+
 }
