@@ -5463,7 +5463,6 @@ final class Chat implements Model
                 // without a modifier key.
                 'exit', 'quit' => [$this, Cmd::quit()],
                 'keys' => $this->handleKeysCommand(),
-                'permissions' => $this->handlePermissionsCommand($text),
                 'help' => $this->handleHelpCommand(),
                 'clear' => $this->handleClearCommand(),
                 default => null,
@@ -5478,6 +5477,25 @@ final class Chat implements Model
         // parsing already, and re-splitting it here would be a second parse to
         // keep in step with theirs.
         return match ($parsed->name) {
+            // Down here rather than in the bare-only block above, and this is a
+            // DELIBERATE break with `/keys`, which it otherwise resembles.
+            //
+            // `/help me name this variable` is prose, so `help` is bare-only;
+            // `/keys extra` is the same judgement one notch weaker. Measured,
+            // `permissions` shipped in that block and so `/permissions rules`
+            // went to the MODEL — which is the exact defect this command was
+            // added to fix, surviving in every spelling but one. The cost is
+            // not symmetric here: `/keys` mis-routed is a reference screen a
+            // model answers badly, `/permissions` mis-routed is a question
+            // about the local gate answered by the one participant that cannot
+            // see it, and answered plausibly.
+            //
+            // The argument is then IGNORED, not parsed, because the report is
+            // total: mode, source, every rule in evaluation order, and the
+            // breaker. There is no sub-view for `/permissions rules` to select
+            // — it is already on the screen — so every spelling gets a superset
+            // of what it asked for rather than a "no such subcommand".
+            'permissions' => $this->handlePermissionsCommand($text),
             'compact' => $this->handleCompactCommand($text),
             'budget' => $this->handleBudgetCommand($text),
             'workflow' => $this->handleWorkflowCommand($text),
@@ -5650,7 +5668,9 @@ final class Chat implements Model
      * gate grew read-only doors for this; nothing here calls the evaluator.
      *
      * Rule patterns, classifier categories AND the mode source are run through
-     * {@see Sanitize::untrusted()} on the way out. All three are
+     * {@see reportField()} on the way out — NOT through
+     * {@see Sanitize::untrusted()} directly, which preserves the two bytes that
+     * matter most to a report built line-per-fact. All three are
      * caller-supplied text landing in the transcript — the source label is
      * built around a config path that `--config` can name — and an ESC byte in
      * any of them would put raw ANSI in front of the frame-diff renderer. That
@@ -5658,10 +5678,21 @@ final class Chat implements Model
      * guards at the SOURCE for the `ob_start()`-captured commands; this one is
      * not among them (it writes no stdout, so that census cannot see it by
      * construction), and its guard is
-     * `Commands\PermissionsCommandTest::testNoConfiguredValueCanPutEscapeBytesInTheTranscript()`
+     * `Commands\PermissionsCommandTest::testTheReportHasExactlyTheLinesTheRendererIntended()`
      * — a RUNTIME check on the bytes actually produced, which is the stronger
      * half of that pair anyway. The mode source was measured getting through
      * before that test was written.
+     *
+     * A LINE OF THIS REPORT IS ONE LINE BY CONSTRUCTION, and that is a property
+     * of the whole method rather than of any field: `$lines` is assembled here
+     * and joined with `"\n"` at the bottom, so the report's line count is
+     * exactly `count($rules) + 6` for every possible config — the mode line,
+     * the description, a blank, one rules line (the header, or the "none
+     * configured" sentence that stands in its place, which is why the formula
+     * needs no special case at zero), one line per rule, a blank, and the
+     * breaker. Nothing a caller supplies may change it.
+     * {@see reportField()} is what enforces
+     * that, and the paragraph there records what got through before it existed.
      */
     private function permissionsReport(): string
     {
@@ -5690,7 +5721,7 @@ final class Chat implements Model
                 $mode->value,
                 $gate->modeSource() === null
                     ? 'a source this gate did not record'
-                    : Sanitize::untrusted($gate->modeSource()),
+                    : self::reportField($gate->modeSource()),
             ),
             $mode->description(),
             '',
@@ -5702,8 +5733,18 @@ final class Chat implements Model
             // enumerates every dot-path literal in src/ and a trailing period
             // makes `config.json.` a second, unclassified entry — measured, it
             // reds that inventory.
+            // BOTH files are named, and the omission this replaces was one the
+            // feature already knew about: `Cli\Bootstrap::PERMISSION_SETTINGS_KEYS`
+            // lists `permissionRules`, `permissionConfigLayers()` merges the
+            // `settings.json` layer beneath `config.json`, and
+            // `Cli\BootstrapToolAndPermissionSettingsTest::testTheGateRemembersWhichFileSetTheMode()`
+            // asserts the source label printed one line above this one can read
+            // `settings.json`. Sending a user to edit one of two files
+            // is a coin flip they lose half the time, and they lose it silently
+            // — rules in the file this sentence did not name still load.
             $lines[] = 'Rules: none configured, so every decision above is the mode\'s own. '
-                . 'The `permissionRules` array in ~/.sugar-crush/config.json is where they go.';
+                . 'A `permissionRules` array in ~/.sugar-crush/config.json or in '
+                . '~/.sugar-crush/settings.json is where they go; config.json wins where both set a key.';
         } else {
             $lines[] = sprintf(
                 'Rules (%d), tried in this order — the first one that matches decides, ahead of the mode:',
@@ -5714,7 +5755,7 @@ final class Chat implements Model
                     '  %d. %-5s %s',
                     $index + 1,
                     $rule->action->value,
-                    Sanitize::untrusted($rule->pattern),
+                    self::reportField($rule->pattern),
                 );
             }
         }
@@ -5723,6 +5764,56 @@ final class Chat implements Model
         $lines[] = self::autoBreakerLine($gate);
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * One caller-supplied value, made safe to be PART OF A REPORT LINE.
+     *
+     * {@see Sanitize::untrusted()} is the wrong tool on its own here, and the
+     * reason is a deliberate feature of it: it PRESERVES `\t`, `\n` and `\r`
+     * (`Util\Sanitize` strips `[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, and those
+     * three are excluded). That is right for a sink that renders a paragraph
+     * and wrong for one that builds a line-per-fact report and joins with
+     * `"\n"`: an LF inside a rule pattern or a `--config` path does not become
+     * visible text, it becomes A NEW REPORT LINE, indistinguishable from one
+     * this method wrote.
+     *
+     * MEASURED, on the build that shipped this screen. A single rule whose
+     * `pattern` carried two LFs added
+     * `Permission mode: bypass-permissions - from --permission-mode` to a
+     * report drawn off a gate that was in `default`; a `modeSource` carrying
+     * LFs added `Rules (9), tried in this order:` to a gate holding no rules at
+     * all; and a CR mid-pattern let the tail of the value overwrite the head of
+     * its own line on a real terminal. So the screen whose entire purpose is to
+     * stop a lie about permissions could be made to tell one, in the gate's own
+     * voice, by the config it reads — and `permissionRules[].pattern` is
+     * validated only by `is_string()` in {@see \SugarCraft\Crush\Cli\Bootstrap},
+     * while `~/.sugar-crush/config.json` is writable by any model holding
+     * `Write` under `auto` or `bypass-permissions`.
+     *
+     * ESCAPED, not stripped. A pattern that really does contain a newline is a
+     * broken rule its author needs to SEE; deleting the byte silently would
+     * print a pattern that is not the one the gate is matching with, which is
+     * the same class of lie one step quieter. `\n` renders as the two
+     * characters a user would have typed. TAB goes with them: it forges no
+     * line, but it does move the cursor across the `%-5s` action column and
+     * mis-set the alignment that makes the rule list readable as a table.
+     *
+     * The guard is
+     * `Commands\PermissionsCommandTest::testTheReportHasExactlyTheLinesTheRendererIntended()`,
+     * which counts LINES against the count the renderer intended rather than
+     * scanning for residue bytes — the residue scan that shipped with this
+     * screen asserted a byte class that was a strict SUBSET of what
+     * `untrusted()` already removes, so it could only ever confirm that
+     * `untrusted()` had been called.
+     */
+    private static function reportField(string $value): string
+    {
+        return strtr(Sanitize::untrusted($value), [
+            "\n" => '\\n',
+            "\r" => '\\r',
+            "\t" => '\\t',
+        ]);
     }
 
     /**
@@ -5757,7 +5848,7 @@ final class Chat implements Model
             $breaker['strikeThreshold'],
             $breaker['lastBlockedCategory'] === null
                 ? 'nothing blocked yet'
-                : 'last category: ' . Sanitize::untrusted($breaker['lastBlockedCategory']),
+                : 'last category: ' . self::reportField($breaker['lastBlockedCategory']),
             $breaker['totalBlocks'],
             $breaker['totalBlockThreshold'],
         );

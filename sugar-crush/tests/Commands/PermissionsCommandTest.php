@@ -132,6 +132,107 @@ final class PermissionsCommandTest extends TestCase
     }
 
     /**
+     * The defect SURVIVED ITS OWN FIX in every spelling but the bare one.
+     *
+     * `permissions` shipped in `dispatchCommand()`'s bare-only block — the
+     * `$text === '/' . $name` branch that exists so `/help me name this
+     * variable` stays a prompt. Measured on that build: `/permissions` was
+     * answered locally and `/permissions rules` set `inFlight`, i.e. went to
+     * the MODEL. The commit's own framing — "a question about LOCAL policy went
+     * to the model, which is the one participant that cannot see the gate" —
+     * was still true for every argument spelling.
+     *
+     * `/keys extra` behaves the old way and is deliberately left alone: it is a
+     * reference screen, and a model answering it badly costs a wrong keybinding.
+     * This is a security surface, and a model answering it badly costs a user
+     * who believes the wrong thing about what is gating their session — stated
+     * fluently, because that is what a model with no view of the gate produces.
+     *
+     * @param string $draft every spelling a user might reach for
+     */
+    #[DataProvider('permissionsSpellings')]
+    public function testEverySpellingOfPermissionsIsAnsweredLocally(string $draft): void
+    {
+        $next = $this->submit($this->chat(new PermissionGate(PermissionMode::Plan), $draft));
+
+        self::assertFalse($next->inFlight, $draft . ' reached the model instead of a handler');
+        self::assertSame('', $next->inputBuf, 'the submitted draft must be consumed');
+
+        $added = array_slice($next->history, 2);
+        self::assertCount(2, $added, $draft . ' must echo the command and answer it');
+        self::assertSame($draft, $added[0]->content, 'the echo should be what was typed');
+        self::assertStringContainsString(
+            'Permission mode: plan',
+            $added[1]->content,
+            'the argument is ignored, but the report is still the report',
+        );
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function permissionsSpellings(): array
+    {
+        return [
+            'bare' => ['/permissions'],
+            // The report has no sub-views, so an argument naming one is
+            // answered with the whole screen rather than "no such subcommand":
+            // mode, source, rules and breaker are all already on it.
+            'a subcommand that does not exist' => ['/permissions rules'],
+            'asking it for help' => ['/permissions --help'],
+            'several words' => ['/permissions what am I allowed to do'],
+        ];
+    }
+
+    /**
+     * `/PERMISSIONS` DOES still go to the model, and that is recorded here
+     * rather than fixed, because it is not a property of this command.
+     *
+     * `dispatchCommand()` is case-sensitive for everything: measured, `/THEME`
+     * reaches the model exactly as `/PERMISSIONS` does. Making one command
+     * case-insensitive would leave the dispatcher inconsistent in a way a user
+     * cannot predict, which is worse than uniformly strict. The pairing is
+     * asserted so that a future round making `/theme` case-insensitive reds
+     * here and has to decide for `/permissions` at the same time, instead of
+     * leaving the security surface as the strict one.
+     */
+    public function testUppercaseIsNotSpecialToThisCommandAndIsNotFixedHere(): void
+    {
+        $shouted = $this->submit($this->chat(new PermissionGate(PermissionMode::Plan), '/PERMISSIONS'));
+        $other = $this->submit($this->chat(new PermissionGate(PermissionMode::Plan), '/THEME'));
+
+        self::assertSame(
+            $other->inFlight,
+            $shouted->inFlight,
+            '/PERMISSIONS and /THEME must route the same way — case handling belongs to the dispatcher, '
+                . 'not to one command',
+        );
+        self::assertTrue($shouted->inFlight, 'the dispatcher is case-sensitive; this records that it is');
+    }
+
+    /**
+     * The report told a user with no rules that `permissionRules` lives in
+     * `config.json`. It is read from `settings.json` too —
+     * `Cli\Bootstrap::PERMISSION_SETTINGS_KEYS` lists it and
+     * `permissionConfigLayers()` merges that layer beneath `config.json` — and
+     * this class's sibling `testTheGateRemembersWhichFileSetTheMode` already
+     * asserts the source label can NAME `settings.json`. So the feature knew
+     * there were two files while its help text named one, and a reader who
+     * followed it into the wrong file would see their rules not take effect
+     * with nothing to tell them why.
+     *
+     * Both names are asserted, and so is the precedence, because "put it in
+     * either" without "config.json wins" is the next question a user has.
+     */
+    public function testTheReportNamesBothFilesRulesCanBeWrittenIn(): void
+    {
+        $text = $this->report(new PermissionGate(PermissionMode::Default));
+
+        self::assertStringContainsString('none configured', $text, 'this is the no-rules branch');
+        self::assertStringContainsString('config.json', $text);
+        self::assertStringContainsString('settings.json', $text);
+        self::assertStringContainsString('config.json wins', $text, 'which one decides is the next question');
+    }
+
+    /**
      * The GENERAL form of the defect, derived from the reservation list itself.
      *
      * A CONTROL_PLANE name is one a repository's `*.md` may not take over —
@@ -363,6 +464,171 @@ final class PermissionsCommandTest extends TestCase
             preg_match_all('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', $text),
             'a control byte reached the transcript',
         );
+    }
+
+    /**
+     * THE GUARD ABOVE WAS NOT ENOUGH, and the way it was not enough is worth
+     * writing down because it is a general shape.
+     *
+     * Its byte class — `[\x00-\x08\x0b\x0c\x0e-\x1f]` — is a strict SUBSET of
+     * what {@see \SugarCraft\Core\Util\Sanitize::untrusted()} already removes.
+     * `untrusted()` deliberately PRESERVES `\t`, `\n` and `\r`, and those are
+     * precisely the bytes the class omits. So the assertion could only ever
+     * confirm that `untrusted()` had been called; it was written around the
+     * residue rather than around the threat, and it passed on a build where a
+     * rule pattern could write whole lines of its own into this report.
+     *
+     * MEASURED on that build, through the real `Chat::update(KeyMsg(Enter))`:
+     *
+     * - a `pattern` carrying two LFs added `Permission mode:
+     *   bypass-permissions - from --permission-mode` and `The mode gates
+     *   nothing.` to a report drawn off a gate that was in `default`;
+     * - a `modeSource` carrying LFs added `Rules (9), tried in this order:` and
+     *   a `deny EVERYTHING` row to a gate holding NO rules;
+     * - a CR mid-pattern let the tail of the value overwrite the head of its
+     *   own line on a real terminal.
+     *
+     * The docblock on {@see Chat::permissionsReport()} says this screen exists
+     * because "a permission screen that disagrees with the gate is worse than
+     * no screen: it tells somebody they are in `plan` while
+     * `bypass-permissions` runs". The first case above is that sentence,
+     * achieved from config text, on the screen written to prevent it. And it is
+     * reachable: `permissionRules[].pattern` is validated only by `is_string()`
+     * in {@see \SugarCraft\Crush\Cli\Bootstrap}, and `~/.sugar-crush/config.json`
+     * is writable by any model holding `Write` or `Edit` under `auto` or
+     * `bypass-permissions`.
+     *
+     * So the property asserted is no longer about bytes. IT IS ABOUT LINES:
+     * this report is built one line per fact and joined with `"\n"`, so its
+     * line count is `count($rules) + 6` — mode, description, blank, one rules
+     * line, one line per rule, blank, breaker — for EVERY possible config.
+     * Nothing a caller supplies may change it. That is a property the
+     * `untrusted()` call cannot satisfy on its own, which is exactly what makes
+     * it worth asserting.
+     *
+     * @param list<PermissionRule> $rules
+     */
+    #[DataProvider('lineForgeryAttempts')]
+    public function testTheReportHasExactlyTheLinesTheRendererIntended(
+        PermissionMode $mode,
+        array $rules,
+        ?string $modeSource,
+    ): void {
+        $text = $this->report(new PermissionGate($mode, $rules, new SafetyClassifier(), $modeSource));
+
+        self::assertSame(
+            count($rules) + 6,
+            substr_count($text, "\n") + 1,
+            'a configured value forged a report line — the report must be one line per fact, always',
+        );
+
+        self::assertStringNotContainsString("\r", $text, 'a CR can overwrite the head of its own line');
+        self::assertStringNotContainsString("\t", $text, 'a TAB mis-sets the rule table\'s action column');
+    }
+
+    /**
+     * The three cases the previous round's reviewer forged, verbatim.
+     *
+     * Each carries the FULL text the forged line would have been, so the
+     * assertion below is not merely "the count is right" but "this exact
+     * sentence is not standing on a line of its own claiming to be the gate's".
+     *
+     * @return array<string, array{0: PermissionMode, 1: list<PermissionRule>, 2: ?string, 3: string}>
+     */
+    public static function knownForgeries(): array
+    {
+        return [
+            // A gate in `default` made to announce `bypass-permissions`.
+            'a rule pattern rewrites the mode line' => [
+                PermissionMode::Default,
+                [new PermissionRule(
+                    "Bash*\n\nPermission mode: bypass-permissions - from --permission-mode\n"
+                        . 'The mode gates nothing.',
+                    PermissionAction::Allow,
+                )],
+                '--permission-mode',
+                'Permission mode: bypass-permissions - from --permission-mode',
+            ],
+            // A gate holding no rules at all made to list nine of them.
+            'the mode source invents a rule list' => [
+                PermissionMode::Plan,
+                [],
+                "--permission-mode\nRules (9), tried in this order:\n  1. deny  EVERYTHING",
+                'Rules (9), tried in this order:',
+            ],
+            // Not a new line, but the same lie: on a real terminal everything
+            // after the CR is redrawn over the start of the row, so `deny` is
+            // painted over by `allow`.
+            'a CR overwrites the action column' => [
+                PermissionMode::Default,
+                [new PermissionRule("Bash*\rallow  *", PermissionAction::Deny)],
+                '--permission-mode',
+                "\r",
+            ],
+        ];
+    }
+
+    #[DataProvider('knownForgeries')]
+    public function testAConfiguredValueCannotForgeALineThatReadsAsTheGates(
+        PermissionMode $mode,
+        array $rules,
+        ?string $modeSource,
+        string $forged,
+    ): void {
+        $text = $this->report(new PermissionGate($mode, $rules, new SafetyClassifier(), $modeSource));
+
+        foreach (explode("\n", $text) as $line) {
+            self::assertNotSame(
+                $forged,
+                $line,
+                'a configured value became a whole line of the report, indistinguishable from one the '
+                    . 'renderer wrote',
+            );
+        }
+
+        // The value is still SHOWN — escaped, not deleted. A pattern that
+        // really does contain a newline is a broken rule its author has to be
+        // able to see; printing a pattern that is not the one the gate matches
+        // with would be the same lie one step quieter.
+        self::assertStringContainsString(
+            '\\',
+            $text,
+            'the offending byte should be escaped into view, not silently dropped',
+        );
+    }
+
+    /**
+     * @return array<string, array{0: PermissionMode, 1: list<PermissionRule>, 2: ?string}>
+     */
+    public static function lineForgeryAttempts(): array
+    {
+        $attempts = [];
+
+        foreach (self::knownForgeries() as $label => [$mode, $rules, $modeSource]) {
+            $attempts[$label] = [$mode, $rules, $modeSource];
+        }
+
+        $attempts['every hostile byte at once, in every field'] = [
+            PermissionMode::Auto,
+            [
+                new PermissionRule("A\nB\rC\tD", PermissionAction::Deny),
+                new PermissionRule("E\x1b[31mF\nG", PermissionAction::Ask),
+                new PermissionRule("\n\n\n\n", PermissionAction::Allow),
+            ],
+            "--config /tmp/\n\n\r\t/config.json",
+        ];
+
+        // The no-rules and one-rule shapes with ordinary values, so the formula
+        // is pinned at both ends and not only against hostile input.
+        $attempts['an ordinary gate with no rules'] = [PermissionMode::Plan, [], '--permission-mode'];
+        $attempts['an ordinary gate with one rule'] = [
+            PermissionMode::Default,
+            [new PermissionRule('Bash(rm *)', PermissionAction::Deny)],
+            '--permission-mode',
+        ];
+        $attempts['an ordinary gate that recorded no source'] = [PermissionMode::DontAsk, [], null];
+
+        return $attempts;
     }
 
     /**

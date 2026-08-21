@@ -513,7 +513,17 @@ screen that disagrees with the gate is worse than no screen. It is READ-ONLY in
 the strong sense — `PermissionGate::evaluate()` moves the Auto strike counters,
 so opening this must not, and does not, go anywhere near it. To CHANGE the
 mode, relaunch with `--permission-mode`, set `$SUGARCRUSH_PERMISSION_MODE`, or
-edit `permissionMode` in `~/.sugar-crush/config.json`.
+edit `permissionMode` in `~/.sugar-crush/config.json` — or in
+`~/.sugar-crush/settings.json`, which is read for `permissionMode` and
+`permissionRules` too and which `config.json` outranks where both set a key.
+Naming only one of the two files is how this paragraph, and the report itself,
+read for one round: rules written in the file that was not named still load,
+so a reader who followed the sentence and saw no change had been sent to edit
+the wrong file. Every spelling is answered locally — `/permissions rules` and
+`/permissions --help` get the same screen, because the report has no sub-views
+and there is nothing for an argument to select. Unlike `/keys`, it is never
+handed to the model: a question about the local gate answered by the one
+participant that cannot see it comes back fluent and wrong.
 
 Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
 (`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each

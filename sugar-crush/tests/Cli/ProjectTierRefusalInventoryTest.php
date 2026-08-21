@@ -249,6 +249,15 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // the entries around it — the grant lives under `~`, which is exactly
         // why a repository cannot make it.
         'Chat.php|.sugar-crush/config.json' => self::USER,
+        // Both halves of the same sentence, and the SECOND one is why the
+        // sentence changed: `/permissions` told a user with no rules that
+        // `permissionRules` lives in `config.json`, when
+        // `Cli\Bootstrap::PERMISSION_SETTINGS_KEYS` reads it from
+        // `settings.json` too and `permissionConfigLayers()` merges both. Naming
+        // one of two files sends half of the people who follow it to the wrong
+        // one. User-tier for the same reason as the entry above: the file is
+        // under `~`, so a repository cannot write it.
+        'Chat.php|.sugar-crush/settings.json' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json.' => self::USER,
         // The install path `sugarcrush completion fish` PRINTS, in a comment.
@@ -297,11 +306,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is THIRTY occurrences — one per entry in
-     * {@see DOT_PATHS} — of TWENTY-ONE distinct paths. THIRTEEN of those
+     * APPEARS IN. On this tree that is THIRTY-THREE occurrences — one per entry
+     * in {@see DOT_PATHS} — of TWENTY-THREE distinct paths. SIXTEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
-     * they are TEN distinct paths — which is the figure
+     * they are THIRTEEN distinct paths — which is the figure
      * {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()} asserts,
      * on PATHS. All four figures are measured off the map above, and each is
      * written next to the thing it counts because the pair has been mixed up in
@@ -309,7 +318,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * 30/21, and the correction that fixed them replaced a correct "ten distinct
      * paths are repository-chosen" with 10-occurrences/8-paths, which is the
      * `REPOSITORY`-class-only measurement and not what `repositoryChosenPaths()`
-     * returns. A new dot-path anywhere in `src/` fails here by file and name
+     * returns.
+     *
+     * AND THEN ALL FOUR WENT STALE AGAIN, which is why they are now ASSERTED
+     * ({@see testBothCensusFiguresThisDocBlockQuotes()}) rather than merely
+     * written down. Measured on the tree that added this paragraph, the map held
+     * 32/23 with 16 repository-chosen occurrences over 13 paths while this
+     * doc-block still read 30/21/13/10 — every one of them wrong, in the
+     * doc-block whose own next sentence is about a number in prose sitting next
+     * to a number that is checked. Nothing checked THESE: the assertion that
+     * existed read `Bootstrap::projectTierRefusals()`'s doc-block, not this one.
+     * Prose a test does not read is not documentation, it is a comment that used
+     * to be true.
+     *
+     * A new dot-path anywhere in `src/` fails here by file and name
      * until somebody classifies it — and the SAME path arriving in a SECOND file fails too,
      * which is the case the string-keyed version could not express.
      */
@@ -466,6 +488,48 @@ final class ProjectTierRefusalInventoryTest extends TestCase
 
         self::assertStringContainsString('THIRTEEN repository-chosen', $enumeration);
         self::assertStringContainsString('TWENTY-THREE distinct', $enumeration);
+
+        // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
+        // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
+        // Spelled out in words in the prose, so they are compared in words:
+        // a digit here would pass against a paragraph that says something else.
+        $ownWords = [30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO', 33 => 'THIRTY-THREE'];
+        $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE'];
+        $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN', 16 => 'SIXTEEN', 17 => 'SEVENTEEN'];
+
+        $occurrences = \count(self::DOT_PATHS);
+        $repositoryOccurrences = 0;
+        foreach (self::DOT_PATHS as $kind) {
+            if ($kind === self::REPOSITORY || $kind === self::BOTH) {
+                ++$repositoryOccurrences;
+            }
+        }
+
+        $own = $this->docBlockAbove(__FILE__, 'public function testTheDotPathEnumerationIsDerivedFromSrc()');
+
+        self::assertArrayHasKey($occurrences, $ownWords, 'the occurrence count left the spelled-out range');
+        self::assertArrayHasKey($repositoryOccurrences, $repoWords, 'the repository-chosen count left it too');
+
+        self::assertStringContainsString(
+            $ownWords[$occurrences] . ' occurrences',
+            $own,
+            'this file\'s doc-block quotes an occurrence count the map no longer has',
+        );
+        self::assertStringContainsString(
+            'of ' . $pathWords[\count($distinct)] . ' distinct paths',
+            $own,
+            'this file\'s doc-block quotes a distinct-path count the map no longer has',
+        );
+        self::assertStringContainsString(
+            $repoWords[$repositoryOccurrences] . ' of those',
+            $own,
+            'this file\'s doc-block quotes a repository-chosen OCCURRENCE count the map no longer has',
+        );
+        self::assertStringContainsString(
+            'they are ' . $repoWords[\count($this->repositoryChosenPaths())] . ' distinct paths',
+            $own,
+            'this file\'s doc-block quotes a repository-chosen PATH count the map no longer has',
+        );
     }
 
     /**
