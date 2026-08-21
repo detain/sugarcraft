@@ -9479,3 +9479,78 @@ children mid-transfer.
 one-shot path a 0 %-CPU park. Told to prove it, it measured: blocking `stream_select()` 0.04 % vs the
 old 0.03 %, against 0.33 % for the poll loop it feared. The trade did not exist and the deadlock is
 gone.
+
+---
+
+## Round 37 — the record correcting the recurring defect had the recurring defect
+
+Opened with a read-only scout pass, per round 36's rule. It measured E51–E56 by execution and found
+**every one still open** — and found that E51's own "correcting the record" block, written precisely
+to stop a fact being attached to the wrong thing, does exactly that twice.
+
+**Landed, each verified by a supervisor full-suite run in the live tree:**
+
+| commit | what | verified |
+|---|---|---|
+| `d7919902` | backlog corrections: 11 stale line numbers in E51, 3 in E54, two false E51 claims | docs only |
+| `fc597e81` | three waits nothing guaranteed would end — `ScriptHook::drain()`, `BackgroundSessionRunner`, `TransientFailure` | 8735 / 95327 |
+| `995eb257` | `timeout: .inf` put the unbounded wait back behind an error saying it could not be asked for | **8757 / 95419** |
+| `cc3bfeaf` | the output cap bounded the results and not the rules — 5 tools, not the 2 recorded | (bundled) |
+| `2993aee7` | the cap that bounded the rules was unbounded at its own default | (bundled) |
+| `ec3b6d68` | the guard test was green under the regression it exists for | **8786 / 99189** |
+
+### The round's defining finding — a fix that made the bug worse, invisibly
+
+`lsp`'s first cut split the output cap so instruction text could not starve the results. Its
+`clipInstructionSet()` passed `intdiv($remaining, $count - $i)` into `clipInstructions()`, whose
+non-positive budget is the documented **"no cap" sentinel**. So every body past the reserve was emitted
+verbatim: at the shipped default, 500 governed directories returned **2,964,407 bytes, 45× the cap.**
+The bug it was written to fix was 19.3×.
+
+**The trap was documented 30 lines above the code that fell into it.** `clipInstructions()`'s docblock:
+*"A caller that has a reserve but no room left in it must therefore pass 1, not 0 — passing the
+arithmetic straight through is how the first cut of this change silently disabled the very bound it
+added."* The call sites got the `max(1, …)` guard; the loop inside did not. The author wrote down the
+lesson from their own first cut and repeated it one screen later.
+
+**The suite could not see any of it.** Seven simultaneous mutations to the load-bearing lines left the
+full suite **byte-identical** — 8721 / 95258 / 1 / rc 0. One of those mutations *fixes* the blowup and
+the suite cannot tell that either.
+
+### Earned rules
+
+**A guard test whose sensitivity depends on a 2 % band of one parameter passes by luck.** The
+`GrepInstructionWiringTest` guard detected its own regression at **47 of 2,100 caps**, and shipped
+pointed 392 bytes below the window. The fix was not moving the cap into the window — it was widening
+the fixture from 6 directories to 60 until the window was **12,859 consecutive caps**, then picking
+four inside it. Sensitivity that narrow is indistinguishable from coverage.
+
+**"No test reaches it" is much weaker than "no caller can."** Two mutation survivors were defended by
+instrumenting the sites and running the whole suite. The reviewer upheld the conclusion and replaced
+the argument: the minimum reachable budget is **151** by arithmetic, and `clipInstructions()`'s
+sentinel has exactly three callers, one of which needs `maxBytes <= 0`, which `fread()` refuses first.
+Same verdict, and only the second version survives a caller that does not exist yet.
+
+**A fixture can be shaped like the property instead of the bug.** `sglang`'s all-zones sweep covered
+`keyHelp`/`prompt`/`picker` and excluded the **palette** — the one state with a non-trivial rule — so
+widening its whitelist prefix to `'p'` was a behavioural mutation the full suite passed.
+
+**The trigger dimension is not always the obvious one.** Many files per directory does *not* reproduce
+the cap blowup; many directories with few files each does. Three agents measured the wrong axis first.
+
+**A claim true of one state, written as though true of all.** `selectPaletteItem()`'s docblock says it
+calls "the exact method `handlePaletteKey()`'s Enter arm calls … behaves identically whether the row
+was chosen with the keyboard or the mouse." True when idle. Mid-turn, Enter branches on `inFlight` and
+the click does not, so **8 of 9 palette rows disagree** — including `Switch model`, which swaps the
+backend the running loop is about to call.
+
+**Correct one half of a paragraph and you have corrupted the other half.** A mutation table's CURRENT
+list was corrected from three tests to four; the figure two paragraphs down that says it *tracks that
+list* was left at the old domain. The agent flagged the figure as carrying someone else's date and
+missed that it was also over a different set.
+
+**My own instance, again.** My brief for `TransientFailure` asserted its docblock was truncated and its
+`usleep()` uninterruptible. The docblock is complete; the sleep is interruptible; the real defect was
+the *opposite* — a SIGWINCH during a 5xx storm put the retry back on the failing upstream having slept
+**120312 µs of 500000 owed**. The implementer refuted me and a reviewer re-derived it from scratch.
+Two agents overturned my briefs this round and both were right.
