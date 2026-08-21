@@ -6,12 +6,12 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 34 IS CLOSED AND VERIFIED. ROUND 35 IS IN FLIGHT AT 2 LANES — read this first, then §0 for the standing rules
+## 0-NOW. ROUNDS 34 AND 35 ARE CLOSED AND VERIFIED. ROUND 36 IS BEING SCOPED — read this first, then §0 for the standing rules
 
-**Written mid-round so a compact cannot lose it.** Rounds 33 and 34 are both CLOSED and
-supervisor-verified. Round 35 is in flight at two lanes; its items were measured in advance and the
-measurements are further down under "ROUND 35 IS MEASURED". §0-NOW-32 below is an older round's block
-and remains the authority for the standing rules and the DeepSeek record.
+**Written between rounds so a compact cannot lose it.** Rounds 33, 34 and 35 are all CLOSED and
+supervisor-verified. Round 36 is being scoped by a read-only scout — see "WHERE THINGS STAND" below
+for why its items are being re-measured rather than taken from the plan. §0-NOW-32 further down is an
+older round's block and remains the authority for the standing rules and the DeepSeek record.
 
 ### CONCURRENCY: **2**, BY USER INSTRUCTION
 
@@ -50,139 +50,72 @@ mechanics.
 sync daemon were stopped mid-flight and every agent was confirmed killed before the pause. That pause
 is why the `sglang` lane holds a partial artefact — see below.
 
-### WHERE THINGS STAND — as of master `8de875d3`
+### WHERE THINGS STAND — as of master `f3d59e1a`
 
-**SUITE FLOOR: `8464 / 94225 / 1 skipped / rc 0` — supervisor-measured in the live tree at `8de875d3`.**
-This supersedes every earlier figure (8360/93659 held round 34; 8393/93728 was the intermediate after
-the `cmd` bundle).
-**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`, `testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`);
-a 2 means `vendor/sugarcraft/*` was replaced by Packagist copies and every figure since is void.
+**SUITE FLOOR: `8673 / 95005 / 1 skipped / rc 0` — supervisor-measured in the live tree at `f3d59e1a`.**
+Supersedes every earlier figure (8464 held the round-34/35 boundary; 8508, 8527 were intermediate).
+**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`,
+`testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`); a 2 means `vendor/sugarcraft/*` was
+replaced by Packagist copies and every figure since is void.
 `sugar-crush/vendor/sugarcraft/` = **18 symlinks**.
 `md5sum /home/sites/sugarcraft/.sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`.
 `php tools/check-path-repos.php --no-lib-path-repos` must exit 0; zero tracked per-lib `composer.lock`.
-**`src/` census: 284 files / 303 declarations / 235 concrete.**
 
 ⚠️ **Assertion totals are NOT assert-call counts** — PHPUnit 10 counts the `…OrEqual` family as 2.
-See the dedicated block below before quoting any assertion delta as coverage.
 
-**ROUND 35 IS RUNNING AT 2 LANES.**
+**ROUND 36 IS BEING SCOPED.** All three lanes are clean at master. A read-only scout is measuring 13
+candidate items, because the plan's own text has repeatedly been wrong about what is still open —
+round 35 found two candidates (`Glob` globstar, `Edit`'s `'bool'` schema) that look **already fixed**
+despite being listed as open, and two plan-cited line numbers that had drifted by hundreds of lines.
+**Do not launch a bundle off this plan's text without re-measuring the item first.**
 
-| lane dir | bundle | stage | holds |
-|---|---|---|---|
-| `crush-lane-sglang` | **P8.8 repo-map context block** — owns the CENSUS TOKEN this round | IMPLEMENT | `src/Context/**`, `src/Runtime.php`, `tests/Tools/BuiltInToolCorpusTest.php`, `docs/ARCHITECTURE.md` |
-| `crush-lane-cmd` | **finding #7 — `/permissions` is reserved but does not exist** | IMPLEMENT | `src/Permissions/**`, `src/Commands/CommandRegistry.php`, `src/Chat.php`, `docs/PERMISSIONS.md`, `docs/COMMANDS.md` |
-| `crush-lane-lsp` | — | PARKED | clean at master |
+⚠️ **CI PUSHES TO MASTER WHILE LANES WORK.** A `vhs: regenerate demo GIFs` commit landed mid-round and
+broke a lane's fast-forward. It touches only `.gif` files, so a lane rebase is clean — but the
+supervisor must `git fetch` and re-check `origin/master` before every merge, and be ready to rebase a
+lane that had already rebased once.
 
-🔴 **`cmd` IS BARRED FROM ADDING ANY NEW `src/` FILE THIS ROUND** — `sglang` owns the census token and a
-second new file would collide on it. `/permissions` is buildable as a `CommandRegistry` row + dispatch
-arm + render method, which is the established control-plane pattern. `cmd` is instructed to STOP and
-report if it concludes otherwise.
-
-### WHAT LANDED — rounds 33 and 34, all supervisor-verified by my own suite runs in the live tree
+### WHAT LANDED — rounds 33 to 35, all supervisor-verified by my own suite runs in the live tree
 
 | commit | round | what | verified |
 |---|---|---|---|
-| `339f512c` | 33 | `--permission-mode` / `--model` empty values exit 2; `accept-edits` scoped-write gate pinned | 8204 / 91728 / 1 / rc 0 |
-| `2bde4114` | 33 | both text tool-call parsers stop fabricating calls from quoted prose; params no longer vanish; PCRE cliff gone | 8299 / 91986 / 1 / rc 0 |
-| `c4718781` | 33 | P3.2 FocusRing/Shift-Tab + P3.5 cell-width padding (+ `candy-core` `CSI Z` decoder) | 8315 / 92077 / 1 / rc 0 |
-| `b009077a` | 34 | **P8.9** — `Grep` gains the `InstructionFileLoader` + `skillNudge` pair | 8331 / 92144 / 1 / rc 0 |
-| `7714675d` | 34 | **P8.4** — compositor rewired to the sub-agent map + liveness filter | 8360 / 93659 / 1 / rc 0 |
-| `3837b49f` | 34 | **headless permission approver** — `withPermissionApprover()` finally has a `src/` caller | 8393 / 93728 / 1 / rc 0 |
-| `8de875d3` | 34 | **P3.4 `Table` + finding #5 (16-field carry) + finding #8 (fourth trust grant)** | **8464 / 94225 / 1 / rc 0** |
+| `339f512c` | 33 | `--permission-mode`/`--model` empty values exit 2; `accept-edits` scoped-write gate pinned | 8204 / 91728 |
+| `2bde4114` | 33 | both text tool-call parsers stop fabricating calls from quoted prose | 8299 / 91986 |
+| `c4718781` | 33 | P3.2 FocusRing/Shift-Tab + P3.5 cell-width padding (+ `candy-core` `CSI Z`) | 8315 / 92077 |
+| `b009077a` | 34 | **P8.9** — `Grep` gains `InstructionFileLoader` + `skillNudge` | 8331 / 92144 |
+| `7714675d` | 34 | **P8.4** — compositor rewired to the sub-agent map + liveness filter | 8360 / 93659 |
+| `3837b49f` | 34 | **headless permission approver** — `withPermissionApprover()` gets a `src/` caller | 8393 / 93728 |
+| `8de875d3` | 34 | **P3.4 `Table`** + finding #5 (16-field carry) + finding #8 (fourth trust grant) | 8464 / 94225 |
+| `bc7b17f6` | 35 | **P8.8 repo-map** — generic sub-package detector, not the plan's markdown parser | 8508 / 94353 |
+| `6c33705c` | 35 | P8.8 fix — **the ungated walk**, `packages/*` support, 6 mutation survivors killed | 8527 / 94400 |
+| `c9d846e8` | 35 | **finding #7 `/permissions`** — a reserved name that answered nothing | 8514 (pre-rebase) |
+| `f3d59e1a` | 35 | `/permissions` fix — **line forgery**, and 3 of 6 mode descriptions false | **8673 / 95005** |
 
-### 🔴 ROUND 35's SECOND LESSON — a guard test written around the RESIDUE instead of the THREAT
+**ROUND 35 IS CLOSED. Both bundles landed, each after a review that found BLOCKING security defects.**
 
-`/permissions` exists so the app cannot tell you that you are in `plan` while `bypass-permissions`
-runs — its docblock says exactly that. Its reviewer made it tell the **opposite**, using nothing but
-the config file it reads.
+### ROUND 35's THIRD LESSON — "two independent methods agree" was one method counted twice
 
-`Sanitize::untrusted()` **deliberately preserves LF and CR** (`candy-core/src/Util/Sanitize.php:124`
-strips `[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, excluding 0x09/0x0a/0x0d). The report joins its lines
-with `implode("\n", …)`. So a newline inside a rule pattern or a config path **forges report lines** —
-measured, through the real `Chat::update()`, producing a fake `Permission mode: bypass-permissions`
-row under a gate that was actually `Default`. A CR does overwrite instead.
+`/permissions`'s reviewer called the lane's assertion baseline unreproducible and derived a different
+delta, corroborated "two independent ways". **The fix agent refuted it by measurement** — a full suite
+run against a `git archive` of the parent commit reproduced the lane's figure exactly — and then named
+the reviewer's error: both of its methods assumed the new tests' isolated assertion count was the
+whole delta. It was not. The commit added a row to `CommandRegistry::all()`, and **20 pre-existing
+assertions are data-driven over that list.**
 
-**The guard test could not have caught it.** It asserted
-`preg_match_all('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', $text) === 0` — a strict SUBSET of what
-`untrusted()` already strips, omitting exactly the bytes that get through. It asserted only what
-calling `untrusted()` at all already guarantees.
+**The rule: when a change adds a row to a list that tests iterate, the assertion delta includes tests
+that are not yours and did not change.** More generally — *check whether two corroborating methods
+share a premise before treating them as independent.*
 
-**The rule: a guard test written from the sanitiser's byte class tests the sanitiser, not the
-surface.** Write it from the property the surface needs — here, *a report has exactly the number of
-lines the renderer intended, whatever the fields contain* — and it fails for any escape, including the
-ones the sanitiser was never meant to cover.
+### ROUND 35's FOURTH LESSON — anchoring the claims is useless if CHOOSING which to anchor is possible
 
-**Corollary, and it is the same shape as the walk-vs-values lesson above:** both round-35 lanes did
-real, competent security work and both left a hole beside it. One gated the values and not the walk;
-the other sanitised the bytes and not the structure. **Ask what the surface guarantees, not what the
-helper strips.**
+Three of six `PermissionMode` descriptions were factually false about the gate they describe
+(`default` said networking asks — `WebFetch` **allows**; `accept-edits` said everything else asks —
+reads **allow**; `plan` said every other write is denied — `Bash rm ./a` and `Bash curl` **run**). In
+**all three** the false clause was precisely the one with no anchor row.
 
-### 🔴 ROUND 35's SECURITY LESSON — the gate went on the VALUES and not on the WALK
-
-`P8.8`'s implementer did unprompted security work and did it well: `autoload.psr-4` values are
-repository content, so it gated every source root through `ContainedPath::within()`. Its reviewer threw
-**24 attacks** at that gate — `../../..`, `/etc`, `.`, `""`, null byte, backslash separators,
-`a/../a/../a/../../outside`, symlink-then-`..`, symlink chains, symlinked source roots, psr-4 as
-string/list/array, manifest as a JSON array, invalid JSON, `chmod 000`, root-is-a-symlink,
-trailing-slash root — **nothing escaped and nothing threw.**
-
-**And the sub-package WALK that finds the manifests in the first place had no gate at all.**
-`isScannableDir()` uses `is_dir()` and `readManifest()` uses `is_file()`/`file_get_contents()`, all of
-which follow symlinks. A directory symlink among the root's immediate children — **committed to the
-repo, since git stores symlinks as mode `120000` and a clone materialises them** — leads the manifest
-read outside the checkout, and that manifest's `psr-4` prefix and `description` render into **every
-system prompt of the session**. `../` is a fully predictable target and `description` is an unbounded
-attacker-authored string, so this is prompt injection, not merely disclosure.
-
-Three sentences shipped in the same commit asserted it could not happen ("a directory entry cannot
-contain a separator, so it cannot escape"; "nothing here can leave the root"; "no part of the path is
-chosen by model output or by file content"). **The path STRING is caller-supplied; the FILE it
-resolves to is repository-chosen.** That distinction is exactly what `ContainedPath`'s own docblock
-was written about — "THE TENTH WAS ARBITRARY CODE EXECUTION AND ITS INVENTORY ROW WAS GREEN".
-
-**The rule: securing the data a walk RETURNS is not securing the walk. Gate the traversal and the
-values separately, and never let a census row answer "is this path safe?" with a sentence about the
-string rather than about what it resolves to.**
-
-⚠️ **There is a THIRD hand-maintained containment inventory** the round-34/35 briefs did not know
-about: `src/Support/ContainedPath.php:97` ("TWENTY-SEVEN call sites in ELEVEN files"), which is 5 sites
-and 3 files behind the two that ARE derived-and-asserted. A commit claiming "both censuses carry its
-rows" was true of the two it named and silent about this one.
-
-### 🔴 A NEW `src/` FILE MOVES **THREE** CENSUSES, NOT TWO — put this in every implement brief
-
-Round 35's `sglang` lane reported this as a premise my brief got wrong, and it is the kind of thing
-that reds a lane at the very end of its run. Adding any file under `sugar-crush/src/` moves:
-
-1. `tests/Tools/BuiltInToolCorpusTest.php` — the file/declaration/concrete census (the "census token").
-2. `tests/Integration/BinSugarcrushWiringTest.php` — its provider data-provides one case per file under
-   `src/` plus `bin/sugarcrush`, so one new file silently adds exactly **one test**. Account for it in
-   the delta reconciliation rather than being surprised by it.
-3. **`tests/…/ReadPathCensusTest.php` and `tests/…/ContainedPathInventoryTest.php`** — these red **by
-   construction** the moment a new file introduces a read/execute sink (`scandir`,
-   `file_get_contents`, `RecursiveDirectoryIterator`, …) without naming its containment gate. Both are
-   derived-and-asserted, so this is not optional and cannot be worked around: the sink must declare
-   its gate.
-
-⚠️ **`ContainedPathInventoryTest`'s prose was ALREADY stale before round 35 touched it** — it read
-"THIRTY call sites in THIRTEEN files" while the map it restates summed to **31** across 13. The lane
-corrected it to 32-in-14 and recorded the pre-existing drift in place rather than quietly folding it
-into its own bump. That is the right handling: a number you did not cause is still a number you are
-now standing next to.
-
-### PATHS AND LINE NUMBERS CORRECTED BY ROUND-35 LANES — the tree moves under a brief
-
-- **`ARCHITECTURE.md` is at `sugar-crush/docs/ARCHITECTURE.md`**, not `docs/ARCHITECTURE.md`. Its
-  "### The system prompt, in assembly order" section is at **`:226`** — NOT `:192` (long-known wrong)
-  and NOT `:224` (which I asserted as verified last round; it had moved again by one lane's commit).
-- **`Agent::$source` is at `:72`**, not `:69`.
-- **`Chat::helpListing()` DOES NOT EXIST.** The width derivation is at `Chat.php:5705` but inside
-  **`handleHelpCommand()`**. I put the wrong name in a brief and a lane propagated it into four
-  docblocks before its own `{@see}` resolver caught it.
-
-**The rule this earns: a brief's figures are measurements with a timestamp, not facts.** State them as
-claims to check, and tell the lane that reporting a wrong premise is worth more than routing around it
-silently. Both round-35 lanes did exactly that, which is the only reason these are known.
+The fix was not sharper rows. It was making the table **total**: 15 probes × 6 modes = 90 cells,
+completeness asserted against `cases() × probes()`, plus a clause→probe map requiring every clause of
+every sentence to point at a real cell. **A partial anchor table lets an author anchor the claims they
+are confident about — which are the true ones.**
 
 ### ROUND 34's TWO LESSONS — both lanes shipped a test that asserted PRESENCE rather than TRUTH
 

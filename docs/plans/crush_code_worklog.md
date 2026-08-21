@@ -9367,3 +9367,58 @@ round — including one to `Chat::helpListing()`, a method that does not exist (
 were re-derived by the lanes and several had moved; one brief cited `Agent::$source` at `:69` when it
 is `:72`, and one cited a method by a name it never had. Briefs are measurements with a timestamp, and
 the tree moves under them — say so in the brief rather than presenting them as facts.
+
+## Round 35 — P8.8 repo-map and finding #7 `/permissions`, and two competent security jobs with a hole beside each
+
+Both bundles landed after a review that found BLOCKING security defects. Floor 8464 → **8673 / 95005 /
+1 / rc 0**, supervisor-measured in the live tree after every commit.
+
+**P8.8** refused the plan's instruction to parse `docs/MATCHUPS.md`/`PROJECT_NAMES.md`, on the grounds
+that it binds a shipped feature to documents edited for human readers and is inert for every other
+user, and built a generic sub-package detector off each package's own `composer.json` instead. Its
+reviewer then found the genericity claim overstated — a `packages/*` monorepo, the dominant Composer
+convention, rendered the empty string — and the fix agent chose to *support* it rather than downgrade
+the claim, reading the root manifest's declared `repositories: {type: path}` urls. That preserves the
+floor the original reasoning asked for: nothing searches for manifests, it opens what the repo
+declared.
+
+**`/permissions`** was a reserved command name that answered nothing. It now reports the live mode, its
+source, the rules in evaluation order, and the breaker standing — built entirely on read-only
+accessors, because `PermissionGate::evaluate()` mutates the Auto-mode breaker and a preview built on it
+would corrupt the safety state it displays. That was proven closed structurally: a `throw` inserted as
+`evaluate()`'s first statement leaves all 15 render-surface tests green.
+
+### Rules earned
+
+**Securing the data a walk returns is not securing the walk.** P8.8 gated every `autoload.psr-4` value
+through `ContainedPath` — 24 attacks, none escaped — and left the walk that *finds* the manifests
+ungated. A committed directory symlink (git stores those as mode `120000`; a clone materialises them)
+took the manifest read outside the checkout and put a foreign package's description into every system
+prompt of the session. Three sentences in the same commit asserted this was impossible, all reasoning
+about the path string rather than what it resolves to.
+
+**A guard test written from the sanitiser's byte class tests the sanitiser, not the surface.**
+`/permissions` sanitised its fields and still let a newline in a rule pattern forge whole report lines
+— including a fake `Permission mode: bypass-permissions` under a gate that was `Default`. Its guard
+asserted a byte class that was a strict subset of what `Sanitize::untrusted()` already strips. Write
+the guard from the property the surface needs (*this report has exactly the lines the renderer
+intended*), not from the residue.
+
+**The pattern across both: each lane did real security work and left a hole immediately beside it.**
+One gated the values and not the walk; the other sanitised the bytes and not the structure. Ask what
+the surface guarantees, not what the helper strips.
+
+**Anchoring the claims is useless if choosing which to anchor is possible.** Three of six permission
+mode descriptions were false about the gate, and in all three the false clause was the one with no
+anchor row. A partial table lets an author anchor the claims they are confident about — which are the
+true ones. Fixed by making the table total and requiring every clause to point at a real cell.
+
+**"Two independent methods agree" was one method counted twice.** A reviewer declared an assertion
+baseline unreproducible and derived a different figure two ways; the fix agent reproduced the original
+exactly from a `git archive` and showed both reviewer methods shared a premise — that the new tests'
+isolated assertions were the whole delta. They weren't: the commit added a row to a list that 20
+pre-existing assertions iterate.
+
+**Fix agents should be told the reviewer can be wrong, and it pays.** Both fix agents this round
+refuted or corrected a finding by measurement, and one retracted its own earlier defence of a mutation
+survivor unprompted. A fix brief that presents review findings as gospel loses that.
