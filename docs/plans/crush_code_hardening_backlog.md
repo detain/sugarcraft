@@ -3205,9 +3205,46 @@ bytes rendered inside trusted chrome. A PTY is that with a keyboard attached.
 3. The app's chrome around the PTY is **visually distinct from PTY content**, so a forged prompt cannot
    impersonate the app. A border the child cannot draw, or a reserved column, or colour the child
    cannot set — decided by measurement, not by assertion, since a PTY child can emit SGR freely.
-4. Consider never routing a password through the app at all: `SUDO_ASKPASS` pointing at a helper the
-   *user's* terminal owns keeps the secret out of the model's process entirely. Cheaper than proving
-   the composited path is safe.
+4. Consider hoisting secret prompts out of the byte stream entirely via `SUDO_ASKPASS`/`sudo -A` —
+   **but see the correction below; the naive version of this claim does not hold.**
+
+⚠️ **CORRECTION to point 4, made the same day it was written.** The original wording said askpass
+"keeps the secret out of the model's process entirely". That is loose in two ways and the second one
+matters.
+
+*First, the framing.* There is no local model process — the model is a remote API. The accurate claim
+is that askpass keeps the plaintext out of **`sugar-crush`'s address space**, and therefore out of
+anything `sugar-crush` can persist or transmit. That distinction is load-bearing **in this app
+specifically**: the PTY route puts a password within reach of the transcript, of tool output that is
+sent back to the model as context, and of `EnhancedSessionStore::saveCheckpoint()`, which writes
+conversation state to SQLite. Password prompts disable echo, so the bytes should not round-trip — but
+"should not echo" is a property of the child, not a guarantee of ours.
+
+*Second, and this is the real limit.* **`sudo -A` only helps if the askpass helper can reach the user
+without going back through `sugar-crush`.** `sudo -A` execs `$SUDO_ASKPASS` with the prompt as
+`argv[1]` and reads the secret from the helper's **stdout** — no tty anywhere, which is why it composes
+cleanly with Phase 9's step 1. But the helper still has to ask somebody. Its options:
+- a GUI dialog (X11/Wayland) — irrelevant to a TUI over SSH, and **none is installed on this box**
+  (checked: no `ssh-askpass`, no `zenity`; only `pinentry`/`pinentry-curses`);
+- `pinentry-curses` or any terminal helper — **needs a tty, which step 1 just removed**, so it would
+  need a *different* terminal (a second window, another tmux pane);
+- a helper that sockets back to `sugar-crush` so the app renders the modal — at which point
+  **`sugar-crush` handles the plaintext again and the entire advantage collapses.**
+
+**What survives the collapse, and is the actual reason to want askpass:** the prompt becomes an
+**authenticated channel**. With `-A`, the app learns that *`sudo` asked* out-of-band — via the helper's
+exec — rather than by pattern-matching bytes in the child's output stream. A command that merely
+*prints* something shaped like `[sudo] password for joe:` cannot trigger the modal. A PTY gives an
+**unauthenticated** prompt channel: bytes in a stream that look like a request, with a live keyboard
+attached. **That property is independent of who ends up typing, so it holds even in the
+socket-back-to-the-app configuration** — which makes it the part worth engineering around.
+
+*Coverage, for completeness:* askpass is per-program and covers exactly one question type — a secret.
+Its siblings are `SSH_ASKPASS` (plus `SSH_ASKPASS_REQUIRE=force` on modern OpenSSH), `GIT_ASKPASS` /
+`core.askPass`, and GPG's `pinentry`. **None of them covers `Continue? [Y/n]`, `apt`'s config prompts,
+`psql`, a REPL, an editor, or `read` in a shell script.** Only a PTY does. So these are layers, not
+rivals: the PTY is the general interaction mechanism, and askpass is how *secrets* get lifted out of it
+onto a channel the app can trust.
 
 **Do not treat Phase 9 step 1 (detach the controlling terminal) as blocked on this.** Step 1 REMOVES a
 leak and adds no surface; it should ship regardless of when (C) is scheduled.
