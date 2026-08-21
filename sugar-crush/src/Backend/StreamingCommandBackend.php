@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Backend;
 
 use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Message;
@@ -13,29 +14,33 @@ use SugarCraft\Crush\Message;
  * Streaming-capable backend that shells out to an external command and calls
  * the `$onToken` callback once per COMPLETE line of stdout, as it arrives.
  *
- * WHAT "AS IT ARRIVES" MEANS, AND WHAT IT DOES NOT. The callback half is true.
- * The DISPLAY half, which this paragraph used to assert as "real-time
- * token-by-token display in the SugarCrush UI", is FALSE and is withdrawn.
+ * WHAT "AS IT ARRIVES" MEANS. Both halves — the callback AND the display — are
+ * now true on the {@see completeAsync()} path. They were not always; this
+ * paragraph used to withdraw the display half as false, and the withdrawal was
+ * correct at the time.
  *
- * MEASURED on this tree, `completeAsync()` driven under a live `Loop::run()`
- * with a 50ms periodic timer standing in for the render tick, against a wrapper
- * emitting six tokens 300ms apart: SIX `$onToken` calls, at 0.006s / 0.306s /
- * 0.612s / 0.912s / 1.212s / 1.512s — so the callback really does fire per
- * token, as each token's newline lands on the pipe — and ZERO timer ticks in
- * that window. {@see complete()} reads the pipes in a SYNCHRONOUS loop and
- * {@see completeAsync()} runs the whole of it inside one `Loop::futureTick`, so
- * the ReactPHP loop is blocked for the duration of the completion, and `Chat`'s
- * `withTick` subscription — the thing that turns a `TokenDelta` into text on
- * screen — cannot run until the completion has already resolved. On the `-p`
- * one-shot path {@see \SugarCraft\Crush\Cli\NonInteractive::run()} no
- * callback is passed at all. What a caller gets today is a per-token callback
- * plus a single repaint at the end.
+ * MEASURED THEN, `completeAsync()` driven under a live `Loop::run()` with a
+ * 50ms periodic timer standing in for the render tick, against a wrapper
+ * emitting six tokens 300ms apart: six `$onToken` calls at 0.005s / 0.304s /
+ * 0.608s / 0.907s / 1.210s / 1.514s — the callback really did fire per token —
+ * and ZERO timer ticks in that 1.81s. `complete()` read the pipes in a
+ * synchronous loop and `completeAsync()` ran the whole of it inside one
+ * `Loop::futureTick`, so the ReactPHP loop was blocked for the duration and
+ * `Chat`'s `withTick` subscription — the thing that turns a `TokenDelta` into
+ * text on screen — could not run until the completion had already resolved.
+ * What a caller got was a per-token callback plus a single repaint at the end.
  *
- * Rewriting the read loop non-blocking (`Loop::addReadStream`) is an
- * architectural change to an optional tier and is recorded in the hardening
- * backlog rather than attempted here. The callback and its plumbing stay
- * exactly as they are: that is the half that already works, and an unused
- * capability in this project gets completed or documented, never deleted.
+ * MEASURED NOW, same wrapper and same 50ms observer: the same six `$onToken`
+ * calls at the same instants, and 36 timer ticks interleaved with them. The
+ * read loop was not rewritten — it was HOISTED, into {@see pump()}, one
+ * iteration of which is now driven either by `complete()`'s `usleep` loop or by
+ * `completeAsync()`'s periodic timer. One implementation of the stdout protocol
+ * below, two drivers, so the blocking and non-blocking paths cannot drift about
+ * what a line means.
+ *
+ * On the `-p` one-shot path {@see \SugarCraft\Crush\Cli\NonInteractive::run()}
+ * no callback is passed at all, and `complete()` blocking is what that path
+ * wants.
  *
  * THE STDOUT CONTRACT IS ONE TOKEN PER TERMINATED LINE, AND IT IS NOT {@see
  * CommandBackend}'S:
@@ -187,6 +192,45 @@ final class StreamingCommandBackend implements Backend
      */
     public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
     {
+        $state = $this->begin($history, $onToken);
+        if ($state instanceof Message) {
+            return $state;
+        }
+
+        while (!$this->pump($state)) {
+            // Nothing arrived this iteration, so yield — UNCONDITIONALLY. The
+            // `&& $running` this guard used to carry meant that the one state
+            // where the loop cannot make progress (child gone, pipe held open
+            // by a descendant, `feof()` therefore false) span at 100% CPU with
+            // the ReactPHP loop blocked and signals unserviced.
+            if (!$state['progressed']) {
+                usleep(self::POLL_INTERVAL_US);
+            }
+        }
+
+        return $this->finish($state);
+    }
+
+    /**
+     * Spawn the child and build the state one completion carries between two
+     * reads of its pipes — or the assistant message that says why it could not
+     * start.
+     *
+     * The state is an array and {@see pump()} takes it BY REFERENCE, rather
+     * than a set of local variables in one long method, for a single reason:
+     * {@see complete()} and {@see completeAsync()} must run the identical
+     * protocol. Every rule in this class's docblock — an empty line is a
+     * literal newline, a partial read is buffered until its terminator lands,
+     * the idle deadline measures silence, the post-exit grace bounds a
+     * descendant holding the pipes — lives in `pump()` exactly once, and the
+     * two entry points differ only in what makes the next iteration happen.
+     *
+     * @param list<Message> $history
+     *
+     * @return array<string,mixed>|Message
+     */
+    private function begin(array $history, ?callable $onToken): array|Message
+    {
         $payload = json_encode(
             array_map(static fn(Message $m) => $m->toWire(), $history),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
@@ -217,132 +261,181 @@ final class StreamingCommandBackend implements Backend
         // process will be opened directly … PHP will take care of any
         // necessary argument escaping"). Nothing is claimed here about what
         // Windows does with a string command; neither of us can run it.
+        $pipes = [];
         $proc = @proc_open($this->command, $descriptor, $pipes);
         if (!is_resource($proc)) {
             return Message::assistant('_[error: failed to spawn streaming backend command]_');
         }
 
-        // Set stdout to non-blocking so we can read as bytes arrive
+        // ALL THREE non-blocking, stdin included. stdout and stderr so bytes
+        // can be read as they arrive; stdin because a blocking `fwrite()` of a
+        // history larger than the kernel's ~64K pipe buffer parks until the
+        // child drains it, and a wrapper that reads its stdin only after it has
+        // finished answering parks it for the whole completion — a deadlock in
+        // `complete()` and a frozen terminal in `completeAsync()`, both before
+        // the read loop this class is built around ever starts. The payload is
+        // now written a slice at a time from the same iteration that drains
+        // stdout, so a full pipe costs an iteration rather than the turn.
+        stream_set_blocking($pipes[0], false);
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
 
-        fwrite($pipes[0], $payload);
-        fclose($pipes[0]);
+        return [
+            'proc' => $proc,
+            'pipes' => $pipes,
+            'onToken' => $onToken,
+            // Bytes of the history not yet accepted by the child's stdin.
+            'stdin' => $payload,
+            'stderr' => '',
+            'tokens' => [],
+            // Bytes read from stdout that do not yet end in a newline. Held
+            // back so one line is one token: a read boundary in the middle of a
+            // line used to emit both halves separately AND, when the boundary
+            // landed on a `\r`, delete it — `a\rb\n` came back as `ab` or as
+            // `a\rb` depending on nothing but timing.
+            'partial' => '',
+            // Re-armed by every byte either pipe produces, so the deadline
+            // below measures SILENCE and never elapsed time. A wrapper that
+            // streams for an hour never trips it; one that wedges without
+            // exiting does.
+            'lastOutputAt' => microtime(true),
+            // When the direct child was first seen to be gone, or null while it
+            // still runs. Arms POST_EXIT_GRACE_SECONDS, nothing else.
+            'exitedAt' => null,
+            'running' => true,
+            'progressed' => false,
+            'expired' => false,
+            'abandoned' => false,
+        ];
+    }
 
-        $stderr = '';
-        $tokens = [];
-        // Bytes read from stdout that do not yet end in a newline. Held back so
-        // one line is one token: a read boundary in the middle of a line used
-        // to emit both halves separately AND, when the boundary landed on a
-        // `\r`, delete it — `a\rb\n` came back as `ab` or as `a\rb` depending
-        // on nothing but timing.
-        $partial = '';
-        // Re-armed by every byte either pipe produces, so the deadline below
-        // measures SILENCE and never elapsed time. A wrapper that streams for
-        // an hour never trips it; one that wedges without exiting does.
-        $lastOutputAt = microtime(true);
-        // When the direct child was first seen to be gone, or null while it
-        // still runs. Arms POST_EXIT_GRACE_SECONDS, nothing else.
-        $exitedAt = null;
-        $expired = false;
-        $abandoned = false;
+    /**
+     * ONE iteration of the read loop: push whatever stdin the child will take,
+     * drain both output pipes, emit every token whose terminator has arrived,
+     * and decide whether this completion is over.
+     *
+     * Returns true when the caller must stop iterating — the child exited and
+     * both pipes reached EOF, the idle deadline expired, or the post-exit grace
+     * ran out on a descendant holding the pipes. Sets `$state['progressed']` so
+     * a driver can tell an iteration that moved bytes from one that should
+     * yield before trying again.
+     *
+     * @param array<string,mixed> $state
+     */
+    private function pump(array &$state): bool
+    {
+        $pipes = $state['pipes'];
 
-        // Keep reading until process exits AND both pipes are exhausted
-        $running = true;
-        while (true) {
-            $stdoutBytes = 0;
-            while (($chunk = fread($pipes[1], 65536)) !== false && $chunk !== '') {
-                $stdoutBytes += strlen($chunk);
-                $partial .= $chunk;
-            }
-
-            // Emit only lines whose terminator has arrived.
-            while (($newline = strpos($partial, "\n")) !== false) {
-                $line = substr($partial, 0, $newline);
-                $partial = substr($partial, $newline + 1);
-                $token = self::tokenForLine($line);
-                $tokens[] = $token;
-                if ($onToken !== null) {
-                    $onToken($token);
-                }
-            }
-
-            // Read stderr (non-blocking)
-            $stderrBytes = 0;
-            while (($chunk = fread($pipes[2], 65536)) !== false && $chunk !== '') {
-                $stderrBytes += strlen($chunk);
-                $stderr .= $chunk;
-            }
-
-            $progressed = $stdoutBytes > 0 || $stderrBytes > 0;
-            // A blank line counts as activity, as it always did — the child is
-            // alive and writing, which is the only question the idle deadline
-            // asks. It now also survives as a `"\n"` token.
-            if ($progressed) {
-                $lastOutputAt = microtime(true);
-            }
-
-            // Check if process is still running
-            if ($running) {
-                $status = proc_get_status($proc);
-                if (!$status['running']) {
-                    $running = false;
-                    $exitedAt = microtime(true);
-                }
-            }
-
-            // Check if we've exhausted both pipes
-            if (!$running && feof($pipes[1]) && feof($pipes[2])) {
-                break;
-            }
-
-            // Opt-in only, and reported in the unit the caller configured.
-            // The message this replaced said "timed out after {$iterations}
-            // iterations" — a loop counter handed to someone who had
-            // configured seconds.
-            if ($this->idleTimeout > 0 && microtime(true) - $lastOutputAt > (float) $this->idleTimeout) {
-                $expired = true;
-                break;
-            }
-
-            // The child is gone but a pipe is not at EOF, which only a
-            // DESCENDANT holding the inherited fd can cause. Bounded here
-            // rather than left to `$idleTimeout`, whose default is 0 and which
-            // Bootstrap passes nothing for: without this branch the `break`
-            // above is the only exit this loop has, and it can never fire.
-            if ($exitedAt !== null
-                && microtime(true) - max($exitedAt, $lastOutputAt) > self::POST_EXIT_GRACE_SECONDS) {
-                $abandoned = true;
-                break;
-            }
-
-            // Nothing arrived this iteration, so yield — UNCONDITIONALLY. The
-            // `&& $running` this guard used to carry meant that the one state
-            // where the loop cannot make progress (child gone, pipe held open
-            // by a descendant, `feof()` therefore false) span at 100% CPU with
-            // the ReactPHP loop blocked and signals unserviced.
-            if (!$progressed) {
-                usleep(self::POLL_INTERVAL_US);
+        // Offer the child more of the history. `false` from `fwrite()` is a
+        // broken pipe — the child closed stdin or died — so stop offering
+        // rather than re-presenting the same bytes every iteration forever.
+        if ($state['stdin'] !== '' && is_resource($pipes[0])) {
+            $written = @fwrite($pipes[0], $state['stdin']);
+            $state['stdin'] = $written === false ? '' : substr($state['stdin'], $written);
+            if ($state['stdin'] === '') {
+                fclose($pipes[0]);
             }
         }
 
-        if ($expired) {
-            self::terminateAndReap($proc);
+        $stdoutBytes = 0;
+        while (($chunk = fread($pipes[1], 65536)) !== false && $chunk !== '') {
+            $stdoutBytes += strlen($chunk);
+            $state['partial'] .= $chunk;
+        }
+
+        // Emit only lines whose terminator has arrived.
+        while (($newline = strpos($state['partial'], "\n")) !== false) {
+            $line = substr($state['partial'], 0, $newline);
+            $state['partial'] = substr($state['partial'], $newline + 1);
+            $token = self::tokenForLine($line);
+            $state['tokens'][] = $token;
+            if ($state['onToken'] !== null) {
+                ($state['onToken'])($token);
+            }
+        }
+
+        $stderrBytes = 0;
+        while (($chunk = fread($pipes[2], 65536)) !== false && $chunk !== '') {
+            $stderrBytes += strlen($chunk);
+            $state['stderr'] .= $chunk;
+        }
+
+        $state['progressed'] = $stdoutBytes > 0 || $stderrBytes > 0;
+        // A blank line counts as activity, as it always did — the child is
+        // alive and writing, which is the only question the idle deadline
+        // asks. It now also survives as a `"\n"` token.
+        if ($state['progressed']) {
+            $state['lastOutputAt'] = microtime(true);
+        }
+
+        if ($state['running']) {
+            $status = proc_get_status($state['proc']);
+            if (!$status['running']) {
+                $state['running'] = false;
+                $state['exitedAt'] = microtime(true);
+            }
+        }
+
+        // Child gone AND both pipes exhausted.
+        if (!$state['running'] && feof($pipes[1]) && feof($pipes[2])) {
+            return true;
+        }
+
+        // Opt-in only, and reported in the unit the caller configured.
+        // The message this replaced said "timed out after {$iterations}
+        // iterations" — a loop counter handed to someone who had
+        // configured seconds.
+        if ($this->idleTimeout > 0 && microtime(true) - $state['lastOutputAt'] > (float) $this->idleTimeout) {
+            $state['expired'] = true;
+
+            return true;
+        }
+
+        // The child is gone but a pipe is not at EOF, which only a
+        // DESCENDANT holding the inherited fd can cause. Bounded here
+        // rather than left to `$idleTimeout`, whose default is 0 and which
+        // Bootstrap passes nothing for: without this branch the `return true`
+        // above is the only exit this loop has, and it can never fire.
+        if ($state['exitedAt'] !== null
+            && microtime(true) - max($state['exitedAt'], $state['lastOutputAt']) > self::POST_EXIT_GRACE_SECONDS) {
+            $state['abandoned'] = true;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Reap the child and turn the accumulated tokens into the assistant
+     * message. Shared by both drivers, so an expiry notice or a non-zero exit
+     * reads identically whether the caller blocked or awaited a promise.
+     *
+     * @param array<string,mixed> $state
+     */
+    private function finish(array &$state): Message
+    {
+        if ($state['expired']) {
+            self::terminateAndReap($state['proc']);
         }
 
         // The bytes of an unterminated last line were still paid for.
-        if ($partial !== '') {
-            $token = rtrim($partial, "\r");
+        if ($state['partial'] !== '') {
+            $token = rtrim($state['partial'], "\r");
+            $state['partial'] = '';
             if ($token !== '') {
-                $tokens[] = $token;
-                if ($onToken !== null) {
-                    $onToken($token);
+                $state['tokens'][] = $token;
+                if ($state['onToken'] !== null) {
+                    ($state['onToken'])($token);
                 }
             }
         }
 
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        foreach ($state['pipes'] as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
         // And REAP. The old timeout branch signalled and returned, and
         // MEASURED on PHP 8.3: the pipes are fine either way — freeing the
         // local `$pipes` array on return closes them, `/proc/self/fd` does not
@@ -350,11 +443,11 @@ final class StreamingCommandBackend implements Backend
         // own-zombie count went 0 → 1 → 2 → 3 across three expiries without
         // this call on the expiry path, and did not move with it. Descriptors
         // were never the leak; the process was.
-        $exit = proc_close($proc);
+        $exit = proc_close($state['proc']);
 
-        $body = trim(implode('', $tokens));
+        $body = trim(implode('', $state['tokens']));
 
-        if ($expired) {
+        if ($state['expired']) {
             // The tokens already went to `$onToken`, so the user has SEEN
             // them; replacing them with an error message would delete an
             // answer they watched arrive and paid for.
@@ -375,12 +468,13 @@ final class StreamingCommandBackend implements Backend
         }
 
         if ($exit !== 0) {
-            $tail = trim($stderr);
+            $tail = trim($state['stderr']);
             $hint = $tail === '' ? '' : "\n\n```\n{$tail}\n```";
+
             return Message::assistant("_[error: streaming backend exited {$exit}]_{$hint}");
         }
 
-        if ($abandoned) {
+        if ($state['abandoned']) {
             $grace = self::POST_EXIT_GRACE_SECONDS;
             $notice = "_[notice: the command exited but something it spawned still holds its output"
                 . " pipes open; stopped reading after {$grace}s of silence]_";
@@ -458,28 +552,135 @@ final class StreamingCommandBackend implements Backend
         return !proc_get_status($proc)['running'];
     }
 
+    /**
+     * Drives the SAME {@see pump()} {@see complete()} does, from a periodic
+     * timer on the event loop instead of from a `usleep` loop, so the caller's
+     * render/input loop keeps running for the whole completion and every token
+     * reaches the screen as it lands rather than all at once at the end.
+     *
+     * WHAT WAS WRONG. This method used to schedule one `Loop::futureTick()` and
+     * call the fully synchronous `complete()` inside it. The `futureTick` bought
+     * exactly one thing — the promise was returned before the work started —
+     * and nothing else: the tick's callback then blocked the loop for the whole
+     * round-trip. See the class docblock for the before/after measurement (zero
+     * observer ticks in 1.81s, versus 36 across the same span now). It is the
+     * same defect {@see EngineBackend::completeAsync()} was fixed for on the
+     * primary backend, and it is why a `$SUGARCRUSH_BACKEND_CMD_STREAM` user's
+     * spinner never animated.
+     *
+     * WHY A TIMER AND NOT A FORK. `EngineBackend` forks, because ITS blocking
+     * work is in-process — a Guzzle round-trip and the agentic tool loop — and
+     * a parent has no descriptor it could watch instead. Here it does:
+     * `proc_open()` already handed us a child and three pipes, and this class's
+     * read loop was already non-blocking. Forking would mean a PHP process
+     * whose only job is to spawn a shell and shuttle the shell's bytes back
+     * over a socket pair — a second process, a second copy of the parent's
+     * heap, an ext-pcntl/ext-posix availability guard and its own zombie reap,
+     * all to obtain a file descriptor we were already holding. Rejected
+     * alongside it: `addReadStream()` on the two pipes. That is edge-driven and
+     * would beat this on latency, but child exit, the idle deadline and the
+     * post-exit grace have no readable edge, so it would need a supervising
+     * timer anyway — three loop registrations to do what one does, and two
+     * codepaths through the protocol instead of `pump()`.
+     *
+     * The poll interval is the cost, and it is the interval `complete()` was
+     * already spending: a token is noticed up to 5ms after its newline lands.
+     *
+     * ONE BOUNDED EXCEPTION TO "NEVER BLOCKS", stated rather than glossed:
+     * {@see finish()} on the EXPIRED path calls {@see terminateAndReap()},
+     * which polls with `usleep` for at most
+     * TERMINATE_GRACE_SECONDS + KILL_GRACE_SECONDS. That is a teardown of a
+     * child that has already stopped answering, on a turn that has already
+     * failed, and only when a caller opted into `$idleTimeout` at all — not the
+     * completion path this method exists to unblock.
+     */
     public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
-        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $cancellation): void {
-            Loop::futureTick(function () use ($history, $onToken, $resolve, $reject, $cancellation): void {
-                if ($cancellation?->isCancelled() === true) {
-                    $reject(new \RuntimeException('Request cancelled'));
+        $deferred = new Deferred();
 
+        if ($cancellation?->isCancelled() === true) {
+            $deferred->reject(new \RuntimeException('Request cancelled'));
+
+            return $deferred->promise();
+        }
+
+        $state = $this->begin($history, $onToken);
+        if ($state instanceof Message) {
+            $deferred->resolve($state);
+
+            return $deferred->promise();
+        }
+
+        $loop = Loop::get();
+        $settled = false;
+        $timer = null;
+
+        // No Loop::stop() anywhere below - this backend is constructed by
+        // callers (see this class's own "Usage" docblock) and driven by
+        // Program's own long-lived Loop::run(); stopping the shared global loop
+        // after a single completion would kill the whole program's
+        // render/input loop the moment the first reply arrived, not just this
+        // one async call.
+        $timer = $loop->addPeriodicTimer(
+            self::POLL_INTERVAL_US / 1000000,
+            function () use (&$state, &$settled, &$timer, $loop, $deferred, $cancellation): void {
+                if ($settled) {
                     return;
                 }
+
+                // Kill and reap without going through finish(): an aborted turn
+                // has no message to build and the child must not outlive it.
+                // Signal 9 rather than terminateAndReap()'s graceful escalation
+                // because a cancel is a user abort, and `proc_close()` WAITS —
+                // anything gentler hands this loop's deadline to a child that
+                // has already been given up on.
+                $abort = static function () use (&$state, &$settled, &$timer, $loop): void {
+                    $settled = true;
+                    if ($timer !== null) {
+                        $loop->cancelTimer($timer);
+                    }
+                    @proc_terminate($state['proc'], 9);
+                    foreach ($state['pipes'] as $pipe) {
+                        if (is_resource($pipe)) {
+                            fclose($pipe);
+                        }
+                    }
+                    proc_close($state['proc']);
+                };
+
                 try {
-                    $message = $this->complete($history, $onToken);
-                    $resolve($message);
+                    // Polled rather than checked once up front: Chat's
+                    // double-Escape flips this token long after this closure
+                    // was built, which is the whole point of a shared mutable
+                    // flag, and a check that only ran before the spawn could
+                    // never see it. Same shape as
+                    // {@see EngineBackend::completeAsync()}'s cancel timer.
+                    if ($cancellation?->isCancelled() === true) {
+                        $abort();
+                        $deferred->reject(new \RuntimeException('Request cancelled'));
+
+                        return;
+                    }
+
+                    if (!$this->pump($state)) {
+                        return;
+                    }
+
+                    $settled = true;
+                    $loop->cancelTimer($timer);
+                    $deferred->resolve($this->finish($state));
                 } catch (\Throwable $e) {
-                    $reject($e);
+                    // Reached when a caller's own $onToken throws from inside
+                    // pump(). The child is mid-answer and nobody is left to
+                    // read it, so it is killed rather than orphaned.
+                    if (!$settled) {
+                        $abort();
+                    }
+                    $deferred->reject($e);
                 }
-                // No Loop::stop() here - this backend is constructed by
-                // callers (see this class's own "Usage" docblock) and driven
-                // by Program's own long-lived Loop::run(); stopping the
-                // shared global loop after a single completion would kill
-                // the whole program's render/input loop the moment the
-                // first reply arrived, not just this one async call.
-            });
-        });
+            },
+        );
+
+        return $deferred->promise();
     }
 }

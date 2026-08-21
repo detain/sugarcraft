@@ -1474,10 +1474,13 @@ final class Bootstrap
      *      nothing, and the tokens joined with the EMPTY STRING — the newline
      *      between two tokens is framing, not text
      *      ({@see StreamingCommandBackend}). `$onToken` is called once per
-     *      token as the command produces it; the read loop is synchronous, so
-     *      the TUI does not repaint until the completion resolves (see that
-     *      class's docblock — the display half of this claim was withdrawn
-     *      after measurement, and a non-blocking rewrite is a backlog item).
+     *      token as the command produces it, and the TUI now repaints as they
+     *      arrive: the display half of that claim used to be withdrawn here
+     *      because the read loop ran to completion inside one
+     *      `Loop::futureTick` and blocked the render loop for the whole
+     *      round-trip. It is driven from a periodic timer now (see that class's
+     *      `completeAsync()` for the before/after measurement), so tiers 2 and
+     *      3 are as non-blocking as tier 1.
      *      Ranked BELOW tier 2 rather than above it so tier 2 stays
      *      byte-identical for everyone who already uses it, including a run
      *      with both variables exported — the two protocols are genuinely

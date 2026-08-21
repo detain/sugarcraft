@@ -68,23 +68,26 @@ guess which one it was handed. Measured on this tree against a wrapper printing
 | `SUGARCRUSH_BACKEND_CMD` | `"Para one line one.\nPara one line two.\n\nPara two."` |
 | `SUGARCRUSH_BACKEND_CMD_STREAM` | `"Para one line one.Para one line two.\nPara two."` |
 
-**Streaming is a callback, not yet a live screen.** The streaming backend calls
-its callback once per token, at the moment that token's newline lands on the
-pipe. But the read loop is **synchronous**, and the async wrapper runs the whole
-of it inside one ReactPHP `futureTick`, so the event loop is blocked for the
-duration of the completion and the TUI's render tick cannot run until the answer
-has already resolved. Measured on this tree — `completeAsync()` under a live
-`Loop::run()`, a 50ms periodic timer standing in for the render tick, and a
-wrapper emitting six tokens 300ms apart:
+**Streaming is a live screen.** The streaming backend calls its callback once
+per token, at the moment that token's newline lands on the pipe, and the TUI
+repaints between them. That second half used to be false and is worth recording
+because it was measured both ways: the read loop was synchronous and
+`completeAsync()` ran the whole of it inside one ReactPHP `futureTick`, so the
+event loop was blocked for the duration and the render tick could not run until
+the answer had already resolved. Measured on this tree — `completeAsync()` under
+a live `Loop::run()`, a 50ms periodic timer standing in for the render tick, and
+a wrapper emitting six tokens 300ms apart:
 
-| | observed |
-|---|---|
-| callback invocations | 6, at 0.006s / 0.306s / 0.612s / 0.912s / 1.212s / 1.512s |
-| loop ticks during the stream | **0** |
+| | before | after |
+|---|---|---|
+| callback invocations | 6, at 0.005s / 0.304s / 0.608s / 0.907s / 1.210s / 1.514s | 6, at 0.010s / 0.309s / 0.609s / 0.914s / 1.214s / 1.515s |
+| loop ticks during the stream | **0** | **36** |
 
-So what you get today is a per-token callback plus one repaint at the end.
-Making the read loop non-blocking is tracked in the hardening backlog. (The
-one-shot `-p` path passes no callback at all.)
+The same is true of `SUGARCRUSH_BACKEND_CMD`, which had the same defect in a
+worse form — its promise executor ran the blocking call immediately, so the
+freeze started before the promise was even returned. Both are now drained from a
+periodic timer on the event loop rather than read to completion in one go. (The
+one-shot `-p` path passes no callback at all and blocks deliberately.)
 
 **Absence means unset, empty *or* whitespace-only,** for both variables. One
 helper (`Bootstrap::backendCommandEnv()`) defines that, and every site that

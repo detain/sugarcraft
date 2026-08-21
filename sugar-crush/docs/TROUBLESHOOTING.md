@@ -254,10 +254,12 @@ sugarcrush models          # every selectable provider, "*" marks the selected o
   Ctrl+P (which persists to `config.json`).
 - **`doctor` FAILs on provider.** The configured name is not one this install
   knows. `models` lists the valid ones.
-- **Streaming shows nothing until the end.** Known: the streaming backend's read
-  loop is synchronous and runs inside one ReactPHP `futureTick`, so the event
-  loop is blocked for the duration and the render tick cannot run. You get a
-  per-token callback plus one repaint at the end. Measured in
+- **Streaming shows nothing until the end.** Fixed — if you still see it, the
+  install predates the fix. The streaming backend's read loop used to run to
+  completion inside one ReactPHP `futureTick`, so the event loop was blocked for
+  the duration and the render tick could not run; you got a per-token callback
+  plus one repaint at the end. It is driven from a periodic timer on the loop
+  now. Before/after measurements in
   [`ENVIRONMENT.md`](ENVIRONMENT.md#the-two-shell-out-variables).
 - **A shell-out backend lost all my paragraph breaks.** You used
   `SUGARCRUSH_BACKEND_CMD_STREAM` with a wrapper written for

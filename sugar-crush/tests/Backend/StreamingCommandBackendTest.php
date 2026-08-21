@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Backend;
 
+use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
@@ -715,6 +716,260 @@ final class StreamingCommandBackendTest extends TestCase
         }
     }
 
+    /**
+     * THE POINT OF THE WHOLE METHOD, and the assertion no implementation that
+     * merely finishes can satisfy.
+     *
+     * Awaiting the promise passes whether the loop was free or frozen — the
+     * work completes either way, which is exactly why
+     * {@see testCompleteAsyncDoesNotStopTheSharedEventLoop()} above stayed green
+     * throughout the years this method blocked. So this one arms an independent
+     * 20ms periodic timer standing in for the render tick and counts how many
+     * times it fires WHILE the command is in flight.
+     *
+     * MEASURED against the old implementation (the whole synchronous
+     * `complete()` inside one `Loop::futureTick`): 0 ticks across 1.81s.
+     * Against this one: 36. The floor here is far below that so the assertion
+     * is about the difference between "the loop ran" and "it did not", not
+     * about scheduler precision on a loaded box.
+     */
+    public function testCompleteAsyncLeavesTheEventLoopFreeWhileTheCommandRuns(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nsleep 0.4\nprintf 'slow reply\\n'");
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $loop = \React\EventLoop\Loop::get();
+
+            $ticks = 0;
+            $ticker = $loop->addPeriodicTimer(0.02, static function () use (&$ticks): void { ++$ticks; });
+
+            $message = $this->awaitPromise($backend->completeAsync([Message::user('hello')]));
+            $loop->cancelTimer($ticker);
+
+            $this->assertSame('slow reply', $message->content);
+            $this->assertGreaterThan(5, $ticks, "the event loop ticked only {$ticks} times during a 400ms completion - it was blocked");
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * The streaming half of the same claim: tokens must reach `$onToken` AS
+     * THEY ARRIVE, interleaved with the loop's other work — not batched up and
+     * flushed when the completion settles.
+     *
+     * Counting the ticks alone cannot tell those two apart, and neither can
+     * counting the tokens: a `pump()` that buffered every line and emitted them
+     * all from `finish()` would still deliver six callbacks under a loop that
+     * ticked throughout. What separates them is WHEN each callback fired
+     * relative to the ticker, so every token records the tick count at its own
+     * instant. Six tokens 150ms apart against a 20ms ticker must land at six
+     * DISTINCT and increasing tick counts; a batched implementation records six
+     * identical ones.
+     */
+    public function testCompleteAsyncDeliversEachTokenWhileTheLoopIsStillTicking(): void
+    {
+        $script = $this->writeScript(
+            "#!/bin/bash\ncat > /dev/null\nfor i in 1 2 3 4 5 6; do printf 'tok%s\\n' \"\$i\"; sleep 0.15; done",
+        );
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $loop = \React\EventLoop\Loop::get();
+
+            $ticks = 0;
+            $ticker = $loop->addPeriodicTimer(0.02, static function () use (&$ticks): void { ++$ticks; });
+
+            $tokens = [];
+            $tickAtToken = [];
+            $message = $this->awaitPromise($backend->completeAsync(
+                [Message::user('hello')],
+                static function (string $token) use (&$tokens, &$tickAtToken, &$ticks): void {
+                    $tokens[] = $token;
+                    $tickAtToken[] = $ticks;
+                },
+            ));
+            $loop->cancelTimer($ticker);
+
+            $this->assertSame(['tok1', 'tok2', 'tok3', 'tok4', 'tok5', 'tok6'], $tokens);
+            $this->assertSame('tok1tok2tok3tok4tok5tok6', $message->content);
+            $this->assertSame(
+                $tickAtToken,
+                array_values(array_unique($tickAtToken)),
+                'two tokens were delivered without a single loop tick between them - they were batched, not streamed: ' . json_encode($tickAtToken),
+            );
+            // The first token lands within a few ms of the spawn, before a
+            // 20ms ticker has fired at all, so its own count is legitimately 0
+            // - the claim is about the SPAN, which a batched implementation
+            // collapses to zero.
+            $this->assertGreaterThan(
+                5,
+                $tickAtToken[5] - $tickAtToken[0],
+                'the loop barely ticked between the first token and the last: ' . json_encode($tickAtToken),
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * Cancellation has to be POLLED, not checked once before the spawn.
+     * `Chat`'s double-Escape flips the shared token long after
+     * `completeAsync()` has returned, and the old implementation could not have
+     * looked again if it wanted to: it never got back to the loop.
+     *
+     * The fixture would take 5 seconds to answer. Coming back in a fraction of
+     * that is the assertion, so it cannot be satisfied by waiting the child out
+     * and reporting a cancel afterwards.
+     */
+    public function testCompleteAsyncIsCancellableWhileTheCommandIsStillRunning(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nsleep 5\nprintf 'too late\\n'");
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $cancellation = new CancellationToken();
+            $loop = \React\EventLoop\Loop::get();
+
+            $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+            $flip = $loop->addTimer(0.1, static function () use ($cancellation): void { $cancellation->cancel(); });
+
+            $started = microtime(true);
+            $caught = null;
+
+            try {
+                $this->awaitPromise($promise);
+            } catch (\Throwable $e) {
+                $caught = $e;
+            }
+
+            $elapsed = microtime(true) - $started;
+            $loop->cancelTimer($flip);
+
+            $this->assertInstanceOf(\RuntimeException::class, $caught);
+            $this->assertSame('Request cancelled', $caught->getMessage());
+            $this->assertLessThan(2.0, $elapsed, "cancellation took {$elapsed}s - the child was waited out rather than aborted");
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * A cancelled completion must not leave the child behind as a zombie: the
+     * abort path kills and reaps rather than dropping the handle, for the same
+     * reason {@see testAnExpiredCommandIsReapedRatherThanLeftAsAZombie()}
+     * exists. Same census, same caveat about it being a whole-process count.
+     */
+    public function testACancelledCompletionReapsItsChild(): void
+    {
+        if (!is_dir('/proc/self')) {
+            $this->markTestSkipped('the zombie census needs a Linux-shaped /proc');
+        }
+
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nsleep 5\nprintf 'too late\\n'");
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $before = self::ownZombieCount();
+
+            for ($i = 0; $i < 2; ++$i) {
+                $cancellation = new CancellationToken();
+                $loop = \React\EventLoop\Loop::get();
+                $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+                $flip = $loop->addTimer(0.05, static function () use ($cancellation): void { $cancellation->cancel(); });
+
+                try {
+                    $this->awaitPromise($promise);
+                } catch (\RuntimeException) {
+                    // expected
+                }
+                $loop->cancelTimer($flip);
+            }
+
+            $this->assertSame(
+                $before,
+                self::ownZombieCount(),
+                'two cancelled completions killed their children but never waited for them',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * THE CLASSIC DOUBLE-DEADLOCK, asserted on BOTH entry points because the
+     * single blocking `fwrite()` this replaced sat before the read loop and so
+     * froze the blocking path exactly as hard as the async one.
+     *
+     * The history is bigger than the kernel's ~64K pipe buffer and the command
+     * writes more than 64K of stdout BEFORE it reads its stdin. Write the
+     * history in one blocking call and both sides park forever: we are blocked
+     * writing a full stdin pipe, the child is blocked writing a full stdout
+     * pipe, and the only process that could drain either is the one blocked on
+     * the other. Not a slow case — unbounded; a child that could exit would at
+     * least hand the writer an EPIPE, and this one cannot reach its exit.
+     *
+     * {@see pump()} writes a slice of stdin from the same iteration that drains
+     * stdout, so neither pipe can fill without the other being emptied — which
+     * is why hoisting the loop fixed `complete()` too, and not only the method
+     * this round set out to unblock.
+     *
+     * Without it neither of these fails — they HANG, unbounded, and no timer
+     * rescues them: `awaitPromise()`'s safety timer lives on the very loop the
+     * `fwrite()` is blocking, and `complete()` has no loop at all. A regression
+     * here wedges the suite rather than reddening it. MEASURED by mutating
+     * stdin back to blocking: killed by an external `timeout`, not by PHPUnit.
+     *
+     * @dataProvider entryPoints
+     */
+    public function testAHistoryLargerThanThePipeBufferDoesNotDeadlockAgainstTheCommandsOwnOutput(string $entryPoint): void
+    {
+        $script = $this->writeScript(
+            "#!/bin/bash\n"
+            . "yes 0123456789012345678901234567890123456789012345678901234567890123 | head -n 4000\n"
+            . "cat > /dev/null\n"
+            . "printf 'done\\n'",
+        );
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $huge = [Message::user(str_repeat('x', 512 * 1024))];
+
+            // `match` with no default, so a third `complete*()` method added
+            // later fails here loudly instead of being silently dispatched to
+            // whichever arm a ternary's else-branch happened to be.
+            $message = match ($entryPoint) {
+                'complete' => $backend->complete($huge, null),
+                'completeAsync' => $this->awaitPromise($backend->completeAsync($huge)),
+            };
+
+            $this->assertStringEndsWith('done', $message->content);
+            // 4000 tokens of 64 chars joined with the empty string, then the
+            // `done` token: every byte the child wrote survived the interleaved
+            // write, so nothing was lost to a pipe that filled.
+            $this->assertSame(4000 * 64 + 4, strlen($message->content));
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * Named from the class's own two entry points rather than hand-listed, so
+     * this provider cannot go stale by omission - a third public completion
+     * method would show up here without anyone remembering to add it.
+     *
+     * @return iterable<string,array{string}>
+     */
+    public static function entryPoints(): iterable
+    {
+        foreach ((new \ReflectionClass(StreamingCommandBackend::class))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            if (str_starts_with($method->getName(), 'complete')) {
+                yield $method->getName() => [$method->getName()];
+            }
+        }
+    }
+
     private function timerPromise(float $seconds): \React\Promise\PromiseInterface
     {
         $deferred = new \React\Promise\Deferred();
@@ -723,6 +978,62 @@ final class StreamingCommandBackendTest extends TestCase
         });
 
         return $deferred->promise();
+    }
+
+    /**
+     * The drain timer must be CANCELLED when the promise settles, not merely
+     * short-circuited by a `$settled` flag.
+     *
+     * A periodic timer left armed on the shared `Loop::get()` singleton is
+     * almost invisible — every later tick returns immediately under the flag —
+     * but it keeps the loop non-empty forever, so a `Loop::run()` that should
+     * return the instant its work is done never returns at all, and every
+     * completed turn adds another 200 wakeups a second for the rest of the
+     * process's life.
+     *
+     * IN A SUBPROCESS, and deliberately. The only portable observable for "the
+     * loop has nothing left" is `run()` returning on its own — and asserting
+     * that in-process means either arming a guard timer, which is itself the
+     * work being tested for, or hanging this suite when the assertion fails.
+     * Reflecting into the loop's private timer collection was the third option
+     * and was rejected: `ExtUvLoop` and `StreamSelectLoop` do not store timers
+     * the same way, so the test would pass or fail on which extension is
+     * installed. A child with its own `timeout` budget answers the question
+     * exactly and cannot wedge anything.
+     */
+    public function testCompleteAsyncLeavesNoTimerBehindOnTheSharedLoop(): void
+    {
+        $probe = self::writeProbe(
+            '<?php require ' . var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true) . ';'
+            . ' $b = new \\' . StreamingCommandBackend::class . '([\'printf\', \'hi\']);'
+            . ' $loop = \React\EventLoop\Loop::get();'
+            . ' $b->completeAsync([\SugarCraft\Crush\Message::user(\'hi\')])'
+            . '   ->then(static function () { echo "SETTLED\n"; });'
+            . ' $loop->run();'
+            . ' echo "LOOP-RETURNED\n";',
+        );
+
+        try {
+            $output = (string) shell_exec('timeout 10 ' . PHP_BINARY . ' ' . escapeshellarg($probe) . ' 2>&1');
+
+            $this->assertStringContainsString('SETTLED', $output, "the probe never completed at all: {$output}");
+            $this->assertStringContainsString(
+                'LOOP-RETURNED',
+                $output,
+                'Loop::run() never returned after the promise settled - the drain timer was left armed on the shared loop',
+            );
+        } finally {
+            unlink($probe);
+        }
+    }
+
+    /** A PHP source file for the subprocess probe above to run. */
+    private static function writeProbe(string $source): string
+    {
+        $probe = sys_get_temp_dir() . '/sugarcrush_loop_probe_' . uniqid('', true) . '.php';
+        file_put_contents($probe, $source);
+
+        return $probe;
     }
 
     /**
