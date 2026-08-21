@@ -2987,9 +2987,11 @@ is lowercase **`doctor`**. The parallel passage at `LayeredSettings.php:274-276`
 **ROUND 40 `sglang` — ADDRESSED, by reporting the effect rather than restricting the grammar. Read
 the two narrowings below before deciding this needs more.**
 
-Re-measured in the lane, all confirming the round-39 scout and none of the original entry's figures:
-trusted `["[!B]*"]` → 1 tool (`Bash`); untrusted → all 11; `["*"]` → 0 tools; the shipped tool name is
-lower-case `doctor`.
+Re-measured in the lane, every row confirming the round-39 scout: trusted `["[!B]*"]` → 1 tool
+(`Bash`); untrusted → all 11; `["*"]` → 0 tools; the shipped tool name is lower-case `doctor`. To be
+exact about what did and did not survive re-measurement: the ORIGINAL entry's central figure (`[!B]*`
+leaves `Bash`) reproduced; what did not was its "no trust grant required" and all four of its line
+numbers, both already corrected by the scout.
 
 **NEITHER PROPOSED RESTRICTION WAS TAKEN, and one of them is measurably not a fix.** "Refuse negated
 character classes at the project tier" closes `[!B]*` and nothing else: **`["[C-Z]*", "[a-z]*"]` uses no
