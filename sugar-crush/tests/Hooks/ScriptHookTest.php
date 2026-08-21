@@ -1104,6 +1104,42 @@ final class ScriptHookTest extends TestCase
     }
 
     /**
+     * THE BOUNDARY ITSELF, because every other test in this group probes at
+     * 200 KB and would stay green if the fit computation drifted by 100 KB.
+     *
+     * The kernel's check is on `NAME=VALUE\0` TOGETHER, not on the value:
+     * `strlen('CRUSH_TOOL_INPUT') + 1 + value + 1 <= 131072`, which puts the
+     * last value that fits at **131,054** bytes. Measured at afe3c26b against
+     * the old env-only transport by bisection: 131,054 allowed, 131,055 denied.
+     * The same two lengths now separate "handed over verbatim" from "replaced
+     * by the marker", which is the same arithmetic on the safe side of it.
+     *
+     * `wc -c` counts what the hook actually received, so an off-by-one in
+     * either direction shows up as a length rather than as a verdict.
+     */
+    public function testTheEnvironmentIsUsedUpToTheKernelBoundaryAndNotPastIt(): void
+    {
+        $hook = new ScriptHook(
+            name: 'boundary',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf "%s" "$CRUSH_TOOL_INPUT" | wc -c | tr -d " \n"',
+            description: '',
+        );
+
+        $fits = $hook->execute($this->createContext()->withToolInput(str_repeat('B', 131_054)));
+        $this->assertSame('131054', $fits->message, 'the last value that fits was not passed verbatim');
+
+        $overflows = $hook->execute($this->createContext()->withToolInput(str_repeat('B', 131_055)));
+        $this->assertNotSame('131055', $overflows->message, 'a value the kernel refuses was passed anyway');
+        $this->assertSame(
+            (string) \strlen('@@CRUSH_PAYLOAD_IN_FILE@@ 131055 bytes; read $CRUSH_TOOL_INPUT_FILE'),
+            $overflows->message,
+            'one byte over the boundary did not fall back to the marker',
+        );
+    }
+
+    /**
      * What an OVERSIZE `CRUSH_TOOL_INPUT` carries instead, and why it is not
      * the empty string and not a prefix of the JSON.
      *
