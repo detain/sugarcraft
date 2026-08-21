@@ -6,32 +6,30 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 34 IS IN FLIGHT — CONCURRENCY DROPS TO **1** AS THESE LAND. Read this first, then §0 for the standing rules
+## 0-NOW. ROUND 34 IS IN FLIGHT AT 2 LANES — read this first, then §0 for the standing rules
 
 **Written mid-round so a compact cannot lose it.** Round 33 is CLOSED and verified; round 34 is
 half-landed with two lanes still running; round 35 is already measured further down. §0-NOW-32 below
 is an older round's block and remains the authority for the standing rules and the DeepSeek record.
 
-### CONCURRENCY: **1**, BY USER INSTRUCTION (superseding 3, then 2)
+### CONCURRENCY: **2**, BY USER INSTRUCTION
 
-🔴 **CURRENT STANDING INSTRUCTION — concurrency is 1.** Given 2026-08-20 while round 34's lanes were
-in flight, with the reason stated: *"switch to 1 agent at a time when these come back im at 90%
-session limit they'll finish im sure but after that do 1 at a time jsut in case"*.
+**CURRENT STANDING INSTRUCTION — concurrency is 2.** The user briefly set it to 1 on 2026-08-20 as a
+deliberate TEMPORARY measure while near a session limit, then restored 2 once the limit reset:
+*"go back to 2 agent concurrency and keep driving the plan no stopping for confirmation unless you
+can't progress any farther without some decision you need me to make"*. The 1-lane window is over;
+do not re-apply it.
 
-**Take it literally: let the IN-FLIGHT work finish, then drop to one.** Do not kill anything to reach
-1 sooner — the user expects the running agents to complete. "When these come back" means after
-`crush-lane-cmd`'s review/fix cycle AND `crush-lane-lsp`'s implement/review/fix cycle have landed.
-From the next bundle onward, **exactly one writing lane at a time.**
-
-At concurrency 1 the file-collision rules stop binding, so the bundle queue no longer has to be
-filtered for disjoint file sets — pick the next item on merit alone. That also unblocks items parked
-purely for collision: **P8.9-style `Bootstrap.php` work, finding #7 (`/permissions`), P8.8 and P8.13
-can now be scheduled in any order** (P8.8/P8.13 still collide with EACH OTHER on the census token, so
-never bundle those two together — that is a same-lane conflict, not a cross-lane one).
+**Both round-34 lanes were killed mid-cycle by that session limit, not by any fault in their work,
+and BOTH WERE RESUMED from their saved transcripts** rather than restarted — restarting would have
+thrown away a nearly-complete review and a nearly-complete implement.
 
 A read-only measurement/scout agent does NOT count against the lane budget — it holds no files, makes
-no writes, and cannot collide. Only lanes that write count. **One reviewer for the one active lane is
-part of that lane's cycle, not a second lane.**
+no writes, and cannot collide. Only lanes that write count. A reviewer for an active lane is part of
+that lane's cycle, not a second lane.
+
+⚠️ **P8.8 and P8.13 collide with EACH OTHER on the census token** — never bundle those two together.
+That is a same-lane conflict and it survives any concurrency setting.
 
 ### CONCURRENCY HISTORY (superseded — kept so the reasoning is not re-litigated)
 
