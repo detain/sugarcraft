@@ -3281,3 +3281,52 @@ reduced from "the fix" to "defence in depth", which is the right weight for it.
 
 **Do not treat Phase 9 step 1 (detach the controlling terminal) as blocked on this.** Step 1 REMOVES a
 leak and adds no surface; it should ship regardless of when (C) is scheduled.
+
+### E63 — `ChatTest`'s stranded-payload detector attributes every writer's files to itself
+
+**Found by the round-38 `lsp` implement agent, then verified by the supervisor.** Not a security
+finding — a **measurement-integrity** one, which is why it is recorded here rather than left in a lane
+report: it can fabricate a failure in the very suite runs this project uses to certify its floor.
+
+**What.** `sugar-crush/tests/ChatTest.php:76` snapshots `glob(sys_get_temp_dir() . '/sc_chat_tool_*')`
+in `setUpBeforeClass()`, and `:96` diffs the same glob in `tearDownAfterClass()`, asserting the
+difference is empty with *"a forked tool child was abandoned with its IPC payload uncollected"*.
+
+The diff does not measure what that message says. It measures **every `sc_chat_tool_*` file that
+appeared anywhere in the shared temp dir during this class's window, from any process on the box** —
+a sibling lane running the same suite, a second developer, or the user's own `sugar-crush` session.
+Payload names are `prefix . bin2hex(random_bytes(8)) . '.json'` (`ToolIpcFiles::reserve()`, `:93-96`):
+no pid, no run id, nothing that ties a file to its creator.
+
+**This is THE recurring defect, and the refutation is already written down inside the class the test
+calls into.** `ToolIpcFiles::STALE_AFTER_SECONDS`' docblock states the constraint plainly — the cutoff
+exists to *"never delete a file belonging to a LIVE run, including another sugar-crush process on the
+same box, **whose files this process cannot tell apart from its own**. Age is the only signal available
+for that."* `sweep()` therefore attributes by age and refuses to attribute by identity. `ChatTest` then
+attributes by identity anyway, from a weaker signal (a window), and calls the result *this run's*.
+
+**Measured.** During the round-38 `lsp` lane's full-suite run, `/tmp` held dozens of `sc_chat_tool_*`
+files with mtimes spanning 17:40–18:28 written by other lanes; the run failed on one written at 18:28,
+mid-window. `vendor/bin/phpunit --filter ChatTest` alone → **OK (222 tests)**.
+
+**Why the obvious fix is wrong.** Pointing the glob at the suite's TMPDIR sandbox instead of
+`sys_get_temp_dir()` would make the detector blind to the leak it exists to catch — `toolIpcFiles()`'s
+docblock (`:2477-2485`) already records why: PHP resolves and caches the temp dir once per process, so
+`tests/bootstrap.php` setting TMPDIR moves it for spawned **children** and not for this process, and an
+in-process `ToolIpcFiles::reserve()` still lands in the real one. That comment is correct and must
+survive any fix.
+
+**Severity.** Low as a defect, **high as a hazard to this audit**. It is false-positive-only in the
+direction that matters (it cannot hide a real leak, only invent one) — but a spurious red in a
+certification run is exactly the input that gets a good lane rejected or, worse, gets a supervisor into
+the habit of re-running until green.
+
+**Step.** Attribute by **identity, not by window**: have the batch record the paths it reserved and
+assert *those specific paths* no longer exist, so a concurrent writer's files are structurally
+incapable of entering the assertion. Keep the `sys_get_temp_dir()` choice and its docblock. Failing
+that, restrict the diff to files this process could own and state the residual honestly in the message
+— the current wording asserts a cause the measurement cannot establish.
+
+**Supervisor protocol until this is fixed:** a certification run that fails ONLY on
+`ChatTest::tearDownAfterClass` is not a red suite. Re-run `--filter ChatTest` alone to disambiguate
+before drawing any conclusion, and prefer to take floor measurements when no lane is running a suite.
