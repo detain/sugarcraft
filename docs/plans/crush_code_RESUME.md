@@ -90,6 +90,33 @@ report if it concludes otherwise.
 | `3837b49f` | 34 | **headless permission approver** — `withPermissionApprover()` finally has a `src/` caller | 8393 / 93728 / 1 / rc 0 |
 | `8de875d3` | 34 | **P3.4 `Table` + finding #5 (16-field carry) + finding #8 (fourth trust grant)** | **8464 / 94225 / 1 / rc 0** |
 
+### 🔴 ROUND 35's SECOND LESSON — a guard test written around the RESIDUE instead of the THREAT
+
+`/permissions` exists so the app cannot tell you that you are in `plan` while `bypass-permissions`
+runs — its docblock says exactly that. Its reviewer made it tell the **opposite**, using nothing but
+the config file it reads.
+
+`Sanitize::untrusted()` **deliberately preserves LF and CR** (`candy-core/src/Util/Sanitize.php:124`
+strips `[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, excluding 0x09/0x0a/0x0d). The report joins its lines
+with `implode("\n", …)`. So a newline inside a rule pattern or a config path **forges report lines** —
+measured, through the real `Chat::update()`, producing a fake `Permission mode: bypass-permissions`
+row under a gate that was actually `Default`. A CR does overwrite instead.
+
+**The guard test could not have caught it.** It asserted
+`preg_match_all('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', $text) === 0` — a strict SUBSET of what
+`untrusted()` already strips, omitting exactly the bytes that get through. It asserted only what
+calling `untrusted()` at all already guarantees.
+
+**The rule: a guard test written from the sanitiser's byte class tests the sanitiser, not the
+surface.** Write it from the property the surface needs — here, *a report has exactly the number of
+lines the renderer intended, whatever the fields contain* — and it fails for any escape, including the
+ones the sanitiser was never meant to cover.
+
+**Corollary, and it is the same shape as the walk-vs-values lesson above:** both round-35 lanes did
+real, competent security work and both left a hole beside it. One gated the values and not the walk;
+the other sanitised the bytes and not the structure. **Ask what the surface guarantees, not what the
+helper strips.**
+
 ### 🔴 ROUND 35's SECURITY LESSON — the gate went on the VALUES and not on the WALK
 
 `P8.8`'s implementer did unprompted security work and did it well: `autoload.psr-4` values are

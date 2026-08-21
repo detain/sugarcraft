@@ -2779,3 +2779,38 @@ rewording the comment a third time.
 ⚠️ **Whoever takes this must re-measure the `fnmatch` behaviour first.** The
 claim above is that `[!B]*` survives as a project-tier value — verify that is
 still true before designing around it.
+
+---
+
+## E58 — a `permissionMode` in `settings.json` is silently discarded by an EMPTY key in `config.json`
+
+**Found by round 35's `/permissions` reviewer while differentially testing an unrelated refactor.**
+Pre-existing: a 2400-row cross-product replay of the old `??` chain against the new precedence walk
+shows **zero divergence**, so this behaviour predates round 35 and was merely made visible by it.
+
+`permissionConfigLayers()` merges the tiers with `array_merge`, so a later layer wins. A
+`permissionMode` key present in `~/.sugar-crush/config.json` as `""` or `null` normalises to *absent*
+**after** it has already displaced the earlier layer's value. Net effect: a user who configured
+`plan` in `settings.json` gets the built-in default — which is currently `bypass-permissions`.
+
+**A configured `plan` becomes `bypass-permissions` because a different file mentioned the key and left
+it blank.** That is a fail-open, and it is precisely the failure
+`permissionSettingsLayer()`'s own docblock claims its strict reader closes.
+
+**Severity.** Higher than E57. E57 removes capability; this silently *grants* the widest one, from a
+config shape that reads as a no-op to anyone writing it — an empty string is the natural way to spell
+"I am not setting this here".
+
+**What is already true and should not be re-derived:** the round-33 fix making an empty
+`--permission-mode` **flag** exit 2 lives in `ArgvParser` (`EMPTY_PERMISSION_MODE_ERROR`) and is
+untouched by this. The flag path is strict; the *file* path is not. The asymmetry is the bug.
+
+**Step.** Decide whether an empty/null value in a permission key means "absent" or is an error, then
+make one true across every layer. If "absent", it must be dropped **before** the merge so it cannot
+displace an earlier layer. If an error, reuse the flag path's refusal. Do not fix this by reordering
+the layers — that changes documented precedence for every other key.
+
+⚠️ **Re-measure before designing.** The claim is that `""` and `null` in `config.json` both defeat a
+valid `settings.json` value; verify both spellings, and check whether the same shape affects the other
+`PERMISSION_SETTINGS_KEYS` (notably `permissionRules`, which is read from both files) — the reviewer
+measured the mode only.
