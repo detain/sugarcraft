@@ -52,10 +52,18 @@ final class CommandRegistry
      * already gone from the merged map. The names are the thing being reserved,
      * so the names are what is written down.
      *
-     * `permissions` is here although {@see all()} lists no row for it: it is the
-     * trust-prompt spelling the permission layer answers to, and reserving a
-     * name that has no row yet costs nothing while un-reserving it later is a
-     * decision somebody has to make on purpose.
+     * `permissions` was reserved here for two rounds while {@see all()} listed
+     * NO row for it and {@see \SugarCraft\Crush\Chat::dispatchCommand()} had
+     * no arm — a name held against a project's `permissions.md` on behalf of a
+     * command that did not exist, so the only thing the reservation actually
+     * did was refuse the override. It now has both, and this paragraph is kept
+     * rather than deleted because the shape it describes is the one to watch
+     * for: a reserved name is a promise, and the only way to tell whether the
+     * promise was kept is `Commands\SlashDispatchTest`, which drives every
+     * VISIBLE row through the real dispatch. `quit` is the remaining
+     * asymmetry and is deliberate — it has no row of its own because it is an
+     * alias of `exit`, but it IS dispatched, so it is a reserved name that
+     * works rather than one that does not.
      */
     public const CONTROL_PLANE = ['budget', 'clear', 'exit', 'help', 'model', 'permissions', 'quit'];
 
@@ -161,6 +169,21 @@ final class CommandRegistry
             // registry feeds are exactly where a rename would have gone
             // unnoticed.
             CommandSpec::new('help', 'List every slash command', 'App'),
+            // Category 'App', matching /keys and /budget: the gate is built once
+            // per LAUNCH by Cli\Bootstrap::permissionGate() and carried across
+            // /new, /clear and a provider switch by object identity, so filing
+            // it under Session would advertise a scope it does not have.
+            //
+            // Read-only on purpose, and there is no `<mode>` argumentHint to
+            // suggest otherwise. Changing the mode mid-session would hand a
+            // model that has just been refused a way to ask the user for the
+            // refusal to be lifted, in the same transcript; the mode comes from
+            // the flag, the env or the settings file, and this shows you which.
+            CommandSpec::new(
+                'permissions',
+                'Show this session\'s permission mode, its source, and the rules it decides by',
+                'App',
+            ),
             CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
             // Deliberately NOT `/new`: this wipes the transcript and keeps the
             // session id, so the session file on disk keeps accumulating the

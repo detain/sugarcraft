@@ -956,6 +956,10 @@ final class Bootstrap
                 $mode,
                 $permissionRules,
                 new SafetyClassifier(),
+                // Named honestly: this gate's mode came from the preset, not
+                // from the precedence chain permissionGate() walks, and a
+                // sub-agent's `/permissions` must not claim otherwise.
+                "this agent preset's permissionMode",
             ),
             permissionApprover: $approver,
         );
@@ -3100,21 +3104,40 @@ final class Bootstrap
         // THIS launch beats an inherited env var and beats a config file. It runs
         // through the same permissionModeFrom(), so a value that is not a mode
         // fails with the same message shape, naming the flag as its source.
-        $mode = self::permissionModeFrom(self::$permissionModeOverride, '--permission-mode')
-            ?? self::permissionModeFrom($envRaw, '$' . self::PERMISSION_MODE_ENV)
-            ?? self::permissionModeFrom(
-                $configRaw,
-                self::PERMISSION_MODE_CONFIG_KEY . ' in '
-                    . self::permissionKeySource($layers, self::PERMISSION_MODE_CONFIG_KEY),
-            )
-            ?? self::DEFAULT_PERMISSION_MODE;
+        //
+        // WALKED rather than written as a `??` chain, so that WHICH source won
+        // survives the resolution instead of being thrown away one line after
+        // it was known. `/permissions` reports it, and re-deriving it at
+        // display time would be a second copy of this precedence — free to
+        // disagree with this one, and reading files that may have been edited
+        // since. The loop is behaviourally identical to the chain it replaces:
+        // `??` short-circuits, so a later source's BAD value is still never
+        // validated (and so never throws) once an earlier source has answered.
+        $candidates = [
+            '--permission-mode' => self::$permissionModeOverride,
+            '$' . self::PERMISSION_MODE_ENV => $envRaw,
+            self::PERMISSION_MODE_CONFIG_KEY . ' in '
+                . self::permissionKeySource($layers, self::PERMISSION_MODE_CONFIG_KEY) => $configRaw,
+        ];
+
+        $mode = null;
+        $modeSource = 'the built-in default';
+        foreach ($candidates as $source => $raw) {
+            $resolved = self::permissionModeFrom($raw, $source);
+            if ($resolved !== null) {
+                $mode = $resolved;
+                $modeSource = $source;
+                break;
+            }
+        }
+        $mode ??= self::DEFAULT_PERMISSION_MODE;
 
         // The classifier is what Auto mode gates on, and PermissionGate fails
         // CLOSED (everything Asks) without one — so it is always supplied
         // rather than only when the mode currently happens to be Auto: this
         // gate instance is shared, and a mode read from config is not
         // something this method should have to predict.
-        return new PermissionGate($mode, self::permissionRules($config), new SafetyClassifier());
+        return new PermissionGate($mode, self::permissionRules($config), new SafetyClassifier(), $modeSource);
     }
 
     /**

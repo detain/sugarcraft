@@ -33,6 +33,8 @@ use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
@@ -5461,6 +5463,7 @@ final class Chat implements Model
                 // without a modifier key.
                 'exit', 'quit' => [$this, Cmd::quit()],
                 'keys' => $this->handleKeysCommand(),
+                'permissions' => $this->handlePermissionsCommand($text),
                 'help' => $this->handleHelpCommand(),
                 'clear' => $this->handleClearCommand(),
                 default => null,
@@ -5586,6 +5589,178 @@ final class Chat implements Model
     private function handleKeysCommand(): array
     {
         return [$this->withInputBuf('')->withKeyHelp(0), null];
+    }
+
+    /**
+     * `/permissions` — what this session is actually gated by.
+     *
+     * The name sat in {@see CommandRegistry::CONTROL_PLANE} for two rounds with
+     * no row and no arm: reserved against a project's `permissions.md`, on
+     * behalf of a command that did not exist. Typing it sent the word
+     * "/permissions" to the MODEL, which is the one place a question about
+     * local policy has no business going.
+     *
+     * A TRANSCRIPT MESSAGE, not a modal overlay like `/keys`. The answer is
+     * text worth scrolling back to, worth having above the turn it explains,
+     * and worth still being there when the next refusal lands — which is
+     * exactly when it gets typed.
+     *
+     * READ-ONLY, in the strong sense: see {@see permissionsReport()} for the
+     * accessors it is built on and why reaching for
+     * {@see PermissionGate::evaluate()} here would have been a bug rather
+     * than a shortcut.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handlePermissionsCommand(string $inputText): array
+    {
+        return [
+            $this->mutate([
+                'history' => [
+                    ...$this->history,
+                    Message::user($inputText),
+                    Message::assistant($this->permissionsReport()),
+                ],
+                'inputBuf' => '',
+                'inFlight' => false,
+            ]),
+            null,
+        ];
+    }
+
+    /**
+     * The `/permissions` body, DERIVED from the launch's live
+     * {@see PermissionGate} rather than restating what the config said.
+     *
+     * WHY DERIVED MATTERS HERE MORE THAN USUAL. A permission screen that
+     * disagrees with the enforcing gate is worse than no screen: it tells
+     * somebody they are in `plan` while `bypass-permissions` runs. So every
+     * line comes off the gate itself — {@see PermissionGate::mode()},
+     * {@see PermissionGate::modeSource()}, {@see PermissionGate::rules()},
+     * {@see PermissionGate::autoBreaker()} — the mode's own sentence comes off
+     * {@see PermissionMode::description()}, and the breaker's thresholds come
+     * back from the gate alongside the counters so this method never writes
+     * "of 3" in its own hand.
+     *
+     * WHAT IT MUST NOT USE, and this is the trap the item was really about:
+     * {@see PermissionGate::evaluate()} MUTATES the Auto-mode circuit breaker.
+     * Building a preview on it — "what would this gate say about a Write?" —
+     * would advance or reset the strike counters every time a user opened a
+     * read-only screen, i.e. a safety state changed by being looked at. The
+     * gate grew read-only doors for this; nothing here calls the evaluator.
+     *
+     * Rule patterns, classifier categories AND the mode source are run through
+     * {@see Sanitize::untrusted()} on the way out. All three are
+     * caller-supplied text landing in the transcript — the source label is
+     * built around a config path that `--config` can name — and an ESC byte in
+     * any of them would put raw ANSI in front of the frame-diff renderer. That
+     * is the `[33m`-as-literal-text defect `Commands\NoRawAnsiInTranscriptTest`
+     * guards at the SOURCE for the `ob_start()`-captured commands; this one is
+     * not among them (it writes no stdout, so that census cannot see it by
+     * construction), and its guard is
+     * `Commands\PermissionsCommandTest::testNoConfiguredValueCanPutEscapeBytesInTheTranscript()`
+     * — a RUNTIME check on the bytes actually produced, which is the stronger
+     * half of that pair anyway. The mode source was measured getting through
+     * before that test was written.
+     */
+    private function permissionsReport(): string
+    {
+        $gate = $this->permissionGate();
+        if ($gate === null) {
+            // NOT "you are unprotected": this Chat has no gate to report, which
+            // is the ordinary shape for an embedder and for a Chat built with
+            // neither a hook chain nor an engine backend. Whatever hooks are
+            // installed still run — see checkProjectCommandShell()'s own
+            // "no gate is not a refusal" note.
+            return 'No permission gate is attached to this session, so no mode and no rule are '
+                . 'deciding anything here. That is what an embedder gets, and a Chat built without a '
+                . 'hook chain and without an engine backend; a `sugarcrush` launch always builds one. '
+                . 'Any hooks that are installed still run.';
+        }
+
+        $mode = $gate->mode();
+
+        $lines = [
+            sprintf(
+                'Permission mode: %s — from %s',
+                // The mode is enum-constrained and safe by construction; the
+                // SOURCE is not. Bootstrap builds it around a file path, and
+                // that path can come from `--config`, so it is caller text on
+                // its way into the transcript exactly as a rule pattern is.
+                $mode->value,
+                $gate->modeSource() === null
+                    ? 'a source this gate did not record'
+                    : Sanitize::untrusted($gate->modeSource()),
+            ),
+            $mode->description(),
+            '',
+        ];
+
+        $rules = $gate->rules();
+        if ($rules === []) {
+            // The path is deliberately not sentence-final. `Cli\ProjectTierRefusalInventoryTest`
+            // enumerates every dot-path literal in src/ and a trailing period
+            // makes `config.json.` a second, unclassified entry — measured, it
+            // reds that inventory.
+            $lines[] = 'Rules: none configured, so every decision above is the mode\'s own. '
+                . 'The `permissionRules` array in ~/.sugar-crush/config.json is where they go.';
+        } else {
+            $lines[] = sprintf(
+                'Rules (%d), tried in this order — the first one that matches decides, ahead of the mode:',
+                count($rules),
+            );
+            foreach ($rules as $index => $rule) {
+                $lines[] = sprintf(
+                    '  %d. %-5s %s',
+                    $index + 1,
+                    $rule->action->value,
+                    Sanitize::untrusted($rule->pattern),
+                );
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = self::autoBreakerLine($gate);
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Where the Auto-mode circuit breaker stands, in the gate's own numbers.
+     *
+     * Reported for every mode rather than only for `auto`, and saying plainly
+     * that it is idle elsewhere: the counters exist on every gate, and a line
+     * that simply vanished under the other five modes reads as "there is no
+     * such thing" rather than "it is not counting right now".
+     *
+     * Both thresholds come back from {@see PermissionGate::autoBreaker()}. They
+     * are private constants of the evaluator, and printing this method's own
+     * copy of them is precisely the drift that would let the screen advertise
+     * "of 3" the day the evaluator started escalating at 4.
+     */
+    private static function autoBreakerLine(PermissionGate $gate): string
+    {
+        $breaker = $gate->autoBreaker();
+
+        if ($gate->mode() !== PermissionMode::Auto) {
+            return sprintf(
+                'Auto-mode circuit breaker: idle. It only counts under `%s`, and this session is `%s`.',
+                PermissionMode::Auto->value,
+                $gate->mode()->value,
+            );
+        }
+
+        return sprintf(
+            'Auto-mode circuit breaker: %d of %d consecutive blocks (%s), %d of %d blocks this session. '
+            . 'Reaching either threshold turns the next block into a prompt instead of a refusal.',
+            $breaker['consecutiveBlocks'],
+            $breaker['strikeThreshold'],
+            $breaker['lastBlockedCategory'] === null
+                ? 'nothing blocked yet'
+                : 'last category: ' . Sanitize::untrusted($breaker['lastBlockedCategory']),
+            $breaker['totalBlocks'],
+            $breaker['totalBlockThreshold'],
+        );
     }
 
     /**

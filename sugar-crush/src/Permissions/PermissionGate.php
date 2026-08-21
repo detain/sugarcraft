@@ -48,6 +48,13 @@ use SugarCraft\Crush\ToolCall;
  * Both go through the one private {@see decide()}, so no mode's policy exists
  * in two places; the Auto arm is the only branch between them.
  *
+ * A THIRD KIND OF CALLER wants neither: it wants to DISPLAY the policy, not
+ * apply it. {@see mode()}, {@see modeSource()}, {@see rules()} and
+ * {@see autoBreaker()} are the doors for that, and they exist so nobody
+ * reaches for {@see evaluate()} to find out what this gate would do. Doing
+ * that under Auto does not ask a question, it answers one and then changes
+ * the subject — see {@see autoBreaker()}.
+ *
  * @see PermissionMode for the full set of modes
  */
 final class PermissionGate
@@ -77,6 +84,22 @@ final class PermissionGate
         /** @var PermissionRule[] */
         private readonly array $rules = [],
         private readonly ?SafetyClassifier $classifier = null,
+        /**
+         * How to NAME the place `$mode` came from, for a surface that reports
+         * the policy back to the user — `--permission-mode`,
+         * `$SUGARCRUSH_PERMISSION_MODE`, `permissionMode in /home/…/settings.json`.
+         *
+         * Carried ON THE GATE rather than looked up by the reporter, and that
+         * is the whole point: {@see \SugarCraft\Crush\Cli\Bootstrap::permissionGate()}
+         * resolves this precedence chain ONCE per launch and the files behind
+         * it are editable while the session runs, so a reporter that
+         * re-derived the source could name a layer that is not the one this
+         * gate was actually built from. Null means nobody recorded it — every
+         * embedder, most tests, and {@see \SugarCraft\Crush\Agents\AgentManager}'s
+         * bare fallback — and a null is reported as "not recorded" rather than
+         * guessed at.
+         */
+        private readonly ?string $modeSource = null,
     ) {}
 
     /**
@@ -85,6 +108,64 @@ final class PermissionGate
     public function mode(): PermissionMode
     {
         return $this->mode;
+    }
+
+    /**
+     * How the caller that built this gate named the source of {@see mode()},
+     * or null when it did not say. See the constructor parameter.
+     */
+    public function modeSource(): ?string
+    {
+        return $this->modeSource;
+    }
+
+    /**
+     * The rules this gate decides by, in the order {@see evaluateRules()}
+     * tries them — FIRST MATCH WINS, so the order is part of the policy and
+     * not an incidental array order.
+     *
+     * Exists so that a caller which wants to SHOW the policy does not have to
+     * probe for it. Without this the only way to learn what a gate refuses was
+     * to hand it tool calls and watch, and under {@see PermissionMode::Auto}
+     * that is not a question — it is a state change: {@see evaluate()} records
+     * every outcome in the circuit-breaker counters, so a read-only screen
+     * built on it would reset the strike run it was drawing. Read-only
+     * inspection needs a read-only door, and this is it.
+     *
+     * @return list<PermissionRule>
+     */
+    public function rules(): array
+    {
+        return array_values($this->rules);
+    }
+
+    /**
+     * A snapshot of the {@see PermissionMode::Auto} circuit breaker: where the
+     * strike run stands, and the thresholds it is measured against.
+     *
+     * READ-ONLY, for the same reason {@see rules()} is. {@see evaluate()} is
+     * the only thing that moves these numbers and it must stay that way — a
+     * `/permissions` screen that advanced the counters it was displaying would
+     * be a safety state changed by looking at it.
+     *
+     * THE THRESHOLDS RIDE ALONG deliberately. They are private constants that
+     * {@see evaluateAuto()} compares against, so a display that printed its
+     * own "of 3" would be a second copy of the policy, free to disagree with
+     * the enforced one the day a threshold moves. Handing back the same
+     * constants the evaluator uses makes that disagreement impossible rather
+     * than merely unlikely.
+     *
+     * @return array{consecutiveBlocks: int, totalBlocks: int, lastBlockedCategory: ?string, strikeThreshold: int, totalBlockThreshold: int}
+     */
+    public function autoBreaker(): array
+    {
+        return [
+            'consecutiveBlocks' => $this->consecutiveBlocks,
+            'totalBlocks' => $this->totalBlocks,
+            'lastBlockedCategory' => $this->lastBlockedCategory,
+            'strikeThreshold' => self::STRIKE_THRESHOLD,
+            'totalBlockThreshold' => self::TOTAL_BLOCK_THRESHOLD,
+        ];
     }
 
     /**

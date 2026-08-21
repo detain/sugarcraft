@@ -497,12 +497,23 @@ discriminated so a text-selection drag does not fire the zone underneath it.
 ### Slash commands
 
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/rename`
-`/rewind` `/sessions` `/share` `/theme` `/websearch` `/workflow` `/exit`
-(`/quit`).
+`/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/permissions`
+`/rename` `/rewind` `/sessions` `/share` `/theme` `/websearch` `/workflow`
+`/exit` (`/quit`).
 
 The parenthesised spellings are aliases: they dispatch, but they have no
 `CommandRegistry` row of their own, so no surface advertises them.
+
+`/permissions` answers, in the transcript, what this session is actually gated
+by: the mode, the source it came from (`--permission-mode`, the env var, or the
+file — named), the rules in the order they are tried, and where the Auto-mode
+circuit breaker stands. Every line is read off the launch's live
+`PermissionGate` rather than re-derived from config, because a permission
+screen that disagrees with the gate is worse than no screen. It is READ-ONLY in
+the strong sense — `PermissionGate::evaluate()` moves the Auto strike counters,
+so opening this must not, and does not, go anywhere near it. To CHANGE the
+mode, relaunch with `--permission-mode`, set `$SUGARCRUSH_PERMISSION_MODE`, or
+edit `permissionMode` in `~/.sugar-crush/config.json`.
 
 Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
 (`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each

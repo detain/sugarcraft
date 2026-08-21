@@ -53,6 +53,10 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
     {
         Bootstrap::useProjectRootForSettings(null);
         Bootstrap::useConfigPath(null);
+        // The highest-precedence source, and a static: leaving it set would
+        // pin every later gate in the process to this fixture's mode, which is
+        // the same process-wide leak the env-var branch below documents.
+        Bootstrap::usePermissionMode(null);
         $this->restoreHomeSandbox();
 
         // BOTH BRANCHES, and the else is the one that matters. This fixture
@@ -543,6 +547,102 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
     }
 
     /** @param array<string, mixed> $data */
+    // -------------------------------------------------------------------------
+    // Provenance: which source the GATE remembers, for `/permissions`
+    // -------------------------------------------------------------------------
+
+    /**
+     * `permissionGate()` resolved this precedence chain and then threw away
+     * WHICH layer won, one line after knowing it. `/permissions` has to report
+     * it, and re-deriving it at display time would be a second copy of the
+     * precedence — free to disagree with this one, and re-reading files that
+     * may have been edited since the launch. So the winning source rides on the
+     * gate.
+     *
+     * Each case asserts the mode AND the source together. Asserting the source
+     * alone would pass on a label hardcoded to the layer under test; asserting
+     * the mode alone is what the tests above this block already do.
+     */
+    public function testTheGateRemembersThatTheFlagSetTheMode(): void
+    {
+        $this->writeUserSettings(['permissionMode' => 'plan']);
+        putenv('SUGARCRUSH_PERMISSION_MODE=auto');
+        Bootstrap::usePermissionMode('dont-ask');
+
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::DontAsk, $gate->mode());
+        self::assertSame('--permission-mode', $gate->modeSource());
+    }
+
+    public function testTheGateRemembersThatTheEnvVarSetTheMode(): void
+    {
+        $this->writeUserSettings(['permissionMode' => 'plan']);
+        putenv('SUGARCRUSH_PERMISSION_MODE=dont-ask');
+
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::DontAsk, $gate->mode());
+        self::assertSame('$SUGARCRUSH_PERMISSION_MODE', $gate->modeSource());
+    }
+
+    /**
+     * The file case names the FILE, and the one it names is the one that
+     * actually carried the key — the same provenance the refusal message above
+     * had to be fixed to get right. A label hardcoded to `config.json` would
+     * pass a test that only looked for "a path".
+     */
+    public function testTheGateRemembersWhichFileSetTheMode(): void
+    {
+        $this->writeUserSettings(['permissionMode' => 'plan']);
+
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::Plan, $gate->mode());
+        self::assertStringContainsString('permissionMode in ', (string) $gate->modeSource());
+        self::assertStringContainsString(LayeredSettings::USER_FILE, (string) $gate->modeSource());
+        self::assertStringNotContainsString('config.json', (string) $gate->modeSource());
+    }
+
+    public function testTheGateSaysSoWhenNothingConfiguredTheMode(): void
+    {
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::BypassPermissions, $gate->mode());
+        self::assertSame('the built-in default', $gate->modeSource());
+    }
+
+    /**
+     * The rewrite from a `??` chain to a walked list must not change WHEN a bad
+     * value is validated. `??` short-circuits, so a broken env var behind a
+     * valid flag was never parsed and never threw; a loop that validated every
+     * candidate before choosing would turn that into a refused launch.
+     */
+    public function testAnUnusableValueBehindAWinningSourceIsStillNeverValidated(): void
+    {
+        $this->writeUserSettings(['permissionMode' => 'not-a-mode-at-all']);
+        putenv('SUGARCRUSH_PERMISSION_MODE=also-not-a-mode');
+        Bootstrap::usePermissionMode('plan');
+
+        $gate = Bootstrap::permissionGate();
+
+        self::assertSame(PermissionMode::Plan, $gate->mode());
+        self::assertSame('--permission-mode', $gate->modeSource());
+    }
+
+    /**
+     * …and the converse, so the test above cannot be passing because nothing
+     * validates anything any more: with no flag, the bad env var still refuses
+     * the launch.
+     */
+    public function testAnUnusableValueInTheWinningSourceStillRefusesTheLaunch(): void
+    {
+        putenv('SUGARCRUSH_PERMISSION_MODE=also-not-a-mode');
+
+        $this->expectException(PermissionConfigException::class);
+        Bootstrap::permissionGate();
+    }
+
     private function writeUserConfigFile(array $data): void
     {
         file_put_contents($this->configDir . '/config.json', (string) json_encode($data));
