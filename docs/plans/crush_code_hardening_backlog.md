@@ -3246,5 +3246,38 @@ Its siblings are `SSH_ASKPASS` (plus `SSH_ASKPASS_REQUIRE=force` on modern OpenS
 rivals: the PTY is the general interaction mechanism, and askpass is how *secrets* get lifted out of it
 onto a channel the app can trust.
 
+### DECIDED 2026-08-21 by the user: **do NOT build the askpass route.** Secrets are out of scope instead.
+
+*"so dont go the sudo askpass route it sounds like"* — accepted, and it simplifies E62 rather than
+merely deferring it.
+
+**Why askpass is not worth building here.** Its one durable benefit is the authenticated prompt
+channel, and buying it costs: a helper with a channel to the user that does not route back through the
+app (which does not exist in a TUI over SSH — verified, no `ssh-askpass`, no `zenity`, and
+`pinentry-curses` needs the tty step 1 removes), **times four separate integrations** (`SUDO_ASKPASS`,
+`SSH_ASKPASS`, `GIT_ASKPASS`, `pinentry`), **none of which covers the general case** — `Continue? [Y/n]`,
+`apt` config prompts, `psql`, a REPL, `read` in a shell script. High cost, narrow coverage, and the
+security benefit collapses in exactly this app's deployment shape.
+
+🔴 **What replaces it: the interactive PTY does NOT accept secrets. That is a scope decision, not a
+mitigation.** The threat in E62 is a credential-entry surface driven by model output. **Remove the
+credential entry and the surface is gone** — the remaining prompts (`[Y/n]`, menus, a pager, an editor)
+are low-stakes to forge, because forging them buys an attacker a keystroke, not a password.
+
+So when a command needs a **secret**, the answer is step 1's fail-fast, with a message that names the
+three real options: configure `NOPASSWD` for that command, run it yourself outside the agent, or grant
+the capability some other way. **The agent does not get to hold your password.** That is a better
+outcome than any amount of chrome-hardening around a password box, and it is strictly cheaper.
+
+⚠️ **Do not let this decision delete the non-interactive ENVIRONMENT work in Phase 9 step 1.**
+`GIT_TERMINAL_PROMPT=0`, `DEBIAN_FRONTEND=noninteractive`, `PAGER=cat`/`GIT_PAGER=cat`,
+`SYSTEMD_PAGER=`, `sudo -n` are **not** askpass — they are how a command fails fast and legibly instead
+of hanging. They stay.
+
+**Residual to carry, honestly:** a PTY child can still *print* something that looks like a password
+prompt, and a user who has been trained by the `[Y/n]` flow to type into the pane may type a secret
+into it anyway. E62 point 3 (app chrome visually distinct from PTY content) therefore still applies —
+reduced from "the fix" to "defence in depth", which is the right weight for it.
+
 **Do not treat Phase 9 step 1 (detach the controlling terminal) as blocked on this.** Step 1 REMOVES a
 leak and adds no surface; it should ship regardless of when (C) is scheduled.

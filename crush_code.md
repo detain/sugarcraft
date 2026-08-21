@@ -1008,6 +1008,34 @@ plainly that the command may ask for input; and the app's own chrome around the 
 distinct from PTY content so a forged prompt cannot impersonate the app. Recorded in
 `docs/plans/crush_code_hardening_backlog.md`; the FIX may be deferred, the FINDING is not.
 
+🔴 **DECIDED 2026-08-21 by the user: the askpass route is NOT being built, and the interactive PTY
+does NOT accept secrets at all.** *"so dont go the sudo askpass route it sounds like"*.
+
+That is a **scope decision, not a mitigation**, and it is why it simplifies rather than defers. The
+threat is a credential-entry surface driven by model output — **remove the credential entry and the
+surface is gone.** The remaining interactive prompts (`[Y/n]`, menus, a pager, an editor) are low-stakes
+to forge, because forging one buys an attacker a keystroke, not a password.
+
+Askpass was rejected on cost, not on principle: its one durable benefit is an *authenticated* prompt
+channel, and buying it needs a helper with a channel to the user that does not route back through the
+app — which does not exist in a TUI over SSH (verified: no `ssh-askpass`, no `zenity`; `pinentry-curses`
+needs the very tty step 1 removes) — times **four** separate integrations (`SUDO_ASKPASS`,
+`SSH_ASKPASS`, `GIT_ASKPASS`, `pinentry`), **none** of which covers `Continue? [Y/n]`, `apt`'s config
+prompts, `psql`, a REPL, or `read` in a shell script.
+
+**So a command that needs a secret gets step 1's fail-fast**, with a message naming the real options:
+configure `NOPASSWD` for that command, run it yourself outside the agent, or grant the capability some
+other way. **The agent does not hold your password.**
+
+⚠️ **This does NOT delete the non-interactive ENVIRONMENT work in step 1.** `GIT_TERMINAL_PROMPT=0`,
+`DEBIAN_FRONTEND=noninteractive`, `PAGER=cat`/`GIT_PAGER=cat`, `SYSTEMD_PAGER=` and `sudo -n` are not
+askpass — they are how a command fails fast and legibly instead of hanging. They stay.
+
+**Residual, carried honestly:** a PTY child can still *print* something that looks like a password
+prompt, and a user trained by the `[Y/n]` flow to type into the pane may type a secret into it anyway.
+So E62's "app chrome visually distinct from PTY content" still applies — demoted from *the fix* to
+*defence in depth*, which is the right weight for it.
+
 #### Steps
 
 1. **Detach the controlling terminal for every tool shell-out**, plus the non-interactive env block.
