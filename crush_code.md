@@ -901,6 +901,90 @@ written after the work had landed. The OS-version line landed as `'OS version: '
 
 ---
 
+### Phase 9 — Interactive-prompt containment (a tool that blocks on a human, and paints outside the app)
+
+**Added 2026-08-21, from a live incident.** A user told an agent it could use `sudo`, believing
+passwordless sudo was configured. It was not. `sudo` prompted for a password — and the prompt
+**rendered at column 0, outside the chat pane**, while the tool hung. Both halves of that are bugs, and
+the second one is why the first is not fixable where you would expect.
+
+**Sequencing:** this phase runs **after the remaining functional fixes and BEFORE the deferred security
+pass**, per the standing "functionality before hardening" rule. It is a functionality item — a tool
+that hangs and corrupts the display — that happens to have a security-shaped fix.
+
+#### What is actually happening — measured, not assumed
+
+1. **Stdin is already handled.** `CapturesProcessOutput` (`src/Tools/Concerns/CapturesProcessOutput.php:77-98`)
+   gives the child a stdin **pipe** and closes it immediately, with the comment saying a command that
+   reads stdin gets EOF rather than hanging. That is correct and is not the bug.
+2. **`sudo` never reads stdin.** It opens **`/dev/tty`** — the controlling terminal — directly, for both
+   the prompt and the reply. Closing stdin, redirecting stdin, and every byte-level output guard in
+   this tree are all bypassed, because the child is writing to a **device**, not to a pipe the app owns.
+   That is precisely why the text landed at column 0 outside the pane: it never passed through the
+   renderer, so no amount of output sanitising could have caught it.
+3. **Verified by probe** (spawned exactly the way `CapturesProcessOutput` spawns): the stdout pipe saw
+   only the pipe writes; the `/dev/tty` write went somewhere the pipes cannot observe. In a session
+   with **no controlling terminal** the `/dev/tty` open fails outright —
+   `sh: cannot create /dev/tty: No such device or address` — and `sudo -n true` exits non-zero
+   immediately with `sudo: a password is required`, printing no prompt at all.
+
+🔴 **Therefore options "detach the terminal" and "handle the output better" are NOT alternatives.**
+Detaching is a **prerequisite** for the display fix. A child holding the controlling terminal can
+scribble on the screen at any time, and the TUI — which paints by diffing against its own model of the
+screen — has no way to know it happened. Fixing the render half alone fixes nothing.
+
+#### The three options, with the one correction that matters
+
+- **(A) Make tool shell-outs non-interactive — fail fast.** Give the child **no controlling terminal**
+  (`posix_setsid()` in the forked child before exec, or `setsid`), so `/dev/tty` cannot be opened.
+  `sudo` then exits immediately with a clear diagnostic **on stderr**, which the existing pipe capture
+  already collects and the renderer already displays correctly. Pair with the standard
+  non-interactive environment: `SUDO_ASKPASS` unset + `sudo -n`, `GIT_TERMINAL_PROMPT=0`,
+  `DEBIAN_FRONTEND=noninteractive`, `PAGER=cat`/`GIT_PAGER=cat`, `SYSTEMD_PAGER=`. **Cheapest, and it
+  is the only option that closes the display leak.** Cost: a command that *legitimately* needs a
+  password can no longer be run at all — which is arguably the correct answer for an autonomous agent.
+- **(B) Detect the block, kill, and report.** A heuristic on top of (A) rather than a substitute for it:
+  no output for N seconds while the child is alive. This is a **weaker version of a problem this round
+  already solved twice** — see `ScriptHook::drain()`'s deadline and `CommandBackend`'s
+  idle-since-spawn measurement, both of which learned that "idle" must be defined against a real clock
+  and a real progress signal. If (A) lands, most of (B)'s value evaporates: the process no longer
+  hangs, it exits. Keep only the generic "this tool produced nothing and did not exit" watchdog.
+- **(C) Pipe the prompt back to the user.** 🔴 **The premise that this is the hardest option no longer
+  holds.** `sugar-crush` **already depends on `sugarcraft/candy-pty`** (`sugar-crush/composer.json:57`),
+  which ships `Pty.php`, `Spawn.php`, **`ControllingTerminal.php`**, **`Expect.php`**, `SignalForwarder.php`
+  and `PtyPool.php` — i.e. allocate a PTY, detect a prompt, answer it, forward signals. The machinery
+  for both (A) and (C) is a declared dependency that is currently unused by the tool path.
+
+#### Recommended shape (decision is the user's — this phase is scoped, not chosen)
+
+Layer them rather than picking one: **(A) unconditionally for every tool shell-out**, so the default is
+safe and nothing can paint outside the pane; **(C) behind an explicit opt-in** — a command the user has
+marked interactive runs under a `candy-pty` PTY whose output is composited *inside* the chat pane and
+whose prompt routes through the existing permission-prompt UI, which is already a built, tested,
+blocking modal. **(B)** shrinks to a generic no-progress watchdog once (A) is in.
+
+#### Steps
+
+1. **Detach the controlling terminal for every tool shell-out**, plus the non-interactive env block.
+   Touches `src/Tools/Concerns/CapturesProcessOutput.php` and `src/Tools/BuiltIn/Bash.php`; check
+   whether `CommandSpec`, `ScriptHook`, `ProcessExecutor`, `AgentWorkerPool` and the MCP stdio spawn
+   need the same treatment — **sweep the behaviour, not the token**: the question is "can this child
+   reach `/dev/tty`", not "does this file say sudo".
+2. **Regression test the leak directly.** ⚠️ The probe above could not reproduce the *bug* in a headless
+   session, only the *fix* — a headless environment has no controlling terminal, so `/dev/tty` already
+   fails there. **A test that passes because CI has no tty proves nothing**, and would be this project's
+   canonical "fixture shaped like the property, not the bug". Use `candy-pty` to allocate a real PTY,
+   run a child that writes to `/dev/tty`, and assert the bytes do NOT reach the terminal.
+3. **Decide (C).** If adopted: PTY-backed interactive command path, output composited into the pane,
+   prompt routed to the permission modal. If declined: record the refusal and the reason, and make the
+   failure message name the option — a user who gets "this command needs a terminal" should be told
+   what to do instead.
+4. **Audit the message.** When a shell-out fails for want of a terminal, the user must be able to tell
+   that from a crash. Today they would see `sudo: a password is required` with no context about why the
+   agent could not answer it.
+
+---
+
 ## Appendix: Full Angle Reports
 
 The 13 full research dossiers below are kept close to verbatim from each research agent's output (file:line citations, code sketches, live-repro transcripts intact) so implementation work can be done directly against them. Two corrections from the "Corrections applied during compilation" section above apply throughout: `ChatPane.php` is live (not dead) and `AgentsPane.php` is intentionally preserved (not dead) — read any language below to the contrary as superseded by those corrections. Per the "never remove, wire instead" rule, deletion recommendations below (mainly in §4 and §8) have been superseded by the "Flagged for consolidation review" section above and should not be read as approved action items.
