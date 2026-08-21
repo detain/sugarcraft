@@ -9614,3 +9614,79 @@ explicitly that its working tree is its own work and not something to "clean up"
 FIXED**, not FIXED: the `+4` is single-sourced and the dashboard over-run is gone, but the below-44 case
 named in its own heading is untouched. `CHROME_WIDTH`'s docblock and the new geometry test now document
 a known over-run as current behaviour, so both must be updated the day E64 is fixed — said so in E64's Step.
+
+---
+
+## Round 39 — three lanes, concurrency raised to 3 mid-round, and a finding that predicted its own violation
+
+**Floor: `8879 / 100396 / 1 skipped / rc 0`** at `3737f506`, supervisor-measured in the live tree.
+Master moved 8820 → 8831 (`lsp`) → 8848 (`cmd`) → 8879 (`sglang`). Every merge's arithmetic was
+predicted before the run and matched to the assertion.
+
+### What landed
+
+- **`lsp` — E63 + E64** (`3da36908`, `91582018`, `575635bd`, `4963d097`, `3df2d42e`, `3cceabd9`).
+  `ChatTest`'s stranded-payload detector now attributes by **identity** (an opt-in ledger in
+  `ToolIpcFiles`) instead of by a glob window over the shared temp dir. `AgentViewPane::render()` now
+  measures its right section and degrades metrics rather than letting the body outgrow the box.
+- **`cmd` — E60 + E65** (`ff54c377`, `3df5024d`, `c50680c9`, + 2). Hook ASK clipped, MODIFY **refused**
+  (a truncated rewrite is not a smaller rewrite), and the payload transport now **asks the OS** instead
+  of assuming a page size.
+- **`sglang` — E57 + E58** (`880fa82c`, `5f956c6b`, `3737f506`, + 2). An empty `permissionMode` key no
+  longer displaces an earlier layer; a trusted project's tool removals are now reported **inside the
+  alt screen**.
+
+### Rules earned this round
+
+**A finding can predict its own violation.** E63 says a glob over the shared temp dir cannot tell one
+process's payloads from another's. The agent that *fixed* E63 then ran `rm -f /tmp/sc_chat_tool_*.json`
+while cleaning up a probe — the exact hazard, executed while two sibling lanes were live. It self-reported.
+The rule that followed: **a prohibition belongs in the brief of every agent that could trip it**, not only
+in the entry that records it.
+
+**Two units of the same measurement are not two figures.** A reviewer challenged a docblock's `+6` as
+"never +6; the excess is +2 through 44 and +1 at 45". Both were right: `+6` was the **absolute** row
+width, `+2` the **excess** over the `+4` due. The fix agent refuted the reviewer with the measurement and
+then spelled out the units everywhere the figure appears — a better outcome than either party winning.
+
+**The obvious fix is sometimes the one that must not ship.** E63's fix could have been "point the glob at
+the suite's TMPDIR sandbox". That passes, and blinds the detector to the leak it exists to catch: PHP
+caches the temp dir per process, so `bootstrap.php` moves it for children and not for the test process.
+The file already said so. **A green suite is not evidence that a detector still detects.**
+
+**Removing an assumption beats scoping it.** The hook transport hardcoded `MAX_ARG_STRLEN = 131072`,
+assuming a 4 KiB page everywhere. Offered the choice of scoping the claim or removing the guess, the fix
+**removed** it: offer the real bytes, retry only when `proc_open()` actually refuses, and derive the test's
+expectation from `getconf PAGESIZE`. The obstacle that had made a previous agent reject this route
+(`failOnWarning` vs `proc_open`'s warning) turned out not to be real once checked.
+
+**A report nobody can see is not a mitigation, and only a capture proves it.** E57 was closed with a
+launch-time stderr warning. A reviewer drove a real PTY launch and replayed it through `candy-vt`:
+the line lives **0.47 s** before `\e[?1049h` takes the screen, and is absent from every frame after.
+The fix moved it into the transcript — and was required to prove it by **replaying only the bytes after
+the alt-screen enter**, so "showing through from underneath" could not be mistaken for "painted".
+
+**A test that cannot fail is not a control.** The E64 pin kept six broken numbers and asserted they were
+gone — except the `assertNotSame` doing that work sat after `assertSame($w + 4, $widest)` and was
+therefore unfalsifiable. Twelve assertions that could never fire, under a docblock claiming the fix could
+not be reverted into a test that only says `+4`. It was exactly that test.
+
+### The tracker's own recurring defect
+
+**E57 has now carried stale line numbers four rounds running.** Round 37 corrected them; round 39's scout
+corrected them again; the reviewer re-measured and corrected them a third time; and by the time the fix
+landed they were stale a **fourth** time — because that fix inserted ~100 lines above them. The entry now
+cites **symbols**, and the old corrections are marked *as of round 39* rather than re-corrected.
+**Line numbers in a long-lived document are a defect generator, not a convenience.**
+
+Also: `SkillPathNudge` had been filed under **E57's number**, and `Grep.php` repeated the error in shipped
+source — which is why a round-38 queue summary briefed a lane against the wrong entry. Now **E66**.
+
+### New findings recorded, not fixed
+
+**E65** (any script hook denied tool calls over ~128 KiB — fixed this round), **E66** (`SkillPathNudge`
+unbounded to 10 MB), **E67** (`SkillRegistry::register()` keys by array key — recorded at
+*reasoned-not-verified* strength on purpose), **E68** (`AgentDashboardPane` over-runs on a single emoji;
+root cause traced to `Width::truncateAnsi()` in **candy-core**, so the Step points at the foundation lib),
+**E69** (`Width::string()` scores a tab 0 while `Style::render()` expands it to four spaces — a width
+authority disagreeing with the renderer that consumes it).
