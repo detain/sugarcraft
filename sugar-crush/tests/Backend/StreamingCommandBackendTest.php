@@ -248,6 +248,92 @@ final class StreamingCommandBackendTest extends TestCase
     }
 
     /**
+     * REGRESSION. A child that is still SWALLOWING a large history is making
+     * progress, and the idle deadline must not kill it.
+     *
+     * Every other deadline test in this file passes `complete([], …)`, so the
+     * payload is the two bytes `[]` and the stdin transfer is instantaneous —
+     * which makes "silence since spawn" and "silence since the history was
+     * delivered" indistinguishable, and they are not the same clock. The
+     * blocking `fwrite()` that {@see StreamingCommandBackend::pump()} replaced
+     * returned only once the WHOLE payload had been handed over, and the old
+     * code armed the deadline after it; arming it at spawn and re-arming it on
+     * stdout/stderr alone silently redefined it, and a healthy wrapper reading
+     * a long conversation in 64K bites died mid-prompt. MEASURED with the
+     * fixture below scaled to 512 KB and `idleTimeout: 2`: 2.01s and
+     * `_[error: no output …]_` against 4.51s and `ok` from the code this
+     * replaced.
+     *
+     * The fixture reads in `read`-sized bites with a sleep between them, so
+     * every iteration that moves bytes moves them ON STDIN ONLY — there is no
+     * output at all until the transfer is over, which is exactly the state the
+     * regression mistook for a wedge.
+     */
+    public function testAChildStillSwallowingALargeHistoryIsNotKilledByTheIdleDeadline(): void
+    {
+        // 256 KB of history against a child that takes 64K every 0.4s: four
+        // bites, ~1.6s of transfer, against a 1s deadline it must not trip.
+        $history = [Message::user(str_repeat('x', 256 * 1024))];
+        $script = $this->writeScript(
+            "#!/bin/bash
+" . 'while IFS= read -r -n 65536 chunk; do sleep 0.4; done' . "
+printf 'ok\n'
+",
+        );
+
+        try {
+            $started = microtime(true);
+            $result = (new StreamingCommandBackend($script, idleTimeout: 1))->complete($history, null);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame('ok', $result->content);
+            // The transfer alone has to outlive the deadline, or the fixture
+            // proves nothing: 1.5s is a floor the four 0.4s bites clear while
+            // leaving margin over the 1s deadline for scheduling jitter.
+            $this->assertGreaterThan(
+                1.5,
+                $elapsed,
+                'the stdin transfer has to outlive the 1s deadline by a clear margin or this proves nothing',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * And the deadline still bites once the large history HAS been delivered,
+     * so the test above is not passing because stdin progress disabled the
+     * mechanism for anything with a payload.
+     *
+     * `cat` drains the whole 256 KB as fast as the pipe will give it, so the
+     * last stdin byte moves within milliseconds of the spawn and the silence
+     * that follows is the child's own.
+     */
+    public function testTheDeadlineStillBitesAfterALargeHistoryHasBeenDelivered(): void
+    {
+        $history = [Message::user(str_repeat('x', 256 * 1024))];
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nsleep 30\necho 'never reached'");
+
+        try {
+            $started = microtime(true);
+            $result = (new StreamingCommandBackend($script, idleTimeout: 1))->complete($history, null);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame(
+                "_[error: no output on the streaming backend's pipes for more than 1s]_",
+                $result->content,
+            );
+            $this->assertLessThan(
+                5.0,
+                $elapsed,
+                'the deadline must fire on the silence after delivery, not wait out the 30s sleep',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
      * A string command still reaches the shell, which is what makes a pipeline
      * wrapper (`curl … | jq -r …`) usable here at all.
      *

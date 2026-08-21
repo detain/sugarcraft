@@ -261,6 +261,11 @@ sugarcrush models          # every selectable provider, "*" marks the selected o
   plus one repaint at the end. It is driven from a periodic timer on the loop
   now. Before/after measurements in
   [`ENVIRONMENT.md`](ENVIRONMENT.md#the-two-shell-out-variables).
+- **A shell-out backend hung on a long conversation.** Fixed — if you still see
+  it, the install predates the fix. The history used to go out in one blocking
+  write before anything was read back, which deadlocks past ~64K against a
+  command that echoes its input, and neither shell-out path has a completion
+  deadline that would end it. Both now interleave the write with the reads.
 - **A shell-out backend lost all my paragraph breaks.** You used
   `SUGARCRUSH_BACKEND_CMD_STREAM` with a wrapper written for
   `SUGARCRUSH_BACKEND_CMD`. They are two different stdout protocols and neither

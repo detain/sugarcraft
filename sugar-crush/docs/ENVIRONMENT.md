@@ -89,6 +89,18 @@ freeze started before the promise was even returned. Both are now drained from a
 periodic timer on the event loop rather than read to completion in one go. (The
 one-shot `-p` path passes no callback at all and blocks deliberately.)
 
+**A long conversation no longer hangs a shell-out wrapper.** Both variables used
+to hand the whole history to the command in one blocking `fwrite()` and only
+then read its output. Past the kernel's ~64K pipe buffer that deadlocks against
+any command that *echoes* its input — the shape of every streaming wrapper, and
+of `cat` — because the parent is blocked writing a full stdin pipe while the
+child is blocked writing a full stdout pipe, and neither path has a completion
+deadline that would ever end it. Measured with `cat` as the command: a 64 KB
+history returned, 130 KB returned, 200 KB hung until it was killed. Both paths
+now interleave the write with the reads, `-p` included, which keeps parking in
+the kernel at 0% CPU (0.03% before, 0.04% after, against a wrapper that thinks
+for two seconds) and returns at 200 KB, 1 MB and 8 MB.
+
 **Absence means unset, empty *or* whitespace-only,** for both variables. One
 helper (`Bootstrap::backendCommandEnv()`) defines that, and every site that
 either selects the tier or labels the run asks it, so the tier a launch selects

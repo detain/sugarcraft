@@ -58,8 +58,13 @@ use SugarCraft\Crush\Message;
  * legitimately run tens of minutes.
  *
  * {@see complete()} BLOCKS, by contract — it is what the `-p` one-shot path
- * ({@see \SugarCraft\Crush\Cli\NonInteractive::run()}) wants and it parks at 0%
- * CPU in a blocking read. {@see completeAsync()} does NOT, and used to: it
+ * ({@see \SugarCraft\Crush\Cli\NonInteractive::run()}) wants, and it parks at 0%
+ * CPU in the kernel rather than polling. It blocks in `stream_select()` over
+ * the write descriptor and the two read descriptors TOGETHER, not in a write
+ * followed by a read: the sequential ordering it used to have deadlocked
+ * outright against any command that echoes its input — `cat` included — and
+ * with no deadline on this path there was nothing to end it.
+ * {@see completeAsync()} does NOT block, and used to: it
  * called `complete()` straight from its Promise executor, which the Promise
  * constructor runs IMMEDIATELY rather than deferring, so a `$SUGARCRUSH_BACKEND_CMD`
  * user's terminal froze for the whole round-trip — no spinner, no keystrokes,
@@ -73,6 +78,10 @@ final class CommandBackend implements Backend
      * before looking at the pipes again. Matches
      * {@see StreamingCommandBackend}'s own poll interval, so the shell-out
      * tier's two halves agree about how promptly a child's output is noticed.
+     *
+     * {@see complete()} does NOT poll — it blocks in `stream_select()` — and
+     * borrows this only as the back-off for an interrupted syscall, which is
+     * the one case where its wait returns without anything having happened.
      */
     private const POLL_INTERVAL_SECONDS = 0.005;
 
@@ -108,23 +117,97 @@ final class CommandBackend implements Backend
         }
         [$proc, $pipes] = $spawned;
 
-        fwrite($pipes[0], $payload);
-        fclose($pipes[0]);
-        // `=== false` and not `?:`. `stream_get_contents()` returns
-        // `string|false`, and `"0" ?: ''` is `''` in PHP — so a wrapper whose
-        // ENTIRE reply is the single character `0` with no trailing newline
-        // used to come back as an empty assistant message. Same for a stderr
-        // tail of `"0"` on the failure path below.
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        if ($stdout === false) {
-            $stdout = '';
+        // ALL THREE PIPES NON-BLOCKING, AND ONE BLOCKING `stream_select()` OVER
+        // ALL OF THEM. This used to be a blocking `fwrite($pipes[0], $payload)`
+        // followed by `stream_get_contents($pipes[1])`, and that ordering
+        // DEADLOCKS against any command that echoes its input — which is the
+        // shape of every streaming wrapper, and of `cat`, which this repo's own
+        // tests already point `$SUGARCRUSH_BACKEND_CMD` at. Once the child has
+        // written ~64K of stdout the stdout pipe is full and it blocks; the
+        // parent is still inside `fwrite()` with the stdin pipe full because
+        // the child stopped reading; neither side can move and there is no
+        // deadline on this path to end it. MEASURED with `cat` as the command:
+        // a 64 KB history returned, 130 KB returned, 200 KB hung until it was
+        // killed at 10s.
+        //
+        // WHY `stream_select()` AND NOT A POLL LOOP. The property `complete()`
+        // is chosen for on the `-p` one-shot path
+        // ({@see \SugarCraft\Crush\Cli\NonInteractive::run()}) is that it
+        // parks at 0% CPU while the model thinks, and a `usleep`-driven poll
+        // like {@see StreamingCommandBackend::complete()}'s would give that up.
+        // It does not have to: a blocking `stream_select()` with a NULL timeout
+        // sleeps in the kernel exactly as the blocking read did, and wakes on
+        // whichever descriptor moves first — so the write and the two reads
+        // interleave without either one being able to park the other. MEASURED
+        // over the same `cat`: 200 KB and 8 MB both return, and `getrusage()`
+        // reports the same ~0 CPU for a 2s-thinking wrapper as the blocking
+        // read did.
+        //
+        // STILL NO COMPLETION DEADLINE, deliberately — the timeout argument
+        // stays NULL. A completion legitimately runs tens of minutes.
+        stream_set_blocking($pipes[0], false);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $stdout = '';
+        $stderr = '';
+
+        while (true) {
+            // A stream at EOF is permanently "ready", so an exhausted pipe has
+            // to leave the set or `stream_select()` returns immediately forever.
+            $read = [];
+            foreach ([$pipes[1], $pipes[2]] as $pipe) {
+                if (is_resource($pipe) && !feof($pipe)) {
+                    $read[] = $pipe;
+                }
+            }
+            $write = $payload !== '' && is_resource($pipes[0]) ? [$pipes[0]] : [];
+
+            if ($read === [] && $write === []) {
+                break;
+            }
+
+            $except = null;
+            // `stream_select()` mutates its arrays, so it gets copies.
+            $r = $read;
+            $w = $write;
+            $ready = @stream_select($r, $w, $except, null);
+            if ($ready === false) {
+                // An interrupted syscall — a signal handler ran between the
+                // call and the wait. Nothing has changed about the pipes, so
+                // the loop simply re-enters the wait; the brief yield is there
+                // so a persistent error cannot become a hot spin.
+                usleep((int) (self::POLL_INTERVAL_SECONDS * 1000000));
+
+                continue;
+            }
+
+            if ($w !== []) {
+                $written = @fwrite($pipes[0], $payload);
+                // `false` is a broken pipe — the child closed stdin or died.
+                // Nothing left to say to it.
+                $payload = $written === false ? '' : substr($payload, $written);
+                if ($payload === '') {
+                    fclose($pipes[0]);
+                }
+            }
+
+            foreach ($r as $pipe) {
+                while (($chunk = fread($pipe, 65536)) !== false && $chunk !== '') {
+                    if ($pipe === $pipes[1]) {
+                        $stdout .= $chunk;
+                    } else {
+                        $stderr .= $chunk;
+                    }
+                }
+            }
         }
-        if ($stderr === false) {
-            $stderr = '';
+
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
         }
-        fclose($pipes[1]);
-        fclose($pipes[2]);
 
         return self::finish(proc_close($proc), $stdout, $stderr);
     }
@@ -170,13 +253,15 @@ final class CommandBackend implements Backend
      * lands. That is invisible next to a provider's own latency and it is the
      * same interval {@see StreamingCommandBackend::complete()} already spends.
      *
-     * ALL THREE PIPES GO NON-BLOCKING, stdin included. `complete()`'s blocking
-     * `fwrite()` of a history larger than the kernel's ~64K pipe buffer parks
-     * until the child reads it, and a wrapper that reads stdin only after it
-     * has finished answering parks it for the whole completion — the same
-     * freeze one syscall earlier. Here the payload is written a slice at a time
-     * from the same tick that drains stdout, so a full pipe costs a tick rather
-     * than the turn.
+     * ALL THREE PIPES GO NON-BLOCKING, stdin included — as they now do in
+     * {@see complete()} too, for the same reason and by a different mechanism.
+     * A single blocking `fwrite()` of a history larger than the kernel's ~64K
+     * pipe buffer parks until the child reads it, and a wrapper that reads
+     * stdin only after it has finished answering parks it for the whole
+     * completion — the same freeze one syscall earlier, and an outright
+     * deadlock when the child's own stdout pipe fills first. Here the payload
+     * is written a slice at a time from the same tick that drains stdout, so a
+     * full pipe costs a tick rather than the turn.
      *
      * $onToken is accepted and ignored for the same reason it is in
      * `complete()`: this backend's protocol delivers one final blob of stdout,

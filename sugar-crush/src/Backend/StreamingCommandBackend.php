@@ -151,8 +151,10 @@ final class StreamingCommandBackend implements Backend
      * @param string|list<string> $command Command + args. Pass a
      *                                     list to avoid shell
      *                                     escaping concerns.
-     * @param int $idleTimeout Seconds the command may produce NO OUTPUT ON ITS
-     *        PIPES before it is terminated, or 0 (the default) for no deadline.
+     * @param int $idleTimeout Seconds the command may move NO BYTES ON ANY OF
+     *        ITS THREE PIPES — it neither writes output nor accepts any more of
+     *        the history on stdin — before it is terminated, or 0 (the default)
+     *        for no deadline.
      *        Measured with `microtime(true)`, so a configured 1 means silence
      *        longer than 1.0s and not "somewhere in (1.0, 2.0]" — which is what
      *        a `time()`-based deadline meant, since a whole-second clock
@@ -294,10 +296,11 @@ final class StreamingCommandBackend implements Backend
             // landed on a `\r`, delete it — `a\rb\n` came back as `ab` or as
             // `a\rb` depending on nothing but timing.
             'partial' => '',
-            // Re-armed by every byte either pipe produces, so the deadline
-            // below measures SILENCE and never elapsed time. A wrapper that
-            // streams for an hour never trips it; one that wedges without
-            // exiting does.
+            // Re-armed by every byte that moves on ANY of the three pipes, so
+            // the deadline below measures SILENCE and never elapsed time. A
+            // wrapper that streams for an hour never trips it; nor does one
+            // still swallowing a large prompt; one that wedges without exiting
+            // does. See {@see pump()} for why stdin has to count.
             'lastOutputAt' => microtime(true),
             // When the direct child was first seen to be gone, or null while it
             // still runs. Arms POST_EXIT_GRACE_SECONDS, nothing else.
@@ -317,8 +320,8 @@ final class StreamingCommandBackend implements Backend
      * Returns true when the caller must stop iterating — the child exited and
      * both pipes reached EOF, the idle deadline expired, or the post-exit grace
      * ran out on a descendant holding the pipes. Sets `$state['progressed']` so
-     * a driver can tell an iteration that moved bytes from one that should
-     * yield before trying again.
+     * a driver can tell an iteration that moved bytes — in EITHER direction —
+     * from one that should yield before trying again.
      *
      * @param array<string,mixed> $state
      */
@@ -329,8 +332,12 @@ final class StreamingCommandBackend implements Backend
         // Offer the child more of the history. `false` from `fwrite()` is a
         // broken pipe — the child closed stdin or died — so stop offering
         // rather than re-presenting the same bytes every iteration forever.
+        $stdinBytes = 0;
         if ($state['stdin'] !== '' && is_resource($pipes[0])) {
             $written = @fwrite($pipes[0], $state['stdin']);
+            if ($written !== false) {
+                $stdinBytes = $written;
+            }
             $state['stdin'] = $written === false ? '' : substr($state['stdin'], $written);
             if ($state['stdin'] === '') {
                 fclose($pipes[0]);
@@ -360,10 +367,23 @@ final class StreamingCommandBackend implements Backend
             $state['stderr'] .= $chunk;
         }
 
-        $state['progressed'] = $stdoutBytes > 0 || $stderrBytes > 0;
+        $state['progressed'] = $stdinBytes > 0 || $stdoutBytes > 0 || $stderrBytes > 0;
         // A blank line counts as activity, as it always did — the child is
         // alive and writing, which is the only question the idle deadline
         // asks. It now also survives as a `"\n"` token.
+        //
+        // BYTES THE CHILD TOOK ON STDIN COUNT TOO, and the deadline is wrong
+        // without them. The blocking `fwrite()` this loop replaced returned
+        // only once the WHOLE history had been handed over, and the old code
+        // armed `$lastOutputAt` after it — so the deadline has always meant
+        // "silence since the prompt was delivered". Arming it at spawn and
+        // re-arming it on output alone would silently redefine it as "silence
+        // since spawn", and a healthy child that is still reading a large
+        // prompt is silent by that definition: MEASURED, a wrapper doing
+        // `read -r -n 65536; sleep 0.5` over a 512 KB history with
+        // `idleTimeout: 2` died at 2.01s where the blocking write finished at
+        // 4.51s and answered. A child that accepts nothing AND says nothing
+        // still trips it, which is the wedge the deadline is for.
         if ($state['progressed']) {
             $state['lastOutputAt'] = microtime(true);
         }

@@ -91,6 +91,67 @@ final class CommandBackendTest extends TestCase
         $this->assertSame("indented\nline two\n\nline four", $backend->complete([])->content);
     }
 
+    /**
+     * THE CLASSIC DOUBLE-DEADLOCK, ON THE BLOCKING PATH — where it was left
+     * unfixed once and should not have been.
+     *
+     * `complete()` used to write the history with a single BLOCKING `fwrite()`
+     * and only then `stream_get_contents()` the output. Hand that a history
+     * bigger than the kernel's ~64K pipe buffer and a command that echoes its
+     * input, and both sides park forever: the parent is blocked writing a full
+     * stdin pipe, the child is blocked writing a full stdout pipe, and the only
+     * process that could drain either is the one blocked on the other. Nothing
+     * on this path ends it — there is no completion deadline here, deliberately.
+     *
+     * "Echoes its input" is the shape of every streaming wrapper AND of `cat`,
+     * which this suite already points `$SUGARCRUSH_BACKEND_CMD` at
+     * ({@see \SugarCraft\Crush\Tests\Cli\NonInteractiveProviderFailureTest},
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapSpendAndSummaryTest}), so
+     * this is not an exotic command. MEASURED against the code this replaced,
+     * `cat` as the command: a 64 KB history returned, 130 KB returned, 200 KB
+     * hung until an external `timeout` killed it at 10s. Reachable from the
+     * `-p` one-shot path and from `BackgroundSessionRunner`.
+     *
+     * The fix is one blocking `stream_select()` over the write descriptor and
+     * the two read descriptors together, so neither pipe can fill without the
+     * other being emptied — and it keeps the property this path was chosen for,
+     * which is that it parks in the kernel at 0% CPU rather than polling.
+     * MEASURED with `getrusage()` against a wrapper that thinks for 2s:
+     * 0.03% CPU before, 0.04% after (a 5ms poll loop over the same wrapper
+     * costs 0.33%).
+     *
+     * Without the fix this test does not fail, it HANGS — a regression here
+     * shows up as a wedged suite rather than a red one, which is worth knowing
+     * before someone waits on it.
+     */
+    public function testCompleteDoesNotDeadlockAgainstACommandThatEchoesALargeHistory(): void
+    {
+        $huge = Message::user(str_repeat('x', 512 * 1024));
+
+        // `cat`: every byte of the wire history comes straight back, so the
+        // stdout pipe fills long before the parent has finished writing stdin.
+        $echoed = (new CommandBackend(['cat']))->complete([$huge])->content;
+        $this->assertSame(512 * 1024 + 30, strlen($echoed));
+
+        // And the harder ordering: 4000 lines of output written BEFORE the
+        // command reads a single byte of its stdin.
+        $script = $this->writeScript(
+            "#!/bin/bash\n"
+            . "yes 0123456789012345678901234567890123456789012345678901234567890123 | head -n 4000\n"
+            . "cat > /dev/null\n"
+            . "printf 'done\\n'",
+        );
+
+        try {
+            $message = (new CommandBackend($script))->complete([$huge]);
+
+            $this->assertStringEndsWith("\ndone", $message->content);
+            $this->assertSame(4000 * 65 + 4, strlen($message->content));
+        } finally {
+            unlink($script);
+        }
+    }
+
     // =========================================================================
     // completeAsync() Tests
     //

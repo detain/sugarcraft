@@ -398,18 +398,28 @@ own variable instead of inheriting this one. `SUGARCRUSH_BACKEND_CMD` wins if
 both are set; for either variable, unset, empty and whitespace-only all count as
 absent. Neither path imposes any completion deadline.
 
-**What "streaming" buys you today is the callback, not a live screen.** The
-backend invokes its per-token callback as each token's newline lands on the pipe,
-but the read loop is synchronous and the async wrapper runs the whole of it
-inside one ReactPHP `futureTick` — so the event loop is blocked for the duration
-of the completion, and the TUI repaints once, when the answer resolves, rather
-than token by token. Measured against a wrapper emitting six tokens 300ms apart,
-with a 50ms periodic timer standing in for the render tick: six callbacks, at
-0.006s/0.306s/0.612s/0.912s/1.212s/1.512s, and **zero** timer ticks in that
-window. A non-blocking rewrite is tracked in the hardening backlog; the one-shot
-`-p` path passes no callback at all. See
-[`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md#the-two-shell-out-variables) for the
-byte-level comparison and for the Windows `bypass_shell` note.
+**"Streaming" buys you a live screen, not just the callback.** The backend
+invokes its per-token callback as each token's newline lands on the pipe, *and*
+the TUI repaints between the tokens. The second half used to be false and is
+worth recording because it was measured both ways: the read loop ran to
+completion inside one ReactPHP `futureTick`, so the event loop was blocked for
+the duration of the completion and the TUI repainted once, when the answer
+resolved. Measured against a wrapper emitting six tokens 300ms apart, with a
+50ms periodic timer standing in for the render tick:
+
+| | before | after |
+|---|---|---|
+| callbacks | 6, at 0.005s/0.304s/0.608s/0.907s/1.210s/1.514s | 6, at 0.010s/0.309s/0.609s/0.914s/1.214s/1.515s |
+| loop ticks during the stream | **0** | **36** |
+
+The read loop was not rewritten, it was hoisted: one implementation of the
+stdout protocol, driven either by the blocking path's own loop or by a periodic
+timer on the event loop. `SUGARCRUSH_BACKEND_CMD` had the same defect in a worse
+form — its promise executor ran the blocking call *immediately*, so the freeze
+started before the promise was even returned — and is drained from a timer now
+too. The one-shot `-p` path passes no callback at all and blocks deliberately.
+See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md#the-two-shell-out-variables) for
+the byte-level comparison and for the Windows `bypass_shell` note.
 
 ```bash
 export SUGARCRUSH_BACKEND_CMD_STREAM=~/bin/ollama-stream.sh
@@ -908,7 +918,7 @@ Things that are genuinely not finished, stated plainly rather than left for you 
 - **Five shell commands are still inert**: `GroupInputCmd`, `CancelAgentCmd`, `ResumeAgentCmd`, `StopAllAgentsCmd`, `QuitAgentViewCmd`. The first has no counterpart in the live app; the agent four would need to reach into a worker pool the shell does not hold. Their pane/selection half *is* applied — only the action half is missing.
 - **Workflow resume granularity is per whole stage.** An interrupted *parallel* sub-stage cannot be resumed with partial credit.
 - **A workflow stage does not reach a live model.** `AgentWorkerPool`'s default executor is `ProcessExecutor`, whose worker script is still the P1.S5 simulation: it echoes the task back as `[name] Task finished: …` without making a provider request. So `/workflow run` genuinely exercises loading, stage sequencing, interpolation, fan-out, pausing and resumption — and genuinely does not do the agents' work. Inject your own `ExecutorInterface` to change that.
-- **`/workflow run` freezes the TUI until it finishes.** `Chat::update()` calls `WorkflowEngine::run()` synchronously on the ReactPHP loop, and each stage blocks in `stream_select` until its worker returns or `ProcessExecutor`'s own 300s timeout expires (the executor enforces that one, not the sub-agent's) — so a multi-stage workflow means no repaint, no keystrokes, and no spinner for the duration. Tracked as issue #79; the fix follows `EngineBackend::completeAsync()`'s fork-plus-socket pattern.
+- **`/workflow run` freezes the TUI until it finishes.** `Chat::update()` calls `WorkflowEngine::run()` synchronously on the ReactPHP loop, and each stage blocks in `stream_select` until its worker returns or `ProcessExecutor`'s own 300s timeout expires (the executor enforces that one, not the sub-agent's) — so a multi-stage workflow means no repaint, no keystrokes, and no spinner for the duration. Tracked as issue #79. The fix is **not** `EngineBackend::completeAsync()`'s fork-plus-socket pattern, as this line used to claim: a fork is what that backend needs because its blocking work is in-process with no descriptor to watch, and forking *this* feature would put the live stage view permanently out of reach, since the object graph it renders lives in the parent.
 - **`pcntl` is required for real parallelism.** Without it `AgentWorkerPool` falls back to sequential execution and logs a one-time visible warning rather than pretending to fan out.
 - **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by the `Doctor` tool (model-invocable; there is no `/doctor` slash command) and by using it, not by CI.
 - **The `Doctor` tool reports capabilities, it does not repair them.**
