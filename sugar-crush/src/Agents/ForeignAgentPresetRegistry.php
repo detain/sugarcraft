@@ -38,27 +38,56 @@ use Symfony\Component\Yaml\Yaml;
  * in. Before that, nothing in `src/` or `bin/` constructed this class at all: an
  * agent authored for either tool was read by the tests below and by nothing else.
  *
- * {@see AgentPreset::$source} STILL HAS NO READER, and that half is worth
- * separating from the wiring rather than being carried along by it.
- * {@see \SugarCraft\Crush\Agents\Agent} has no source field, so the tag stops at
- * {@see \SugarCraft\Crush\Agents\Agent::fromPreset()} and the palette cannot yet
- * badge an imported row. That is the remaining half of Phase 1 item 3 and it needs
- * a field on `Agent`, not another call site.
+ * {@see AgentPreset::$source} NOW HAS A CARRIER, which closes the remaining half
+ * of Phase 1 item 3 on the value-object side: {@see \SugarCraft\Crush\Agents\Agent}
+ * has a `$source` field and {@see \SugarCraft\Crush\Agents\Agent::fromPreset()}
+ * copies it, so the tag survives the trip onto the roster. NO READER STILL: the
+ * palette does not badge an imported row, and that is a call site rather than a
+ * field.
  *
- * WHAT REACHES THE ROSTER IS NARROWER THAN WHAT THIS CLASS PARSES, which bounds
- * how much the wiring above can cost: `Agent::fromPreset()` reads name,
- * description, `initialPrompt`, model, `tools` and `skills`, so the
- * `permissionMode:` this class maps — including the `bypass-permissions` in the
- * measurement below — does not travel that path. It is dropped for native presets
- * too. The fields are still mapped here because the preset is the durable value
- * object and `Agent` is the lossy consumer, not the reverse.
+ * WHAT REACHES THE ROSTER IS STILL NARROWER THAN WHAT THIS CLASS PARSES, but
+ * for a different reason than it used to be — read this before relying on
+ * either sentence it replaced. `Agent::fromPreset()` used to read six of the
+ * preset's sixteen fields and drop ten, so the `permissionMode:` this class
+ * maps could not travel that path at all. It reads all sixteen now, because a
+ * bridge that silently keeps six makes the other ten look broken rather than
+ * unwired.
  *
- * THE DOMAIN OF THAT SENTENCE is the roster path only, and it is asserted on
- * `Agent`'s field list by
- * {@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeHasNowhereToLandOnTheRoster()}
- * rather than being read off the mapper. It says nothing about a future consumer
- * that reads an {@see AgentPreset} directly — which is why the containment gates
- * below are the load-bearing protection here and that narrowing is merely a bound.
+ * FOR ONE ROUND THE REPLACEMENT BOUND WAS WEAKER, and it was not enough: the
+ * value landed on the `Agent` and what made it "harmless" was only that
+ * nothing outside `Agent` read it back. Measured end-to-end through
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::agentRoster()}, a `.claude/agents`
+ * preset produced a rostered `Agent` carrying `BypassPermissions` — an
+ * unread-field guarantee, one line from becoming a permission decision made by
+ * a file that arrived with a clone.
+ *
+ * THE BOUND IS UNREPRESENTABLE AGAIN, and narrowly: `Agent::fromPreset()`
+ * gates that ONE field on {@see AgentPreset::$source}, which this class already
+ * sets. A `SkillSource::Native` preset keeps the mode its author wrote; every
+ * preset this class produces is forced to
+ * {@see \SugarCraft\Crush\Permissions\PermissionMode::Default}. The
+ * `bypass-permissions` in the measurement below is still parsed, still visible
+ * on the `AgentPreset`, and cannot reach a rostered `Agent`. Asserted on the
+ * VALUE through the real roster by
+ * {@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeIsForcedToDefaultOnTheRoster()},
+ * with the native half asserted beside it so a gate that broke `.sugar-crush/agents`
+ * could not pass.
+ *
+ * The census
+ * {@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testNoSourceFileOutsideAgentReadsAnAgentsPermissionMode()}
+ * survives as DEFENCE IN DEPTH — it scrapes `src/` for a second file
+ * containing `->permissionMode` and catches a reader arriving, which is the
+ * moment to decide whether the native tier's mode should drive that path
+ * either. (That scrape strips comments before matching, and THIS doc-block is
+ * why: the sentence you are reading quotes the needle while the code below
+ * never does, so a raw-byte scrape reported this file as a second reader. The
+ * census pins that, so deleting this parenthesis reds it.) The other FIFTEEN fields are still carried ungated and unread; that
+ * is a weaker bound and it is deliberate, because none of the fifteen is a
+ * privilege decision.
+ *
+ * Either way the narrowing was only ever a bound: the load-bearing protection on
+ * this path is the containment gating below, since these two directories are read
+ * with no `trustedProject*` opt-in at all.
  *
  * DORMANT IS NOT UNGATED, and for one round it was. This class reads TWO
  * repository-chosen directories — `{projectRoot}/.claude/agents` and

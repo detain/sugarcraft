@@ -230,8 +230,9 @@ hidden: in the shipped default mode, which answers `Ask` for `Bash`, a
 that acceptable is that authorisation is the first check — it is either your own
 file or a checkout you explicitly trusted.
 
-See [`PERMISSIONS.md`](PERMISSIONS.md#the-three-trustedproject-keys) for the
-properties this key shares with `trustedProjectHooks` and `trustedProjectMcp`.
+See [`PERMISSIONS.md`](PERMISSIONS.md#the-four-trustedproject-keys) for the
+properties this key shares with `trustedProjectHooks`, `trustedProjectMcp` and
+`trustedProjectSettings`.
 
 ---
 

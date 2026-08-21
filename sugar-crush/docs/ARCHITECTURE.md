@@ -78,9 +78,11 @@ out to `bin/sugarcrush` and blocking on `Program::run()`.
 Two consequences worth knowing:
 
 - **`Bootstrap` is where trust decisions live**, because it is the only layer
-  that knows which *directory* a file came out of. The three `trustedProject*`
+  that knows which *directory* a file came out of. The four `trustedProject*`
   gates, the `$HOME` anchors and the containment checks are all here or reached
-  from here.
+  from here — see [`PERMISSIONS.md`](PERMISSIONS.md) for the four, one of
+  which (`trustedProjectSettings`) is defined on `LayeredSettings` rather than
+  on `Bootstrap`.
 - **`Bootstrap` is where the launch refuses.** Anything "configured but
   unusable" throws `PermissionConfigException` from construction, before the
   alt screen exists — which is also why its warnings go to stderr at

@@ -197,7 +197,8 @@ and it has no channel to the user — but it is **recorded**, and
 
 ```
 ~/.sugar-crush/
-├── config.json        settings, permissions, the three trustedProject* keys
+├── config.json        settings, permissions, the four trustedProject* keys
+├── settings.json      hand-authored settings   → SETTINGS.md
 ├── session.db         SQLite session store
 ├── memory/<scope>/    the memory store
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md

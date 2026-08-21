@@ -34,8 +34,8 @@ The two candidates are de-duplicated **by real path**, because they are not
 always two files: run `sugarcrush` in your own home directory and both name
 `~/.sugar-crush/hooks.yaml`. Loading it twice would trip the
 already-registered guard and kill the launch over a collision that does not
-exist. See [`PERMISSIONS.md`](PERMISSIONS.md#the-three-trustedproject-keys) for
-the properties this trust key shares with the other two.
+exist. See [`PERMISSIONS.md`](PERMISSIONS.md#the-four-trustedproject-keys) for
+the properties this trust key shares with the other three.
 
 ---
 

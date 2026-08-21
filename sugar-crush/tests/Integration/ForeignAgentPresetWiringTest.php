@@ -6,8 +6,10 @@ namespace SugarCraft\Crush\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentPreset;
 use SugarCraft\Crush\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Skills\SkillSource;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
@@ -29,11 +31,24 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  *
  * DOMAIN of what these prove: that an imported preset becomes a REGISTERED
  * {@see Agent} on the live roster, carrying the fields
- * {@see Agent::fromPreset()} reads (name, description, prompt, model, tools,
- * skills). They do NOT prove that `permissionMode:`, `maxTurns:`, `memory:` or
- * `effort:` travel — `Agent::fromPreset()` drops all four for native presets too —
- * and they do not prove a palette badge exists, because {@see Agent} has no source
- * field for one to read.
+ * {@see Agent::fromPreset()} reads — which is now ALL SIXTEEN of
+ * {@see \SugarCraft\Crush\Agents\AgentPreset}'s, including `maxTurns:`,
+ * `memory:`, `effort:` and `source:`. An earlier revision of this paragraph
+ * said the opposite ("they do NOT prove that … travel", "`Agent` has no source
+ * field"), which was true of the six-field mapper it was written against and
+ * false from the moment that widened; it is called out rather than quietly
+ * swapped because a stale DOMAIN paragraph is worse than none — it tells a
+ * reader not to look.
+ *
+ * The ONE field that does not travel unconditionally is `permissionMode:`,
+ * which {@see Agent::fromPreset()} gates on provenance: a foreign preset's is
+ * forced to {@see PermissionMode::Default} and a native preset's is honoured.
+ * Both halves are proven here.
+ *
+ * What these still do NOT prove is that a palette BADGE exists. `Agent` has a
+ * `$source` field now and `fromPreset()` copies it, so the tag reaches the
+ * roster — but nothing renders it, which makes the remaining half of Phase 1
+ * item 3 a call site rather than a field.
  */
 final class ForeignAgentPresetWiringTest extends TestCase
 {
@@ -116,8 +131,10 @@ final class ForeignAgentPresetWiringTest extends TestCase
 
         $this->assertNotNull($agent, 'an agent under <root>/.opencode/agents must reach the launch roster');
         // `bash: true` maps to sugar-crush's Bash; `write: false` folds onto Edit
-        // and lands in the DENY list, which Agent::fromPreset() does not carry — so
-        // the allow list is the observable half at this layer.
+        // and lands in the DENY list, which Agent::fromPreset() DOES carry now
+        // (`disallowedTools`) — the allow list is asserted here because it is
+        // the half this test is about; the deny half is covered by
+        // AgentPresetFieldCarryTest.
         $this->assertSame(['Bash'], $agent->tools, 'the allow decision must survive the import into the roster');
     }
 
@@ -244,22 +261,42 @@ final class ForeignAgentPresetWiringTest extends TestCase
     }
 
     /**
-     * WHAT THE IMPORT CANNOT CARRY, measured on the type rather than argued.
+     * WHAT THE IMPORT CARRIES, AND WHAT STILL STOPS IT — and the bound here
+     * CHANGED SHAPE TWICE, which is the part worth reading before trusting it.
      *
-     * {@see Agent} has no `permissionMode`, `disallowedTools`, `maxTurns`, `memory`,
-     * `background`, `effort` or `isolation` — so an imported preset declaring
-     * `permissionMode: bypass-permissions`, which is the field the foreign
-     * registry's own escape measurement turned up, has nowhere to land on the roster
-     * this wiring feeds. That is a bound on the blast radius of the wiring, and it
-     * was originally written here as prose read off `Agent::fromPreset()`; a missing
-     * property is exactly the kind of claim a doc-block gets wrong two refactors
-     * later, so it is asserted.
+     * ROUND ONE, the original: {@see Agent} had no `permissionMode`,
+     * `disallowedTools`, `maxTurns`, `memory`, `background`, `effort` or
+     * `isolation` at all, so an imported preset declaring
+     * `permissionMode: bypassPermissions` had nowhere to land on the roster.
+     * That was the cheapest possible guarantee — a field that does not exist
+     * cannot be read by anything, ever — and it was an ACCIDENT of
+     * `fromPreset()` reading six of sixteen fields.
      *
-     * It is NOT a claim that the field is harmless everywhere — only that it does
-     * not travel THIS path. {@see \SugarCraft\Crush\Agents\AgentPreset} still
-     * carries it, and any future consumer reading presets directly inherits it.
+     * ROUND TWO, and it was a REGRESSION: `fromPreset()` was widened to carry
+     * all sixteen, because a bridge that silently keeps six makes the other
+     * ten look broken rather than unwired. That deleted the bound and replaced
+     * it with "nothing reads the field yet" — and this very test asserted the
+     * escape as if it were a feature, with
+     * `assertSame(PermissionMode::BypassPermissions, $agent->permissionMode)`.
+     * Reproduced end-to-end through {@see Bootstrap::agentRoster()}: a
+     * `.claude/agents/*.md` committed to a repository, read with no
+     * `trustedProject*` opt-in of any kind, produced a rostered `Agent`
+     * carrying `BypassPermissions`.
+     *
+     * ROUND THREE, what this asserts now: {@see Agent::fromPreset()} gates
+     * THAT ONE FIELD on the provenance the preset already carries. A native
+     * preset out of `.sugar-crush/agents` keeps the mode its author wrote; a
+     * foreign one is forced to {@see PermissionMode::Default}. The other
+     * fifteen fields still travel unconditionally — they describe an agent,
+     * they do not decide what it may do — so the widening's actual purpose
+     * survives. The bound is back to UNREPRESENTABLE for the path that
+     * matters, at the cost of one conditional, and it no longer depends on
+     * nobody ever adding a reader.
+     *
+     * Both halves are asserted, because a gate that also broke the native tier
+     * would look identical from the foreign side.
      */
-    public function testAnImportedPresetsPermissionModeHasNowhereToLandOnTheRoster(): void
+    public function testAnImportedPresetsPermissionModeIsForcedToDefaultOnTheRoster(): void
     {
         $dir = $this->repo . '/.claude/agents';
         mkdir($dir, 0755, true);
@@ -268,16 +305,222 @@ final class ForeignAgentPresetWiringTest extends TestCase
             "---\nname: bypasser\ndescription: Declares a mode.\npermissionMode: bypassPermissions\n---\n\nPROMPT BODY.\n",
         );
 
-        $this->assertNotNull($this->rosterEntry('bypasser'), 'the import still arrives');
+        $agent = $this->rosterEntry('bypasser');
+        $this->assertNotNull($agent, 'the import still arrives');
+
+        // The mapper really does understand the value — asserted so a green
+        // result here can never mean "the frontmatter was ignored", which
+        // would make the gate look effective while proving nothing.
+        $preset = (new ForeignAgentPresetRegistry())->discover($this->repo)['bypasser'] ?? null;
+        $this->assertNotNull($preset, 'fixture assumption: the foreign mapper parses this file');
+        $this->assertSame(
+            PermissionMode::BypassPermissions,
+            $preset->permissionMode,
+            'fixture assumption: the mapper kebab-cases bypassPermissions and resolves it',
+        );
+
+        $this->assertSame(
+            PermissionMode::Default,
+            $agent->permissionMode,
+            'a repository-supplied preset must not raise its own permission mode on the roster',
+        );
+
+        // Every route OFF the Agent, not just the property. toArray() emits
+        // permission_mode and json_encode() sees the public property, and a
+        // gate that only held for one spelling would be no gate at all.
+        $this->assertSame(PermissionMode::Default->value, $agent->toArray()['permission_mode']);
+        $encoded = json_decode((string) json_encode($agent), true);
+        $this->assertIsArray($encoded);
+        $this->assertSame(PermissionMode::Default->value, $encoded['permissionMode']);
 
         foreach (
             ['permissionMode', 'disallowedTools', 'maxTurns', 'memory', 'background', 'effort', 'isolation'] as $field
         ) {
-            $this->assertFalse(
+            $this->assertTrue(
                 property_exists(Agent::class, $field),
-                "Agent must have no {$field} for an imported preset's value to reach",
+                "Agent should carry {$field} now that fromPreset() reads all sixteen preset fields",
             );
         }
+    }
+
+    /**
+     * THE OTHER HALF OF THE GATE: a NATIVE preset keeps its declared mode.
+     *
+     * Without this, {@see Agent::fromPreset()} forcing every preset to
+     * {@see PermissionMode::Default} would pass the test above while quietly
+     * breaking `.sugar-crush/agents` — the tier that is sugar-crush's own
+     * configuration and the one a user writes deliberately. Asserted on the
+     * value object rather than through a roster, because the native discovery
+     * path is {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}'s and is
+     * covered by its own suite; what is under test here is the gate's
+     * condition, not the tier's discovery.
+     */
+    public function testANativePresetsPermissionModeIsCarriedUngated(): void
+    {
+        $native = new AgentPreset(
+            name: 'native-bypasser',
+            description: 'Declares a mode.',
+            initialPrompt: 'PROMPT BODY.',
+            permissionMode: PermissionMode::BypassPermissions,
+            source: SkillSource::Native,
+        );
+
+        $agent = Agent::fromPreset($native, 'anthropic', 'claude-sonnet-4-6');
+
+        $this->assertSame(
+            PermissionMode::BypassPermissions,
+            $agent->permissionMode,
+            'the gate is on provenance, not on the field — native config must still be honoured',
+        );
+
+        foreach ([SkillSource::Claude, SkillSource::Opencode, SkillSource::AgentSkillsSpec] as $foreign) {
+            $this->assertSame(
+                PermissionMode::Default,
+                Agent::fromPreset(
+                    new AgentPreset(
+                        name: 'x',
+                        description: 'x',
+                        permissionMode: PermissionMode::BypassPermissions,
+                        source: $foreign,
+                    ),
+                    'anthropic',
+                    'claude-sonnet-4-6',
+                )->permissionMode,
+                "{$foreign->value} is repository-supplied content and must not raise its own mode",
+            );
+        }
+    }
+
+    /**
+     * The census, now DEFENCE IN DEPTH rather than the only bound.
+     *
+     * {@see Agent::fromPreset()} gates a foreign preset's `permissionMode` to
+     * {@see PermissionMode::Default} at construction, so a new reader can no
+     * longer execute under a repository-supplied mode by accident. This census
+     * still earns its place: it catches the reader arriving, which is the
+     * moment to decide whether the NATIVE tier's mode should drive that code
+     * path either, and it is the thing that would notice the gate being
+     * removed and a reader added in the same change.
+     *
+     * THE NEEDLE COVERS THREE ROUTES, not one, and the first cut covered only
+     * the first. `->permissionMode` is the direct property read. But
+     * {@see Agent::toArray()} re-emits the same value under the snake_case key
+     * `permission_mode`, and `Agent`'s properties are all public so
+     * `json_encode($agent)` emits `"permissionMode"` with no method call at
+     * all. MEASURED on the one-needle version: a reader planted in
+     * `AgentManager::createSubAgent()` — the exact downstream the doc-blocks
+     * name — reading `$agent->toArray()['permission_mode']` left this suite
+     * fully GREEN. Neither `toArray()` nor `fromArray()` has an `Agent`-typed
+     * caller today; both are documented as the persistence seam to be wired
+     * later, which is precisely why the hole had to be closed before it was
+     * used rather than after.
+     *
+     * The `json_encode()` route is NOT scanned, and the tail of this method
+     * says why: a static needle for it MEASURED at six false positives, and
+     * what actually closes it is `fromPreset()`'s provenance gate rather than
+     * a census. The needles here scan the two routes a census can scan
+     * honestly.
+     *
+     * If you are the one adding a reader: this test is not asking you not to.
+     * It is asking that the gate be decided deliberately at that moment,
+     * because the roster is fed from two repository-chosen directories that no
+     * `trustedProject*` key gates.
+     */
+    public function testNoSourceFileOutsideAgentReadsAnAgentsPermissionMode(): void
+    {
+        $src = realpath(\dirname(__DIR__, 2) . '/src');
+        self::assertIsString($src);
+
+        $readers = [];
+        /** @var \SplFileInfo $file */
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS)
+        ) as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+            $path = (string) $file->getPathname();
+            $code = self::codeWithoutComments((string) file_get_contents($path));
+            foreach (['->permissionMode', 'permission_mode'] as $needle) {
+                if (str_contains($code, $needle)) {
+                    $readers[] = str_replace('\\', '/', substr($path, \strlen($src) + 1));
+                    break;
+                }
+            }
+        }
+        $readers = array_values(array_unique($readers));
+        sort($readers);
+
+        $this->assertSame(
+            ['Agents/Agent.php'],
+            $readers,
+            'a new reader of Agent::$permissionMode appeared (directly or via the permission_mode '
+                . 'array key); an imported .claude/agents preset can set it on the preset, '
+                . 'so decide the gate before wiring the read',
+        );
+
+        // The comment-stripping is load-bearing rather than tidy, so it is
+        // pinned by the file that proves it: ForeignAgentPresetRegistry's
+        // doc-block quotes the needle while its code never reads it. Raw-byte
+        // scanning reported it as a second reader, which is a false alarm that
+        // invites weakening the needle.
+        $registry = (string) file_get_contents($src . '/Agents/ForeignAgentPresetRegistry.php');
+        $this->assertStringContainsString('->permissionMode', $registry, 'fixture assumption: the prose quotes it');
+        $this->assertStringNotContainsString('->permissionMode', self::codeWithoutComments($registry));
+
+        // THE THIRD ROUTE, asserted on BEHAVIOUR rather than on source text.
+        // Agent's properties are all public, so json_encode() on one emits
+        // "permissionMode" with no property read and no toArray() call for
+        // either needle above to catch. A text census cannot close that: the
+        // only honest static needle is "this file calls json_encode() and
+        // mentions Agent", which MEASURED at six false positives
+        // (AgentWorkerPool, ProcessExecutor, WorktreeManager, Chat,
+        // BackgroundSupervisor, WorkflowEngine) — an allow-list that large is
+        // one that gets appended to rather than read.
+        //
+        // What closes the route instead is Agent::fromPreset()'s provenance
+        // gate: a foreign preset's mode is Default BEFORE any encoder sees it,
+        // so every serialization of it carries Default no matter which route
+        // reaches the field. That is asserted on the value, through the real
+        // roster, by
+        // testAnImportedPresetsPermissionModeIsForcedToDefaultOnTheRoster().
+        // Pinned here is the premise that makes the route exist at all, so
+        // that making the property non-public — which would silently retire
+        // half of that test's coverage — reds this instead.
+        $this->assertTrue(
+            (new \ReflectionProperty(Agent::class, 'permissionMode'))->isPublic(),
+            'if this is no longer public, json_encode() no longer exposes it and the gate test above '
+                . 'is asserting a route that has stopped existing',
+        );
+    }
+
+    /**
+     * The source with every comment and doc-block removed, so the scrape above
+     * matches real CODE rather than prose that quotes it.
+     *
+     * MEASURED, not defensive: the first cut of the census read raw file bytes
+     * and immediately reported `Agents/ForeignAgentPresetRegistry.php` as a
+     * second reader — because that class's doc-block *explains* the census and
+     * quotes the very string it searches for. The natural "fix" for that is to
+     * weaken the needle, which is the outcome worth avoiding; stripping
+     * comments is what {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest}'s
+     * own source-text scrape already does for the same reason.
+     */
+    private static function codeWithoutComments(string $source): string
+    {
+        $code = '';
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token)) {
+                if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                    continue;
+                }
+                $code .= $token[1];
+                continue;
+            }
+            $code .= $token;
+        }
+
+        return $code;
     }
 
     /**

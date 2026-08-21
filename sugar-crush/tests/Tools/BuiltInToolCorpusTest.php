@@ -250,25 +250,28 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 17 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 283 files declare
-     * 302 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 284 files declare
+     * 303 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
-     * TWO files arrived at once here, from two lanes that landed in the same
-     * window, so this bump is +2 and not the usual +1:
+     * THREE files arrived at once here, from three lanes that landed in the same
+     * window, so this bump is +3 and not the usual +1:
      * `Tui/Components/AgentSplitColumn` — the live-agent pane the split-pane
-     * compositor lays beside the shell band (crush_code.md Phase 8 item 4) —
-     * and `Cli/HeadlessPermissionPrompt`, the console approver the `-p`
-     * one-shot path and the background-session daemon attach to the engine,
-     * which is the first caller
+     * compositor lays beside the shell band (crush_code.md Phase 8 item 4);
+     * `Cli/HeadlessPermissionPrompt`, the console approver the `-p` one-shot
+     * path and the background-session daemon attach to the engine, which is the
+     * first caller
      * {@see \SugarCraft\Crush\Backend\EngineBackend::withPermissionApprover()}
-     * has had in `src/`. Both are a single concrete class, hence the +2 on
+     * has had in `src/`; and `Commands/TranscriptTable`, the shared column
+     * layout `AgentsCommand` and `McpAuthCommand` moved onto when their
+     * hand-built `strlen()` columns became a candy-sprinkles `Table`
+     * (crush_code.md P3.4). Each is a single concrete class, hence the +3 on
      * `concrete` and on the file count, and nothing else moving; the 19
-     * SECONDARY declarations in 8 files are untouched by either, which is why
-     * only the two totals above move and the per-file map below does not. The
-     * file before the pair was `Providers/ToolCallParser/MarkupScanner`, also
-     * a single concrete class.
+     * SECONDARY declarations in 8 files are untouched by any of them, which is
+     * why only the two totals above move and the per-file map below does not.
+     * The file before the trio was `Providers/ToolCallParser/MarkupScanner`,
+     * also a single concrete class.
      *
      * THE PREVIOUS BUMP NAMED THE WRONG CAUSE. This paragraph attributed the
      * last +1 to `Config/LayeredSettings` after the numbers had already been
@@ -310,9 +313,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(283, $files, 'php files under src/');
+        $this->assertSame(284, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 234, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
+            ['concrete' => 235, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -341,8 +344,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 282 `.php`
-     * files, 301 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names: 284 `.php`
+     * files, 303 top-level declarations, 19 of them secondary in 8 files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *
@@ -402,8 +405,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(283, count($files), 'php files under src/');
-        $this->assertSame(302, $declarations, 'top-level declarations in them');
+        $this->assertSame(284, count($files), 'php files under src/');
+        $this->assertSame(303, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

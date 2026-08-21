@@ -19,6 +19,55 @@ use SugarCraft\Crush\Chat;
  */
 final class AgentsCommand
 {
+    /**
+     * The `/agents` list table: header text => cell budget, in cells.
+     *
+     * Budgets rather than the old `str_repeat(" ", max(1, 20 - $nameLen))`
+     * and `40 - strlen($agent->name)`, which had two separate defects. They
+     * could not clip at all, so a preset with a 200-character `name:` emitted
+     * a 200-column row into a transcript that wraps at the pane width; and
+     * the description budget SHRANK as the name grew, so the same description
+     * rendered at a different length depending on which agent it belonged to,
+     * cut by `substr()` at a BYTE offset that could land inside a UTF-8
+     * sequence and emit a broken rune.
+     *
+     * They sum — with {@see TranscriptTable::maxCells()}'s border overhead —
+     * to 76 cells. `Status` is 10 because `○ inactive` is the longer of the
+     * two labels this command emits.
+     *
+     * 76 IS A STARTING POINT, NOT A CEILING, and the number it is NOT is
+     * worth writing down because two drafts of this doc-block got it wrong.
+     * The transcript pane is `max(20, cols() - 6)`
+     * ({@see TranscriptTable::CHROME_COLS}), so an 80-column terminal gives
+     * this box **74** cells, not 76 or 80 — a 76-cell table does not fit an
+     * 80-column terminal, and a row wider than the pane is hard-wrapped by the
+     * Markdown pass, which shreds the box.
+     *
+     * {@see listAgents()} therefore runs these through
+     * {@see TranscriptTable::fit()} against the live pane width taken off the
+     * `Chat` `execute()` is handed: at 80 columns `Agent` and `Description`
+     * each give up one cell, and at 60 they give up considerably more, rather
+     * than the box being shredded at either. An earlier revision said the pane
+     * width was unknowable here; it is not —
+     * {@see \SugarCraft\Crush\Chat::cols()} has always exposed it, and
+     * {@see \SugarCraft\Crush\Chat::handleHelpCommand()} has always used it.
+     */
+    private const COLUMNS = [
+        'Agent' => 20,
+        'Description' => 36,
+        'Status' => 10,
+    ];
+
+    /**
+     * The one column {@see TranscriptTable::fit()} may not shrink.
+     *
+     * `Status` holds one of two literals this class writes itself, and
+     * `○ inactiv…` is a wrong status rather than a short one. `Agent` and
+     * `Description` carry on-disk preset text, where `…` reads as the
+     * abbreviation it is, so they absorb the whole loss on a narrow pane.
+     */
+    private const COLUMN_FLOORS = ['Status' => 10];
+
     public function __construct(
         private readonly AgentManager $agentManager,
     ) {
@@ -35,7 +84,7 @@ final class AgentsCommand
     {
         // /agents with no args lists all active agents
         if ($args === []) {
-            return $this->listAgents();
+            return $this->listAgents(TranscriptTable::paneWidth($chat));
         }
 
         // /agent <name> shows details for a specific agent
@@ -53,7 +102,7 @@ final class AgentsCommand
      * launch rather than an empty manager — which is why the two no-work
      * branches below have to say different things.
      */
-    private function listAgents(): int
+    private function listAgents(int $paneWidth): int
     {
         $agents = $this->agentManager->active();
 
@@ -81,25 +130,28 @@ final class AgentsCommand
             return 0;
         }
 
-        echo "\n  Active Agents:\n";
-        echo "  " . str_repeat("─", 50) . "\n";
+        // COLUMNS is the budget at a comfortable width; fit() is what makes it
+        // true at the width this pane actually has. Both the header row and
+        // every cell are sized from the SAME returned array, so the derived cap
+        // still cannot be reached from below.
+        $columns = TranscriptTable::fit(self::COLUMNS, $paneWidth, self::COLUMN_FLOORS);
+        $table = TranscriptTable::headed($columns);
 
         foreach ($agents as $agent) {
-            $status = $agent->isActive ? "● active" : "○ inactive";
-            $nameLen = strlen($agent->name);
-            $descLen = 40 - $nameLen;
-            $desc = strlen($agent->description) > $descLen
-                ? substr($agent->description, 0, $descLen - 3) . "..."
-                : $agent->description;
-
-            echo "  {$agent->name}";
-            echo str_repeat(" ", max(1, 20 - $nameLen));
-            echo $desc;
-            echo str_repeat(" ", max(1, 42 - strlen($desc) - $nameLen));
-            echo $status . "\n";
+            $table = $table->row(
+                TranscriptTable::cell($agent->name, $columns['Agent']),
+                TranscriptTable::cell($agent->description, $columns['Description']),
+                // Through cell() like its neighbours even though this class
+                // writes the string itself: what keeps the table's natural
+                // width under TranscriptTable's derived cap — and so keeps the
+                // cap's proportional shrink from ever firing — is that EVERY
+                // cell respects its budget, not most of them.
+                TranscriptTable::cell($agent->isActive ? "● active" : "○ inactive", $columns['Status']),
+            );
         }
 
-        echo "\n";
+        echo "\n  Active Agents:\n\n";
+        echo $table->render() . "\n\n";
 
         return 0;
     }

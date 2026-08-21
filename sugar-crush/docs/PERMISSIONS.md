@@ -258,20 +258,31 @@ registered behind it.
 
 ---
 
-## The three `trustedProject*` keys
+## The four `trustedProject*` keys
 
-Three separate opt-ins live in `~/.sugar-crush/config.json`, each a list of
+Four separate opt-ins live in `~/.sugar-crush/config.json`, each a list of
 canonical project roots. They exist because a `git clone` can carry a file that
-runs code, and the trust decision must be yours, made before the untrusted
-content runs:
+runs code — or a file that quietly picks your model — and the trust decision
+must be yours, made before the untrusted content is read:
 
 | Key | Gates | Documented in |
 |---|---|---|
 | `trustedProjectHooks` | `<root>/.sugar-crush/hooks.yaml` — shell on every tool call | [`HOOKS.md`](HOOKS.md) |
 | `trustedProjectMcp` | `<root>/.mcp.json` — servers started at launch | [`MCP.md`](MCP.md) |
 | `trustedProjectCommands` | `` !`cmd` `` forms in `<root>/.sugar-crush/commands/*.md` | [`COMMANDS.md`](COMMANDS.md) |
+| `trustedProjectSettings` | `<root>/.sugar-crush/settings.json` and its `.local.json` sibling | [`SETTINGS.md`](SETTINGS.md) |
 
-Shared properties, in one place because all three behave identically:
+They are four separate keys rather than one, and that is a decision rather
+than an accident: folding any of them into another would hand every root
+already listed there a new capability *by upgrade* rather than by your
+decision. Trusting a repository to run the shell commands in its `hooks.yaml`
+is not the same grant as letting it start long-lived servers, which is not the
+same grant as letting it choose which host every prompt in the session is sent
+to.
+
+Shared properties, in one place because all four are parsed by the same
+function — `Bootstrap::trustedProjectRoots()` — with the same key name
+substituted:
 
 - **Absolute paths only.** The guard is not a special case for `"."` — it is
   `if (!self::isAbsolutePath($expanded))`, so **every** relative entry is
@@ -290,11 +301,28 @@ Shared properties, in one place because all three behave identically:
   while a CWD is per-**invocation**.
 - **Read once per process and frozen.** A write made *during* a session cannot
   take effect in that session.
+- **Read from the file `--config` names**, not unconditionally from
+  `~/.sugar-crush/config.json`. All four go through
+  `Bootstrap::permissionConfigLayers()`, which honours the override — so under
+  `--config alt.json` a grant left in `~/.sugar-crush/config.json` is not
+  consulted. See [`SETTINGS.md`](SETTINGS.md#opting-a-project-in).
 - **Fail closed** on every uncertainty: an unresolvable root, an absent key, a
-  key of the wrong shape. The one thing that does not degrade quietly is a
-  `config.json` that exists and cannot be parsed — that stops the launch.
+  key of the wrong shape.
 - **A refusal is never silent.** Each prints one stderr line at construction
   time, before the alt screen is up, at most once per path per process.
+
+**One property is NOT shared, and it is the one worth knowing.** A
+`config.json` that exists and cannot be parsed stops the launch for the first
+three keys — `PermissionConfigException` escapes construction, because each is
+consulted from a path that should refuse to start on an unusable permission
+policy. `trustedProjectSettings` swallows that throw
+(`Bootstrap::projectSettingsTrusted()` is the only member of the family that
+does), because it is consulted from `readUserConfig()`, whose contract is that
+a corrupt config costs you your theme rather than your session, and which
+`EngineBackend` calls once per turn. So on an unparseable config the first
+three refuse the launch and the fourth quietly contributes nothing — which is
+still fail-closed, since the project settings layer is the lowest-trust input
+in the stack and its absence is the pre-layering behaviour.
 
 ## Inspecting the live policy
 
@@ -308,4 +336,6 @@ unusable — which is precisely the diagnosis you ran it for.
 ## See also
 
 - [`HOOKS.md`](HOOKS.md) — the escape hatch for a rule a mode cannot express.
+- [`SETTINGS.md`](SETTINGS.md) — the layered settings stack, and what a
+  project file is allowed to contribute once you have trusted it.
 - [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — exit 2 at launch, and why.

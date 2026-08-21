@@ -28,13 +28,22 @@ use SugarCraft\Crush\Support\ContainedPath;
  * file would look broken. Here a project can only fill in what the user left
  * unsaid, which is the whole of what a project legitimately knows.
  *
- * `config.json` OUTRANKS `settings.json` even though it is the DEPRECATED name.
- * It is the file {@see \SugarCraft\Crush\Cli\Bootstrap::writeUserConfig()}
- * writes — Ctrl+P "Switch model", `/theme` — so it must also be the file read
- * back. Ranked the other way round, a `settings.json` that names `theme` would
- * make every `/theme` appear to do nothing, with no error anywhere and nothing
- * in the UI pointing at the file responsible. A deprecated NAME that still
- * decides is a smaller problem than a control that silently does not work.
+ * `config.json` OUTRANKS `settings.json`, and it is the OLDER of the two names
+ * rather than a deprecated one — nothing in `src/` marks it deprecated, and it
+ * is still the file the CLI writes, so calling it deprecated (as an earlier
+ * version of this paragraph did) tells a reader to migrate off the only file
+ * that gets written. It is the file
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::writeUserConfig()} writes, and
+ * EXACTLY TWO KEYS reach it: `provider`, from the Ctrl+P palette's
+ * "Switch Model" action, and `theme`, from the palette and from `/theme`.
+ * Those are the two values `onConfigChange` is ever invoked with. No MODEL is
+ * persisted by either — the palette action is named for what a user thinks
+ * they are choosing, not for the key it writes.
+ *
+ * Ranked the other way round, a `settings.json` that names `theme` would make
+ * every `/theme` appear to do nothing, with no error anywhere and nothing in
+ * the UI pointing at the file responsible. The file that WRITES has to be the
+ * file that DECIDES, or the control silently does not work.
  *
  * WHAT IS NOT LAYERED, and this is the security boundary rather than a scoping
  * shortcut: any key absent from {@see LAYERED_KEYS} is answered by layer 4
@@ -248,9 +257,29 @@ final class LayeredSettings
      * work", it is the SAME work through `Bash`, which reaches the permission
      * gate as opaque shell text instead of as a reviewable path. That is a
      * privilege escalation by degradation: strictly fewer tools, strictly
-     * coarser review. `disabledTools` can express the same attack, but only by
-     * naming every tool it removes, which is a value an operator reading the
-     * file can see.
+     * coarser review.
+     *
+     * AN EARLIER VERSION OF THIS PARAGRAPH ENDED WITH A FALSE CLAIM, and it is
+     * corrected here rather than deleted because it was the stated reason for
+     * the tiering: it said `disabledTools` "can express the same attack, but
+     * only by naming every tool it removes, which is a value an operator
+     * reading the file can see". It cannot be relied on.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()} matches with
+     * {@see \SugarCraft\Crush\Permissions\PermissionRule::matchesToolName()},
+     * which is bare `fnmatch()`, and `fnmatch()` honours NEGATED character
+     * classes. MEASURED end-to-end: a project-tier
+     * `{"disabledTools": ["[!B]*"]}` — eight characters, one key this tier is
+     * allowed — leaves exactly `Bash` and removes everything else, which is
+     * the same tool set `allowedTools: ["Bash"]` produces.
+     *
+     * So the shape argument DOES NOT survive on its own, and the honest
+     * statement of where this key stands is: a project-tier `disabledTools`
+     * glob CAN reduce the model to a single tool of the project's choosing,
+     * and the second reason below is what the split actually rests on. This is
+     * a KNOWN, UNCLOSED gap — recorded rather than quietly reworded, because
+     * a reader deciding whether to widen this list needs it. Closing it means
+     * either refusing negated classes in a project-tier `disabledTools` or
+     * moving the key to the user tier; neither is done here.
      *
      * Second, a whitelist is what a user reaches for when they want a CEILING,
      * and a ceiling a checkout can rewrite is not one. What makes that hold when

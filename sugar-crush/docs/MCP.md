@@ -39,7 +39,7 @@ is rejected**, not just `"."` — `../x` and `src/repo` too. `.` is merely the
 shortest spelling: it resolves against the working directory on every launch
 exactly as `--root` does, so it would always match, turning a per-path allowlist
 into "trust every repository I `cd` into". `~` and `~/…` are expanded first and
-are accepted. See [`PERMISSIONS.md`](PERMISSIONS.md#the-three-trustedproject-keys) for
+are accepted. See [`PERMISSIONS.md`](PERMISSIONS.md#the-four-trustedproject-keys) for
 the measured table.
 
 Containment is checked **before** trust, deliberately: an out-of-tree config is
@@ -215,6 +215,6 @@ conversation rather than a question about the install.
 
 ## See also
 
-- [`PERMISSIONS.md`](PERMISSIONS.md) — `mcp__*` rule patterns, the other two
+- [`PERMISSIONS.md`](PERMISSIONS.md) — `mcp__*` rule patterns, the other three
   `trustedProject*` keys.
 - [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — "my MCP tools are missing".

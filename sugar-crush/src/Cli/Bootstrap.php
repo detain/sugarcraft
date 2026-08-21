@@ -1019,26 +1019,43 @@ final class Bootstrap
      * somebody else's prompt. Additive is the only safe direction for a new
      * discovery source.
      *
-     * WHAT THE IMPORT CARRIES INTO THE ROSTER IS NARROWER THAN THE PRESET, and
-     * the difference is worth stating where the merge happens rather than leaving
-     * it to be inferred: {@see Agent::fromPreset()} reads name, description,
-     * `initialPrompt`, model, `tools` and `skills` and NOTHING ELSE, so an
-     * imported preset's `permissionMode:` — the field the foreign registry's own
-     * measurement showed reaching `bypass-permissions` — does not travel this
-     * path at all. It is dropped on the floor for native presets too; this wiring
-     * neither widens nor narrows that. ASSERTED on the type, not read off the
-     * mapper, by
-     * {@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeHasNowhereToLandOnTheRoster()}
-     * — the bound is only as good as `Agent`'s field list, which a refactor can
-     * change without touching this method. It bounds THIS path and nothing else:
-     * {@see \SugarCraft\Crush\Agents\AgentPreset} still carries every field, so a
-     * future consumer reading presets directly inherits them.
+     * WHAT THE IMPORT CARRIES INTO THE ROSTER USED TO BE NARROWER THAN THE
+     * PRESET, AND NO LONGER IS — read this before relying on the sentence it
+     * replaced, which said {@see Agent::fromPreset()} reads six fields "and
+     * NOTHING ELSE" and that an imported `permissionMode:` "does not travel
+     * this path at all". Both were true when written and are now false:
+     * `fromPreset()` reads all sixteen of the preset's fields. Stated where
+     * the merge happens rather than left to be inferred, because THIS method
+     * is the one that performs it.
      *
-     * {@see \SugarCraft\Crush\Agents\AgentPreset::$source} STILL HAS NO READER
-     * after this change. {@see Agent} carries no source field, so the palette
-     * badge that would make an imported row distinguishable from a native one is
-     * the remaining half of Phase 1 item 3 and needs a field on `Agent`, not more
-     * wiring here.
+     * `permissionMode` IS GATED ON PROVENANCE, which is what replaced the
+     * accidental bound rather than nothing. {@see Agent::fromPreset()} copies
+     * a NATIVE preset's mode and forces every foreign one to
+     * {@see \SugarCraft\Crush\Permissions\PermissionMode::Default}, so the
+     * `bypass-permissions` the foreign registry's own measurement showed
+     * reaching a preset still cannot reach a rostered `Agent` from
+     * `.claude/agents` or `.opencode/agents`. MEASURED end-to-end through this
+     * method before the gate landed: a `.claude/agents` preset produced an
+     * `Agent` carrying `BypassPermissions`. Asserted by
+     * {@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeIsForcedToDefaultOnTheRoster()}
+     * — on the VALUE now, through this method's real path, rather than on
+     * `Agent`'s field list, which is what the old assertion checked and what a
+     * refactor could change without touching either file.
+     *
+     * The other fifteen fields are carried unconditionally and are UNREAD
+     * rather than unrepresentable: nothing outside `Agent` itself consumes
+     * them yet. That is the weaker of the two kinds of bound and it is worth
+     * naming as such — it holds because of a census
+     * ({@see \SugarCraft\Crush\Tests\Integration\ForeignAgentPresetWiringTest::testNoSourceFileOutsideAgentReadsAnAgentsPermissionMode()})
+     * rather than because of the type. It bounds THIS path and nothing else:
+     * {@see \SugarCraft\Crush\Agents\AgentPreset} still carries every field, so a
+     * future consumer reading presets directly inherits them ungated.
+     *
+     * {@see \SugarCraft\Crush\Agents\AgentPreset::$source} NOW HAS A CARRIER
+     * and still has no reader. {@see Agent} carries a `$source` field and
+     * `fromPreset()` copies it, so the tag survives onto the roster — but the
+     * palette does not badge an imported row yet, so the remaining half of
+     * Phase 1 item 3 is a call site rather than a field.
      *
      * @return list<Agent>
      */
@@ -2848,19 +2865,36 @@ final class Bootstrap
     /**
      * The project roots listed under $key in the user config, canonicalised.
      *
-     * ONE PARSER FOR BOTH TRUST KEYS, parameterised by the key name rather than
-     * copied: `trustedProjectHooks` and `trustedProjectMcp` are two separate
-     * GRANTS ({@see TRUSTED_PROJECT_MCP_CONFIG_KEY} says why they may not be one)
-     * but they are the same DATA SHAPE, and every rule below — the relative-entry
-     * refusal, the `~` expansion, the item-wise tolerance, the once-per-process
-     * warning — is a property of "a list of project roots in the user's config",
-     * not of what the list authorises. A second copy would be a second place for
-     * the `"."`-is-a-global-bypass refusal to be forgotten.
+     * ONE PARSER FOR ALL FOUR TRUST KEYS, parameterised by the key name rather
+     * than copied. This said "BOTH … `trustedProjectHooks` and
+     * `trustedProjectMcp`" while there were already four callers, which is the
+     * kind of count that rots silently — so it is written as the list, and the
+     * list is asserted by
+     * {@see \SugarCraft\Crush\Tests\Config\TrustKeyDocumentationDriftTest}:
+     *
+     *  - {@see TRUSTED_PROJECT_HOOKS_CONFIG_KEY} via {@see projectHooksAreTrusted()}
+     *  - {@see TRUSTED_PROJECT_MCP_CONFIG_KEY} via {@see projectMcpIsTrusted()}
+     *  - {@see TRUSTED_PROJECT_COMMANDS_CONFIG_KEY} via {@see projectCommandShellIsTrusted()}
+     *  - {@see \SugarCraft\Crush\Config\LayeredSettings::PROJECT_SETTINGS_TRUST_KEY}
+     *    via {@see projectSettingsTrusted()}
+     *
+     * They are four separate GRANTS ({@see TRUSTED_PROJECT_MCP_CONFIG_KEY} says
+     * why they may not be one) but the same DATA SHAPE, and every rule below —
+     * the relative-entry refusal, the `~` expansion, the item-wise tolerance,
+     * the once-per-process warning — is a property of "a list of project roots
+     * in the user's config", not of what the list authorises. A second copy
+     * would be a second place for the `"."`-is-a-global-bypass refusal to be
+     * forgotten.
+     *
+     * The four do NOT share caching or failure behaviour, only parsing: each
+     * caller memoises into its own static, and {@see projectSettingsTrusted()}
+     * alone swallows the {@see trustedConfigDirPath()} throw instead of
+     * propagating it. See `PERMISSIONS.md` for that asymmetry.
      *
      * @param array<string, mixed> $config the already-read user config
      * @param string $key which trust list to read
      * @param string $nothingTrusted what a wrong-shaped value costs, for the
-     *        warning — the only sentence that differs between the two keys
+     *        warning — the only sentence that differs between the four keys
      * @return list<string>
      */
     private static function trustedProjectRoots(array $config, string $key, string $nothingTrusted): array
