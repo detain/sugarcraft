@@ -268,8 +268,9 @@ Notes that matter in practice:
 ### Environment handed to the script
 
 `ScriptHook::execute()` builds the `$env` array it hands `proc_open()` from
-**eight** `CRUSH_*` keys, and it **replaces** the environment rather than adding
-to it:
+**eight** `CRUSH_*` keys — six, on the one run where the temp directory will not
+take a file, which is covered below — and it **replaces** the environment rather
+than adding to it:
 
 ```
 CRUSH_SESSION_ID       CRUSH_TOOL_NAME   CRUSH_TOOL_INPUT
