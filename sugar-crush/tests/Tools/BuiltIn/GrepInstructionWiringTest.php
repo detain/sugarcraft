@@ -165,19 +165,45 @@ final class GrepInstructionWiringTest extends TestCase
      * the capture is bounded by the same `maxOutputBytes` — but the two bounds
      * are NOT the same point: the capture stops at exactly the cap, while
      * {@see \SugarCraft\Crush\Tools\Concerns\TruncatesOutput} additionally
-     * reserves room for the truncation marker and drops the partial line the
-     * cut landed in. Whole hits live in that gap.
+     * reserves room for the truncation marker, reserves a quarter of the cap
+     * for the rules, and drops the partial line the cut landed in. Whole hits
+     * live in that gap, and their rules would be retired for the session
+     * without ever being shown to anyone.
      *
-     * MEASURED over this exact fixture with the read point moved to
-     * `$run['stdout']`:
+     * THE FIXTURE IS SIXTY DIRECTORIES BECAUSE SIX MADE THIS TEST PASS UNDER
+     * ITS OWN REGRESSION.
      *
-     *   cap= 300  visible=[]            announced=[bbb]
-     *   cap= 500  visible=[bbb]         announced=[aaa,bbb]
-     *   cap= 900  visible=[aaa,bbb,fff] announced=[aaa,bbb,ccc,ddd,fff]
+     * At six directories and the cap this test used to ship with, the
+     * raw-stdout variant is BYTE-IDENTICAL to the correct one, and the reason
+     * is structural rather than a near miss. The reserve at that cap holds
+     * exactly ONE entry; the first hit is the same line in the probe and in
+     * the raw capture; so a variant that reads a strictly LARGER set still
+     * announces the identical rule. MEASURED on the six-directory fixture this
+     * replaces, at this file's own 35-byte temp root, sweeping the cap one
+     * byte at a time: the two are BYTE-IDENTICAL from 900 to 1,375, and at the
+     * shipped 1,024 both return 898 bytes with `visible=[aaa,bbb,fff]
+     * announced=[bbb]`. The window where the containment assertion below fails
+     * at all is caps 1,416 to 1,462 — FORTY-SEVEN caps, and the test shipped
+     * pointed 392 below the bottom of it. A guard whose sensitivity depends on
+     * a 2% band of one parameter is the defect it exists to catch, in a new
+     * place.
      *
-     * Every extra name there is an instruction file retired without ever being
-     * shown to anyone — it would never surface again for the rest of the
-     * session.
+     * A difference is observable only where the reserve holds MORE entries
+     * than the probe holds hits, and that regime is bounded on both sides by
+     * the fixture: below it the reserve holds one entry, above it the probe
+     * holds every hit and there is no unseen path left to announce. Sixty
+     * directories moves the upper bound out by an order of magnitude, because
+     * it is `directories × line length ÷ ¾` and nothing else. RE-MEASURED on
+     * this fixture with the read point moved to `$filtered['run']['stdout']`,
+     * sweeping every cap from 1 to 19,218: the mutation is caught at 13,445 of
+     * them, including 12,859 CONSECUTIVE caps from 1,860 to 14,718. The
+     * correct code violates containment at none of the 19,218.
+     *
+     * The four caps below sit inside that band with at least 640 bytes of
+     * margin at the low end and 3,700 at the high end, so neither a shorter
+     * `sys_get_temp_dir()` (which shortens every hit line) nor readdir order
+     * can walk the fixture out of the window. At each of them the mutation
+     * announces between 4 and 16 directories the model cannot see.
      *
      * The names are illustrative and the assertions below do NOT depend on
      * them: `grep -rn` walks in readdir order, and the numbers additionally
@@ -188,34 +214,36 @@ final class GrepInstructionWiringTest extends TestCase
      * WEAKER RELATION AND THE ONLY ONE THAT WAS EVER A LAW. Equality held
      * because the section happened to be large enough to pull the final clip
      * down onto the probe; it was an artifact of one fixture's arithmetic, not
-     * a property of the code. The section is now bounded in COUNT as well as
-     * in bytes, so a call can legitimately show three paths and announce one —
-     * MEASURED here at cap 1024: visible [aaa,bbb,fff], announced [bbb], with
-     * `2 further path(s) not examined` said out loud. What must never happen
-     * is the reverse, and that is what containment forbids: the raw-stdout
-     * variant this test was written against announces rules for files the
-     * model cannot see, which puts a name in `announced` that is not in
-     * `visible` and fails below. The two assertions after it close the gap
-     * equality used to cover — the shortfall is COUNTED in the result, and
-     * every unannounced rule is still unspent, which is the thing that
-     * actually matters about a file that was not shown.
+     * a property of the code. The section is bounded in COUNT as well as in
+     * bytes, so a call can legitimately show more paths than it announces.
+     * What must never happen is the reverse, and that is what containment
+     * forbids. The two assertions after it close the gap equality used to
+     * cover — the shortfall is COUNTED in the result, and every unannounced
+     * rule is still unspent, which is the thing that actually matters about a
+     * file that was not shown.
+     *
+     * @dataProvider capsInsideTheDetectionWindow
      */
-    public function testTheAnnouncedRulesAreExactlyTheOnesWhoseHitsSurvivedTheClip(): void
+    public function testTheAnnouncedRulesAreExactlyTheOnesWhoseHitsSurvivedTheClip(int $cap): void
     {
-        $dirs = ['aaa', 'bbb', 'ccc', 'ddd', 'eee', 'fff'];
+        $dirs = [];
+        for ($i = 0; $i < 60; $i++) {
+            $dirs[] = sprintf('d%03d', $i);
+        }
+
         foreach ($dirs as $d) {
             mkdir($this->dir . '/' . $d, 0o777, true);
             file_put_contents($this->dir . '/' . $d . '/CLAUDE.md', 'RULE-' . strtoupper($d) . "\n");
-            file_put_contents($this->dir . '/' . $d . '/' . str_repeat($d[0], 120) . '.php', "<?php // needle\n");
+            file_put_contents($this->dir . '/' . $d . '/' . self::hitFileName($d), "<?php // needle\n");
         }
 
         $loader = new InstructionFileLoader($this->dir);
-        $content = $this->grep(new Grep($this->dir, 1024, $loader));
+        $content = $this->grep(new Grep($this->dir, $cap, $loader));
 
         $visible = [];
         $announced = [];
         foreach ($dirs as $d) {
-            if (str_contains($content, '/' . $d . '/' . str_repeat($d[0], 120) . '.php:')) {
+            if (str_contains($content, '/' . $d . '/' . self::hitFileName($d) . ':')) {
                 $visible[] = $d;
             }
             if (str_contains($content, 'RULE-' . strtoupper($d))) {
@@ -225,7 +253,7 @@ final class GrepInstructionWiringTest extends TestCase
 
         // `grep -rn` walks in readdir order, so WHICH directories survive the
         // clip is not asserted — only that the clip bit and that something got
-        // through, which is what makes the equality below meaningful.
+        // through, which is what makes the containment below meaningful.
         self::assertNotSame([], $visible, 'fixture must leave at least one hit visible');
         self::assertNotSame($dirs, $visible, 'fixture must leave at least one hit clipped away');
 
@@ -233,7 +261,7 @@ final class GrepInstructionWiringTest extends TestCase
         self::assertSame(
             [],
             array_values(array_diff($announced, $visible)),
-            'a rule may be announced only for a file whose hits the model can actually see',
+            "cap $cap: a rule may be announced only for a file whose hits the model can actually see",
         );
 
         // The shortfall equality used to cover is not silent: what was not
@@ -246,16 +274,132 @@ final class GrepInstructionWiringTest extends TestCase
         // is still unspent for whoever touches it next.
         foreach (array_diff($dirs, $announced) as $d) {
             $read = (new Read($this->dir, instructionLoader: $loader))
-                ->execute(['id' => 'r', 'file_path' => $this->dir . '/' . $d . '/' . str_repeat($d[0], 120) . '.php'])
+                ->execute(['id' => 'r', 'file_path' => $this->dir . '/' . $d . '/' . self::hitFileName($d)])
                 ->content();
 
             self::assertStringContainsString('RULE-' . strtoupper($d), $read, "{$d}'s rule was retired unseen");
         }
     }
 
+    /**
+     * Four caps spread across the 12,859-cap band in which the raw-stdout
+     * regression is observable at all — see the test's own docblock for how
+     * that band was measured and why it has the width it has.
+     *
+     * @return array<string, array{int}>
+     */
+    public static function capsInsideTheDetectionWindow(): array
+    {
+        return [
+            'cap 2500' => [2500],
+            'cap 5000' => [5000],
+            'cap 8000' => [8000],
+            'cap 11000' => [11000],
+        ];
+    }
+
+    /**
+     * A 120-byte name, so one hit line is long enough that a cap in the
+     * thousands still clips the list — the fixture's whole job.
+     */
+    private static function hitFileName(string $dir): string
+    {
+        return str_repeat(substr($dir, 1), 40) . '.php';
+    }
+
     // =========================================================================
     // The skill nudge
     // =========================================================================
+
+    /**
+     * THE NUDGE IS SCOPED TO EVERY HIT, NOT TO THE HITS THAT SURVIVED THE
+     * CLIP — the same rule {@see \SugarCraft\Crush\Tools\BuiltIn\Glob} follows
+     * for `$files` versus `$shown`, and the two tools must not disagree about
+     * it.
+     *
+     * {@see SkillPathNudge::forPaths()} answers "does a skill claim this area
+     * of the tree", which a byte cap does not change the truth of, and the
+     * line it emits names the SKILL rather than the path. So a nudge earned by
+     * a path the cap dropped is still true and still actionable, where an
+     * instruction BODY shown for an unseen path is neither — which is why the
+     * two are read off different text.
+     *
+     * Scoping it to the probe instead broke the containment in the direction
+     * that costs the model something. The probe is the three-quarter floor;
+     * the result is the FULL cap whenever no rule was surfaced, which under
+     * announce-once is almost every call. A hit landing between the two cuts
+     * was therefore VISIBLE while its skill went unannounced — and
+     * announce-once means unannounced for the rest of the session.
+     *
+     * MEASURED with this fixture, one cap at a time from 200 to 12,000,
+     * counting the caps where `target.zzz.php` is in the result and
+     * `zzz-audit` is not: 0 at d7919902, 1,745 at 6569891f (caps 5,233 to
+     * 6,977), 0 now. The band moves with the length of `sys_get_temp_dir()`,
+     * since that prefix is repeated on every hit line, so the sweep below
+     * steps in 250s across a range an order of magnitude wider than the band
+     * rather than naming caps inside it.
+     */
+    public function testASkillIsAnnouncedForEveryHitTheModelCanSeeAtEveryCap(): void
+    {
+        for ($i = 0; $i < 200; $i++) {
+            file_put_contents(sprintf('%s/sub/f%03d.php', $this->dir, $i), "<?php // needle\n");
+        }
+        // Sorts last among the hits, so it is the one most likely to land
+        // between the probe's cut and the result's.
+        file_put_contents($this->dir . '/sub/target.zzz.php', "<?php // needle\n");
+
+        $seenVisible = false;
+        $seenClippedButAnnounced = false;
+
+        for ($cap = 1000; $cap <= 12000; $cap += 250) {
+            $content = $this->grep(new Grep($this->dir, $cap, skillNudge: $this->zzzNudge()));
+
+            $visible = str_contains($content, '/sub/target.zzz.php:');
+            $announced = str_contains($content, 'zzz-audit');
+
+            $seenVisible = $seenVisible || ($visible && $announced);
+            $seenClippedButAnnounced = $seenClippedButAnnounced || (!$visible && $announced);
+
+            // The one direction that is a law. A cap small enough that the
+            // CAPTURE itself never reached the file is a hit the tool truly
+            // never had, and silence about it is correct; a hit the model is
+            // looking at is not.
+            self::assertTrue(
+                !$visible || $announced,
+                "cap $cap: the hit is in the result and its path-scoped skill was not announced — "
+                . 'announce-once means it will not be announced again this session',
+            );
+        }
+
+        // Both regimes have to be in the sweep or the assertion above is only
+        // testing one of them.
+        self::assertTrue($seenVisible, 'the sweep must include caps where the target hit survives');
+        self::assertTrue(
+            $seenClippedButAnnounced,
+            'the sweep must include caps where the clip dropped the hit and the skill was announced anyway',
+        );
+    }
+
+    /** A skill scoped to a suffix only ONE fixture file carries. */
+    private function zzzNudge(): SkillPathNudge
+    {
+        $registry = new SkillRegistry();
+        $registry->register([
+            'zzz-audit' => Skill::parse(
+                <<<SKILL
+                ---
+                description: Audit for zzz files
+                paths:
+                  - "*.zzz.php"
+                ---
+                body
+                SKILL,
+                'zzz-audit'
+            ),
+        ]);
+
+        return SkillPathNudge::new($registry);
+    }
 
     public function testAHitAnnouncesAPathScopedSkillOnce(): void
     {

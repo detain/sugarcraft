@@ -162,7 +162,7 @@ final class ToolOutputBudgetTest extends TestCase
             foreach (['Grep' => $this->grepAll($cap), 'Glob' => $this->globAll($cap)] as $tool => $content) {
                 self::assertLessThanOrEqual(
                     intdiv($cap, 4),
-                    strlen(self::instructionSection($content)),
+                    strlen($this->rulesSection($content)),
                     "$tool at cap $cap: the section must stay inside its quarter",
                 );
             }
@@ -360,6 +360,175 @@ final class ToolOutputBudgetTest extends TestCase
     }
 
     // =========================================================================
+    // The byte accounting the whole split rests on
+    // =========================================================================
+
+    /**
+     * THE ENTRY FLOOR, PINNED AGAINST ITS OWN DERIVATION — the one number in
+     * this design that output cannot check.
+     *
+     * {@see \SugarCraft\Crush\Tools\Concerns\TruncatesOutput::instructionSectionCeiling()}
+     * is `max(quarter, one entry floor)` and the loop admits a body only while
+     * a whole floor still fits, so this number decides both how small a cap
+     * can get before the rules may outgrow their quarter and how many entries
+     * a section holds. It is deliberately a WORST CASE that no real file
+     * reaches: the marker inside it is sized at `PHP_INT_MAX` in both slots,
+     * 120 bytes, where the marker for a 9,611-byte `CLAUDE.md` is 90. What the
+     * floor prices is an entry clipped all the way down to its bounded head,
+     * and on every fixture in this file that costs 212 bytes — head 120, the
+     * newline after it, a 90-byte marker, the newline before the next entry —
+     * against a 242-byte reservation.
+     *
+     * THAT SLACK IS EXACTLY WHY NO OUTPUT ASSERTION REACHES IT. Dropping the
+     * two `+ 1` the derivation below spells out — the newline after the kept
+     * head, and the newline `implode()` puts between entries — leaves 240,
+     * and 240 still covers every entry a real file can produce, so both bounds
+     * asserted in {@see testTheSectionAccountingHoldsOverAnAdversarialTree()}
+     * stay green. MEASURED: that mutation changed the output at 175 of 29,025
+     * (fixture, cap) pairs swept one cap at a time and violated NEITHER bound
+     * at any of them. Sizing the marker at `(0, 0)` instead leaves 206, which
+     * does overrun — 111 of the same 29,025 pairs returned more than their
+     * cap. One of the two is a bug the bounds catch; the other is a bug only
+     * this assertion catches.
+     *
+     * The expected value is rebuilt from a marker this run actually emitted,
+     * not from the format string copied into the test, so a reworded marker
+     * moves both sides together and only a changed ARITHMETIC fails here.
+     */
+    public function testTheEntryFloorIsTheWorstCaseCostOfOneClippedRule(): void
+    {
+        $this->seedOversizeInstructions();
+        $this->seedMatches(5);
+
+        $emitted = null;
+        foreach (explode("\n", $this->glob(2048)) as $line) {
+            if (str_starts_with($line, '... [instructions truncated:')) {
+                $emitted = $line;
+            }
+        }
+
+        self::assertNotNull($emitted, 'the fixture must actually clip a rule');
+        self::assertSame(
+            1,
+            preg_match('/^\.\.\. \[instructions truncated: (\d+) of (\d+) /', $emitted, $counts),
+            'the marker must name both byte counts',
+        );
+
+        // The same marker as it would render at its longest, which is what the
+        // floor reserves for: same wording, both counts widened to PHP_INT_MAX.
+        $widest = strlen($emitted)
+            - strlen($counts[1])
+            - strlen($counts[2])
+            + 2 * strlen((string) PHP_INT_MAX);
+
+        $head = (new \ReflectionClassConstant(Glob::class, 'INSTRUCTION_HEAD_BYTES'))->getValue();
+        $floor = (new \ReflectionMethod(Glob::class, 'instructionBodyFloor'))->invoke(new Glob());
+
+        self::assertSame(
+            $head + 1 + $widest + 1,
+            $floor,
+            'the entry floor must cover a maximally clipped body: its head, the newline after it, '
+            . 'its marker at the marker\'s longest, and the newline implode() puts before the next entry',
+        );
+
+        // And the slack the paragraph above claims, stated as a number rather
+        // than asserted away: a real entry costs well under the reservation.
+        self::assertLessThan(
+            $floor,
+            strlen($emitted) + $head + 2,
+            'a real clipped entry must fit inside the floor with room to spare',
+        );
+    }
+
+    /**
+     * THE ACCOUNTING, NOT ONLY THE BOUNDS IT PRODUCES.
+     *
+     * Every byte the section emits is charged to `$spent` before the next body
+     * is admitted, and three separate `+ 1`/`- 1` terms in that sum pay for
+     * newlines nothing else charges for. A sum that is one byte per entry
+     * short is invisible on a fixture with three entries and is 800 bytes over
+     * the reserve on one with eight hundred — which is why this sweeps a tree
+     * whose section holds HUNDREDS of entries as well as one whose single
+     * entry is clipped down to its head.
+     *
+     * MEASURED, dropping the `+ 1` from `$spent += strlen($clipped) + 1`: over
+     * the five-hundred-directory tree below the section runs 63, 100, 135 and
+     * 171 bytes past its ceiling at the four caps asserted, and the RESULT
+     * runs 31, 82, 94 and 145 bytes past its cap. The same mutation on a
+     * three-entry fixture overruns by one to six bytes at 25 of 29,025
+     * (fixture, cap) pairs and by nothing at the other 29,000 — the difference
+     * between a test that catches it and one that could.
+     *
+     * The narrow sweep is the other direction: eight directories whose
+     * `CLAUDE.md` opens with a 200-byte heading, so the clip lands inside the
+     * first line and the head fallback — the one path that can return MORE
+     * than the budget it was handed — is what the reserve has to have priced.
+     * Reserving the label unconditionally, or emitting the withheld note
+     * without checking that it fits, both overrun the cap in that band.
+     */
+    public function testTheSectionAccountingHoldsOverAnAdversarialTree(): void
+    {
+        $floor = (new \ReflectionMethod(Glob::class, 'instructionBodyFloor'))->invoke(new Glob());
+
+        // MANY ENTRIES, none of them clipped: the per-entry newline is the
+        // only thing being tested, so nothing else may move.
+        $this->seedTinyGovernedDirs(500);
+
+        foreach ([18000, 20000, 22000, 24000] as $cap) {
+            $content = $this->globAll($cap);
+            $section = $this->rulesSection($content);
+
+            self::assertLessThanOrEqual($cap, strlen($content), "cap $cap: the result must stay inside its cap");
+            self::assertLessThanOrEqual(
+                max(intdiv($cap, 4), $floor),
+                strlen($section),
+                "cap $cap: the section must stay inside its ceiling",
+            );
+
+            // Every directory here governs exactly one matched path, so an
+            // entry per shown path is the only way nothing was withheld — and
+            // where something was, the result has to say so.
+            $shown = preg_match_all('/^' . preg_quote($this->dir, '/') . '.*\.php$/m', $content);
+            $entries = substr_count($section, '# GOVERN-D');
+            if ($entries < $shown) {
+                self::assertStringContainsString(
+                    'further path(s) not examined',
+                    $content,
+                    "cap $cap: $entries rules for $shown shown paths, and the shortfall was not counted",
+                );
+            }
+        }
+    }
+
+    /**
+     * The same accounting at the other end of the scale: a cap small enough
+     * that the reserve holds ONE entry and that entry is clipped inside its
+     * first line, swept one byte at a time so no knife-edge is missed.
+     *
+     * The head fallback is the only clip in the instruction path that can
+     * return more bytes than the budget it was handed — a 200-byte heading
+     * clipped to a 9-byte window comes back as 120 bytes of head plus a
+     * marker — so this band is where the entry floor is doing real work.
+     */
+    public function testTheReserveHoldsAtEveryCapAroundOneEntryFloor(): void
+    {
+        $floor = (new \ReflectionMethod(Glob::class, 'instructionBodyFloor'))->invoke(new Glob());
+
+        $this->seedGovernedDirsWithLongHeadings(8, 200, 70);
+
+        for ($cap = 350; $cap <= 1200; $cap++) {
+            $content = $this->globAll($cap);
+
+            self::assertLessThanOrEqual($cap, strlen($content), "cap $cap: the result must stay inside its cap");
+            self::assertLessThanOrEqual(
+                max(intdiv($cap, 4), $floor),
+                strlen($this->rulesSection($content)),
+                "cap $cap: the section must stay inside its ceiling",
+            );
+        }
+    }
+
+    // =========================================================================
     // Read, Edit and Write carried the same exemption
     // =========================================================================
 
@@ -479,7 +648,7 @@ final class ToolOutputBudgetTest extends TestCase
             self::assertLessThanOrEqual(65536, strlen($content), "cap at $dirs governed dirs");
             self::assertLessThanOrEqual(
                 16384,
-                strlen(self::instructionSection($content)),
+                strlen($this->rulesSection($content)),
                 "quarter at $dirs governed dirs",
             );
         }
@@ -551,7 +720,7 @@ final class ToolOutputBudgetTest extends TestCase
             file_put_contents($this->dir . '/' . $name . '/needle-file-00.php', "<?php\n// NEEDLE_TOKEN\n");
         }
 
-        $section = self::instructionSection($this->globAll(4096));
+        $section = $this->rulesSection($this->globAll(4096));
 
         self::assertGreaterThanOrEqual(800, strlen($section), 'the unused room must reach the next rule');
         self::assertLessThanOrEqual(1024, strlen($section), 'and must still stay inside the quarter');
@@ -736,6 +905,43 @@ final class ToolOutputBudgetTest extends TestCase
         }
     }
 
+    /**
+     * MANY GOVERNED DIRECTORIES, EACH WITH A RULE TOO SHORT TO CLIP — the
+     * shape that makes the PER-ENTRY cost the only variable in the section's
+     * byte sum. One matched file per directory, so an entry per shown path is
+     * exactly what "nothing was withheld" looks like.
+     */
+    private function seedTinyGovernedDirs(int $dirs): void
+    {
+        for ($d = 0; $d < $dirs; $d++) {
+            mkdir($this->dir . "/d$d");
+            file_put_contents($this->dir . "/d$d/CLAUDE.md", "# GOVERN-D$d\n");
+            file_put_contents($this->dir . "/d$d/needle-file-00.php", "<?php\n// NEEDLE_TOKEN\n");
+        }
+    }
+
+    /**
+     * A `CLAUDE.md` whose FIRST LINE is longer than any small cap's reserve,
+     * so the clip lands inside it and the bounded-head fallback fires — the
+     * one path in the instruction clip that can return more bytes than the
+     * budget it was given, and therefore the one the entry floor exists to
+     * price.
+     */
+    private function seedGovernedDirsWithLongHeadings(int $dirs, int $headBytes, int $bodyLines): void
+    {
+        for ($d = 0; $d < $dirs; $d++) {
+            mkdir($this->dir . "/d$d");
+            file_put_contents(
+                $this->dir . "/d$d/CLAUDE.md",
+                "# GOVERN-D$d" . str_repeat('H', $headBytes) . "\n"
+                . str_repeat("RULE: a long instruction line that keeps going.\n", $bodyLines),
+            );
+            for ($i = 0; $i < 2; $i++) {
+                file_put_contents(sprintf('%s/d%d/needle-file-%02d.php', $this->dir, $d, $i), "<?php\n// NEEDLE_TOKEN\n");
+            }
+        }
+    }
+
     /** Grep over the whole fixture root, not only `sub/`. */
     private function grepAll(int $cap): string
     {
@@ -750,12 +956,45 @@ final class ToolOutputBudgetTest extends TestCase
             ->content();
     }
 
-    /** Everything from the instruction label onward, i.e. the rules section. */
-    private static function instructionSection(string $content): string
+    /**
+     * Everything from the start of the instruction section — the rules plus
+     * the label and the withheld note that frame them.
+     *
+     * FOUND BY ELIMINATING THE ANSWER rather than by locating the label, and
+     * that is a repair. The label is emitted only where the reserve can hold
+     * it: on `seedGovernedDirs()`'s fixture every cap up to 1,595 ships the
+     * section UNLABELLED, and the previous form of this helper — `substr()`
+     * from the first `... [instructions:` — then found the WITHHELD NOTE
+     * instead, which sits at the END of the section rather than its start.
+     * MEASURED at cap 1,024: it reported 73 bytes for a 226-byte section, so a
+     * "the section stays inside its quarter" assertion built on it could not
+     * have failed. Every cap its callers actually pass is above that band, so
+     * no shipped assertion was wrong — it was a trap laid for the next
+     * fixture, which is why it is repaired rather than documented.
+     *
+     * The ANSWER is the part that can be identified exactly, at any cap: every
+     * line of it is either a path under the fixture root (a Glob match or a
+     * Grep hit) or one of the `... [` notes that annotate the answer. The
+     * section is whatever follows the last such line — true whether or not the
+     * label survived, and true for a section whose first surviving byte is a
+     * clipped body's own marker.
+     */
+    private function rulesSection(string $content): string
     {
-        $at = strpos($content, '... [instructions:');
+        $offset = 0;
+        foreach (explode("\n", $content) as $line) {
+            $answerLine = $line === ''
+                || str_starts_with($line, $this->dir)
+                || (str_starts_with($line, '... [') && !str_starts_with($line, '... [instructions'));
 
-        return $at === false ? '' : substr($content, $at);
+            if (!$answerLine) {
+                return substr($content, $offset);
+            }
+
+            $offset += strlen($line) + 1;
+        }
+
+        return '';
     }
 
     private function seedOversizeInstructions(): void

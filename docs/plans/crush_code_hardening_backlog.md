@@ -2918,7 +2918,10 @@ should need no change — which is the test's own claim, and worth checking rath
 correct for their fixture, and the difference is not a discrepancy.
 
 **E56.** Cap 200 → 193 bytes, **0 of 5 matched paths listed**, `BIG-RULE` body present, marker fires.
-Reproduces exactly as written; no correction.
+Reproduces exactly as written; no correction. (The "of 5" is right for the scout's fixture and is NOT
+the same denominator as the six-path one in the ROUND 37 `lsp` table below — that fixture adds
+`sub/target.php`, which `sub/*.php` also matches, and the two-byte difference between 193 and the
+table's 195 is that sixth path inside the marker's own byte counts.)
 
 **The two are broken in opposite directions** — `Grep` appends *after* the cap and blows through it,
 `Glob` prepends *before* it and starves the results — which is why they are one fix and not two.
@@ -2934,15 +2937,26 @@ quarters as a guaranteed floor, and the two sections carry different markers —
 model can write will act on.
 
 Measured by running the tools over ONE fixture — the one `ToolOutputBudgetTest` builds: a 9,611-byte
-`sub/CLAUDE.md`, five matched `sub/*.php`, and a 39-byte `sub/target.php`.
+`sub/CLAUDE.md` and **six** paths matching `sub/*.php`, namely five `needle-file-00N.php` and the
+39-byte `sub/target.php` the `Read` rows read. The root is `sys_get_temp_dir()/crush_budget_<12 hex>`,
+**30 characters**, and that length is repeated on every path line — so it is part of every byte figure
+below and is stated rather than left to be rediscovered.
 
 | tool | cap | `4a4ecb98` | `f1fda934` | now |
 | --- | --- | --- | --- | --- |
 | `Grep` | 400 | 10,096 B (25.2×), 2 hits | 503 B (1.3×), 1 hit | 348 B (0.9×), 2 hits |
-| `Glob` | 200 | 195 B, **0 of 5 paths** | 200 B, 0 of 5 | 200 B, 0 of 5 (the base marker, not the rules — the list alone is 225 B) |
-| `Glob` | 400 | 387 B, **0 of 5 paths** | 530 B, 2 of 5 | 321 B, **5 of 5 paths** |
+| `Glob` | 200 | 195 B, **0 of 6 paths** | 200 B, 0 of 6 | 200 B, 0 of 6 (the base marker, not the rules — the six-path list alone is 321 B) |
+| `Glob` | 400 | 387 B, **0 of 6 paths** | 530 B, 2 of 6 | 321 B, **6 of 6 paths** |
 | `Read` | 200 | 9,651 B (48.3×) | 141 B | 141 B |
 | `Read` | 400 | 9,651 B (24.1×) | 140 B | 141 B |
+
+**The path denominator and the list figure in that table were both wrong, and both by the recurring
+defect.** `sub/*.php` matches six files, not five — `target.php` is one of them — so every "of 5" was
+one short. And "the list alone is 225 B" reconciles only with a 20-character root: on the fixture's
+own 30-character root the five `needle-file` paths come to **275 B** and all six to **321 B**, which
+is exactly the 321 the `Glob` 400 row reports, i.e. that cap now returns the complete list and nothing
+else. Re-measured in one run over a freshly built fixture; every other figure in the table reproduced
+byte-for-byte, which is what says they were taken on this root and this fixture.
 
 **The `f1fda934` row of that table was wrong in BOTH columns, and both errors were the recurring
 defect.** It quoted a 7,211-byte `CLAUDE.md` and a 637-byte target in five places while the fixture it
@@ -3023,6 +3037,100 @@ Three stale claims corrected in `f1fda934` and still correct: `GrepInstructionWi
 contrasting itself with a prepending `Glob`,
 `GlobTest::testNestedInstructionFileContentIsStillPrependedPerMatch`'s name, and `Glob::description()`'s
 promise that a governing file is "surfaced above that path".
+
+---
+
+### ROUND 37 `lsp` — SECOND REVIEW FIX. The guard test was green under its own regression
+
+`GrepInstructionWiringTest::testTheAnnouncedRulesAreExactlyTheOnesWhoseHitsSurvivedTheClip` no longer
+detected the defect it exists for **at the cap it shipped with**. Moving the read point to
+`$filtered['run']['stdout']` — the announce-rules-for-files-the-model-cannot-see regression — left the
+test **byte-identical to pristine** at cap 1,024. The reason is structural, not a near miss: at six
+directories and that cap the reserve holds exactly ONE entry, and the first hit is the same line in
+the probe as in the raw capture, so a strictly larger read set still announces the identical rule.
+Swept one cap at a time on that fixture's own 35-byte temp root, the two are byte-identical from 900
+to 1,375 — at 1,024 both return 898 B, `visible=[aaa,bbb,fff] announced=[bbb]` — and the window where
+the containment assertion fails at all is caps 1,416–1,462: **47 caps, with the shipped cap pointed
+392 below the bottom of it.**
+
+The relation was not the problem — containment does catch it — the FIXTURE was. A difference is
+observable only where the reserve holds more entries than the probe holds hits, and both ends of that
+band are set by the fixture: below it the reserve holds one entry, above it the probe holds every hit
+and no unseen path is left to announce. **Sixty directories instead of six**, and the mutation is
+caught at **13,445 of the 19,218 caps swept, including 12,859 consecutive (1,860–14,718)** — 273× the
+old band. The test now runs at four caps spread across it with ≥640 bytes of margin at the low end and
+≥3,700 at the high end; the mutation announces 4 to 16 unseen directories at each. Correct code
+violates containment at **none** of the 19,218.
+
+**A regression inside `d7919902..6569891f`: Grep's skill nudge under-announced for a file the model
+can see.** `$hitFiles` was read off the probe (the ¾ floor) and reused for
+`SkillPathNudge::forPaths()`, but the result is clipped at the FULL cap whenever no rule was surfaced —
+which under announce-once is almost every call. A hit between the two cuts was visible while its skill
+went unannounced, and announce-once means unannounced for the session. Measured with a `*.zzz.php`
+skill over 201 hits, counting caps where the hit is visible and the skill silent: **0 at `d7919902`,
+1,745 at `6569891f` (caps 5,233–6,977), 0 now.** `Glob` documents the opposite answer two files over —
+*"scoped to every MATCHED path, not to `$shown`… a nudge earned by a path the cap dropped is still a
+true and actionable statement"* — so the commit shipped Grep contradicting a comment it was adding to
+Glob. The nudge now reads the unclipped capture in both tools; the instruction section still reads the
+probe, and `hitFiles()` documents why its two callers pass different text.
+
+**Six unkilled mutants on the new load-bearing lines; five now die.** They were coverage gaps rather
+than demonstrated bugs — none broke `section ≤ ceiling` or `total ≤ cap` on the sweeps that found
+them — but the byte accounting the whole split rests on was pinned by no assertion. Two were added:
+the entry floor is now checked against its own derivation (head + newline + the marker at its widest +
+the implode newline), rebuilt from a marker the run actually emitted so a reworded marker moves both
+sides together; and the section/cap bounds are swept over a tree whose section holds HUNDREDS of
+entries as well as one whose single entry is clipped inside its first line.
+
+| mutant | now |
+| --- | --- |
+| `instructionBodyFloor()` drops both `+ 1` | **dies** (the derivation assertion — it breaks no bound) |
+| `instructionBodyFloor()` marker sized `(0, 0)` | **dies** (111 of 29,025 pairs returned more than their cap) |
+| `-1` dropped from the body budget | **survives** — see below |
+| `$spent += strlen($clipped)` without the `+ 1` | **dies** (63–171 B past the ceiling, 31–145 B past the cap, on a 500-directory tree) |
+| `$labelRoom` unconditional | **dies** |
+| the note emitted without the `$noteCost <= $leftover` check | **dies** |
+
+The survivor is one byte and no assertion can reach it. At most ONE body per call is ever clipped — a
+clipped body consumes the room that was left, so the loop breaks on the next path — and the note's own
+`<=` check absorbs the byte by dropping the note rather than letting it escape as an overrun. Swept:
+328 of 29,025 (fixture, cap) pairs change output, **zero** violate either bound, 36 lose the withheld
+note, in windows four caps wide. A test aimed at those four caps would be the same defect this round
+exists to remove. Recorded in the code at the site.
+
+**Two more documented rather than changed.** `instructionSection()`'s `$bodies === []` branch cannot
+emit its note — the loop's break requires `$bodies !== []`, so no body collected means no early exit,
+so `$withheld === 0`; stubbing the branch to `return '';` leaves the suite green. It stays wired, with
+the arithmetic written beside it, because the condition is the specification of the count bound above
+it. And `Glob::pathsIn()`'s line-membership test guards a prefix collision that `sort($matches)` makes
+unreachable: a prefix always sorts before the paths that extend it, so it survives a suffix-truncating
+clip whenever they do. Mutated to `str_contains()` over a `d/f.php` ⊂ `d/f.php.dir/g.php` fixture
+across caps 100–4,000: **zero** paths spent but unseen, at both revisions.
+
+**The two `f1fda934` survivors are unreachable by ARITHMETIC, which is what the code now says.**
+"Instrumented and no test reached it" is a much weaker claim than "no caller can".
+`instructionSection()`'s share cannot come out below **151** (`$room ≥ 242`, `$noteCost ≤ 90` even at
+`count($paths) === PHP_INT_MAX`). `clipInstructions()`'s `$budget <= 0` has three callers: Edit and
+Write pass a constant, `instructionSection()` guards it, and `Read`'s `: $reserve` branch needs
+`$maxBytes <= 0`, which Read never reaches because `fread()` is called with that value first and
+throws (measured: 0 and −1 both give `fread(): Argument #2 ($length) must be greater than 0`).
+
+**The trait's headline was false of one of its five users.** *"The instruction section can spend at
+most a quarter, the answer keeps at least three quarters"* is true where the cap bounds a COMPOSED
+result (`Grep`, `Glob`). `Read`'s `$maxBytes` is a per-file READ bound, so the quarter is added rather
+than taken out — a stated 1.25×. At Read's 1 MiB default that reserve is **256 KiB: 16× the flat
+`DEFAULT_MAX_INSTRUCTION_BYTES` Edit and Write get, and 4× the whole `DEFAULT_MAX_OUTPUT_BYTES`**, so
+a Read at the default returns this repo's 9,611-byte `CLAUDE.md` verbatim. That is the intended
+behaviour and it is announce-once, but it is a bound of a different order and the headline now says so
+instead of averaging over it.
+
+**A latent trap in the test helper.** `ToolOutputBudgetTest::instructionSection()` was documented as
+"everything from the instruction label onward" and `substr()`'d from the first `... [instructions:` —
+which is the WITHHELD NOTE, at the end of the section, whenever the label was dropped for want of
+room. On `seedGovernedDirs()`'s fixture that is every cap up to 1,595: at 1,024 it reported 73 bytes
+for a 226-byte section. Every cap its callers pass is above the band, so no shipped assertion was
+wrong. It now finds the section by eliminating the answer — every answer line is a path under the
+fixture root or a `... [` note that is not an instruction note — which is exact at any cap.
 
 ---
 

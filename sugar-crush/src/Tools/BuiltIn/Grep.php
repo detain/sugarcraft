@@ -292,8 +292,7 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         $probe = $this->truncateMerged($merged, $floor);
 
         $section = '';
-        $hitFiles = [];
-        if ($this->instructionLoader !== null || $this->skillNudge !== null) {
+        if ($this->instructionLoader !== null) {
             $hitFiles = self::hitFiles($probe, $path);
 
             // LABELLED, where Read emits the body raw. Read puts it where
@@ -388,7 +387,33 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         }
 
         if ($this->skillNudge !== null) {
-            $nudge = $this->skillNudge->forPaths($hitFiles);
+            // Scoped to every path with a HIT, not to the paths that survived
+            // the clip, and that is the SAME rule {@see Glob::execute()}
+            // follows two files over — where it is scoped to every matched
+            // path rather than to $shown. The two tools answer the same shape
+            // of question and must not disagree about this one:
+            // {@see \SugarCraft\Crush\Skills\SkillPathNudge::forPaths()}
+            // answers "does a skill claim this area of the tree", which the
+            // clip does not change the truth of, and the nudge names the SKILL
+            // rather than the path — so a nudge earned by a path the cap
+            // dropped is still a true and actionable statement, where an
+            // instruction body shown for an unseen path is neither.
+            //
+            // Reading it off $probe instead was a REGRESSION this change's own
+            // parent introduced, and it broke the containment in the direction
+            // that actually costs the model something. $probe is the
+            // three-quarter floor; $content is the FULL cap whenever no rule
+            // was surfaced, which under announce-once is almost every call. So
+            // a hit between the two cuts was VISIBLE in the result while its
+            // skill went unannounced — and announce-once means unannounced
+            // here is unannounced for the session. MEASURED over
+            // `GrepInstructionWiringTest`'s fixture — a `*.zzz.php`-scoped
+            // skill, 201 hits, a 35-byte root — sweeping caps 200 to 12,000
+            // one at a time and counting the caps where the hit is visible and
+            // the skill is silent: 0 at d7919902, 1,745 at 6569891f (caps
+            // 5,233 to 6,977), 0 here. The band moves with the length of the
+            // root, since that prefix is repeated on every hit line.
+            $nudge = $this->skillNudge->forPaths(self::hitFiles($filtered['run']['stdout'], $path));
             if ($nudge !== null) {
                 $content = self::separated($content);
                 $content .= $nudge;
@@ -402,20 +427,30 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
     }
 
     /**
-     * The distinct files the surviving hit lines refer to, in first-hit order.
+     * The distinct files the hit lines in $content refer to, in first-hit
+     * order.
      *
-     * Parsed back out of the rendered content rather than threaded through
-     * from {@see withoutIgnoredHits()} BECAUSE it must reflect the clip: a hit
-     * truncation dropped is a path the model cannot see, and announcing its
-     * `CLAUDE.md` against it would spend the once-per-session mark on a file
-     * the model was never shown.
+     * TWO CALLERS PASS DIFFERENT $content ON PURPOSE, and the difference is
+     * the whole announce-once doctrine of this tool.
      *
-     * $content at this point ALREADY carries the `... [skipped: ...]` and
-     * `... [gitignored: ...]` notes, which is safe rather than incidental:
-     * {@see hitPath()} recognises a hit only by the search-root prefix (or by
-     * grep's exact `Binary file X matches` wording), and a note opens with
-     * `... [`. Anything appended AFTER this call — the instruction block, the
-     * nudge — is never re-scanned at all.
+     * The INSTRUCTION path passes the probe, i.e. text that has already been
+     * clipped, and it must: a hit truncation dropped is a path the model
+     * cannot see, and announcing its `CLAUDE.md` against it would spend the
+     * once-per-session mark on a file the model was never shown.
+     *
+     * The SKILL NUDGE passes the unclipped capture, and it must: the nudge
+     * names the SKILL and not the path, so it stays true of a path the cap
+     * dropped, and scoping it to the clip loses it for the whole session for a
+     * hit the model can in fact see. {@see Glob::execute()} draws the same
+     * line between $shown and $files.
+     *
+     * NEITHER caller's $content carries the `... [skipped: ...]` or
+     * `... [gitignored: ...]` notes any more — the probe is cut before they
+     * are appended, and the capture never had them — but the parse is immune
+     * to them either way, which is what lets the two call sites move without
+     * being re-audited: {@see hitPath()} recognises a hit only by the
+     * search-root prefix (or by grep's exact `Binary file X matches`
+     * wording), and every note opens with `... [`.
      *
      * `strval` over the keys for the reason
      * {@see \SugarCraft\Crush\Context\InstructionFileLoader::emittedPaths()}

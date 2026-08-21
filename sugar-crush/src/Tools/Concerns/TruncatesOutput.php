@@ -42,9 +42,33 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
  * {@see \SugarCraft\Crush\Tools\BuiltIn\Read} 48.3x.
  *
  * So {@see instructionBudget()} splits the cap instead, and the split is what
- * makes both failures unreachable: the instruction section can spend at most a
- * quarter, the answer keeps at least three quarters, and whichever section is
- * cut says so in its own words — see {@see instructionTruncationMarker()}.
+ * makes both failures unreachable. Whichever section is cut says so in its own
+ * words — see {@see instructionTruncationMarker()}.
+ *
+ * THE SPLIT IS A QUARTER IN BOTH DISPOSITIONS, AND THE TWO ARE NOT THE SAME
+ * SENTENCE. Where the cap bounds a COMPOSED result — {@see
+ * \SugarCraft\Crush\Tools\BuiltIn\Grep} and
+ * {@see \SugarCraft\Crush\Tools\BuiltIn\Glob} — the quarter is taken OUT of
+ * it: the section spends at most a quarter and the answer keeps at least three
+ * quarters, which is the floor that fixes the reported bug.
+ * {@see \SugarCraft\Crush\Tools\BuiltIn\Read}'s `$maxBytes` is not that kind of
+ * number — it is a per-file READ bound, "how much of the file you asked for do
+ * you get" — so reducing the file's share to pay for a sibling `CLAUDE.md`
+ * would be a silent content loss against the very thing the caller named. The
+ * quarter is therefore ADDED there, bounding the total at a stated 1.25x where
+ * it used to be an unbounded multiple (48.3x measured).
+ *
+ * That asymmetry has a price worth naming rather than leaving to be
+ * rediscovered: Read's default `$maxBytes` is 1 MiB, so its reserve is 256
+ * KiB — sixteen times the flat {@see DEFAULT_MAX_INSTRUCTION_BYTES} that
+ * {@see \SugarCraft\Crush\Tools\BuiltIn\Edit} and
+ * {@see \SugarCraft\Crush\Tools\BuiltIn\Write} get, and four times this
+ * trait's whole {@see DEFAULT_MAX_OUTPUT_BYTES}. At the shipped default a Read
+ * returns this repository's 9,611-byte `CLAUDE.md` verbatim, which is the
+ * intended behaviour — it is announce-once, so it is paid on the first read
+ * under a governing directory and never again — but it is a bound of a
+ * different order from the other four users, and the headline above used to
+ * claim it was the same one.
  */
 trait TruncatesOutput
 {
@@ -291,10 +315,18 @@ trait TruncatesOutput
     /**
      * Bound one instruction-file body to $budget, announcing what was cut.
      *
-     * $budget <= 0 disables the bound, matching {@see truncateOutput()}. No
-     * caller reaches it any more — instrumented and measured across the whole
-     * suite, zero calls arrive with a non-positive budget — but a caller that
-     * has a reserve and no room left in it must still pass 1, not 0, because
+     * $budget <= 0 disables the bound, matching {@see truncateOutput()}. NO
+     * CALLER CAN REACH IT — which is a stronger statement than "no test does",
+     * and it is the one that holds. There are exactly three callers. Edit and
+     * Write pass the constant {@see DEFAULT_MAX_INSTRUCTION_BYTES}.
+     * {@see instructionSection()} guards its own call with `max(1, ...)`.
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Read}'s reserve is
+     * `max(1, intdiv($maxBytes, 4))` while `$maxBytes > 0`, and its `: $reserve`
+     * branch needs `$maxBytes <= 0` — which Read never reaches, because
+     * `fread()` is called with that value first and throws on it
+     * (MEASURED: 0 and -1 both give `fread(): Argument #2 ($length) must be
+     * greater than 0`). A caller that has a reserve and no room left in it must
+     * still pass 1, not 0, because
      * passing the arithmetic straight through is how the first cut of
      * this change silently disabled the very bound it added, and how the
      * SECOND cut did it again thirty lines below: the set loop handed
@@ -389,6 +421,20 @@ trait TruncatesOutput
      * The marker is sized with PHP_INT_MAX in both slots because that is its
      * longest possible form, which makes this a true upper bound rather than
      * an estimate that a large file quietly exceeds.
+     *
+     * THAT WORST-CASE SIZING IS ALSO WHY NO OUTPUT ASSERTION CAN CHECK THIS
+     * NUMBER, and why one test pins it directly instead. A PHP_INT_MAX marker
+     * is 120 bytes where the marker for a 9,611-byte `CLAUDE.md` is 90, so the
+     * floor carries about thirty bytes of slack over any entry a real file can
+     * produce: dropping the two `+ 1` below leaves 240, which still covers
+     * every real entry, so the section stays inside its ceiling and the result
+     * inside its cap. MEASURED — that mutation changed the output at 175 of
+     * 29,025 (fixture, cap) pairs swept one cap at a time and violated neither
+     * bound at any of them. Sizing the marker at (0, 0) instead leaves 206,
+     * which DOES overrun: 111 of the same pairs returned more than their cap.
+     * `ToolOutputBudgetTest::testTheEntryFloorIsTheWorstCaseCostOfOneClippedRule()`
+     * asserts this sum against a marker the run actually emitted, which is the
+     * only thing that catches the first of those two.
      */
     private function instructionBodyFloor(): int
     {
@@ -537,18 +583,31 @@ trait TruncatesOutput
             // cap" sentinel: handing the arithmetic straight through is the
             // defect being fixed.
             //
-            // THE max() IS UNREACHABLE TODAY AND IS KEPT ANYWAY. $room is at
-            // least instructionBodyFloor(), the note costs less than that, and
-            // the guard above leaves every body after the first a whole floor,
-            // so this expression cannot come out below 1. MEASURED rather than
-            // argued: instrumenting this site and clipInstructions()'s own
-            // sentinel and running the entire suite reported ZERO calls with a
-            // non-positive budget, and a mutation to max(0, ...) leaves the
-            // suite green — the honest reading of which is that the branch has
-            // no reachable input, not that it is untested. It stays because
-            // this exact arithmetic has silently disabled this exact bound
-            // twice: once by passing intdiv() into clipInstructions(), once by
-            // rounding a quarter to zero in Read and Glob.
+            // THE -1 IS ONE BYTE AND NO ASSERTION CAN CATCH IT, which is
+            // recorded here so the next reader does not spend a round looking.
+            // Dropping it lets one body take a byte the implode() newline is
+            // owed, but AT MOST ONE BODY PER CALL is ever clipped — a clipped
+            // body by definition consumes the room that was left, so the guard
+            // above breaks the loop on the next path — and the note's own
+            // `<=` check below then absorbs the byte by dropping the note
+            // rather than letting it escape as an overrun. MEASURED: that
+            // mutation changes the output at 328 of 29,025 (fixture, cap)
+            // pairs swept one cap at a time, violates the section ceiling at
+            // none of them and the cap at none of them, and loses the withheld
+            // note at 36 — in windows four caps wide. A test aimed at those
+            // four caps would be the same defect this bound keeps producing:
+            // an assertion that holds by luck.
+            //
+            // THE max() IS UNREACHABLE, AND BY ARITHMETIC RATHER THAN BY
+            // INSTRUMENTATION. $room is at least instructionBodyFloor(), which
+            // is 242; $noteCost is at most 90 even at count($paths) ===
+            // PHP_INT_MAX; and the guard above leaves every body after the
+            // first a whole floor. So the smallest value this expression can
+            // take is 242 - 0 - 90 - 1 = 151, and it is never non-positive for
+            // any input, not merely for any input a test supplies. It stays
+            // because this exact arithmetic has silently disabled this exact
+            // bound twice: once by passing intdiv() into clipInstructions(),
+            // once by rounding a quarter to zero in Read and Glob.
             $clipped = $capped
                 ? $this->clipInstructions($body, max(1, $room - $spent - $noteRoom - 1))
                 : $body;
@@ -559,6 +618,25 @@ trait TruncatesOutput
 
         $withheld = count($paths) - $examined;
         if ($bodies === []) {
+            // THE NOTE HERE IS UNREACHABLE TODAY, AND THAT IS SAID OUT LOUD
+            // rather than left for the next reviewer to rediscover — this
+            // commit's parent removed one branch on exactly this ground and
+            // documented two others, so a third left unremarked would be an
+            // inconsistency in the same file.
+            //
+            // The arithmetic: the loop's break requires $bodies !== [], so
+            // while no body has been collected the loop cannot exit early,
+            // therefore $examined === count($paths) and $withheld === 0
+            // whenever this branch is entered. Stubbing the whole branch to
+            // `return '';` leaves the suite green.
+            //
+            // It stays wired because the guard it encodes is not "this is
+            // possible" but "if the count bound is ever allowed to admit ZERO
+            // bodies, the paths it skipped must still be counted". That is the
+            // one property this section may not lose silently: a model told
+            // nothing about rules it was not shown cannot ask for them. The
+            // condition is the specification of the branch above it, not dead
+            // weight beside it.
             return $withheld > 0 && $noteCost <= $room
                 ? $this->instructionsWithheldNote($withheld)
                 : '';

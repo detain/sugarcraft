@@ -783,6 +783,24 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
      * survived, and the instruction file of a directory the model never saw
      * would be spent on its behalf.
      *
+     * THAT DEFECT IS UNREACHABLE TODAY, AND THIS STAYS ANYWAY — said out loud
+     * because a guard whose docblock names a live bug, when the bug cannot
+     * happen, reads as evidence of a risk that is not there. `sort($matches)`
+     * runs before the clip and a prefix always sorts BEFORE the paths that
+     * extend it, so a prefix survives a suffix-truncating clip whenever any of
+     * its extensions does: there is no ordering in which `<root>/a/b` is in
+     * the kept window and `<root>/a` is not. The only other window this method
+     * can be handed — a first-line FRAGMENT, where the budget ran out before
+     * the first newline — is SHORTER than the path it came from and so
+     * contains no whole candidate at all. Mutating this to `str_contains()`
+     * and sweeping a `d/f.php` ⊂ `d/f.php.dir/g.php` fixture across the caps
+     * either side of the clip finds zero paths spent but unseen.
+     *
+     * It stays because the property it depends on lives in a different method:
+     * one `sort()` moved or dropped, and the prefix collision is live again,
+     * with a spent-but-unshown instruction file as the symptom and nothing in
+     * between to catch it.
+     *
      * @param list<string> $candidates
      * @return list<string>
      */
