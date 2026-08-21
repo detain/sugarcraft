@@ -9314,3 +9314,56 @@ The fix closed the first two and **left the third open honestly** — F5 reverte
 - **`timeout` DOES NOT RESCUE A PIPED PHPUNIT HERE.** A forked test child can outlive the killed
   process still holding the write end, so `$( … | grep … )` blocks forever on a process that has
   already exited. Redirect to a file when backgrounding a suite.
+
+## Round 34 — two lanes, and both of them shipped a test that could not fail
+
+Two bundles landed: the headless permission approver (`3837b49f`) and P3.4 `Table` + finding #5 +
+finding #8 (`8de875d3`). Floor moved 8360 → **8464 / 94225 / 1 / rc 0**, supervisor-measured in the
+live tree both times rather than taken from either lane's report.
+
+The round's real finding is not in either bundle. It is that **both lanes, independently, shipped a
+test that asserted presence rather than truth, and a reviewer broke both.**
+
+`cmd`'s nine wiring tests asserted the permission approver closure was *bound to* a
+`HeadlessPermissionPrompt` via `getClosureThis()`. They never asserted it *ran* it. Replacing the
+closure body with `fn() => true` — still bound to a real prompt object — passed all 8359 tests
+byte-identically, while making every headless run auto-grant every permission ask. A green suite was
+hiding a total fail-open in the feature built to prevent exactly that.
+
+`lsp`'s ANSI guard used a hand-written provider list. Deleting a row left the suite green, because a
+data-driven provider cannot fail for a case it omits. Deriving the provider from a source census
+killed the mutation and immediately found `WebSearchCommand` unguarded too.
+
+### Rules earned
+
+**A test over a hand-maintained list inherits that list's omissions.** Derive the list, or the test
+only proves what someone remembered to type. Both failures this round are the same shape.
+
+**Ask of each test you write: what mutation would this fail to catch?** Both lanes had honest,
+well-written tests. Neither had asked that question.
+
+**When a finding says "carry the field", check whether it can be carried CONDITIONALLY before
+accepting that a security bound must be traded away.** Finding #5 removed a bound pinning that an
+imported `.claude/agents` preset's `permissionMode` could not reach the roster. The lane replaced it
+with a weaker unread-field census and said so honestly; the reviewer then broke the replacement via
+`toArray()`, which the same change had widened. The narrower fix had been available on the same line
+all along — `fromPreset()` already copied `source`, so forcing the mode to `Default` for non-native
+sources carries all sixteen fields AND keeps the bound unrepresentable. Taken, and extended to
+`fromArray()` so the invariant belongs to the type rather than one constructor.
+
+**A stated justification is a claim, and claims get measured.** `disabledTools` is project-settable
+while `allowedTools` is user-tier-only, justified in both a doc page and the source comment by: a deny
+list can only express the attack by naming every tool it removes. `fnmatch()` honours negated
+character classes. A project-tier `{"disabledTools":["[!B]*"]}` leaves exactly `Bash`. Recorded as
+E57.
+
+**A `{@see}` pointing at a renamed method is invisible to CI.** There is no `{@see}`-target validator
+in this suite, so a dangling doc reference goes green forever. One lane wrote itself a reflection-based
+resolver to check its own work and caught a second dangling reference it had introduced in the same
+round — including one to `Chat::helpListing()`, a method that does not exist (the derivation is inside
+`handleHelpCommand()`).
+
+**The supervisor's own briefs carried the defect too.** Line numbers handed to both round-35 lanes
+were re-derived by the lanes and several had moved; one brief cited `Agent::$source` at `:69` when it
+is `:72`, and one cited a method by a name it never had. Briefs are measurements with a timestamp, and
+the tree moves under them — say so in the brief rather than presenting them as facts.

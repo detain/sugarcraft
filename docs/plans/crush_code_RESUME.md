@@ -6,11 +6,12 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 34 IS IN FLIGHT AT 2 LANES — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 34 IS CLOSED AND VERIFIED. ROUND 35 IS IN FLIGHT AT 2 LANES — read this first, then §0 for the standing rules
 
-**Written mid-round so a compact cannot lose it.** Round 33 is CLOSED and verified; round 34 is
-half-landed with two lanes still running; round 35 is already measured further down. §0-NOW-32 below
-is an older round's block and remains the authority for the standing rules and the DeepSeek record.
+**Written mid-round so a compact cannot lose it.** Rounds 33 and 34 are both CLOSED and
+supervisor-verified. Round 35 is in flight at two lanes; its items were measured in advance and the
+measurements are further down under "ROUND 35 IS MEASURED". §0-NOW-32 below is an older round's block
+and remains the authority for the standing rules and the DeepSeek record.
 
 ### CONCURRENCY: **2**, BY USER INSTRUCTION
 
@@ -49,50 +50,35 @@ mechanics.
 sync daemon were stopped mid-flight and every agent was confirmed killed before the pause. That pause
 is why the `sglang` lane holds a partial artefact — see below.
 
-### WHERE THINGS STAND — as of master `5cbd5200`
+### WHERE THINGS STAND — as of master `8de875d3`
 
-**SUITE FLOOR: `8360 / 93659 / 1 skipped / rc 0` — supervisor-measured at `7714675d`.** This
-supersedes every earlier figure (8111/91477 held rounds 31-33; 8299, 8315, 8331 were intermediate).
-**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was
-replaced by Packagist copies and every figure since is void.
+**SUITE FLOOR: `8464 / 94225 / 1 skipped / rc 0` — supervisor-measured in the live tree at `8de875d3`.**
+This supersedes every earlier figure (8360/93659 held round 34; 8393/93728 was the intermediate after
+the `cmd` bundle).
+**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`, `testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`);
+a 2 means `vendor/sugarcraft/*` was replaced by Packagist copies and every figure since is void.
 `sugar-crush/vendor/sugarcraft/` = **18 symlinks**.
 `md5sum /home/sites/sugarcraft/.sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`.
 `php tools/check-path-repos.php --no-lib-path-repos` must exit 0; zero tracked per-lib `composer.lock`.
+**`src/` census: 284 files / 303 declarations / 235 concrete.**
 
 ⚠️ **Assertion totals are NOT assert-call counts** — PHPUnit 10 counts the `…OrEqual` family as 2.
 See the dedicated block below before quoting any assertion delta as coverage.
 
-**TWO LANES ARE RUNNING** (the user's cap; `sglang` is parked clean at master).
+**ROUND 35 IS RUNNING AT 2 LANES.**
 
 | lane dir | bundle | stage | holds |
 |---|---|---|---|
-| `crush-lane-cmd` | **headless engine permission approver** (`NonInteractive` path only) | **IMPLEMENT** | `src/Backend/**`, `src/Cli/**`, `src/Runtime.php`, `src/PermissionRequestMsg.php`, `README.md`, `src/Sessions/BackgroundSessionRunner.php` |
-| `crush-lane-lsp` | **P3.4 `Table` restyle + finding #5 (`fromPreset` drops 10/16) + finding #8 (trust-grant docs)** | **IMPLEMENT** | `src/Commands/**`, `tests/Commands/**`, `src/Agents/Agent.php`, `src/Agents/AgentPreset.php`, `docs/PERMISSIONS.md`, new `docs/SETTINGS.md` |
-| `crush-lane-sglang` | — | **PARKED** | clean at master, ready to take the next bundle |
+| `crush-lane-sglang` | **P8.8 repo-map context block** — owns the CENSUS TOKEN this round | IMPLEMENT | `src/Context/**`, `src/Runtime.php`, `tests/Tools/BuiltInToolCorpusTest.php`, `docs/ARCHITECTURE.md` |
+| `crush-lane-cmd` | **finding #7 — `/permissions` is reserved but does not exist** | IMPLEMENT | `src/Permissions/**`, `src/Commands/CommandRegistry.php`, `src/Chat.php`, `docs/PERMISSIONS.md`, `docs/COMMANDS.md` |
+| `crush-lane-lsp` | — | PARKED | clean at master |
 
-**EVERY LANE DIR IS MERGED AND NOTHING IS UNPUSHED** — verified: live tree = `origin/master` exactly,
-all three lanes ahead=0. A lane that is "behind" is behind *because* it is mid-work; each rebases onto
-master itself immediately before committing, which is where the merge happens. The sync daemon
-(`scratchpad/sync-lanes.sh`) ff-only pulls the live tree, rebases a lane ONLY when clean AND idle,
-**never touches a dirty lane**, and emits `ALERT` when a lane is behind and cannot auto-refresh.
+🔴 **`cmd` IS BARRED FROM ADDING ANY NEW `src/` FILE THIS ROUND** — `sglang` owns the census token and a
+second new file would collide on it. `/permissions` is buildable as a `CommandRegistry` row + dispatch
+arm + render method, which is the established control-plane pattern. `cmd` is instructed to STOP and
+report if it concludes otherwise.
 
-🔴 **SUPERVISOR TODO AFTER BOTH ROUND-34 LANES LAND — a cross-lane docblock debt that neither lane
-could pay.** `lsp` widened `Agent` to carry all 16 `AgentPreset` fields, which falsifies THREE claims
-in `sugar-crush/src/Cli/Bootstrap.php:1022-1041` (`agentRoster()`'s docblock) — a file `cmd` holds, so
-`lsp` correctly stopped and reported instead of editing it:
-
-1. `:1022-1029` says `fromPreset()` reads "name, description, `initialPrompt`, model, `tools` and
-   `skills` and NOTHING ELSE" and that `permissionMode` "does not travel this path at all" — **now false.**
-2. `:1031` `{@see …ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeHasNowhereToLandOnTheRoster()}`
-   — **the method was renamed, so this reference dangles.** ⚠️ Nothing goes red: there is no
-   `{@see}`-target validator in the suite. A dangling doc reference is invisible to CI here.
-3. `:1037-1041` says `AgentPreset::$source` "STILL HAS NO READER … `Agent` carries no source field" —
-   `Agent` now carries `$source`.
-
-**This is a supervisor commit, taken once `cmd` has committed and released `Bootstrap.php`.** Do not
-route it to a lane while `cmd` holds the file, and do not let it ride along inside `lsp`'s bundle.
-
-### WHAT LANDED — rounds 33 and 34, all supervisor-verified by my own suite runs
+### WHAT LANDED — rounds 33 and 34, all supervisor-verified by my own suite runs in the live tree
 
 | commit | round | what | verified |
 |---|---|---|---|
@@ -100,7 +86,60 @@ route it to a lane while `cmd` holds the file, and do not let it ride along insi
 | `2bde4114` | 33 | both text tool-call parsers stop fabricating calls from quoted prose; params no longer vanish; PCRE cliff gone | 8299 / 91986 / 1 / rc 0 |
 | `c4718781` | 33 | P3.2 FocusRing/Shift-Tab + P3.5 cell-width padding (+ `candy-core` `CSI Z` decoder) | 8315 / 92077 / 1 / rc 0 |
 | `b009077a` | 34 | **P8.9** — `Grep` gains the `InstructionFileLoader` + `skillNudge` pair | 8331 / 92144 / 1 / rc 0 |
-| `7714675d` | 34 | **P8.4** — compositor rewired to the sub-agent map + liveness filter | **8360 / 93659 / 1 / rc 0** |
+| `7714675d` | 34 | **P8.4** — compositor rewired to the sub-agent map + liveness filter | 8360 / 93659 / 1 / rc 0 |
+| `3837b49f` | 34 | **headless permission approver** — `withPermissionApprover()` finally has a `src/` caller | 8393 / 93728 / 1 / rc 0 |
+| `8de875d3` | 34 | **P3.4 `Table` + finding #5 (16-field carry) + finding #8 (fourth trust grant)** | **8464 / 94225 / 1 / rc 0** |
+
+### ROUND 34's TWO LESSONS — both lanes shipped a test that asserted PRESENCE rather than TRUTH
+
+This is the round's most transferable finding, and it happened **twice, independently, in unrelated
+lanes**. Put it in every implement brief.
+
+1. **`cmd`** — 9 wiring tests asserted the approver closure was *bound to* a `HeadlessPermissionPrompt`
+   (`ReflectionFunction::getClosureThis()`), never that it *ran* it. Replacing the body with
+   `fn() => true`, still bound to a real prompt, passed **all 8359 tests byte-identically** — every
+   `-p` run auto-granting every ASK, the exact fail-open the change existed to prevent. Killed by
+   asserting the closure's BEHAVIOUR (feed it a non-tty stream, assert refusal) plus a
+   `getShortName() === '__invoke'` pin.
+2. **`lsp`** — `NoRawAnsiInTranscriptTest`'s hand-written provider. Deleting a row left the suite
+   green, because a data-driven provider cannot fail for a case it omits. Killed by DERIVING the
+   provider from a source census — which immediately found `WebSearchCommand` unguarded too.
+
+**The rule: a test over a hand-maintained list inherits that list's omissions. Derive the list, or
+the test only proves what someone remembered to type.**
+
+### THE SECURITY BOUND THAT WAS "REMOVED AND REPLACED" — and then actually restored
+
+Finding #5 (carry all 16 `AgentPreset` fields onto `Agent`) removed a real bound: a test existed
+specifically to pin that an imported `.claude/agents` preset's `permissionMode` could NOT reach the
+roster, and two docblocks cited it as a bound on **ungated repository content**. After the change a
+`.claude/agents/*.md` declaring `permissionMode: bypassPermissions` landed as exactly that — measured
+through the real `Bootstrap::agentRoster()` path, not a harness.
+
+The lane replaced it with a census asserting only `Agent.php` reads the field, and **said plainly that
+unread-and-asserted is weaker than unrepresentable** rather than letting it read as equivalent. Its
+reviewer then **broke the replacement**: the same change had widened `Agent::toArray()` to emit
+`permission_mode`, so reading it that way in `AgentManager::createSubAgent()` — the exact downstream
+the docblocks name — left the suite 15/15 green.
+
+**Resolution: the narrower fix existed all along and was taken.** `fromPreset()` already had the
+provenance in hand on the same line (`source: $preset->source`), so the mode is forced to `Default`
+for non-native sources — all sixteen fields carried, `$source` badge-able, and the *unrepresentable*
+bound restored for ungated content specifically. The fix agent went further than proposed and gated
+`fromArray()` identically, so the invariant belongs to the TYPE rather than to one constructor —
+otherwise the persistence seam is a way back in.
+
+**Rule earned: when a finding says "carry the field", check whether the field can be carried
+CONDITIONALLY before accepting that a bound must be traded away.**
+
+### E57 RECORDED — the argument justifying a tier split did not survive contact with the matcher
+
+`docs/SETTINGS.md` and `src/Config/LayeredSettings.php` both defended `disabledTools` being
+project-settable (while `allowedTools` is user-tier-only) with: a deny list can only express the
+attack by naming every tool it removes, so you can see it in the file. **`fnmatch()` honours negated
+character classes.** Measured end to end: a project-tier `{"disabledTools":["[!B]*"]}` leaves exactly
+`Bash`. Eight characters. Recorded as **E57**, deferred per functionality-first; the two false doc
+claims were corrected in-round.
 
 **`candy-core` foundation edit is cleared across the whole monorepo**: `affected-libs.php` puts the
 closure at 53/58; the supervisor swept **57 libs, 0 failures, 0 errors, all rc 0.**
