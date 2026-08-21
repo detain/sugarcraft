@@ -226,6 +226,22 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — a walked-to instruction file',
             'CONTAINED — a configured `instructions:` glob match',
         ],
+        // Three sinks, one gate, and the split between them is the point: only
+        // ONE of the three follows a path the repository chose.
+        'Context/RepoMapBlock.php|scandir' => [
+            'NAMES_ONLY — the immediate children of the root, enumerated to find sub-packages. A '
+                . 'scandir() entry cannot contain a separator, so nothing here can leave the root',
+        ],
+        'Context/RepoMapBlock.php|file_get_contents' => [
+            'CALLER_SUPPLIED — a composer.json at `$root` or `$root/<entry>`, where the root is '
+                . 'App::$root (`--root`) and <entry> came from the scandir() above; no part of the '
+                . 'path is chosen by model output or by file content',
+        ],
+        'Context/RepoMapBlock.php|new RecursiveDirectoryIterator' => [
+            'CONTAINED — the one path in this file that CONTENT steers: a manifest\'s '
+                . '`autoload.psr-4` values are written by whoever wrote the repository, and each is '
+                . 'refused by ContainedPath::within() against the root before the walk opens it',
+        ],
         'Context/InstructionFileLoader.php|glob' => [
             'NAMES_ONLY — expansion of the configured glob; each match is compared before it is read',
         ],

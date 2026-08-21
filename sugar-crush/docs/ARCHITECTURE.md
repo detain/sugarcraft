@@ -231,16 +231,25 @@ only so no dependency cycle is created.
    true *and* the limit past which it stops being true);
 2. `EnvironmentBlock` — cwd, model, git state, date; memoized per `Runtime`
    because `render()` shells out to git and the prompt is rebuilt once per step;
-3. `<project-instructions>` documents — `CLAUDE.md` / `AGENTS.md`, with
+3. `RepoMapBlock` — a `<repo-map>` of the workspace's Composer sub-packages and
+   its PSR-4 source directories, memoized per `Runtime` for the same reason;
+4. `<project-instructions>` documents — `CLAUDE.md` / `AGENTS.md`, with
    `@import`s expanded, via `InstructionFileLoader`;
-4. `MemoryBlock` — `project`-scope memory entries only;
-5. explicitly enabled skills' full bodies;
-6. `SkillMatcher::listForPrompt()` — name + description for every discovered
+5. `MemoryBlock` — `project`-scope memory entries only;
+6. explicitly enabled skills' full bodies;
+7. `SkillMatcher::listForPrompt()` — name + description for every discovered
    auto-invocable skill.
 
-Item 6 is what makes the `Skill` tool worth having: without the listing, the
+Item 7 is what makes the `Skill` tool worth having: without the listing, the
 model has no reason to call it, and a populated registry would still be
 un-triggerable.
+
+Items 2 and 3 are the derived-fact half and 4 and 5 the authored-convention
+half, which is why the map sits where it does: every line in it is a path
+relative to the cwd item 2 names, and the conventions in item 4 talk about both.
+`RepoMapBlock` is deliberately generic — it reads `composer.json` files, not
+this repository's `docs/MATCHUPS.md`, so it maps any Composer workspace rather
+than only this one; its own docblock records that decision and what it costs.
 
 Note the prompt-caching consequence stated in `MemoryBlock`'s own source:
 `EnvironmentBlock::render()` polls `git status --porcelain` and sits **ahead** of

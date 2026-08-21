@@ -179,6 +179,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Commands/CommandSpec.php' => 1,
         'Config/LayeredSettings.php' => 2,
         'Context/InstructionFileLoader.php' => 6,
+        'Context/RepoMapBlock.php' => 1,
         'Memory/ForeignMemoryImporter.php' => 2,
         'Providers/ProviderFactory.php' => 2,
         'Skills/SkillLoader.php' => 3,
@@ -224,12 +225,23 @@ final class ContainedPathInventoryTest extends TestCase
      * `Commands/CommandLoader.php` holds, for `Cli/Bootstrap.php`'s reason: the
      * boundary here IS the root, and a tree cannot be confined to itself.
      *
-     * "THIRTY call sites in THIRTEEN files", per file — the sum and the key
+     * `Context/RepoMapBlock.php` is the FOURTEENTH file, and it too arrived with
+     * the read it gates: the `<repo-map>` prompt block walks the directories a
+     * manifest's `autoload.psr-4` names, and those values are written by whoever
+     * wrote the repository — `"../../.."` is a legal one. ONE compare, for
+     * `Cli/Bootstrap.php`'s reason: the boundary IS the root, and a tree cannot
+     * be confined to itself. `within()` and not `below()`, because a prefix
+     * mapped to `""` means the package root itself.
+     *
+     * "THIRTY-TWO call sites in FOURTEEN files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
-     * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve";
-     * each new routed file makes it stale by one in each figure, because the
-     * sentence is a restatement of the map and has to move with it.) Each count is one read
+     * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",
+     * then "THIRTY in THIRTEEN" — and that last one was ALREADY WRONG when
+     * `RepoMapBlock` arrived: the map summed to thirty-one across thirteen
+     * files, so the sentence had drifted by one without anybody noticing. That
+     * is the cost of a restatement no test asserts, and it is recorded here
+     * rather than quietly corrected.) Each count is one read
      * decision, so a dropped gate shows up as the file's number falling — which
      * is the half of #89 an instrument like this genuinely covers.
      *

@@ -9,6 +9,7 @@ use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -97,6 +98,8 @@ final class Runtime
      * a session-wide block to inject.
      */
     private ?MemoryBlock $memoryBlock = null;
+
+    private ?RepoMapBlock $repoMapBlock = null;
 
     public function __construct(
         private ProviderInterface $provider,
@@ -1267,7 +1270,10 @@ final class Runtime
      *
      * The <env> block goes first, ahead of any project instruction, so the
      * model knows where it is (cwd, git state, platform, model, date) before
-     * it reads conventions that talk about paths relative to that cwd.
+     * it reads conventions that talk about paths relative to that cwd, and
+     * <repo-map> goes immediately after it for the same reason one step out:
+     * it is a list of paths relative to that cwd, so it has to follow the
+     * block that names the cwd and precede the prose that assumes both.
      */
     private function buildSystemPrompt(App $app): string
     {
@@ -1358,6 +1364,18 @@ final class Runtime
 
         $base .= "\n\n" . $this->environmentSnapshot($app)->render();
 
+        // Immediately after <env> and BEFORE the instruction documents,
+        // because it is the same KIND of thing <env> is - fact derived from
+        // the repository, not convention an author wrote down - and because
+        // every line in it is a path relative to the cwd <env> just named.
+        // The ordering argument that puts <env> first therefore puts this
+        // second: read where you are, then what is where you are, then the
+        // conventions that talk about both.
+        $repoMap = $this->repoMapSnapshot($app)->render();
+        if ($repoMap !== '') {
+            $base .= "\n\n" . $repoMap;
+        }
+
         if ($app->instructionLoader !== null) {
             $docs = [
                 ...$app->instructionLoader->loadRoot(),
@@ -1442,6 +1460,34 @@ final class Runtime
         return $this->memoryBlock ??= $app->memoryStore === null
             ? MemoryBlock::empty()
             : MemoryBlock::capture($app->memoryStore);
+    }
+
+    /**
+     * Resolve the repository map folded into every system prompt.
+     *
+     * Memoized for the same reason {@see environmentSnapshot()} and
+     * {@see memorySnapshot()} are, and the cost avoided is the largest of the
+     * three: {@see RepoMapBlock::capture()} stats the root's subdirectories,
+     * reads a `composer.json` from each, and walks the package's own PSR-4
+     * source roots. Repeating that up to `maxSteps` times per turn would put a
+     * full source-tree walk on the critical path of every step of the agentic
+     * loop.
+     *
+     * Captured at {@see projectRoot()} for the reason {@see
+     * environmentSnapshot()} is: on a `--root <lib>` run the map has to
+     * describe the directory the tools are jailed to, not the process
+     * directory the binary happened to start in.
+     *
+     * There is deliberately no constructor injection here the way there is for
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock}: that parameter
+     * exists because an owner already holds a session-wide environment
+     * snapshot, and nothing in this codebase holds a session-wide repo map. A
+     * parameter with no caller is a seam that rots; it can be added when an
+     * owner needs one.
+     */
+    private function repoMapSnapshot(App $app): RepoMapBlock
+    {
+        return $this->repoMapBlock ??= RepoMapBlock::capture(self::projectRoot($app));
     }
 
     /**

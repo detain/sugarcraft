@@ -139,6 +139,29 @@ final readonly class EnvironmentBlock
      * result is text the model ASKED for whereas this block is emitted
      * unconditionally on every step whether it helps or not.
      *
+     * THE AXIS THAT LADDER RANKS ON, named because a third context block now
+     * exists and the count "two neighbours" would otherwise silently go stale.
+     * {@see RepoMapBlock} joined this directory and the system prompt after
+     * this argument was written, and its {@see RepoMapBlock::MAX_SECTION_BYTES}
+     * is 8192 — the same figure as this one, which reads at a glance like a
+     * third rung landing on top of this one. It is not a rung at all: the
+     * ladder above ranks content whose size GROWS WITH USE, where the cap is
+     * the feature and what renders under it is a sample. Notes accumulate as
+     * the user writes them; a diff grows as the agent edits. A repository's
+     * shape does neither — it is fixed for the session and does not respond to
+     * anything the agent does — so `RepoMapBlock` sizes itself to the largest
+     * real workspace measured instead, and the coincidence of 8192 is a
+     * coincidence. This constant's two neighbours on the growth axis are still
+     * exactly the two named above.
+     *
+     * What a third block DOES change is the total, which no single constant
+     * here bounds: the unconditional prompt now costs up to this block's
+     * 24,576 B of capped fields (below), plus `MemoryBlock`'s 4,096, plus
+     * `RepoMapBlock`'s 2 x 8,192 — about 45 KiB of capped block text if every
+     * bound were struck at once. In practice `RepoMapBlock`'s two sections are
+     * near mutually exclusive (see its own docblock), so a real ceiling is
+     * closer to 37 KiB.
+     *
      * DOMAIN OF THE BOUND: per SECTION. {@see render()} emits two independently
      * capped sections (staged, unstaged), so the block's diff contribution is
      * bounded by 2 * this, plus the two label lines. Independent rather than a
