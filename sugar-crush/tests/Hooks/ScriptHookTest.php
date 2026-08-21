@@ -15,6 +15,34 @@ use SugarCraft\Crush\Hooks\ScriptHook;
  */
 final class ScriptHookTest extends TestCase
 {
+    /**
+     * The prelude `docs/HOOKS.md` hands hook authors, kept here so the snippet
+     * in that document is a thing this suite actually RUNS rather than a thing
+     * it merely claims. The previous wording — an unconditional
+     * `input="$(cat "$CRUSH_TOOL_INPUT_FILE")"` labelled "correct at every
+     * size" — was measured allowing `rm -rf /` on a host whose temp directory
+     * would not take a file: `CRUSH_TOOL_INPUT_FILE` is unset there, `cat`
+     * reads nothing, and the guard inspects an empty string.
+     *
+     * Two rules, and both are load-bearing: prefer the file, fall back to the
+     * variable; and refuse when what you end up with is empty or a marker,
+     * because a guard that cannot see the arguments has not cleared them.
+     */
+    private const DOCUMENTED_GUARD_PRELUDE = <<<'SH'
+        if [ -n "${CRUSH_TOOL_INPUT_FILE:-}" ] && [ -r "$CRUSH_TOOL_INPUT_FILE" ]; then
+            input="$(cat "$CRUSH_TOOL_INPUT_FILE")"
+        else
+            input="$CRUSH_TOOL_INPUT"
+        fi
+
+        case "$input" in
+            ''|'@@CRUSH_PAYLOAD_IN_FILE@@'*)
+                echo "hook: the tool arguments could not be read" >&2
+                exit 2
+                ;;
+        esac
+        SH;
+
     // =========================================================================
     // fromConfig Tests
     // =========================================================================
@@ -1325,6 +1353,116 @@ final class ScriptHookTest extends TestCase
         } finally {
             @unlink($counter);
         }
+    }
+
+    /**
+     * THE HOLE THE `_FILE` DOCUMENTATION HAD TO BE WRITTEN AROUND, pinned so
+     * the shape of it cannot drift away from what `docs/HOOKS.md` promises.
+     *
+     * When {@see ScriptHook::writePayloadFile()} returns null — an unwritable or
+     * full temp directory — and the payload FITS, the hook still runs, the
+     * payload is still handed over verbatim in `CRUSH_TOOL_INPUT`, and
+     * `CRUSH_TOOL_INPUT_FILE` is not set at all. That combination is correct
+     * (refusing every tool call because `/tmp` is full would be a far worse
+     * trade) but it is exactly the case in which a guard written as
+     * `input="$(cat "$CRUSH_TOOL_INPUT_FILE")"` sees the empty string and
+     * ALLOWS what it was written to deny. Measured before the documentation
+     * changed: that guard reported `action=allow` on `{"command":"rm -rf /"}`.
+     *
+     * So both halves are asserted here — the environment the hook is given, and
+     * the verdict of a guard written the way `docs/HOOKS.md` now documents,
+     * which falls back to the variable and refuses when it ends up with
+     * nothing. The oversize half of the same configuration is
+     * {@see testAPayloadThatFitsNeitherRouteFailsClosed()}, which denies before
+     * the hook runs; this is the half that runs.
+     *
+     * It runs in a CHILD for the same reason that test does: `TMPDIR` pointed
+     * at a REGULAR FILE fails `tempnam()` for root as well, and
+     * `sys_get_temp_dir()` caches its answer on the first call, so a `putenv()`
+     * inside a suite that has already used a temp file changes nothing.
+     */
+    public function testAFittingPayloadStillReachesAHookThatCanBeGivenNoFile(): void
+    {
+        $notADirectory = tempnam(sys_get_temp_dir(), 'scripthook_notadir_');
+        self::assertIsString($notADirectory);
+
+        $guardFile = tempnam(sys_get_temp_dir(), 'scripthook_guard_');
+        self::assertIsString($guardFile);
+        file_put_contents($guardFile, self::DOCUMENTED_GUARD_PRELUDE . <<<'SH'
+
+            case "$input" in
+                *"rm -rf"*) echo "refused" >&2; exit 2 ;;
+            esac
+
+            exit 0
+            SH);
+
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = <<<PHP
+            <?php
+            declare(strict_types=1);
+            require {$this->export($autoload)};
+
+            \$context = new SugarCraft\Crush\Hooks\HookContext(
+                'sid', 'Bash', [], '{"command":"rm -rf /"}', '',
+                'test-model', 'test-provider', '/tmp',
+            );
+
+            \$run = static function (string \$command) use (\$context): array {
+                \$hook = new SugarCraft\Crush\Hooks\ScriptHook(
+                    'guard', SugarCraft\Crush\Hooks\HookEvent::PreToolUse, '.*', \$command, '',
+                );
+                \$result = \$hook->execute(\$context);
+
+                return ['action' => \$result->action, 'message' => \$result->message];
+            };
+
+            fwrite(STDOUT, json_encode([
+                'env' => \$run('printf "%s|%s" "\$CRUSH_TOOL_INPUT_FILE" "\$CRUSH_TOOL_INPUT"'),
+                'guard' => \$run('sh ' . escapeshellarg({$this->export($guardFile)})),
+            ]));
+            PHP;
+
+        $file = tempnam(sys_get_temp_dir(), 'scripthook_nofile_');
+        self::assertIsString($file);
+        file_put_contents($file, $script);
+
+        try {
+            $process = proc_open(
+                [PHP_BINARY, $file],
+                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                null,
+                ['TMPDIR' => $notADirectory, 'PATH' => (string) getenv('PATH')],
+            );
+            self::assertIsResource($process);
+
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($process);
+        } finally {
+            @unlink($file);
+            @unlink($guardFile);
+            @unlink($notADirectory);
+        }
+
+        $decoded = json_decode($stdout, true);
+        self::assertIsArray($decoded, "the child reported nothing: {$stdout}{$stderr}");
+
+        $this->assertSame('allow', $decoded['env']['action'], 'a payload that fits was not delivered at all');
+        $this->assertSame(
+            '|{"command":"rm -rf /"}',
+            $decoded['env']['message'],
+            'the fitting payload did not arrive verbatim with no file beside it',
+        );
+
+        $this->assertSame(
+            'deny',
+            $decoded['guard']['action'],
+            'the guard documented in docs/HOOKS.md allowed a call it could not read',
+        );
     }
 
     /**

@@ -280,27 +280,45 @@ CRUSH_TOOL_INPUT_FILE  CRUSH_TOOL_OUTPUT_FILE
 
 #### The two `_FILE` variables, and why they exist
 
-**Linux caps one environment entry at 131,072 bytes** (`MAX_ARG_STRLEN`, for
-`NAME=VALUE\0` together) and fails the whole `execve()` with `E2BIG` past that.
+**Linux caps one environment entry** at `MAX_ARG_STRLEN`, which is
+`PAGE_SIZE * 32` for `NAME=VALUE\0` together, and fails the whole `execve()`
+with `E2BIG` past that. On the usual 4 KiB pages that is **131,072 bytes**; it
+is 2 MiB on a 64 KiB-page kernel (ppc64le, and the aarch64 kernels RHEL and
+SLES ship), and macOS and the BSDs cap the whole environment instead of one
+entry, so the figures below are this platform's and not a portable constant.
+SugarCrush does not assume any of them — see the retry described below.
+
 While `CRUSH_TOOL_INPUT` was the only route the payload had, that kernel limit
 was a limit on **the tool call**: with any script hook registered, a `Write`
-whose JSON arguments exceeded ~128 KB could not run at all. Measured against a
-hook whose entire script is `exit(0)`: 131,054 bytes of value allowed, 131,055
-denied, 200,000 and 1,000,000 denied identically — with a refusal reading
-`Hook <name> could not be executed`, which names neither the size nor the cause
-and reads as *"your hook is broken"*. `CRUSH_TOOL_OUTPUT` behaved the same.
+whose JSON arguments exceeded ~128 KB could not run at all. Measured on a
+4 KiB-page host against a hook whose entire script is `exit(0)`: 131,054 bytes
+of value allowed, 131,055 denied, 200,000 and 1,000,000 denied identically —
+with a refusal reading `Hook <name> could not be executed`, which names neither
+the size nor the cause and reads as *"your hook is broken"*.
+`CRUSH_TOOL_OUTPUT` behaves the same way one byte lower, at 131,053/131,054,
+because its name is one byte longer and the kernel measures `NAME=VALUE\0`.
 
 So the payload now travels **both** ways:
 
 - `CRUSH_TOOL_INPUT_FILE` and `CRUSH_TOOL_OUTPUT_FILE` point at a `0600` temp
   file holding the **complete** bytes, and are set on every run in which such a
-  file could be created — which is every run short of an unwritable temp
-  directory, and in *that* case an oversize payload is a fail-closed deny rather
-  than a hook that silently sees nothing. The files are deleted as soon as the
-  hook exits: read them, do not stash the path.
-- `CRUSH_TOOL_INPUT` / `CRUSH_TOOL_OUTPUT` are **unchanged whenever the value
-  fits**, which is every call that works today. Nothing already written breaks.
-- When the value does **not** fit, the variable carries a marker instead:
+  file could be created — which is every run short of a temp directory that will
+  not take a file. The files are deleted as soon as the hook exits: read them,
+  do not stash the path.
+- **On a run where no temp file could be written, neither `_FILE` variable is
+  set at all**, and the two payloads split: an *oversize* one is a fail-closed
+  deny before your hook ever starts, while one that *fits* is handed over in
+  `CRUSH_TOOL_INPUT` exactly as it always was and your hook runs normally.
+  A guard that reads only the file therefore sees **nothing** on that second
+  case — which is why the snippet below falls back to the variable rather than
+  trusting the path to be there. (Refusing every tool call because `/tmp` is
+  full would be the worse trade, so this case is handled and not designed out.)
+- `CRUSH_TOOL_INPUT` / `CRUSH_TOOL_OUTPUT` carry the **real bytes** whenever the
+  operating system will accept them, which is every call that works today.
+  Nothing already written breaks.
+- When the OS refuses to start your hook with the payload in its environment,
+  SugarCrush retries with the file-backed payloads moved out of the environment,
+  and the variable carries a marker instead:
 
   ```
   @@CRUSH_PAYLOAD_IN_FILE@@ 200011 bytes; read $CRUSH_TOOL_INPUT_FILE
@@ -310,23 +328,44 @@ So the payload now travels **both** ways:
   decodes it leniently judges a call that does not exist. Not empty either, since
   an absent `CRUSH_*` already means "empty" here.
 
-**If your hook inspects arguments, read the file, not the variable.** A hook that
-reads only `CRUSH_TOOL_INPUT` will now *run* on an oversize call and see the
-marker where it used to see arguments — whereas before, the call was denied
-outright. For a guard that keys on the argument text, that is a change in the
-permissive direction, over calls that previously could not happen at all.
-`CRUSH_TOOL_NAME` and your `matcher:` are unaffected.
+**If your hook inspects arguments, prefer the file, fall back to the variable,
+and refuse when you end up with neither.** A hook that reads only
+`CRUSH_TOOL_INPUT` will now *run* on a call whose payload the environment could
+not carry, and see the marker where it used to see arguments — whereas before,
+the call was denied outright. A hook that reads only `CRUSH_TOOL_INPUT_FILE`
+sees the empty string on a host whose temp directory will not take a file.
+Either way, a guard that cannot read the arguments has not cleared them, so say
+so with an `exit 2`:
 
 ```sh
-# portable, and correct at every size
-input="$(cat "$CRUSH_TOOL_INPUT_FILE")"
+if [ -n "${CRUSH_TOOL_INPUT_FILE:-}" ] && [ -r "$CRUSH_TOOL_INPUT_FILE" ]; then
+    input="$(cat "$CRUSH_TOOL_INPUT_FILE")"
+else
+    input="$CRUSH_TOOL_INPUT"
+fi
+
+case "$input" in
+    ''|'@@CRUSH_PAYLOAD_IN_FILE@@'*)
+        echo "hook: the tool arguments could not be read" >&2
+        exit 2
+        ;;
+esac
 ```
 
-One limit is **not** modelled: platforms that cap the whole environment rather
-than one entry (macOS: 256 KiB for argv and environ together). A payload pair
-that passes every per-entry check can still be refused there — but the refusal
-now prints both payload sizes rather than saying only that the hook could not
-be executed.
+Both branches are exercised by `ScriptHookTest`, including on a host whose
+`TMPDIR` is a regular file: without the fallback that guard was **measured
+allowing `{"command":"rm -rf /"}`**, because `cat` on an unset path reads
+nothing and an empty string matches no dangerous pattern.
+
+`CRUSH_TOOL_NAME` and your `matcher:` are unaffected by any of this.
+
+Platforms that cap the whole environment rather than one entry (macOS: 256 KiB
+for argv and environ together) are not modelled as a *number* anywhere — but
+they no longer need to be: the retry above is triggered by the exec the OS
+actually refused, not by a size SugarCrush guessed at, so a payload pair that
+passes every per-entry check and is still refused gets moved onto the files and
+tried again. If even that is refused, the refusal names both payload sizes
+rather than saying only that the hook could not be executed.
 
 Nothing from your shell survives — no `HOME`, no `LANG`, no `VIRTUAL_ENV`, and
 none of the `SUGARCRUSH_*` variables that configured the launch.
