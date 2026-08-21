@@ -29,11 +29,18 @@ use SugarCraft\Crush\Tui\Renderer as ShellRenderer;
  * machine over the WHOLE string, so the family emoji U+1F468 ZWJ U+1F469 ZWJ
  * U+1F467 measures 2 cells. `truncate()` walked `preg_split('//u')` and summed
  * `charWidth()` per CODEPOINT, which scores the same sequence 6. Two answers
- * for one string. The direction was safe — the per-codepoint sum is the
- * larger, so the loop over-spent its budget and cut early, never late — but
- * cutting inside the sequence emitted a **dangling ZWJ**: a joiner with
- * nothing after it, which is a rendering hazard on its own account and not
- * merely a lost character.
+ * for one string. The direction was USUALLY safe — the per-codepoint sum is
+ * usually the larger, so the loop over-spent its budget and cut early — but
+ * not always, and the entry this test was written from got that wrong.
+ * `Width::string()` charges +2 for `<emoji> ZWJ`, crediting the emoji its ZWJ
+ * state machine skipped, where the per-codepoint sum charges `1 + 0`; on those
+ * inputs the WHOLE-string measure is the larger and the old truncator's
+ * `$visualWidth <= $maxWidth` early return handed an over-wide string back.
+ * Measured at 087a3179, `truncate(U+1F1E6 U+11A8 U+2764 ZWJ U+1F1F8, 4)` came
+ * back **5 cells**, and 400,000 fuzzed calls gave 727 over-runs against 0 for
+ * the cluster loop. On top of that, cutting inside the sequence emitted a
+ * **dangling ZWJ**: a joiner with nothing after it, which is a rendering
+ * hazard on its own account and not merely a lost character.
  *
  * **E54 — `render(..., $width, ...)` returns `$width + 4` cells.**
  * `$width` is handed to `Style::width()`, which sizes the CONTENT box; the

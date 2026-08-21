@@ -273,10 +273,22 @@ final class AgentViewPane
      * Widths still come from {@see charWidth()}/{@see visualWidth()}, so this
      * adds a segmentation rule and NOT a second width table -- the mistake
      * this class already made once, when its truncator carried a local width
-     * table that disagreed with `Width`. Nor does the grouping move any total:
-     * `Width::string()` scores a flag 1+1 and a skin-toned thumb 2+2, the same
-     * either way, so grouping changes what may be SPLIT, never how wide
-     * anything measures.
+     * table that disagreed with `Width`. What the grouping does to a TOTAL
+     * differs by rule, and stating it of all four at once would be wrong.
+     *
+     * Neither of the two EMOJI rules -- 3 and 4 -- moves a total. On this
+     * tree's PHP 8.3 `Width::string()` scores a flag 1+1 and a skin-toned
+     * thumb 2+2, the same grouped or ungrouped, so for those two the grouping
+     * changes what may be SPLIT and nothing else; measured over a ZWJ-free
+     * alphabet, 60,000 random strings produced 0 cases where grouping moved
+     * the total. Rule 1 is the opposite and deliberately so: the family emoji
+     * is 2 cells grouped against 6 summed per codepoint, and closing exactly
+     * that gap is why this function exists.
+     *
+     * The 1+1 and 2+2 figures are PHP 8.3's, not universal. On an 8.4 build
+     * `Width` splits with `grapheme_str_split()` and the same flag measures 1
+     * grouped against 2 summed, the same thumb 2 against 4 -- measured against
+     * a simulated 8.4 path, not assumed.
      *
      * This is not full UAX #29 and does not claim to be. Hangul syllables,
      * Indic conjuncts and prepend marks are still split at codepoint
@@ -368,11 +380,24 @@ final class AgentViewPane
      * with `grapheme_str_split()` and score that syllable by its first
      * codepoint, 2, where the sum here is still 4.
      *
-     * That residual gap runs in the same safe direction the ZWJ one did: the
-     * per-unit sum is the LARGER, so the loop spends its budget early and cuts
-     * sooner than it had to. It can drop a character that would have fit; it
-     * cannot emit a row wider than its budget, which is the failure this
-     * file's tests exist to prevent, and which was never reachable from here.
+     * That residual gap runs in the safe direction: on 8.4 the per-unit sum is
+     * the LARGER -- measured, a jamo-spelled Hangul syllable is 4 summed here
+     * against 2 whole, a Devanagari conjunct 4 against 1 -- so the loop spends
+     * its budget early and cuts sooner than it had to. It can drop a character
+     * that would have fit; it does not over-run.
+     *
+     * Do NOT read that reassurance back onto the truncator this replaced. The
+     * same "over-truncates, never over-runs" was said of the per-codepoint
+     * loop, and of that loop it was false. `Width::string()` charges +2 for
+     * `<emoji> ZWJ` -- it credits the emoji its ZWJ state machine skipped --
+     * where the per-codepoint sum charges 1 + 0, so on those inputs the
+     * WHOLE-string measure is the larger of the two and the early return let
+     * an over-wide string through. Measured at 087a3179,
+     * `truncate(U+1F1E6 U+11A8 U+2764 ZWJ U+1F1F8, 4)` came back 5 cells, and
+     * 400,000 fuzzed calls over an emoji-heavy alphabet produced 727 over-runs
+     * (worst +2). The cluster loop above produced 0 on the same 400,000. This
+     * change therefore closes an over-run as well as a dangling joiner, which
+     * is more than the finding it was written for claimed for it.
      */
     private static function visualWidth(string $text): int
     {
@@ -386,9 +411,14 @@ final class AgentViewPane
      * {@see truncate()} no longer sums this — it measures whole clusters with
      * {@see visualWidth()} instead. What still reads it is
      * {@see joinsPrevious()}, and it reads it for one bit of information only:
-     * whether a codepoint has a cell of its own. A zero answer means a
-     * combining mark, a variation selector or the joiner itself, none of which
-     * can be cut away from what they attach to.
+     * whether a codepoint has a cell of its own. A zero answer is NOT only the
+     * cases the rule is aimed at -- a combining mark, a variation selector,
+     * the joiner itself, none of which can be cut away from what they attach
+     * to -- but anything `Width` scores 0, which per the line above includes
+     * controls. Measured, "a\x00b\x07c" clusters as `a\x00` | `b\x07` | `c`.
+     * Attaching a control to the character before it moves no budget, since it
+     * had no cell either way, and a row carrying one has a worse problem than
+     * where its truncator cut.
      */
     private static function charWidth(string $char): int
     {

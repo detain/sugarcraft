@@ -2652,11 +2652,18 @@ per codepoint.
 
 **Where.** `sugar-crush/src/Tui/AgentViewPane.php` — `truncate()` and `visualWidth()`/`charWidth()`.
 
-**Severity.** Low, and bounded in the safe direction. The per-codepoint sum is the **larger** of the
-two, so the loop spends its budget early and truncates **sooner** than it needed to. It can drop a
-character that would have fit; it **cannot** emit a row wider than its budget, which is the failure
-mode this project treats as broken functionality (the diff renderer paints one line per terminal row).
-Over-truncation, never over-run.
+**Severity.** Low. **CORRECTED IN ROUND 38 — the bound this paragraph rested on is not there.** It
+read: the per-codepoint sum is the **larger** of the two, so the loop over-truncates and **cannot**
+emit a row wider than its budget. True of most inputs, false in general. `Width::string()` charges
+**+2** for `<emoji> ZWJ` — it credits the emoji its ZWJ state machine skipped — where the
+per-codepoint sum charges `1 + 0`, so on those inputs the WHOLE-string measure is the larger and
+`truncate()`'s `$visualWidth <= $maxWidth` early return hands an over-wide string straight back.
+Measured at `087a3179`: `truncate(U+1F1E6 U+11A8 U+2764 ZWJ U+1F1F8, 4)` returns **5 cells** for a
+4-cell budget, and 400,000 fuzzed calls over an emoji-heavy alphabet produced **727 over-runs**
+(worst +2) against **0** for the cluster loop that replaced it. So this was an over-run — the failure
+mode this project treats as broken functionality, because the diff renderer paints one line per
+terminal row — and not only a dangling-joiner hazard. It was filed Low on the strength of a bound that
+did not hold.
 
 **Step.** Make the truncation loop iterate graphemes rather than codepoints, so both paths answer the
 same measure. The `visualWidth()` docblock has been softened in-place — it previously claimed the
@@ -2678,8 +2685,16 @@ to the unit before them — anything after a ZWJ, any zero-width codepoint, a sk
 which needs no extension: `grapheme_str_split()` is PHP 8.4+ and this tree is 8.3, and `intl` is not a
 declared dependency of sugar-crush or candy-core, so branching on it would give the truncator two
 behaviours. It is not full UAX #29 and the docblock says so: Hangul syllables and Indic conjuncts are
-still split at codepoint boundaries, which costs the glyph but not a cell (`Width::string()` scores
-those additively either way).
+still split at codepoint boundaries. What that costs is version-dependent, and this stamp now splits
+it the way the shipped `visualWidth()` docblock does — an earlier draft of this paragraph said
+`Width::string()` "scores those additively either way", which is true of 8.3 only and is exactly the
+half the code comment was corrected away from. On **PHP 8.3** — this tree — `Width` splits with
+`mb_str_split()`, one codepoint per cluster, so the whole-string measure IS the per-codepoint sum for
+anything without a ZWJ in it: measured, jamo-spelled `L+V+T` is 4 either way and a Devanagari `kṣi`
+conjunct 4 either way, so the split costs the glyph and not a cell. On **PHP 8.4** `Width` would split
+with `grapheme_str_split()` and score the cluster by its first codepoint: measured against a simulated
+8.4 path, `L+V+T` is **2** whole against **4** summed here, and `kṣi` **1** against **4**. On 8.4 the
+split therefore DOES cost cells — in the over-truncating direction, never the over-running one.
 
 *Corrected figure.* The scout's "at budget 4 the truncator emitted `U+1F468 ZWJ …`" does NOT
 reproduce on the bare family emoji: it is 2 cells whole-string, so `truncate()`'s
