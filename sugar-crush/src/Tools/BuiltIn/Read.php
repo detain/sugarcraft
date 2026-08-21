@@ -8,6 +8,7 @@ use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tools\CarriesSessionState;
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -15,6 +16,8 @@ use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
 {
+    use TruncatesOutput;
+
     private const DEFAULT_MAX_BYTES = 1024 * 1024;
 
     /**
@@ -222,10 +225,35 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
             }
             restore_error_handler();
 
-            // Prepend nested instruction file content if found for this path
+            // Prepended, unlike Grep and Glob, and that difference is the
+            // point rather than drift: there is exactly ONE file here and
+            // exactly one rule set governing it, so position alone says what
+            // the markdown is. In a record stream of `path:line:text` or a
+            // list of paths it would not, which is why those two label it and
+            // put it last.
+            //
+            // BOUNDED, which it was not. $maxBytes is a per-file READ bound —
+            // "how much of the file the model asked for does it get" — and the
+            // instruction body was outside it entirely. MEASURED at this
+            // commit against `ToolOutputBudgetTest`'s fixture: a 7,211-byte
+            // `sub/CLAUDE.md` in front of a 637-byte file, read at a 200-byte
+            // cap, returned 7,428 bytes — 37.1x, of which 200 were the file.
+            // The body now gets its own quarter of $maxBytes with its own
+            // marker; the same call now returns 318 bytes.
+            //
+            // The FILE's share is deliberately NOT reduced to pay for it. A
+            // read that returns less of the file because a sibling CLAUDE.md
+            // exists is a silent content loss against the thing the caller
+            // actually asked for, and the whole failure being fixed here is a
+            // budget spent on the wrong content. So the total is bounded at
+            // $maxBytes plus the instruction reserve rather than at $maxBytes
+            // — a stated 1.25x, replacing an unbounded multiple.
             $nestedContent = $this->instructionLoader?->loadForPath($path);
             if ($nestedContent !== null) {
-                $content = $nestedContent . "\n" . $content;
+                $content = $this->clipInstructions(
+                    $nestedContent,
+                    $this->instructionBudget($this->maxBytes),
+                ) . "\n" . $content;
             }
 
             // Appended, not prepended: the file the model asked for stays the

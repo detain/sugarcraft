@@ -241,18 +241,97 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
 
         $filtered = self::withoutIgnoredHits($run, $rules, $path);
 
+        $merged = $this->mergeCapturedOutput($filtered['run']);
+
+        // The instruction section is budgeted FIRST, exactly as
+        // {@see TruncatesOutput::truncateMerged()} budgets a failing command's
+        // stderr first, and for the mirror-image reason: there the risk is that
+        // the noise pushes the ANSWER off the end, here it is that the rules
+        // push the answer off the end. Reserving a quarter up front means the
+        // hit list keeps three quarters of the cap no matter how large the
+        // governing CLAUDE.md is.
+        //
+        // MEASURED at this commit against the fixture in
+        // `ToolOutputBudgetTest`: a 7,211-byte `sub/CLAUDE.md` over five
+        // matched files returned 7,737 bytes against a 400-byte cap (19.3x)
+        // before this reservation existed, because the bodies were appended
+        // AFTER the clip and so were never inside the budget at all.
+        $reserve = $this->instructionBudget($this->maxOutputBytes);
+
+        // The probe exists to answer ONE question — which hits will still be
+        // in the result once the instruction section has taken its share — and
+        // it is deliberately clipped to the SMALLEST budget the final content
+        // can be given. The final clip is therefore never tighter than this
+        // one, so every path read off the probe is guaranteed to be in what
+        // the model receives. That is what keeps the announce-once mark honest
+        // now that the clip depends on the instructions and the instructions
+        // depend on the clip: the cycle is broken by probing at the floor
+        // rather than by clipping twice and hoping the second cut agrees with
+        // the first.
+        //
         // See Bash::execute() for why the merge's account is what gets clipped
         // rather than the capture's raw byte totals.
-        $content = $this->truncateMerged(
-            $this->mergeCapturedOutput($filtered['run']),
-            $this->maxOutputBytes,
-        );
+        $floor = $this->maxOutputBytes > 0
+            ? max(0, $this->maxOutputBytes - $reserve - 1)
+            : 0;
+        $probe = $this->truncateMerged($merged, $floor);
+
+        $section = '';
+        $hitFiles = [];
+        if ($this->instructionLoader !== null || $this->skillNudge !== null) {
+            $hitFiles = self::hitFiles($probe, $path);
+
+            $instructions = [];
+            foreach ($hitFiles as $file) {
+                $loaded = $this->instructionLoader?->loadForPath($file);
+                if ($loaded !== null) {
+                    $instructions[] = $loaded;
+                }
+            }
+
+            // LABELLED, where Read emits the body raw. Read puts it where
+            // position alone explains it — at the top of the one file being
+            // read. Here it lands after a run of `... [note]` lines at the end
+            // of a record stream, and an unlabelled markdown blob in that
+            // position is indistinguishable from tool output that failed to
+            // parse. Glob labels it the same way, for the same reason and in
+            // the same place: the two tools answer the same shape of question
+            // and used to disagree about where the rules go.
+            if ($instructions !== []) {
+                $label = sprintf(
+                    "... [instructions: %d instruction file(s) govern the matched paths. "
+                    . "Surfaced once per session, so they are shown here and not repeated.]\n",
+                    count($instructions),
+                );
+                // max(1, ...) and not max(0, ...): 0 is this trait's "no cap"
+                // sentinel, so a label that eats the whole reserve would hand
+                // the bodies an UNBOUNDED budget — the exact defect being
+                // fixed, reintroduced by arithmetic.
+                $section = $label . $this->clipInstructionSet(
+                    $instructions,
+                    $reserve > 0 ? max(1, $reserve - strlen($label)) : 0,
+                );
+            }
+        }
+
+        // max($floor, ...) is the guaranteed floor, and it is the property
+        // that actually fixes the reported bug: whatever the instruction
+        // section costs, the answer keeps three quarters of the cap. The
+        // section can exceed its own reserve only at caps small enough that
+        // the label and the marker no longer fit inside a quarter — a fixed
+        // ~210-byte overshoot, not a multiple of the instruction file's size,
+        // which is what it was before.
+        $budget = $this->maxOutputBytes;
+        if ($budget > 0 && $section !== '') {
+            $budget = max($floor, $budget - strlen($section) - 1);
+        }
+        // Identical to the pre-reservation clip whenever no instruction file
+        // governs a hit, which is every call after the first in a session.
+        $content = $budget === $floor ? $probe : $this->truncateMerged($merged, $budget);
 
         $skipped = self::presentExcludedDirs($path, $rules);
         if ($skipped !== []) {
-            if ($content !== '' && !str_ends_with($content, "\n")) {
-                $content .= "\n";
-            }
+            $content = self::separated($content);
             $content .= sprintf(
                 "... [skipped: %s were not searched. Point path inside one to search it.]",
                 implode(', ', $skipped),
@@ -260,9 +339,7 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         }
 
         if ($filtered['hidden'] > 0) {
-            if ($content !== '' && !str_ends_with($content, "\n")) {
-                $content .= "\n";
-            }
+            $content = self::separated($content);
             // Announced for the same reason truncation is: a quietly shortened
             // hit list reads as a complete one, and "that string appears
             // nowhere" is a confident wrong answer when the file holding it was
@@ -274,62 +351,26 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
-        // Announced AFTER the clip, and read off the CLIPPED content rather
-        // than off the raw hit list, so the announce-once budget is only ever
-        // spent on a path the model actually received.
-        //
-        // Appending rather than interleaving is MEASURED, not stylistic. Glob
-        // does the opposite — it prepends each matched file's instruction body
-        // into the list before truncating — and with a 200-byte cap over a
-        // 500-line `sub/CLAUDE.md` the instruction body wins the entire budget
-        // and the FILE LIST, the answer the caller asked for, is what the
-        // truncation marker reports as dropped. Grep would fare worse still: a
-        // hit list is a `path:line:text` record stream, so an injected
-        // markdown body does not merely crowd the answer out, it emits
-        // hundreds of lines that PARSE as hits. Appending after the clip gives
-        // up the cap's exactness over this block and buys back both
-        // properties: the hits always survive, and nothing is marked emitted
-        // that the model never saw. {@see Read} already takes the same
-        // exemption for the same reason.
-        //
-        // Both halves of that trade are recorded rather than left implicit:
-        // Glob's prepend-before-clip defect is E56 and the cap this exemption
-        // gives up is E55, both in docs/plans/crush_code_hardening_backlog.md,
-        // with the byte measurements behind the numbers above.
-        if ($this->instructionLoader !== null || $this->skillNudge !== null) {
-            $hitFiles = self::hitFiles($content, $path);
+        // The two `... [note]` lines above and the nudge below are the ONE
+        // thing still outside the cap, and that is a bounded, deliberate
+        // exemption rather than the unbounded one this reservation replaced.
+        // Each is a single sentence whose length is set by directory names or
+        // skill names, they are the only place the escape hatch appears, and
+        // an escape hatch the budget sacrifices is not a hatch. The
+        // instruction bodies were the unbounded term — a whole markdown file,
+        // and as many of them as there are matched directories.
+        if ($section !== '') {
+            $content = self::separated($content);
+            $content .= $section;
+        }
 
-            $instructions = [];
-            foreach ($hitFiles as $file) {
-                $loaded = $this->instructionLoader?->loadForPath($file);
-                if ($loaded !== null) {
-                    $instructions[] = $loaded;
-                }
-            }
-
-            // LABELLED, where Read and Glob emit the body raw. Those two put it
-            // where position alone explains it — at the top of the one file
-            // being read, or beside the path it belongs to. Here it lands after
-            // a run of `... [note]` lines at the end of a record stream, and an
-            // unlabelled markdown blob in that position is indistinguishable
-            // from tool output that failed to parse.
-            if ($instructions !== []) {
-                $content = self::separated($content);
-                $content .= sprintf(
-                    "... [instructions: %d instruction file(s) govern the matched paths. "
-                    . "Surfaced once per session, so they are shown here and not repeated.]\n",
-                    count($instructions),
-                );
-                $content .= implode("\n", $instructions);
-            }
-
-            $nudge = $this->skillNudge?->forPaths($hitFiles);
+        if ($this->skillNudge !== null) {
+            $nudge = $this->skillNudge->forPaths($hitFiles);
             if ($nudge !== null) {
                 $content = self::separated($content);
                 $content .= $nudge;
             }
         }
-
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: $content,

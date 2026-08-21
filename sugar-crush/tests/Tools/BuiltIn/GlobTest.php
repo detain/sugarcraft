@@ -798,7 +798,15 @@ final class GlobTest extends TestCase
     // Collaborators the recursive rewrite must not have dropped
     // =========================================================================
 
-    public function testNestedInstructionFileContentIsStillPrependedPerMatch(): void
+    /**
+     * RENAMED from `...IsStillPrependedPerMatch`, which described what this
+     * tool used to do: one body inlined before each path it governed, ahead of
+     * the byte clip. That placement is what let a `CLAUDE.md` spend the whole
+     * cap and return zero of the matched paths, so the bodies now arrive once,
+     * labelled, after the list, with their own quarter of the budget. The
+     * assertion is unchanged — the content still has to be there.
+     */
+    public function testNestedInstructionFileContentIsStillSurfacedForAMatch(): void
     {
         file_put_contents($this->root . '/a/AGENTS.md', 'NESTED INSTRUCTION MARKER');
 

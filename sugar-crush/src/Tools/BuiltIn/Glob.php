@@ -136,11 +136,17 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             . 'pruned, gitignored, not followed or clipped.';
 
         // Claimed only by an instance that HAS the loader, because only then
-        // does execute() interleave instruction-file content with the paths --
-        // and a result that is not purely a path list has to say so.
+        // does execute() add an instruction section to the path list -- and a
+        // result that is not purely a path list has to say so.
+        //
+        // "after the list", not "above that path": the bodies used to be
+        // interleaved one before each path they governed, which is what let
+        // them spend the byte cap the paths needed. They are now one labelled
+        // section at the end, with its own share of the budget.
         if ($this->instructionLoader !== null) {
             $lead .= ' A CLAUDE.md/AGENTS.md governing a matched file\'s directory is '
-                . 'surfaced above that path the first time the directory is touched.';
+                . 'surfaced once, in a labelled section after the list, the first time '
+                . 'the directory is touched.';
         }
 
         $pruned = $this->prunedDirNames();
@@ -341,13 +347,25 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         }
         $files = $this->withinRoot($found['files']);
 
-        // Prepend nested instruction file content for each matched file
+        // The LIST first, on its own, with nothing interleaved into it.
+        //
+        // The bodies used to be prepended into this loop, one before each path
+        // it governed, and then the whole thing was clipped — so the rules
+        // were inside the budget and the paths were what the clip spent it on.
+        // MEASURED at this commit against the fixture in `ToolOutputBudgetTest`:
+        // a 7,211-byte `sub/CLAUDE.md` over five matched `.php` files returned
+        // 195 bytes against a 200-byte cap containing the `BIG-RULE` heading, a
+        // truncation marker, and ZERO of the five paths. The tool was asked
+        // which files match and answered with a rule book.
+        //
+        // Grep had the opposite defect at the same commit — it appended the
+        // bodies AFTER its clip, so the hits survived but the cap did not (400
+        // -> 7,737 bytes). The two tools answer the same shape of question and
+        // now compose the same way: results, then notes, then a LABELLED
+        // instruction section that has its own quarter of the budget and its
+        // own marker.
         $output = '';
         foreach ($files as $file) {
-            $nestedContent = $this->instructionLoader?->loadForPath($file);
-            if ($nestedContent !== null) {
-                $output .= $nestedContent . "\n";
-            }
             $output .= $file . "\n";
         }
 
@@ -359,9 +377,60 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
-        // Clip before the nudge so the nudge is not what gets cut off: it is
-        // the shortest and most actionable part of the result.
-        $output = $this->truncateOutput($output, $this->maxOutputBytes);
+        $reserve = $this->instructionBudget($this->maxOutputBytes);
+
+        // Probed at the FLOOR — the smallest budget the final list can be
+        // given — so every path whose instruction file is loaded below is
+        // guaranteed to still be in the result. Loading against the FULL list
+        // is what this replaces, and that was a second announce-once leak in
+        // its own right: a `**/*.php` over a large tree retired the
+        // `CLAUDE.md` of every matched directory for the whole session while
+        // showing the model only the handful of paths that fit the cap.
+        // {@see Grep::execute()} takes the same probe for the same reason.
+        $floor = $this->maxOutputBytes > 0
+            ? max(0, $this->maxOutputBytes - $reserve - 1)
+            : 0;
+        $probe = $this->truncateOutput($output, $floor);
+        $shown = self::pathsIn($probe, $files);
+
+        $section = '';
+        $instructions = [];
+        foreach ($shown as $file) {
+            $loaded = $this->instructionLoader?->loadForPath($file);
+            if ($loaded !== null) {
+                $instructions[] = $loaded;
+            }
+        }
+        if ($instructions !== []) {
+            $label = sprintf(
+                "... [instructions: %d instruction file(s) govern the matched paths. "
+                . "Surfaced once per session, so they are shown here and not repeated.]\n",
+                count($instructions),
+            );
+            // max(1, ...) and not max(0, ...): 0 is this trait's "no cap"
+            // sentinel, so a label that eats the whole reserve would hand the
+            // bodies an UNBOUNDED budget — the exact defect being fixed,
+            // reintroduced by arithmetic.
+            $section = $label . $this->clipInstructionSet(
+                $instructions,
+                $reserve > 0 ? max(1, $reserve - strlen($label)) : 0,
+            );
+        }
+
+        // max($floor, ...) is the guaranteed floor, and it is the property
+        // that actually fixes the reported bug: whatever the instruction
+        // section costs, the answer keeps three quarters of the cap. The
+        // section can exceed its own reserve only at caps small enough that
+        // the label and the marker no longer fit inside a quarter — a fixed
+        // ~210-byte overshoot, not a multiple of the instruction file's size,
+        // which is what it was before.
+        $budget = $this->maxOutputBytes;
+        if ($budget > 0 && $section !== '') {
+            $budget = max($floor, $budget - strlen($section) - 1);
+        }
+        // Clip before the notes and the nudge so those are not what gets cut
+        // off: they are the shortest and most actionable part of the result.
+        $output = $budget === $floor ? $probe : $this->truncateOutput($output, $budget);
 
         // The pruning has to announce itself for the same reason the byte cap
         // and the match cap do: a silently shortened list reads as a complete
@@ -411,6 +480,24 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
+        // After the notes, like Grep: the notes are one line each and are the
+        // only place the escape hatch appears, so they go where the budget
+        // cannot reach them. The instruction section is bounded by its own
+        // reserve, subtracted from the list's budget above, so putting it last
+        // costs the cap nothing.
+        if ($section !== '') {
+            $output = self::separated($output);
+            $output .= $section;
+        }
+
+        // Scoped to every MATCHED path, not to $shown. Deliberate, and the one
+        // place this tool does not follow the announce-once doctrine above:
+        // {@see \SugarCraft\Crush\Skills\SkillPathNudge::forPaths()} answers
+        // "does a skill claim this area of the tree", which the clip does not
+        // change the truth of, and the nudge names the SKILL rather than the
+        // path — so a nudge earned by a path the cap dropped is still a true
+        // and actionable statement, where an instruction body shown for an
+        // unseen path is neither.
         $nudge = $this->skillNudge?->forPaths($files);
         if ($nudge !== null) {
             $output .= "\n" . $nudge;
@@ -676,6 +763,29 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         } finally {
             restore_error_handler();
         }
+    }
+
+    /**
+     * Which of $candidates survived a clip of the one-path-per-line list.
+     *
+     * A membership test over the clipped text's LINES rather than a
+     * `str_contains()` over the whole blob: a path is a prefix of every path
+     * below it, so `<root>/a` would count itself present whenever `<root>/a/b`
+     * survived, and the instruction file of a directory the model never saw
+     * would be spent on its behalf.
+     *
+     * @param list<string> $candidates
+     * @return list<string>
+     */
+    private static function pathsIn(string $clipped, array $candidates): array
+    {
+        if ($clipped === '' || $candidates === []) {
+            return [];
+        }
+
+        $lines = array_flip(explode("\n", $clipped));
+
+        return array_values(array_filter($candidates, static fn (string $p): bool => isset($lines[$p])));
     }
 
     /**

@@ -8,6 +8,7 @@ use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PathJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -38,6 +39,7 @@ use SugarCraft\Crush\Tools\ToolResult;
 final readonly class Write implements Tool
 {
     use BuildsUnifiedDiff;
+    use TruncatesOutput;
 
     /**
      * $skillNudge/$instructionLoader mirror {@see Edit}'s wiring: writing into a
@@ -188,8 +190,16 @@ final readonly class Write implements Tool
             : '';
 
         $message = ($exists ? 'File overwritten: ' : 'File created: ') . $path;
+        // Bounded by the standalone default rather than by a fraction of a
+        // cap, because this tool has no output cap to take a fraction OF: its
+        // result is one line ("File updated: <path>"), so nothing here was
+        // ever going to need one. The instruction body was the whole of the
+        // unbounded term — a `CLAUDE.md` of any size, prepended verbatim into
+        // every write result for a governed path, replayed into every
+        // following request of the turn.
         if ($nestedContent !== null) {
-            $message = $nestedContent . "\n\n" . $message;
+            $message = $this->clipInstructions($nestedContent, self::DEFAULT_MAX_INSTRUCTION_BYTES)
+                . "\n\n" . $message;
         }
 
         // Fired only after the write landed -- a rejected or failed write did

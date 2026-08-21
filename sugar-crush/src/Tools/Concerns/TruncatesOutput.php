@@ -27,6 +27,22 @@ namespace SugarCraft\Crush\Tools\Concerns;
  * Mirrors the existing {@see \SugarCraft\Crush\Tools\BuiltIn\Read} cap, which
  * has always bounded single-file reads; this generalises the same rule to the
  * tools that can produce far more than one file's worth of text.
+ *
+ * A cap also has to bound the RIGHT text. Five tools compose a result out of
+ * two things — the answer, and the instruction-file body governing the paths
+ * the answer names — and the second is not something the caller asked for or
+ * can predict the size of. Left to share one budget it wins, because it is a
+ * whole markdown file and the answer is a list of lines: measured at a
+ * 200-byte cap, {@see \SugarCraft\Crush\Tools\BuiltIn\Glob} returned the rule
+ * book and none of the five paths it had matched. Left OUTSIDE the budget it
+ * is worse, because then there is no bound at all:
+ * {@see \SugarCraft\Crush\Tools\BuiltIn\Grep} returned 19.3x its cap and
+ * {@see \SugarCraft\Crush\Tools\BuiltIn\Read} 37.1x.
+ *
+ * So {@see instructionBudget()} splits the cap instead, and the split is what
+ * makes both failures unreachable: the instruction section can spend at most a
+ * quarter, the answer keeps at least three quarters, and whichever section is
+ * cut says so in its own words — see {@see instructionTruncationMarker()}.
  */
 trait TruncatesOutput
 {
@@ -185,6 +201,171 @@ trait TruncatesOutput
         return sprintf(
             '... [truncated: %d of %d bytes omitted. This result is PARTIAL, not the complete answer '
             . '— narrow the query (a more specific pattern, a deeper path, or a filter) to see the rest.]',
+            $droppedBytes,
+            $totalBytes,
+        );
+    }
+
+    /**
+     * The instruction bound for a tool that has NO output cap to take a
+     * fraction of.
+     *
+     * 16 KiB — a quarter of {@see DEFAULT_MAX_OUTPUT_BYTES}, so the two agree
+     * rather than one silently contradicting the other.
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Edit} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Write} are the callers: their
+     * own result is one line ("File updated: <path>"), so a cap on it would
+     * bound nothing, but the instruction body they prepend to it is a whole
+     * markdown file replayed into every following request of the turn.
+     */
+    private const DEFAULT_MAX_INSTRUCTION_BYTES = 16384;
+
+    /**
+     * The share of a tool's output budget that instruction-file text may take.
+     *
+     * A QUARTER, so three quarters of the cap is a FLOOR under the results —
+     * which is the property that actually fixes the reported bug. The bug was
+     * never "the instructions are too long"; it was that a tool asked "which
+     * files match" answered with a rule book and none of the matches. A cap
+     * split by a fixed fraction cannot produce that outcome at any input size:
+     * the instruction section can only ever spend its own quarter, and the
+     * answer keeps the rest whether or not the quarter is used.
+     *
+     * A fraction rather than a separate setting because the two numbers are
+     * not independently meaningful. `maxOutputBytes` is already the statement
+     * of "how much of the context window one tool result may occupy"; a second
+     * absolute byte setting beside it can be configured into exactly the
+     * starvation this method exists to prevent (set it to the cap and the
+     * floor is zero). Deriving it means the floor holds for every value of the
+     * cap, including the ones a caller invents.
+     *
+     * Mirrors the tail reservation in {@see truncateMerged()}, which caps
+     * stderr's share at a half for the same reason in the other direction.
+     *
+     * A non-positive cap means "no cap" throughout this trait, and returns 0
+     * here to say the same thing.
+     */
+    private function instructionBudget(int $maxOutputBytes): int
+    {
+        return $maxOutputBytes > 0 ? intdiv($maxOutputBytes, 4) : 0;
+    }
+
+    /**
+     * The most of an instruction file's FIRST line that survives a budget too
+     * small to hold anything else.
+     *
+     * A rule reduced to nothing but a truncation marker names no subject: the
+     * model is told some rules exist and cannot tell which. The first line of
+     * a `CLAUDE.md` is its heading in practice, so keeping it is the
+     * difference between "instructions were withheld" and "the section on X
+     * was withheld". Bounded because a first line is not guaranteed to be
+     * short — a minified or single-line file has exactly one.
+     */
+    private const INSTRUCTION_HEAD_BYTES = 120;
+
+    /**
+     * Bound one instruction-file body to $budget, announcing what was cut.
+     *
+     * $budget <= 0 disables the bound, matching {@see truncateOutput()}. A
+     * caller that has a reserve but no room left in it must therefore pass 1,
+     * not 0 — passing the arithmetic straight through is how the first cut of
+     * this change silently disabled the very bound it added.
+     */
+    private function clipInstructions(string $text, int $budget): string
+    {
+        if ($budget <= 0 || strlen($text) <= $budget) {
+            return $text;
+        }
+
+        $total = strlen($text);
+        // Sized with $total in both slots for the reason truncateMerged() does
+        // it: the marker is part of what the model receives, so a budget that
+        // excludes it is not the bound it claims to be, and the dropped count
+        // can never exceed the total.
+        $room = $budget - (strlen($this->instructionTruncationMarker($total, $total)) + 1);
+        $clip = self::clipToLine($text, max(0, $room), false);
+
+        if ($clip['dropped'] <= 0) {
+            return $clip['kept'];
+        }
+
+        $kept = $clip['kept'];
+        if ($kept === '') {
+            $firstLine = strstr($text, "\n", true);
+            $kept = substr($firstLine === false ? $text : $firstLine, 0, self::INSTRUCTION_HEAD_BYTES);
+        }
+
+        return $kept === ''
+            ? $this->instructionTruncationMarker($total, $total)
+            : $kept . "\n" . $this->instructionTruncationMarker($total - strlen($kept), $total);
+    }
+
+    /**
+     * Bound a whole SET of instruction bodies to $budget.
+     *
+     * Every body gets a share, and that is deliberate rather than tidy.
+     * {@see \SugarCraft\Crush\Context\InstructionFileLoader::loadForPath()}
+     * marks a file emitted AT LOAD TIME, so a body loaded and then dropped
+     * whole is an instruction file retired for the rest of the session without
+     * ever having been shown — the precise failure
+     * `GrepInstructionWiringTest::testTheAnnounceOnceMarkIsSpentOnlyOnWhatTheModelReceived()`
+     * exists to prevent. Clipping each body instead keeps every governing file
+     * present, with its own marker saying it is partial.
+     *
+     * The shares are handed out sequentially against what is LEFT rather than
+     * as a fixed 1/n slice, so short bodies (the common case — a nested
+     * `CLAUDE.md` is usually a few lines) leave their unused room to the
+     * bodies after them instead of stranding it.
+     *
+     * @param list<string> $bodies
+     */
+    private function clipInstructionSet(array $bodies, int $budget): string
+    {
+        if ($bodies === []) {
+            return '';
+        }
+        if ($budget <= 0) {
+            return implode("\n", $bodies);
+        }
+
+        $remaining = $budget;
+        $count = count($bodies);
+        $kept = [];
+
+        foreach ($bodies as $i => $body) {
+            $share = intdiv($remaining, $count - $i);
+            $clipped = $this->clipInstructions($body, $share);
+            $kept[] = $clipped;
+            // +1 for the newline implode() will put back between the parts.
+            $remaining = max(0, $remaining - strlen($clipped) - 1);
+        }
+
+        return implode("\n", $kept);
+    }
+
+    /**
+     * A DIFFERENT wording from {@see truncationMarker()}, on purpose.
+     *
+     * "Narrow the query to see the rest" is the right advice about a clipped
+     * result and the wrong advice about a clipped rule: no pattern the model
+     * can write will make a project's instruction file shorter, and a rule
+     * read halfway is a rule the model may believe it has followed. What it
+     * needs to know is that the text is PARTIAL, in the same word the other
+     * markers use.
+     *
+     * SHORT, where {@see truncationMarker()} is discursive, and that is a
+     * measured constraint rather than a stylistic one. This marker is charged
+     * against a QUARTER of the cap, so it competes with the very text it
+     * describes: at the trait's default cap the difference is noise, but a
+     * caller that passes a few hundred bytes gets a reserve of a few dozen,
+     * and a marker longer than its own budget crowds out every line of the
+     * rule it was written to annotate. A marker that cannot fit inside the
+     * budget it announces is not a marker, it is the truncation.
+     */
+    private function instructionTruncationMarker(int $droppedBytes, int $totalBytes): string
+    {
+        return sprintf(
+            '... [instructions truncated: %d of %d bytes omitted; these project rules are PARTIAL.]',
             $droppedBytes,
             $totalBytes,
         );

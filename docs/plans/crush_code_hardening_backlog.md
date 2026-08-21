@@ -2925,6 +2925,57 @@ Reproduces exactly as written; no correction.
 
 ---
 
+### ROUND 37 `lsp` — FIXED. E55, E56 and the same exemption in `Read`, `Edit` and `Write`
+
+One fix, as the scout judged. The cap is now **split**: an instruction section may take at most a
+QUARTER of `maxOutputBytes` (`TruncatesOutput::instructionBudget()`), so the answer keeps three
+quarters as a guaranteed floor, and the two sections carry different markers — a clipped rule says
+`these project rules are PARTIAL`, because "narrow the query to see the rest" is advice no pattern the
+model can write will act on.
+
+Measured by running the tools, at `4a4ecb98` and again after, over one fixture — a 7,211-byte
+`sub/CLAUDE.md` and five matched `sub/*.php`:
+
+| tool | cap | before | after |
+| --- | --- | --- | --- |
+| `Grep` | 400 | 7,737 B (19.3×), 5 hits | 498 B (1.2×), 1 hit |
+| `Glob` | 200 | 195 B, **0 of 5 paths** | 200 B, 0 of 5 paths (the base marker, not the rules — the list alone is 225 B) |
+| `Glob` | 400 | 375 B, **0 of 5 paths** | 462 B (1.2×), **5 of 5 paths** |
+| `Read` | 200 | 7,428 B (37.1×) | 318 B (1.6×) |
+| `Read` | 400 | 7,628 B (19.1×) | 517 B (1.3×) |
+
+At a realistic cap the split lands where it is designed to: on the same fixture, cap 8,000 returns
+2,332 B of which the instruction section is 1,978 B against its 2,000-byte quarter (cap 2,000 → 832 B,
+section 478 B against a 500-byte quarter). With no instruction file to surface
+the result is byte-identical to the same tool built with no loader at all, so the reserve costs nothing
+on the calls (almost all of them, under announce-once) that have nothing to put in it.
+
+Two further findings from the sweep, both fixed here:
+
+- **`Read`, `Edit` and `Write` carried the same exemption.** `Read`'s `$maxBytes` is a per-file READ
+  bound, so the file's share is deliberately not reduced to pay for the rules: the total is bounded at
+  1.25× rather than at 1×, replacing an unbounded multiple. `Edit`/`Write` have no output cap to take a
+  fraction of — their result is one line — so the body is bounded by a standalone 16 KiB default.
+- **`Glob` spent the announce-once mark on paths it never showed.** It loaded one instruction file per
+  matched path *before* truncating, so a `**/*.php` over a large tree retired every matched directory's
+  `CLAUDE.md` for the whole session while showing the model only the paths that fit. It now probes at
+  the result floor first and loads only for paths that survive — the doctrine `Grep` already followed.
+
+Residual, stated rather than hidden: the `... [skipped: …]`, `... [gitignored: …]`, `... [pruned: …]`,
+`... [symlinks: …]` notes and the skill nudge remain outside the cap. Each is one sentence sized by
+directory or skill names, and each is the only place its escape hatch appears — an escape hatch the
+budget sacrifices is not a hatch. Below a cap of roughly 700 bytes the instruction label and marker no
+longer fit inside a quarter and the section overruns its reserve by a fixed ~210 bytes; the result
+floor still holds, because the result budget is `max(floor, cap - section)`.
+
+Tests: `sugar-crush/tests/Tools/ToolOutputBudgetTest.php` (13 tests, 59 assertions), fixtures
+adversarial in both directions at once. Three stale claims corrected while here:
+`GrepInstructionWiringTest`'s docblock contrasting itself with a prepending `Glob`,
+`GlobTest::testNestedInstructionFileContentIsStillPrependedPerMatch`'s name, and `Glob::description()`'s
+promise that a governing file is "surfaced above that path".
+
+---
+
 ## E60 — a hook's non-DENY output is still unbounded prompt text (recorded, not fixed)
 
 **Found by round 37's `cmd` reviewer on the timeout work; fixed only where it was measured.**

@@ -131,11 +131,19 @@ final class GrepInstructionWiringTest extends TestCase
     // =========================================================================
 
     /**
-     * MEASURED against `Glob`, which prepends instruction bodies BEFORE its
-     * clip: with a 200-byte cap and a 500-line `sub/CLAUDE.md`, the body wins
-     * the whole budget and the file list — the answer — is what the truncation
-     * marker reports as dropped. Grep appends after the clip instead, so the
-     * hits survive an oversize instruction file.
+     * THE DOCBLOCK THIS REPLACES WAS TRUE WHEN WRITTEN AND IS NOT NOW. It said
+     * Grep "appends after the clip instead", contrasted with a `Glob` that
+     * "prepends instruction bodies BEFORE its clip", and cited a 200-byte cap
+     * over a 500-line `sub/CLAUDE.md`. Both tools have since been given a
+     * split budget — the instruction section takes at most a quarter, the
+     * answer keeps the rest — so neither the contrast nor the mechanism it
+     * named survives, even though this test's assertions are unchanged and
+     * still pass.
+     *
+     * What it pins now is the outcome rather than the mechanism: an
+     * instruction file an order of magnitude larger than the cap does not cost
+     * the hit list its answer. `ToolOutputBudgetTest` measures the budget
+     * itself, in both tools, at several caps.
      */
     public function testAnOversizeInstructionFileDoesNotDisplaceTheHits(): void
     {
