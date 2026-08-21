@@ -53,23 +53,33 @@ final class AgentViewPane
      * rounded border adds a column on each side and `padding(0, 1)` one more
      * on each side, so a finished row is `$width + CHROME_WIDTH` cells
      * WHENEVER THE ROW BODY FITS `$width`. State the domain rather than call
-     * it an invariant: with an ASCII operation the `+4` holds at
-     * `$width` = 20, 28, 30, 40, 43, 44, 58, 60, 80 and 98, populated list and
-     * empty placeholder alike, but an ASCII operation is precisely the case
-     * that always fits.
+     * it an invariant, even though {@see render()} now makes the body fit by
+     * construction: the domain is the thing that is actually true of the
+     * arithmetic, and the construction is a separate claim that can be broken
+     * by a future edit without this comment noticing.
      *
-     * What can break it is {@see render()}'s
-     * `$opBudget = max(5, $width - Width::string($name) - 60)`. The floor of 5
-     * binds below roughly 69 content columns for a 3-cell name, so
-     * `leftSection` plus `rightSection` can exceed `$width`; `Style::width()`
-     * then wraps a body whose 2-cell clusters do not land on the boundary, and
-     * the row comes back `$width + 6`. Measured with a skin-toned thumb or a
-     * flag in the operation, that is 6 of those 10 widths -- 20, 28, 30, 40,
-     * 43 and 44 -- with the excess exactly +2 and gone from 46 up. It is
-     * byte-for-byte the same at 087a3179, so it is this pane's pre-existing
-     * floor policy and not the chrome arithmetic; it is recorded as E64 and
-     * the shell renderer's `clipWidth()` is still what keeps it off the
-     * screen.
+     * What used to break it, and what the clamp in `render()` exists for, was
+     * `$opBudget = max(5, $width - Width::string($name) - 60)`. That floor of
+     * 5 is unconditional, so `leftSection` plus `rightSection` could exceed
+     * `$width`; the body no longer fitted the box `Style::width()` was sizing,
+     * and where the cut fell inside a 2-cell cluster the row came back wider
+     * than the box's own border. Measured with a 3-cell name and a skin-toned
+     * thumb or a flag in the operation, that was 6 of the 10 widths above --
+     * 20, 28, 30, 40, 43 and 44 -- and over a 20..140 sweep every width from
+     * 20 to 45 inclusive (excess +2 through 44, +1 at 45). It was
+     * byte-for-byte the same at 087a3179, so it was this pane's pre-existing
+     * floor policy and not the chrome arithmetic; it is recorded as E64.
+     *
+     * The floor itself is untouched, deliberately: `$opBudget` is still the
+     * same estimate, so every width where it already fitted renders exactly as
+     * before. What changed is that the composed label is clamped to the cells
+     * actually left after the metrics, and the metrics degrade (usage first,
+     * then elapsed) rather than being clipped mid-token.
+     *
+     * `clipWidth()` in the shell renderer remains the backstop, for the case
+     * {@see contentWidth()} documents: a terminal narrower than
+     * `$minimum + CHROME_WIDTH` still gets rows wider than itself, because the
+     * floor there is the CALLER's and nothing in this class can see it.
      *
      * It exists as a named constant because the two callers each used to
      * write their own literal for it and one of them wrote the wrong one:
@@ -132,6 +142,14 @@ final class AgentViewPane
         // ── Column-budget layout ─────────────────────────────────────────────
         // Right-side fixed columns (estimated; shrinks gracefully on narrow terms):
         //   sep(2) + elapsed(~7) + sep(2) + usage(~15)
+        //
+        // Kept, unread, as the written-down form of an estimate the loop below
+        // still charges for: this same ~26 is the bulk of the `60` in
+        // `$opBudget`, which is why that number is what it is. Nothing reads
+        // it because the loop measures `Width::string($rightSection)` for real
+        // now -- an estimate cannot be the thing a budget is enforced against
+        // (E64) -- but deleting it would take the derivation of the 60 with
+        // it, and the 60 is deliberately unchanged.
         $fixedRight = 26;
 
         $rows = [];
@@ -149,6 +167,26 @@ final class AgentViewPane
             // Right-side (elapsed + usage).
             $rightSection = $agent->elapsedDisplay() . '  ' . $agent->usageDisplay();
 
+            // Cells the IDENTITY costs, operation excluded:
+            //   dot(1) + ' '(1) + name + ' ['(2) + status + ']  '(3).
+            $identityWidth = 7 + Width::string($name) + Width::string($agent->status);
+
+            // Below `identity + metrics` columns the row cannot show both, and
+            // the metrics are what gives: a row that cannot say WHICH agent it
+            // is has nothing left to say, while elapsed-without-usage is still
+            // a whole reading. Degrade in two steps rather than cutting the
+            // metrics mid-number -- `1,234 tok | $0.00` clipped to fit reads as
+            // a smaller cost, not as a truncated one.
+            if ($identityWidth + Width::string($rightSection) > $width) {
+                $rightSection = $agent->elapsedDisplay();
+
+                if ($identityWidth + Width::string($rightSection) > $width) {
+                    $rightSection = '';
+                }
+            }
+
+            $rightWidth = Width::string($rightSection);
+
             // Truncate operation to fill remaining space.
             // name(~12) + dot(2) + sep(2) + status_bracket(~14) + sep(2) + right(~26)
             //
@@ -158,11 +196,41 @@ final class AgentViewPane
             // an identically-wide ASCII name -- "abc" got 17 columns while
             // "abc" with an acute accent on the a got 16, for the same three
             // cells on screen.
+            //
+            // This is an ESTIMATE and always was -- the 60 is the comment above
+            // added up and rounded, and the floor of 5 is a wish that a narrow
+            // pane still shows some operation text. Neither is measured against
+            // what this particular row actually has left, which is what the
+            // clamp below is for; the estimate is kept as-is so that every
+            // width where it already fitted renders byte-for-byte as before.
             $opBudget = max(5, $width - Width::string($name) - 60);
             $operation = self::truncate($agent->operation, $opBudget);
 
-            // Left section: dot + name + status + operation.
-            $leftSection = "{$dot} {$name} [{$agent->status}]  {$operation}";
+            // Left section: dot + name + status + operation, clamped to the
+            // cells actually left after the metrics.
+            //
+            // The clamp is the fix for E64. `$opBudget`'s floor of 5 is
+            // unconditional, so on a narrow pane the composed left section plus
+            // the right section could add up to more than `$width` -- 17 cells
+            // of identity plus a 5-cell operation plus 24 cells of metrics does
+            // not fit 20 columns, and no amount of padding arithmetic below
+            // claws that back. `Style::width()` then had to deal with a body
+            // longer than the box it was sizing, and where the cut fell inside
+            // a 2-cell cluster the finished row came back WIDER than the box's
+            // own border: `render(.., 20, ..)` returned a 24-cell frame around
+            // a 26-cell row. Only the shell renderer's `clipWidth()` kept that
+            // off the screen.
+            //
+            // Clamping the label (everything after the styled dot -- it is
+            // plain text, so `truncate()` cannot cut an SGR sequence in half)
+            // to `$width - $rightWidth - 1` makes the body fit by construction,
+            // and the wrap that produced the over-run never happens.
+            $label = self::truncate(
+                " {$name} [{$agent->status}]  {$operation}",
+                max(0, $width - $rightWidth - 1),
+            );
+
+            $leftSection = $dot . $label;
 
             if ($isSelected) {
                 // Inverted highlight — dark background, status-colour foreground.
@@ -192,9 +260,12 @@ final class AgentViewPane
             //    Width::string() strips ANSI before measuring, so the pad is
             //    computed against what the terminal actually shows.
             //
-            // padRight() is a no-op once the section already meets the width,
-            // so this cannot widen a row past its budget.
-            $leftPadded = Width::padRight($leftSection, $width - Width::string($rightSection) - 1);
+            // padRight() is a no-op once the section already meets the width.
+            // That is NOT the same as "this cannot widen a row past its
+            // budget", which is what this comment used to claim: padRight
+            // cannot widen the row, but it cannot narrow it either, and until
+            // the clamp above existed nothing did (E64).
+            $leftPadded = Width::padRight($leftSection, $width - $rightWidth - 1);
 
             $rows[] = $rowStyle->render($leftPadded)
                 . $rightStyle->render($rightSection);

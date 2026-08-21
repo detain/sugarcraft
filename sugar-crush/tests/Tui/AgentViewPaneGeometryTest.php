@@ -250,36 +250,39 @@ final class AgentViewPaneGeometryTest extends TestCase
     }
 
     /**
-     * The same sweep with a wide-cluster operation, which is where the `+4`
-     * stops being an invariant — pinned at the bound it actually has.
+     * The same sweep with a wide-cluster operation — the case that used to
+     * break the `+4`, inverted now that E64 is fixed.
      *
      * The sweep above ran an ASCII fixture over these widths and came back
      * `+4` at every one, and an ASCII fixture over an ASCII-shaped property is
      * the trap this file was written to avoid elsewhere. Swap in a skin-toned
-     * thumb or a flag and 6 of the 10 widths break it.
+     * thumb or a flag and 6 of the 10 widths used to break it: `render()`
+     * returned `$w + 6` at 20/28/30/40/43/44 (26/34/36/46/49/50 against
+     * 24/32/34/44/47/48 due) and `$w + 4` at 58/60/80/98. Those six numbers
+     * are kept below as `$beforeE64` and asserted to be GONE, so the fix
+     * cannot be silently reverted into a test that only says "+4".
      *
-     * The cause is `render()`'s `$opBudget = max(5, $width - name - 60)`. With
-     * a 3-cell name the floor of 5 binds below 69 content columns, so
-     * `leftSection` plus `rightSection` can exceed `$width`; `Style::width()`
-     * then wraps a body whose 2-cell clusters do not land on the boundary and
-     * the wrapped row measures `$width + 6` instead of `$width + 4`. Measured,
-     * the excess is exactly +2 and it is gone from 46 columns up.
+     * The cause was `render()`'s `$opBudget = max(5, $width - name - 60)`.
+     * With a 3-cell name the floor of 5 binds below 69 content columns, so
+     * `leftSection` plus `rightSection` exceeded `$width` and the body no
+     * longer fitted the box `Style::width()` was sizing; where the cut fell
+     * inside a 2-cell cluster the finished row came back wider than the box's
+     * own border. `render()` now clamps the label to the cells actually left
+     * after the metrics, so the body fits by construction.
      *
-     * This is PRE-EXISTING and not a regression of the CHROME_WIDTH work:
-     * running the same sweep against `087a3179`'s AgentViewPane gives the same
-     * ten numbers. It is recorded as **E64**, `clipWidth(clipTail(...))` is
-     * still what keeps it off the screen, and this test exists so that a fix
-     * to E64 — or a drift in the floor — is visible rather than silent.
+     * The over-run was PRE-EXISTING, not a regression of the CHROME_WIDTH
+     * work: running the old sweep against `087a3179`'s AgentViewPane gave the
+     * same ten numbers.
      */
-    public function testAWideClusterOperationOverrunsTheChromeGeometryAtTheOperationFloor(): void
+    public function testAWideClusterOperationNoLongerOverrunsTheChromeGeometryAtTheOperationFloor(): void
     {
-        // Content width => measured widest row. +6 where the operation floor
-        // lets the body outgrow the box, +4 (i.e. CHROME_WIDTH) above it.
-        $expected = [
+        // Content width => the widest row this used to produce. +6 where the
+        // operation floor let the body outgrow the box, +4 above it.
+        $beforeE64 = [
             20 => 26, 28 => 34, 30 => 36, 40 => 46, 43 => 49,
             44 => 50, 58 => 62, 60 => 64, 80 => 84, 98 => 102,
         ];
-        $this->assertSame(self::WIDTHS, array_keys($expected), 'the sweep and the expectation map must agree');
+        $this->assertSame(self::WIDTHS, array_keys($beforeE64), 'the sweep and the historical map must agree');
 
         foreach ([self::THUMB, self::FLAG] as $label => $payload) {
             foreach (self::WIDTHS as $width) {
@@ -288,19 +291,91 @@ final class AgentViewPaneGeometryTest extends TestCase
                 $widest = max(array_map(static fn(string $row): int => Width::string($row), $rows));
 
                 $this->assertSame(
-                    $expected[$width],
+                    $width + AgentViewPane::CHROME_WIDTH,
                     $widest,
                     sprintf('payload #%d at content width %d: widest row was %d', $label, $width, $widest),
                 );
-                // Whatever the wrap does, it never costs more than one wide
-                // cluster on top of the chrome.
-                $this->assertLessThanOrEqual(
-                    $width + AgentViewPane::CHROME_WIDTH + 2,
+
+                if ($beforeE64[$width] !== $width + AgentViewPane::CHROME_WIDTH) {
+                    $this->assertNotSame(
+                        $beforeE64[$width],
+                        $widest,
+                        sprintf('payload #%d at content width %d is back to its E64 over-run', $label, $width),
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * The bound stated over the whole range rather than over ten chosen
+     * widths, because "ten chosen widths" is how E54's `+4` came to be written
+     * up as an invariant in the first place.
+     *
+     * 20 through 140 is the range the E64 sweep was measured over. What that
+     * sweep found before the fix: the wide-cluster payloads over-ran at every
+     * width from 20 to 45 inclusive — 26 of the 121, not the 6 the ten-width
+     * table showed — and the excess was NOT always +2 either: it is +2 from 20
+     * to 44 and +1 at 45.
+     */
+    public function testEveryContentWidthFrom20To140IsExactlyChromeWidthWiderThanItsBox(): void
+    {
+        $payloads = [
+            'thumb' => str_repeat(self::THUMB, 3),
+            'flag'  => str_repeat(self::FLAG, 3),
+            'ascii' => 'ascii operation here',
+            'family' => str_repeat(self::FAMILY, 3),
+        ];
+
+        foreach ($payloads as $name => $payload) {
+            for ($width = 20; $width <= 140; $width++) {
+                $agent = AgentDisplayState::new('abc', 'working', $payload, 42, 1234, 0.0042);
+                $rows = explode("\n", AgentViewPane::render([$agent], 0, $width, 6, self::theme()));
+                $widest = max(array_map(static fn(string $row): int => Width::string($row), $rows));
+
+                $this->assertSame(
+                    $width + AgentViewPane::CHROME_WIDTH,
                     $widest,
-                    sprintf('payload #%d at content width %d over-ran by more than one wide cluster', $label, $width),
+                    sprintf('%s payload at content width %d: widest row was %d', $name, $width, $widest),
                 );
             }
         }
+    }
+
+    /**
+     * What the clamp actually costs at the narrow end, spelled out rather than
+     * left to "it fits now".
+     *
+     * 20 content columns cannot hold `● abc [working]` (15 cells), a 5-cell
+     * operation and 24 cells of `42s  1,234 tok | $0.0042`. Something has to
+     * give, and the choice is that the METRICS give first: a row that cannot
+     * say which agent it is has nothing left to say, while elapsed without
+     * usage is still a whole reading. Below even that, the label itself is
+     * truncated.
+     */
+    public function testTheNarrowPaneDropsTheUsageColumnBeforeTheAgentsIdentity(): void
+    {
+        $agent = AgentDisplayState::new('abc', 'working', 'compiling', 42, 1234, 0.0042);
+
+        $body = static function (int $width) use ($agent): string {
+            $rows = explode("\n", AgentViewPane::render([$agent], 0, $width, 6, self::theme()));
+
+            return trim(self::plain($rows[1]), "\u{2502} ");
+        };
+
+        // Wide: everything is there.
+        $this->assertStringContainsString('1,234 tok | $0.0042', $body(80));
+        $this->assertStringContainsString('compiling', $body(80));
+
+        // 40 columns: usage will not fit beside the identity, elapsed still does.
+        $this->assertStringNotContainsString('tok', $body(40));
+        $this->assertStringContainsString('42s', $body(40));
+        $this->assertStringContainsString('abc [working]', $body(40));
+
+        // 20 columns: the label itself is cut, and the identity is what
+        // survives longest.
+        $this->assertStringContainsString('abc [working]', $body(20));
+        $this->assertStringNotContainsString('compiling', $body(20));
     }
 
     /**
@@ -377,13 +452,21 @@ final class AgentViewPaneGeometryTest extends TestCase
      * keeps catching itself getting wrong, so it is pinned against output
      * captured from the pre-change tree rather than argued from the source.
      *
-     * 44 columns is the boundary the compensation is exact at; the rest are
-     * above it. BELOW 44 the `max(40, …)` floor still makes the strip wider
-     * than the terminal — unchanged by this commit, on purpose — and is still
-     * left to `clipWidth()`. This test therefore says nothing about widths
-     * under 44, and the name says so.
+     * 60 columns and up, NOT 44. This test was written over 44/60/80/120 and
+     * 44 has since moved — see
+     * {@see testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64()},
+     * which pins both halves of that move. 44 is the boundary where
+     * `contentWidth($cols, 40)` is exact, so the strip there is handed a
+     * content width of 40, which is inside the range E64's operation floor
+     * was breaking; the three wider captures are outside it and are still
+     * byte-for-byte what the pre-CHROME_WIDTH tree drew.
+     *
+     * BELOW 44 the `max(40, …)` floor still makes the strip wider than the
+     * terminal — unchanged, on purpose — and is still left to `clipWidth()`.
+     * This test therefore says nothing about widths under 44, and the name
+     * says so.
      */
-    public function testRenderAgentViewIsByteIdenticalAtAndAbove44Columns(): void
+    public function testRenderAgentViewIsByteIdenticalAtAndAbove60Columns(): void
     {
         $provider = $this->createMock(ProviderInterface::class);
         $manager = new AgentManager($provider, new SkillRegistry());
@@ -402,6 +485,10 @@ final class AgentViewPaneGeometryTest extends TestCase
         $render = new \ReflectionMethod(Renderer::class, 'renderAgentView');
 
         foreach (self::preChangeFrames() as $cols => $expected) {
+            if ($cols < 60) {
+                continue;
+            }
+
             $chat = (new Chat(agentManager: $manager))->withSize($cols, 40);
 
             $this->assertSame(
@@ -413,9 +500,81 @@ final class AgentViewPaneGeometryTest extends TestCase
     }
 
     /**
+     * The one width of the four where the in-transcript strip DID move, and
+     * both halves of the move, so neither can be quietly walked back.
+     *
+     * At 44 columns `contentWidth(44, 40)` hands `AgentViewPane::render()` a
+     * content width of 40, and 40 is inside the band E64's operation floor was
+     * breaking: 17 cells of identity plus a 5-cell operation plus 24 cells of
+     * `0s  0 tok | $0.0000` is 46, which does not fit 40. The strip drew
+     * `● reviewer [working]  Revi…0s  0 tok | $` — the usage column clipped
+     * mid-token, with no gap before it and a cost that reads as `$` rather
+     * than as truncated. It now drops the usage column it cannot fit and
+     * right-aligns what remains: `● reviewer [working]  Revi…          0s`.
+     *
+     * Asserted against BOTH captures rather than just the new one, because
+     * "this is what it draws now" alone would pass just as happily if the
+     * clamp were reverted and the capture re-taken.
+     */
+    public function testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $manager = new AgentManager($provider, new SkillRegistry());
+        $manager->register(new Agent(
+            name: 'reviewer',
+            description: 'Reviews code for bugs',
+            prompt: 'You are a reviewer.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        ));
+
+        $render = new \ReflectionMethod(Renderer::class, 'renderAgentView');
+        $chat = (new Chat(agentManager: $manager))->withSize(44, 40);
+        $actual = base64_encode((string) $render->invoke(null, $chat));
+
+        $this->assertNotSame(
+            self::preChangeFrames()[44],
+            $actual,
+            'the 44-column strip is back to its pre-E64 bytes',
+        );
+        $this->assertSame(self::postE64Frame44(), $actual, 'the 44-column strip moved again');
+
+        // The BOXED row only. `renderAgentView()`'s frame opens with a
+        // separate one-line zone-marked strip that this change does not touch
+        // and that still carries the full usage figure -- asserting over the
+        // whole frame would be a claim about the pane written against a
+        // different thing.
+        $lines = explode("\n", self::plain(base64_decode($actual, true) ?: ''));
+        $boxed = array_values(array_filter($lines, static fn(string $l): bool => str_contains($l, "\u{2502}")));
+        $this->assertCount(1, $boxed, 'the pane draws exactly one agent row here');
+        $this->assertStringContainsString('reviewer [working]', $boxed[0]);
+        $this->assertStringNotContainsString('tok', $boxed[0], 'the usage column does not fit 40 content cells');
+        $this->assertSame(44, Width::string($boxed[0]));
+    }
+
+    /**
+     * `renderAgentView()` at 44 columns as it stands with E64 fixed, base64
+     * for the same reason {@see preChangeFrames()} is.
+     */
+    private static function postE64Frame44(): string
+    {
+        return '7oCAcGFuZTphZ2VudHPugIEbWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSAbWzFtG1szODsyOzE2MDsyMTY7MTYwbXJldmlld2VyG1swbSAbWzM4OzI7MTYwOzIxNjsxNjBtW3dvcmtpbmddG1swbSAbWzM4OzI7MTk3OzIwMTsyMTJtUmV2aWV3cyBjb2RlIGZvciBidWdzG1swbSAbWzM4OzI7MTM5OzE0MzsxNjhtMHMbWzBtIBtbMzg7MjsxMzk7MTQzOzE2OG0wIHRvayB8ICQwLjAwMDAbWzBt7oCAL3BhbmU6YWdlbnRz7oCBCuKVrSBhZ2VudHMg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pWuCuKUgiAbWzM4OzI7MTM5OzE0MzsxNjhtG1szODsyOzE2MDsyMTY7MTYwbeKXjxtbMG0gcmV2aWV3ZXIgW3dvcmtpbmddICBSZXZp4oCmICAgICAgICAgIBtbMG0bWzM4OzI7MTM5OzE0MzsxNjhtMHMbWzBtICDilIIK4pWw4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pWv';
+    }
+
+    /**
      * Output of `Renderer::renderAgentView()` captured from the tree as it
      * stood BEFORE the chrome constant was introduced, base64 so the SGR bytes
      * and the private-use zone sentinels survive the source file intact.
+     *
+     * Still all four widths. 60/80/120 are what the strip draws today; 44 is
+     * kept as the BEFORE half of
+     * {@see testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64()},
+     * which is why the byte-identity sweep skips it rather than this array
+     * dropping it.
      *
      * @return array<int, string>
      */
