@@ -117,6 +117,32 @@ completeness asserted against `cases() × probes()`, plus a clause→probe map r
 every sentence to point at a real cell. **A partial anchor table lets an author anchor the claims they
 are confident about — which are the true ones.**
 
+### 🔴 ROUND 36's LESSON — my own brief's central premise was FALSE, and the fix I suggested would have made the feature permanently unreachable
+
+Two supervisor errors in one brief, both caught by the lane and reported rather than worked around.
+
+**1. "The feature is complete except for the synchrony" — FALSE.** Fixing only the async paints a
+**blank pane**. `SubAgent::$output` had exactly one writer — `AgentManager::drain()` — which sets the
+final text and the terminal status *in the same breath*. So no pool sub-agent is ever simultaneously
+non-terminal and non-empty, and `liveOutputs()` was **structurally empty for the whole of every run**.
+Proved by mutation: async intact, child publishes nothing → only the live-frame test fails.
+
+This retroactively vindicates round 34's honest label. P8.4 was marked "WIRED, NOT YET VISIBLE" and
+the synchronous `run()` was named as the blocker — but there was a **second** blocker nobody had
+found, and the honest label was more right than it knew. **A feature with one known blocker is not a
+feature with one blocker.**
+
+**2. My suggested fix would have made the feature permanently unreachable.** I pointed at
+`EngineBackend::completeAsync()`'s fork + socket-pair. `liveOutputs()` reads an object graph **in the
+parent**; forking the workflow puts every sub-agent in a child the renderer cannot see. Fibers keep it
+in-process. **A pattern that solved one blocking problem is not a pattern for every blocking problem —
+check what the fix has to be able to SEE.**
+
+**3. And a test-design trap worth keeping.** An injected executor runs *inline*, so it never forks,
+never idles and never publishes — a test built on one would exercise **neither mechanism** while
+appearing to. The proof test therefore forks for real. Related: `AgentWorkerPool`'s comment offering
+"protected helpers — overridable for testing" is **untrue**; the class is `final`.
+
 ### 🔴 ROUND 36 SCOPE — a scout measured 13 candidates and **8 WERE ALREADY CLOSED**
 
 The plan is unreliable at roughly **2:1** on what is still open. Measured against master at `f3d59e1a`.

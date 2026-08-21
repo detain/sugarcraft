@@ -2814,3 +2814,30 @@ the layers — that changes documented precedence for every other key.
 valid `settings.json` value; verify both spellings, and check whether the same shape affects the other
 `PERMISSION_SETTINGS_KEYS` (notably `permissionRules`, which is read from both files) — the reviewer
 measured the mode only.
+
+---
+
+## E59 — the split-pane compositor now paints running-worker output, but the worker is a SIMULATION STUB
+
+**Volunteered by round 36's implementer, unprompted, while reporting the item as done.**
+
+`ProcessExecutor::createInlineWorkerScript()` carries its own comment — *"Real LLM integration comes in
+later phases"*. It `usleep`s roughly one second and echoes the task back.
+
+So the two mechanisms the round built are genuinely real and genuinely proven: the workflow no longer
+blocks the loop, and the pane paints a **live, unsettled** agent's output mid-run. What it paints
+today is a simulation.
+
+**This is a scope boundary, not a defect, and the distinction decides what may be marked ✅.** The
+compositor item (P8.4 / Phase 8 item 4) IS closed — the pane works, the plumbing carries real bytes
+from a real forked worker over real IPC. What is NOT closed is the worker actually talking to a model,
+which was never part of that item and belongs to the pool's own phase.
+
+⚠️ **Do not let a later round read "the compositor paints agent output" as evidence that agent
+execution is wired.** That is precisely the shape this audit keeps finding — a true sentence standing
+next to a different claim it appears to support.
+
+**Step.** When the pool's real execution lands, re-run round 36's
+`WorkflowLivePaneTest::testAFramePaintsTheRunningAgentsOutputWhileTheWorkflowIsStillRunning` against a
+real worker. It is written against the shipped path (real `pcntl_fork()`, real `proc_open()`), so it
+should need no change — which is the test's own claim, and worth checking rather than assuming.
