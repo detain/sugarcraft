@@ -90,6 +90,41 @@ report if it concludes otherwise.
 | `3837b49f` | 34 | **headless permission approver** — `withPermissionApprover()` finally has a `src/` caller | 8393 / 93728 / 1 / rc 0 |
 | `8de875d3` | 34 | **P3.4 `Table` + finding #5 (16-field carry) + finding #8 (fourth trust grant)** | **8464 / 94225 / 1 / rc 0** |
 
+### 🔴 A NEW `src/` FILE MOVES **THREE** CENSUSES, NOT TWO — put this in every implement brief
+
+Round 35's `sglang` lane reported this as a premise my brief got wrong, and it is the kind of thing
+that reds a lane at the very end of its run. Adding any file under `sugar-crush/src/` moves:
+
+1. `tests/Tools/BuiltInToolCorpusTest.php` — the file/declaration/concrete census (the "census token").
+2. `tests/Integration/BinSugarcrushWiringTest.php` — its provider data-provides one case per file under
+   `src/` plus `bin/sugarcrush`, so one new file silently adds exactly **one test**. Account for it in
+   the delta reconciliation rather than being surprised by it.
+3. **`tests/…/ReadPathCensusTest.php` and `tests/…/ContainedPathInventoryTest.php`** — these red **by
+   construction** the moment a new file introduces a read/execute sink (`scandir`,
+   `file_get_contents`, `RecursiveDirectoryIterator`, …) without naming its containment gate. Both are
+   derived-and-asserted, so this is not optional and cannot be worked around: the sink must declare
+   its gate.
+
+⚠️ **`ContainedPathInventoryTest`'s prose was ALREADY stale before round 35 touched it** — it read
+"THIRTY call sites in THIRTEEN files" while the map it restates summed to **31** across 13. The lane
+corrected it to 32-in-14 and recorded the pre-existing drift in place rather than quietly folding it
+into its own bump. That is the right handling: a number you did not cause is still a number you are
+now standing next to.
+
+### PATHS AND LINE NUMBERS CORRECTED BY ROUND-35 LANES — the tree moves under a brief
+
+- **`ARCHITECTURE.md` is at `sugar-crush/docs/ARCHITECTURE.md`**, not `docs/ARCHITECTURE.md`. Its
+  "### The system prompt, in assembly order" section is at **`:226`** — NOT `:192` (long-known wrong)
+  and NOT `:224` (which I asserted as verified last round; it had moved again by one lane's commit).
+- **`Agent::$source` is at `:72`**, not `:69`.
+- **`Chat::helpListing()` DOES NOT EXIST.** The width derivation is at `Chat.php:5705` but inside
+  **`handleHelpCommand()`**. I put the wrong name in a brief and a lane propagated it into four
+  docblocks before its own `{@see}` resolver caught it.
+
+**The rule this earns: a brief's figures are measurements with a timestamp, not facts.** State them as
+claims to check, and tell the lane that reporting a wrong premise is worth more than routing around it
+silently. Both round-35 lanes did exactly that, which is the only reason these are known.
+
 ### ROUND 34's TWO LESSONS — both lanes shipped a test that asserted PRESENCE rather than TRUTH
 
 This is the round's most transferable finding, and it happened **twice, independently, in unrelated
