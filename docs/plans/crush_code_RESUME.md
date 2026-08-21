@@ -76,6 +76,22 @@ master itself immediately before committing, which is where the merge happens. T
 (`scratchpad/sync-lanes.sh`) ff-only pulls the live tree, rebases a lane ONLY when clean AND idle,
 **never touches a dirty lane**, and emits `ALERT` when a lane is behind and cannot auto-refresh.
 
+🔴 **SUPERVISOR TODO AFTER BOTH ROUND-34 LANES LAND — a cross-lane docblock debt that neither lane
+could pay.** `lsp` widened `Agent` to carry all 16 `AgentPreset` fields, which falsifies THREE claims
+in `sugar-crush/src/Cli/Bootstrap.php:1022-1041` (`agentRoster()`'s docblock) — a file `cmd` holds, so
+`lsp` correctly stopped and reported instead of editing it:
+
+1. `:1022-1029` says `fromPreset()` reads "name, description, `initialPrompt`, model, `tools` and
+   `skills` and NOTHING ELSE" and that `permissionMode` "does not travel this path at all" — **now false.**
+2. `:1031` `{@see …ForeignAgentPresetWiringTest::testAnImportedPresetsPermissionModeHasNowhereToLandOnTheRoster()}`
+   — **the method was renamed, so this reference dangles.** ⚠️ Nothing goes red: there is no
+   `{@see}`-target validator in the suite. A dangling doc reference is invisible to CI here.
+3. `:1037-1041` says `AgentPreset::$source` "STILL HAS NO READER … `Agent` carries no source field" —
+   `Agent` now carries `$source`.
+
+**This is a supervisor commit, taken once `cmd` has committed and released `Bootstrap.php`.** Do not
+route it to a lane while `cmd` holds the file, and do not let it ride along inside `lsp`'s bundle.
+
 ### WHAT LANDED — rounds 33 and 34, all supervisor-verified by my own suite runs
 
 | commit | round | what | verified |
