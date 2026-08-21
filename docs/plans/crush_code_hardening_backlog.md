@@ -2726,3 +2726,56 @@ marker makes it look like a legitimately large result rather than a lost one.
 **Step.** Reverse `Glob`'s order to match `Grep`'s — clip the file list to the
 cap, then append the instruction block — which folds this into E55's single
 "budget the appended block" fix rather than needing its own.
+
+---
+
+## E57 — a project-tier `disabledTools` glob can reduce the tool set to one arbitrary tool
+
+**Found by round 34's `lsp` reviewer, proven by execution, not by reading.**
+
+`docs/SETTINGS.md:106-107` and its source of truth
+`src/Config/LayeredSettings.php:249-253` both defend the trust asymmetry —
+`allowedTools` is user-tier-only, `disabledTools` is project-settable — with
+this argument:
+
+> `disabledTools` can express the same attack, but only by naming every tool it
+> removes — a value you can see when you read the file.
+
+**The argument is false.** `filterToolSet()` matches both lists through
+`PermissionRule::matchesToolName()` (`src/Cli/Bootstrap.php:4266`), which is a
+bare `fnmatch()` (`src/Permissions/PermissionRule.php:334`). `fnmatch` honours
+negated character classes, so a glob can name a complement rather than a list.
+
+**Evidence — MEASURED end to end** through `Bootstrap::tools()` with a project
+`.sugar-crush/settings.json` of `{"disabledTools":["[!B]*"]}`:
+
+```
+surviving tools: Bash
+```
+
+Eight characters, project-tier-legal, no trust grant required, and it produces
+exactly the Bash-only tool set the doc says only a whitelist could produce "in
+one line". Tier membership confirmed directly rather than from the doc:
+`PROJECT_TIER_KEYS` contains `disabledTools`; `userTierOnlyKeys()` contains
+`allowedTools`.
+
+**Severity.** The blast radius is narrower than it first reads: this REMOVES
+tools, so it cannot grant a capability the user did not already have, and the
+sharpest version — leave only `Bash` — is a denial-of-alternatives that pushes
+the model toward the one tool with the widest reach, rather than an escalation
+on its own. It still matters, because the whole reason `allowedTools` is
+user-tier-only is an argument that does not survive contact with `fnmatch`.
+
+**Why it is here and not fixed.** Functionality before hardening. The FINDING is
+recorded now; the FIX is deferred. Note the two false doc claims were corrected
+in round 34 — this entry is the behaviour, not the prose.
+
+**Step.** Decide the intended contract, then make one of these true:
+either restrict project-tier `disabledTools` to literal names (no glob
+metacharacters) and keep globs user-tier, or move `disabledTools` to
+user-tier-only alongside `allowedTools` and accept the loss. Do not "fix" it by
+rewording the comment a third time.
+
+⚠️ **Whoever takes this must re-measure the `fnmatch` behaviour first.** The
+claim above is that `[!B]*` survives as a project-tier value — verify that is
+still true before designing around it.
