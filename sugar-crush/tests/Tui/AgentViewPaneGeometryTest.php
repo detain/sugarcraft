@@ -46,16 +46,41 @@ use SugarCraft\Crush\Tui\Renderer as ShellRenderer;
  * `$width` is handed to `Style::width()`, which sizes the CONTENT box; the
  * rounded border (2 cells) and `padding(0, 1)` (2 more) are drawn outside it.
  * That holds whenever the composed row body FITS `$width`, which is the domain
- * the sweeps below now state instead of claiming an invariant: with an ASCII
- * operation it is `+4` at `$width` = 20/28/30/40/43/44/58/60/80/98, populated
- * and empty alike, and with a wide-cluster operation it is `+6` at six of those
- * ten, because `render()`'s `$opBudget = max(5, $width - name - 60)` floor lets
- * the body outgrow the box and the wrap then falls inside a 2-cell cluster.
- * That second half is pre-existing — the same ten numbers come out of
- * `087a3179` — and is recorded as E64; the sweep asserts it. The
- * overhead is now named — {@see AgentViewPane::CHROME_WIDTH} — and both
+ * the sweeps below state instead of claiming an invariant. With an ASCII
+ * operation it was already `+4` at `$width` = 20/28/30/40/43/44/58/60/80/98,
+ * populated and empty alike. With a wide-cluster operation it USED TO come
+ * back `$width + 6` at six of those ten — 2 cells over the `$width + 4` due —
+ * because `render()`'s `$opBudget = max(5, $width - name - 60)` floor let the
+ * body outgrow the box and the wrap then fell inside a 2-cell cluster. That
+ * second half was pre-existing, not a regression of the CHROME_WIDTH work:
+ * the same ten numbers came out of `087a3179`. It is recorded as E64 and it
+ * is FIXED — `render()` now clamps the composed label to the cells actually
+ * left after the metrics — so what the sweep asserts today is `$width + 4` at
+ * every one of the ten, wide-cluster payload included, and over every width
+ * from 20 to 140.
+ *
+ * Two units get confused here, so both are spelled out: the ABSOLUTE figure
+ * was `$width + 6` (26 cells at `$width` = 20, measured), and the EXCESS over
+ * the due `$width + 4` was `+2`. Re-measured against `70a4efb3`'s pane over
+ * 20..140, that excess was +2 at every width from 20 to 44 and +1 at 45, for
+ * both the skin-toned thumb and the flag; above 45 there was none.
+ *
+ * The overhead is now named — {@see AgentViewPane::CHROME_WIDTH} — and both
  * callers subtract it through {@see AgentViewPane::contentWidth()} instead of
  * each writing its own literal, which is how they came to disagree.
+ *
+ * **The clamp's own hazard, found and fixed with it.** The clamp
+ * that fixed E64 feeds the WHOLE composed label to `truncate()`, which groups
+ * clusters and knows nothing about escape sequences. Where the old code
+ * interpolated `$name` and `$agent->status` untruncated — so an escape inside
+ * either survived intact — the clamp could cut one in half: measured over
+ * widths 1..140 with `name = \e[32mabc\e[0m`, the clamp severed an SGR at 7
+ * widths against the old code's 0, and with the same escapes in the status,
+ * at 13 against 0. A severed reset leaks colour into the rest of the FRAME.
+ * `render()` now takes name, status and operation through
+ * `AgentViewPane::stripEscapes()` first, so the precondition the clamp needs
+ * is enforced rather than assumed; see
+ * {@see self::testTheClampNeverSeversAnEscapeSequenceInAName()}.
  *
  * @see AgentViewPane
  * @see AgentDashboardPane::render()
@@ -260,9 +285,22 @@ final class AgentViewPaneGeometryTest extends TestCase
      * the trap this file was written to avoid elsewhere. Swap in a skin-toned
      * thumb or a flag and 6 of the 10 widths used to break it: `render()`
      * returned `$w + 6` at 20/28/30/40/43/44 (26/34/36/46/49/50 against
-     * 24/32/34/44/47/48 due) and `$w + 4` at 58/60/80/98. Those six numbers
-     * are kept below as `$beforeE64` and asserted to be GONE, so the fix
-     * cannot be silently reverted into a test that only says "+4".
+     * 24/32/34/44/47/48 due) and `$w + 4` at 58/60/80/98. Those ten numbers
+     * are kept below as `$beforeE64`, and they are DOCUMENTATION, not
+     * enforcement — this used to say they were "asserted to be GONE, so the
+     * fix cannot be silently reverted into a test that only says +4", and that
+     * claim was false. The guard that made it was
+     * `assertNotSame($beforeE64[$w], $widest)` sitting after
+     * `assertSame($w + CHROME_WIDTH, $widest)`: once the first assertion
+     * passes, `$widest` IS `$w + 4`, so on the six widths where `$beforeE64`
+     * differs from `$w + 4` the second could not fail, and on the other four
+     * it was skipped. Twelve assertions that could never fire. A suite holding
+     * only the fixed pane cannot re-derive what the broken one returned, so
+     * nothing here can enforce the historical figures; what does the work is
+     * the `+4` assertion itself, and this test earns its place by driving it
+     * over the wide-cluster payloads the ASCII sweep above cannot reach. The
+     * historical number is carried into the failure message instead, where it
+     * tells a future reader which defect a red line means.
      *
      * The cause was `render()`'s `$opBudget = max(5, $width - name - 60)`.
      * With a 3-cell name the floor of 5 binds below 69 content columns, so
@@ -295,16 +333,14 @@ final class AgentViewPaneGeometryTest extends TestCase
                 $this->assertSame(
                     $width + AgentViewPane::CHROME_WIDTH,
                     $widest,
-                    sprintf('payload #%d at content width %d: widest row was %d', $label, $width, $widest),
-                );
-
-                if ($beforeE64[$width] !== $width + AgentViewPane::CHROME_WIDTH) {
-                    $this->assertNotSame(
-                        $beforeE64[$width],
+                    sprintf(
+                        'payload #%d at content width %d: widest row was %d; before E64 was fixed this returned %d',
+                        $label,
+                        $width,
                         $widest,
-                        sprintf('payload #%d at content width %d is back to its E64 over-run', $label, $width),
-                    );
-                }
+                        $beforeE64[$width],
+                    ),
+                );
             }
         }
     }
@@ -319,6 +355,23 @@ final class AgentViewPaneGeometryTest extends TestCase
      * width from 20 to 45 inclusive — 26 of the 121, not the 6 the ten-width
      * table showed — and the excess was NOT always +2 either: it is +2 from 20
      * to 44 and +1 at 45.
+     *
+     * **What this test does NOT establish, said plainly.** It generalises over
+     * ONE axis. The width moves; the name (`abc`), the status (`working`) and
+     * the metrics (`42s  1,234 tok | $0.0042`) are pinned, and the operation
+     * is drawn from four hand-picked payloads. That is the same
+     * fixture-shaped-like-the-property trap this file names elsewhere, moved
+     * one axis over, and it is stated rather than fixed because the honest
+     * generalisation FAILS today: `render()`'s clamp makes the body fit by
+     * `Width::string`, and `Width::string` is not the measure the box uses.
+     * `Style::render()` expands a tab to four spaces
+     * (`candy-sprinkles/src/Style.php:969-970`) after the clamp has scored it
+     * 0, so `operation = "\t" . U+1F3FD` — two codepoints — makes this pane
+     * return `$width + 6` at 117 of these 121 widths. That is NOT a
+     * regression: the pre-clamp pane at `70a4efb3` returns `$width + 6` at 120
+     * of the same 121. It is a width-authority divergence, recorded as E69,
+     * and widening this sweep is blocked on it rather than on anything in this
+     * class.
      */
     public function testEveryContentWidthFrom20To140IsExactlyChromeWidthWiderThanItsBox(): void
     {
@@ -378,6 +431,89 @@ final class AgentViewPaneGeometryTest extends TestCase
         // survives longest.
         $this->assertStringContainsString('abc [working]', $body(20));
         $this->assertStringNotContainsString('compiling', $body(20));
+    }
+
+    /**
+     * The clamp that fixed E64 must not cut an escape sequence in half.
+     *
+     * This is a REGRESSION test in the literal sense: the behaviour it pins
+     * was correct before the clamp and wrong after it, for three commits. The
+     * old code interpolated `$name` and `$agent->status` into `$leftSection`
+     * untruncated, so an escape inside either reached the terminal intact; the
+     * clamp feeds the WHOLE composed label to `truncate()`, which groups
+     * clusters and knows nothing about escapes. An ESC byte measures 0 cells
+     * so it joins the unit before it, while the `[`, the digits and the final
+     * `m` are ordinary 1-cell units the loop may cut between — at width 10 the
+     * row carried `\e[32mabc` then a bare `\e` then the ellipsis, and at
+     * width 12 `…abc\e[0` then the ellipsis, a RESET cut in half whose colour
+     * then bleeds into the rest of the frame rather than into one row.
+     *
+     * Measured over widths 1..140 before the fix: 7 severed widths with the
+     * escapes in the name (3,4,5,6,10,11,12) and 13 with them in the status
+     * (8,9,10,11,19,20,21,24,25,26,45,46,47), against 0 for both at
+     * `70a4efb3`. The fix is `AgentViewPane::stripEscapes()`, applied to name,
+     * status and operation before anything measures or cuts them, so the
+     * precondition is enforced by the code rather than asserted of data
+     * nothing validates — `$name` is `$agent->name` verbatim
+     * (`Renderer.php:1663`), straight off the Agent registry and out of
+     * imported foreign presets.
+     *
+     * The check is deliberately "no ESC survives stripping well-formed CSI",
+     * not "the output equals X": it is the SEVERED sequence that is the
+     * hazard, and a test pinning exact bytes would go red for cosmetic changes
+     * that are not it.
+     */
+    public function testTheClampNeverSeversAnEscapeSequenceInAName(): void
+    {
+        $green = "\x1b[32m";
+        $reset = "\x1b[0m";
+
+        $fixtures = [
+            'name'      => AgentDisplayState::new($green . 'abc' . $reset, 'working', 'building the thing', 65, 1234, 0.0042),
+            'status'    => AgentDisplayState::new('abc', $green . 'working' . $reset, 'building the thing', 65, 1234, 0.0042),
+            'operation' => AgentDisplayState::new('abc', 'working', $green . 'building the thing' . $reset, 65, 1234, 0.0042),
+        ];
+
+        foreach ($fixtures as $where => $agent) {
+            $severed = [];
+
+            for ($width = 1; $width <= 140; $width++) {
+                $frame = AgentViewPane::render([$agent], -1, $width, 6, self::theme());
+
+                // Drop every WELL-FORMED CSI; any ESC still standing was cut.
+                if (str_contains(self::plain($frame), "\x1b")) {
+                    $severed[] = $width;
+                }
+            }
+
+            $this->assertSame(
+                [],
+                $severed,
+                sprintf('escape in the %s was severed at widths %s', $where, implode(',', $severed)),
+            );
+        }
+    }
+
+    /**
+     * The strip is the identity on escape-free text, which is why no geometry
+     * figure in this file moved when it was introduced, and it leaves the
+     * visible bytes of a non-CSI escape alone rather than swallowing them.
+     */
+    public function testStrippingEscapesLeavesEscapeFreeTextByteIdentical(): void
+    {
+        $strip = static fn(string $t): string => (string) (new \ReflectionMethod(AgentViewPane::class, 'stripEscapes'))
+            ->invoke(null, $t);
+
+        foreach (['', 'abc', 'a b [c]  d', self::FAMILY, self::THUMB, self::FLAG, "tab\there", '(B', "\x07"] as $plain) {
+            $this->assertSame($plain, $strip($plain));
+        }
+
+        $this->assertSame('abc', $strip("\x1b[32mabc\x1b[0m"));
+        $this->assertSame('abc', $strip("\x1b]0;title\x07abc"));
+        // Bare ESC and a non-CSI escape: the ESC goes, what it prefixed stays.
+        $this->assertSame('ab', $strip("a\x1bb"));
+        $this->assertSame('(B', $strip("\x1b(B"));
+        $this->assertSame('', $strip("\x1b[3"));
     }
 
     /**
