@@ -290,24 +290,40 @@ final class EngineBackend implements Backend, ReportsContextWindow
      * The approver must return literal `true` to grant — see
      * {@see Runtime::settleAsk()} on why a truthy cast is not enough.
      *
-     * KNOWN LIMIT, deliberately left as a seam rather than papered over, and
-     * there are TWO of them — the first is the one that actually bites today:
+     * WHO CALLS THIS — measured, not assumed
+     * (`grep -rn withPermissionApprover src/ bin/`):
      *
-     * 1. Nothing in `src/` or `bin/` calls this method. The caller that should
-     *    is {@see \SugarCraft\Crush\Chat}, which owns the blocking prompt UI,
-     *    and that wiring is its own change. So on the engine path every ASK
-     *    currently settles as {@see Runtime::settleAsk()}'s no-approver
-     *    refusal, whatever the transport underneath.
-     * 2. Even once one is attached, {@see completeAsync()} runs
-     *    {@see complete()} inside a `pcntl_fork()`ed child whose only channel
-     *    back to the parent is a one-way frame stream, so a closure attached
-     *    from the TUI cannot put its question on screen from in there. That
-     *    needs a request/response protocol on the socket.
+     * 1. THE CONSOLE PATHS DO, and this used to say nothing did.
+     *    {@see \SugarCraft\Crush\Cli\NonInteractive::consoleBackend()} — the
+     *    `-p` one-shot's only route to a backend — builds it through
+     *    {@see \SugarCraft\Crush\Cli\Bootstrap::backend()} with
+     *    `$consolePermissionPrompt: true`, attaching
+     *    {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}. So does the
+     *    background-session daemon
+     *    ({@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::backend()}),
+     *    where the same tty probe resolves the other way — its fd 0 is
+     *    `/dev/null` from the spawn site — and the ASK becomes an explicit
+     *    refusal naming the tool, the mode and the remedies in the session's
+     *    log rather than an opaque one.
+     * 2. THE TUI STILL DOES NOT, and that is the limit that remains — a seam
+     *    rather than something papered over. {@see \SugarCraft\Crush\Chat}
+     *    owns the blocking prompt UI, but its prompt is a `Deferred` settled
+     *    by a later `Msg`, not a function that returns a verdict; and
+     *    {@see completeAsync()} runs {@see complete()} inside a
+     *    `pcntl_fork()`ed child whose only channel back to the parent is a
+     *    one-way frame stream, so a closure attached from the TUI could not
+     *    put its question on screen from in there even if the shapes did
+     *    match. That needs a request/response protocol on the socket. Until
+     *    it lands, an ASK raised on the engine path from inside a TUI session
+     *    still settles as {@see Runtime::settleAsk()}'s no-approver refusal —
+     *    which is why the shipped default mode is still
+     *    {@see \SugarCraft\Crush\Permissions\PermissionMode::BypassPermissions}.
      *
-     * An attached approver already works on every SYNCHRONOUS
-     * {@see complete()} caller (embedders, {@see completeAsyncBlocking()}'s
-     * no-pcntl fallback, tests), which is why the parameter is threaded now
-     * rather than after the socket work.
+     * An attached approver works on every SYNCHRONOUS {@see complete()} caller
+     * (the two above, embedders, {@see completeAsyncBlocking()}'s no-pcntl
+     * fallback, tests) — which is exactly the set of callers that can be
+     * served before the socket work, and is why the parameter was threaded
+     * ahead of it.
      *
      * @param \Closure(\SugarCraft\Crush\Tools\ToolCall, \SugarCraft\Crush\Hooks\HookResult): bool $approver
      */

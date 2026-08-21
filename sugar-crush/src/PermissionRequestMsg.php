@@ -19,7 +19,14 @@ use SugarCraft\Core\Msg;
  * It is a Msg, not a private call inside {@see Chat}, so that any pipeline
  * can raise the same prompt: the Chat-native tool path builds it directly
  * today, and the engine path ({@see Runtime}) can dispatch it once its ASK
- * resolver is threaded through {@see Backend\EngineBackend}.
+ * resolver is threaded through {@see Backend\EngineBackend} FROM THE TUI.
+ *
+ * That resolver seam is no longer unused — the console callers attach
+ * {@see Cli\HeadlessPermissionPrompt} to it — but a blocking closure is the
+ * wrong shape for this Msg, which is settled asynchronously by a later
+ * {@see PermissionReplyMsg}, and {@see Backend\EngineBackend::completeAsync()}
+ * runs its turn in a forked child that has no way to send a question home. So
+ * nothing dispatches this from the engine path yet.
  */
 final class PermissionRequestMsg implements Msg
 {

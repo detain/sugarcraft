@@ -190,9 +190,31 @@ matcher instead — see [`HOOKS.md`](HOOKS.md).
 
 ### `Ask` needs somewhere to ask
 
-`Ask` is only meaningful where a blocking prompt can be shown. `Chat` implements
-one; `Runtime` (the engine/provider path) fails **closed** and turns an `Ask`
-into a denial. And any caller that holds no prompt at all must not turn "would
+`Ask` is only meaningful where somewhere to ask exists. There are now three
+situations, not two:
+
+- **`Chat`** shows a modal and settles the paused call.
+- **The console paths** attach `HeadlessPermissionPrompt` as `Runtime`'s
+  approver. At a terminal it asks on **stderr** and reads the answer from
+  stdin, granting only on a literal `y`/`yes`. With no terminal it does not
+  read — it refuses, naming the tool, the mode and the two things that change
+  the outcome. Two callers do this, and the same probe decides opposite ways
+  for them:
+  - the **one-shot `-p` / `run` path** (`NonInteractive::consoleBackend()`),
+    which owns stdin and is prompted at a real terminal;
+  - the **background-session daemon**
+    (`Sessions\BackgroundSessionRunner::backend()`), whose fd 0 is `/dev/null`
+    from the spawn site, so it always takes the refusal branch. It is attached
+    there not to prompt — nobody is watching a daemon — but so the session's
+    log records *which* tool was refused under *which* mode and what to change,
+    instead of the bare "no approver is attached to this run".
+- **Everything else**, the TUI's engine path included, still fails **closed**:
+  `Runtime::settleAsk()` turns an `Ask` into a denial when no approver is
+  attached, and `Bootstrap` deliberately attaches none for a caller inside a
+  TUI, because a closure that blocks on stdin would fight the render loop for
+  keystrokes.
+
+And any caller that holds no prompt at all must not turn "would
 have asked" into "no" — `PermissionGate::refuses()` answers `true` only for
 `Deny`, and `Chat::refuseCommandShell()` follows the same rule for a custom
 command's `` !`cmd` `` form.

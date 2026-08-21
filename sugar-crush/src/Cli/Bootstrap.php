@@ -1493,8 +1493,23 @@ final class Bootstrap
      *        {@see EngineBackend::withPermissionGate()}. Pass the caller's so
      *        the engine and Chat's own tool path share ONE circuit breaker;
      *        defaults to a gate built fresh from the same config.
+     * @param bool $consolePermissionPrompt Attach
+     *        {@see HeadlessPermissionPrompt} as the engine's approver, so a
+     *        {@see \SugarCraft\Crush\Hooks\HookResult::ask()} on the engine
+     *        path is PUT TO SOMEONE instead of failing closed.
+     *
+     *        Opt-in, and defaulted OFF, because this method has two kinds of
+     *        caller and only one of them owns a console. {@see chat()} and
+     *        {@see \SugarCraft\Crush\Chat}'s provider switch reach here from
+     *        inside a TUI that holds the terminal in raw mode and alt-screen:
+     *        a closure that blocks on `fgets(STDIN)` from in there would eat
+     *        the keystrokes the render loop is reading and print its question
+     *        underneath the frame. {@see NonInteractive} — the `-p` one-shot —
+     *        owns stdin outright and passes true. See the class docblock on
+     *        {@see HeadlessPermissionPrompt} for why the TUI needs a different
+     *        mechanism rather than this one wired more widely.
      */
-    public static function backend(?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null): Backend
+    public static function backend(?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false): Backend
     {
         // Same first-line refusal {@see chat()} makes, for the same ordering
         // reason: this method is the `-p` path's entry point, where nothing
@@ -1517,7 +1532,7 @@ final class Bootstrap
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
             try {
-                return self::backendFor($providerType, $root, $skills, $gate);
+                return self::backendFor($providerType, $root, $skills, $gate, $consolePermissionPrompt);
             } catch (PermissionConfigException $e) {
                 // Not a provider problem, and not survivable by degrading:
                 // the echo fallback below builds the very same gate and would
@@ -1555,7 +1570,7 @@ final class Bootstrap
         $persisted = self::readUserConfig()['provider'] ?? null;
         if (is_string($persisted) && $persisted !== '') {
             try {
-                return self::backendFor($persisted, $root, $skills, $gate);
+                return self::backendFor($persisted, $root, $skills, $gate, $consolePermissionPrompt);
             } catch (PermissionConfigException $e) {
                 // See the env-var branch above: this arm exists to keep the
                 // `\Throwable` degrade-to-echo arm below from catching it.
@@ -1568,10 +1583,17 @@ final class Bootstrap
         $loader = self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
 
-        return (new EngineBackend(new EchoProvider(), 'echo'))
+        $engine = (new EngineBackend(new EchoProvider(), 'echo'))
             ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks(null, $root))
-            ->withPermissionGate($gate ?? self::permissionGate())
+            // `??=`, not `??`, and INSIDE the chain rather than hoisted above
+            // it: the approver below needs the gate that was actually
+            // installed, and moving the resolution to its own statement would
+            // move permissionGate()'s PermissionConfigException ahead of
+            // tools()/hooks(), changing which failure a broken launch reports
+            // first. Assigning in place keeps the evaluation order byte-for-byte
+            // what it was and still leaves $gate non-null afterwards.
+            ->withPermissionGate($gate ??= self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
             ->withRoot($root)
@@ -1579,6 +1601,8 @@ final class Bootstrap
             // real run: the store would exist, /memory would still write to it,
             // and nothing the user recorded would ever reach the model.
             ->withMemoryStore(self::memoryStoreOrNull());
+
+        return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
     }
 
     /**
@@ -1595,10 +1619,13 @@ final class Bootstrap
      *
      * @param SkillRegistry|null $skills See {@see backend()}.
      * @param PermissionGate|null $gate See {@see backend()}.
+     * @param bool $consolePermissionPrompt See {@see backend()} — same opt-in,
+     *        same reason it is not on by default here either: this method is
+     *        also what Chat's Ctrl+P provider switch calls, mid-TUI.
      *
      * @throws \Throwable
      */
-    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null): Backend
+    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false): Backend
     {
         // See backend(): whichever of the two a run enters through, the sweep
         // happens once, and the config directory is named before any store or
@@ -1624,10 +1651,13 @@ final class Bootstrap
         $loader = self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
 
-        return (new EngineBackend($provider, (string) $model))
+        $engine = (new EngineBackend($provider, (string) $model))
             ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks(null, $root))
-            ->withPermissionGate($gate ?? self::permissionGate())
+            // See backend(): `??=` in place, so the approver below can read the
+            // mode off the gate that was installed without re-reading the
+            // config or reordering the failures.
+            ->withPermissionGate($gate ??= self::permissionGate())
             ->withSkillRegistry($skills)
             ->withInstructionLoader($loader)
             ->withRoot($root)
@@ -1635,6 +1665,28 @@ final class Bootstrap
             // real run: the store would exist, /memory would still write to it,
             // and nothing the user recorded would ever reach the model.
             ->withMemoryStore(self::memoryStoreOrNull());
+
+        return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
+    }
+
+    /**
+     * Attach the console approver, or hand the engine back untouched.
+     *
+     * One place rather than two so {@see backend()} and {@see backendFor()}
+     * cannot drift on the thing that decides whether an ASK is answerable.
+     * The mode comes off the gate the engine actually got — not from a second
+     * {@see permissionGate()} call, which would re-read both policy files and
+     * re-print any per-rule warnings they produce.
+     */
+    private static function withConsolePermissionPrompt(EngineBackend $engine, PermissionGate $gate, bool $enabled): EngineBackend
+    {
+        if (!$enabled) {
+            return $engine;
+        }
+
+        return $engine->withPermissionApprover(
+            (new HeadlessPermissionPrompt($gate->mode()))->approver(),
+        );
     }
 
     /**
@@ -2934,11 +2986,27 @@ final class Bootstrap
      * DEFAULT IS BypassPermissions, deliberately, and TEMPORARILY. The main
      * loop had no gate at all before this, and a stricter default would have
      * been a breaking change on upgrade rather than a safer one: modes that
-     * answer Ask (Default/AcceptEdits/Auto, for writes) currently fail CLOSED
-     * on the engine path, because no caller anywhere attaches an approver —
-     * {@see EngineBackend::withPermissionApprover()} has none outside its own
-     * test — so Default mode would have turned "no permission system" into
-     * "every Edit refused". Be honest about what that costs: with the shipped
+     * answer Ask (Default/AcceptEdits/Auto, for writes) failed CLOSED on the
+     * engine path, because no caller anywhere attached an approver — so
+     * Default mode would have turned "no permission system" into "every Edit
+     * refused".
+     *
+     * HALF OF THAT IS NOW FIXED, and the default has NOT moved with it, on
+     * purpose. {@see HeadlessPermissionPrompt} is attached on the console
+     * paths — the `-p` one-shot ({@see NonInteractive}) and the
+     * background-session daemon
+     * ({@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::backend()})
+     * — so an ASK there is prompted for at a terminal, and refused with a
+     * reason naming the tool and the remedies without one. The TUI path still
+     * fails closed: {@see backend()}/{@see backendFor()} leave the approver
+     * off for it (see the `$consolePermissionPrompt` parameter), because
+     * {@see \SugarCraft\Crush\Chat}'s prompt is a `Deferred` settled by a
+     * later `Msg` and {@see EngineBackend::completeAsync()} runs the turn in a
+     * forked child with a one-way channel home — neither of which a blocking
+     * closure can serve. Flipping the default is what happens when THAT
+     * lands, not before: it is the path a real interactive session runs on.
+     *
+     * Be honest about what the default costs: with the shipped
      * empty rule set, BypassPermissions is not "more guarded than before", it
      * is EXACTLY EQUAL to having no gate. Every destructive `rm` the gate's
      * circuit breaker refuses is already refused, earlier and more broadly, by
@@ -2948,10 +3016,12 @@ final class Bootstrap
      * `permissionMode`/`permissionRules` and it starts deciding things. The
      * permissive default is a stopgap for the fail-closed ASK path, not the
      * settled design — it goes away once an ASK on the engine path can
-     * actually be ANSWERED: an approver attached (the missing piece today),
-     * and a channel it can ask over from inside
-     * {@see EngineBackend::completeAsync()}'s forked child (the piece behind
-     * that one).
+     * actually be ANSWERED FROM A TUI SESSION. That takes the two pieces named
+     * above and exactly ONE of them is now done: an approver IS attached, on
+     * the console paths. The other is untouched — the channel it would have to
+     * ask over from inside {@see EngineBackend::completeAsync()}'s forked
+     * child is still a one-way frame stream, and no closure can put a question
+     * on screen through it.
      *
      * Rules come from a `permissionRules` array of
      * `{"pattern": "Bash*", "action": "deny"}` objects. Unlike the mode, a

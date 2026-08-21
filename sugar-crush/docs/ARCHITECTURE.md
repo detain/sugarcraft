@@ -268,7 +268,11 @@ One chain, two live pipelines. `Runtime::gate()` (engine/provider path) and
 `PreToolUse` hook chain, which is why the six-mode `PermissionGate` rides in as
 a hook (`PermissionGateHook`) rather than being called separately: it reaches
 both with no new dispatch machinery, and inherits the ASK plumbing they already
-implement — a blocking prompt on Chat's side, a fail-closed denial on Runtime's.
+implement — a blocking prompt on Chat's side, and on Runtime's whatever approver
+its caller attached. The console callers attach one (`-p` one-shot and the
+background-session daemon, both via `Cli\HeadlessPermissionPrompt`); every other
+caller, the TUI's own engine path included, attaches none and gets a fail-closed
+denial. See [`PERMISSIONS.md`](PERMISSIONS.md#ask-needs-somewhere-to-ask).
 
 ```
 ProtectFilesHook → ConfirmRemoveHook → AuditHook → [hooks.yaml] → PermissionGateHook

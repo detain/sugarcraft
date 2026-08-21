@@ -173,11 +173,11 @@ final class NonInteractive
                 // No provider was asked for, so nothing is being substituted
                 // for one — see noticeOfflineDefault() for why this stays
                 // lenient. The notice is still worth a line of stderr.
-                $backend = Bootstrap::backend($args->root);
+                $backend = self::consoleBackend($args->root, null);
                 self::noticeOfflineDefault();
             } else {
                 try {
-                    $backend = Bootstrap::backendFor($providerName, $args->root);
+                    $backend = self::consoleBackend($args->root, $providerName);
                 } catch (PermissionConfigException $e) {
                     // An unusable permission policy is not this provider's
                     // fault and must not be reported as if it were — it
@@ -501,6 +501,42 @@ final class NonInteractive
         }
 
         return $data;
+    }
+
+    /**
+     * The backend a one-shot run executes on — the ONLY route `run()` has to
+     * one when the caller did not supply it.
+     *
+     * Two things happen here rather than at the two call sites. The first is
+     * the existing strictness split: a run that named no provider gets
+     * {@see Bootstrap::backend()}, which may degrade to the offline engine,
+     * and a run that named one gets {@see Bootstrap::backendFor()}, which
+     * throws instead (see the class docblock).
+     *
+     * The second is new, and is the reason this is a method: BOTH branches
+     * pass `$consolePermissionPrompt: true`, attaching
+     * {@see HeadlessPermissionPrompt} as the engine's approver. That closes the
+     * hole where a `-p` run under `default`/`accept-edits`/`auto` had every
+     * ASK settled as "permission required and no approver is attached to this
+     * run" — {@see \SugarCraft\Crush\Runtime::settleAsk()}'s fail-closed arm —
+     * because nothing in `src/` or `bin/` called
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::withPermissionApprover()}
+     * at all. This path is the right owner: it holds stdin, it is synchronous
+     * all the way down to `complete()`, and it never enters an alt-screen.
+     *
+     * Flag passed at BOTH branches, never one: an approver attached on only
+     * one of them is an ASK answered when the run happens to reach that
+     * branch and refused when it reaches the other, which is worse than
+     * either behaviour applied consistently.
+     *
+     * @throws \SugarCraft\Crush\Permissions\PermissionConfigException
+     * @throws \Throwable when $providerName names a provider that cannot be built
+     */
+    public static function consoleBackend(?string $root, ?string $providerName): Backend
+    {
+        return $providerName === null
+            ? Bootstrap::backend($root, null, null, true)
+            : Bootstrap::backendFor($providerName, $root, null, null, true);
     }
 
     /**

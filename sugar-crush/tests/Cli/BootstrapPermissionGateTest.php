@@ -106,10 +106,15 @@ final class BootstrapPermissionGateTest extends TestCase
 
     /**
      * The upgrade-safety guarantee: the main loop had no gate at all before
-     * this, and every Ask-producing mode fails closed on the engine path
-     * (nothing anywhere attaches an approver), so anything stricter than
+     * this, and every Ask-producing mode failed closed on the engine path
+     * because nothing anywhere attached an approver, so anything stricter than
      * BypassPermissions by default would turn "no permission system" into
      * "every write refused".
+     *
+     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt} closes that for the
+     * one-shot `-p` path and NOT for the TUI — see
+     * {@see ConsolePermissionApproverWiringTest} — so the default stands until
+     * an ASK can reach the interactive path too.
      */
     public function testDefaultsToBypassPermissionsWhenNothingIsConfigured(): void
     {

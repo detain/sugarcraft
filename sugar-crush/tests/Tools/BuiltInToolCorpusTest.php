@@ -250,18 +250,25 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 17 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 282 files declare
-     * 301 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 283 files declare
+     * 302 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
-     * The most recent file is `Tui/Components/AgentSplitColumn` — the live-agent
-     * pane the split-pane compositor lays beside the shell band (crush_code.md
-     * Phase 8 item 4). A single concrete class, hence the +1 on `concrete` and
-     * on the file count, and nothing else moving; the 19 SECONDARY declarations
-     * in 8 files are untouched by it, which is why only the two totals above
-     * move and the per-file map below does not. The file before it was
-     * `Providers/ToolCallParser/MarkupScanner`, also a single concrete class.
+     * TWO files arrived at once here, from two lanes that landed in the same
+     * window, so this bump is +2 and not the usual +1:
+     * `Tui/Components/AgentSplitColumn` — the live-agent pane the split-pane
+     * compositor lays beside the shell band (crush_code.md Phase 8 item 4) —
+     * and `Cli/HeadlessPermissionPrompt`, the console approver the `-p`
+     * one-shot path and the background-session daemon attach to the engine,
+     * which is the first caller
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::withPermissionApprover()}
+     * has had in `src/`. Both are a single concrete class, hence the +2 on
+     * `concrete` and on the file count, and nothing else moving; the 19
+     * SECONDARY declarations in 8 files are untouched by either, which is why
+     * only the two totals above move and the per-file map below does not. The
+     * file before the pair was `Providers/ToolCallParser/MarkupScanner`, also
+     * a single concrete class.
      *
      * THE PREVIOUS BUMP NAMED THE WRONG CAUSE. This paragraph attributed the
      * last +1 to `Config/LayeredSettings` after the numbers had already been
@@ -303,9 +310,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(282, $files, 'php files under src/');
+        $this->assertSame(283, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 233, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
+            ['concrete' => 234, 'enum' => 26, 'abstract' => 0, 'interface' => 17, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -395,8 +402,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(282, count($files), 'php files under src/');
-        $this->assertSame(301, $declarations, 'top-level declarations in them');
+        $this->assertSame(283, count($files), 'php files under src/');
+        $this->assertSame(302, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

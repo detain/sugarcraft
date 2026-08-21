@@ -222,6 +222,30 @@ final class BackgroundSessionRunner
      * unknown provider degrades to the offline engine rather than killing
      * the session.
      *
+     * BOTH ROUTES ASK FOR THE CONSOLE APPROVER
+     * ({@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}), and the
+     * reason is the opposite of the one it reads like. This is a daemon with
+     * no user in front of it, so the point is not to PROMPT — it is that the
+     * approver's no-terminal branch produces a refusal naming the tool, the
+     * mode and the two things that change the outcome, written to the
+     * session's sidecar log, where a no-approver refusal would say only
+     * "permission required and no approver is attached to this run"
+     * ({@see \SugarCraft\Crush\Runtime::settleAsk()}). Same verdict, a
+     * reader who can act on it.
+     *
+     * IT CANNOT STEAL KEYSTROKES, and that is a property of the spawn rather
+     * than of this class: {@see BackgroundSupervisor::spawnSession()} opens the
+     * daemon with `['file', '/dev/null', 'r']` as descriptor 0, so fd 0 is
+     * `/dev/null` BEFORE `buildSessionDaemonCode()`'s double fork ever runs
+     * and `stream_isatty(STDIN)` in here is false (measured:
+     * `php -r 'var_dump(stream_isatty(STDIN));' < /dev/null` => `bool(false)`).
+     * The `posix_setsid()` in the daemon bootstrap is NOT what decides this —
+     * detaching from a controlling terminal does not change the `isatty`
+     * answer for an already-open descriptor — the redirection at the spawn
+     * site is. Attach the same prompt to a run whose stdin IS a terminal and
+     * it asks there, which is the behaviour that path wants anyway; the probe
+     * is the single source of truth either way.
+     *
      * @throws PermissionConfigException when the launch's permission policy is
      *         present and unusable — the one failure the fallback cannot help
      *         with, reported by {@see self::executeTask()} as a task failure
@@ -237,7 +261,7 @@ final class BackgroundSessionRunner
 
         if ($this->provider !== '') {
             try {
-                return Bootstrap::backendFor($this->provider, $root);
+                return Bootstrap::backendFor($this->provider, $root, null, null, true);
             } catch (PermissionConfigException $e) {
                 // Same arm {@see \SugarCraft\Crush\Cli\NonInteractive::run()}
                 // and {@see Bootstrap::backend()} carry: an unusable permission
@@ -257,7 +281,7 @@ final class BackgroundSessionRunner
             }
         }
 
-        return Bootstrap::backend($root);
+        return Bootstrap::backend($root, null, null, true);
     }
 
     /**
