@@ -3697,8 +3697,12 @@ over-run never happens.
 
 *What deliberately did NOT change.* `$opBudget = max(5, $width - name - 60)` is untouched. The Step
 above says not to raise or drop the floor, and re-deriving the budget from what actually remains would
-have been worse than either: it widens the operation column at every width from **47 to 68**, which is
-output movement nowhere near the bug. Keeping the estimate and clamping the result is what confines
+have been worse than either: for the fixture this entry is measured on (3-cell name, `working`,
+`42s  1,234 tok | $0.0042`) the exact remaining budget exceeds `max(5, …)` at every width from **47 to
+68**, so the operation column would have widened there — output movement nowhere near the bug, at
+widths that were never broken. The 47 and the 68 are that fixture's; the *shape* is general, since the
+floor of 5 binds until `$width > Width::string($name) + 65` while the exact budget passes 5 as soon as
+`$width` exceeds identity + metrics + 5. Keeping the estimate and clamping the result is what confines
 the change to widths that were already broken.
 
 *The floor's purpose, answered.* What a 5-cell operation column buys at width 20 is **nothing**: 20
