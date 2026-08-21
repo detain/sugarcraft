@@ -3175,3 +3175,39 @@ deadline on one. So:
 **Step.** If a hand-written hook ever needs bounding, the mechanism is a fiber or a fork, not another
 constant — and that is a design decision with its own cost, not a follow-up edit. Recorded so a later
 round reads "the chain is bounded" as the qualified claim it is.
+
+---
+
+### E62 — an interactive PTY in the chat pane is a credential-entry surface driven by model output
+
+**Recorded 2026-08-21 while scoping Phase 9. The FIX is deferred; the FINDING is not.**
+
+Phase 9 adds an opt-in interactive mode: a command marked interactive runs under a `candy-pty` PTY
+whose output is composited **inside** the chat pane and whose prompt routes to the user. That is the
+right shape for usability, and it creates a surface that does not exist today.
+
+**The threat.** A model that can set `interactive: true` can run a command that prints bytes shaped like
+a `sudo` password prompt. The user sees a prompt inside real application chrome, in the pane where the
+app legitimately asks for input, and types a password. Nothing about the rendering distinguishes
+"the app is asking" from "a child process printed something that looks like the app asking".
+
+**Why this class is already known here.** Round 35's `/permissions` finding was the same shape one layer
+down: `Sanitize::untrusted()` deliberately preserves LF and CR (`candy-core/src/Util/Sanitize.php:124`
+strips `[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, excluding 0x09/0x0a/0x0d), the report joined its lines
+with `implode("\n", …)`, and a newline inside a rule pattern **forged report lines** — producing a fake
+`Permission mode: bypass-permissions` row under a gate that was actually `Default`. Attacker-controlled
+bytes rendered inside trusted chrome. A PTY is that with a keyboard attached.
+
+**Minimum bar when Phase 9's option (C) is built:**
+1. `interactive: true` is a **permission-gated escalation**, not a free parameter — it routes through the
+   existing blocking permission modal, which already exists, is tested, and is the right owner.
+2. The modal states plainly that the command may ask for input, and shows the command.
+3. The app's chrome around the PTY is **visually distinct from PTY content**, so a forged prompt cannot
+   impersonate the app. A border the child cannot draw, or a reserved column, or colour the child
+   cannot set — decided by measurement, not by assertion, since a PTY child can emit SGR freely.
+4. Consider never routing a password through the app at all: `SUDO_ASKPASS` pointing at a helper the
+   *user's* terminal owns keeps the secret out of the model's process entirely. Cheaper than proving
+   the composited path is safe.
+
+**Do not treat Phase 9 step 1 (detach the controlling terminal) as blocked on this.** Step 1 REMOVES a
+leak and adds no surface; it should ship regardless of when (C) is scheduled.

@@ -955,13 +955,58 @@ screen — has no way to know it happened. Fixing the render half alone fixes no
   and `PtyPool.php` — i.e. allocate a PTY, detect a prompt, answer it, forward signals. The machinery
   for both (A) and (C) is a declared dependency that is currently unused by the tool path.
 
-#### Recommended shape (decision is the user's — this phase is scoped, not chosen)
+#### DECIDED 2026-08-21 by the user: layered — (A) always, (C) opt-in
 
-Layer them rather than picking one: **(A) unconditionally for every tool shell-out**, so the default is
-safe and nothing can paint outside the pane; **(C) behind an explicit opt-in** — a command the user has
-marked interactive runs under a `candy-pty` PTY whose output is composited *inside* the chat pane and
-whose prompt routes through the existing permission-prompt UI, which is already a built, tested,
-blocking modal. **(B)** shrinks to a generic no-progress watchdog once (A) is in.
+*"go with the layered approach, A always + C opt-in"*, and: *"yes i would like both the ability for
+tool calls to support being interactive or non interactive somehow"*.
+
+**(A) is unconditional** for every tool shell-out. **(C) is an opt-in interactive mode.** What remained
+open was the SHAPE of the opt-in — two tools, or a parameter. The user was undecided.
+
+#### The shape: an optional parameter, NOT a second tool
+
+Three shapes were considered: a separate `BashInteractive` tool; an optional `interactive` parameter on
+`Bash`; or automatic escalation (run non-interactive, detect the terminal failure, offer a re-run).
+
+🔴 **A second tool is the wrong shape in THIS codebase, for a reason this repo has proved repeatedly:
+two entry points to one capability diverge, and the guard gets written on one of them.** That is the
+single most common defect in this tree across 37 audit rounds. Round 37 alone produced three fresh
+instances of exactly this shape:
+
+- `Chat::update()` dispatched `MouseMsg` above the `!KeyMsg` early return, so **every modal guard in the
+  class was on the keyboard path only** — a whole class of guards written on one of two paths.
+- `selectPaletteItem()` called `runSelectedPaletteAction()` unconditionally while `handlePaletteKey()`'s
+  Enter arm branched on `inFlight`, so mid-turn **a click ran what Enter refused, on 8 of 9 rows.**
+- `ScriptHook`'s `.inf` timeout was refused at the config parser and reachable through the constructor
+  — one gate on one of two doors.
+
+`PermissionGate`, `HookManager`, every `PreToolUse` matcher and every user-written permission rule match
+on the tool name. Adding `BashInteractive` means **every one of those rules silently stops covering the
+dangerous half**, and the failure is invisible: the rule still matches `Bash` and still passes.
+
+**A parameter keeps one name, one schema, one gate, one hook surface, and one set of user rules** — and
+the parameter is visible in the tool-call JSON, so the gate can read it. Default is non-interactive, so
+a model that knows nothing about the flag gets the safe path.
+
+**Automatic escalation is kept, but as UX on top, not as the mechanism.** When a non-interactive run
+fails for want of a terminal, say exactly that and offer the interactive re-run — the user decides at
+the moment it matters, with the command in front of them. It is not the primary mechanism because a
+re-run repeats whatever the first attempt already did before it hit the prompt.
+
+#### 🔴 A security finding this design creates — recorded now, per functionality-before-hardening
+
+**An interactive PTY composited inside the chat pane, showing a password prompt, is a credential-entry
+surface whose content is chosen by model output.** A model that can set `interactive: true` can run a
+command that *prints something that looks like a `sudo` prompt* and harvest whatever the user types.
+The prompt the user sees would be real UI rendered by the app around attacker-influenced bytes — which
+is the same class as round 35's `/permissions` line-forgery finding, where `Sanitize::untrusted()`
+deliberately preserves LF and a newline inside a config value forged report lines.
+
+Therefore: **`interactive: true` must be a permission-gated escalation, not a free parameter the model
+sets at will.** Minimum bar — it routes through the existing blocking permission modal; the modal states
+plainly that the command may ask for input; and the app's own chrome around the PTY is visually
+distinct from PTY content so a forged prompt cannot impersonate the app. Recorded in
+`docs/plans/crush_code_hardening_backlog.md`; the FIX may be deferred, the FINDING is not.
 
 #### Steps
 
