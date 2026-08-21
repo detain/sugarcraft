@@ -1795,11 +1795,22 @@ final class HookRegistryTest extends TestCase
      * NEXT pass's `toolInput` — so a rewrite has to survive the payload
      * transport a second time, as input. While that transport was a single
      * environment entry, a rewrite could never exceed `MAX_ARG_STRLEN`
-     * (131,072 bytes for `NAME=VALUE\0`) no matter what the hook printed: pass 2
-     * died with `E2BIG` and the chain denied. MEASURED at afe3c26b through this
-     * exact path — `ScriptHook::execute()` called DIRECTLY returned a
-     * 200,014-byte rewrite, and the same hook through `executeHooks()` returned
-     * `deny  "Hook audit could not be executed"`.
+     * (131,072 bytes for `NAME=VALUE\0` on this host) no matter what the hook
+     * printed: the re-scan died with `E2BIG` and the chain denied.
+     *
+     * WHAT THIS FIXTURE ACTUALLY MEASURES, re-measured with the fixture below
+     * rather than with the neighbouring experiment an earlier version of this
+     * comment imported its figures from. The original here is 250,011 bytes,
+     * which is already past the old ceiling, so at afe3c26b the `E2BIG` landed
+     * on pass ONE — `ScriptHook::execute()` called DIRECTLY returned
+     * `action=deny` with no `modifiedInput` at all, and the same hook through
+     * `executeHooks()` returned `deny  "Hook bulk-rewriter could not be
+     * executed"`. It is red at afe3c26b for the plain E65 reason and does NOT
+     * demonstrate the re-scan seam there. It exercises the seam against the
+     * code as it stands now, where pass 1 carries a 250,011-byte input and pass
+     * 2 has to carry the 200,011-byte rewrite back through the same transport.
+     * (200,014 is the figure for a `{"command":…}` payload; this fixture's
+     * `{"body":…}` wrapper is three bytes shorter.)
      *
      * That is why "bound the rewrite" and "fix the transport" could not be two
      * changes. A rewrite ceiling under 128 KiB would have made the E2BIG path

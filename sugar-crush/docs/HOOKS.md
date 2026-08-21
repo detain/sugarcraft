@@ -480,12 +480,19 @@ not `ScriptHook`) are a synchronous call in this process with no deadline to
 honour: they neither contribute to that budget nor are charged against it, and
 a chain made only of those is bounded by nothing here, as it always was.
 
-**A deny reason is clipped at 16 KiB**, with the clip announcing itself. A deny
-message is quoted verbatim into the model's tool result, so it is prompt text
-paid for per token — written by a process this class has just decided it cannot
-trust to finish. `EXIT_MODIFY` JSON, an `EXIT_ASK` question and an `EXIT_ALLOW`
-message are not clipped: the first must round-trip or it becomes a deny of a
-call the hook meant to permit, and the other two are the hook succeeding.
+**A deny reason is clipped at 16 KiB**, with the clip announcing itself, and so
+is an `EXIT_ASK` question. Both are quoted verbatim into the model's tool
+result, so both are prompt text paid for per token — the deny reason written by
+a process this class has just decided it cannot trust to finish, and the
+question by one whose answer nobody is necessarily there to give
+(`Runtime::settleAsk()` on a run with no approver attached interpolates the
+question whole and hands it to the model). The clip is what the MODEL sees; the
+permission modal was never the unbounded half of that path, since it keeps 8
+wrapped rows and appends its own `… N more lines` well before 16 KiB.
+
+`EXIT_MODIFY` JSON and an `EXIT_ALLOW` message are not clipped: the first must
+round-trip or it becomes a deny of a call the hook meant to permit, and the
+second reaches the model nowhere at all.
 
 It used to be unbounded in two independent places, and either one alone was
 enough to freeze the CLI — no spinner, no Escape. Measured at `4a4ecb98`, each

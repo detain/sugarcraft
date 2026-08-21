@@ -1557,12 +1557,18 @@ final class ScriptHookTest extends TestCase
      * hands that to the model as the tool result.
      *
      * The objection the old docblock raised — "clipping it changes what the
-     * human is answering" — is real and is answered rather than ignored: the
-     * clip announces itself, so the human and the model both see that the
-     * question was cut, which is strictly more than a 200 KB modal tells
-     * anybody. What is NOT answered by clipping is a question whose operative
-     * clause is at the end; that is the accepted cost, and it is the same one
-     * the deny path already accepts.
+     * human is answering" — is real, and the answer is narrower than an earlier
+     * version of this comment claimed. THE MODEL is told the question was cut:
+     * the marker names both figures and 262,144 bytes reach `settleAsk()` as
+     * 16,465. THE HUMAN is not, and does not need to be —
+     * {@see \SugarCraft\Crush\Renderer::wrapPermissionText()} already keeps 8
+     * wrapped rows and appends its own "… N more lines", and the clip does not
+     * engage until 16,384 bytes, which is some two hundred rows. Measured at 76
+     * columns: a 16,384-byte question renders as 8 rows and "… 209 more lines",
+     * with this marker off screen. So the modal was never the unbounded half.
+     * What is NOT answered by clipping is a question whose operative clause is
+     * at the end; that is the accepted cost, and it is the same one the deny
+     * path already accepts.
      */
     public function testALargeAskQuestionIsClipped(): void
     {

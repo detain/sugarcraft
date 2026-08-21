@@ -212,11 +212,23 @@ final readonly class ScriptHook implements BoundedHookInterface
      * {@see \SugarCraft\Crush\Runtime::settleAsk()}, which on a run with NO
      * approver attached interpolates it WHOLE into "Permission required and no
      * approver is attached to this run: …" and hands that to the model as the
-     * tool result. Neither a modal nor a tool result is improved by 200 KB, and
-     * the clip announces itself, so the reader sees that the question was cut
-     * instead of seeing a question that merely stops. What clipping does NOT
-     * fix is a question whose operative clause is at the end; that is the
-     * accepted cost, and it is the one the deny path already accepts.
+     * tool result. Neither a modal nor a tool result is improved by 200 KB.
+     *
+     * THE MODEL IS THE HALF THIS FIXES. A 262,144-byte question reaches
+     * `settleAsk()` as 16,465 bytes — 16,384 plus a marker that names both
+     * figures — so the model is told the question was cut instead of reading a
+     * question that merely stops. The HUMAN never sees that marker and does not
+     * need to: {@see \SugarCraft\Crush\Renderer::wrapPermissionText()} keeps
+     * `PERMISSION_PROMPT_MAX_ROWS` = 8 wrapped rows and appends its own
+     * "… N more lines", and the clip only engages above 16,384 bytes, which is
+     * some two hundred rows. Measured at 76 columns: a 16,384-byte question
+     * renders as 8 rows and "… 209 more lines", with the clip marker off
+     * screen. The modal was already bounded; this bounds what crosses into the
+     * prompt.
+     *
+     * What clipping does NOT fix is a question whose operative clause is at the
+     * end; that is the accepted cost, and it is the one the deny path already
+     * accepts.
      */
     private const MAX_ASK_PROMPT_BYTES = 16384;
 
