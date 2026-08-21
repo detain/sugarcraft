@@ -2933,6 +2933,36 @@ still true before designing around it.
 
 ---
 
+**ROUND 39 SCOUT — STILL OPEN, reproduces exactly, but this entry contains a SUBSTANTIVELY FALSE
+claim and every line number it cites is stale.**
+
+🔴 **"no trust grant required" is FALSE.** `Bootstrap::projectSettingsTrusted()` gates
+`LayeredSettings::projectLayer()`, and an untrusted project's `disabledTools` is discarded whole.
+Measured with pattern `[!B]*`: **trusted → 1 tool survives (`Bash`); untrusted → all 11 survive.** The
+operator must first have listed the checkout in `trustedProjectSettings` in their own `config.json`.
+A shipped test already says so —
+`tests/Cli/BootstrapToolAndPermissionSettingsTest.php::testAnUntrustedProjectCannotEvenDisableATool`.
+This materially narrows the blast radius. **It is not drift: the trust gate landed in `f0585149`
+(2026-08-20) and this entry was written in `a48d33a7` (2026-08-21), so the entry was wrong when recorded.**
+
+Stale line numbers — all four: `docs/SETTINGS.md:106-107` → **`:178-195`**;
+`src/Config/LayeredSettings.php:249-253` → **`:262-282`**; `src/Cli/Bootstrap.php:4266` → **`:4386`**
+(`filterToolSet()` opens at `:4374`); `src/Permissions/PermissionRule.php:334` → **`:332`**.
+
+**Severity argument SURVIVES.** `filterToolSet()` (`:4374-4402`) tests allow/deny as a single
+conjunction with no later stage, so a project's `disabledTools` genuinely cannot re-admit what a user's
+`allowedTools` excluded — "only ever shrinks" holds. Tier membership confirmed by execution.
+
+**Not previously recorded:** `{"disabledTools":["*"]}` yields **0 tools** — there is no floor, and
+nothing in `filterToolSet()` notices or reports handing the model an empty tool set. Fail-safe
+direction, but silent.
+
+**Doc defect found while reading:** `docs/SETTINGS.md:172` names the tool **`Doctor`**; the shipped name
+is lowercase **`doctor`**. The parallel passage at `LayeredSettings.php:274-276` names only five of ten.
+
+⚠️ A fix must preserve globs at the user tier —
+`testDisabledToolsAcceptsTheSameGlobDialectAsAPermissionRule` locks the dialect in.
+
 ## E58 — a `permissionMode` in `settings.json` is silently discarded by an EMPTY key in `config.json`
 
 **Found by round 35's `/permissions` reviewer while differentially testing an unrelated refactor.**
@@ -2968,6 +2998,39 @@ measured the mode only.
 
 ---
 
+**ROUND 39 SCOUT — STILL OPEN, and this entry is ACCURATE as written.** Measured, `settings.json`
+carrying `{"permissionMode":"plan"}` in every row:
+
+```
+config=ABSENT                =>  plan                 (from settings.json)
+config={}                    =>  plan                 (from settings.json)
+config={"permissionMode":""} =>  bypass-permissions   (the built-in default)
+config={"permissionMode":null} => bypass-permissions  (the built-in default)
+config={"permissionMode":"  "} => refuses the launch
+config={"permissionMode":false} => refuses the launch
+```
+
+Silently, with no stderr line. The fail-open is narrow to exactly `""` and `null`; whitespace and
+non-strings refuse loudly. Current locations (the entry cites none, so nothing is stale):
+`permissionConfigLayers()` `src/Cli/Bootstrap.php:3243`, `permissionSettingsLayer()` `:3325`, the
+post-merge `''→null` normalisation `:3098-3104`, `permissionGate()` `:3078`.
+`DEFAULT_PERMISSION_MODE` at `:153`; `ArgvParser::EMPTY_PERMISSION_MODE_ERROR` at
+`src/Cli/ArgvParser.php:710`.
+
+**Its ⚠️ is now ANSWERED — `permissionRules` has the same shape, but loudly.** A `null` or `""`
+`permissionRules` in `config.json` also drops a configured `deny` rule from `settings.json`, but both
+spellings announce on stderr and have shipped tests. **Neither message says "and this displaced your
+settings.json value"** — which is the part a user needs.
+
+⚠️ **Write the fix against the right invariant.** The entry says this "silently grants the widest mode".
+True in effect, but the mechanism is *"an empty key falls through to `DEFAULT_PERMISSION_MODE`"*, and
+that default merely happens to be `bypass-permissions` today. **If the default is ever tightened this
+same bug flips to fail-CLOSED.** Fix "an empty value must not displace an earlier layer", not "must not
+reach bypass".
+
+**No test locks the current behaviour in** — the mode-precedence tests cover absent/present/invalid but
+not empty-string or null. Test-free to land; needs new coverage. **Size S**, one file region.
+
 ## E59 — the split-pane compositor now paints running-worker output, but the worker is a SIMULATION STUB
 
 **Volunteered by round 36's implementer, unprompted, while reporting the item as done.**
@@ -2994,6 +3057,28 @@ real worker. It is written against the shipped path (real `pcntl_fork()`, real `
 should need no change — which is the test's own claim, and worth checking rather than assuming.
 
 ---
+
+**ROUND 39 SCOUT — STILL OPEN on the stub; but this entry's STEP IS WRONG.**
+
+The stub is intact: `ProcessExecutor::createInlineWorkerScript()` at
+`src/Agents/ProcessExecutor.php:514`, with *"Real LLM integration comes in later phases"* at `:585`.
+The "roughly one second" figure checks out — the script's sleeps sum to `20000+20000+500000+500000` µs
+= **1.04 s**, and the live test runs in 1.218 s wall.
+
+🔴 **The Step claims the test "is written against the shipped path … so it should need no change".
+Checked, and false.** The test asserts on **the stub's own literal output string**: the worker emits
+`"[{$agentConfig['name']}] Processing: {$task}"` (`ProcessExecutor.php:591`) and the test matches
+`'Processing:'` and `'[' . self::AGENT_NAME . '] Processing:'`
+(`tests/Workflows/WorkflowLivePaneTest.php:190,227`). A real LLM worker emits no such string, so the
+liveness probe has no anchor. What is reusable is the test's **structure** (real `pcntl_fork()` /
+`proc_open()`, frames stamped un-settled); its **assertions** are not. The test's own docblock claims
+only the fork/proc_open part — the entry over-read it.
+
+The scope-boundary framing is otherwise correct: `ProcessExecutor` is instantiated at
+`src/Agents/AgentWorkerPool.php:1320` and `src/Chat.php:4679` and is the shipped default, so the pane
+genuinely does paint the stub. `src/App/App.php:437-444` carries the same note, accurately.
+
+**Size L. Do not bundle it** — the test rewrite is the risky part and deserves an isolated diff.
 
 ## ROUND 37 SCOUT — E55 and E56 both reproduce; figures restated at master `4a4ecb98`
 
@@ -3242,6 +3327,42 @@ into the model's tool result by both live gates.
 leave (ASK). Do not reach for one constant across all four actions — the four have different failure
 modes and that is the whole content of this entry.
 
+**ROUND 39 SCOUT — PARTIALLY OPEN. The headline bullet is NOT REPRODUCIBLE as described.**
+
+Measured, a 200 KB payload through the live path `HookManager::preToolUse()` → `HookRegistry::executeHooks()`:
+
+```
+ALLOW(0)  stdout  200000 bytes in ->  message=      0   modifiedInput=     0
+ASK(3)    stdout  200000 bytes in ->  message= 200000   modifiedInput=     0
+MODIFY(4) stdout  100014 bytes in ->  message=      0   modifiedInput=100014
+DENY(1)   stderr  200000 bytes in ->  message=  16465   (clipped, marker present)
+```
+
+🔴 **Bullet 1 — "`EXIT_ALLOW` stdout becomes the tool result message" — is false, in two independent
+places.** (a) `HookRegistry::executeHooks()` ends
+`return $modified ?? $inertRewrite ?? HookResult::allow();`, rebuilding the permitting result with an
+**empty message**, so the hook's stdout dies before any gate sees it. (b) Both live gates discard
+`$hookResult->message` on the permitting path anyway — `Runtime::gate()` (`src/Runtime.php:769-796`)
+and `Chat::gateToolCall()` interpolate it **only** into `"Hook denied: …"`.
+
+**The real ALLOW-adjacent exposure the entry does not name:** `src/Runtime.php:1124` — an **ASK with no
+approver attached** becomes `"Permission required and no approver is attached to this run: {$ask->message}"`,
+measured surviving at **200,000 bytes**.
+
+**The MODIFY path is worse than the entry frames it.** The unbounded quantity is `modifiedInput`, not
+`message`, and it is not prompt text — it is **the tool arguments that execute**, also stamped onto the
+PostToolUse context via `withRewrittenArgs()`.
+
+**"Four actions, four failure modes" half-survives.** Five exit codes map to four actions, and
+`EXIT_BLOCK` plus unknown codes share DENY's clipped path (measured: all three clip to 16,465). After
+measurement there are **three** live failure modes, not four: ASK (unbounded), MODIFY (unbounded,
+executed), DENY/BLOCK/unknown (clipped) — and ALLOW, which carries nothing. The Step's "do not reach for
+one constant" still holds; the enumeration behind it does not.
+
+Cited figures all check out: `MAX_DENY_REASON_BYTES = 16384` (`ScriptHook.php:166`),
+`CommandSpec::MAX_SUBSTITUTION_BYTES = 16384` (`:149`), `modifyOrDeny()` (`ScriptHook.php:676`),
+`clip()` (`:439`). Observed 16,465 = 16,384 + an 81-byte marker. **Size S–M**, one file plus tests.
+
 ## E61 — a chain of hand-written PHP hooks is bounded by nothing
 
 **Same review, same round; named rather than guessed at.**
@@ -3262,6 +3383,34 @@ constant — and that is a design decision with its own cost, not a follow-up ed
 round reads "the chain is bounded" as the qualified claim it is.
 
 ---
+
+**ROUND 39 SCOUT — STILL OPEN, both claims MEASURED TRUE.** A hand-written `HookInterface` that
+sleeps, driven through the real `HookRegistry::executeHooks()`:
+
+```
+A: two hand-written hooks @1.5s each        elapsed=3.00s  action=allow
+B: hand-written 2.0s, then a ScriptHook with timeout 1.0s
+                                            elapsed=2.00s  action=deny
+```
+
+Case A: `chainBudgetSeconds()` returns `null`, no deadline is armed. Case B: the hand-written hook
+**spent** the whole budget and **contributed** nothing to it, and the `ScriptHook` was denied without
+ever running. Reachability derived from callers, not coverage: `chainBudgetSeconds()`
+(`src/Hooks/HookRegistry.php:428`) accumulates only for `BoundedHookInterface`, and **`ScriptHook` is
+its sole implementor in `src/`**; the charge/expiry check (`:502-521`) is behind the same `instanceof`,
+so a hand-written hook is never even asked.
+
+⚠️ **Not in the entry, and it is this audit's recurring defect again.** Case B's denial reads *"did not
+finish within the 1 seconds their timeouts add up to"* — but the hook that HAS that 1-second timeout
+never ran and consumed **zero** of it. The clock was spent by an unbounded hook the message never names.
+A user reading it would raise the `ScriptHook`'s `timeout:`, which cannot help.
+
+**Size: L as a fix** (a fiber or a fork, plus a decision about what killing an in-process hook means —
+a design decision, not an edit). **S** if the outcome is to correct the denial message to name the spender.
+
+⚠️ **Must NOT share a lane with E60** — it changes E60's premise: if hand-written hooks become
+forkable, `ScriptHook` stops being the only `BoundedHookInterface` implementor and the clip design
+acquires more callers.
 
 ### E62 — an interactive PTY in the chat pane is a credential-entry surface driven by model output
 
@@ -3481,3 +3630,87 @@ body longer than `$width`, and the wrap that produces the over-run never happens
 before/after capture of `renderAgentView()` at 20/28/30/40/43/44 columns, since it changes what those
 narrow panes print. `AgentViewPaneGeometryTest::testAWideClusterOperationOverrunsTheChromeGeometryAtTheOperationFloor()`
 pins the current numbers, so the change will be visible rather than silent.
+
+---
+
+### E65 — any registered `ScriptHook` denies every tool call whose input exceeds ~128 KiB
+
+**Found by the round-39 scout, measured.** Not a security finding — a **daily-driver blocker**, and it
+fails in the one direction that reads as someone else's bug.
+
+**What.** `ScriptHook` passes the tool input to its child through the **environment**
+(`CRUSH_TOOL_INPUT`, `sugar-crush/src/Hooks/ScriptHook.php:340-346`). Linux caps a single env entry at
+`MAX_ARG_STRLEN` = 131,072 bytes. Past that the `exec` fails with `E2BIG`, the hook cannot run, and the
+chain denies. Measured against a hook whose script is nothing but `exit(0)`:
+
+```
+toolInput =  131037 -> allow
+toolInput =  131137 -> deny   "Hook audit could not be executed"
+toolInput =  200037 -> deny   "Hook audit could not be executed"
+toolInput = 1000037 -> deny   "Hook audit could not be executed"
+```
+
+Boundary pinned to between **131,054 and 131,074 bytes** of value.
+
+**Severity.** Fail-closed, so not a hole — but a user with **any** script hook installed cannot `Write`
+a file, or run a `Bash` heredoc, whose JSON-encoded arguments exceed ~128 KB. The refusal names neither
+the size nor the cause; it reads as *"your hook is broken"*. The same limit is what capped the E60
+MODIFY measurement at 131,054 bytes, so the two findings share a mechanism as well as a file.
+
+**Step.** Hand the child its input through a **pipe or a temp file** instead of an env var. Bundle with
+E60: bounding MODIFY at a sane size would also make this failure unreachable, so fixing them separately
+means the second fix arrives with a stale premise. Whatever the outcome, the refusal must say what
+actually happened.
+
+---
+
+### E66 — `SkillPathNudge` is unbounded, and it is filed under a number that belongs to a different finding
+
+**Two defects: the code one, and a tracker one that caused a supervisor to brief a lane wrongly.**
+
+**The tracker defect.** `sugar-crush/src/Tools/BuiltIn/Grep.php:377` says *"Recorded as **E57** in the
+hardening backlog"* — but `## E57` is the project-tier `disabledTools` glob. The nudge claim exists only
+as a **bold label inside the ROUND 37 `lsp` narrative**, with no heading of its own, which is why the
+round-38 queue summary read "E57 — `SkillPathNudge` genuinely unbounded" while the entry it pointed at
+was about tool filtering. **This is the recurring defect inside the tracker itself.** Fixed by giving it
+this number; the `Grep.php:377` cross-reference must be corrected to **E66** by whichever lane next
+touches `src/Tools/`.
+
+**The code defect — measured.** `SkillPathNudge::forPaths()` with N auto-invocable `paths:`-scoped skills:
+
+```
+skills =   1  descLen =   200  ->  nudge =        345 bytes
+skills =  10  descLen =  2000  ->  nudge =     20,253 bytes
+skills =  50  descLen = 20000  ->  nudge =  1,000,773 bytes
+skills = 200  descLen = 50000  ->  nudge = 10,002,823 bytes
+```
+
+Linear in (matching skills × description length) with **no clip anywhere**: `Skill::fromFile()`
+(`src/Skills/Skill.php:73`) reads `description` from frontmatter untruncated,
+`SkillPathNudge.php:79` emits `- {name}: {description}` per skill, and the result is appended **outside**
+`maxOutputBytes` in `Grep`/`Glob`/`Read`/`Edit`/`Write`. Announce-once per session, which bounds how
+often but not how much.
+
+**Note:** the `Grep.php:362-380` comment states the bound correctly. Only the backlog reference was wrong.
+
+**Step.** Clip the nudge, and count it against the same budget as the tool body rather than beside it.
+
+---
+
+### E67 — `SkillRegistry::register()` keys by array key, not by skill name
+
+**Reasoned from reading, NOT verified against callers — recorded at that strength deliberately.**
+
+`sugar-crush/src/Skills/SkillRegistry.php:19-24` stores each skill under its incoming **array key**. A
+list-shaped `register([$skill, …])` therefore stores under `0, 1, 2 …`, after which
+`isAutoInvocable($skill->name)` misses and **every skill silently becomes non-auto-invocable**. The
+round-39 scout hit this in its own probe harness.
+
+**Whether any shipped caller passes a list was not checked.** That is the whole question: if none does,
+this is a latent trap for the next caller; if one does, auto-invocation is broken in production today.
+**Establish that before sizing a fix** — and note that "no test reaches it" would not settle it.
+
+**Also noted, not a defect:** a `PostToolUse` hook's result is discarded at both call sites
+(`src/Runtime.php:857`, `src/Chat.php:3250`). Runtime's comment — *a hook is OBSERVABILITY, not the
+answer* — makes this deliberate. Flagged only because a user writing a PostToolUse hook that returns
+DENY gets silence. A documentation gap at most.
