@@ -121,6 +121,25 @@ same-day correction: `SUDO_ASKPASS` only keeps plaintext out of the app **if the
 user without routing back through it** — what survives regardless is that askpass is an
 **authenticated** prompt channel and a PTY is not. **Phase 9 step 1 is explicitly NOT blocked on E62.**
 
+**NO ASKPASS — decided by the user (`50439cbb`), and it is a SCOPE decision, not a mitigation.** The
+E62 threat is a *credential-entry* surface; removing credential entry removes the surface. A command
+that needs a secret gets the fail-fast naming the real options (configure `NOPASSWD`, run it yourself,
+grant the capability another way) — **the agent never holds the password.** Askpass lost on cost, not
+principle: its one durable benefit is the authenticated channel, and buying it needs a helper that can
+reach the user WITHOUT routing back through the app — verified absent on this box (no `ssh-askpass`, no
+`zenity`; `pinentry-curses` needs the very tty step 1 removes) — times four separate integrations, none
+of which covers the general interactive case anyway.
+
+⚠️ **Two ways this decision gets over-applied by whoever reads it next — guard both.**
+(a) It does **NOT** delete step 1's non-interactive environment work. `GIT_TERMINAL_PROMPT=0`,
+`DEBIAN_FRONTEND=noninteractive`, `PAGER=cat`, `sudo -n` are not askpass — they are how a command fails
+fast and legibly instead of hanging. They stay.
+(b) The residual is carried honestly: a PTY child can still **print** something that looks like a
+password prompt, and a user trained by the `[Y/n]` flow may type a secret into the pane anyway. So
+E62's "app chrome visually distinct from PTY content" **survives, demoted** from *the fix* to *defence
+in depth*. What makes the remaining prompts low-stakes to forge is that forging one buys a keystroke,
+not a password.
+
 **Round 37's scout re-measured E51–E56 and found ALL SIX still open.** Unlike round 36 (8 of 13 already
 closed), the backlog was accurate about open/closed here — but wrong in its details at a rate of 11
 stale line numbers in E51 alone, plus two substantively false claims. `d7919902` fixed the record.
