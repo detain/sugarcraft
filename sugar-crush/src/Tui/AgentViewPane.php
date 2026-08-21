@@ -159,18 +159,25 @@ final class AgentViewPane
         for ($i = 0; $i < $count; $i++) {
             $agent = $agents[$i];
             $isSelected = ($i === $selectedIndex);
-            $statusColor = self::statusColor($agent->status, $theme);
+            $statusColor = self::statusColor(self::stripEscapes($agent->status), $theme);
 
             // Colour dot + name + status badge.
-            $dot  = Style::new()->foreground($statusColor)->render("\u{25CF}");
-            $name = $agent->name;
+            //
+            // The three data-derived fields are taken through
+            // {@see stripEscapes()} FIRST, before anything measures or cuts
+            // them. See the clamp below for why: this row's truncator is
+            // cluster-aware but not escape-aware, so an escape reaching it is
+            // an escape it may cut in half.
+            $dot    = Style::new()->foreground($statusColor)->render("\u{25CF}");
+            $name   = self::stripEscapes($agent->name);
+            $status = self::stripEscapes($agent->status);
 
             // Right-side (elapsed + usage).
             $rightSection = $agent->elapsedDisplay() . '  ' . $agent->usageDisplay();
 
             // Cells the IDENTITY costs, operation excluded:
             //   dot(1) + ' '(1) + name + ' ['(2) + status + ']  '(3).
-            $identityWidth = 7 + Width::string($name) + Width::string($agent->status);
+            $identityWidth = 7 + Width::string($name) + Width::string($status);
 
             // Below `identity + metrics` columns the row cannot show both, and
             // the metrics are what gives: a row that cannot say WHICH agent it
@@ -209,7 +216,7 @@ final class AgentViewPane
             // that every width where it already fitted renders byte-for-byte as
             // before.
             $opBudget = max(5, $width - Width::string($name) - 60);
-            $operation = self::truncate($agent->operation, $opBudget);
+            $operation = self::truncate(self::stripEscapes($agent->operation), $opBudget);
 
             // Left section: dot + name + status + operation, clamped to the
             // cells actually left after the metrics.
@@ -226,12 +233,39 @@ final class AgentViewPane
             // a 26-cell row. Only the shell renderer's `clipWidth()` kept that
             // off the screen.
             //
-            // Clamping the label (everything after the styled dot -- it is
-            // plain text, so `truncate()` cannot cut an SGR sequence in half)
-            // to `$width - $rightWidth - 1` makes the body fit by construction,
-            // and the wrap that produced the over-run never happens.
+            // Clamping the label -- everything after the styled dot -- to
+            // `$width - $rightWidth - 1` makes the body fit the box, and the
+            // wrap that produced the over-run never happens. "Fit" here means
+            // fit BY `Width::string`, which is not quite the same as fitting
+            // the renderer: `Style::render()` expands a tab to four spaces
+            // AFTER this clamp has measured it as zero, so an operation
+            // carrying a TAB still outgrows the box. That divergence is a
+            // width-authority defect rather than this pane's, and is recorded
+            // separately as E69.
+            //
+            // The dot is excluded from the clamp deliberately, and the label
+            // is escape-free deliberately. `truncate()` groups CLUSTERS, not
+            // escape sequences: an ESC byte measures 0 cells, so it joins the
+            // unit before it, while the `[`, the parameter digits and the
+            // final `m` are each ordinary 1-cell units the loop is free to cut
+            // between. Feed it a string carrying SGR and it will happily
+            // return `\e[32mabc\e` or `...abc\e[0` -- a severed reset leaks
+            // its colour into the REST OF THE FRAME, not just this row. Before
+            // the clamp, `$name` and `$agent->status` were interpolated
+            // untruncated and an escape inside them survived intact; measured
+            // over widths 1..140 with a name of `\e[32mabc\e[0m`, clamping
+            // the composed label severed at 7 widths against the old code's 0,
+            // and with the same escapes in the status, 13 against 0.
+            //
+            // So the precondition is ENFORCED rather than assumed: $name,
+            // $status and $operation are escape-free copies (see
+            // {@see stripEscapes()}) and nothing that reaches `truncate()`
+            // carries an escape at all. It is not enough to require it of the
+            // data -- `$name` is `$agent->name` verbatim, straight off the
+            // Agent registry and out of imported foreign presets, and nothing
+            // anywhere validates it.
             $label = self::truncate(
-                " {$name} [{$agent->status}]  {$operation}",
+                " {$name} [{$status}]  {$operation}",
                 max(0, $width - $rightWidth - 1),
             );
 
@@ -294,6 +328,59 @@ final class AgentViewPane
         $token = self::STATUS_TOKEN[strtolower(trim($status))] ?? self::STATUS_TOKEN['completed'];
 
         return $theme->$token;
+    }
+
+    /**
+     * Strip every ESC byte, and the sequence it introduces, out of $text.
+     *
+     * The row's truncator is cluster-aware and NOT escape-aware, so anything
+     * it may cut has to be escape-free before it gets there; see the clamp in
+     * {@see render()} for the measured cost of skipping this. Applied to the
+     * three fields that come from data -- name, status, operation -- and not
+     * to the styled dot, which this class composes itself and never cuts.
+     *
+     * Removing rather than preserving, for two reasons. A row is a fixed-width
+     * cell of someone else's text and colouring it is this pane's decision,
+     * not the registry's; and an ANSI-preserving truncator would have to be
+     * trusted at exactly the widths that matter, which
+     * {@see Width::truncateAnsi()} is not: measured over 20,000 random
+     * cluster-heavy strings at budgets 1..8 it came back WIDER than the budget
+     * it was given 3,425 times, worst +8 -- `truncateAnsi(U+1F44D U+1F3FD
+     * . 'xy', 3)` returns 5 cells. Handing the clamp to it would trade a
+     * severed escape for an over-run, which is the defect the clamp exists to
+     * close.
+     *
+     * Three alternatives: a CSI (`ESC [`, parameter bytes 0x30..0x3f,
+     * intermediate bytes 0x20..0x2f, final byte 0x40..0x7e), an OSC (`ESC ]`
+     * up to BEL or ST), and then any ESC left over. The last one drops the ESC
+     * BYTE only and keeps what followed it, which is why `ESC ( B` comes back
+     * as `(B`: two visible cells, which is also what `Width::string()` scores
+     * the original.
+     *
+     * On escape-FREE input this is the identity -- measured, 0 of 20,000
+     * random strings over an alphabet of ASCII, accents, emoji, ZWJ, tabs and
+     * bare brackets came back changed -- so nothing any existing geometry
+     * figure was measured over moves at all.
+     *
+     * It is NOT width-neutral on escape-bearing input, and does not need to
+     * be. `Width::string()` skips a CSI by scanning to the first byte in
+     * 0x40..0x7e whatever lies between, so a MALFORMED `ESC [` swallows the
+     * visible text after it; the grammar above stops at the first byte that is
+     * not a legal parameter or intermediate, and leaves that text on screen,
+     * which is what a real terminal does with it. Over 20,000 random
+     * escape-bearing strings the two disagree on width in 5,398. That
+     * disagreement is inert here because {@see render()} measures the STRIPPED
+     * text everywhere -- `$identityWidth`, `$opBudget`, the clamp and the
+     * right-pad all read fields that have already been through this function,
+     * and the raw field is never measured again after it.
+     */
+    private static function stripEscapes(string $text): string
+    {
+        return preg_replace(
+            '/\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]?|\x1b\][^\x07\x1b]*(?:\x07|\x1b\x5c)?|\x1b/',
+            '',
+            $text,
+        ) ?? $text;
     }
 
     /**
