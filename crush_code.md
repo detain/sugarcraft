@@ -1058,6 +1058,30 @@ So E62's "app chrome visually distinct from PTY content" still applies — demot
 
 ---
 
+### Status — as of round 39 (2026-08-21)
+
+**Suite floor `8879 / 100396 / 1 skipped / rc 0` at `3737f506`.** `docs/plans/crush_code_RESUME.md` §0-NOW
+is the live entry point; this section only records what the *plan* needs to know.
+
+**Concurrency is 3** (raised by the user mid-round-39).
+
+**Closed since the plan was written**, all supervisor-verified in the live tree — see
+`docs/plans/crush_code_hardening_backlog.md` for each: E53, E54 (**partially** — the `+4` is single-sourced
+and the dashboard over-run is gone, but the below-44 case in its own heading stands), E57, E58, E60, E63,
+E64, E65.
+
+**Phase 9 has NOT started.** It is still sequenced after the remaining functional queue and before the
+deferred security pass, and its decisions stand unchanged: layered **(A) detach always + (C) PTY opt-in**,
+the opt-in an **optional parameter and not a second tool**, and **no askpass** — the interactive PTY does
+not accept secrets at all.
+
+⚠️ **One round-39 outcome bears directly on Phase 9.** `Chat::withLaunchNotices()` now exists as a seam
+for getting launch-time text *inside* the alt screen — built because a stderr warning was measured living
+only **0.47 s** before `\e[?1049h` took the screen. Phase 9's step 1 has the same problem in a harder
+form: a detached child's refusal must reach the user, and stderr will not do it. **Use that seam rather
+than inventing a second one**, and note that ~9 other launch warnings are still swallowed and want the
+same home.
+
 ## Appendix: Full Angle Reports
 
 The 13 full research dossiers below are kept close to verbatim from each research agent's output (file:line citations, code sketches, live-repro transcripts intact) so implementation work can be done directly against them. Two corrections from the "Corrections applied during compilation" section above apply throughout: `ChatPane.php` is live (not dead) and `AgentsPane.php` is intentionally preserved (not dead) — read any language below to the contrary as superseded by those corrections. Per the "never remove, wire instead" rule, deletion recommendations below (mainly in §4 and §8) have been superseded by the "Flagged for consolidation review" section above and should not be read as approved action items.
