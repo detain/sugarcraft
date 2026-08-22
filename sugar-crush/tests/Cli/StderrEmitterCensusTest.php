@@ -564,6 +564,7 @@ final class StderrEmitterCensusTest extends TestCase
         $naiveTotal = 0;
         $callTotal = 0;
         $commentTotal = 0;
+        $examined = 0;
 
         foreach (self::sources() as $relative => $absolute) {
             $source = (string) file_get_contents($absolute);
@@ -573,7 +574,10 @@ final class StderrEmitterCensusTest extends TestCase
             // as a cheap skip and was a hole: it dropped every file the weak
             // instrument cannot see, which is precisely the file this
             // reconciliation exists to find. For a genuinely empty file the
-            // identity below is `0 === 0` and costs nothing.
+            // identity below is `0 === 0` and costs nothing. The `$examined`
+            // counter at the bottom of this body is what keeps the skip from
+            // coming back unnoticed — nothing else in this file reds when it
+            // does.
             $inComments = 0;
             foreach (token_get_all($source) as $token) {
                 if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
@@ -602,7 +606,27 @@ final class StderrEmitterCensusTest extends TestCase
             $naiveTotal += $naive;
             $callTotal += $calls;
             $commentTotal += $inComments;
+            // LAST STATEMENT IN THE BODY, so that any early exit added above
+            // fails to reach it. This is what pins the removal of the
+            // `if ($naive === 0) { continue; }` skip: re-adding that line
+            // leaves every assertion above green (there is no file in `src/`
+            // today where the two instruments disagree, which is the whole
+            // reason the skip looked free), and only this count notices that
+            // the reconciliation quietly stopped covering most of the tree.
+            // MEASURED: with the skip re-added and this counter absent, the
+            // whole of this file stayed green.
+            ++$examined;
         }
+
+        self::assertSame(
+            \count(self::sources()),
+            $examined,
+            'the reconciliation did not reach the end of its loop body for every file `sources()` walks. '
+                . 'A file skipped here is a file whose identity is not asserted, and the ones worth '
+                . 'skipping — those the naive instrument reports zero for — are exactly the ones where a '
+                . 'call it cannot see would hide. No cardinality is written here on purpose (rule 18): '
+                . 'both sides are derived from the same walk.',
+        );
 
         self::assertSame($naiveTotal, $callTotal + $commentTotal, 'the per-file identity holds but the totals do not');
 
