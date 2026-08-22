@@ -900,27 +900,37 @@ final class ToolOutputBudgetTest extends TestCase
      */
     public function testGrepAndGlobStayInsideTheirCapWithAnOversizeSkillNudge(): void
     {
-        $this->seedMatches(30);
+        // ADVERSARIAL IN BOTH DIRECTIONS AT ONCE, and the first cut of this
+        // test was not. 30 matches under a 65,536-byte cap leaves the answer
+        // far inside the budget, so removing the reservation entirely — the
+        // mutation this test exists to kill — left the whole file GREEN. The
+        // hit list has to overflow the cap on its own before a nudge appended
+        // beside it can be seen to push the total past it. 400 matches is
+        // ~33,000 bytes of hits and ~22,000 of paths, over both caps below.
+        //
+        // The caps are also both above the threshold at which a nudge fits its
+        // eighth (MEASURED: 4,120 for a maximum-length entry), which is what
+        // the `<system-reminder>` assertions guard — a bound satisfied by
+        // never emitting a nudge would prove nothing.
+        $this->seedMatches(400);
 
         foreach ([[1, 200], [5, 5000], [20, 20000]] as [$count, $descLen]) {
-            foreach ([1024, 4096, 16384, 65536] as $cap) {
+            foreach ([8192, 16384] as $cap) {
+                $shape = "$count skills x $descLen-byte descriptions at cap $cap";
+
                 $grep = (new Grep($this->dir, $cap, null, $this->fatNudge($count, $descLen)))
                     ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
                     ->content();
-                self::assertLessThanOrEqual(
-                    $cap,
-                    strlen($grep),
-                    "Grep cap $cap overrun by $count skills x $descLen-byte descriptions",
-                );
+                self::assertLessThanOrEqual($cap, strlen($grep), "Grep overrun by $shape");
+                self::assertStringContainsString('<system-reminder>', $grep, "Grep emitted no nudge for $shape");
+                self::assertGreaterThanOrEqual(1, $this->hitCount($grep), "Grep lost every hit for $shape");
 
                 $glob = (new Glob($this->dir, null, [], $this->fatNudge($count, $descLen), $cap))
                     ->execute(['pattern' => 'sub/*.php', 'path' => $this->dir])
                     ->content();
-                self::assertLessThanOrEqual(
-                    $cap,
-                    strlen($glob),
-                    "Glob cap $cap overrun by $count skills x $descLen-byte descriptions",
-                );
+                self::assertLessThanOrEqual($cap, strlen($glob), "Glob overrun by $shape");
+                self::assertStringContainsString('<system-reminder>', $glob, "Glob emitted no nudge for $shape");
+                self::assertGreaterThanOrEqual(1, $this->pathCount($glob), "Glob lost every path for $shape");
             }
         }
     }
