@@ -1031,6 +1031,68 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     }
 
     /**
+     * KNOWN-ANSWER CONTROL FOR THE COLLECTOR, not for the scanner.
+     *
+     * {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()} proves
+     * the matcher can still find a quotation in text it is handed. It says
+     * nothing about whether the text is handed over at all, and those are two
+     * different instruments with the same failure mode: a collector that
+     * quietly stops returning a page makes the roster assertion above pass by
+     * finding nothing on it, which is round 44's dead census wearing a
+     * different hat.
+     *
+     * THE THREE SHAPES ARE THE ONES THE OLD ALPHABET COULD NOT EXPRESS —
+     * a root page that is not `README.md`, a page nested under `docs/`, and a
+     * non-markdown file that must NOT be collected. The last is as load-bearing
+     * as the first two: a collector that takes everything would drag
+     * `docs/*.json` fixtures and any generated HTML into the sweep, and the
+     * roster would then have to grow a row per file rather than per page.
+     */
+    public function testTheSweepCollectsPagesFromATreeWhoseAnswerIsKnown(): void
+    {
+        // Unique per run, and torn down by exact path: sibling suites share
+        // /tmp and a glob-delete here would take their fixtures with it.
+        $root = sys_get_temp_dir() . '/sc_lane_c_sweep_' . bin2hex(random_bytes(8));
+        $made = [];
+        $write = static function (string $relative, string $text) use ($root, &$made): void {
+            $path = $root . '/' . $relative;
+            $dir = \dirname($path);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0o700, true);
+            }
+            file_put_contents($path, $text);
+            $made[] = $path;
+        };
+
+        try {
+            $write('README.md', 'root readme');
+            $write('CHANGELOG.md', 'root changelog');
+            $write('notes.txt', 'not markdown');
+            $write('docs/FLAT.md', 'a flat docs page');
+            $write('docs/nested/DEEP.md', 'a nested docs page');
+            $write('docs/nested/schema.json', '{}');
+
+            $found = self::markdownPagesUnder($root);
+
+            self::assertSame(
+                ['CHANGELOG.md', 'README.md', 'docs/FLAT.md', 'docs/nested/DEEP.md'],
+                array_keys($found),
+                'the sweep no longer collects the pages it claims to reach; every set the roster asserts is '
+                . 'as large as the collector, and no larger',
+            );
+            self::assertSame('a nested docs page', $found['docs/nested/DEEP.md']);
+        } finally {
+            // Exact paths only, deepest first.
+            foreach (array_reverse($made) as $path) {
+                @unlink($path);
+            }
+            @rmdir($root . '/docs/nested');
+            @rmdir($root . '/docs');
+            @rmdir($root);
+        }
+    }
+
+    /**
      * Every guard {@see PAGE_QUOTES} names still exists.
      *
      * A roster row is a claim that some test pins that page against that
@@ -1123,25 +1185,71 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     }
 
     /**
-     * `README.md` and every page under `docs/`, flattened.
+     * Every markdown page this package ships, flattened.
      *
      * DERIVED, NOT LISTED — that is the half of the sweep a hand-run pass
      * cannot have. A page added next round is swept without anyone remembering
      * to extend a roster.
      *
-     * @return array<string, string> repo-relative page path => flattened text
+     * THE PAGE SET IS THE SWEEP'S ALPHABET, and round 47 widened it rather
+     * than believing its own zero. WHAT THIS SAID: "`README.md` and every page
+     * under `docs/`", implemented as `glob('docs/*.md')` beside one hard-coded
+     * `README.md`. WHAT IS TRUE NOW: {@see markdownPagesUnder()} walks `docs/`
+     * RECURSIVELY and takes every `*.md` at the package root, so
+     * `CHANGELOG.md`, `CALIBER_LEARNINGS.md` and a page filed under
+     * `docs/<anything>/` are swept too — three shapes the old alphabet could
+     * not express at all, each of which would have restored exactly the
+     * silence E187 exists to end. WHY THE OLD READING STILL EARNS ITS PLACE:
+     * it is why the widening is free. MEASURED on PHP 8.3.6 at round 47 —
+     * `docs/` holds no subdirectory today, and neither `CHANGELOG.md` nor
+     * `CALIBER_LEARNINGS.md` quotes any promoted format —
+     * so the wider alphabet nominates the SAME (constant, page) set the
+     * narrow one did. A widening that changes no verdict today is the only
+     * kind that can be adopted without renegotiating the roster, and it is
+     * the reach, not the verdict, that was the hole.
+     *
+     * @return array<string, string> package-relative page path => flattened text
      */
     private static function docPages(): array
     {
-        $root = \dirname(__DIR__, 2);
+        return self::flattenPages(self::markdownPagesUnder(\dirname(__DIR__, 2)));
+    }
 
-        $paths = ['README.md'];
-        $docs = glob($root . '/docs/*.md');
-        if ($docs === false) {
-            throw new \RuntimeException('the docs/ glob failed; the sweep cannot answer for any page');
+    /**
+     * Every `*.md` at `$root` plus every `*.md` anywhere beneath `$root/docs`,
+     * RAW — keyed by the path relative to `$root`, sorted.
+     *
+     * SEPARATE FROM {@see docPages()} AND TAKING ITS ROOT AS A PARAMETER so
+     * the collector can be run against a tree whose answer is known.
+     * {@see testTheSweepCollectsPagesFromATreeWhoseAnswerIsKnown()} is that
+     * control, and it is the half of rule 15 the sweep did not have: the
+     * scanner had a known-positive fixture from the day it landed, the
+     * COLLECTOR had none, and a collector that silently returns fewer pages
+     * makes every "no unguarded quote" verdict above it vacuous in exactly the
+     * way a dead scanner would.
+     *
+     * @return array<string, string> path relative to $root => raw text
+     */
+    private static function markdownPagesUnder(string $root): array
+    {
+        $paths = [];
+        $rootPages = glob($root . '/*.md');
+        if ($rootPages === false) {
+            throw new \RuntimeException('the root markdown glob failed; the sweep cannot answer for any page');
         }
-        foreach ($docs as $doc) {
-            $paths[] = 'docs/' . basename($doc);
+        foreach ($rootPages as $page) {
+            $paths[] = basename($page);
+        }
+
+        if (is_dir($root . '/docs')) {
+            $walk = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root . '/docs', \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($walk as $entry) {
+                if ($entry instanceof \SplFileInfo && $entry->isFile() && $entry->getExtension() === 'md') {
+                    $paths[] = substr($entry->getPathname(), \strlen($root) + 1);
+                }
+            }
         }
         sort($paths);
 
@@ -1157,7 +1265,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             $out[$path] = $text;
         }
 
-        return self::flattenPages($out);
+        return $out;
     }
 
     /**
