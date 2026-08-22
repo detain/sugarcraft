@@ -430,10 +430,14 @@ final class SkillRegistry
 
         $result = @preg_match($regex, $path);
         if ($result === false) {
-            // The class did not compile (a POSIX class, a reversed range), or
-            // PCRE hit a backtrack limit on a pathological pattern. Either way
-            // the question is still the skill author's, so it is answered by
-            // the predicate this method replaced.
+            // The regex did not compile — a backslash-escaped `]` inside a
+            // class, or a reversed range — or PCRE hit a backtrack limit on a
+            // pathological pattern. Either way the question is still the skill
+            // author's, so it is answered by the predicate this method
+            // replaced. (This used to name a POSIX class as the first case.
+            // Those compile now; see {@see compilePathPattern()}'s bracket
+            // scan. Keeping the stale example here would send the next reader
+            // looking for a branch that no longer exists.)
             return self::legacyPathMatch($pattern, $path);
         }
 
