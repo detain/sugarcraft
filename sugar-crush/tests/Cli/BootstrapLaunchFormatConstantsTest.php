@@ -73,7 +73,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * applied to the two formats that happened to come up. WHAT THIS PARAGRAPH SAID:
  * "promoting the rest is recorded as a deferred finding rather than done".
  * WHAT IS TRUE NOW: every `sprintf()` in `Bootstrap.php` with a literal format
- * was walked and asked the question, four more were promoted, and the ones left
+ * was walked and asked the question, five more were promoted, and the ones left
  * inline were left inline ON PURPOSE — every reader they have asserts a
  * FRAGMENT (`'outside the project tree'`, `'could not be fully started'`,
  * `/cannot be established as yours/`), which is a deliberately loose coupling to
@@ -82,6 +82,19 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * promoting all ten. "Every literal is a constant" buys nothing and costs a
  * reader one indirection per line; the finding is which ones have a reader, and
  * saying "this one does not" is as much of an answer as promoting it.
+ *
+ * A WALK IS A CLAIM AND HAS TO BE MEASURED LIKE ONE, which E164's own first
+ * answer was not. It read the readers of `reportProjectTierRefusals()`'s
+ * `'ignoring %s — %s'` off two files that mention the envelope in COMMENTS,
+ * concluded "fragment only", and left it inline. Rewording it `ignoring` →
+ * `skipping` took
+ * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest}
+ * and its neighbours to `Tests: 177, Assertions: 615, Failures: 1` — a third
+ * file reconstructs the whole envelope twice. It is
+ * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT} now. THE LESSON FOR THE NEXT
+ * WALK: `grep` for the format's WORDS finds the files that talk about it;
+ * only a mutation finds the files that depend on it, and those are not the
+ * same set.
  *
  * ONE PROMOTED CONSTANT USED NOT TO SATISFY THAT RULE, and the repair is worth
  * recording because the shape of it applies to the next such constant.
@@ -134,6 +147,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
+        'PROJECT_TIER_REFUSAL_FORMAT' => ['method' => 'reportProjectTierRefusals', 'conversions' => 2],
     ];
 
     /**
@@ -193,6 +207,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // Both halves of the retention report are named, so what is left here
         // is the plural pair and the four `$row` keys the detail line reads.
         'reportPrunedSessions' => ["'session'", "'sessions'", "'id'", "'updated_at'", "'messages'", "'message'"],
+        // The full stop rtrim()ed off the reason, because STDERR_LINE_FORMAT
+        // adds one of its own and two would read as a typo.
+        'reportProjectTierRefusals' => ["'.'"],
     ];
 
     public function testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt(): void
@@ -433,7 +450,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
-        self::assertSame(6, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
+        self::assertSame(5, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
         self::assertSame(
             \count(self::NAMED_FORMATS),
             $census['constant'],

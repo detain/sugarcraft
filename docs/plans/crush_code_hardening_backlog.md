@@ -6922,15 +6922,20 @@ The independent copy is best held by a second party that is not a test — READM
 test. The general form: **whenever a guard's expected and actual values are both derived from the code
 under test, name what the tautology costs before shipping it.**
 
-### Ec46-3 — six `sprintf()` formats in `Bootstrap.php` are inline on purpose; here is the list and the trigger
+### Ec46-3 — five `sprintf()` formats in `Bootstrap.php` are inline on purpose; a sixth was not, and a mutation found it
 
 **Recorded 2026-08-22 by round-46 lane c.** Severity: informational. **Measured.**
 
-**What.** E164's walk asked, per literal format, whether an external reader exists. Four had one and were
-promoted. The other six were left inline because every reader they have asserts a FRAGMENT — a loose
-coupling to an idea, not two parties agreeing on a sentence: `reportProjectTierRefusals()`'s
-`'ignoring %s — %s'` envelope (its two readers mention it only in comments and assert the *reason*
-argument); `mcpConfigDecision()`'s out-of-tree and untrusted refusals (`'outside the project tree'`,
+**What.** E164's walk asked, per literal format, whether an external reader exists. Five had one and were
+promoted — the fifth only after a mutation falsified the walk's own first answer, which is the part of this
+entry worth keeping. `reportProjectTierRefusals()`'s `'ignoring %s — %s'` envelope was classified
+"fragment only" on the strength of two files that mention it in COMMENTS; rewording it `ignoring` →
+`skipping` reds `BootstrapLaunchNoticeRoutingTest::testARefusedProjectDirectoryReachesBothChannels()`
+(`Tests: 177, Assertions: 615, Failures: 1`), which reconstructs the whole envelope twice. **`grep` for a
+format's words finds the files that talk about it; only a mutation finds the files that depend on it.**
+
+The other five were left inline because every reader they have really does assert a FRAGMENT — a loose
+coupling to an idea, not two parties agreeing on a sentence: `mcpConfigDecision()`'s out-of-tree and untrusted refusals (`'outside the project tree'`,
 `'running programs this repository chose'`, `assertStringStartsWith('resolves to ')`, and a `docs/MCP.md`
 paragraph that narrates the policy rather than quoting the message); `mcpClient()`'s `error_log` and
 transcript notices (both read via the shared clause `'could not be fully started'`); and

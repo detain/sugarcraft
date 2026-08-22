@@ -362,6 +362,31 @@ final class Bootstrap
     public const SESSION_RETENTION_DETAIL_FORMAT = "sugarcrush:   %s (last used %s UTC, %d %s)\n";
 
     /**
+     * The envelope {@see reportProjectTierRefusals()} wraps every refused
+     * project directory in — the path this launch would not read, and the
+     * reason, joined by an em dash.
+     *
+     * PROMOTED AFTER A MUTATION FALSIFIED THE JUDGEMENT THAT LEFT IT INLINE
+     * (E164), and the correction is worth recording because the mis-reading is
+     * an easy one to repeat. WHAT E164'S WALK CONCLUDED: this envelope has no
+     * external reader, because the two files that mention it — `McpToolWiringTest`
+     * and `WorkflowRegistryTest` — name it only in COMMENTS and assert the
+     * `%s` REASON rather than the sentence. WHAT IS TRUE: MEASURED on PHP 8.3.6
+     * by rewording it `ignoring` → `skipping`,
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testARefusedProjectDirectoryReachesBothChannels()}
+     * goes red — `Tests: 177, Assertions: 615, Failures: 1`. It reconstructs
+     * the whole envelope twice, `'ignoring ' . $path . ' — ' . $reason` for the
+     * transcript row and `'ignoring ' . $path` for a `substr_count()` on
+     * stderr. That is a second party agreeing on a SENTENCE, which is the test
+     * the walk applies, and the walk answered it from the wrong two files.
+     *
+     * `%s` the path, `%s` the reason with its own full stop already stripped —
+     * the stop belongs to {@see STDERR_LINE_FORMAT}, which adds one, and two
+     * would read as a typo.
+     */
+    public const PROJECT_TIER_REFUSAL_FORMAT = 'ignoring %s — %s';
+
+    /**
      * How many CALL sites in this file route a warning onto
      * {@see warnPermissionConfigInTranscript()}.
      *
@@ -1231,7 +1256,9 @@ final class Bootstrap
             // {@see LAUNCH_NOTICE_LIMIT} exists: the eight feeders named above
             // are bounded, but $commandLoader->refusedCommands() is one entry
             // per refused FILE and nothing caps that.
-            self::warnPermissionConfigInTranscript(sprintf('ignoring %s — %s', $path, rtrim($reason, '.')));
+            self::warnPermissionConfigInTranscript(
+                sprintf(self::PROJECT_TIER_REFUSAL_FORMAT, $path, rtrim($reason, '.')),
+            );
         }
     }
 
