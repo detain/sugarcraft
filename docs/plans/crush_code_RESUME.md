@@ -6,6 +6,53 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 46 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-22 from master `62f4e5d1`, tree clean.** Run `wf_5e9bcf7f-cf2` (task `wgbvw18cj`),
+9 agents, three lanes × implement → adversarial review → fix, concurrency 3.
+
+**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-46-wf_5e9bcf7f-cf2.js`
+(copied there deliberately — the scratchpad copy it was launched from does not survive a session end).
+🔴 **If a session limit kills agents mid-round, RESUME rather than relaunch:**
+`Workflow({scriptPath, resumeFromRunId: 'wf_5e9bcf7f-cf2'})` replays completed agents from cache. This
+worked in round 45 and cost nothing.
+
+**Base floor `9308 / 130874 / 1 / rc 0` was measured AT `62f4e5d1` itself**, per E167 — not carried
+forward from the merge commit. The briefs say so.
+
+**Lane dirs `/home/sites/crush-lane-{a,b,c}`** are full-repo `cp -a` copies at `62f4e5d1`, each verified
+clean with 18/18 `vendor/sugarcraft/*` symlinks resolving INSIDE the lane by `realpath()`.
+⚠️ **DO NOT DELETE THEM until the merged floor has been measured.**
+
+| lane | label | items |
+| --- | --- | --- |
+| `a` | stderr | **E154** (triage the unprefixed `error_log()` sites — 🔴 **reconcile 38 vs 58 FIRST**) · **E155** (`HeadlessPermissionPrompt`'s four shapes) · **E161** (`T_ATTRIBUTE` depth bug) |
+| `b` | harness | **E142/E80** (a forked-child pid reaper trait — `phpunit.xml` is FORBIDDEN) · **E138** · **E141** (the rendezvous overshoot that produced a false KILL) · **E156** (`tests/Integration/` half only) |
+| `c` | formats | **E152** (read the promoted constant) · **E153** (a behavioural assertion + the no-survivors branch) · **E164** (walk the ten literal formats) · **E162/E163** (the classifier that lies in one direction) |
+
+### WHAT THE SUPERVISOR MUST DO WHEN IT LANDS
+
+Follow §0-NOW-46's rules plus round 45's merge sequence, which worked: merge `a` → `b` → `c`; expect a
+conflict in `docs/plans/crush_code_hardening_backlog.md` ONLY; resolve by keeping both sides and
+renumbering **from E168**; then grep the whole tree — not just the backlog — for the provisional ids
+(`Ea46-`, `Eb46-`, `Ec46-`). Check real overlap with `git diff --name-only <base>..HEAD` per lane plus
+`comm -12`, never the lanes' self-reports.
+
+🔴 **CHECK EVERY LANE TREE FOR A DIRTY WORKTREE BEFORE MERGING** (E168). Round 45's session limit left an
+unrestored oracle probe in a lane; `git status --porcelain` per lane catches it, and reverting to
+committed HEAD is the right move once you have confirmed the dirt is a mutation and not fix work.
+
+⚠️ **Two read-side hazards this round, both flagged in the briefs.** Lane `a`'s `StderrEmitterCensusTest`
+holds a per-file roster of stderr writes in `src/Cli/Bootstrap.php`, which is lane `c`'s file — E159
+predicted this and **a red there at merge is the guard working, not a defect**. Bump the roster after
+deciding where the write belongs; never loosen the map. And `BootstrapTranscriptSeamCallSiteCensusTest`
+pins that same file's seam call-site count at 16 plus ten `PROSE_SITES` offsets.
+
+**Predict tests additively; predict assertions as a LOWER BOUND.** Lane a is editing a dozen `src/` files,
+which moves the per-paragraph censuses in files no lane touches (E143).
+
+---
+
 ## 0-NOW-46. ROUND 45 CLOSED (floor 9308) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR: `9308 / 130874 / 1 skipped / rc 0` at `ee77252c`** (backlog additions at `5daa7420`),
