@@ -49,6 +49,18 @@ use SugarCraft\Crush\Support\ForkedChild;
  */
 final class MultiAgentRefactorTest extends TestCase
 {
+    /**
+     * THE PER-TEST TIME LIMIT DOES NOT REACH A FORKED CHILD. `phpunit.xml`'s
+     * `enforceTimeLimit`/`defaultTimeLimit` is `pcntl_alarm()`, which fires in
+     * the process that armed it and is not inherited across `pcntl_fork()` -
+     * so an abort here stops the parent and leaves every child of this test
+     * running with no clock at all, writing into a temp tree the parent's own
+     * `tearDown()` is about to delete. {@see ReapsForkedChildrenTrait} for the
+     * measurement behind that, and for why `tearDown()` is the right place to
+     * put the net.
+     */
+    use \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+
     private string $tmpRoot;
     private string $repoRoot;
     private string $worktreesBase;
@@ -112,6 +124,13 @@ final class MultiAgentRefactorTest extends TestCase
 
     protected function tearDown(): void
     {
+        // BEFORE the temp tree goes, not after: an orphan still running when
+        // the directory is removed goes on writing into a path that no longer
+        // exists, and the next test inherits the wreckage. Runs on the abort
+        // path too - PHPUnit swallows the time-limit TimeoutException in
+        // runBare() and calls tearDown() anyway.
+        $this->reapTrackedForkedChildren();
+
         $_SERVER['HOME'] = $this->oldHome;
         $this->removeDirectory($this->tmpRoot);
 
@@ -178,8 +197,8 @@ final class MultiAgentRefactorTest extends TestCase
         $pids = [];
 
         foreach ($coderIds as $coderId) {
-            $pid = pcntl_fork();
-            $this->assertNotSame(-1, $pid, 'pcntl_fork() must succeed.');
+            $pid = $this->forkTracked();
+            $this->assertNotSame(-1, $pid, 'the harness fork must succeed.');
 
             if ($pid === 0) {
                 // Never returns: see runCoderChild()'s doc-block for why a
@@ -400,8 +419,8 @@ final class MultiAgentRefactorTest extends TestCase
 
         $this->resetTaskListConnectionCache();
 
-        $pid = pcntl_fork();
-        $this->assertNotSame(-1, $pid, 'pcntl_fork() must succeed.');
+        $pid = $this->forkTracked();
+        $this->assertNotSame(-1, $pid, 'the harness fork must succeed.');
         if ($pid === 0) {
             $this->runCoderChild('coder-1', $teamId, $resultDir, $goMarker);
         }

@@ -50,6 +50,18 @@ use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
  */
 final class ParallelToolCallsTest extends TestCase
 {
+    /**
+     * THE PER-TEST TIME LIMIT DOES NOT REACH A FORKED CHILD. `phpunit.xml`'s
+     * `enforceTimeLimit`/`defaultTimeLimit` is `pcntl_alarm()`, which fires in
+     * the process that armed it and is not inherited across `pcntl_fork()` -
+     * so an abort here stops the parent and leaves every child of this test
+     * running with no clock at all, writing into a temp tree the parent's own
+     * `tearDown()` is about to delete. {@see ReapsForkedChildrenTrait} for the
+     * measurement behind that, and for why `tearDown()` is the right place to
+     * put the net.
+     */
+    use \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+
     private string $dir;
 
     private ProviderInterface $provider;
@@ -107,6 +119,13 @@ final class ParallelToolCallsTest extends TestCase
 
     protected function tearDown(): void
     {
+        // BEFORE the temp tree goes, not after: an orphan still running when
+        // the directory is removed goes on writing into a path that no longer
+        // exists, and the next test inherits the wreckage. Runs on the abort
+        // path too - PHPUnit swallows the time-limit TimeoutException in
+        // runBare() and calls tearDown() anyway.
+        $this->reapTrackedForkedChildren();
+
         ToolIpcFiles::recordReservations(false);
 
         $this->removeTree($this->dir);
@@ -1271,7 +1290,7 @@ final class ParallelToolCallsTest extends TestCase
 
         $report = $this->dir . '/forkfail.json';
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         $this->assertNotSame(-1, $pid, 'the harness fork itself must succeed');
 
         if ($pid === 0) {

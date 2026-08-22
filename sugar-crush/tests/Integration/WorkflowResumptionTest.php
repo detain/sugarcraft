@@ -30,6 +30,18 @@ final class WorkflowResumptionTest extends TestCase
 {
     use \SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
+    /**
+     * THE PER-TEST TIME LIMIT DOES NOT REACH A FORKED CHILD. `phpunit.xml`'s
+     * `enforceTimeLimit`/`defaultTimeLimit` is `pcntl_alarm()`, which fires in
+     * the process that armed it and is not inherited across `pcntl_fork()` -
+     * so an abort here stops the parent and leaves every child of this test
+     * running with no clock at all, writing into a temp tree the parent's own
+     * `tearDown()` is about to delete. {@see ReapsForkedChildrenTrait} for the
+     * measurement behind that, and for why `tearDown()` is the right place to
+     * put the net.
+     */
+    use \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+
     private string $tempDir;
     private WorkflowRegistry $registry;
     private ExecutorInterface $mockExecutor;
@@ -63,6 +75,13 @@ final class WorkflowResumptionTest extends TestCase
 
     protected function tearDown(): void
     {
+        // BEFORE the temp tree goes, not after: an orphan still running when
+        // the directory is removed goes on writing into a path that no longer
+        // exists, and the next test inherits the wreckage. Runs on the abort
+        // path too - PHPUnit swallows the time-limit TimeoutException in
+        // runBare() and calls tearDown() anyway.
+        $this->reapTrackedForkedChildren();
+
         $this->restoreHomeSandbox();
 
         // Clean up temp directory
@@ -424,7 +443,7 @@ final class WorkflowResumptionTest extends TestCase
 
         $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/real-sigterm-test.json';
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->fail('pcntl_fork() failed.');
         }
@@ -579,7 +598,7 @@ final class WorkflowResumptionTest extends TestCase
         $this->assertNotNull($previousAsyncSignals, 'Handlers should install successfully when pcntl is available.');
 
         try {
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             if ($pid === -1) {
                 $this->fail('pcntl_fork() failed.');
             }
