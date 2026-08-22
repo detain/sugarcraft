@@ -15,6 +15,7 @@ use SugarCraft\Crush\Agents\Teammate;
 use SugarCraft\Crush\Agents\WorktreeConfig;
 use SugarCraft\Crush\Agents\WorktreeIsolationMode;
 use SugarCraft\Crush\Agents\WorktreeManager;
+use SugarCraft\Crush\Support\ForkedChild;
 
 /**
  * E2E: multi-agent refactor coordination via Team/TeamManager/TaskList/WorktreeManager.
@@ -53,6 +54,33 @@ final class MultiAgentRefactorTest extends TestCase
     private string $worktreesBase;
     private string $oldHome;
     private WorktreeConfig $worktreeConfig;
+
+    /**
+     * The whole budget one forked coder gets for ALL of its tasks, and why it
+     * is one budget rather than one per task.
+     *
+     * WHAT IT SAID: each task got its own 30s race deadline, described as
+     * "generous ... claimTask() creates a real git worktree, which takes far
+     * longer on a small shared CI runner than on a dev box".
+     *
+     * WHAT IS TRUE NOW: two tasks at 30s each is a 60s worst case in the
+     * child, and the parent spends all of it blocked in pcntl_waitpid() --
+     * which is exactly phpunit.xml's enforced defaultTimeLimit. A test whose
+     * own budget equals the limit that aborts it cannot report its own
+     * diagnosis: the slow path surfaces as PHPUnit's "aborted after 60
+     * seconds" RISKY rather than as this file's gaveup breadcrumb. Measured on
+     * this host (PHP 8.3.6, 48 cores): 700 runs of this test under 48
+     * CPU-burner processes finished between 0.18s and 0.63s, p50 0.48s. So the
+     * real work is three orders of magnitude inside any of these numbers, and
+     * the only thing a 60s ceiling ever bought was the harness taking the
+     * failure away from the test.
+     *
+     * WHY A BUDGET STILL EARNS ITS PLACE: without one a genuine claim
+     * regression is an unbounded spin rather than a red. 20s for the whole
+     * child keeps the parent's wait comfortably under the enforced limit while
+     * still being ~30x the slowest run ever measured here.
+     */
+    private const CHILD_BUDGET_SECONDS = 20.0;
 
     protected function setUp(): void
     {
@@ -154,8 +182,9 @@ final class MultiAgentRefactorTest extends TestCase
             $this->assertNotSame(-1, $pid, 'pcntl_fork() must succeed.');
 
             if ($pid === 0) {
+                // Never returns: see runCoderChild()'s doc-block for why a
+                // forked child of this suite must not reach a plain exit().
                 $this->runCoderChild($coderId, $teamId, $resultDir, $goMarker);
-                exit(0);
             }
 
             $pids[] = $pid;
@@ -182,7 +211,12 @@ final class MultiAgentRefactorTest extends TestCase
             static fn(string $f): string => basename($f) . '[' . trim((string) file_get_contents($f)) . ']',
             glob($resultDir . '/*.gaveup.*') ?: [],
         ));
-        $diag = $gaveUp === '' ? '' : ' | gave up: ' . $gaveUp;
+        $threw = implode(', ', array_map(
+            static fn(string $f): string => basename($f) . '[' . trim((string) file_get_contents($f)) . ']',
+            glob($resultDir . '/*.threw') ?: [],
+        ));
+        $diag = ($gaveUp === '' ? '' : ' | gave up: ' . $gaveUp)
+            . ($threw === '' ? '' : ' | threw: ' . $threw);
 
         $this->assertCount(
             1,
@@ -252,21 +286,313 @@ final class MultiAgentRefactorTest extends TestCase
     }
 
     /**
-     * Runs inside a forked child process, playing one coder.
+     * A coder takes AT MOST ONE task, deterministically.
      *
-     * Waits for the shared start-barrier, then races (in a tight retry loop,
-     * same shape as TaskListTest's R1 fork-race test) to claim task-a first
-     * and task-b second, via a FRESH Team/TaskList/WorktreeManager stack —
-     * exercising Team::claimTask()'s real flock()-guarded claim plus real
-     * `git worktree add` under genuine multi-process contention.
+     * The forked version of this is a race, and a race is only ever a
+     * probabilistic pin: a coder claiming both tasks needs to be quick enough
+     * to beat its sibling twice, which happened 2 times in 700 loaded runs. So
+     * the invariant is pinned here instead, with the race removed and nothing
+     * else changed -- ONE coder, TWO claimable tasks, the same
+     * {@see raceForTasks()} the child runs. A loop that advances after a win
+     * claims both and asks {@see \SugarCraft\Crush\Agents\WorktreeManager::createWorktree()}
+     * for a second worktree under the same agent id, which throws; a loop that
+     * stops after a win leaves the second task Pending for somebody else.
      */
-    private function runCoderChild(string $coderId, string $teamId, string $resultDir, string $goMarker): void
+    public function testACoderTakesAtMostOneTaskSoNoAgentEverAsksForTwoWorktrees(): void
     {
-        $deadline = microtime(true) + 5.0;
-        while (!file_exists($goMarker) && microtime(true) < $deadline) {
-            usleep(1_000);
+        $teamId = 'solo-' . uniqid('', true);
+        $manager = new TeamManager($this->tmpRoot . '/.sugar-crush/teams');
+        $team = $manager->createTeam($teamId, 'Refactor Team', 'lead-agent', new TeamConfig(maxTeammates: 10));
+
+        $taskList = $team->getTaskList();
+        $taskList->addTask($this->makeTask('task-a', $teamId, 'Extract helper in module A'));
+        $taskList->addTask($this->makeTask('task-b', $teamId, 'Extract helper in module B'));
+
+        $resultDir = $this->tmpRoot . '/results-solo';
+        mkdir($resultDir, 0755, true);
+
+        $this->raceForTasks('coder-1', $teamId, $resultDir, microtime(true) + self::CHILD_BUDGET_SECONDS);
+
+        $this->assertSame(
+            ['task-a.won.coder-1'],
+            array_map('basename', glob($resultDir . '/*.won.*') ?: []),
+            'one coder facing two claimable tasks must take the first and leave the second',
+        );
+
+        $fresh = $team->getTaskList();
+        $this->assertSame(TaskStatus::Completed, $fresh->getTask('task-a')->status);
+        $this->assertSame(
+            TaskStatus::Pending,
+            $fresh->getTask('task-b')->status,
+            'the second task must still be claimable by the other coder',
+        );
+
+        // ...and only one worktree was ever asked for. Dot-entries filtered
+        // rather than listed: WorktreeManager keeps its own `.registry.json`
+        // and `.last-sweep` alongside the agent directories, and neither is a
+        // worktree.
+        $this->assertSame(
+            ['coder-1'],
+            array_values(array_filter(
+                scandir($this->worktreesBase) ?: [],
+                static fn (string $entry): bool => !str_starts_with($entry, '.'),
+            )),
+        );
+    }
+
+    /**
+     * A throw inside a forked coder stays inside that coder.
+     *
+     * THE POSITIVE CONTROL IS THE THROW ITSELF: the child is set up to fail for
+     * real (its worktree is created in the parent first, so its very first
+     * {@see \SugarCraft\Crush\Agents\Team::claimTask()} raises the same
+     * `Worktree for agent "…" already exists.` that E80's double-claim
+     * produced), and the `.threw` breadcrumb proves the failure actually
+     * happened rather than the child having quietly done nothing. Only then is
+     * the absence assertion -- the parent's tree survived -- worth anything.
+     *
+     * Without {@see runCoderChild()}'s catch and {@see ForkedChild::exitNow()},
+     * PHPUnit catches that throw in the CHILD, runs this class's
+     * {@see tearDown()} there, and deletes `$this->tmpRoot` out from under the
+     * parent. Measured on this host before the fix: the sentinel below was
+     * gone, the child printed its own "ERRORS! Tests: 1" summary, and the
+     * parent's real assertions then failed on an empty results directory.
+     *
+     * WHICH HALF DOES WHICH JOB, measured rather than assumed, because the two
+     * are easy to conflate and this test asserts both. THE CATCH is what keeps
+     * PHPUnit's teardown out of the child: with `exitNow()` swapped for a plain
+     * `exit()` and the catch left in place, the sentinel below still SURVIVES
+     * (PHP 8.3.6 -- 5 assertions run, and only the `wifsignaled` one fails).
+     * Nothing propagates, so PHPUnit in the child is never told there was a
+     * failure and never tears anything down. Swap the catch for one that does
+     * not match instead and the pre-fix signature comes straight back: a child
+     * `ERRORS! Tests: 1` summary next to the parent's `FAILURES!`.
+     * `exitNow()` is the belt to that catch's braces, and it closes a SECOND,
+     * independent hazard rather than the same one twice: leaving by signal
+     * means PHP's shutdown sequence does not run AT ALL -- no destructors, no
+     * `register_shutdown_function` callbacks -- so nothing a future
+     * `setUp()`/`tearDown()`/loop registration adds to this class can find a
+     * way to run in the child either. See {@see runCoderChild()} for the
+     * `React\EventLoop\Loop` shutdown hook that is the live example.
+     */
+    public function testAThrowInsideAForkedCoderCannotRunPhpunitsTeardownInTheChild(): void
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl extension not available.');
         }
 
+        $teamId = 'throwing-' . uniqid('', true);
+        $manager = new TeamManager($this->tmpRoot . '/.sugar-crush/teams');
+        $team = $manager->createTeam($teamId, 'Refactor Team', 'lead-agent', new TeamConfig(maxTeammates: 10));
+        $team->getTaskList()->addTask($this->makeTask('task-a', $teamId, 'Extract helper in module A'));
+
+        // Make the child's FIRST createWorktree() throw, exactly as a second
+        // claim by the same coder would.
+        (new WorktreeManager($this->worktreeConfig, $this->repoRoot))->createWorktree('coder-1');
+
+        $sentinel = $this->tmpRoot . '/sentinel';
+        file_put_contents($sentinel, 'the parent still owns this tree');
+
+        $resultDir = $this->tmpRoot . '/results-throw';
+        mkdir($resultDir, 0755, true);
+        $goMarker = $this->tmpRoot . '/go-throw';
+        file_put_contents($goMarker, '1');
+
+        $this->resetTaskListConnectionCache();
+
+        $pid = pcntl_fork();
+        $this->assertNotSame(-1, $pid, 'pcntl_fork() must succeed.');
+        if ($pid === 0) {
+            $this->runCoderChild('coder-1', $teamId, $resultDir, $goMarker);
+        }
+
+        $status = 0;
+        pcntl_waitpid($pid, $status);
+
+        $breadcrumb = $resultDir . '/coder-1.threw';
+        $this->assertFileExists($breadcrumb, 'the child was supposed to fail for real; nothing was recorded');
+        $this->assertStringContainsString('already exists', (string) file_get_contents($breadcrumb));
+
+        $this->assertFileExists(
+            $sentinel,
+            'the forked child ran this class\'s tearDown() and deleted the parent\'s temp tree',
+        );
+
+        // ForkedChild::exitNow() only signals itself where posix_kill(),
+        // posix_getpid() and SIGKILL all exist, and falls back to a plain
+        // exit($code) otherwise -- so the LEAVING SHAPE is build-dependent
+        // while everything asserted above it is not. Asserted both ways
+        // instead of gated behind a skip: the guarantee this test is named
+        // for holds on either build (measured -- the sentinel survives even
+        // with exitNow() replaced by a plain exit(); see this method's
+        // doc-block), and a skip would drop that coverage on the exact
+        // builds that exercise the fallback.
+        if (function_exists('posix_kill') && function_exists('posix_getpid') && defined('SIGKILL')) {
+            $this->assertTrue(
+                pcntl_wifsignaled($status),
+                'the child must leave by SIGNAL, so that no part of PHP\'s shutdown sequence runs in '
+                    . 'it -- the belt to the catch\'s braces, NOT the thing that suppressed the '
+                    . 'teardown asserted above (the catch did that on its own)',
+            );
+            $this->assertSame(SIGKILL, pcntl_wtermsig($status));
+        } else {
+            $this->assertTrue(pcntl_wifexited($status), 'the posix-less fallback leaves by exit($code)');
+            $this->assertSame(1, pcntl_wexitstatus($status));
+        }
+    }
+
+    /**
+     * The child's budget must stay UNDER the runner's own time limit.
+     *
+     * This is the third leg of E80's fix and the only one that was left
+     * unpinned. The child used to get 30s PER TASK for two tasks, summing to
+     * exactly `phpunit.xml`'s `defaultTimeLimit="60"` -- so the one run that
+     * genuinely needed its whole budget was aborted as RISKY by the runner at
+     * the same instant, and the test could never report its own diagnosis.
+     * Mutating {@see CHILD_BUDGET_SECONDS} today reddens nothing at all,
+     * because no passing run comes close to spending it.
+     *
+     * Read out of `phpunit.xml` rather than hard-coded: a limit lowered there
+     * (or raised, and the budget not moved with it) is exactly the drift this
+     * exists to catch, and a copy of the number here would sail through it.
+     * `phpunit.xml` is not this lane's to edit, which is the other reason to
+     * assert against it instead of alongside it.
+     */
+    public function testTheChildBudgetLeavesRoomUnderThePhpunitTimeLimit(): void
+    {
+        $config = __DIR__ . '/../../phpunit.xml';
+        $this->assertFileExists($config);
+
+        $xml = simplexml_load_string((string) file_get_contents($config));
+        $this->assertNotFalse($xml, 'phpunit.xml did not parse, so nothing can be read out of it');
+
+        $enforced = (string) ($xml['defaultTimeLimit'] ?? '');
+        $this->assertMatchesRegularExpression(
+            '/^\d+$/',
+            $enforced,
+            'phpunit.xml has no numeric defaultTimeLimit, so this test cannot say what it is comparing against',
+        );
+
+        // Two of these run back to back in the forked case, one per coder, and
+        // the parent waits for both -- so the pair, not one of them, is what
+        // has to fit. Halved-and-then-some rather than "less than": a budget
+        // that only just fits leaves nothing for setUp, the git worktree calls
+        // or the reviewer's own claim.
+        $this->assertLessThan(
+            (float) $enforced / 2.0,
+            self::CHILD_BUDGET_SECONDS,
+            'a coder child could burn its budget and be aborted by the runner before it can report why '
+                . '-- which is exactly what E80 looked like from the outside',
+        );
+    }
+    /**
+     * Runs inside a forked child process, playing one coder. NEVER RETURNS.
+     *
+     * WHY THIS ENDS IN {@see ForkedChild::exitNow()} AND CATCHES EVERYTHING.
+     * A `pcntl_fork()` child of a PHPUnit process is a complete copy of the
+     * test runner, so anything that unwinds out of here is caught by PHPUnit
+     * IN THE CHILD, which then runs {@see tearDown()} there -- and this
+     * class's tearDown deletes `$this->tmpRoot`, the tree the PARENT is still
+     * using. Measured on this host (PHP 8.3.6) with a child that throws: the
+     * child ran tearDown, removed the shared directory, and printed a second
+     * "ERRORS! Tests: 1" summary of its own. The observed run then failed with
+     * an EMPTY winner list. That is E80's whole failure chain, and it
+     * reproduced 2 times in 700 runs of this test under 48 CPU-burner
+     * processes.
+     *
+     * WHY THAT LIST WAS EMPTY -- AND A CORRECTION THAT WAS ITSELF WRONG.
+     * WHAT THIS SAID: that the list was empty "from both halves at once" --
+     * the deleted results directory AND no `.won` file for task-a ever being
+     * written, "the claim committed, then createWorktree() threw before the
+     * breadcrumb".
+     * WHAT IS TRUE NOW: that second half is false, and it was false when it
+     * was written as a correction. {@see raceForTasks()} writes
+     * `<task>.won.<coder>` on the statement immediately after a claim returns
+     * true, with no branch in between, and the throw comes from the coder's
+     * SECOND claim. Measured by putting the pre-fix `continue` back and
+     * listing the results directory at the instant of the throw (PHP 8.3.6):
+     * it holds exactly `task-a.won.coder-1`, with task-a COMPLETED and TASK-B
+     * left `in_progress` and assigned to the very coder whose worktree call
+     * threw. So the empty winner list had ONE cause -- the tearDown above --
+     * and the stranded claim is a separate consequence, on task-b rather than
+     * task-a.
+     * WHY THIS STILL EARNS ITS PLACE: the single-cause reading is the stronger
+     * one, not the weaker one. It says every bit of parent-visible damage
+     * comes from a forked child running teardown, which is exactly what the
+     * catch and `exitNow()` below prevent. An explanation that also blamed a
+     * missing breadcrumb would send the next reader hunting for a second fix
+     * that does not exist.
+     *
+     * `exitNow()` SIGKILLs the child instead of returning or calling `exit()`,
+     * which skips PHP's shutdown sequence entirely -- no destructors, no
+     * `register_shutdown_function` callbacks, and so no PHPUnit teardown.
+     * {@see ForkedChild}'s class doc-block already required this of every
+     * forked child in the codebase. It is NOT true that this was the only test
+     * that disobeyed -- several other fork sites under `tests/` end their
+     * child in a plain `exit(0)`, some of them deliberately and documented as
+     * such ({@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest},
+     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest}). What made
+     * this one damaging is the combination the others lack: a child that can
+     * throw, and a tearDown that deletes a tree the parent is still reading.
+     * Note that a plain `exit()` is
+     * hazardous here for a second, independent reason: `React\EventLoop\Loop`
+     * registers a shutdown function that RUNS the loop, so a child inheriting
+     * a loop with any live watcher blocks forever at exit. Measured: with a
+     * periodic timer armed, such a child never exited; with none, it exited at
+     * once. This suite is currently shielded from that by tests/bootstrap.php
+     * installing the loop with `Loop::set()` (which never registers the hook)
+     * rather than `Loop::get()` -- a shield that exists for an unrelated
+     * reason and could be reworked away without anyone connecting it to this.
+     */
+    private function runCoderChild(string $coderId, string $teamId, string $resultDir, string $goMarker): never
+    {
+        try {
+            $deadline = microtime(true) + 5.0;
+            while (!file_exists($goMarker) && microtime(true) < $deadline) {
+                usleep(1_000);
+            }
+
+            $this->raceForTasks($coderId, $teamId, $resultDir, microtime(true) + self::CHILD_BUDGET_SECONDS);
+        } catch (\Throwable $e) {
+            // A breadcrumb rather than a rethrow, for the same reason the
+            // gaveup files exist: the parent has to be able to say WHY it has
+            // no winner, and a child that dies silently makes a claim
+            // regression and a crashed coder look identical.
+            @file_put_contents(
+                $resultDir . '/' . $coderId . '.threw',
+                $e::class . ': ' . $e->getMessage(),
+                LOCK_EX,
+            );
+
+            ForkedChild::exitNow(1);
+        }
+
+        ForkedChild::exitNow(0);
+    }
+
+    /**
+     * Race the other coder for the shared task list, taking AT MOST ONE task.
+     *
+     * ONE TASK, AND WHY THAT IS THE FIX RATHER THAN A TIDY-UP. This loop used
+     * to `continue` after a win, under a comment reading "This coder already
+     * implemented one task -- move on and let the other coder take the
+     * remaining one". `continue` does not do that: it advances to the next
+     * task and races for that one too. A coder quick enough to win both then
+     * calls {@see \SugarCraft\Crush\Agents\Team::claimTask()} twice, whose
+     * second {@see \SugarCraft\Crush\Agents\WorktreeManager::createWorktree()}
+     * throws `Worktree for agent "…" already exists.` -- see
+     * {@see runCoderChild()} for what an uncaught throw in a forked child then
+     * does to the parent's temp tree. The comment described the intent
+     * correctly and the code did something else; `break` is the code catching
+     * up, and it also makes "one task each" structural instead of raced.
+     *
+     * Extracted from the child so it can be driven in-process by
+     * {@see testACoderTakesAtMostOneTaskSoNoAgentEverAsksForTwoWorktrees()},
+     * where a single coder facing two claimable tasks is a DETERMINISTIC
+     * version of the race above.
+     */
+    private function raceForTasks(string $coderId, string $teamId, string $resultDir, float $budgetUntil): void
+    {
         $childTeam = new Team(
             id: $teamId,
             name: 'Refactor Team',
@@ -278,12 +604,9 @@ final class MultiAgentRefactorTest extends TestCase
         $wm = new WorktreeManager($this->worktreeConfig, $this->repoRoot);
 
         foreach (['task-a', 'task-b'] as $taskId) {
-            // Generous budget: claimTask() creates a real git worktree, which
-            // takes far longer on a small shared CI runner than on a dev box.
-            $raceDeadline = microtime(true) + 30.0;
             $claimed = false;
             $attempts = 0;
-            while (microtime(true) < $raceDeadline) {
+            while (microtime(true) < $budgetUntil) {
                 if ($childTeam->claimTask($taskId, $coderId, $wm)) {
                     $claimed = true;
                     break;
@@ -296,13 +619,39 @@ final class MultiAgentRefactorTest extends TestCase
                     break;
                 }
 
-                // Back off between attempts. Without this the loop is a hot
-                // spin, and two forked children hammering the same lock on a
-                // 2-vCPU runner starve each other badly enough that NEITHER
-                // claims before the deadline — the CI failure this fixes was
-                // "expected exactly one winner ... got: 0", i.e. livelock, not
-                // a broken claim. Jittered by coder id so the two processes
-                // do not re-collide in lockstep.
+                // Back off between attempts, jittered by coder id so the two
+                // processes do not re-collide in lockstep.
+                //
+                // WHAT THIS SAID: that without the backoff "two forked
+                // children hammering the same lock on a 2-vCPU runner starve
+                // each other badly enough that NEITHER claims before the
+                // deadline", i.e. that the loop is a lock-contention spin.
+                //
+                // WHAT IS TRUE NOW: it is not a lock spin, because
+                // TaskList::acquireTaskLock() takes a BLOCKING `flock(LOCK_EX)`
+                // — a contender waits for the lock, it never fails to get one
+                // and comes back round. claimTask() can return false with the
+                // task still Pending for a dependency that is not complete or
+                // an assignment to somebody else, neither of which task-a and
+                // task-b can have. Measured accordingly: over 700 runs of this
+                // test under 48 CPU-burner processes, every coder — winners and
+                // losers alike — recorded attempts=0. This backoff has never
+                // executed HERE.
+                //
+                // THE THIRD WAY ROUND THIS LOOP, which the two above do not
+                // cover and which is the one the backoff really guards: the
+                // break clause is `$current !== null && status !== Pending`, so
+                // a task that comes back NULL — never added, or a task list
+                // this child cannot read — does not break. It falls through to
+                // here and spins the entire budget. That is a hot loop with no
+                // sleep in it, on a box already running one child per coder.
+                //
+                // WHY IT STILL EARNS ITS PLACE: dormant is not the same as
+                // wrong. It is the only thing standing between a future
+                // claimTask() that CAN return a retryable false (a LOCK_NB
+                // acquire, a busy-timeout surfaced as false) and a hot spin
+                // that burns this child's whole budget. Left armed, and left
+                // documented as unexercised rather than quietly deleted.
                 $attempts++;
                 usleep(min(20_000, 1_000 * $attempts) + (crc32($coderId) % 3_000));
             }
@@ -317,15 +666,17 @@ final class MultiAgentRefactorTest extends TestCase
                     "status={$status} attempts={$attempts}",
                     LOCK_EX,
                 );
-            }
 
-            if ($claimed) {
-                file_put_contents("{$resultDir}/{$taskId}.won.{$coderId}", $coderId, LOCK_EX);
-                $childTeam->getTaskList()->completeTask($taskId, "Implemented by {$coderId}.");
-                // This coder already implemented one task — move on and let
-                // the other coder take the remaining one.
                 continue;
             }
+
+            file_put_contents("{$resultDir}/{$taskId}.won.{$coderId}", $coderId, LOCK_EX);
+            $childTeam->getTaskList()->completeTask($taskId, "Implemented by {$coderId}.");
+
+            // ONE TASK PER CODER. See this method's doc-block: `continue` here
+            // is what let a fast coder claim both and ask WorktreeManager for
+            // a second worktree under the same agent id.
+            return;
         }
     }
 

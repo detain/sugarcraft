@@ -6276,3 +6276,211 @@ of the merge step.
 **Step.** Either a supervisor-allocated number block per lane, or lane-prefixed provisional ids
 (`Eb1`, `Ec1`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
 shared scratchpad but not this.
+
+### Eb45-1 — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: medium, correctness. **Measured, not inferred.**
+
+**What.** `Team::claimTask()` does two things and calls itself atomic: it takes the per-task `flock()` in
+`TaskList::claimTask()` (which commits `status = in_progress, assigned_to = X` and releases), and then,
+*outside* that lock, runs `WorktreeManager::sweepIfDue()` and `createWorktree()`. Its own doc-block
+already says "If the task claim succeeds but worktree creation fails, the task claim is NOT rolled back"
+— so a throw from `createWorktree()` leaves the task **in progress, assigned to an agent that has no
+worktree**, and no other agent can ever claim it because it is no longer `Pending`. Note that the caller
+does **not** get `false` back: there is no `catch` anywhere in `Team::claimTask()`, so the
+`RuntimeException` from `WorktreeManager::createWorktree()` propagates straight out of it (stack
+measured: `WorktreeManager.php` ← `Team.php` ← the caller). A caller checking the boolean never runs.
+
+**How it was observed.** This is the second link of E80's chain — see
+`MultiAgentRefactorTest::runCoderChild()`'s doc-block and the commit that landed it,
+`e51aead9`. A coder that won both tasks asked for a second worktree under the same agent id and
+`createWorktree()` threw `Worktree for agent "…" already exists.`. Re-measured deterministically by
+restoring the pre-fix `continue` in `raceForTasks()` and reading the task list at the instant of the
+throw (PHP 8.3.6): **`task-a` is `completed`, and `task-b` is the one left `in_progress` and assigned**
+to that coder. An earlier write-up of this entry named task-a and said the stranded claim is why the
+parent's winner list came back empty; both are wrong. The winner list was emptied by the forked child's
+`tearDown()` deleting the results directory (`task-a.won.coder-1` was on disk when the throw landed).
+What the stranded claim actually costs is task-b: unclaimable by anybody, forever. Reproduced 2 times in
+700 runs of `MultiAgentRefactorTest` under 48 CPU-burner processes on this host (PHP 8.3.6).
+
+**Why it was not fixed here.** Round 45 fixed the *test's* half (a coder now takes at most one task, and
+a throw in a forked child can no longer run PHPUnit's teardown). The production half is a change to what
+a claim MEANS under contention — either roll the claim back on a worktree failure, or move worktree
+creation inside the per-task lock so the pair really is atomic — and both want their own mutation work
+against `TaskList`'s lock semantics. `src/Session.php` and `src/Agents/WorktreeManager.php` were also
+off-limits to this lane.
+
+**Step.** Decide between rollback-on-failure and claim-inside-the-lock, then pin it with a test that
+makes `createWorktree()` throw (pre-creating the agent's worktree is enough — see
+`MultiAgentRefactorTest::testAThrowInsideAForkedCoderCannotRunPhpunitsTeardownInTheChild()`) and asserts
+the task is claimable again afterwards.
+
+### Eb45-2 — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: low today, latent. **Source-verified, not observed.**
+
+**What.** `TaskList::acquireTaskLock()`, `TaskList::openForWrite()` and `WorktreeManager::loadRegistry()`
+all take a **blocking** `flock()` with no `LOCK_NB` and no timeout; `WorktreeManager::saveRegistry()`
+writes with `LOCK_EX`. A holder that stalls (a wedged `git worktree add` under the DB write lock, a
+paused process) blocks every contender indefinitely, and the caller has no way to report why.
+
+**The useful negative that goes with it.** The blocking acquire is also why round 45's brief was wrong to
+read the coder retry loop's capped backoff as a lock-starvation shape: a contender **waits** for the
+lock, it never fails to get one and comes back round, so the backoff cannot be reached by contention.
+Measured: over 700 runs under load, every coder — winner and loser alike — recorded `attempts=0`. The
+backoff has never executed. It was left armed and documented as unexercised rather than deleted.
+**Refinement (same round, after review):** the loop's break clause is `$current !== null && status !==
+Pending`, so a task that comes back **null** — never added, or a task list the child cannot read — does
+not break, and spins the whole budget with the backoff running every iteration. That, not contention, is
+the path the backoff protects; the code comment now says so.
+
+**Step.** Not a fix request yet: a measurement. Decide whether any of these four sites wants
+`LOCK_NB` + a bounded retry with a diagnosable failure, or whether blocking is correct and the
+justification should just say so. `src/Session.php` uses `flock()` too and belongs in the same sweep.
+
+### Eb45-3 — nothing stops the next forked child in `tests/` from ending in a plain `exit()`
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: low, process. **Mechanism measured.**
+
+**What.** `ForkedChild`'s class doc-block says every `pcntl_fork()`'d child in this codebase MUST end
+with `exitNow()`. `src/` obeys it. `tests/` does not, and not only in the one place round 45 fixed:
+several fork sites under `tests/` end their child in a plain `exit(0)`, a couple of them deliberately
+and documented as such (`McpToolWiringTest` exercises the `posix`-less fallback path on purpose,
+`ForkedChildTest` needs the unguarded shape as its control). What made
+`tests/Integration/MultiAgentRefactorTest.php` damaging was the combination the others lack — a child
+that can throw, plus a `tearDown()` that deletes a tree the parent is still reading — so the child ran
+PHPUnit's teardown and removed the parent's temp tree (measured directly: it printed a second
+`ERRORS! Tests: 1` summary of its own). There is no guard, so the next forking test with that
+combination reintroduces it, and a guard has to be able to exempt the deliberate cases by name rather
+than banning the shape outright.
+
+A second, independent reason the rule matters in `tests/`: `React\EventLoop\Loop::get()` registers a
+shutdown function that RUNS the loop, so a child inheriting a loop with any live watcher blocks forever
+at `exit()`. Measured on PHP 8.3.6 — with a periodic timer armed the child never exited; with an empty
+loop, or one that had already run, it exited at once. **This suite is currently shielded only because
+`tests/bootstrap.php` installs the loop with `Loop::set()`, which never registers that hook** — a shield
+installed for an entirely unrelated reason (pinning `StreamSelectLoop`) and one that could be reworked
+away without anyone connecting it to forked children.
+
+**Step.** A guard test that finds each `pcntl_fork()` site under `tests/` and asserts its child branch
+does not reach a bare `exit(`. Two constraints from this round's rules: it must run a **known-positive
+fixture** through the same scanner in the same test (an absence assertion with a dead scanner is green),
+and it must assert **per occurrence, not a count** — a cardinality over `tests/` is invalidated the
+moment a sibling lane merges. It was left unwritten here for exactly that reason: it scans files three
+lanes were editing concurrently.
+
+### Eb45-4 — E133's recorded negative about `sys_get_temp_dir()` is right but understated
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: none, correction. **Re-measured as instructed.**
+
+**What E133 says.** "on PHP 8.3.6 `sys_get_temp_dir()` resolves and **caches on first use** and does NOT
+honour a runtime `putenv('TMPDIR=…')`".
+
+**What is true.** The conclusion holds and the mechanism is stronger than "first use". Re-measured on
+PHP 8.3.6, three ways: `putenv('TMPDIR=<existing dir>')` as the **very first statement of the script**,
+before any `sys_get_temp_dir()` or `tempnam()` call, still yields `/tmp`; the same variable present in
+the environment at exec time yields the named directory; and a target that does not exist is accepted
+just the same, so nothing is being rejected for being missing. So it is not a userland-first-call cache
+that a sufficiently early `putenv()` could win — the value comes from the startup environment and
+userland cannot move it at all.
+
+**Why this still earns its place.** The practical rule E133 drew is unchanged and, if anything, safer: a
+test cannot relocate itself into a private temp directory after the fact, so attribution has to move
+instead of the directory. `tests/bootstrap.php`'s `putenv('TMPDIR=…')` is not contradicted by this — it
+is documented there as working on **children** only, which is exactly what the measurement above shows.
+### Eb45-5 — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
+
+**Recorded 2026-08-22 by round-45 lane b (fix stage), from its own reviewer's finding.** Severity: low,
+documentation accuracy. **Source-verified.**
+
+**What.** `src/Support/ToolIpcFiles.php`'s class doc-block says each dispatcher "unlinks a payload when
+it collects it, and that is the **ONLY unlink** either of them has". Round 45 added a second one:
+`Runtime::executeConcurrently()`'s `finally` discards every settled-but-uncollected payload when the
+group is abandoned or unwound. The sentence is now false for `Runtime` (it remains true for
+`Chat::forkToolCalls()`), and it is load-bearing prose — it is the premise for the paragraph explaining
+why `sweep()` exists at all.
+
+**Why it was not fixed here.** `src/Support/ToolIpcFiles.php` was outside lane b's file list and the
+lane's own reviewer explicitly declined to prescribe an edit to it. `tests/Support/ToolIpcFilesTest.php`
+carries the same sentence in the PAST tense, which is defensible as history and may not need touching.
+
+**Step.** Rewrite the class doc-block in the three-part form (what it said / what is true now / why the
+point stands): the collect-side unlink is still the normal lifecycle, the `finally` is a bounded second
+one for the abandonment path only, and neither reaches a child that is still running — which is the
+population `sweep()` is actually for, so the paragraph's conclusion is unchanged.
+
+### Eb45-6 — `rendezvousTool()` reports `max($seen, count(glob(...)))`, which overshoots whenever callers outnumber `peers`
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: low, test-harness sharp edge. **Observed twice.**
+
+**What.** The rendezvous witness in `tests/Integration/ParallelToolCallsTest.php` returns the highest
+count it ever saw in its group directory, and it stops looking as soon as it has seen `peers`. With
+`peers` BELOW the number of callers sharing one group directory, the reported `saw=` is whatever
+happened to be on disk at the first glob — a race, not a measurement. It cost round 45 a 2% flake in
+`testPostToolUseObservesEachConcurrentCallsOwnRewrittenArguments` (three calls, `peers: 2`) and a false
+KILL verdict on an unrelated mutation. The two new abandonment cases avoid it by giving each call its
+own group directory, which is a convention nothing enforces.
+
+**Step.** Make the class impossible rather than avoided: have `rendezvousCall()`/`rendezvousCalls()`
+record callers per group and assert that `peers` equals that number, so a mismatched pair fails loudly
+at construction instead of flaking one run in fifty.
+
+### Eb45-7 — the suite's per-test time limit does not reach a forked child
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: medium for diagnosis, low for correctness.
+**Measured.**
+
+**What.** `enforceTimeLimit` is implemented with php-invoker's `pcntl_alarm`, which fires in the process
+that armed it. A test that forks keeps its children running after the parent is aborted as RISKY, and
+the parent's `tearDown()` has by then deleted the temp tree those children are still writing into. E80's
+observed failure had exactly this shape: the parent aborted at 60s while a child was still inside
+PHPUnit's own shutdown.
+
+**Why it was not fixed here.** `sugar-crush/phpunit.xml` is supervisor-owned, and the choice (drop the
+limit, raise it, or make forked-child tests register their pids with a shutdown reaper) is a decision
+rather than an edit.
+
+**Step.** Decide. The cheap 90% is a shared trait for forked-child tests that records every pid it
+creates and SIGKILLs any survivor in `tearDown()`, which is inside the parent's control and needs no
+phpunit.xml change.
+
+### Eb45-8 — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
+
+**Recorded 2026-08-22 by round-45 lane b (fix stage).** Severity: low for correctness, HIGH for every
+future round's reporting. **Measured, with the generator below.**
+
+**What.** `GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()`
+alone accounted for **18,234** of the suite's 127,822 assertions at the time of writing — about one in
+seven. The mechanism: `census()` calls `carriesTheStaleFigure()` once per paragraph of every `.php` under
+`sugar-crush/src/` and every `.md` under `sugar-crush/docs/`; that calls `stalePattern()`; and
+`stalePattern()` calls `word(8)`, whose first statement is `assertArrayHasKey()`. So the test performs
+**one assertion per paragraph in scope**, asserting each time that a hard-coded constant array still
+contains the key `8`.
+
+**Why it matters far more than it looks.** Every lane that writes a comment paragraph into `src/` silently
+moves the suite's assertion total, with no new test and no new behaviour. That is the exact reconciliation
+failure round 45 lane b's reviewer could not close: a `+16` full-suite assertion delta against a `+14`
+delta over the changed test files, with two assertions unaccounted for. They were these — this round's
+`src/Runtime.php` edits net **+2 paragraphs** (237 → 239), measured with the test's own splitter:
+
+```php
+// paragraphs() copied verbatim out of GlobFigureDriftTest, run over one file
+$lines = [];
+foreach (preg_split('/\R/', $text) as $line) { $lines[] = preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line); }
+$n = 0;
+foreach (preg_split('/\n\s*\n/', implode("\n", $lines)) as $p) { if (trim(preg_replace('/\s+/', ' ', $p)) !== '') { $n++; } }
+```
+
+PHP 8.3.6. Note the splitter treats a blank line as the separator and strips only `/**`, `*/` and `*`, so
+a `//` block with `//`-only spacer lines is ONE paragraph however long it is, while a doc-block with ` *`
+spacers is many — which is why the delta is nowhere near the number of lines a round writes.
+
+**Step.** Hoist the invariant out of the hot path: `word(8)` and `stalePattern()` are constant for the
+whole run, so compute the pattern once (a `?string` cache, or a `setUp()` field) and keep a SINGLE
+`assertArrayHasKey()` outside the paragraph loop. The scanner's behaviour does not change; the suite
+loses ~18k assertions of pure noise, and a lane's assertion delta becomes a function of the tests it
+wrote. The file already made this exact call once — see its `matchOrFail()` comment, which chose `fail()`
+over `assertIsInt()` for precisely this reason ("an assertion per call added ~34,000 to the suite's
+assertion count while pinning nothing") — and then reintroduced the same cost one call deeper.
+`tests/Config/GlobFigureDriftTest.php` belongs to another lane, hence a backlog entry rather than a fix.
+
