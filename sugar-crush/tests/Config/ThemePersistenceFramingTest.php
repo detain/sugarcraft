@@ -144,11 +144,34 @@ final class ThemePersistenceFramingTest extends TestCase
 
         $this->assertSame('dracula', $merged['theme'], 'config.json must win, or a persisted /theme silently reverts');
 
-        // The counterfactual, spelled out rather than asserted about prose: with
-        // the ranking reversed, the same three layers hand the next launch the
-        // hand-authored value instead. Nothing about the SESSION changes.
-        $reversed = array_merge(['theme' => 'projecty'], ['theme' => 'dracula'], ['theme' => 'settingsy']);
-        $this->assertSame('settingsy', $reversed['theme']);
+        // The counterfactual, spelled out rather than asserted about prose: if
+        // `config.json` ranked BELOW `settings.json`, the same three files hand
+        // the next launch the hand-authored value instead, and nothing about
+        // the SESSION changes. Modelled by demoting what `/theme` persisted
+        // into the second slot — THROUGH `merge()`, so the thing being measured
+        // is the ranking this class implements.
+        //
+        // THIS BLOCK USED TO BE `array_merge(['theme' => 'projecty'], …)` with
+        // the layers hand-shuffled. WHAT WAS WRONG WITH IT: it invoked no code
+        // under test. Both operands were literals and the function was the PHP
+        // builtin, so it could not fail for any change to `LayeredSettings` —
+        // the same shape {@see ReadmeSettingsTierClaimTest} retracted from its
+        // own file ("It was 10 of this file's 25 assertions and pinned
+        // nothing"). WHY THE COUNTERFACTUAL STILL EARNS AN ASSERTION: it is the
+        // half of the framing that says the damage is deferred to the next
+        // launch, and a reader who is told that and shown nothing goes looking
+        // for it in `Chat`.
+        $asIfConfigRankedBelowSettings = LayeredSettings::merge(
+            ['theme' => 'settingsy'],  // the hand-authored file, in the slot that wins
+            ['theme' => 'dracula'],    // what /theme persisted, demoted
+            ['theme' => 'projecty'],
+        );
+        $this->assertSame(
+            'settingsy',
+            $asIfConfigRankedBelowSettings['theme'],
+            'merge() no longer ranks its first argument highest, so the counterfactual below it is not the '
+            . 'counterfactual the doc-block describes',
+        );
     }
 
     // ── prose ────────────────────────────────────────────────────────────

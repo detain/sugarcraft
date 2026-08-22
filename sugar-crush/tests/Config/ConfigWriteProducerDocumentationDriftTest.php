@@ -430,11 +430,21 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
      */
     public function testTheRetractedProviderCreditAppearsOnlyInsideItsRetraction(): void
     {
-        $needle = '`provider`, from the Ctrl+P palette\'s "Switch Model" action';
+        // QUOTE-INSENSITIVE, and the exemption below is why. The retracted
+        // sentence used `"Switch Model"`; the retraction quoting it writes
+        // `'Switch Model'`, because it is itself already inside double quotes.
+        // With a literal needle the exemption branch could never fire — it was
+        // dead code guarding a case that could not arise, so the day someone
+        // re-quoted the sentence verbatim (which rule 7's three-part form
+        // actively invites) this would have redded against CORRECT prose.
+        // Folding both quote characters together makes the exemption real, and
+        // the test now passes BECAUSE of it rather than despite it.
+        $fold = static fn(string $t): string => str_replace(['"', "'", '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}'], '"', $t);
+        $needle = $fold('`provider`, from the Ctrl+P palette\'s "Switch Model" action');
 
         $offenders = [];
         foreach ($this->paragraphs($this->layeredSettingsDocBlock()) as $para) {
-            if (stripos($para, $needle) === false) {
+            if (stripos($fold($para), $needle) === false) {
                 continue;
             }
             if (!str_contains($para, 'WHAT IT SAID')) {
@@ -442,10 +452,79 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
             }
         }
 
+        // The exemption is LOAD-BEARING, not decorative: the retraction
+        // paragraph must actually match the needle, or this test is passing
+        // because it found nothing rather than because it forgave the right
+        // thing — and would keep passing after the retraction was deleted.
+        $quoting = array_values(array_filter(
+            $this->paragraphs($this->layeredSettingsDocBlock()),
+            static fn(string $p): bool => stripos($fold($p), $needle) !== false,
+        ));
+        $this->assertCount(
+            1,
+            $quoting,
+            'exactly one paragraph should quote the retracted wording — its retraction',
+        );
+
         $this->assertSame(
             [],
             $offenders,
             'the retracted "palette alone writes provider" wording is back outside its retraction',
+        );
+    }
+
+    /**
+     * AND THE README'S OWN COUNTERFACTUAL, which had the identical omission one
+     * section below the table that did not.
+     *
+     * "Ranked the other way, a `settings.json` naming `theme` would outrank
+     * what Ctrl+P 'Switch theme' had just written" credited the palette alone
+     * for `theme`, exactly as the {@see LayeredSettings} doc-block had for
+     * `provider`. The table three lines above it named `/theme`. That is the
+     * whole E81 shape reproduced inside one page: the ROSTER stayed right and
+     * the PROSE that explains the roster drifted, and prose is what a reader
+     * who is debugging actually reads.
+     *
+     * Pinned separately from the table row because they fail separately — the
+     * table is generated from constants and this is a sentence.
+     */
+    public function testTheReadmeCounterfactualCreditsTheSlashCommandAndNotThePaletteAlone(): void
+    {
+        $readme = (string) file_get_contents(self::README);
+
+        $hits = [];
+        foreach ($this->paragraphs($readme) as $para) {
+            if (str_contains($para, 'would outrank what')) {
+                $hits[] = $para;
+            }
+        }
+
+        $this->assertCount(1, $hits, "README.md's reversed-ordering counterfactual is gone or no longer unique");
+
+        // THE SENTENCE, NOT THE PARAGRAPH — and this narrowing was forced by a
+        // measurement, not chosen. Written against the whole paragraph, the
+        // assertion passed with the palette-alone wording restored, because the
+        // RETRACTION that follows the claim also names `/theme` and the needle
+        // found it there. A guard whose own explanatory prose satisfies it is
+        // the round's recurring shape (see this file's key census, and
+        // `docs/SETTINGS.md`'s list of stale sites), so the window stops at the
+        // full stop that ends the claim.
+        $sentences = preg_split('/(?<=\.)\s+/', $hits[0]) ?: [];
+        $claims = array_values(array_filter(
+            $sentences,
+            static fn(string $sentence): bool => str_contains($sentence, 'would outrank what'),
+        ));
+        $this->assertCount(1, $claims, 'the counterfactual claim is no longer exactly one sentence');
+
+        $this->assertStringContainsString(
+            'Switch theme',
+            $claims[0],
+            "README.md's counterfactual stopped naming the palette door",
+        );
+        $this->assertStringContainsString(
+            '/theme',
+            $claims[0],
+            "README.md's counterfactual credits the palette alone again — the /theme door reaches the same write",
         );
     }
 
@@ -459,10 +538,13 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
     {
         $readme = (string) file_get_contents(self::README);
 
-        $matched = preg_match('/^\| 4 \| `~\/\.sugar-crush\/config\.json` \|([^|]*)\|/m', $readme, $m);
-        $this->assertSame(1, $matched, 'the layer-4 row of the README precedence table is not in the expected shape');
+        // preg_match_ALL for the reason {@see ReadmeRosterDriftTest}'s class
+        // doc-block records at length: `assertSame(1, preg_match(…))` is a
+        // presence check, and a second layer-4 row would be read past.
+        $matched = preg_match_all('/^\| 4 \| `~\/\.sugar-crush\/config\.json` \|([^|]*)\|/m', $readme, $m);
+        $this->assertSame(1, $matched, 'the layer-4 row of the README precedence table is not uniquely locatable');
 
-        $this->assertStringContainsString('/theme', $m[1], 'the layer-4 row stopped crediting /theme');
-        $this->assertStringContainsString('/model', $m[1], 'the layer-4 row stopped crediting /model');
+        $this->assertStringContainsString('/theme', $m[1][0], 'the layer-4 row stopped crediting /theme');
+        $this->assertStringContainsString('/model', $m[1][0], 'the layer-4 row stopped crediting /model');
     }
 }

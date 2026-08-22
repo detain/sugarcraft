@@ -130,9 +130,12 @@ do. **Your files beat the project's**, because a project file arrived with a
 `git clone` — a repository can fill in what you left unsaid and never overrule
 a choice you made. And **`config.json` beats `settings.json`**, because it is
 the file the CLI *writes*: ranked the other way, a `settings.json` naming
-`theme` would outrank what Ctrl+P "Switch theme" had just written, and the
-choice would fail to stick with no error anywhere and nothing pointing at the
-file responsible.
+`theme` would outrank what Ctrl+P "Switch theme" **or `/theme <name>`** had just
+written, and the choice would fail to stick with no error anywhere and nothing
+pointing at the file responsible. (This sentence credited the palette alone
+until round 43 — the same omission the `provider` row of the table above once
+had, and it matters for the same reason: a reader who reached for `/theme`
+cannot tell whether the sentence is about them.)
 
 > **This paragraph used to say `config.json` was "the deprecated name".** It is
 > not, and the word was doing real damage in the file most likely to be read:
