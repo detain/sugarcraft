@@ -357,6 +357,23 @@ final class MultiAgentRefactorTest extends TestCase
      * parent. Measured on this host before the fix: the sentinel below was
      * gone, the child printed its own "ERRORS! Tests: 1" summary, and the
      * parent's real assertions then failed on an empty results directory.
+     *
+     * WHICH HALF DOES WHICH JOB, measured rather than assumed, because the two
+     * are easy to conflate and this test asserts both. THE CATCH is what keeps
+     * PHPUnit's teardown out of the child: with `exitNow()` swapped for a plain
+     * `exit()` and the catch left in place, the sentinel below still SURVIVES
+     * (PHP 8.3.6 -- 5 assertions run, and only the `wifsignaled` one fails).
+     * Nothing propagates, so PHPUnit in the child is never told there was a
+     * failure and never tears anything down. Swap the catch for one that does
+     * not match instead and the pre-fix signature comes straight back: a child
+     * `ERRORS! Tests: 1` summary next to the parent's `FAILURES!`.
+     * `exitNow()` is the belt to that catch's braces, and it closes a SECOND,
+     * independent hazard rather than the same one twice: leaving by signal
+     * means PHP's shutdown sequence does not run AT ALL -- no destructors, no
+     * `register_shutdown_function` callbacks -- so nothing a future
+     * `setUp()`/`tearDown()`/loop registration adds to this class can find a
+     * way to run in the child either. See {@see runCoderChild()} for the
+     * `React\EventLoop\Loop` shutdown hook that is the live example.
      */
     public function testAThrowInsideAForkedCoderCannotRunPhpunitsTeardownInTheChild(): void
     {
@@ -401,12 +418,27 @@ final class MultiAgentRefactorTest extends TestCase
             'the forked child ran this class\'s tearDown() and deleted the parent\'s temp tree',
         );
 
-        $this->assertTrue(
-            pcntl_wifsignaled($status),
-            'the child must leave via ForkedChild::exitNow()\'s SIGKILL, which is what skips PHP\'s '
-                . 'shutdown sequence and with it PHPUnit\'s teardown',
-        );
-        $this->assertSame(SIGKILL, pcntl_wtermsig($status));
+        // ForkedChild::exitNow() only signals itself where posix_kill(),
+        // posix_getpid() and SIGKILL all exist, and falls back to a plain
+        // exit($code) otherwise -- so the LEAVING SHAPE is build-dependent
+        // while everything asserted above it is not. Asserted both ways
+        // instead of gated behind a skip: the guarantee this test is named
+        // for holds on either build (measured -- the sentinel survives even
+        // with exitNow() replaced by a plain exit(); see this method's
+        // doc-block), and a skip would drop that coverage on the exact
+        // builds that exercise the fallback.
+        if (function_exists('posix_kill') && function_exists('posix_getpid') && defined('SIGKILL')) {
+            $this->assertTrue(
+                pcntl_wifsignaled($status),
+                'the child must leave by SIGNAL, so that no part of PHP\'s shutdown sequence runs in '
+                    . 'it -- the belt to the catch\'s braces, NOT the thing that suppressed the '
+                    . 'teardown asserted above (the catch did that on its own)',
+            );
+            $this->assertSame(SIGKILL, pcntl_wtermsig($status));
+        } else {
+            $this->assertTrue(pcntl_wifexited($status), 'the posix-less fallback leaves by exit($code)');
+            $this->assertSame(1, pcntl_wexitstatus($status));
+        }
     }
 
     /**
