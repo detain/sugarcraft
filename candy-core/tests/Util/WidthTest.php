@@ -355,6 +355,26 @@ final class WidthTest extends TestCase
     }
 
     /**
+     * E69, third measure. `wrapAnsi()` had its own tab rule — it charged a
+     * `\t` **1** cell in its whitespace branch, where `string()` charged 0 and
+     * `Style::render()` laid out {@see Width::TAB_WIDTH}. Three answers for one
+     * character. It now charges what `graphemeWidth()` says, so a wrapped line
+     * cannot come back wider than the column it was wrapped to.
+     *
+     * `wrapAnsi("ab\tcd", 7)` is the reproduction: at a 1-cell charge the whole
+     * string scored 5 against a budget of 7 and came back as ONE line of 8
+     * cells. At `TAB_WIDTH` it breaks, and both lines are 2 cells.
+     */
+    public function testWrapAnsiChargesATabTheSameCellsAsEveryOtherMeasure(): void
+    {
+        $lines = explode("\n", Width::wrapAnsi("ab\tcd", 7));
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(7, Width::string($line), 'wrapAnsi returned a line over its column');
+        }
+        $this->assertCount(2, $lines);
+    }
+
+    /**
      * The reason E68 existed: `string()` and every truncation path have to
      * agree on where one grapheme ends and the next begins. They did not —
      * `string()` split per codepoint on PHP 8.3 (its preferred

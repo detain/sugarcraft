@@ -9,7 +9,18 @@ namespace SugarCraft\Core\Util;
  *
  * Width is counted in monospace cells. ANSI escape sequences are stripped
  * before measurement. Wide East-Asian characters and most emoji count as 2;
- * zero-width and combining marks count as 0.
+ * zero-width and combining marks count as 0; a `\t` counts {@see TAB_WIDTH}.
+ *
+ * Everything here measures and cuts at GRAPHEME CLUSTER boundaries, and it is
+ * one splitter ({@see nextCluster()}) for both — `string()` and the truncators
+ * used to run different ones and disagree by cells on emoji sequences (E68).
+ * A consequence worth knowing before writing an assertion against this class:
+ * a cluster's width is not a property of its codepoints alone but of what
+ * PRECEDES it, because a combining mark or emoji modifier joins the character
+ * before it. `Width::string(" " . U+1F3FD)` is 1 and
+ * `Width::string("\t" . U+1F3FD)` is TAB_WIDTH + 2, from the same modifier.
+ * Any transform that rewrites content — tab expansion, padding, joining —
+ * can therefore move a width without adding or removing a single glyph.
  */
 final class Width
 {
@@ -33,6 +44,36 @@ final class Width
      * working set of distinct strings exceeds the cap.
      */
     private const MEMO_MAX = 2048;
+
+    /**
+     * Cells a `\t` is charged, and the default every tab-expanding renderer
+     * in the stack must share.
+     *
+     * E69: `string()` scored a tab 0 while `\SugarCraft\Sprinkles\Style::render()`
+     * replaced it with `str_repeat(' ', $tabWidth)` — default 4 — *before* its
+     * own measurement. A caller that budgeted with `Width` and laid out with
+     * `Style` was using two measures 4 cells apart per tab, and every assertion
+     * written in terms of `Width` was blind to the gap. `Style`'s default now
+     * reads this constant, so the two move together instead of agreeing by
+     * coincidence.
+     *
+     * **Domain.** This is a fixed per-tab charge, not tab-STOP arithmetic: a
+     * real terminal advances a tab to the next stop, which depends on the
+     * column the tab sits in, and no context-free measure can model that. It is
+     * exact for content rendered through a `Style` at the default tab width.
+     * Measured across the non-vendor tree: no PRODUCTION file calls
+     * `Style::tabWidth()` at all, and the only non-default widths anywhere are
+     * in `candy-sprinkles/tests/StyleTest.php`, which exercises the knob itself
+     * (2, 0, and 8-then-unset) rather than any `Width` agreement. A `Style`
+     * given `tabWidth(0)` (literal tabs) or any other non-default width still
+     * disagrees with `string()`; that residue is deliberate and recorded rather
+     * than papered over.
+     *
+     * Not to be confused with `\SugarCraft\Dash\Components\Card\Highlight`'s
+     * own `$tabWidth`, an unrelated field on a different class that happens to
+     * share the name and the default of 4 and is settable to any value >= 1.
+     */
+    public const TAB_WIDTH = 4;
 
     /**
      * Cell width of a string after stripping ANSI sequences.
@@ -336,9 +377,13 @@ final class Width
                     $word = '';
                     $wordWidth = 0;
                 }
-                if ($lineWidth + 1 <= $max) {
+                // E69: this charged a tab 1 cell — a THIRD tab measure, after
+                // string()'s 0 and Style::render()'s TAB_WIDTH. Route it
+                // through graphemeWidth() so there is only one.
+                $bw = self::graphemeWidth($b);
+                if ($lineWidth + $bw <= $max) {
                     $line .= $b;
-                    $lineWidth += 1;
+                    $lineWidth += $bw;
                 } else {
                     $flushLine();
                 }
@@ -788,6 +833,12 @@ final class Width
         // the +1 half of E68's over-run.
         if ($cp >= 0x1f1e6 && $cp <= 0x1f1ff) {
             return self::isRegionalIndicatorPair($g) ? 2 : 1;
+        }
+        // E69: a tab is laid out as {@see TAB_WIDTH} cells by every renderer
+        // that consumes this measure, so it is charged that here. It must be
+        // tested before isZeroWidth(), which swallows the whole C0 range.
+        if ($cp === 0x09) {
+            return self::TAB_WIDTH;
         }
         if (self::isZeroWidth($cp)) {
             return 0;
