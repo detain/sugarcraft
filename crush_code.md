@@ -1094,6 +1094,32 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 43 — CLOSED (`628f50f1`). Eight backlog items fixed, twenty-two recorded.**
+Floor `9078 / 105590 / 1 skipped / rc 0`, `sugar-crush` linked. The merged-total prediction matched on
+**both** tests and assertions — a first — because every lane re-measured after its fix stage and
+reconciled a `grep -c '^+ *public function test'` cross-check in writing.
+
+- ✅ **E85 + E87** (lane a, +18 tests) — `SkillRegistry`'s three hand-rolled `str_replace` rewrites are
+  replaced by a real pattern→regex translation. **This is a live behaviour change**: three of the four
+  shipped skills declare a leading `**` and therefore never fired on a tree-root file
+  (`**/*.php` vs `foo.php` = 0 under bare `fnmatch`, 1 now — supervisor-verified after the merge).
+  🔴 The lane then **refuted its own deferral**: a POSIX class does NOT always route to the fallback —
+  a second bracket group supplies the missing `]`, the regex compiles, and the match is silently wrong.
+  Found only by widening the differential fuzz's **own alphabet**. E87 decided rather than deferred.
+- ✅ **E86 + E84** (lane b, +32 tests) — the MCP start failure now reaches the transcript seam **as well
+  as** `error_log()` (the existing justification was partly sound, so both channels, not a swap), and the
+  autoload guard emits a real JSON contract document. That closed a family: three argv shapes made the
+  **broken** checkout answer a question the working one refuses; the guard now models `--` and
+  `ArgvParser`'s two value-consumption flavours, asserted by a 17-row differential table.
+- ✅ **E81 + E82 + E83 + E89** (lane c, +32 tests) — the `onConfigChange` census moved onto the token
+  stream and now REDS on what it cannot parse instead of skipping it; `GlobFigureDriftTest` is the
+  generator the prose only claimed to have; `README.md` gained its first real drift coverage beyond the
+  single round-42 test. The lane caught an inverted mechanism claim of its own that the reviewer missed,
+  and correctly refuted one of the reviewer's findings.
+- 📝 **E90–E111 recorded** (backlog now 105 entries). Start next with **E103** (fixing it deliberately
+  reds `GlobFigureDriftTest`, and `docs/SETTINGS.md` must move in the same commit), **E94/E98**
+  (`README.md` has four spots E84 falsified, not two), **E106**, **E90**.
+
 **ROUND 42 — CLOSED (`c204015e`). Three findings fixed (one deliberately half), nine recorded.**
 Floor `8996 / 105179 / 1 skipped / rc 0`, `sugar-crush` linked.
 
