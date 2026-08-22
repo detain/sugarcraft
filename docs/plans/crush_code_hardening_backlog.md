@@ -4260,9 +4260,51 @@ instruction section takes a quarter, making `Read`'s stated total 1.375x `maxByt
 pass no budget — their result is a one-line success message with no cap to spend — so the class
 ceiling is the whole bound there, the analogue of their flat `DEFAULT_MAX_INSTRUCTION_BYTES`.
 
-Residual, stated: below a cap of roughly 4,120 bytes (1,960 for a short entry) an eighth cannot hold
-the chrome plus one entry, so no nudge is emitted at all — deferred, not spent. The shipped cap is
-65,536.
+Residual, stated: below a cap that depends on the case, an eighth cannot hold the chrome plus one
+entry, so no nudge is emitted at all — deferred, not spent. **There is no single threshold**, because
+the deferred-note reserve is charged only when something is actually held back. MEASURED by binary
+sweep on `SkillPathNudge::forPaths()` (PHP 8.3.6), and independently reproduced by the round-40
+reviewer and by the supervisor:
+
+| pending × description | min budget | min cap (×8) |
+|---|---|---|
+| 1 × 20,000 | 434 | 3,472 |
+| 2 × 20,000 | 529 | 4,232 |
+| 1 × 30 | 173 | 1,384 |
+| 20 × 30 | 268 | 2,144 |
+
+Chrome is `strlen(HEADER) + strlen(FOOTER)` = 115 + 19 = 134; one clipped entry is at most
+`MAX_ENTRY_BYTES` = 300; the note reserve adds 95. The shipped cap is 65,536, whose eighth (8,192)
+clears every row.
+
+⚠️ **The figures this paragraph originally carried — "roughly 4,120 bytes (1,960 for a short entry)"
+and a companion "515 bytes" in `ToolOutputBudgetTest` — were WRONG, in all three cases, and stated
+without naming which of the four cases they held over.** That is §5's recurring defect committed
+inside the fix that closes E66. Corrected in the same round it was introduced.
+
+**ROUND 40 SUPERVISOR REVIEW — three findings recorded, not fixed.** An adversarial reviewer found
+these against the E66 fix; the supervisor reproduced them and fixed the two blocking ones (the vacuous
+`Read` guard and the wrong threshold figures above) in the same round. These three are recorded instead:
+
+- **E70 — `GrepInstructionWiringTest::testASkillIsAnnouncedForEveryHitTheModelCanSeeAtEveryCap` is now
+  violable.** That test asserts the law `!$visible || $announced`. MEASURED on the round-40 branch:
+  with 1 hit file and a skill carrying a 400-byte description, at caps 1,000 / 1,250 / 1,500 / 2,000 /
+  3,000 the hit path **is** in the 62-byte result and the skill is **never** announced — the eighth
+  cannot hold the entry. It flips true at 3,500. With the shipped 30-byte description the dead band is
+  caps 1,000–1,250. **Not live**: the only shipped construction sites are `Bootstrap`'s
+  `new Read/Glob/Grep(...)` at 1 MB / 65,536 / 65,536, whose eighths all clear the thresholds tabulated
+  above. The existing test passes only because its fixture's two regimes — hit visible, entry
+  affordable — do not overlap. **That is fixture luck, not structure**, and it is the exact shape §5
+  describes: a law asserted over a fixture that cannot reach its own boundary.
+- **E71 — `Read`'s "an eighth" and `Glob`'s +1 reservation are stated but unpinned.** MEASURED:
+  `intdiv($this->maxBytes, 8)` → `intdiv($this->maxBytes, 2)` in `Read::execute()` SURVIVES the suite,
+  and `$nudgeCost = ... strlen($nudge) + 1` → `strlen($nudge)` in `Glob` SURVIVES. The latter is a
+  reachable 1-byte overrun when `truncateOutput()` saturates `$bodyCap` exactly; no test does.
+- **E72 — `SkillPathNudge::hasPending()` does not consult `isAutoInvocable()`.** A path-scoped skill
+  carrying `disable-model-invocation: true` keeps `hasPending()` true forever, so the class docblock's
+  claim that "a long session pays nothing per tool call" once everything is announced is FALSE in that
+  case. Driven: two consecutive `forPath()` calls both return null, `announced()` stays `[]`, and the
+  registry is walked in full each time. Pre-existing; surfaced by the diff's prose.
 
 The `Grep::execute()` cross-reference is corrected from E57 to E66, and the two comments in `Grep` and
 `Glob` that described the nudge as living outside the cap are rewritten. `sugar-crush/docs/SKILLS.md`'s

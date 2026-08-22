@@ -290,6 +290,33 @@ final class SkillPathNudgeTest extends TestCase
     }
 
     /**
+     * The count bound is EXACTLY {@see SkillPathNudge::MAX_ENTRIES}, and this
+     * pins the boundary rather than the neighbourhood.
+     *
+     * {@see testManyShortSkillsAreBoundedByCountAndOneLongSkillByBytes()}
+     * bounds the nudge in BYTES, which 200 twenty-byte skills reach long
+     * before the count matters, and
+     * {@see testASkillHeldBackByTheCountBoundIsAnnouncedByTheNextCall()} uses
+     * an 11-skill fixture. Between them the off-by-one is invisible: MEASURED,
+     * `if (count($lines) >= self::MAX_ENTRIES)` -> `>` emits NINE entries and
+     * every test in this file and in ToolOutputBudgetTest still passes; so do
+     * limits of 10. Only 11 or more fails, and only by accident of fixture
+     * size. A bound whose exact value nothing asserts is a bound that drifts.
+     */
+    public function testTheCountBoundEmitsExactlyEightEntriesAndNotNine(): void
+    {
+        $text = SkillPathNudge::new($this->fatRegistry(20, 20))->forPath('/src/App.php');
+
+        self::assertNotNull($text);
+        // One line per emitted skill: `- {name}: {description}`.
+        self::assertSame(
+            8,
+            preg_match_all('/^- fat-\d+: /m', $text),
+            'the nudge must emit exactly MAX_ENTRIES entries, not one more or one fewer',
+        );
+    }
+
+    /**
      * A clipped entry says so. A description cut to half a sentence with no
      * sign of it reads as the skill's whole trigger phrase, and the model then
      * decides the skill does not apply on evidence that was withheld.
