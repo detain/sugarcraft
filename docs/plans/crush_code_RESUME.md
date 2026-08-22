@@ -88,6 +88,23 @@ php -r '$f="candy-buffer/composer.json"; $j=json_decode(file_get_contents($f),tr
 ```
 **`candy-buffer`'s assertion count moved 1,621 → 1,661 the moment it tested the real `candy-core`.**
 That +40 is the measure of how blind the stale run was — same test files, different vendored dependency.
+🔴 **NEW, ROUND 42 — A CONTENT PROBE ON THE WRONG FILE REPORTS `SAME` WITH THE CLOSURE ENTIRELY GONE.**
+The user ran `composer update` in `sugar-crush` again mid-round-42. Measured state: **`symlinks=0/18`** —
+the closure was completely absent — yet a content probe on `candy-sprinkles/src/Style.php` printed
+**`SAME`**, because round 41 changed only `StyleTest.php`, never `Style.php`. An unchanged file is
+byte-identical in the Packagist copy *by construction*, so it can never detect staleness.
+**`is_link()` is the PRIMARY check and cannot be fooled; the content probe is the SECONDARY one, and it
+is only meaningful on a file the round actually changed.** Pick the probe file out of the round's own
+diff (`git diff --name-only <base>..HEAD -- '<dep>/src/'`), never from habit. Here the honest probe was
+`candy-core/src/Util/Width.php`: vendored `f2a3558f…` against the live `270fc3f2…`.
+**Restore was the standard round-trip and it worked cleanly** (`--fix --strict-closure` → 396 issues
+fixed across 58 libs → `composer update` in `sugar-crush` → `git checkout -- '*/composer.json'` →
+rc 0 / 18 of 18 / 0 escaping / all four round-41 files `SAME`). ✅ **Third-party drift was ZERO** —
+`sugar-crush/composer.lock` resolves the same versions as the round-42 lane copies, verified package by
+package, so the lanes' deltas remain comparable to a live-tree measurement. **Check that whenever the
+user updates mid-round**: a third-party bump between the lanes and the live tree would silently break
+the merged-total prediction.
+
 🔴 **NEVER commit that `repositories[]` block** (hard fatal in a split-repo clone);
 `php tools/check-path-repos.php --no-lib-path-repos` must exit 0 before you commit.
 
