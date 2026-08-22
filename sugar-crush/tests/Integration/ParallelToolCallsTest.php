@@ -92,10 +92,15 @@ final class ParallelToolCallsTest extends TestCase
         // test, and a ledger accumulating across the file would make every
         // later test inherit every earlier test's reservations.
         //
-        // Arming here cannot disturb ChatTest, the only other armer: PHPUnit
-        // runs one test class at a time in one process, and ChatTest arms in
-        // setUpBeforeClass() and disarms in tearDownAfterClass(), so the two
-        // windows cannot overlap in either order.
+        // Arming here cannot disturb the other armers, and there are TWO, not
+        // one -- this comment said "ChatTest, the only other armer" and
+        // tests/Support/ToolIpcFilesTest.php arms and disarms it in five of its
+        // own cases. The conclusion is unchanged and the reason is structural
+        // rather than a headcount: PHPUnit runs one test class at a time in one
+        // process, ChatTest arms in setUpBeforeClass() and disarms in
+        // tearDownAfterClass(), and ToolIpcFilesTest disarms in a `finally` in
+        // every case that arms -- so no other armer's window can be open while
+        // this class is running, whatever the order.
         ToolIpcFiles::recordReservations(true);
     }
 
@@ -750,20 +755,54 @@ final class ParallelToolCallsTest extends TestCase
      * payload is guaranteed to still be on disk while the prober looks. The
      * umask is deliberately wide open — a regression to a plain
      * `file_put_contents()` would show 0666 here, not the machine's default.
+     *
+     * WHERE THE ATTRIBUTION HAPPENS, and why it moved. WHAT THIS TEST DID: the
+     * probe snapshotted `glob('/tmp/sc_runtime_tool_*')` in its constructor and
+     * returned the mode of the first path that was not in the snapshot. WHAT IS
+     * TRUE ABOUT THAT: it is the same before/after diff over a shared directory
+     * that E96 had just removed from {@see strandedRuntimePayloads()} forty
+     * lines away — same prefix, same directory, same failure. A concurrent
+     * `sugar-crush` run, or a sibling test lane, drops an
+     * `sc_runtime_tool_*` file into the window and this test reports a FOREIGN
+     * file's mode as though it were ours. It was not hypothetical: round 44's
+     * baseline run of this suite failed both of E96's call sites for exactly
+     * that reason.
+     *
+     * WHY THE PROBE STILL GLOBS: identity does not exist in the child. The
+     * parent chooses each payload name immediately before forking that job, so
+     * a child inherits its OWN reserved name and no sibling's — the probe is
+     * job 0 and its ledger holds one path, its own, which is not written until
+     * after `execute()` returns. So the child reports every candidate it saw
+     * and the PARENT, which holds {@see ToolIpcFiles::reservations()} for the
+     * whole group, keeps the one it reserved. A foreign file can still be
+     * SIGHTED; it can no longer be READ FOR AN ANSWER.
+     *
+     * WHY THIS STILL EARNS ITS PLACE rather than being folded into the leak
+     * detector: the leak detector asks whether a payload survived; this asks
+     * what a payload's MODE was while it was alive, which is only answerable
+     * from inside the group and only by another child.
      */
     public function testAChildsPayloadIsNeverReadableByAnotherUser(): void
     {
         $tool = new class (sys_get_temp_dir()) implements Tool, ParallelSafe {
-            /** @var array<string, true> */
-            private array $preexisting;
+            /**
+             * How long to keep scanning after the first payload is sighted.
+             *
+             * NOT a race against the sibling's payload, which is the thing this
+             * probe exists to see: the dispatcher releases results in provider
+             * order, this probe is call 0, so the sibling's payload cannot be
+             * collected until this probe has already returned -- it is on disk
+             * for the whole life of this loop. The window exists only so that a
+             * FOREIGN `sc_runtime_tool_*` file sighted first does not end the
+             * scan before the sibling has finished writing. Foreign files are
+             * then dropped by the parent, which is where identity lives.
+             */
+            private const SETTLE_SECONDS = 0.25;
 
-            public function __construct(private string $tmp)
-            {
-                $this->preexisting = array_fill_keys($this->payloads(), true);
-            }
+            public function __construct(private string $tmp) {}
 
             public function name(): string { return 'modeprobe'; }
-            public function description(): string { return 'reports the mode of a sibling payload'; }
+            public function description(): string { return 'reports the mode of every payload it can see'; }
             public function inputSchema(): array { return ['type' => 'object']; }
             public function isParallelSafe(): bool { return true; }
 
@@ -774,22 +813,33 @@ final class ParallelToolCallsTest extends TestCase
                 }
 
                 $deadline = microtime(true) + 3.0;
+                $settleUntil = null;
+
+                /** @var array<string, string> $seen path => four-digit octal mode */
+                $seen = [];
+
                 do {
                     foreach ($this->payloads() as $path) {
-                        if (isset($this->preexisting[$path])) {
+                        if (isset($seen[$path])) {
                             continue;
                         }
 
                         clearstatcache(true, $path);
                         $perms = @fileperms($path);
                         if ($perms !== false) {
-                            return new ToolResult(toolCallId: '', content: substr(sprintf('%o', $perms), -4));
+                            $seen[$path] = substr(sprintf('%o', $perms), -4);
+                            $settleUntil ??= microtime(true) + self::SETTLE_SECONDS;
                         }
                     }
+
+                    if ($settleUntil !== null && microtime(true) >= $settleUntil) {
+                        break;
+                    }
+
                     usleep(1_000);
                 } while (microtime(true) < $deadline);
 
-                return new ToolResult(toolCallId: '', content: 'no sibling payload observed');
+                return new ToolResult(toolCallId: '', content: (string) json_encode($seen));
             }
 
             /** @return list<string> */
@@ -813,8 +863,44 @@ final class ParallelToolCallsTest extends TestCase
             umask($previous);
         }
 
-        $this->assertSame('0600', $results[0]->content());
         $this->assertSame('quick', $results[1]->content());
+
+        $reserved = ToolIpcFiles::reservations();
+        $this->assertCount(
+            2,
+            $reserved,
+            'both calls must have gone through the fork path, or there is no sibling payload to have a mode',
+        );
+
+        $observed = json_decode($results[0]->content(), true);
+        $this->assertIsArray($observed, 'the probe did not report a payload map: ' . $results[0]->content());
+
+        // IDENTITY, IN THE PARENT. The child can only find candidates by
+        // globbing a directory it shares with every other process on the box;
+        // the parent is the side that knows which of those names it chose. So
+        // the child reports everything it saw and the parent keeps only its
+        // own -- a foreign payload is dropped here rather than mistaken for
+        // the sibling and read for a mode that was never ours to assert.
+        $mine = array_intersect_key($observed, array_flip($reserved));
+
+        $this->assertCount(
+            1,
+            $mine,
+            'the probe must have caught exactly one payload this process reserved -- its own is not written '
+                . 'until after execute() returns, so that one is the sibling. Zero means the sibling had not '
+                . 'been written yet when the probe stopped scanning (raise SETTLE_SECONDS); two would mean '
+                . 'the probe outlived its own payload.',
+        );
+
+        $this->assertSame(
+            [$reserved[1]],
+            array_keys($mine),
+            'the payload the probe caught is not the SIBLING\'s: phase 2 reserves a name immediately before '
+                . 'forking each job in order, so the probe (job 0) inherits its own name first and the '
+                . 'sibling\'s second',
+        );
+
+        $this->assertSame(['0600'], array_values($mine));
     }
 
     /**

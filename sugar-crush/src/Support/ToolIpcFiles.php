@@ -155,6 +155,18 @@ final class ToolIpcFiles
      * "stranded is empty" without also asserting "reservations is not" has a
      * detector that passes hardest when it is looking at nothing.
      *
+     * THE SAME AMBIGUITY LIVES HERE, one level down, and saying so is the
+     * point: an UNARMED ledger and an armed-but-empty one both answer `[]`, so
+     * a caller who forgets {@see recordReservations()} gets an empty answer
+     * from this method and from {@see strandedReservations()} alike. That is
+     * why the useful assertion is a POSITIVE count -- `assertSame(3, …)` fails
+     * on a forgotten arm, `assertSame([], …)` does not. Left as an ambiguity
+     * rather than closed with a third method or an exception because every
+     * caller is a test that arms in `setUp()` and asserts a known count, and a
+     * throwing accessor would turn "this suite forgot to arm" into a fatal in
+     * production code that production never calls. Pinned by
+     * {@see \SugarCraft\Crush\Tests\Support\ToolIpcFilesTest::testAnUnarmedLedgerAndAnEmptyArmedOneAreIndistinguishable()}.
+     *
      * @return list<string>
      */
     public static function reservations(): array

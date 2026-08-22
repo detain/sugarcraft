@@ -505,4 +505,73 @@ final class ToolIpcFilesTest extends TestCase
         self::assertNull($ledger->getValue());
         self::assertSame([], ToolIpcFiles::strandedReservations());
     }
+
+    /**
+     * {@see ToolIpcFiles::reservations()} lists every path handed out,
+     * collected or not — which is the half {@see ToolIpcFiles::strandedReservations()}
+     * cannot supply and the reason both exist.
+     *
+     * The `discard()` step is the point: a collected payload LEAVES the
+     * stranded list and STAYS in the reservation list. A caller asserting only
+     * "stranded is empty" cannot tell that from a run that reserved nothing,
+     * and a run that reserved nothing is usually a fixture that stopped
+     * exercising the fork path rather than a clean bill of health.
+     */
+    public function testTheReservationLedgerKeepsCollectedPathsAndStrandedDoesNot(): void
+    {
+        ToolIpcFiles::recordReservations(true);
+        $first = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+        $second = ToolIpcFiles::reserve(ToolIpcFiles::RUNTIME_PREFIX, 'bin');
+
+        try {
+            self::assertSame([$first, $second], ToolIpcFiles::reservations(), 'in the order they were handed out');
+
+            ToolIpcFiles::write($first, '{}');
+            self::assertSame([$first], ToolIpcFiles::strandedReservations());
+
+            ToolIpcFiles::discard($first);
+            self::assertSame([], ToolIpcFiles::strandedReservations(), 'collecting clears the strand');
+            self::assertSame(
+                [$first, $second],
+                ToolIpcFiles::reservations(),
+                'collecting must NOT clear the reservation — the count of what could have leaked is the '
+                    . 'control that keeps an empty stranded list meaningful',
+            );
+        } finally {
+            ToolIpcFiles::discard($first);
+            ToolIpcFiles::discard($second);
+            ToolIpcFiles::recordReservations(false);
+        }
+    }
+
+    /**
+     * THE RESIDUAL, ASSERTED RATHER THAN DESCRIBED: an unarmed ledger and an
+     * armed-but-empty one give the same answer, `[]`.
+     *
+     * {@see ToolIpcFiles::reservations()} exists because "stranded is empty" is
+     * ambiguous without knowing whether anything was reserved — and this method
+     * carries a smaller copy of that same ambiguity, so a caller who forgets to
+     * arm gets `[]` from BOTH halves and no signal at all from either. What
+     * saves them is asserting a POSITIVE count (`assertSame(3, …)`), which a
+     * forgotten `recordReservations(true)` fails; asserting `assertSame([], …)`
+     * on both halves passes on an unarmed ledger and proves nothing. Pinned
+     * here so the next reader meets the limitation as a test rather than as a
+     * paragraph they may not reach.
+     */
+    public function testAnUnarmedLedgerAndAnEmptyArmedOneAreIndistinguishable(): void
+    {
+        self::assertNull(
+            (new \ReflectionProperty(ToolIpcFiles::class, 'reserved'))->getValue(),
+            'the ledger must be unarmed by default',
+        );
+        self::assertSame([], ToolIpcFiles::reservations(), 'unarmed');
+
+        ToolIpcFiles::recordReservations(true);
+
+        try {
+            self::assertSame([], ToolIpcFiles::reservations(), 'armed and empty — the same answer');
+        } finally {
+            ToolIpcFiles::recordReservations(false);
+        }
+    }
 }
