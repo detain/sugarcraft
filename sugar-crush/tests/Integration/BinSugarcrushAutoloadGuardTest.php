@@ -56,13 +56,19 @@ use SugarCraft\Crush\Cli\NonInteractive;
  * WHAT THIS FILE COSTS, MEASURED, AND WHY IT IS NOT FOLDED (E102, round 44).
  * PHP 8.3.6, this box, 48 cores, load1 ~5.9 with a sibling lane running its own
  * suite, three takes: wall 1.54 / 1.59 / 1.64 s, user+sys 1.61 s — CPU-bound,
- * not waiting. `strace -f -e trace=execve` counts 34 `execve` of a php binary,
- * i.e. THIRTY-THREE child interpreters (the 34th is phpunit itself), inside 100
- * `execve` total — the rest are the `/bin/sh` wrappers `exec()` goes through.
+ * not waiting. `strace -f -e trace=execve` counts 100 `execve` in total, and
+ * they factor exactly: 33 `sh`, 33 `timeout`, 33 `php8.3`, 1 `php`. So
+ * THIRTY-THREE child interpreters — the lone `php` is phpunit itself — each
+ * reached through the `/bin/sh -c` that `exec()` implies and the `timeout -s
+ * KILL 60` this file wraps every spawn in. Three processes per row, one of
+ * which is the interpreter that costs.
+ *
  * The control that makes those numbers trustworthy: the same census run against
- * a file that spawns nothing reports 1, and an earlier attempt at this census
- * with a `php` wrapper on `PATH` reported 0 for THIS file, because the spawns
- * use `PHP_BINARY` and never consult `PATH`.
+ * a file that spawns nothing reports 1. It is worth having, because an earlier
+ * attempt at this census — a `php` shim placed first on `PATH` — reported 0 for
+ * THIS file, and 0 was wrong: the spawns use `PHP_BINARY`, an absolute path,
+ * and never consult `PATH` at all. The broken harness agreed with the control
+ * and disagreed only with reality.
  *
  * Thirty-three bare `php -r 'exit(0);'` startups on this box cost 1.45 s (three
  * takes: 1.48 / 1.44 / 1.44). So ~91% of this file's runtime is interpreter
@@ -74,7 +80,8 @@ use SugarCraft\Crush\Cli\NonInteractive;
  * `bin/sugarcrush` running in a checkout with NO `vendor/`, and its whole job
  * is to hit the autoload IIFE at the top of the file and `exit(2)` before any
  * class, autoloader or harness code exists. It cannot loop, because it is dead
- * by line 26. And the independent variable across rows is the process's own
+ * inside that IIFE — the first statement after `declare(strict_types=1);`, and
+ * the last one it reaches. And the independent variable across rows is its own
  * `$argv`, which is fixed for the life of a process. One child could `exec()`
  * the copied binary seventeen times, but that is seventeen grandchildren and
  * exactly the same interpreter startups — the cost is irreducible because a

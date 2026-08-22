@@ -5817,12 +5817,25 @@ is three lines.
 
 **Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low, but see the measurement trap.
 
-**What.** Measured on PHP 8.3.6 with `grep -ac 'sugarcrush:'` over a combined stdout+stderr capture:
-this file alone → 1; `tests/Integration` → 2; **the full suite → 62**, across about twenty distinct
-warnings (`provider …` 9, the one-shot different-backend refusal 7, `no prompt given` 6,
-`permissionRules*` 8 across four spellings, retention/pruning rows 8, `trustedProjectHooks*` 3,
-`ignoring …` 2, `permissionMode in` 2, plus singletons including E95's MCP line, `piped stdin exceeds`,
-`agent presets unavailable`, `no provider configured`, `unrecognized option`).
+**What.** `McpToolWiringTest.php` alone → 1; `tests/Integration` → 2; **the full suite → 62**, in 32
+distinct message shapes.
+
+**Generator** (a figure without one is not a measurement): PHP 8.3.6, `vendor/bin/phpunit > cap.txt 2>&1`
+from `sugar-crush/`, then `grep -ac 'sugarcrush:' cap.txt` for the total and
+`grep -ao "sugarcrush: .\{0,40\}" cap.txt | sed 's|/tmp/[^ ]*|PATH|g' | sort | uniq -c | sort -rn` for the
+breakdown. The `-a` is load-bearing (see the trap below) and the 40-char window plus the path
+normalisation is what collapses per-run tmpdirs into one row.
+
+Exact breakdown, summing to 62 with nothing dropped: session retention/pruning **9**
+(`retention removed` 3, plus `stale` 2 / `ancient` / `gone` / `older` / `tenDaysOld` 1 each),
+`provider …` **9** (three spellings), the one-shot different-backend refusal **7**,
+`permissionRules*` **7** (three spellings: `… in <path>` 2, `is not a list of rules` 1, `[N] …` 4),
+`no prompt given` **6**, refused project hook files (`… was NOT loaded`) **6**,
+`trustedProjectHooks*` **3**, `disabledTools` cut-tool reports **2**, `permissionMode in …` **2**,
+`ignoring …` **2**, skipped skill files **2**, and **7** singletons — E95's MCP line,
+`piped stdin exceeds 10MB cap`, `agent presets unavailable`, `no provider configured`,
+`allowedTools/disabledTools left no tools`, `unrecognized option: --bogus`, and
+`--root /no/such/dir: no such directory`.
 
 Rounds 43 and 44 both reasoned about E95's MCP line as though it were nearly the suite's only unowned
 stderr output — round 43 accepted it partly because "one diagnostic line is what this suite already

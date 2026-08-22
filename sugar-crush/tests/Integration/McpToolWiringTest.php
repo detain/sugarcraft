@@ -514,11 +514,17 @@ final class McpToolWiringTest extends TestCase
      * WHAT IS TRUE NOW, re-measured in round 44 (E95) on PHP 8.3.6 by counting
      * `sugarcrush:` in a combined stdout+stderr capture: this file alone prints
      * ONE, `tests/Integration` prints TWO (this and the workflow-tier refusal
-     * cited below), and THE FULL SUITE PRINTS 62, from about twenty distinct
-     * warnings — `provider …` nine times, `no prompt given` six, the one-shot
-     * backend refusal seven, retention rows, permission-rule rejections and the
-     * rest. This line is one sixty-second of a channel the suite already uses
-     * heavily and has always used.
+     * cited below), and THE FULL SUITE PRINTS 62, in 32 distinct message
+     * shapes. Counted exactly, nothing rounded and nothing dropped: session
+     * retention/pruning 9, `provider …` 9, the one-shot different-backend
+     * refusal 7, `permissionRules*` 7 across three spellings, `no prompt
+     * given` 6, refused project hook files 6, `trustedProjectHooks*` 3,
+     * `disabledTools` cut-tool reports 2, `permissionMode in …` 2, `ignoring
+     * …` 2, skipped skill files 2, and 7 singletons — this line, `piped stdin
+     * exceeds`, `agent presets unavailable`, `no provider configured`,
+     * `allowedTools/disabledTools left no tools`, `unrecognized option` and
+     * `--root …: no such directory`. This line is one sixty-second of a
+     * channel the suite already uses heavily and has always used.
      *
      * WHY THAT MAKES THE DECISION EASIER RATHER THAN HARDER, which is the
      * opposite of how the original sentence framed it: the cost of accepting
