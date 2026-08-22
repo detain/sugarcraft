@@ -956,14 +956,28 @@ final class ParallelToolCallsTest extends TestCase
      *
      * The collect-side `discard()` only runs for a job that is actually
      * released, and releases stop the moment nobody pulls the next value.
-     * `executeConcurrently()` is a Generator, so "nobody pulls the next value"
-     * is not an exotic state: `Runtime::run()` yields each tool result upward,
-     * a consumer that `break`s or lets an exception unwind destroys the whole
-     * chain mid-group, and PHP then runs the generator's `finally` (verified on
-     * PHP 8.3.6 rather than assumed). Without one, every payload past the
-     * release cursor sits in a world-listable temp directory until
+     * `executeConcurrently()` is a Generator, so PHP runs its `finally` then
+     * (verified on PHP 8.3.6 rather than assumed). Without one, every payload
+     * past the release cursor sits in a world-listable temp directory until
      * {@see ToolIpcFiles::sweep()}'s one-hour backstop, which is a reaper of
      * last resort and not a lifecycle.
+     *
+     * WHICH CONSUMER ACTUALLY DOES THIS.
+     * WHAT THIS SAID: that "nobody pulls the next value" is "not an exotic
+     * state", and named a consumer that `break`s as the first example.
+     * WHAT IS TRUE NOW: source-checked rather than assumed. The only
+     * production consumer of {@see Runtime::run()} is the `foreach` in
+     * {@see \SugarCraft\Crush\Backend\EngineBackend}'s agentic loop, and it
+     * DRAINS -- there is no `break` in it. The abandonment this test drives is
+     * therefore a test-and-future-caller shape, not a live one. What IS live is
+     * the other half of the same sentence, an exception unwinding out of the
+     * generator (an `onEvent` listener, a hook, a merge that escaped its
+     * guard), and that has its own case now:
+     * {@see testAThrowUnwindingOutOfTheGroupAlsoDiscardsTheUncollectedPayloads()}.
+     * WHY THIS STILL EARNS ITS PLACE: both shapes end in the same `finally`,
+     * and destruction is the one that can be driven with no exception in
+     * flight -- so it isolates the cleanup from the unwind. Keeping the pair is
+     * what makes it possible to say which of them a future regression broke.
      *
      * THE POSITIVE CONTROL IS IN THE TEST, not in a sibling case. An empty
      * stranded list proves nothing on its own -- the round-44 lesson is that a
@@ -1025,6 +1039,106 @@ final class ParallelToolCallsTest extends TestCase
         );
     }
 
+    /**
+     * THE DECISION THE `finally` DELIBERATELY DOES NOT TAKE: it never kills.
+     *
+     * That is the loudest comment in {@see Runtime::executeConcurrently()}'s
+     * cleanup and it had no test, which under this repo's own rule (dormant
+     * behaviour gets pinned, not just described) is the same as not having
+     * decided it. A `posix_kill()` added to that loop by a future reader
+     * "while we're here" would make every case above it greener, not redder:
+     * killing a child DOES stop its payload leaking.
+     *
+     * What it also does is truncate a side effect half-way, which is the whole
+     * argument, so that is what this asserts -- the child's OWN completion
+     * record, written after its work, not its process state at an instant.
+     *
+     * NO SLEEP AND NO WINDOW. The surviving child is held at the rendezvous
+     * (`peers: 2` in a group directory only this test can complete) rather than
+     * paused for a guessed duration, so "still running at the moment of
+     * abandonment" is a fact the test arranges, not a race it hopes to win.
+     * Releasing it afterwards is one file_put_contents().
+     */
+    public function testTheAbandonmentCleanupNeverKillsAStillRunningChild(): void
+    {
+        $before = $this->childPids();
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([$this->rendezvousTool()]);
+        $runtime = $this->runtime();
+
+        $method = new \ReflectionMethod($runtime, 'executeToolCalls');
+        $generator = $method->invoke($runtime, [
+            $this->rendezvousCall('quick', peers: 1, wait: 0.0, group: 'nokill0'),
+            // Blocks until this test drops the second marker into its group
+            // directory. The wait is a ceiling on a wedged box, not a timing
+            // assumption: nothing else can ever satisfy `peers: 2` here.
+            $this->rendezvousCall('survivor', peers: 2, wait: 10.0, group: 'nokill1'),
+        ], $app, null, null);
+
+        $this->assertSame('saw=1', $generator->current()->content());
+        $this->assertSame(
+            ['quick'],
+            $this->finishLog(),
+            'the survivor must still be at the rendezvous when the group is abandoned',
+        );
+
+        $after = $this->childPids();
+        $survivorPid = ($before === null || $after === null)
+            ? null
+            : array_values(array_diff($after, $before));
+
+        unset($generator);
+
+        $this->assertSame(
+            ['quick'],
+            $this->finishLog(),
+            'the cleanup must not have waited for the survivor either -- a blocking reap here would '
+                . 'hold the whole turn hostage to the slowest abandoned child',
+        );
+
+        // Release it, and let it prove it was never killed by finishing.
+        $release = $this->dir . '/nokill1/release';
+        file_put_contents($release, '1');
+
+        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        while (!in_array('survivor', $this->finishLog(), true) && microtime(true) < $deadline) {
+            usleep(2_000);
+        }
+
+        $this->assertContains(
+            'survivor',
+            $this->finishLog(),
+            'the abandoned child was killed mid-flight: its side effect never completed. The cleanup '
+                . 'is documented as deliberately NOT killing -- a timeout is a verdict on the call, an '
+                . 'abandoned generator is a verdict on the consumer',
+        );
+
+        if ($survivorPid !== null) {
+            $this->assertCount(1, $survivorPid, 'exactly one child should have outlived the group');
+            pcntl_waitpid((int) $survivorPid[0], $status);
+        }
+
+        // ...and the other half of the same decision: its payload is left
+        // where sweep() will find it, because the parent has no idea whether
+        // the child had finished writing. This doubles as the known-positive
+        // control that the scanner below is alive.
+        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        while ($this->strandedRuntimePayloads() === [] && microtime(true) < $deadline) {
+            usleep(2_000);
+        }
+
+        $left = $this->strandedRuntimePayloads();
+        $this->assertCount(
+            1,
+            $left,
+            'the survivor\'s payload should have been left behind for ToolIpcFiles::sweep()',
+        );
+
+        // Exact path, never a glob: sibling lanes own the other
+        // sc_runtime_tool_* files in this directory.
+        ToolIpcFiles::discard($left[0]);
+        $this->assertSame([], $this->strandedRuntimePayloads());
+    }
     /**
      * ...and so does an EXCEPTION unwinding out of the group, which is a
      * different code path from the one above and the one production actually
