@@ -6274,10 +6274,10 @@ citation of a backlog id is a cross-file reference the merge cannot see** — ch
 of the merge step.
 
 **Step.** Either a supervisor-allocated number block per lane, or lane-prefixed provisional ids
-(`Eb1`, `Ec1`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
+(`Eb1`, `E144`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
 shared scratchpad but not this.
 
-### Eb45-1 — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
+### E136 — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: medium, correctness. **Measured, not inferred.**
 
@@ -6315,7 +6315,7 @@ makes `createWorktree()` throw (pre-creating the agent's worktree is enough — 
 `MultiAgentRefactorTest::testAThrowInsideAForkedCoderCannotRunPhpunitsTeardownInTheChild()`) and asserts
 the task is claimable again afterwards.
 
-### Eb45-2 — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
+### E137 — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low today, latent. **Source-verified, not observed.**
 
@@ -6338,7 +6338,7 @@ the path the backoff protects; the code comment now says so.
 `LOCK_NB` + a bounded retry with a diagnosable failure, or whether blocking is correct and the
 justification should just say so. `src/Session.php` uses `flock()` too and belongs in the same sweep.
 
-### Eb45-3 — nothing stops the next forked child in `tests/` from ending in a plain `exit()`
+### E138 — nothing stops the next forked child in `tests/` from ending in a plain `exit()`
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low, process. **Mechanism measured.**
 
@@ -6369,7 +6369,7 @@ and it must assert **per occurrence, not a count** — a cardinality over `tests
 moment a sibling lane merges. It was left unwritten here for exactly that reason: it scans files three
 lanes were editing concurrently.
 
-### Eb45-4 — E133's recorded negative about `sys_get_temp_dir()` is right but understated
+### E139 — E133's recorded negative about `sys_get_temp_dir()` is right but understated
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: none, correction. **Re-measured as instructed.**
 
@@ -6388,7 +6388,7 @@ userland cannot move it at all.
 test cannot relocate itself into a private temp directory after the fact, so attribution has to move
 instead of the directory. `tests/bootstrap.php`'s `putenv('TMPDIR=…')` is not contradicted by this — it
 is documented there as working on **children** only, which is exactly what the measurement above shows.
-### Eb45-5 — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
+### E140 — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
 
 **Recorded 2026-08-22 by round-45 lane b (fix stage), from its own reviewer's finding.** Severity: low,
 documentation accuracy. **Source-verified.**
@@ -6409,7 +6409,7 @@ point stands): the collect-side unlink is still the normal lifecycle, the `final
 one for the abandonment path only, and neither reaches a child that is still running — which is the
 population `sweep()` is actually for, so the paragraph's conclusion is unchanged.
 
-### Eb45-6 — `rendezvousTool()` reports `max($seen, count(glob(...)))`, which overshoots whenever callers outnumber `peers`
+### E141 — `rendezvousTool()` reports `max($seen, count(glob(...)))`, which overshoots whenever callers outnumber `peers`
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low, test-harness sharp edge. **Observed twice.**
 
@@ -6425,7 +6425,7 @@ own group directory, which is a convention nothing enforces.
 record callers per group and assert that `peers` equals that number, so a mismatched pair fails loudly
 at construction instead of flaking one run in fifty.
 
-### Eb45-7 — the suite's per-test time limit does not reach a forked child
+### E142 — the suite's per-test time limit does not reach a forked child
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: medium for diagnosis, low for correctness.
 **Measured.**
@@ -6444,7 +6444,7 @@ rather than an edit.
 creates and SIGKILLs any survivor in `tearDown()`, which is inside the parent's control and needs no
 phpunit.xml change.
 
-### Eb45-8 — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
+### E143 — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
 
 **Recorded 2026-08-22 by round-45 lane b (fix stage).** Severity: low for correctness, HIGH for every
 future round's reporting. **Measured, with the generator below.**
@@ -6484,3 +6484,186 @@ over `assertIsInt()` for precisely this reason ("an assertion per call added ~34
 assertion count while pinning nothing") — and then reintroduced the same cost one call deeper.
 `tests/Config/GlobFigureDriftTest.php` belongs to another lane, hence a backlog entry rather than a fix.
 
+### E144 — a FOURTH `paragraphs()` copy carries the same blind spot and was not routed
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135 — the
+supervisor should renumber at merge.**
+
+**What.** E125 named three suites carrying a byte-identical private `paragraphs()`. There are **four**.
+`tests/Chat/ChatConfigChangeDoorsDocumentationDriftTest` carries the same rule spelled `private static
+function paragraphs()`, which is why a grep for the instance signature finds three. It was left alone
+this round on file-ownership grounds only.
+
+**Measured before saying so**, on PHP 8.3.6: both doc-blocks it reads (`Chat::$onConfigChange` and
+`Chat::withOnConfigChange()`) are plain prose with no list, table or fence, so the old blank-line window
+and the new `Tests\Config\Support\DocumentParagraphs` window give it **identical unit counts and
+identical verdicts** (property: 4 units / 1 retraction / live hit; method: 3 units / 1 retraction / live
+hit, under both). Nothing is hiding in it **today**. It is a latent carrier: the first `-` bullet or
+table anyone adds to either doc-block reopens the blind spot in that file alone.
+
+**Step.** Delete the private copy and call `DocumentParagraphs::of()`. One line, plus the rule-7
+three-part note the other three carry. Note that its four-doors rule ALSO has the "two adjacent
+half-claims satisfy it" shape that round 45 replaced with a per-key rule in
+`ConfigWriteProducerDocumentationDriftTest`; the same replacement probably belongs here, but its
+retraction-exclusion machinery is different enough that it needs its own measurement rather than a
+transplant.
+
+**Read this before transplanting the per-key rule (added by the round-45 lane-c fix agent).** The
+per-key rule as first written was UNFALSIFIABLE FOR `theme`: it required a unit to name the key AND both
+doors, but `stripos($unit, 'theme')` is satisfied by `Switch Theme` and by `/theme`, so the theme bullet
+could lose its key name entirely and stay green — measured, and green across 149 tests of the Config and
+Chat doc-drift suites. The repair looks for the key in the unit with the DOOR SPANS CUT OUT
+(`ConfigWriteProducerDocumentationDriftTest::unitNamesKeyWithBothDoors()`), and keeps the surviving
+mutation as a fixture row. This file's own `DOORS` is a flat list of four door names with no key
+conjunct, so it does not carry the defect today — it would acquire it the moment the per-key shape is
+transplanted. Transplant the repaired form, not the round-45 one.
+
+### E145 — the mention oracle has no way to record a variable another page deliberately says is unread
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135.**
+
+**What.** E123's new `EnvRosterDriftTest::testEveryVariableAnotherPageNamesIsOneTheCodeReads()` treats
+every `SUGARCRUSH_*` name on any page except `docs/ENVIRONMENT.md` as a promise the code must keep. The
+roster page is excluded from that scrape precisely so its deliberate not-read discussion of
+`SUGARCRUSH_TOOL_CALL_PARSER` stays out of the rule — **verified by mutation**: removing the `continue`
+that skips it reds three tests, and both of the set comparisons among them red on a one-element diff
+naming `SUGARCRUSH_TOOL_CALL_PARSER` and nothing else.
+
+**Corrected 2026-08-22 by the round-45 lane-c fix agent.** The paragraph above originally said "its two
+deliberate not-read discussions (`SUGARCRUSH_TOOL_CALL_PARSER`, `SUGARCRUSH_REASONING_EFFORT`) … two of
+them on exactly those two names". `SUGARCRUSH_REASONING_EFFORT` does not appear on `docs/ENVIRONMENT.md`
+at all — not in a table, not in prose, not in a fence — so it cannot become a mention when the exclusion
+is removed. It exists in exactly one place in the package, a doc-block in
+`src/Providers/ProviderFactory.php`. The pairing was inherited from `EnvRosterDriftTest`'s own class
+doc-block, which names the two together for a different reason, and was then re-stamped "verified by
+mutation". The exclusion is still load-bearing and the mutation still reds; only the arithmetic was
+borrowed.
+
+**The residual.** A page OTHER than the roster that legitimately says "nothing reads this" now reds, and
+there is no exemption. No such sentence exists on any other page at round 45 (measured: every name on
+every mention surface is read), so the machinery was **deliberately not built** — an unmeasured exemption
+rule is what round 43 shipped stale, and "no such paragraph exists" is a statement about a day's tree
+rather than a property of a rule.
+
+**Step, when it first reds.** Do not add a filename exemption list. The window is now available: reuse
+`DocumentParagraphs::of()` and make the exemption a property of the UNIT the name appears in — the
+`GlobFigureDriftTest` retraction pattern — so it is semantic rather than keyed to a path.
+
+### E146 — `exitCodeAfter()`'s red-on-ambiguity contract is dormant in `src/`
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: informational. **Lane-local provisional id.**
+
+**What.** E132 split the exit walk into a multi-valued `exitCodesAfter()` and a single-valued
+`exitCodeAfter()` that now FAILS, rather than returning `null`, when a terminator names two different
+exit codes. Nothing in `src/` exercises that failure — measured by mutation on PHP 8.3.6: replacing the
+`assertCount(1, …)` with a "found something" check left the entire suite green.
+
+**Not removed, per the standing no-dormant-deletion rule; pinned instead** by
+`testTheSingleValuedExitWalkRedsOnATerminatorItCannotSummarise()`, which drives a fixture through the
+real method and asserts the failure fires. `Subcommands::doctor()` IS this shape but emits a
+`result`-only document, so it is never an error producer and reaches `exitCodesAfter()` instead. The
+seam is the split between the two methods; the measured reason to keep it is that the day an error
+document lands on a ternary branch, `shippedTypes()` needs a decision from a person rather than a
+silent `null`.
+
+### E147 — the Agents suites share `~/.sugar-crush/teams/` across lanes and go red on each other
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: medium, process + test hygiene. **Lane-local
+provisional id per E135.**
+
+**What.** `tests/Agents/{AgentManagerTest,TeamManagerTest,TeamTest}` register teams in the REAL
+`~/.sugar-crush/teams/` registry — a path outside every lane worktree — and do not remove them. Lane c's
+third full-suite run at round 45 went **rc 1 with 9 failures**, all nine in those three files, and the
+failure diffs are lists of two thousand-plus `~/.sugar-crush/teams/throwing-<uniqid>` entries left by
+sibling lanes' concurrent runs. **All 136 tests in the three files pass when run alone** (136 tests / 469
+assertions, immediately afterwards, same commit), so the failures are interference and not a defect in
+the tree.
+
+**Measured** at round 45 on PHP 8.3.6: `~/.sugar-crush/teams/` held **2,094** entries, **240** of them
+`throwing-*` fixtures. The count grows with every suite run on this box, by anyone.
+
+**Why it is worse than a flake.** E133 already recorded that `sys_get_temp_dir()` caches on first use and
+cannot be redirected at runtime, so a test cannot isolate itself into a private temp directory after the
+fact. This is the same failure mode one directory over, and `HOME` — unlike `TMPDIR` — IS honoured on
+every `getenv('HOME')` read, so the fix is available here in a way it was not there.
+
+**Step.** Give these three suites a per-test `HOME` (or a per-test teams directory injected through the
+`TeamManager` constructor) and remove it in `tearDown()`. Until then, treat an `rc 1` whose failures are
+confined to `tests/Agents/*` as interference, re-run those files alone, and say so — which is what the
+round-45 brief already asks for `/tmp`, extended to `$HOME`. Do NOT bulk-delete
+`~/.sugar-crush/teams/*` while sibling lanes are running.
+
+### E148 — the mention oracle's surface alphabet stops at `README.md` + `docs/*.md`
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id per
+E135.**
+
+**What.** `EnvRosterDriftTest::mentionSurfaces()` is `README.md` plus a NON-RECURSIVE `glob('docs/*.md')`.
+Round 45's report filed the gap as untested. It is now measured, on PHP 8.3.6, by
+`scratchpad/r45c/alpha.php`: `docs/` has **no subdirectories** today, so the non-recursive glob costs
+nothing yet; outside the surface set there are **17** other `.md` files under `sugar-crush/` (including
+every `src/Skills/BuiltIn/**/SKILL.md`, which is shipped prose a user reads), of which **two** name a
+prefixed variable — `CALIBER_LEARNINGS.md` (`SUGARCRUSH_SEARCH_ENDPOINT`) and `CHANGELOG.md`
+(`SUGARCRUSH_SESSION_RETENTION_DAYS`) — plus `bin/sugarcrush`, which is not `.md` at all and names
+`SUGARCRUSH_DISABLE_MOUSE`.
+
+**Why it is not urgent.** All three of those names are ALREADY in the oracle's scope through an in-scope
+page (`README.md` names all three), so every one of them is already compared. The gap is real and
+currently empty.
+
+**Step.** Walk `docs/` recursively, the way `GlobFigureDriftTest::censusScope()` already does and for the
+reason recorded there, and decide deliberately whether `SKILL.md` files are mention surfaces. Whatever is
+decided, the decision belongs in `mentionSurfaces()`' doc-block with the measurement, not in a filename
+list.
+
+### E149 — the mention scrape reads raw text, so a line-wrapped variable name is invisible
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id.**
+
+**What.** `EnvRosterDriftTest::prefixedNamesIn()` runs `/\b(SUGAR_?CRUSH_[A-Z0-9_]+)\b/` over raw page
+text, while `DocumentParagraphs::of()` — the window the Config guards read through, and for exactly this
+reason — normalises whitespace first. A `SUGARCRUSH_*` name broken across a markdown line wrap would be
+two fragments and would be scraped as neither.
+
+**Measured, PHP 8.3.6, 2026-08-22:** no prefixed name ends a line in `README.md` or any `docs/*.md`
+(`grep -nE 'SUGAR_?CRUSH_[A-Z0-9_]*$'` finds nothing), and there are no lowercase spellings. The hazard is
+empty today.
+
+**Step.** Normalise the text through `DocumentParagraphs::of()` and scrape the units, which also brings
+the two censuses onto one window. Do it when a name first wraps, and pin it with a wrapped fixture.
+
+### E150 — a lane-c guard's span is anchored to a prose phrase on two read-side surfaces
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: informational, merge hazard.
+
+**What.** `ConfigWriteProducerDocumentationDriftTest::ENUMERATION_LEAD_IN` is the literal `'two
+producers'`, and `enumerationSpan()` asserts it identifies EXACTLY ONE unit in each of two documents —
+`docs/SETTINGS.md` and `SugarCraft\Crush\Config\LayeredSettings`' class doc-block. Both are read-side
+surfaces a sibling lane may be rewriting. The `assertCount(1, $leadIn)` makes the coupling fail loudly
+rather than silently, which is the right shape.
+
+**Step.** None. Recorded so a merge-time failure on that assertion is read as prose drift on a page
+someone else edited, not as a lane-c defect. Fix it by restoring the phrase or by moving the anchor,
+never by loosening the `assertCount(1, …)`.
+
+### E151 — the shared window is COARSER inside a fenced block, and that weakens a live exemption
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Documented and pinned this
+round; NOT fixed.**
+
+**What.** E125's window makes a fenced code block ONE unit, opening fence to closing fence. The old
+blank-line rule cut such a block in two wherever it contained a blank line. So the new window is not
+uniformly finer: within a fenced block it is coarser, and
+`GlobFigureDriftTest::carriesTheStaleFigure()`'s retraction exemption — which spares a unit that spells
+the current count AND quotes the glob — now spares a stale figure sitting elsewhere in the SAME block as
+a retraction. Nothing in scope exploits this today.
+
+**What was done this round.** The trade is now measured rather than unmentioned:
+`DocumentParagraphsTest::windowFixtures()` carries a `a fence welds two claims a blank line used to
+separate` row (old `false` / new `true`), `testTheTableContainsFixturesTheOldWindowCouldNotSee()` counts
+a `$widened` column and asserts it is non-empty, and the class doc-block's "either direction" bullet says
+which direction it means.
+
+**Step, if it ever matters.** Do not re-split fences on blank lines — that reintroduces the unbalanced
+halves E125 removed. Scope the retraction exemption so that inside a fenced unit the retraction must be
+on the same LINE as, or adjacent to, the figure it exempts.

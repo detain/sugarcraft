@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Config;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
 
 /**
  * THE CHARACTER COUNTS BESIDE `[!B]*` ARE FIGURES, AND A FIGURE WITHOUT A
@@ -146,30 +147,31 @@ final class GlobFigureDriftTest extends TestCase
     }
 
     /**
-     * Paragraphs of a doc-block or a markdown page, whitespace-normalised — the
-     * same shape {@see ConfigWriteProducerDocumentationDriftTest} and
-     * {@see ThemePersistenceFramingTest} use, and for the same reason: the
-     * claims here are line-wrapped, so a raw `str_contains()` reports a line
+     * The shared paragraph window.
+     *
+     * WHAT THIS SAID: three suites each carried a byte-identical private
+     * `paragraphs()` with its own copy of the same justification — the claims
+     * being checked are line-wrapped, so a raw `str_contains()` reports a line
      * break as a defect.
+     *
+     * WHAT IS TRUE NOW: that justification still holds and has not been
+     * deleted; it moved, in full and with the measurements behind it, to
+     * {@see DocumentParagraphs}. What changed there is the rule itself — a
+     * fenced code block, a table row and a list item are each their own unit
+     * now, because markdown puts no blank line between them and the old rule
+     * therefore handed every guard one unit where a reader sees several.
+     *
+     * WHY THIS METHOD STILL EARNS ITS PLACE: it is the seam. Every call site
+     * reads `$this->paragraphs(...)`, so the window can be changed in one place
+     * and the change measured against
+     * {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest}'s fixture
+     * table rather than three times by hand.
      *
      * @return list<string>
      */
     private function paragraphs(string $text): array
     {
-        $lines = [];
-        foreach (preg_split('/\R/', $text) ?: [] as $line) {
-            $lines[] = preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line) ?? $line;
-        }
-
-        $out = [];
-        foreach (preg_split('/\n\s*\n/', implode("\n", $lines)) ?: [] as $para) {
-            $normalised = trim((string) preg_replace('/\s+/', ' ', $para));
-            if ($normalised !== '') {
-                $out[] = $normalised;
-            }
-        }
-
-        return $out;
+        return DocumentParagraphs::of($text);
     }
 
     /**
@@ -695,7 +697,21 @@ final class GlobFigureDriftTest extends TestCase
         yield 'U+202F narrow no-break space' => ["closes the eight\u{202F}characters version", true, false];
         yield 'U+200B zero-width space' => ["closes the eight\u{200B}character version", true, false];
         yield 'U+00AD soft hyphen' => ["closes the eight\u{00AD}character version", true, false];
-        yield 'hyphenated across doc lines' => ["     * closes the eight-\n     * character version", true, false];
+        // A COMPLETE DOC-BLOCK, NOT TWO LEADER-PREFIXED LINES, and the wrapper
+        // is load-bearing rather than decoration. DocumentParagraphs' leader
+        // strip became conditional on the text being PHP, because on markdown
+        // that strip ate the first asterisk of every line-leading `**bold**`
+        // lead. A bare fragment is not PHP by that test, so the leaders would
+        // survive and ` * ` would sit between `eight-` and `character` — a
+        // separator the alphabet does not contain, and this row would report a
+        // miss for a spelling the census really does catch. In the tree the
+        // shape only ever arrives inside a whole `.php` file, so the wrapper is
+        // what makes the fixture faithful to it.
+        yield 'hyphenated across doc lines' => [
+            "/**\n     * closes the eight-\n     * character version\n     */",
+            true,
+            false,
+        ];
         yield 'underscore separator' => ['closes the eight_character version', true, false];
         yield 'numeral, ASCII hyphen' => ['closes the 8-character version and nothing else', true, false];
         yield 'numeral, ASCII space' => ['closes the 8 characters version and nothing else', true, false];
