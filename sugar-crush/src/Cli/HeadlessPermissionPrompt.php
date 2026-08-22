@@ -100,7 +100,12 @@ use SugarCraft\Crush\Tools\ToolCall;
  * pins that roster, because it is the fact this whole paragraph rests on and
  * the day it changes is the day the decision has to be made again.
  *
- * SECOND — THE SEAM IS NOT MERELY WRONG FOR THESE, IT IS UNREACHABLE.
+ * SECOND — THE SEAM IS NOT MERELY WRONG FOR THESE, IT IS UNCALLABLE, AND THEN
+ * SEPARATELY UNREACHABLE. The short form first, because it cannot rot:
+ * `Bootstrap::warnPermissionConfigInTranscript()` is `private static`, so
+ * nothing outside `Bootstrap` can call it whatever the routing rule says. The
+ * longer form is the one that decides whether making it callable would help,
+ * and the answer is no:
  * `warnPermissionConfigInTranscript()` appends to a static list that
  * {@see Bootstrap::chat()} drains into `Chat::withLaunchNotices()` once, at
  * construction. These four fire from inside

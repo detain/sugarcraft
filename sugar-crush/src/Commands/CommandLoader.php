@@ -131,11 +131,33 @@ final class CommandLoader
      * and the first half stopped being: a raw unprefixed copy on the same
      * channel is the "reported twice" it was willing to accept as the price of
      * a risk that has since been retired.
-     * WHY THE CALLS STILL EARN THEIR PLACE, gated rather than deleted: the
-     * seam clips a long message ({@see \SugarCraft\Crush\Cli\Bootstrap}'s
-     * `LAUNCH_NOTICE_MAX_CHARS`) and caps how many rows it will carry, so the
-     * raw line remains the complete record for anyone debugging discovery.
-     * {@see DEBUG_REFUSALS_ENV} is how they ask for it.
+     * WHY THE CALLS STILL EARN THEIR PLACE, gated rather than deleted.
+     * WHAT THIS SAID: "the seam clips a long message
+     * ({@see \SugarCraft\Crush\Cli\Bootstrap}'s `LAUNCH_NOTICE_MAX_CHARS`)
+     * and caps how many rows it will carry, so the raw line remains the
+     * complete record for anyone debugging discovery."
+     * WHAT IS TRUE NOW: THE CLIP AND THE CAP BOUND THE TRANSCRIPT ROW ONLY.
+     * `Bootstrap::warnPermissionConfigInTranscript()` builds a clipped notice
+     * for its launch-notice list and then hands the ORIGINAL message to
+     * `warnPermissionConfigOnce()`, so the seam's own stderr half is already
+     * unclipped and uncapped — that method's doc-block says as much in its
+     * "BOUNDED ON BOTH AXES, and only on the transcript side" paragraph.
+     * MEASURED on this box, PHP 8.3.6, driving the real private method through
+     * reflection with stderr redirected to a file: a 616-byte message produced
+     * a 402-byte transcript row and a 629-byte stderr line, and 41 calls
+     * produced 25 transcript rows and 41 stderr lines. So for the three
+     * collector-paired refusals the seam's stderr line already IS the complete
+     * record, and the gated copy adds a duplicate rather than a fuller one.
+     * WHY THEY STILL EARN THEIR PLACE, and the reason is not the same for all
+     * five: the two per-FILE refusals ({@see loadFromDirectory()}'s containment
+     * skip and its parse failure) reach no other channel at all — they go on
+     * {@see $skippedFiles}, which nothing drains, so with the gate off this
+     * loader's own accessor is their only reader. The three collector-paired
+     * ones survive as a RAW, unprefixed copy, for a log consumer that greps for
+     * this loader's wording rather than for `sugarcrush: `. That is a thin
+     * reason next to the first one, which is exactly why the gate is off by
+     * default rather than the calls being kept unconditional.
+     * {@see DEBUG_REFUSALS_ENV} is how either group is asked for.
      *
      * DIRECTORY REFUSALS ONLY, matching the name and the collector's subject. A
      * single `*.md` skipped for pointing outside, or for failing to parse, is a

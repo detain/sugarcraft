@@ -63,6 +63,14 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     destination configured, this IS stderr. Three of them appear in the
  *     baseline capture of a full suite run. It is by a wide margin the largest
  *     stderr channel in the application and it was not in the census at all.
+ *     THIS COUNTS CALL SITES, NOT MESSAGES, and the two moved apart in round
+ *     46: funnelling `CommandLoader`'s five `error_log()` calls through one
+ *     private `report()` took its roster entry from 5 to 1 and this figure from
+ *     thirty-eight to thirty-four while removing no message whatever — that
+ *     loader still has five distinct refusals to report and `docs/ENVIRONMENT.md`
+ *     documents all five behind one flag. A fall here is a fall in EMITTERS;
+ *     read it as a fall in diagnostics and you will go hunting for four that
+ *     were never deleted.
  *     A NAIVE `grep -c 'error_log('` OVER `src/` DISAGREES WITH THAT NUMBER by
  *     more than twenty, and the census is the one that is right: the surplus is
  *     entirely this application's own doc-blocks discussing `error_log()`,
