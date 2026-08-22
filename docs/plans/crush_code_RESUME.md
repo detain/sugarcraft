@@ -159,11 +159,20 @@ exactly one risky test and ~22 missing assertions, this is it — re-run before 
 `sugar-crush` deliberately held at its round-42 third-party versions so the floor stays comparable —
 **when they are refreshed, re-measure the floor in the same commit and say so here.**
 
-⚠️ **PUBLISHED MODE IS STILL BLOCKED, CORRECTLY.** `scripts/refresh-deps.php` (default
-`--mode=published`) refuses while commits are unpushed, and there are now **~31**. Packagist cannot serve
-what has not been pushed. Pushing is outward-facing and has NOT been done unilaterally. After a push, let
-`sync-sugarcraft.yml` and the Packagist webhook run, then a published-mode pass verifies what an outside
-consumer actually gets.
+🟢 **PUBLISHED MODE IS NO LONGER BLOCKED — MASTER WAS PUSHED MID-ROUND, BY THE USER, NOT BY ME.**
+`origin/master` advanced to `7f76a855` with reflog `update by push` while round 43's docs were being
+written; no git hooks are installed on this box (`.git/hooks/` holds only samples), so that was a human.
+Everything through the three lane merges and the E99–E111 backlog commit is now public. Only the last
+few doc commits trail.
+
+**So the next round can finally run `php scripts/refresh-deps.php` in its DEFAULT `--mode=published`** —
+give `sync-sugarcraft.yml` and the Packagist webhook time to run first, then the script's own
+post-condition (fingerprinting every vendored sibling's `src/` against the working tree) tells you
+whether the pipeline actually caught up. ⚠️ **Keep `sugar-crush` LINKED regardless** — published mode
+moves its skip count 1 → 2 and voids every floor comparison in this file. The script warns by name.
+
+⚠️ Pushing remains outward-facing and is still **not** something to do unilaterally. This entry records
+that it happened, not a licence to repeat it.
 
 ### CONCURRENCY IS **3**, BY EXPLICIT USER INSTRUCTION
 
