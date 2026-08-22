@@ -871,16 +871,26 @@ final class NonInteractive
      * cheaper owner would put the headless document and the TUI back on two
      * lists — the thing this method exists not to do.
      *
-     * KNOWN LIMIT, stated because the field's NAME over-promises against it: a
+     * THE KNOWN LIMIT RECORDED HERE IS CLOSED (E210). WHAT IT SAID: "a
      * permission refusal and a plain hook DENY are indistinguishable here, and
-     * the reason is upstream of this class rather than a shortcut taken in it.
-     * {@see \SugarCraft\Crush\Hooks\HookManager::resolveAsk()} settles a
-     * refused ASK as `HookResult::deny($ask->message)`, and
-     * {@see \SugarCraft\Crush\Runtime::gate()} renders every non-allowed
-     * verdict as `Hook denied: <message>` — so by the time an event exists the
-     * two have already been collapsed into one string. Both ARE refusals and
-     * both belong in the array; only the sub-classification is missing, and
-     * recovering it needs a distinguishable verdict from `Runtime`.
+     * the reason is upstream of this class rather than a shortcut taken in it…
+     * recovering it needs a distinguishable verdict from `Runtime`". WHAT IS
+     * TRUE NOW: `Runtime` gives one. {@see \SugarCraft\Crush\Runtime::gate()}
+     * picks its prefix BEFORE `settleAsk()` flattens the verdict, so a
+     * `reason` now opens with one of three roster entries —
+     * {@see \SugarCraft\Crush\Runtime::DENIAL_HOOK} for a hook objecting,
+     * {@see \SugarCraft\Crush\Runtime::DENIAL_REFUSED} for an approver
+     * answering no, {@see \SugarCraft\Crush\Runtime::DENIAL_UNANSWERED} for
+     * an ASK that reached a run with no approver attached. A consumer reading
+     * the `refusals` array can tell the three apart with the same
+     * `str_starts_with` this method uses.
+     *
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the diagnosis in it is the
+     * reason the fix went where it did. The collapse happened in `Runtime`, not
+     * here, so no amount of work in this method could have recovered the
+     * distinction — and the same is true of the next one. This method
+     * classifies; it does not author. {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest}
+     * pins the three, and pins that every one of them is on the roster below.
      *
      * @return array{tool: string, reason: string}|null
      */

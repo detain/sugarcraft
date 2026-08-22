@@ -71,6 +71,58 @@ final class Runtime
     private const REAP_POLL_MICROSECONDS = 5_000;
 
     /**
+     * The three ways a tool call can be stopped before it runs, as the prefix
+     * each one's reason string opens with (E210, E211).
+     *
+     * THREE, BECAUSE THEY ARE THREE DIFFERENT EVENTS AND USED TO BE ONE
+     * STRING. {@see gate()} rendered every non-allowed verdict as
+     * `Hook denied: <message>`, so a hook actively objecting, a user answering
+     * "n" at a permission prompt, and an ASK that nobody was attached to
+     * answer were indistinguishable by the time a {@see
+     * \SugarCraft\Crush\Events\ToolFinished} existed. They are not the same
+     * event and the operator debugging "why did nothing happen" needs a
+     * different next step for each: change the hook, answer differently, or
+     * attach an approver / change the permission mode.
+     *
+     * THE SPELLINGS ARE NOT FREE CHOICES. Every one of them is an entry in
+     * {@see \SugarCraft\Crush\Chat::DENIED_ERROR_PREFIXES}, which is the
+     * roster {@see \SugarCraft\Crush\Chat::isDeniedResult()} reads to draw a
+     * refusal as its own struck-through state and
+     * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()} reads to
+     * decide what goes in a `--output-format json` document's `refusals`
+     * array. A prefix this class invents that is not on that roster is a
+     * refusal that renders as an ordinary tool ERROR in both surfaces — the
+     * model's failure to be told a call was blocked, not merely a cosmetic
+     * one. {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} is what
+     * makes that a red rather than a silent misclassification.
+     *
+     * READ FROM THE ROSTER RATHER THAN COPIED? DELIBERATELY NOT, AND THE
+     * REASON IS MEASURED. `Chat` is this application's TUI model; touching
+     * `Chat::DENIED_ERROR_PREFIXES` from here would load it on the first
+     * gated tool call of every run, including the `-p` one-shot path that
+     * exists partly so a run never builds a `Chat` at all —
+     * `NonInteractive::refusalFrom()` goes to some length to keep that load
+     * lazy, and putting the roster read in the engine's hot gate would undo
+     * it for every run that gates anything. So the coupling is pinned by a
+     * test instead of by an autoload.
+     */
+    public const DENIAL_HOOK = 'Hook denied:';
+
+    /**
+     * An ASK an attached approver answered with anything other than a literal
+     * `true` — the user's own decision, made about this call.
+     */
+    public const DENIAL_REFUSED = 'Permission denied:';
+
+    /**
+     * An ASK that reached a run with no approver attached at all. Nobody
+     * refused this call; there was nobody to ask. See {@see settleAsk()}'s
+     * fail-closed arm, and note this is the shape a background daemon and any
+     * embedder that forgot `withPermissionApprover()` both produce.
+     */
+    public const DENIAL_UNANSWERED = 'Permission required:';
+
+    /**
      * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
      *                                            one is captured lazily on first use and
      *                                            reused for the life of this Runtime.
@@ -869,12 +921,26 @@ final class Runtime
     {
         $hookResult = $this->hookManager->preToolUse($context);
 
+        // WHICH OF THE THREE THIS IS HAS TO BE DECIDED HERE, BEFORE settleAsk()
+        // FLATTENS IT. That method answers an ASK by returning an ordinary
+        // HookResult::deny(), which is byte-identical in shape to the DENY the
+        // chain itself returns — so once it has run, the verdict no longer
+        // carries where it came from and both used to be rendered as
+        // `Hook denied:`. The distinction survives here and nowhere else.
+        $prefix = self::DENIAL_HOOK;
+
         if ($hookResult->isAsk()) {
+            // `$onPermissionRequest === null` is settleAsk()'s OWN fail-closed
+            // condition, read a second time rather than inferred from the
+            // message it produces: matching on that message would couple this
+            // to its wording, and the wording is the half most likely to be
+            // reworded.
+            $prefix = $onPermissionRequest === null ? self::DENIAL_UNANSWERED : self::DENIAL_REFUSED;
             $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest);
         }
 
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
-            return [null, "Hook denied: {$hookResult->message}", $context];
+            return [null, "{$prefix} {$hookResult->message}", $context];
         }
 
         // A MODIFY hook rewrites the tool input before execution.
@@ -1228,6 +1294,15 @@ final class Runtime
      * many words rather than reporting it as a hook DENY, because the hook
      * denied nothing — nobody was there to answer.
      *
+     * THAT LAST SENTENCE WAS TRUE OF THE MESSAGE AND FALSE OF THE RESULT, until
+     * E210. WHAT IT SAID: that this arm reports a missing approver "rather than
+     * reporting it as a hook DENY". WHAT WAS TRUE: {@see gate()} then prefixed
+     * whatever this returned with `Hook denied: `, so the finished reason DID
+     * report it as a hook DENY — and so did every consumer that classifies by
+     * prefix. WHY THE SENTENCE STILL EARNS ITS PLACE: it states the intent, and
+     * the intent is now carried by {@see Runtime::DENIAL_UNANSWERED} rather
+     * than by this message's wording alone.
+     *
      * @param ?callable $onPermissionRequest see {@see run()}
      */
     private function settleAsk(
@@ -1236,8 +1311,18 @@ final class Runtime
         ?callable $onPermissionRequest,
     ): HookResult {
         if ($onPermissionRequest === null) {
+            // THE MESSAGE NO LONGER OPENS "Permission required and", because
+            // {@see gate()} now prefixes this arm with
+            // {@see Runtime::DENIAL_UNANSWERED} — `Permission required:` — and
+            // the old wording made the finished reason read "Hook denied:
+            // Permission required and no approver…", which named the wrong
+            // event twice over. The finished string is
+            // `Permission required: no approver is attached to this run: <the
+            // hook's question>`, so the words a reader searched for are all
+            // still in it and the prefix is now one the denied-result roster
+            // recognises as a PERMISSION refusal rather than a hook one.
             return HookResult::deny(
-                "Permission required and no approver is attached to this run: {$ask->message}",
+                "no approver is attached to this run: {$ask->message}",
             );
         }
 
