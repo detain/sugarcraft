@@ -59,6 +59,22 @@ use SugarCraft\Crush\Tools\ToolCall;
  * That claim used to live in a doc-block and nowhere else; it is now
  * {@see testTheGateDecisionForAnMcpNameMatchesBashInFiveModesAndDivergesUnderPlan()},
  * which pins the six actions rather than any sentence about them.
+ *
+ * WHAT THIS FILE COSTS, MEASURED (E102, round 44). PHP 8.3.6, 48 cores, load1
+ * ~5.9 with a sibling lane running its own suite, three takes: wall 3.25 /
+ * 3.26 / 3.24 s, user+sys 1.22 s. `strace -f -e trace=execve` counts 22
+ * `execve` of a php binary, i.e. TWENTY-ONE child interpreters — not the two
+ * `launchChatInChild()` calls a reader counts in the source, because every MCP
+ * fixture server is itself a php process.
+ *
+ * THE COST IS NOT THE CHILDREN. Wall 3.25 s against 1.22 s of CPU means ~2 s of
+ * this file is WAITING — fixture-server startup and the stdio handshake — and
+ * fewer, fatter children would wait exactly as long. That is the opposite of
+ * {@see BinSugarcrushAutoloadGuardTest}, whose 1.6 s is ~91% interpreter
+ * startup, and it is why the two files do not get the same answer despite both
+ * looking like "an integration test that spawns a lot". The lever here would be
+ * the handshake timeout, not the process count; nothing today is close enough
+ * to matter to reach for it.
  */
 final class McpToolWiringTest extends TestCase
 {
@@ -491,23 +507,77 @@ final class McpToolWiringTest extends TestCase
      * `error_log()` call, because the ini destination is the OPERATOR's and a
      * box pointing it at a file left the USER with a silently reduced tool set.
      * That seam's stderr half is a `fwrite(STDERR, …)` no ini can redirect, so
-     * this test now DOES print one line into the suite's own output (MEASURED:
-     * exactly one, `sugarcrush: MCP tools from …/.mcp.json are incomplete…`).
+     * this test prints one line into the suite's own output.
      *
-     * LEFT PRINTING RATHER THAN SILENCED, deliberately. The only way to quiet it
-     * is to pre-seed `Bootstrap::$reportedPermissionConfigWarnings` by
-     * reflection so the de-dup returns early — which would work, since the seam
-     * records the transcript row BEFORE delegating for stderr, but it would
-     * couple this test to a private map whose purpose is unrelated and would
-     * silently stop working the day the message is reworded. One diagnostic line
-     * is what this suite already tolerates elsewhere (the workflow-tier refusal
-     * prints one too), and by this doc-block's own standard a real diagnostic is
-     * not something to silence. What the line SAYS is asserted, in
+     * WHAT THAT SENTENCE USED TO SAY: "(MEASURED: exactly one)", stated
+     * unconditionally. WHAT IS TRUE NOW, re-measured in round 44 (E95) on PHP
+     * 8.3.6, three takes each, counting `^sugarcrush:` on a combined
+     * stdout+stderr capture: running THIS FILE alone prints exactly one — the
+     * claim holds at the scope it was taken at. Running `tests/Integration`
+     * prints TWO: this line and the workflow-tier refusal the paragraph below
+     * cites, which the old sentence named without counting. WHY THE MEASUREMENT
+     * STILL EARNS ITS PLACE: the number is the argument. "One line" is a cost
+     * worth accepting and "some lines" is not, so the count has to carry the
+     * scope it was taken at or the next reader re-decides on a figure that was
+     * never about their situation. THE FULL SUITE PRINTS NEITHER LINE, which is
+     * an unexplained third figure and is recorded as such rather than smoothed
+     * over — see the backlog entry for E95; a diagnostic that vanishes when the
+     * suite grows is a hazard, not a convenience, and nobody should read the
+     * zero as this decision working.
+     *
+     * LEFT PRINTING RATHER THAN SILENCED, deliberately, and round 44 re-argued
+     * it rather than inheriting it. The only way to quiet it is to pre-seed
+     * `Bootstrap::$reportedPermissionConfigWarnings` by reflection so the
+     * de-dup returns early. That WOULD work — the seam records the transcript
+     * row BEFORE delegating for stderr — but the pre-seed has to reproduce the
+     * message verbatim, and the message interpolates a tmpdir path and a
+     * `$e->getMessage()`. So the coupling is not to a private map, which would
+     * be tolerable; it is to the exact TEXT of a sentence this test does not
+     * otherwise care about, and it fails OPEN: reword the message and the
+     * pre-seeded key stops matching, the line comes back, and every assertion
+     * here still passes. A guard that fails open is worse than the thing it was
+     * guarding against.
+     *
+     * WHAT IS PINNED INSTEAD, because accepting a line is not the same as
+     * accepting any number of them:
+     * this test reads the SIZE of that same private map across the call. Size is reword-proof where a
+     * pre-seeded key is not — a reworded message still adds exactly one entry —
+     * so the acceptance is bounded without inheriting the fragility that made
+     * silencing the wrong choice. What the line SAYS stays asserted in
      * {@see testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()},
      * which drives the same config in a child process for exactly that reason.
      */
     public function testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam(): void
     {
+        // THE ACCEPTED LINE IS ONE LINE, and this is the bound that makes that a
+        // decision rather than a hope. It is folded into this test rather than
+        // given one of its own ON PURPOSE: a second test driving this path would
+        // start a second MCP server and print a SECOND copy of the very line it
+        // was counting (measured, when it was briefly written that way: two
+        // lines, and the file went 3.25s -> 4.05s). A guard that doubles what it
+        // bounds is not a guard.
+        //
+        // HOW IT COUNTS WITHOUT READING THE MESSAGE.
+        // Bootstrap::warnPermissionConfigOnce() writes to stderr if and only if
+        // it adds a key to $reportedPermissionConfigWarnings — it returns early
+        // when the key is present, and otherwise records and delegates. So the
+        // GROWTH of that map across this call is the number of stderr lines the
+        // seam emitted, and it is reword-proof: a reworded message is still one
+        // new key. That is exactly why this reads the map's SIZE while this
+        // test's doc-block rejects pre-seeding it by KEY — the size survives a
+        // reword and the key does not.
+        //
+        // WHAT IT DOES NOT COVER, so nobody over-trusts it: two raw
+        // fwrite(STDERR, …) sites in Bootstrap bypass the map entirely —
+        // warnPermissionConfig() itself, which IS the channel, and
+        // reportPrunedSessions()'s per-session rows. Neither is on this path,
+        // which is mcpClient()'s catch and nothing else, so the figure is exact
+        // HERE and would not be on a launch path. A bound on this test, not a
+        // census of the suite. The map is process-global and other files feed
+        // it, so this measures the DELTA and never the absolute size.
+        $seen = new \ReflectionProperty(Bootstrap::class, 'reportedPermissionConfigWarnings');
+        $before = \count((array) $seen->getValue());
+
         $log = $this->tempDir . '/error_log.txt';
         $previousErrorLog = (string) ini_get('error_log');
         ini_set('error_log', $log);
@@ -517,6 +587,15 @@ final class McpToolWiringTest extends TestCase
         } finally {
             ini_set('error_log', $previousErrorLog);
         }
+
+        self::assertSame(
+            1,
+            \count((array) $seen->getValue()) - $before,
+            'this path is accepted as costing the suite ONE unowned stderr line (see this test\'s '
+                . 'doc-block on why it is not silenced). It now emits a different number, so either a '
+                . 'second warning was routed onto the seam from here or the one that was there has '
+                . 'gone — re-argue the acceptance, do not update the number.',
+        );
     }
 
     private function driveTheStartThenThrowPath(string $log): void

@@ -53,6 +53,43 @@ use SugarCraft\Crush\Cli\NonInteractive;
  * THIS one is. What is unique here is that the seam's class cannot even be
  * loaded.
  *
+ * WHAT THIS FILE COSTS, MEASURED, AND WHY IT IS NOT FOLDED (E102, round 44).
+ * PHP 8.3.6, this box, 48 cores, load1 ~5.9 with a sibling lane running its own
+ * suite, three takes: wall 1.54 / 1.59 / 1.64 s, user+sys 1.61 s — CPU-bound,
+ * not waiting. `strace -f -e trace=execve` counts 34 `execve` of a php binary,
+ * i.e. THIRTY-THREE child interpreters (the 34th is phpunit itself), inside 100
+ * `execve` total — the rest are the `/bin/sh` wrappers `exec()` goes through.
+ * The control that makes those numbers trustworthy: the same census run against
+ * a file that spawns nothing reports 1, and an earlier attempt at this census
+ * with a `php` wrapper on `PATH` reported 0 for THIS file, because the spawns
+ * use `PHP_BINARY` and never consult `PATH`.
+ *
+ * Thirty-three bare `php -r 'exit(0);'` startups on this box cost 1.45 s (three
+ * takes: 1.48 / 1.44 / 1.44). So ~91% of this file's runtime is interpreter
+ * startup and the test bodies are ~0.14 s of it.
+ *
+ * THE OBVIOUS FIX IS NOT AVAILABLE, and this is the part worth writing down
+ * because it looks available. Folding the differential table into one child
+ * that reads the rows off stdin cannot work here: the child under test is
+ * `bin/sugarcrush` running in a checkout with NO `vendor/`, and its whole job
+ * is to hit the autoload IIFE at the top of the file and `exit(2)` before any
+ * class, autoloader or harness code exists. It cannot loop, because it is dead
+ * by line 26. And the independent variable across rows is the process's own
+ * `$argv`, which is fixed for the life of a process. One child could `exec()`
+ * the copied binary seventeen times, but that is seventeen grandchildren and
+ * exactly the same interpreter startups — the cost is irreducible because a
+ * fresh process per argv IS the thing under test.
+ *
+ * WHAT WOULD CHANGE THE ANSWER, so "fine for now" is not what this says. The
+ * threshold is the ROW COUNT, since cost is ~44 ms per row and nothing else
+ * moves: at today's 33 children this file is 1.6 s of a roughly four-minute
+ * suite (~0.7%). At ~110 children it would be 5 s, which is where a single file
+ * starts being felt in a local edit-test loop, and that is the point to stop
+ * adding rows and start asking whether the marginal argv vector is buying
+ * coverage or reassurance. Nothing about the STRUCTURE will have improved by
+ * then — the fold will still be unavailable for the reason above — so the lever
+ * is which rows earn a process, not how they are dispatched.
+ *
  * "Structurally exempt" is a claim about behaviour, so it is asserted rather
  * than asserted-in-prose. What makes that cheap is that a checkout with no
  * `vendor/` is one `copy()` away, and {@see guardCandidates()} shows why:
