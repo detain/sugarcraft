@@ -448,7 +448,8 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // $nudgeCost is 0. MEASURED at f8272f8f on PHP 8.3.6: replacing
         // `max(1, $this->maxOutputBytes - $nudgeCost)` with the raw
         // subtraction left SkillPathScopingTest and ToolOutputBudgetTest green
-        // (43 tests together). It is KEPT because a guarantee that holds by
+        // (42 tests, 3,740 assertions together, measured at c8307597). It is
+        // KEPT because a guarantee that holds by
         // accident of one divisor is not a guarantee — and the divisor is now
         // itself pinned, by SkillPathScopingTest::
         // testGlobSpendsExactlyAnEighthOfMaxOutputBytesOnTheSkillNudge(),
