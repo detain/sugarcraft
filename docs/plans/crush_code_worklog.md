@@ -10096,3 +10096,20 @@ entirely absent (`is_link()` is the only check that cannot be fooled), and third
 lanes and the live tree must be checked before trusting delta arithmetic (it was zero). The user then
 made the standing request that every lib be kept updated, which produced `scripts/refresh-deps.php` and
 a correction the supervisor owed them — see the RESUME's §🟢 blocks.
+
+### Round 42 postscript — the vendor state, and a proof that turned out to be a coin flip
+
+After the merge: root `composer update -v -o -W` ran and is committed (`2d78013d`), paying back the
+change round 41 reverted before it knew it was the user's. `scripts/refresh-deps.php --mode=linked`
+then took the monorepo from **12 linked / 12 mixed / 30 fully-Packagist** to **53 linked / 0 mixed /
+0 published**, no failures. `sugar-crush` was held out so the floor stays comparable.
+
+The sweep that followed was the first in which those 30 libs were actually testing the working tree,
+and it was green — but it also killed a claim this plan has been repeating. Round 41 cited
+`candy-buffer` moving 1,621 → 1,661 assertions as proof that linking mattered. Three runs on one
+identical clean tree give 1569, 1545, 1507: `BufferTest.php` uses `rand()`, and that single file swung
+1246 → 1098 between two runs. The +40 was inside the noise. The *conclusion* survives — `--fix
+--strict-closure` genuinely injects nothing for `candy-buffer`, which I re-verified by reading the
+manifest after running it rather than by inferring from a total — but the evidence was never evidence.
+"A figure without its generator is not a measurement" was already a rule in the brief; it was not
+applied to the plan's own prose.
