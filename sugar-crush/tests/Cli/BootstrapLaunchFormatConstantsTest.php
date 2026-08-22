@@ -70,12 +70,21 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * cares.
  *
  * THAT RULE HAS NOW BEEN WALKED ACROSS THE WHOLE FILE (E164) rather than
- * applied to the two formats that happened to come up. WHAT THIS PARAGRAPH SAID:
+ * applied to the formats that happened to come up. WHAT THIS PARAGRAPH SAID:
  * "promoting the rest is recorded as a deferred finding rather than done".
  * WHAT IS TRUE NOW: every `sprintf()` in `Bootstrap.php` with a literal format
- * was walked and asked the question, seven more were promoted, and the three
- * left inline were left inline ON PURPOSE — `mcpConfigDecision()`'s two refusal
- * reasons and `trustedConfigDirPath()`'s home-ownership refusal. Every reader
+ * was walked and asked the question, the ones with a reader were promoted into
+ * {@see NAMED_FORMATS}, and the rest were left inline ON PURPOSE —
+ * `mcpConfigDecision()`'s two refusal
+ * reasons and `trustedConfigDirPath()`'s home-ownership refusal. THE COUNTS
+ * THAT USED TO BE IN THIS SENTENCE ARE GONE, and that is round 46's review
+ * (MINOR 5) rather than tidying: it read "seven more were promoted, and the
+ * three left inline" two paragraphs after the rule forbidding a cardinality in
+ * prose, and those same two numbers had already been wrong once inside this
+ * round — they were written as four and six and left behind by the next two
+ * commits. The promoted set is `NAMED_FORMATS`, which is a list and counts
+ * itself; the inline set is named here, which is what a reader actually needs.
+ * Every reader
  * those three have asserts a FRAGMENT (`'outside the project tree'`,
  * `'running programs this repository chose'`,
  * `/cannot be established as yours/`), a deliberately loose coupling to an idea
@@ -84,7 +93,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * OUTSIDE its documented fragment leaves the classes that could plausibly
  * cover them green. WHY THE ORIGINAL SENTENCE
  * STILL EARNS ITS PLACE: its reasoning is the reason the walk did not end in
- * promoting all ten. "Every literal is a constant" buys nothing and costs a
+ * promoting every literal it found. "Every literal is a constant" buys nothing and costs a
  * reader one indirection per line; the finding is which ones have a reader, and
  * saying "this one does not" is as much of an answer as promoting it.
  *
@@ -549,11 +558,31 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * doc-block: the two pages that quote the retention summary are rendered
      * FROM {@see Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT}.
      *
-     * This is the only one of the six promoted formats whose external reader is
-     * a DOC PAGE rather than a test, and it is the case the promotion rule was
-     * written for — a page an operator reads and a line the launcher prints have
-     * to agree, and neither one is going to notice the other drifting. The
-     * other five have their readers in `tests/`, which red on their own.
+     * WHAT THIS PARAGRAPH USED TO SAY, and why it is rewritten rather than
+     * deleted (round 46's review, MAJOR 3). IT SAID: "the only one of the six
+     * promoted formats whose external reader is a DOC PAGE rather than a test …
+     * the other five have their readers in `tests/`". Two things were wrong
+     * with that. First the arithmetic: it was written when
+     * {@see NAMED_FORMATS} held six, and two later commits in the same round
+     * promoted three more without moving the sentence — which is precisely why
+     * this file's own class doc-block refuses to write a cardinality into prose,
+     * and the rule was broken one screen below where it is stated. Second, and
+     * worse, the CLAIM. MEASURED at round 46 by rendering each promoted format's
+     * longest literal span and searching the flattened pages:
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} is quoted by README.md
+     * AND by `docs/SETTINGS.md`, and {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT}
+     * by `docs/TROUBLESHOOTING.md`. Doc-page readers are the normal case here,
+     * not the exception this claimed to be.
+     *
+     * WHY THE CASE STILL EARNS ITS OWN TEST: not scarcity, but that a page an
+     * operator reads and a line the launcher prints have to agree and neither
+     * one is going to notice the other drifting. The tool-removal sample has had
+     * that guard since E152 — see
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest}, which
+     * covers both of its pages. The retention summary's pages are covered here,
+     * and the refusal format's page is covered by nothing yet; it quotes the
+     * shape with `<path>`/`<reason>` placeholders rather than a rendered sample,
+     * so it needs a different instrument and is recorded rather than faked.
      *
      * THE SAMPLE ARGUMENTS ARE THE PAGES' OWN — three sessions, thirty days —
      * because these are illustrative sentences, not captures. What is pinned is
