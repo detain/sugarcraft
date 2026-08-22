@@ -6881,3 +6881,63 @@ budget chasing a red it did not cause.
 dirty worktree before merging** — round 44's checklist only checked at the end. Lane c's `mut.sh` is the
 model: refuses a dirty tree before mutating, exits 94 on a no-op, prints the actual `+`/`-` lines, and
 re-verifies clean after restoring.
+
+### Ec46-1 — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
+
+**Recorded 2026-08-22 by round-46 lane c. Not done because that file is outside lane c's ownership this
+round.** Severity: low. **Observed, measured.**
+
+**What.** E164 promoted `SKILL_SKIP_NOTICE_FORMAT`, `LAUNCH_NOTICE_OVERFLOW_FORMAT`,
+`SESSION_RETENTION_SUMMARY_FORMAT` and `SESSION_RETENTION_DETAIL_FORMAT` out of `Bootstrap.php` precisely
+because `tests/Cli/BootstrapLaunchNoticeRoutingTest.php` reproduces what they render — in one case with a
+whole-sentence `assertSame()`. Those reproductions are still hand-typed, so the promotion made
+`Bootstrap.php` single-source without yet making the reader read the source. That is half the repair, and
+it is the half E118 spent a round on for the two formats it promoted.
+
+**Step.** Point each retyped expectation at `sprintf(Bootstrap::<CONST>, …)`. The four call sites are the
+skipped-skills aggregate, the capped-fan-out overflow row (both the `assertSame()` and the two later
+`assertStringContainsString()`s), the retention summary (transcript copy and stderr copy), and the
+`'<id> (last used …'` detail fragment. **Careful:** rendering the expectation from the same constant the
+child renders from is a TAUTOLOGY with respect to the constant's TEXT — see Ec46-2. Keep exactly one
+independent copy per format, or keep the doc-page guard that already provides one.
+
+### Ec46-2 — rendering a test expectation from the constant under test cannot pin that constant's text
+
+**Recorded 2026-08-22 by round-46 lane c. Measured against round 46's own fix, which is the only
+acceptance test a fix gets.** Severity: medium, methodological. **Observed.**
+
+**What.** E153 asked for a behavioural case that gives `PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE` "the
+external reader it lacks". The case was written: a real child launch whose trusted project removes every
+tool, expectation rendered from the constant. MEASURED on PHP 8.3.6 — with the constant reworded
+`'leaving no tools at all'` → `'leaving nothing at all'`, that class stayed at
+`OK (57 tests, 135 assertions)`. The child and the expectation both moved. What the case DOES pin is the
+wiring: deleting the ternary branch gives `Tests: 57, Assertions: 134, Failures: 1`. Two different claims,
+and only one of them is "the sentence is this sentence".
+
+**Step.** State the claim a render-from-constant assertion supports ("the running program prints THIS
+CONSTANT") and pair it with exactly one independent copy of the text ("the constant is THAT SENTENCE").
+The independent copy is best held by a second party that is not a test — README.md holds it for
+`PROJECT_TIER_TOOL_REMOVAL_FORMAT`, `docs/ENVIRONMENT.md` and `docs/SETTINGS.md` for
+`SESSION_RETENTION_SUMMARY_FORMAT` — and only failing that by a deliberate, documented literal in the
+test. The general form: **whenever a guard's expected and actual values are both derived from the code
+under test, name what the tautology costs before shipping it.**
+
+### Ec46-3 — six `sprintf()` formats in `Bootstrap.php` are inline on purpose; here is the list and the trigger
+
+**Recorded 2026-08-22 by round-46 lane c.** Severity: informational. **Measured.**
+
+**What.** E164's walk asked, per literal format, whether an external reader exists. Four had one and were
+promoted. The other six were left inline because every reader they have asserts a FRAGMENT — a loose
+coupling to an idea, not two parties agreeing on a sentence: `reportProjectTierRefusals()`'s
+`'ignoring %s — %s'` envelope (its two readers mention it only in comments and assert the *reason*
+argument); `mcpConfigDecision()`'s out-of-tree and untrusted refusals (`'outside the project tree'`,
+`'running programs this repository chose'`, `assertStringStartsWith('resolves to ')`, and a `docs/MCP.md`
+paragraph that narrates the policy rather than quoting the message); `mcpClient()`'s `error_log` and
+transcript notices (both read via the shared clause `'could not be fully started'`); and
+`trustedConfigDirPath()`'s home-ownership refusal (two `expectExceptionMessageMatches()` regexes on a
+clause). Not writing the count into prose is deliberate — the census is derived by
+`BootstrapLaunchFormatConstantsTest::testTheLiteralFormatCensusHasAGenerator()`.
+
+**Step.** No action now. The trigger for revisiting any one of them is a second party reproducing a whole
+rendered SENTENCE rather than a clause — a README sample, a `docs/*.md` code block, or an `assertSame()`
+on the line. That is the same test E164 applied.
