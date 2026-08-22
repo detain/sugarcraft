@@ -11040,6 +11040,12 @@ final class Chat implements Model
      * both the `$inFlight` tick and the watcher are live, and whichever
      * dispatches second drains an inbox the other already emptied.
      *
+     * THE EMPTY ARM IS PINNED BY {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest::testAPumpThatFindsNothingStillRenewsTheOneShotWake()}
+     * AND BY NOTHING ELSE, which was found by mutation rather than assumed:
+     * returning `null` here SURVIVED the whole `RuntimeNoticeSink` filter until
+     * that test existed, because every other pump in the suite finds a row and
+     * takes the other branch.
+     *
      * IT STILL RETURNS `$this` UNCHANGED WHEN THERE IS NOTHING, so
      * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest::testTheSecondPumpAddsNothingBecauseTheFirstConsumedTheInbox()}'s
      * point survives: an empty pump must not repaint. Only the Cmd differs.

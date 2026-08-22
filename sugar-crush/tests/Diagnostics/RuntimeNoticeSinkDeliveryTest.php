@@ -824,6 +824,68 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     }
 
     /**
+     * A PUMP THAT FINDS NOTHING STILL RENEWS THE ONE-SHOT WAKE.
+     *
+     * THIS TEST EXISTS BECAUSE THE ONE ABOVE DID NOT CATCH IT. MEASURED by
+     * mutation: replacing the empty path's `return [$this, $rearm]` with
+     * `return [$this, null]` SURVIVED
+     * `--filter RuntimeNoticeSink` — every pump in
+     * {@see testTheIdleWakeIsRearmedSoASecondNoticeAlsoArrives()} finds a row,
+     * so the empty arm is never taken there and the whole of the renewal
+     * argument rested on an arm nothing exercised. The assertion's window was
+     * wrong, not the mutation's relevance.
+     *
+     * THE ARM IS REACHED, AND NOT BY AN EXOTIC PATH. During a turn the
+     * `$inFlight` tick and the watcher are BOTH live. A datagram lands, the
+     * tick drains it, and the watcher's own `Msg` — already queued — then
+     * arrives at an inbox that is empty. Under the mutation that pump returns
+     * no Cmd, the one-shot wake is spent, and the session silently reverts to
+     * E193's defect the moment the turn ends. That is a race, so it is pinned
+     * here at the unit level rather than raced for in the `Program` harness:
+     * the empty inbox is produced directly and the renewal is asserted by its
+     * EFFECT, not by the Cmd being non-null.
+     *
+     * RUNNING THE Cmd IS THE LOAD-BEARING HALF. `Cmd::promise()` returns a
+     * closure; the watcher is installed by the factory INSIDE it. A test that
+     * stopped at `assertNotNull($cmd)` would pass for a Cmd that arms nothing.
+     */
+    public function testAPumpThatFindsNothingStillRenewsTheOneShotWake(): void
+    {
+        self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host');
+
+        $chat = self::ownerChat();
+
+        // The state the interleaving leaves behind: the wake has been spent and
+        // the inbox is empty.
+        RuntimeNoticeSink::cancelPendingNotification();
+        self::assertFalse(RuntimeNoticeSink::isNotificationArmed());
+        self::assertFalse(RuntimeNoticeSink::hasPending(), 'the inbox is not empty; this is not the empty arm');
+
+        [$next, $cmd] = $chat->update(new RuntimeNoticePumpMsg());
+
+        self::assertSame($chat, $next, 'an empty pump repainted; that is the other half of this arm');
+        self::assertNotNull($cmd, 'an empty pump returned no Cmd, so the one-shot wake is spent for good');
+
+        $cmd();
+        self::assertTrue(
+            RuntimeNoticeSink::isNotificationArmed(),
+            'the empty pump returned a Cmd that arms no watcher when the runtime runs it',
+        );
+
+        // KNOWN-POSITIVE FOR THE OTHER ARM, in the same test: the non-empty
+        // path must renew too, and by the same effect. Without this, a fix that
+        // renewed ONLY on the empty path would pass everything above.
+        RuntimeNoticeSink::cancelPendingNotification();
+        self::assertTrue(RuntimeNoticeSink::record('a row for the non-empty arm'));
+
+        [$after, $cmdAfter] = $chat->update(new RuntimeNoticePumpMsg());
+        self::assertNotSame($chat, $after, 'the non-empty arm did not append; this control is vacuous');
+        self::assertNotNull($cmdAfter);
+        $cmdAfter();
+        self::assertTrue(RuntimeNoticeSink::isNotificationArmed());
+    }
+
+    /**
      * THE WAKE Cmd IS NULL FOR EVERY Chat THAT MUST NOT LISTEN.
      *
      * Two gates, and they are different questions. A Chat nobody appointed must
