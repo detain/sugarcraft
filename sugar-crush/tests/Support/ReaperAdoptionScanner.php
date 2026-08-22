@@ -68,6 +68,24 @@ final class ReaperAdoptionScanner
             $depth = 0;
             for ($j = $open + 1; $j < $close; $j++) {
                 $text = self::text($tokens[$j]);
+                if (\is_array($tokens[$j])
+                    && \in_array($tokens[$j][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                    // `"{$x}"` OPENS with an array token and CLOSES with a
+                    // plain '}', so counting only the closer drives this
+                    // count negative and every later class-body `use` sits at
+                    // a depth that is no longer 0. Measured: a trait `use`
+                    // placed after any method containing an interpolated
+                    // string reported `adoptsTrait() = false`, i.e. the guard
+                    // reddened a file that WAS adopting. Every other brace
+                    // walker in this suite - {@see bodyOf()} below,
+                    // {@see ForkedChildExitScanner::matching()},
+                    // {@see ChildStderrCaptureScanner::topLevelArguments()} -
+                    // already counted this token; this walk was the one that
+                    // did not.
+                    $depth++;
+
+                    continue;
+                }
                 if (\is_string($tokens[$j]) && $text === '{') {
                     $depth++;
 

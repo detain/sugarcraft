@@ -206,6 +206,28 @@ final class ForkedChildReaperAdoptionTest extends TestCase
                 $tracked,
             ),
         );
+
+        // THE OTHER POLARITY, which is the one that bites an instrument: a
+        // file that IS adopting, read as though it were not. An interpolated
+        // string opens its brace with an ARRAY token and closes it with a
+        // plain '}', so a walk that counts only the closer loses a level and
+        // every later class-body `use` stops looking like one. Measured
+        // before the fix: this exact source reported the trait half missing,
+        // i.e. the guard reddened correct code - and a guard that reds
+        // correct code is answered with an exemption, which is where the
+        // next real offender hides.
+        $this->assertSame(
+            [],
+            self::missingHalves(
+                "<?php\nclass F {\n"
+                . "    protected function name(): string { return \"run={\$this->id}\"; }\n"
+                . "    use ReapsForkedChildrenTrait;\n"
+                . "    protected function tearDown(): void {\n"
+                . "        \$this->reapTrackedForkedChildren();\n    }\n}\n",
+                $tracked,
+            ),
+            'a trait use after an interpolated string is still a trait use',
+        );
     }
 
     public function testEveryInProcessForkInScopeIsCoveredByTheReaper(): void
