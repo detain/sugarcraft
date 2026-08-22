@@ -928,11 +928,26 @@ final class ParallelToolCallsTest extends TestCase
             [$this->rendezvousTool()],
         );
 
+        $reserved = $this->reservedRuntimePayloads();
+        $this->assertCount(3, $reserved, 'the detector must have had three payloads to be wrong about');
+
+        // KNOWN-POSITIVE FIXTURE, same scanner, same test, and NOT the same
+        // thing as the count above it. The count is a control over the LEDGER;
+        // it says three names were reserved, which stays true however broken
+        // the scanner is. Measured: with strandedReservations() mutated to
+        // `return []`, the three cases around this one go red and this one
+        // stayed GREEN -- 3 of 4, and this was the 4th. So plant a file on one
+        // of this group's own reserved paths and make the scanner prove it can
+        // still report one before believing that it reports none.
+        file_put_contents($reserved[0], 'x');
         $this->assertSame(
-            3,
-            $this->reservedRuntimePayloadCount(),
-            'the detector must have had three payloads to be wrong about',
+            [$reserved[0]],
+            $this->strandedRuntimePayloads(),
+            'the leak scanner is dead: it did not report a file planted on one of this group\'s own '
+                . 'reserved paths, so the empty list below would mean nothing',
         );
+        unlink($reserved[0]);
+
         $this->assertSame([], $this->strandedRuntimePayloads());
     }
 
@@ -1158,10 +1173,7 @@ final class ParallelToolCallsTest extends TestCase
                     new ToolCall('call_f3', 'plain', ['marker' => 'c']),
                 ], [$tool]);
 
-                $reserved = array_values(array_filter(
-                    ToolIpcFiles::reservations(),
-                    static fn (string $p): bool => str_contains(basename($p), ToolIpcFiles::RUNTIME_PREFIX),
-                ));
+                $reserved = $this->reservedRuntimePayloads();
 
                 // KNOWN-POSITIVE FIXTURE, same scanner, same test. An empty
                 // stranded list is evidence only if the scanner could still
@@ -1522,7 +1534,20 @@ final class ParallelToolCallsTest extends TestCase
      */
     private function reservedRuntimePayloadCount(): int
     {
-        return \count(array_filter(
+        return \count($this->reservedRuntimePayloads());
+    }
+
+    /**
+     * The payload paths {@see Runtime::executeConcurrently()} reserved in this
+     * process, as paths rather than a headcount — what a test needs to plant a
+     * known-positive fixture on one of its OWN names instead of inventing a
+     * path the scanner is not looking at.
+     *
+     * @return list<string>
+     */
+    private function reservedRuntimePayloads(): array
+    {
+        return array_values(array_filter(
             ToolIpcFiles::reservations(),
             static fn (string $path): bool
                 => str_contains(basename($path), ToolIpcFiles::RUNTIME_PREFIX),
