@@ -534,6 +534,25 @@ final class EnvRosterDriftTest extends TestCase
      * every prose mention in a cell would start counting as a promise the code
      * has to keep.
      *
+     * ROUND 45 ADDED A SECOND ORACLE OVER THE OTHER PAGES, AND IT USES THE
+     * OPPOSITE SCRAPE. That is not the two rules disagreeing, and the pair has
+     * to be read together or the next reader will "fix" one of them.
+     * {@see mentionedNames()} scrapes a page WHOLE — prose, table cells and
+     * fenced code alike. The difference is a difference between the pages, not
+     * a difference of opinion about markdown:
+     *
+     * - THIS page is the ROSTER. Its prose is where a variable that is NOT read
+     *   gets explained, which is a thing only the roster page does, and it does
+     *   it for `SUGARCRUSH_TOOL_CALL_PARSER` and `SUGARCRUSH_REASONING_EFFORT`
+     *   today. A page-wide scrape here would turn those two sentences into
+     *   promises and red on prose that exists to record that the code makes no
+     *   promise. So: first column only.
+     * - EVERY OTHER page MENTIONS. It has no roster to keep and no not-read
+     *   section; a `SUGARCRUSH_*` name printed on it is being handed to a
+     *   reader to set. So: whole page — and the roster page is EXCLUDED from
+     *   that scrape rather than exempted inside it, which is what keeps the two
+     *   not-read sentences out of the widened rule without an exemption list.
+     *
      * @return list<string>
      */
     private function tabulatedNames(): array
@@ -621,6 +640,214 @@ final class EnvRosterDriftTest extends TestCase
             array_values(array_diff($this->tabulatedNames(), $read)),
             'docs/ENVIRONMENT.md tabulates an environment variable nothing in src/ reads — a user '
             . 'who sets it gets silence, which is worse than an undocumented variable',
+        );
+    }
+
+    // ── the other surfaces (E123) ────────────────────────────────────────
+
+    /**
+     * THE ROSTER PAGE IS NOT THE ONLY PAGE THAT NAMES THESE VARIABLES, AND
+     * UNTIL ROUND 45 IT WAS THE ONLY ONE UNDER ANY ORACLE.
+     *
+     * Provenance, re-derived rather than quoted, because a count written into
+     * prose is invalidated by the next page anyone adds: at round 45 on PHP
+     * 8.3.6, `README.md` named ten of these variables and the eleven non-roster
+     * `docs/*.md` pages named fourteen between them, and not one of those
+     * appearances was compared against anything. Nothing asserts those figures.
+     *
+     * THE RULE, AND WHY IT IS NOT SYMMETRIC. The surfaces make different
+     * promises, so they get different oracles:
+     *
+     * - `docs/ENVIRONMENT.md` is the ROSTER. It says "every environment
+     *   variable SugarCrush reads, in one place", so BOTH directions are
+     *   asserted against it — {@see testEveryVariableTheCodeReadsHasARowOnTheEnvironmentPage()}
+     *   and {@see testEveryVariableTheEnvironmentPageTabulatesIsOneTheCodeReads()}.
+     * - Every OTHER page MENTIONS. It promises nothing about completeness — a
+     *   troubleshooting page naming three variables is not claiming there are
+     *   only three — so the "no page mentions it" direction is NOT asserted
+     *   here, and must not be. Several of the variables the code reads are
+     *   named nowhere but the roster page, and that is correct.
+     *
+     * ONE DIRECTION, THEN: a name a mention surface prints must be one the code
+     * actually reads or exports. That is the promise a mention makes, and it is
+     * the one a rename breaks — a troubleshooting page telling a reader to
+     * export a variable `src/` stopped reading two rounds ago wastes their
+     * afternoon and cannot be distinguished from a bug in the code.
+     *
+     * THE SCRAPE IS PAGE-WIDE, unlike {@see tabulatedNames()}'s first-column
+     * rule; the reconciliation between the two is written out there. Short
+     * form: a fenced `export SUGARCRUSH_PROVIDER=…` in `README.md` is exactly
+     * as much of an instruction as a table row, and the roster page — the one
+     * page whose prose deliberately discusses variables nothing reads — is
+     * excluded from this scrape rather than exempted inside it.
+     *
+     * @return array<string, list<string>> variable => the pages that name it
+     */
+    private function mentionedNames(): array
+    {
+        $root = realpath(__DIR__ . '/../..');
+        self::assertIsString($root);
+
+        $roster = realpath(self::ENVIRONMENT_DOC);
+        self::assertIsString($roster, 'docs/ENVIRONMENT.md is gone, so the exclusion below excludes nothing');
+
+        $surfaces = array_merge([$root . '/README.md'], glob($root . '/docs/*.md') ?: []);
+        self::assertGreaterThan(
+            1,
+            \count($surfaces),
+            'the mention surfaces collapsed to one file or none, so an empty result means nothing',
+        );
+
+        $found = [];
+        foreach ($surfaces as $path) {
+            if (realpath($path) === $roster) {
+                continue;
+            }
+            $label = substr($path, \strlen($root) + 1);
+            foreach ($this->prefixedNamesIn(self::read($path)) as $name) {
+                $found[$name][] = $label;
+            }
+        }
+        ksort($found);
+
+        return $found;
+    }
+
+    /**
+     * Every `SUGARCRUSH_*` / `SUGAR_CRUSH_*` name in a blob of text.
+     *
+     * The same alphabet {@see tabulatedNames()} uses, deprecated spelling
+     * included for the reason this class's doc-block records: a census cannot
+     * find what its alphabet cannot spell, and the deprecated pair is exactly
+     * what a canonical-prefix-only pattern misses in silence.
+     *
+     * @return list<string>
+     */
+    private function prefixedNamesIn(string $text): array
+    {
+        $matched = preg_match_all('/\b(SUGAR_?CRUSH_[A-Z0-9_]+)\b/', $text, $matches);
+        $this->assertIsInt($matched, 'the mention scrape failed to run, so its answer means nothing');
+
+        $names = array_values(array_unique($matches[1]));
+        sort($names);
+
+        return $names;
+    }
+
+    /**
+     * A name printed on a mention surface is one the code reads.
+     *
+     * THE SCRAPER IS RUN OVER A KNOWN POSITIVE IN THIS SAME TEST. An assertion
+     * that a diff is empty passes just as well in a tree where the scraper has
+     * silently stopped matching — round 44 measured that exactly: a census
+     * mutated to never match reported "nothing is stale" across eighteen
+     * thousand green assertions. The fixture is what makes the empty result
+     * below evidence rather than decoration.
+     */
+    public function testEveryVariableAnotherPageNamesIsOneTheCodeReads(): void
+    {
+        $this->assertSame(
+            ['SUGARCRUSH_FIXTURE_ONE', 'SUGAR_CRUSH_FIXTURE_TWO'],
+            $this->prefixedNamesIn('set `SUGARCRUSH_FIXTURE_ONE`, or the old `SUGAR_CRUSH_FIXTURE_TWO`'),
+            'the mention scraper cannot find the variable names in a fixture that has two, '
+            . 'so the census below is not evidence of anything',
+        );
+
+        $known = array_merge(array_keys($this->scanner()->reads()), array_keys($this->scanner()->exported()));
+
+        $unkept = [];
+        foreach ($this->mentionedNames() as $name => $pages) {
+            if (!\in_array($name, $known, true)) {
+                $unkept[$name] = $pages;
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $unkept,
+            'a page names an environment variable nothing in src/ reads or exports — a promise the '
+            . 'code does not keep, and the reader who sets it gets silence. Either wire it, or move '
+            . 'the discussion to docs/ENVIRONMENT.md, the one page whose prose is allowed to name a '
+            . 'variable the code ignores',
+        );
+    }
+
+    /**
+     * A name printed on a mention surface also has a row on the roster.
+     *
+     * SEPARATE FROM THE TEST ABOVE because it is a different defect with a
+     * different fix. Above: the code does not read it, so the PAGE is wrong.
+     * Here: the code reads it and the roster skipped it, so the ROSTER is wrong
+     * — and the reader who meets the variable on a troubleshooting page and
+     * goes looking for what it does finds nothing. This is
+     * `SUGARCRUSH_DEBUG_SKILLS`' defect from the other side: that one was
+     * read-but-untabulated, and `docs/SKILLS.md` named it while the roster did
+     * not, which is the pair of facts this assertion would have caught.
+     *
+     * It cannot red today without the roster's own oracle redding too — every
+     * mentioned name is read, and every read name is tabulated. That is a fact
+     * about this tree and not a property of the rule: the two sets are built
+     * from different files and drift apart independently.
+     */
+    public function testEveryVariableAnotherPageNamesHasARowOnTheRoster(): void
+    {
+        $tabulated = $this->tabulatedNames();
+
+        $missing = [];
+        foreach ($this->mentionedNames() as $name => $pages) {
+            if (!\in_array($name, $tabulated, true)) {
+                $missing[$name] = $pages;
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $missing,
+            'a page names an environment variable docs/ENVIRONMENT.md does not tabulate — the page '
+            . 'that claims to list every one is missing a row another page already relies on',
+        );
+    }
+
+    /**
+     * THE MENTION SURFACES ARE REALLY BEING READ.
+     *
+     * A guard has to live outside the thing it guards. If the glob in
+     * {@see mentionedNames()} stopped matching, or the roster exclusion started
+     * excluding everything, both censuses above would report `[]` and pass. The
+     * floors are floors rather than counts for
+     * {@see GlobFigureDriftTest::testTheCensusReadsBothHalvesOfItsScope()}'s
+     * reason: a count reds on every page anyone adds, a floor reds when a half
+     * collapses, and only the second is a defect.
+     */
+    public function testTheMentionCensusActuallyReadsTheOtherPages(): void
+    {
+        $mentioned = $this->mentionedNames();
+
+        $this->assertGreaterThan(
+            10,
+            \count($mentioned),
+            'the mention census found almost no variables across README.md and docs/ — it is '
+            . 'comparing against an empty set, which passes for the wrong reason',
+        );
+
+        $pages = [];
+        foreach ($mentioned as $where) {
+            foreach ($where as $page) {
+                $pages[$page] = true;
+            }
+        }
+
+        $this->assertArrayNotHasKey(
+            'docs/ENVIRONMENT.md',
+            $pages,
+            'the roster page leaked into the mention census, whose whole-page scrape would then turn '
+            . 'its deliberate not-read prose into promises — see tabulatedNames()',
+        );
+        $this->assertArrayHasKey('README.md', $pages, 'README.md is not being scraped');
+        $this->assertGreaterThan(
+            3,
+            \count($pages),
+            'the mention census is reading barely any pages, so its empty diffs say almost nothing',
         );
     }
 }
