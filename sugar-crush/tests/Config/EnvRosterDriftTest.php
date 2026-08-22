@@ -298,6 +298,23 @@ final class EnvRosterDriftTest extends TestCase
 
     private function scanner(): EnvReadScanner
     {
+        return new EnvReadScanner($this->sources());
+    }
+
+    /**
+     * Everything the roster scan reads: every `.php` file under `src/`, and
+     * every executable under `bin/`.
+     *
+     * `bin/` IS WALKED, not named. It held one hard-coded filename —
+     * `bin/sugarcrush` — which is the same shape of assumption as a hand-kept
+     * list of stale sites: correct today, silent the day a second entry point
+     * lands. The files there carry no extension (they are `#!/usr/bin/env php`
+     * scripts), so the filter is "a file", not "a `.php` file".
+     *
+     * @return array<string, string> repo-relative label => source text
+     */
+    private function sources(): array
+    {
         $root = realpath(__DIR__ . '/../..');
         self::assertIsString($root);
 
@@ -308,10 +325,55 @@ final class EnvRosterDriftTest extends TestCase
             }
             $sources[substr($file->getPathname(), \strlen($root) + 1)] = self::read($file->getPathname());
         }
-        $sources['bin/sugarcrush'] = self::read($root . '/bin/sugarcrush');
+        foreach (new \DirectoryIterator($root . '/bin') as $file) {
+            if ($file->isDot() || !$file->isFile()) {
+                continue;
+            }
+            $sources[substr($file->getPathname(), \strlen($root) + 1)] = self::read($file->getPathname());
+        }
         ksort($sources);
 
-        return new EnvReadScanner($sources);
+        return $sources;
+    }
+
+    /**
+     * The scan really reads both halves of what it claims to read.
+     *
+     * NOTHING PINNED THIS, and the gap was measurable: deleting `bin/` from the
+     * scan left the suite at `OK (19 tests, 1499 assertions)`, five assertions
+     * short and entirely green. `bin/sugarcrush` contributes no read today —
+     * its one prefixed occurrence is inside a `//` comment, which the token
+     * scan drops before matching — so no roster assertion can notice its
+     * absence. That is exactly why the SCOPE has to be asserted separately from
+     * the roster: a half that currently contributes nothing is the half whose
+     * removal is invisible, and the first `getenv()` added to an entry point
+     * would then go undocumented in silence.
+     *
+     * The floor is a floor for {@see GlobFigureDriftTest::testTheCensusReadsBothHalvesOfItsScope()}'s
+     * reason: 288 files under `src/` and one under `bin/` at round 44.
+     */
+    public function testTheScanReadsEverySourceItClaimsTo(): void
+    {
+        $sources = $this->sources();
+
+        $this->assertArrayHasKey(
+            'bin/sugarcrush',
+            $sources,
+            'the entry point is no longer scanned, and no roster assertion can see that it is missing',
+        );
+        $this->assertArrayHasKey(
+            'src/Tui/TerminalBackground.php',
+            $sources,
+            'the src/ half of the scan scope has collapsed',
+        );
+
+        $bin = array_filter($sources, static fn (string $k): bool => str_starts_with($k, 'bin/'), \ARRAY_FILTER_USE_KEY);
+
+        $this->assertGreaterThanOrEqual(200, \count($sources) - \count($bin), 'the src/ half has collapsed');
+        $this->assertGreaterThanOrEqual(1, \count($bin), 'the bin/ half has collapsed');
+        foreach ($sources as $label => $text) {
+            $this->assertNotSame('', $text, $label . ' was read as empty text');
+        }
     }
 
     private static function read(string $path): string

@@ -470,28 +470,75 @@ final class GlobFigureDriftTest extends TestCase
      * remove a hit today; it is left out because it belongs to a different
      * lane's file set this round, and its absence is a gap rather than a rule.
      *
-     * @return iterable<string, string>
+     * @return array<string, string>
      */
-    private function censusScope(): iterable
+    private function censusScope(): array
     {
         $lib = realpath(__DIR__ . '/../..');
         self::assertIsString($lib);
 
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($lib . '/src')) as $file) {
-            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
-                continue;
+        $scope = [];
+        foreach ([['src', 'php'], ['docs', 'md']] as [$subdir, $extension]) {
+            $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($lib . '/' . $subdir));
+            foreach ($walk as $file) {
+                if (!$file instanceof \SplFileInfo || $file->getExtension() !== $extension) {
+                    continue;
+                }
+                $scope[substr($file->getPathname(), \strlen($lib) + 1)] = self::readOrFail($file->getPathname());
             }
+        }
+        ksort($scope);
 
-            yield substr($file->getPathname(), \strlen($lib) + 1) => self::readOrFail($file->getPathname());
+        return $scope;
+    }
+
+    /**
+     * The scope really does contain both halves.
+     *
+     * THE GUARD THIS REPLACES COULD NOT WORK, and the way it failed is worth
+     * keeping: the `docs/` half used to end with
+     * `assertNotSame([], $pages, 'docs/ produced no pages…')` — an assertion
+     * INSIDE the branch it was meant to protect. Deleting the branch, which is
+     * the realistic regression (someone narrows the scanner back to `src/`),
+     * deleted the assertion with it and left the suite green while the census
+     * silently stopped reading 778 assertions' worth of pages. A guard has to
+     * live outside the thing it guards.
+     *
+     * THE FLOORS ARE FLOORS, not counts: 288 `.php` files under `src/` and 12
+     * `.md` pages under `docs/` at round 44, measured by this method. A count
+     * would red on every added file; a floor reds only when a half collapses,
+     * which is the defect.
+     *
+     * `docs/` IS WALKED RECURSIVELY, though it is flat today. The doc-block
+     * below says "every `.md` page under `docs/`" while the previous
+     * implementation globbed `docs/*.md` — true of the tree, not of the
+     * sentence, and the first `docs/reference/` page anyone adds would have
+     * been out of scope without anything saying so.
+     */
+    public function testTheCensusReadsBothHalvesOfItsScope(): void
+    {
+        $scope = $this->censusScope();
+
+        foreach (['src/Config/LayeredSettings.php', 'src/Cli/Bootstrap.php', 'docs/SETTINGS.md'] as $required) {
+            $this->assertArrayHasKey(
+                $required,
+                $scope,
+                $required . ' is not in the census scope, so the census says nothing about the file '
+                . 'this whole instrument was built around',
+            );
+            $this->assertNotSame('', $scope[$required], $required . ' was read as empty text');
         }
 
-        $pages = glob($lib . '/docs/*.md');
-        self::assertIsArray($pages);
-        self::assertNotSame([], $pages, 'docs/ produced no pages, so half the census scope is silently empty');
-        sort($pages);
-        foreach ($pages as $page) {
-            yield substr($page, \strlen($lib) + 1) => self::readOrFail($page);
-        }
+        $src = array_filter($scope, static fn (string $k): bool => str_starts_with($k, 'src/'), \ARRAY_FILTER_USE_KEY);
+        $docs = array_filter($scope, static fn (string $k): bool => str_starts_with($k, 'docs/'), \ARRAY_FILTER_USE_KEY);
+
+        $this->assertGreaterThanOrEqual(200, \count($src), 'the src/ half of the census scope has collapsed');
+        $this->assertGreaterThanOrEqual(8, \count($docs), 'the docs/ half of the census scope has collapsed');
+        $this->assertSame(
+            \count($scope),
+            \count($src) + \count($docs),
+            'the scope grew a third half nothing in this file describes',
+        );
     }
 
     private static function readOrFail(string $path): string
