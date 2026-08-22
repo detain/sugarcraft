@@ -2638,10 +2638,11 @@ final class Bootstrap
         // user meets that as `/skill` not offering something they wrote. ONE
         // ROW, whatever the count: this message is already an aggregate, which
         // is what makes it safe to put in a transcript that also has to carry
-        // fifteen other sources. THIS SAID ELEVEN, and it said it for long
-        // enough that round 44 could not correct it — this file was out of that
-        // lane's ownership — and instead asserted the gap, with a test whose
-        // failure message was the instruction for closing it (E119). The number
+        // fifteen other sources. THIS SAID ELEVEN. Round 44 could not correct
+        // it — this file was outside that lane's ownership, which is the whole
+        // reason, and not how long the sentence had been wrong — so it asserted
+        // the gap instead, with a test whose failure message was the
+        // instruction for closing it (E119). The number
         // is now a row in BootstrapTranscriptSeamCallSiteCensusTest's
         // PROSE_SITES and a declaration in {@see TRANSCRIPT_SEAM_CALL_SITES}, so
         // a seventeenth site reds this sentence rather than dating it.
