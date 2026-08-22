@@ -234,9 +234,11 @@ path. Strictly fewer tools, strictly coarser review.
 attack "by naming every tool it removes — a value you can see when you read the
 file". That is false.** `Bootstrap::filterToolSet()` matches names with
 `PermissionRule::matchesToolName()`, which is bare `fnmatch()`, and `fnmatch()`
-honours negated character classes. Measured end-to-end, in a project you have
-listed under `trustedProjectSettings` (an untrusted project's `disabledTools`
-never reaches the merge at all, and all eleven tools survive):
+honours negated character classes. Measured end-to-end **on PHP 8.3.6** (the
+version matters here only as provenance — `fnmatch()`'s handling of `[!…]` is
+not version-sensitive, and no ICU is involved), in a project you have listed
+under `trustedProjectSettings` (an untrusted project's `disabledTools` never
+reaches the merge at all, and all eleven tools survive):
 
 ```json
 { "disabledTools": ["[!B]*"] }
