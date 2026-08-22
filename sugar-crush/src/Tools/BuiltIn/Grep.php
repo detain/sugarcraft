@@ -258,6 +258,54 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // AFTER the clip and so were never inside the budget at all.
         $ceiling = $this->instructionSectionCeiling($this->maxOutputBytes);
 
+        // COMPUTED BEFORE THE BODY IS CLIPPED, and that ordering is the whole
+        // of the second half of E66. The nudge used to be built after the clip
+        // and appended beside it, so the cap bounded the hit list and not the
+        // result: MEASURED at 8add627b over a 30-file fixture, cap 1,000 with
+        // one path-scoped skill carrying a 200-byte description returned 1,334
+        // bytes (1.3x), five skills x 5,000 returned 26,182 (26.2x) and twenty
+        // x 20,000 returned 401,372 (401.4x). Building it first turns its
+        // length into a reservation the hit list pays for, so the total lands
+        // inside $maxOutputBytes.
+        //
+        // Its INPUT is unchanged — every path with a hit in the full stdout,
+        // not the paths that survived the clip — for the reason argued where
+        // it is appended below.
+        //
+        // Nothing is lost by building it early: forPaths() returns null unless
+        // it has something new to say, and a null costs nothing.
+        //
+        // AN EIGHTH of the cap, where the instruction section takes a quarter,
+        // so the hit list still keeps at least five eighths of what it was
+        // asked for. A budget too small for one entry surfaces nothing and
+        // SPENDS nothing, so the skill is announced by the next call with room
+        // rather than retired unseen — the same resolution
+        // {@see TruncatesOutput::instructionSection()} takes for a reserve
+        // that cannot hold one body. An uncapped Grep passes null and gets the
+        // class's own ceiling.
+        $nudge = $this->skillNudge?->forPaths(
+            self::hitFiles($filtered['run']['stdout'], $path),
+            $this->maxOutputBytes > 0 ? intdiv($this->maxOutputBytes, 8) : null,
+        );
+
+        // +1 for the newline separated() adds. Charged against the cap even
+        // where the body already ends on one, because over-reserving by a byte
+        // keeps the total inside the cap and under-reserving does not.
+        $nudgeCost = $nudge === null ? 0 : strlen($nudge) + 1;
+
+        // The cap the BODY may spend, which is the whole cap on every call
+        // that produces no nudge — announce-once means that is every call
+        // after the first touch of a scoped path, and every call of a Grep
+        // built with no nudge tracker at all.
+        //
+        // max(1, ...) and not the raw subtraction: 0 is truncateMerged()'s
+        // "no cap" sentinel, so a cap the nudge alone exceeds would hand the
+        // body an UNBOUNDED budget — the same knife-edge instructionSection()
+        // guards, one reservation over.
+        $bodyCap = $this->maxOutputBytes > 0
+            ? max(1, $this->maxOutputBytes - $nudgeCost)
+            : 0;
+
         // The probe exists to answer ONE question — which hits will still be
         // in the result once the instruction section has taken its share — and
         // it is deliberately clipped to the SMALLEST budget the final content
@@ -287,7 +335,7 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // tighter than the final clip below, which is the property the
         // announce-once mark depends on.
         $floor = $this->maxOutputBytes > 0
-            ? max(1, $this->maxOutputBytes - $ceiling - 1)
+            ? max(1, $bodyCap - $ceiling - 1)
             : 0;
         $probe = $this->truncateMerged($merged, $floor);
 
@@ -334,7 +382,7 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // directory; every call after it has no section and takes the whole
         // cap, byte-identical to the same tool built with no loader at all.
         $content = $section === ''
-            ? $this->truncateMerged($merged, $this->maxOutputBytes)
+            ? $this->truncateMerged($merged, $bodyCap)
             : $probe;
 
         $skipped = self::presentExcludedDirs($path, $rules);
@@ -359,24 +407,25 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
-        // The `... [note]` lines above and the nudge below are the ONE thing
-        // still outside the cap. The notes are a bounded exemption: each is a
-        // single sentence whose length is set by directory names drawn from
+        // The `... [note]` lines above are now the ONLY thing outside the cap.
+        // They are a bounded exemption: each is a single sentence whose length
+        // is set by directory names drawn from
         // {@see IgnoreRules::DEFAULT_EXCLUDED_DIRS}, a fixed four-name list —
         // seeded with 2,000 gitignored directories carrying 180-byte names,
         // the note measured 46 bytes.
         //
-        // THE NUDGE IS NOT BOUNDED, AND CALLING IT "ONE SENTENCE SIZED BY
+        // THE NUDGE USED TO BE HERE TOO, AND CALLING IT "ONE SENTENCE SIZED BY
         // SKILL NAMES" UNDERSTATED IT.
         // {@see \SugarCraft\Crush\Skills\SkillPathNudge::forPaths()} emits one
-        // line PER MATCHING SKILL, and each line carries that skill's full
+        // line PER MATCHING SKILL, and each line carries that skill's
         // `SKILL.md` `description` — arbitrary-length repository content, not
-        // a name. Its real bound is the number of auto-invocable skills whose
-        // `paths:` frontmatter matches, times the length of their
-        // descriptions, and it is announce-once so it is paid on the first
-        // matching call of a session. Recorded as E57 in the hardening backlog
-        // rather than fixed here, because bounding it belongs with the nudge
-        // and not with this reservation.
+        // a name — so its size was (matching auto-invocable skills x
+        // description length) with no clip anywhere. Recorded as E66 in the
+        // hardening backlog, and fixed in two halves: forPaths() now bounds
+        // itself to {@see \SugarCraft\Crush\Skills\SkillPathNudge::maxBytes()}
+        // in COUNT as well as in bytes, and $bodyCap above subtracts what it
+        // actually returned from the hit list's budget, so it is spent INSIDE
+        // the cap rather than beside it.
         //
         // What the reservation replaced was a different order of magnitude
         // again: a whole markdown file, and as many of them as there are
@@ -386,7 +435,7 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             $content .= $section;
         }
 
-        if ($this->skillNudge !== null) {
+        if ($nudge !== null) {
             // Scoped to every path with a HIT, not to the paths that survived
             // the clip, and that is the SAME rule {@see Glob::execute()}
             // follows two files over — where it is scoped to every matched
@@ -413,11 +462,12 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             // the skill is silent: 0 at d7919902, 1,745 at 6569891f (caps
             // 5,233 to 6,977), 0 here. The band moves with the length of the
             // root, since that prefix is repeated on every hit line.
-            $nudge = $this->skillNudge->forPaths(self::hitFiles($filtered['run']['stdout'], $path));
-            if ($nudge !== null) {
-                $content = self::separated($content);
-                $content .= $nudge;
-            }
+            //
+            // BUILT ABOVE, not here, and that is the only difference: its
+            // length is subtracted from $bodyCap before the hit list is
+            // clipped, so this append cannot push the result past the cap.
+            $content = self::separated($content);
+            $content .= $nudge;
         }
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
