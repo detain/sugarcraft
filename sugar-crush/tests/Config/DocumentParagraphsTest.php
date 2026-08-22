@@ -199,6 +199,102 @@ final class DocumentParagraphsTest extends TestCase
         );
     }
 
+    /**
+     * THE OLD WINDOW CUT FENCED BLOCKS IN TWO, AND THAT IS LIVE IN SCOPE.
+     *
+     * {@see DocumentParagraphs}' class doc-block used to name three documents
+     * and quote the number three. It is roughly fourfold that, and five of the
+     * affected documents were never named — the enumeration listed the cases
+     * that were already known, which is the failure mode that costs the most
+     * because it looks like evidence. So the figure is DERIVED here and the
+     * prose points at this test instead of quoting it: a count over `docs/` is
+     * wrong the next time anyone edits a page, and a floor is the only shape of
+     * that claim which stays true.
+     *
+     * DERIVED FROM THE TWO RULES DISAGREEING, NOT FROM A SECOND FENCE DETECTOR.
+     * A copy of {@see DocumentParagraphs}' `opensFence()`/`closesFence()` pair
+     * living in the test would agree with the shipped one by construction and
+     * would stop agreeing the moment either was edited. Instead a fenced unit
+     * counts as SPLIT when no single old-rule unit contains it — which is
+     * exactly the damage, and which correctly answers "not split" for a fence
+     * the old rule merged with its neighbouring prose instead.
+     *
+     * THE KNOWN POSITIVE AND THE KNOWN NEGATIVE ARE BOTH RUN HERE. A floor
+     * asserted over live documents also passes in a tree where the derivation
+     * has stopped deriving; the three fixtures are what make the live figure
+     * mean anything.
+     */
+    public function testTheOldWindowsFenceSplitIsLiveInScope(): void
+    {
+        $this->assertSame(
+            1,
+            $this->fencedUnitsTheOldRuleSplit("```yaml\nname: reviewer\n\ndescription: x\n```\n"),
+            'the derivation cannot see the old rule splitting a fence that contains a blank line, '
+            . 'so the live figure below is not evidence of anything',
+        );
+        $this->assertSame(
+            0,
+            $this->fencedUnitsTheOldRuleSplit("```yaml\nname: reviewer\ndescription: x\n```\n"),
+            'the derivation reports a split for a fence with no blank line in it, so it is counting '
+            . 'something other than the damage',
+        );
+        $this->assertSame(
+            0,
+            $this->fencedUnitsTheOldRuleSplit("Set it:\n```json\n{}\n```\nwhich removes ten.\n"),
+            'the derivation counts a fence the old rule MERGED with its prose as one it SPLIT — the '
+            . 'two are opposite defects and the figure would be the sum of both',
+        );
+
+        $live = [];
+        foreach ($this->scope() as $label => $text) {
+            $split = $this->fencedUnitsTheOldRuleSplit($text);
+            if ($split > 0) {
+                $live[$label] = $split;
+            }
+        }
+
+        $this->assertGreaterThan(
+            0,
+            array_sum($live),
+            'no document in scope still has a fenced block containing a blank line, so the class '
+            . 'doc-block\'s claim that the old window\'s fence split was LIVE rather than '
+            . 'hypothetical has stopped being true — rewrite it, do not delete it',
+        );
+        $this->assertGreaterThan(
+            1,
+            \count($live),
+            'the fence split is confined to a single document, so the doc-block should say which '
+            . 'one rather than describing a scope-wide shape',
+        );
+    }
+
+    /**
+     * How many fenced units of `$text` did the old blank-line rule cut apart?
+     *
+     * A fenced unit the old rule merely MERGED into a bigger unit is still held
+     * whole by that unit, so `str_contains()` rather than `in_array()` is what
+     * separates the two directions.
+     */
+    private function fencedUnitsTheOldRuleSplit(string $text): int
+    {
+        $old = $this->blankLineRule($text);
+
+        $split = 0;
+        foreach (DocumentParagraphs::of($text) as $unit) {
+            if (preg_match('/^(?:`{3,}|~{3,})/', $unit) !== 1) {
+                continue;
+            }
+            foreach ($old as $paragraph) {
+                if (str_contains($paragraph, $unit)) {
+                    continue 2;
+                }
+            }
+            $split++;
+        }
+
+        return $split;
+    }
+
     /** @param list<string> $units */
     private function someUnitHoldsBoth(array $units, string $a, string $b): bool
     {

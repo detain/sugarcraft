@@ -71,14 +71,26 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  *
  * THE OLD RULE ALSO MIS-SPLIT FENCES, in the opposite direction, and that is
  * the half that is easy to miss: a fenced block containing a blank line was cut
- * in two, leaving an unbalanced fence in each half. Three were in that state at
- * round 45 — `docs/AGENTS_AUTHORING.md`'s `yaml` preset example,
- * `docs/SKILLS.md`'s frontmatter example and `README.md`'s `ProviderInterface`
- * example. In the first two the closing fence then landed INSIDE the prose
- * paragraph that followed, so prose and code shared a unit; in the third both
- * halves were code. Checked one at a time rather than asserted of all three,
- * because the two outcomes are not the same defect and a sentence covering
- * both was wrong about one of them.
+ * in two, leaving an unbalanced fence in each half. THE SHAPE IS LIVE IN SCOPE
+ * AND THE COUNT IS DERIVED, NOT WRITTEN DOWN — see
+ * {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest::testTheOldWindowsFenceSplitIsLiveInScope()},
+ * which derives it from the two rules disagreeing rather than from a second
+ * copy of the fence detector, and asserts a floor.
+ *
+ * AN EARLIER DRAFT OF THIS PARAGRAPH QUOTED A COUNT, AND THE COUNT IS THE
+ * REASON THIS ONE DOES NOT. WHAT IT SAID: "Three were in that state at round
+ * 45", naming `docs/AGENTS_AUTHORING.md`, `docs/SKILLS.md` and `README.md`, and
+ * describing two distinct outcomes — the closing fence landing inside the
+ * following prose paragraph in two of them, both halves being code in the
+ * third. WHAT IS TRUE: on PHP 8.3.6, over this scope, it is roughly fourfold
+ * that, `README.md` alone accounts for the whole quoted figure, and five
+ * documents the sentence never named are affected — including two blocks in
+ * one `src/` file. The outcome split was inverted as well: in the two named
+ * documents the prose welded to the closing fence is prose INSIDE the block,
+ * not the paragraph that follows it. WHY THE FINDING STILL EARNS ITS PLACE:
+ * the direction is real and it is the half a reader misses; what was wrong was
+ * quoting a cardinality over `docs/` at all, and enumerating the three cases
+ * already known instead of asking how many there were.
  *
  * AN OPENING FENCE FOLLOWS COMMONMARK'S INFO-STRING RULE — the remainder of a
  * backtick fence's opening line may not itself contain a backtick. This is not
