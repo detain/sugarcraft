@@ -332,8 +332,11 @@ final class SkillRegistry
      * seeded differential fuzz — `mt_srand(20260822)`, 200,000 trials, pattern
      * alphabet including `**`, `***`, `[ab]`, `[!a]`, `[a-c]`, `[\d]` and
      * `\*`, path alphabet including `\n`, both 1-8 tokens, PHP 8.3.6 — which
-     * reports 0 narrowings and 16 widenings, every widening a leading
-     * globstar. The grid is pinned in
+     * reports 0 narrowings and 21 widenings, every widening a leading globstar
+     * BY CAUSE and not merely by prefix: strip the leading star run and the
+     * old predicate claims the path. Deterministic, so three runs give the
+     * same three numbers; the seed is there to make the alphabet reproducible,
+     * not to average noise. The grid is pinned in
      * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest}; the fuzz is
      * a generator, restated here so the figure can be re-taken.
      *
