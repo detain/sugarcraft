@@ -9863,3 +9863,128 @@ Lane stamps inside `crush_code_hardening_backlog.md` label round 39's work *"rou
 (E60/E65 and E57's F1 follow-up). The **worklog's numbering is the authority**: round 39 is the round that
 landed E63+E64, E60+E65 and E57+E58. This round — E66+E67, E68+E69, launch notices — is **round 40**.
 Corrected in place rather than renumbered, because renumbering a stamp breaks every cross-reference to it.
+
+---
+
+## ROUND 41 — `ae30fee5`, floor `8909 / 101051 / 1 skipped / rc 0`
+
+**Two findings closed by the supervisor by hand, then concurrency restored to 3 for the remainder.**
+The round opened under the round-40 spawning cap, so E52 and E61's S were done in the live tree without
+agents. The user then lifted the cap explicitly (*"continue with concurrency of 3 and us agents with
+workflows"*), and the remainder — `statusLine`, E73, E70+E71+E72 — went out as three lanes.
+
+### E52 — the modifier merge, and the finding was BIGGER THAN ITS OWN HEADING
+
+`candy-core/src/InputReader.php`. The `;<mod>` rebuild below the CSI key table REPLACED the whole
+`KeyMsg` from the parameter, discarding any modifier the key table's own arm had set. `'Z'` is the only
+such arm, and `Z` as a final byte **is** the shift — so every xterm modifier whose shift bit is clear
+lost it. Measured before the fix: `ESC[1;3Z` → `alt+tab`, `ESC[1;5Z` → `ctrl+tab`, `ESC[1;7Z` →
+`ctrl+alt+tab`, all unshifted.
+
+**The backlog entry named only `CSI 1;5Z`.** It is a three-member family, and a fix scoped to the
+literal `1;5` would have left two thirds of it broken — which is exactly what the third mutation below
+demonstrates. The entry had also declined the fix on the grounds that no xterm-family terminal emits
+`1;5Z`; that reasoning was right about the emitter and wrong about the size, and the comment now says
+so rather than being deleted.
+
+The rebuild now ORs. It is a **no-op for every other arm** — all of them construct with the three flags
+false — so the change is exactly the old assignment everywhere except the `Z` family. `ESC[1;5I` still
+decodes `ctrl+tab`, so the same modifier parameter now diverges correctly on the final byte, which is
+the pair that makes the merge load-bearing.
+
+Three mutations, all killed: revert the OR to an assignment (4 failures), OR in a constant `true`
+(11 — this is the guard against "fixing" it by inventing shift everywhere), scope the fix to `1;5`
+(2 — mod 3 and mod 7).
+
+### E61's S — the refusal named the one lever that could not move the outcome
+
+`sugar-crush/src/Hooks/HookRegistry.php`. The chain-expiry deny read *"did not finish within the N
+seconds their timeouts add up to"*. **Every noun in it was true and the sentence still misled.** The
+hook holding N is the one being *stopped* — it consumed none of the budget — while a hand-written
+`HookInterface` spends the clock without contributing to the sum, because `chainBudgetSeconds()`
+accumulates only for `BoundedHookInterface` and the charge/expiry check sits behind the same
+`instanceof`. A user acting on the old text raises the stopped hook's `timeout:`: the budget grows, the
+unbounded hook overruns the larger budget identically, and the same hook is denied again.
+
+The refusal now states elapsed next to budgeted, names the spenders largest-first, marks each as
+counted-in-the-sum or not, says the stopped hook ran for 0s, and says outright that raising a `timeout:`
+will **not** help when an unbounded hook is implicated — with the opposite advice when every spender was
+bounded. The ledger accumulates **across** rewrite passes, because on a rewriting chain the pass that
+hits the wall is routinely not the pass that spent the budget. Bounded per `MAX_NAMED_SPENDERS` /
+`MAX_SPENDER_NAME_CHARS`, since hook names come from YAML — the same clip doctrine `ScriptHook` uses on
+its own reasons.
+
+**The L stays open.** Bounding an in-process hook chain still needs a fiber or a fork plus a decision
+about what killing an in-process hook means. Do not read "E61 is done" as closing it.
+
+**Two reachability claims were measured rather than assumed, and one of them was wrong when written.**
+A first draft of the no-hook-ran branch's comment said `timeout: 0` reaches it. It does not:
+`ScriptHook::timeoutSeconds()` reads zero as *unset* and answers its 60-second default. The route in is
+a **positive sub-microsecond** timeout (`0.000001`, verified) — the budget is then smaller than the walk
+from arming the deadline to the first hook. That branch also exposed a self-refuting rendering: at three
+decimals the refusal read *"ran 0s against a 0s budget"*, so `seconds()` now falls back to a
+fixed-significand form for anything that would round away.
+
+**A branch whose only honest test is a double.** An all-`ScriptHook` chain can exceed its own sum only
+by per-hook `proc_open`/`proc_close` overhead — total spend ≈ N × overhead against a budget of
+≈ N × overhead. Measured: four hooks each declaring 10ms **denied on some runs and fitted on others**.
+The first cut of that test called `markTestSkipped()` on the fitted case, which would have put a second
+skip in a suite whose skip count is a load-bearing invariant. It is now pinned with a
+`BoundedHookInterface` double that declares a figure and overruns it — legitimate, because
+"shortening only" is `ScriptHook`'s contract rather than the interface's, and the branch has to be
+right for any implementor. **A coin flip dressed as an assertion is worse than a double.**
+
+Seven mutations, all killed: old message restored, unbounded advice forced on and forced off, ledger
+unsorted, ledger bounded-only, sub-millisecond rendering fallback removed, spender cap raised to 999.
+
+### 🔴 THE HAZARD THIS ROUND FOUND, AND IT VOIDS FIGURES SILENTLY
+
+**A `composer install`/`composer update` anywhere in this monorepo replaces `vendor/sugarcraft/*`
+symlinks with Packagist copies, and every suite figure taken afterwards is measuring code that is not
+in the working tree.** It happened live mid-round: the user ran `composer update` in several dirs, and
+**two consecutive full-suite runs of mine were void** — they exercised sugar-crush against a Packagist
+`candy-core`, so the E52 fix under test was not even loaded. All fourteen sibling-lib verifications were
+void for the same reason; only `candy-core`'s own suite was unaffected, because it tests its own `src/`
+directly.
+
+**THE TELL IS THE SKIP COUNT, and this is why that invariant is worth its weight.** Skips went 1 → 2.
+The second skip is `GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed`, skipping
+with *"no path-repo symlinks in this checkout"* — a test that exists to walk the link farm and therefore
+skips precisely when the farm is gone. RESUME has said for many rounds that a 2 means the closure was
+replaced; **this round is the first time it actually fired, and it was correct.**
+
+⚠️ **`ls -l … | grep -c '^l'` DISAGREED WITH REALITY TWICE before I believed it.** Two separate checks
+printed `18` while PHP's `is_link()` returned false for every entry and `ls -la` showed
+`drwxrwxr-x candy-ansi` dated three days earlier. Do not settle this with one `ls`. The measurement that
+cannot lie is PHP's own:
+`php -r 'foreach (glob("<lib>/vendor/sugarcraft/*") as $p) var_dump(is_link($p));'`, or compare file
+contents: `file_get_contents("<lib>/vendor/sugarcraft/candy-core/src/…") === file_get_contents("candy-core/src/…")`.
+
+**Restore recipe, measured:**
+```sh
+php tools/check-path-repos.php --fix --strict-closure     # scratch injection only
+for d in <every affected lib>; do (cd "$d" && composer update --quiet); done
+git checkout -- '*/composer.json'                          # NEVER commit these
+php tools/check-path-repos.php --no-lib-path-repos         # must exit 0
+```
+Then **re-measure everything taken since the update**. The restored run reproduced the predicted floor
+to the assertion (8905 + 4 tests, 101022 + 29 assertions, skips back to 1), which is what proved the
+restore rather than merely asserting it.
+
+**One residue, and it is EXPECTED rather than a defect.** After the restore, `candy-testing` (and
+`candy-vcr` under `sugar-dash`) remain real directories in eight libs' `vendor/sugarcraft/` while every
+other entry is a symlink. `--fix --strict-closure` walks `require`, not `require-dev`, so a test-only
+sibling resolves from Packagist — which is also what CI does. `sugar-crush` itself is **18 of 18
+symlinks**, which is the figure the invariant names. Recorded here so the next reader does not "fix" it.
+
+### Concurrency restored to 3, and the round's remainder went out as a workflow
+
+Lanes `a` = `statusLine` (greenfield M; re-verified zero `statusLine` hits in `sugar-crush/src/` and
+`bin/` at `ae30fee5`, so both grep-baits are still baits), `b` = E73 (the candy-core ZWJ over-run),
+`c` = E70 + E71 + E72 (three guards that do not guard). Lane split chosen so that no two lanes open the
+same file: `a` alone holds `Bootstrap.php`, `Chat.php` and both renderers; `b` alone holds
+`candy-core/`; `c` alone holds `Tools/BuiltIn/` and `Skills/`. Each lane runs implement → adversarial
+review → fix, with the fix stage entered only on a BLOCKING/MAJOR verdict.
+
+**The composer prohibition is now rule 1 of every lane brief**, ahead of even the floor figure, because
+it is the only rule on the list that can make every other number in the report meaningless.

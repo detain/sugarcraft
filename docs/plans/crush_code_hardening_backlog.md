@@ -2642,6 +2642,34 @@ across every modified key, so it is not a drive-by.
 `KeyMsg` wholesale and drops the shift the `Z` final byte encodes. Nothing in this tree emits
 `CSI 1;5Z`, so this stays recorded rather than scheduled.
 
+**ROUND 41 — FIXED (`ae30fee5`), AND THIS ENTRY UNDERSTATED ITS OWN SIZE.** Everything above is
+accurate and the heading is too narrow: it is the whole **shift-bit-clear family**, not one shape.
+Measured before the fix, at `ae30fee5`'s parent: `ESC[1;3Z` → `alt+tab`, `ESC[1;5Z` → `ctrl+tab`,
+`ESC[1;7Z` → `ctrl+alt+tab` — every xterm modifier whose shift bit is clear (the odd values, since
+mod = 1 + bitmask(shift=1, alt=2, ctrl=4)). **A fix scoped to the literal `1;5` this entry names would
+have left two thirds of the family broken**, and a mutation in `InputReaderTest` now demonstrates
+exactly that: constraining the OR to `ctrl && !alt` kills mod 3 and mod 7 and nothing else.
+
+**The Step recorded above was right about the mechanism and right about which option to take.** The
+rebuild in `decodeCsi()` now **ORs** rather than assigns:
+`alt: $mods->alt || $key->alt` and the same for ctrl and shift. The entry called merging "the more
+general fix" that "would want its own test sweep across every modified key, so it is not a drive-by" —
+that sweep is the second data provider added (`unshiftedModifiedKeyProvider`: ctrl+Up, ctrl+Down,
+alt+Right, ctrl+Home, ctrl+Tab, ctrl+F5), and it is what the merge needed, because the danger of an OR
+is inventing a modifier rather than dropping one. **`'Z'` is the only arm in the key table that sets a
+flag of its own**, so for every other final byte the OR is provably identical to the assignment it
+replaced — which is what makes this a small change rather than a sweep.
+
+The load-bearing pair is `ESC[1;5I` vs `ESC[1;5Z`: the SAME modifier parameter must yield an unshifted
+tab for one final byte and a shifted one for the other, and before the fix both came back `ctrl+tab`.
+A rebuild that reads only the parameter cannot tell them apart. Pinned by
+`testTheSameModifierParameterDivergesOnTheFinalByte`.
+
+**The declined-on-emitter-grounds argument has been rewritten in place, not deleted** (per the standing
+rule): the `'Z'` arm's comment now records what it used to say, that the reasoning was right about the
+emitter and wrong about the size, and why the merge is the general fix.
+candy-core: 795 tests / 7181 assertions / 25 skipped / rc 0 (from 785 / 7134).
+
 ### E53 — fast and slow width paths diverge on ZWJ sequences
 
 **What.** `AgentViewPane::visualWidth()` delegates to `Width::string()` and is **grapheme-aware over a
@@ -3717,6 +3745,48 @@ A user reading it would raise the `ScriptHook`'s `timeout:`, which cannot help.
 
 **Size: L as a fix** (a fiber or a fork, plus a decision about what killing an in-process hook means —
 a design decision, not an edit). **S** if the outcome is to correct the denial message to name the spender.
+
+**ROUND 41 — THE S IS FIXED (`ae30fee5`). 🔴 THE L IS STILL OPEN; do not read this stamp as closing the
+entry.** A chain of only hand-written hooks still gets no deadline, and a hand-written hook still spends
+the chain's clock without contributing to it. Nothing about that changed — only what the user is told
+when it bites.
+
+`HookRegistry::executeHooks()` now keeps a spend ledger (name, seconds, whether the hook is a
+`BoundedHookInterface`), **accumulated across rewrite passes** rather than per pass, because on a
+rewriting chain the pass that hits the wall is routinely not the pass that spent the budget. The
+expiry refusal is built by a new `chainExpiryReason()` and states, in order: elapsed **next to**
+budgeted; where the sum came from; the spenders largest-first, each marked counted-in-the-sum or not;
+that the stopped hook ran for **0s** and consumed none of the budget its own timeout contributed; and
+then the actionable half — that raising a `timeout:` will **NOT** fix it when an unbounded hook is
+implicated, with the opposite advice when every spender was bounded. Bounded by
+`MAX_NAMED_SPENDERS` (4) and `MAX_SPENDER_NAME_CHARS` (60), announcing the cut, because hook names come
+from a YAML file and are therefore user-supplied — the same clip doctrine `ScriptHook` applies to its
+own reasons.
+
+**Two reachability claims were measured rather than assumed, and one was wrong when first written.**
+(1) A first draft's comment said `timeout: 0` reaches the "no hook had run yet" branch. It does not —
+`ScriptHook::timeoutSeconds()` reads zero as *unset* and answers its 60-second default, so the chain
+gets a minute. The real route is a **positive sub-microsecond** timeout (`0.000001`, verified): the
+budget is then smaller than the walk from arming the deadline to the first hook. (2) That branch also
+exposed a self-refuting rendering — at three decimals the refusal read *"ran 0s against a 0s budget"* —
+so `seconds()` now falls back to a fixed-significand form for anything that would round away.
+
+**The all-bounded branch is pinned with a test double, deliberately.** A `ScriptHook` cannot overrun
+(it kills itself at the deadline it was charged), so an all-`ScriptHook` chain can exceed its own sum
+only by per-hook `proc_open`/`proc_close` overhead — total spend ≈ N × overhead against a budget of
+≈ N × overhead. **Measured: four hooks each declaring 10ms denied on some runs and fitted on others.**
+The first cut of that test called `markTestSkipped()` on the fitted case, which would have put a
+**second skip** into a suite whose skip count is the path-repo-closure alarm. It is now a
+`BoundedHookInterface` double that declares a figure and overruns it — legitimate, because
+"shortening only" is `ScriptHook`'s own contract rather than the interface's, and this branch has to be
+right for any implementor.
+
+**The E60 non-collision note above still holds and is now load-bearing in the other direction:** the S
+touched only the refusal's wording and the ledger behind it, so `ScriptHook` remains the sole
+`BoundedHookInterface` implementor in `src/` and E60's clip design still has exactly one caller.
+sugar-crush: 8909 tests / 101051 assertions / 1 skipped / rc 0 (from 8905 / 101022). Seven mutations
+killed: old message restored, unbounded advice forced on and forced off, ledger unsorted, ledger
+bounded-only, sub-millisecond rendering fallback removed, spender cap raised to 999.
 
 ⚠️ **Must NOT share a lane with E60** — it changes E60's premise: if hand-written hooks become
 forkable, `ScriptHook` stops being the only `BoundedHookInterface` implementor and the clip design

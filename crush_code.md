@@ -1094,11 +1094,30 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
-**Next: round 41 is measured and ready** — E52 (⚠️ the whole shift-bit-clear family, not just `CSI 1;5Z`),
-E61's **S only** (the deny message; the unbounded-all-PHP-chain **L stays open**), and `statusLine`
-(greenfield **M** confirmed — `Chat::budgetStatusLine()` and `candy-kit`'s `StatusLine` are both
-grep-baits). E59 remains an **L** whose recorded Step is confirmed wrong. See RESUME §0-NOW for the lane
-shape and the collision constraint.
+**ROUND 41 — E52 and E61's S ARE DONE (`ae30fee5`); the rest is in flight.** Floor
+`8909 / 101051 / 1 skipped / rc 0`.
+
+- ✅ **E52** — the `;<mod>` rebuild in `candy-core`'s `decodeCsi()` now ORs rather than replaces.
+  ⚠️ It was the whole **shift-bit-clear family** (`1;3Z`, `1;5Z`, `1;7Z`), not just `CSI 1;5Z` as the
+  backlog recorded, and a mutation proves a `1;5`-scoped fix would have missed two thirds of it.
+- ✅ **E61's S** — the chain-expiry refusal now names the hook that SPENT the clock, marks each spender
+  as counted-in-the-sum or not, and says outright that raising a `timeout:` cannot fix it when an
+  unbounded hook is implicated. 🔴 **E61's L (a fiber or a fork for an unbounded all-PHP chain) STAYS
+  OPEN.**
+- 🚧 **In flight as lanes a/b/c** (concurrency 3, by explicit user instruction 2026-08-22): `statusLine`
+  (greenfield **M** re-confirmed at `ae30fee5` — zero hits in `src/`/`bin/`, absent from
+  `LayeredSettings::LAYERED_KEYS`, so a `statusLine:` is silently dropped today; both grep-baits are
+  still baits), **E73** (the candy-core ZWJ over-run), **E70 + E71 + E72** (three guards that do not
+  guard).
+- **Still queued:** E59 (an **L** whose recorded Step is confirmed WRONG — three literal `"Processing:"`
+  anchors across two tests, one a *negative* assertion), E61's L, the four raw-`fwrite` launch warnings,
+  `keybindings` (**L**, DEFER), then **Phase 9**, then the deferred security pass.
+
+🔴 **A `composer install`/`composer update` anywhere in this monorepo replaces `vendor/sugarcraft/*`
+symlinks with Packagist copies and silently voids every suite figure taken afterwards.** It happened
+live this round and cost two full-suite runs plus all fourteen sibling verifications. The tell is the
+skip count going 1 → 2. See RESUME §0-NOW-41 for the detection commands (`ls` is NOT one of them — it
+lied twice) and the restore recipe.
 
 ## Appendix: Full Angle Reports
 
