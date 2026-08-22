@@ -277,10 +277,46 @@ final class StatusLineCommandTest extends TestCase
         $line = self::command("head -c 2000000 /dev/zero | tr '\\0' a")->run();
         $elapsed = microtime(true) - $started;
 
-        // Capping takes the kill path, so nothing is painted — the same answer
-        // a timeout gives, for the same reason: the command did not finish.
+        // Capping blanks the segment, and the elapsed bound is what says the
+        // 2 MB was never read. What this test does NOT establish is WHICH rule
+        // blanked it — this pipeline is killed mid-write, so its exit is
+        // non-zero and `$exitCode !== 0` alone would give the same '' — which
+        // is why the cap rule has its own exit-0 fixture below.
         self::assertSame('', $line);
         self::assertLessThan(StatusLineCommand::TIMEOUT_SECONDS + 2.0, $elapsed);
+    }
+
+    /**
+     * THE CAP IS ITS OWN RULE, not a re-spelling of the non-zero-exit rule.
+     *
+     * `printf` writes 20000 bytes into a 64 KiB pipe buffer and EXITS 0 before
+     * the drain has finished reading them, so the only thing that can blank
+     * this run is {@see StatusLineCommand::MAX_OUTPUT_BYTES}. `exec` so the
+     * process that exits is `printf` itself and not a `/bin/sh` reporting on
+     * it.
+     *
+     * The under-cap control is the half that makes it discriminating: the same
+     * shape at 16000 bytes paints all 16000, so the difference between the two
+     * assertions is the cap and nothing else. Without it, deleting the
+     * `$timedOut` disjunct from {@see StatusLineCommand::run()} passed every
+     * test in this file at db20c568 while changing the cap path's answer from
+     * '' to 16384 bytes.
+     */
+    public function testHittingTheCapBlanksTheSegmentEvenWhenTheChildExitedCleanly(): void
+    {
+        $under = self::command('exec printf "%016000d" 0')->run();
+        self::assertSame(
+            16000,
+            \strlen($under),
+            'the control must paint, or the cap is not what the other half measures',
+        );
+        self::assertLessThan(
+            StatusLineCommand::MAX_OUTPUT_BYTES,
+            \strlen($under),
+            'the control must be UNDER the cap',
+        );
+
+        self::assertSame('', self::command('exec printf "%020000d" 0')->run());
     }
 
     // =====================================================================

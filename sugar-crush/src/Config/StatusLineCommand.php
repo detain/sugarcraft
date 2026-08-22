@@ -134,10 +134,33 @@ final class StatusLineCommand
      * grapheme cluster has no bounded byte length (a base character plus
      * arbitrarily many combining marks is ONE column), so no number of columns
      * implies a number of bytes. The cap therefore has to be stated in bytes
-     * and be generous, and the row bound is enforced afterwards by
-     * {@see \SugarCraft\Crush\Renderer}'s grapheme-aware clip. What this
-     * constant actually prevents is a `cat /dev/urandom` spending the process's
-     * memory and the segmentation cost before that clip is ever reached.
+     * and be generous. What this constant prevents is a `cat /dev/urandom`
+     * spending the process's memory and the segmentation cost.
+     *
+     * HITTING THE CAP BLANKS THE SEGMENT. It does NOT paint the first 16 KiB
+     * clipped to the row, which is what the previous revision of this docblock
+     * described ("the row bound is enforced afterwards by Renderer's
+     * grapheme-aware clip") and what `docs/SETTINGS.md` told users. That
+     * pipeline never existed: {@see drain()} reports the cap as timed-out so
+     * {@see run()} takes the kill path, and {@see run()}'s
+     * `if ($timedOut || $exitCode !== 0)` returns ''. Measured at db20c568 on
+     * PHP 8.3.6: `exec printf "%020000d" 0` (20000 bytes, exit 0) painted
+     * nothing, while the same command at 16000 bytes painted all 16000.
+     *
+     * BLANKING IS THE BEHAVIOUR THAT WAS KEPT, and the docs were corrected to
+     * it, for two reasons. The stated one is {@see run()}'s own doctrine: a run
+     * that produced nothing USABLE blanks rather than half-asserting, and a
+     * command whose one-row readout is 16 KiB long is a misconfiguration whose
+     * first 16 KiB is not a truer answer than nothing. The measured one is
+     * cost: {@see \SugarCraft\Crush\Renderer::withStatusLineCommand()} calls
+     * `Width::of()` on the cached line EVERY FRAME, i.e. every keystroke, and a
+     * 16 KiB line makes that a per-keystroke grapheme walk over 16 KiB. The
+     * blank costs nothing. (The same walk is already paid by a command that
+     * emits just under the cap and exits 0 — see the note in
+     * {@see \SugarCraft\Crush\Renderer::withStatusLineCommand()}.)
+     *
+     * Pinned by `StatusLineCommandTest::testHittingTheCapBlanksTheSegmentEvenWhenTheChildExitedCleanly()`,
+     * whose under-cap control is what makes the cap the only difference.
      */
     public const MAX_OUTPUT_BYTES = 16384;
 

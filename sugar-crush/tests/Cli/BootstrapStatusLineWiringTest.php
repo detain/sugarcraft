@@ -145,6 +145,45 @@ final class BootstrapStatusLineWiringTest extends TestCase
     }
 
     /**
+     * AND IT RUNS IN THE ROOT THE SESSION WAS LAUNCHED AGAINST, not in the
+     * process's own cwd. {@see Bootstrap::chat()} passes `$root` for this
+     * reason and `--root <lib>` in a monorepo is exactly where the two differ:
+     * a `git`-shaped status command that inherited `getcwd()` would report a
+     * different repository than the session is working in, silently and
+     * plausibly.
+     *
+     * Measured through the LAUNCH rather than through
+     * {@see \SugarCraft\Crush\Config\StatusLineCommand::configure()}'s own
+     * parameter, which `StatusLineCommandTest::testTheConfiguredWorkingDirectoryIsWhereTheCommandRuns()`
+     * already pins: at db20c568 that test stayed green with `$root` in this
+     * call replaced by `null`, because nothing asserted which argument the
+     * launch supplied. The `assertNotSame` below is the control — it is what
+     * says the two directories really are different in this fixture, so a
+     * `pwd` that answers the project root cannot have inherited it.
+     */
+    public function testTheCommandRunsInTheRootTheSessionWasLaunchedAgainst(): void
+    {
+        $this->writeUserSettings([
+            StatusLineCommand::KEY => ['type' => 'command', 'command' => 'pwd'],
+        ]);
+
+        self::assertNotSame(
+            realpath((string) getcwd()),
+            realpath((string) $this->project),
+            'the fixture must launch against a root that is NOT the process cwd',
+        );
+
+        Bootstrap::chat($this->project);
+        StatusLineCommand::refresh();
+
+        self::assertSame(
+            realpath((string) $this->project),
+            realpath(StatusLineCommand::line()),
+            'the status command inherited the process cwd instead of the launched root',
+        );
+    }
+
+    /**
      * A LAUNCH WITH NO `statusLine` CLEARS whatever a previous one installed.
      * The call is unconditional for this reason: in a process that builds more
      * than one Chat — a test suite, `/resume`, a second `Bootstrap::chat()` —

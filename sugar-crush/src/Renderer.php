@@ -1443,10 +1443,25 @@ final class Renderer
             }
         }
 
-        // `break` + one return instead of the four `return $indicator . $bar`
-        // this loop used to have, so the custom `statusLine` segment below is
-        // reached on every path. Behaviour of the loop itself is unchanged: it
-        // still takes the FIRST form that fits and stops.
+        // `break` + one return instead of the loop's own
+        // `return $indicator . $bar`, so the `statusLine` segment below is
+        // reached whether or not a scroll readout was prepended. Behaviour of
+        // the loop itself is unchanged: it still takes the FIRST form that fits
+        // and stops.
+        //
+        // WHAT THIS COMMENT SAID, and why it is being replaced rather than
+        // deleted: "the four `return $indicator . $bar` this loop used to
+        // have", and that the segment "is reached on every path". Both are
+        // false and both were checkable. `git show ae30fee5:src/Renderer.php |
+        // grep -c 'return $indicator . $bar'` is 1, not 4 — there was one
+        // return, inside the loop. And this method still has TWO earlier
+        // returns that bypass this line entirely, KEY_HELP_TOO_SMALL and
+        // KEY_HELP_OVER_PROMPT above; that bypass is correct (both replace the
+        // whole bar with a cue that has to fit a terminal too small for the bar
+        // itself, so appending a user's status line to them would defeat the
+        // substitution) but it is not "every path". The rewrite is what earns
+        // the `break` its place: the reason for it is the scroll-readout path,
+        // not a universal one.
         return self::withStatusLineCommand($bar, $chat->cols());
     }
 
@@ -1493,6 +1508,19 @@ final class Renderer
      * -prompt segment uses, and for the same reason: between 5 and 35 columns
      * the in-flight bar over-runs the frame today, and a pre-existing over-run
      * is not licence to deepen it.
+     *
+     * WHAT THE CACHED LINE COSTS PER FRAME, since this method is the only
+     * reader of it: `Width::of($line)` is a grapheme walk over the WHOLE cached
+     * line, run once per frame — i.e. once per keystroke — and the line is
+     * bounded only by
+     * {@see \SugarCraft\Crush\Config\StatusLineCommand::MAX_OUTPUT_BYTES}
+     * (16 KiB), not by `$cols`. A command emitting just under the cap therefore
+     * pays a 16 KiB grapheme walk on every repaint. NOT FIXED and recorded
+     * rather than guessed at: no walk-per-keystroke figure has been measured on
+     * this box, and pre-clipping in the runner would need a width bound the
+     * runner does not have (it has no `Chat` and no `$cols`). A run that
+     * EXCEEDS the cap costs nothing, because that path blanks the segment —
+     * see `MAX_OUTPUT_BYTES`.
      *
      * @param int $cols the terminal width from the last
      *        {@see \SugarCraft\Core\Msg\WindowSizeMsg}, which is the size
