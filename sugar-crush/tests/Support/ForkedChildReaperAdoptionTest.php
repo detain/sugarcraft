@@ -494,6 +494,23 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      * accounted for by one list or the other. Adding a directory to
      * OUT_OF_SCOPE is then a visible act with a reason attached, and deleting
      * the row without widening SCOPE fails here.
+     *
+     * NOTE THE REACH, because it is wider than {@see SCOPE} and it is easy to
+     * describe this guard as though it were not. The walk is over ALL of
+     * `tests/`, not the directories {@see SCOPE} names: an in-process fork
+     * added ANYWHERE - including a directory no lane has ever listed - reds
+     * this test until its directory is put in one of the two maps. Verified
+     * by injecting an unreaped fork into a file under `tests/Renderer/`,
+     * which is in neither list; this failed, naming that file. That is the
+     * intended behaviour and it is also a standing obligation on every other
+     * lane, so it is written down here rather than left to be rediscovered
+     * from a red merge.
+     *
+     * A TEST AT THE ROOT OF `tests/` has no directory to add. The two maps
+     * are matched with `str_starts_with()`, so the entry for such a file is
+     * its own filename - which works, but reads oddly enough that the failure
+     * message below says so explicitly rather than sending the reader looking
+     * for a directory that does not exist.
      */
     public function testNoDirectoryWithUnreapedForksIsUnaccountedFor(): void
     {
@@ -537,11 +554,12 @@ final class ForkedChildReaperAdoptionTest extends TestCase
         $this->assertSame(
             [],
             $unaccounted,
-            'this file forks inside the PHPUnit process with no reaper, and sits in a directory '
-                . 'that is in neither SCOPE nor OUT_OF_SCOPE. Either adopt the reaper and add the '
-                . 'directory to SCOPE, or add the directory to OUT_OF_SCOPE with the reason it '
-                . 'cannot be adopted yet. Leaving it in neither is the only outcome this guard '
-                . 'refuses.',
+            'this file forks inside the PHPUnit process with no reaper, and is matched by no '
+                . 'prefix in either SCOPE or OUT_OF_SCOPE. Either adopt the reaper and add its '
+                . 'directory to SCOPE, or add that directory to OUT_OF_SCOPE with the reason it '
+                . 'cannot be adopted yet. Both maps are matched with str_starts_with(), so for a '
+                . 'test at the ROOT of tests/ - which has no directory - the entry is the '
+                . 'filename itself. Leaving it in neither is the only outcome this guard refuses.',
         );
     }
 
