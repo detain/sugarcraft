@@ -337,6 +337,26 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     private const PAGE_QUOTE_FIELD_BYTES = 160;
 
     /**
+     * PHPUnit's own two output forms. Never excused by an anchor — see
+     * {@see classTotalsIn()} for why the carve-out is prose-only.
+     */
+    private const CLASS_TOTAL_LITERAL = '/\b(?:Tests:\s*\d+|Assertions:\s*\d+|OK \(\d+ tests?)/';
+
+    /**
+     * The PROSE form of the same figure, which is how every report in this
+     * project writes one and which this guard could not see until round 47.
+     */
+    private const CLASS_TOTAL_PROSE = '/\d[\d,]*\s+(?:tests|assertions)\b/i';
+
+    /**
+     * What makes a prose figure history rather than a claim about the tree: the
+     * round it was taken in, or a backticked commit sha. The sha alternative is
+     * backtick-delimited rather than a bare word so that an all-hex English
+     * word cannot pose as provenance.
+     */
+    private const CLASS_TOTAL_ANCHOR = '/\bround \d+\b|`[0-9a-f]{7,10}`/';
+
+    /**
      * Every string literal each obliged method is allowed to hold, exactly.
      *
      * WHY AN EXACT SET AND NOT "NO FORMAT LITERALS", which is what this file
@@ -1158,13 +1178,27 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * a LATER COMMIT OF THE SAME ROUND. The rule survived as prose in the
      * backlog and prose does not red, which is why it is a test now.
      *
-     * WHAT IS BANNED AND WHAT IS NOT. Only the two class-scoped totals —
-     * `Tests: <n>` / `Assertions: <n>` and PHPUnit's `OK (<n> tests, …)` — are
-     * refused. A `Failures: <n>` is deliberately NOT: it counts the tests that
-     * red, which is a property of the mutation rather than of the class, and it
-     * survives a sibling landing beside it. Naming the failing tests is still
-     * better and the doc-blocks above do, but a rule that reds on the honest
-     * form as well as the rotten one gets deleted rather than obeyed.
+     * WHAT IS BANNED AND WHAT IS NOT. Three shapes are refused: PHPUnit's two
+     * output forms — `Tests: <n>` / `Assertions: <n>` and `OK (<n> tests, …)` —
+     * and the PROSE form, a figure followed by the word for what it counts.
+     * Two things are deliberately allowed. A `Failures: <n>` counts the tests
+     * that red, which is a property of the mutation rather than of the class,
+     * and survives a sibling landing beside it. And a prose figure ANCHORED in
+     * its own sentence — to a round, or to a backticked commit sha — is
+     * history rather than a claim about the tree, and no later commit can
+     * invalidate it. Naming the failing tests is still better and the
+     * doc-blocks above do, but a rule that reds on the honest form as well as
+     * the rotten one gets deleted rather than obeyed.
+     *
+     * THE PROSE SHAPE WAS ADDED AFTER THE HEADLINE ABOVE WAS ALREADY ABSOLUTE.
+     * WHAT THIS GUARD CLAIMED when it landed: that no doc-block in this family
+     * quotes a class total, full stop. WHAT WAS TRUE: it read only PHPUnit's
+     * two literal forms, so a prose total mutated into a guarded file SURVIVED
+     * — and one was already live in scope, in a file the same commit had just
+     * swept for exactly this. WHY THE EPISODE IS RECORDED RATHER THAN QUIETLY
+     * FIXED: an absolute claim paired with a narrow instrument is the defect
+     * class this whole file is about, and it was committed inside the fix for
+     * it. The alphabet of a guard is part of its claim.
      *
      * THE SCOPE IS THE TWO FILES THIS LANE OWNS, stated rather than widened: a
      * historical figure taken at a NAMED COMMIT is a different animal from one
@@ -1210,6 +1244,45 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'the scanner refuses a Failures: count, which is a property of the mutation and not of the class',
         );
 
+        // THE PROSE ARM, which the literal fixture above cannot exercise and
+        // which round 47's review found a live instance of. Assembled from
+        // parts for the same reason everything else here is.
+        $five = '5';
+        $twentySeven = '27';
+        self::assertSame(
+            [$five . ' tests', $twentySeven . ' assertions'],
+            self::classTotalsIn("     * a {$five} tests / {$twentySeven} assertions class at the time.\n"),
+            'the scanner cannot see a class total written as prose, which is the form every report in this '
+            . 'project uses; the absence asserted below is blind to the commonest shape of the thing it bans',
+        );
+
+        // AND THE ANCHORED FORM IS ALLOWED, because a figure that names the
+        // event it was taken at cannot be invalidated by a later commit. Both
+        // anchor shapes, since a guard that only understands one of them
+        // quietly reds correct history written in the other.
+        self::assertSame(
+            [],
+            self::classTotalsIn("     * round 44 watched {$twentySeven} assertions stay green.\n"),
+            'the scanner reds a round-anchored historical figure, which is provenance rather than rot',
+        );
+        self::assertSame(
+            [],
+            self::classTotalsIn("     * measured at `06126017`, {$twentySeven} assertions redded.\n"),
+            'the scanner reds a sha-anchored historical figure',
+        );
+
+        // THE WINDOW IS THE SENTENCE, AND THAT IS THE HALF THAT ROTS QUIETLY.
+        // An anchor in the sentence BEFORE is proximity, not provenance: widen
+        // the window and every figure within a paragraph of the word "round"
+        // is excused, which is how a carve-out becomes a hole. Same anchor,
+        // same figure, one sentence apart — and it must still be reported.
+        self::assertSame(
+            [$twentySeven . ' assertions'],
+            self::classTotalsIn("     * That was round 44. It watched {$twentySeven} assertions stay green.\n"),
+            'the anchor window has grown past the sentence; a figure a paragraph away from any round number '
+            . 'is now excused, which is every figure in this file',
+        );
+
         foreach (['tests/Cli/BootstrapLaunchFormatConstantsTest.php', 'tests/Config/ReadmeSettingsTierClaimTest.php'] as $relative) {
             $path = \dirname(__DIR__, 2) . '/' . $relative;
             $source = @file_get_contents($path);
@@ -1230,10 +1303,39 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     }
 
     /**
-     * Every class-scoped PHPUnit total `$source` quotes, in order.
+     * Every UNANCHORED class-scoped total `$source` quotes, in order.
      *
      * Continuation markers are flattened first — see the caller for why that is
      * load-bearing rather than defensive.
+     *
+     * TWO SHAPES, AND THE SECOND ONE WAS THE HOLE. This scanner used to read
+     * only PHPUnit's own two output forms — `Tests: <n>` / `Assertions: <n>`
+     * and `OK (<n> tests, …)` — while the guard above it claimed, without
+     * qualification, that no doc-block in this family quotes a class total.
+     * Round 47's review mutated a PROSE total into a guarded file and it
+     * SURVIVED. Prose is the form this project's own reports and briefs
+     * actually use, so the instrument was blind to the commonest shape of the
+     * thing it was named after — and a live instance was sitting inside its
+     * own scope, in a file the same commit had just swept.
+     *
+     * AN ANCHORED FIGURE IS A DIFFERENT ANIMAL AND IS ALLOWED. A count that
+     * names the event it was taken at cannot be invalidated by a later commit:
+     * it is history, not a claim about the tree. So a prose figure whose OWN
+     * SENTENCE carries an anchor — `round <n>`, or a backticked commit sha —
+     * is passed over, and one whose sentence does not is reported. The window
+     * is the sentence deliberately: an anchor a paragraph away is not
+     * provenance, it is proximity, and the difference is exactly what
+     * {@see testNoDocBlockInThisLanesFilesQuotesAPhpunitClassTotal()}'s
+     * next-sentence fixture pins.
+     *
+     * THE CARVE-OUT IS PROSE-ONLY, and that asymmetry is a decision rather than
+     * an oversight. PHPUnit's two literal forms are runner output: they read as
+     * a fresh measurement of the current tree whatever sentence they sit in,
+     * which is precisely how round 46 shipped three stale ones. Prose is how a
+     * sentence cites history. Whether an anchored LITERAL should also be
+     * allowed is a real question and not this guard's to settle — this file's
+     * own known-positive fixture is one, and the guard still refuses it, which
+     * is the behaviour the fixture depends on.
      *
      * @return list<string>
      */
@@ -1241,12 +1343,58 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     {
         $flat = (string) preg_replace('/\s*\n\s*(?:\*|\/\/)?\s*/', ' ', $source);
 
-        preg_match_all('/\b(?:Tests:\s*\d+|Assertions:\s*\d+|OK \(\d+ tests?)/', $flat, $matches);
+        $found = [];
 
-        return array_map(
-            static fn(string $hit): string => (string) preg_replace('/\s+/', ' ', $hit),
-            $matches[0],
-        );
+        // PHPUnit's own output, in either form. Never excused by an anchor.
+        preg_match_all(self::CLASS_TOTAL_LITERAL, $flat, $literals, PREG_OFFSET_CAPTURE);
+        $spans = [];
+        foreach ($literals[0] as [$hit, $offset]) {
+            $spans[] = [$offset, $offset + \strlen($hit)];
+            $found[$offset] = (string) preg_replace('/\s+/', ' ', $hit);
+        }
+
+        // The prose form: a figure, then the word `tests` or `assertions`. No
+        // example is written out here — this scanner reads its own file, and
+        // the first draft of the guard above learned that lesson the hard way.
+        // The fixture assembles one from parts instead.
+        preg_match_all(self::CLASS_TOTAL_PROSE, $flat, $prose, PREG_OFFSET_CAPTURE);
+        foreach ($prose[0] as [$hit, $offset]) {
+            foreach ($spans as [$from, $to]) {
+                // Already reported as part of an `OK (…)`; not a second figure.
+                if ($offset >= $from && $offset < $to) {
+                    continue 2;
+                }
+            }
+            if (preg_match(self::CLASS_TOTAL_ANCHOR, self::sentenceAround($flat, $offset)) === 1) {
+                continue;
+            }
+            $found[$offset] = (string) preg_replace('/\s+/', ' ', $hit);
+        }
+
+        ksort($found);
+
+        return array_values($found);
+    }
+
+    /**
+     * The sentence of `$flat` containing the byte at `$offset`.
+     *
+     * Bounded by `. ` on either side, which is coarse on purpose: an
+     * abbreviation splits the sentence early, the window shrinks, and a figure
+     * is MORE likely to be reported. A guard that fails toward loud on text it
+     * cannot parse is the right direction for this one.
+     */
+    private static function sentenceAround(string $flat, int $offset): string
+    {
+        $start = 0;
+        $previous = strrpos(substr($flat, 0, $offset), '. ');
+        if ($previous !== false) {
+            $start = $previous + 2;
+        }
+
+        $next = strpos($flat, '. ', $offset);
+
+        return substr($flat, $start, ($next === false ? \strlen($flat) : $next + 1) - $start);
     }
 
     /**

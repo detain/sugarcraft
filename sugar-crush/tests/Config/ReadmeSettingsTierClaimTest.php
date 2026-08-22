@@ -188,7 +188,23 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         // the only substrings of `[!B]*` that could ever be a tool name are the
         // ones beginning with `B`, which are precisely the names
         // `fnmatch('[!B]*', …)` does NOT match and so can never be in
-        // `$removed`. It was 10 of this file's 25 assertions and pinned nothing.
+        // `$removed`.
+        //
+        // WHAT THIS SENTENCE USED TO CARRY, in the words it had at `11310e8f`:
+        // that the retracted loop "was 10 of this file's 25 assertions". WHAT
+        // IS TRUE NOW: that denominator was a
+        // cardinality over the CLASS — any sibling test added anywhere beside
+        // the retracted loop moves it, with no relationship at all to the loop
+        // being described — and it was already wrong by the round after it was
+        // written. It carried no commit anchor, so nothing could tell a reader
+        // whether it had rotted. WHY THE POINT STILL EARNS ITS PLACE: that the
+        // loop was a LARGE SHARE of everything this file asserted is the whole
+        // reason it was worth deleting rather than leaving as harmless noise; a
+        // handful of dead assertions would not have been. The share is the
+        // claim. A pair of raw counts was the wrong way to carry it, which is
+        // E188 in one sentence, and
+        // {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchFormatConstantsTest::testNoDocBlockInThisLanesFilesQuotesAPhpunitClassTotal()}
+        // now reds on the shape rather than trusting anyone to remember.
         //
         // WHY THE PROPERTY STILL EARNS AN ASSERTION, in a form that can fail:
         // what the retracted README sentence promised is that reading the value
