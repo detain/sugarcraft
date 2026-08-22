@@ -756,26 +756,38 @@ final class ParallelToolCallsTest extends TestCase
      * umask is deliberately wide open — a regression to a plain
      * `file_put_contents()` would show 0666 here, not the machine's default.
      *
-     * WHERE THE ATTRIBUTION HAPPENS, and why it moved. WHAT THIS TEST DID: the
-     * probe snapshotted `glob('/tmp/sc_runtime_tool_*')` in its constructor and
-     * returned the mode of the first path that was not in the snapshot. WHAT IS
-     * TRUE ABOUT THAT: it is the same before/after diff over a shared directory
-     * that E96 had just removed from {@see strandedRuntimePayloads()} forty
-     * lines away — same prefix, same directory, same failure. A concurrent
-     * `sugar-crush` run, or a sibling test lane, drops an
-     * `sc_runtime_tool_*` file into the window and this test reports a FOREIGN
-     * file's mode as though it were ours. It was not hypothetical: round 44's
-     * baseline run of this suite failed both of E96's call sites for exactly
-     * that reason.
+     * WHERE THE ATTRIBUTION HAPPENS, and why it moved TWICE.
      *
-     * WHY THE PROBE STILL GLOBS: identity does not exist in the child. The
-     * parent chooses each payload name immediately before forking that job, so
-     * a child inherits its OWN reserved name and no sibling's — the probe is
-     * job 0 and its ledger holds one path, its own, which is not written until
-     * after `execute()` returns. So the child reports every candidate it saw
-     * and the PARENT, which holds {@see ToolIpcFiles::reservations()} for the
-     * whole group, keeps the one it reserved. A foreign file can still be
-     * SIGHTED; it can no longer be READ FOR AN ANSWER.
+     * WHAT THIS TEST DID, FIRST: the probe snapshotted
+     * `glob('/tmp/sc_runtime_tool_*')` in its constructor and returned the mode
+     * of the first path that was not in the snapshot. That is a before/after
+     * diff over a directory shared with every process on the box; a concurrent
+     * `sugar-crush` run, or a sibling test lane, drops an `sc_runtime_tool_*`
+     * file into the window and this test reports a FOREIGN file's mode as
+     * though it were ours. Not hypothetical: round 44's baseline run of this
+     * suite failed for exactly that reason.
+     *
+     * WHAT IT DID NEXT: the child kept globbing and reported EVERY candidate it
+     * had seen, and the parent -- which holds
+     * {@see ToolIpcFiles::reservations()} -- intersected that report with its
+     * own names, so a foreign file could be sighted but not read for an answer.
+     * That closed the false RED. What it did not close was the flake: the scan
+     * still had to decide when to stop looking at a directory it did not own,
+     * and it did that with a settle window (a fixed 0.25s after the first
+     * sighting). A box loaded badly enough that the sibling's fork-and-write
+     * ran past that window after a foreign file was sighted first left the
+     * probe reporting zero of our payloads, and the test failed. Right
+     * direction, still a coin flip.
+     *
+     * WHAT IS TRUE NOW: the child does not look at the directory at all.
+     * {@see Runtime::executeConcurrently()} reserves every payload name in
+     * phase 1, before it forks anything, so each child inherits the WHOLE
+     * group's ledger rather than the prefix that happened to exist at its own
+     * fork. The probe reads {@see ToolIpcFiles::reservations()} and polls
+     * exactly those paths. A foreign file can no longer even be sighted, the
+     * termination condition is an exact count rather than a timeout ("every
+     * reserved path except my own, which is not written until after execute()
+     * returns"), and the settle window is gone with nothing to replace it.
      *
      * WHY THIS STILL EARNS ITS PLACE rather than being folded into the leak
      * detector: the leak detector asks whether a payload survived; this asks
@@ -784,25 +796,9 @@ final class ParallelToolCallsTest extends TestCase
      */
     public function testAChildsPayloadIsNeverReadableByAnotherUser(): void
     {
-        $tool = new class (sys_get_temp_dir()) implements Tool, ParallelSafe {
-            /**
-             * How long to keep scanning after the first payload is sighted.
-             *
-             * NOT a race against the sibling's payload, which is the thing this
-             * probe exists to see: the dispatcher releases results in provider
-             * order, this probe is call 0, so the sibling's payload cannot be
-             * collected until this probe has already returned -- it is on disk
-             * for the whole life of this loop. The window exists only so that a
-             * FOREIGN `sc_runtime_tool_*` file sighted first does not end the
-             * scan before the sibling has finished writing. Foreign files are
-             * then dropped by the parent, which is where identity lives.
-             */
-            private const SETTLE_SECONDS = 0.25;
-
-            public function __construct(private string $tmp) {}
-
+        $tool = new class () implements Tool, ParallelSafe {
             public function name(): string { return 'modeprobe'; }
-            public function description(): string { return 'reports the mode of every payload it can see'; }
+            public function description(): string { return 'reports the mode of every payload its group reserved'; }
             public function inputSchema(): array { return ['type' => 'object']; }
             public function isParallelSafe(): bool { return true; }
 
@@ -812,14 +808,23 @@ final class ParallelToolCallsTest extends TestCase
                     return new ToolResult(toolCallId: '', content: 'quick');
                 }
 
+                // IDENTITY, IN THE CHILD. Inherited across the fork from a
+                // ledger the parent finished filling before it forked
+                // anything, so this is the whole group's set of names and
+                // nothing else's -- see this method's doc-block.
+                $reserved = ToolIpcFiles::reservations();
+
+                // Every reserved path except this child's own, which the
+                // dispatcher writes only after execute() has returned.
+                $expected = count($reserved) - 1;
+
                 $deadline = microtime(true) + 3.0;
-                $settleUntil = null;
 
                 /** @var array<string, string> $seen path => four-digit octal mode */
                 $seen = [];
 
-                do {
-                    foreach ($this->payloads() as $path) {
+                while (count($seen) < $expected && microtime(true) < $deadline) {
+                    foreach ($reserved as $path) {
                         if (isset($seen[$path])) {
                             continue;
                         }
@@ -828,27 +833,20 @@ final class ParallelToolCallsTest extends TestCase
                         $perms = @fileperms($path);
                         if ($perms !== false) {
                             $seen[$path] = substr(sprintf('%o', $perms), -4);
-                            $settleUntil ??= microtime(true) + self::SETTLE_SECONDS;
                         }
                     }
 
-                    if ($settleUntil !== null && microtime(true) >= $settleUntil) {
+                    if (count($seen) >= $expected) {
                         break;
                     }
 
                     usleep(1_000);
-                } while (microtime(true) < $deadline);
+                }
 
-                return new ToolResult(toolCallId: '', content: (string) json_encode($seen));
-            }
-
-            /** @return list<string> */
-            private function payloads(): array
-            {
-                return array_values(array_filter(
-                    glob($this->tmp . '/sc_runtime_tool_*') ?: [],
-                    static fn (string $p): bool => !str_ends_with($p, '.partial'),
-                ));
+                return new ToolResult(
+                    toolCallId: '',
+                    content: (string) json_encode(['reserved' => $reserved, 'modes' => $seen]),
+                );
             }
         };
 
@@ -875,32 +873,28 @@ final class ParallelToolCallsTest extends TestCase
         $observed = json_decode($results[0]->content(), true);
         $this->assertIsArray($observed, 'the probe did not report a payload map: ' . $results[0]->content());
 
-        // IDENTITY, IN THE PARENT. The child can only find candidates by
-        // globbing a directory it shares with every other process on the box;
-        // the parent is the side that knows which of those names it chose. So
-        // the child reports everything it saw and the parent keeps only its
-        // own -- a foreign payload is dropped here rather than mistaken for
-        // the sibling and read for a mode that was never ours to assert.
-        $mine = array_intersect_key($observed, array_flip($reserved));
-
-        $this->assertCount(
-            1,
-            $mine,
-            'the probe must have caught exactly one payload this process reserved -- its own is not written '
-                . 'until after execute() returns, so that one is the sibling. Zero means the sibling had not '
-                . 'been written yet when the probe stopped scanning (raise SETTLE_SECONDS); two would mean '
-                . 'the probe outlived its own payload.',
+        // THE PHASE-1 RESERVATION ITSELF. The child saw the same ledger the
+        // parent holds, which is only true if every name in the group was
+        // chosen before the first fork. Move the reservation back next to the
+        // fork that uses it and the probe (job 0) inherits one path -- its own
+        // -- and this goes red before any of the mode assertions are reached.
+        // An empty list here means setUp()'s recordReservations() never ran.
+        $this->assertSame(
+            $reserved,
+            $observed['reserved'] ?? null,
+            'the probe child must inherit the WHOLE group\'s reservation ledger, not the prefix of it '
+                . 'that existed when it was forked',
         );
 
         $this->assertSame(
             [$reserved[1]],
-            array_keys($mine),
-            'the payload the probe caught is not the SIBLING\'s: phase 2 reserves a name immediately before '
-                . 'forking each job in order, so the probe (job 0) inherits its own name first and the '
-                . 'sibling\'s second',
+            array_keys($observed['modes'] ?? []),
+            'the payload the probe caught is not the SIBLING\'s: phase 1 reserves names in provider '
+                . 'order, so the probe (job 0) holds its own name first and the sibling\'s second, and '
+                . 'its own is not on disk until after execute() returns',
         );
 
-        $this->assertSame(['0600'], array_values($mine));
+        $this->assertSame(['0600'], array_values($observed['modes']));
     }
 
     /**
@@ -921,6 +915,75 @@ final class ParallelToolCallsTest extends TestCase
             'the detector must have had three payloads to be wrong about',
         );
         $this->assertSame([], $this->strandedRuntimePayloads());
+    }
+
+    /**
+     * ...and so does a group the CONSUMER walks away from part-way through.
+     *
+     * The collect-side `discard()` only runs for a job that is actually
+     * released, and releases stop the moment nobody pulls the next value.
+     * `executeConcurrently()` is a Generator, so "nobody pulls the next value"
+     * is not an exotic state: `Runtime::run()` yields each tool result upward,
+     * a consumer that `break`s or lets an exception unwind destroys the whole
+     * chain mid-group, and PHP then runs the generator's `finally` (verified on
+     * PHP 8.3.6 rather than assumed). Without one, every payload past the
+     * release cursor sits in a world-listable temp directory until
+     * {@see ToolIpcFiles::sweep()}'s one-hour backstop, which is a reaper of
+     * last resort and not a lifecycle.
+     *
+     * THE POSITIVE CONTROL IS IN THE TEST, not in a sibling case. An empty
+     * stranded list proves nothing on its own -- the round-44 lesson is that a
+     * dead scanner reports exactly the same empty list as a clean tree. So this
+     * asserts the leak IS detectable at the moment of abandonment (the same
+     * {@see ToolIpcFiles::strandedReservations()} call, on the same paths, in
+     * the same test), and only then that destroying the generator clears it.
+     *
+     * Job 0 is the slow one so the shape is deterministic rather than raced:
+     * by the time its result is released, its two siblings exited long enough
+     * ago that phase 3's WNOHANG pass has already reaped them, so their
+     * payloads are on disk and uncollected — which is precisely the population
+     * the `finally` exists for.
+     */
+    public function testAbandoningTheGroupMidReleaseDiscardsTheUncollectedPayloads(): void
+    {
+        $app = App::new($this->provider, 'gpt-4')->withTools([$this->rendezvousTool()]);
+        $runtime = $this->runtime();
+
+        $method = new \ReflectionMethod($runtime, 'executeToolCalls');
+        $generator = $method->invoke($runtime, [
+            $this->rendezvousCall('slow', peers: 1, wait: 0.0, sleep: 0.5),
+            $this->rendezvousCall('fast1', peers: 1, wait: 0.0),
+            $this->rendezvousCall('fast2', peers: 1, wait: 0.0),
+        ], $app, null, null);
+
+        // Drives phase 1 + 2 and suspends at the first release.
+        $this->assertSame('saw=1', $generator->current()->content());
+
+        $this->assertSame(
+            3,
+            $this->reservedRuntimePayloadCount(),
+            'the detector must have had three payloads to be wrong about',
+        );
+
+        // POSITIVE CONTROL: the two siblings' payloads are on disk right now,
+        // uncollected, and this scanner sees them. If this is empty the
+        // scanner is dead and the assertion below means nothing.
+        $abandoned = $this->strandedRuntimePayloads();
+        $this->assertNotSame(
+            [],
+            $abandoned,
+            'the sibling payloads should still be uncollected while the group is suspended at its first '
+                . 'release -- an empty list here means the leak detector, not the leak, is missing',
+        );
+
+        unset($generator);
+
+        $this->assertSame(
+            [],
+            $this->strandedRuntimePayloads(),
+            'destroying the generator must run executeConcurrently()\'s finally and discard every payload '
+                . 'past the release cursor; these were stranded a moment ago: ' . implode(', ', $abandoned),
+        );
     }
 
     /**

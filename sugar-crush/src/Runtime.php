@@ -627,7 +627,8 @@ final class Runtime
     ): \Generator {
         $jobs = [];
 
-        // Phase 1 — gate the whole group before anything is forked.
+        // Phase 1 — gate the whole group, and reserve every payload name,
+        // before anything is forked.
         foreach ($toolCalls as $toolCall) {
             $this->emit($onEvent, ToolStarted::fromCall($toolCall));
 
@@ -663,88 +664,154 @@ final class Runtime
                 'args' => $args ?? [],
                 'denied' => $denial,
                 'pid' => null,
-                'file' => null,
+                // Reserved HERE, not next to the fork that uses it, so that
+                // every child inherits the whole group's ledger rather than
+                // the prefix of it that happened to exist when it was forked
+                // — see the WHOLE-GROUP note on the phase-2 loop.
+                'file' => $denial === null
+                    ? ToolIpcFiles::reserve(ToolIpcFiles::RUNTIME_PREFIX, 'bin')
+                    : null,
                 'result' => null,
                 'settled' => $denial !== null,
             ];
         }
 
         // Phase 2 — fan out.
-        foreach ($jobs as $index => $job) {
-            if ($job['settled']) {
-                continue;
-            }
-
-            $file = ToolIpcFiles::reserve(ToolIpcFiles::RUNTIME_PREFIX, 'bin');
-            $pid = pcntl_fork();
-
-            if ($pid === -1) {
-                // This call only: run it here, same as the no-pcntl path.
-                $jobs[$index]['result'] = $this->executeGuarded($job['tool'], $job['call'], $job['args']);
-                $jobs[$index]['settled'] = true;
-
-                continue;
-            }
-
-            if ($pid === 0) {
-                $this->runToolInChild($file, $job['tool'], $job['call'], $job['args']);
-            }
-
-            $jobs[$index]['pid'] = $pid;
-            $jobs[$index]['file'] = $file;
-        }
-
-        // Phase 3 — reap, then release in provider order.
-        $deadline = microtime(true) + $this->parallelToolDeadlineSeconds;
+        //
+        // WHOLE-GROUP LEDGER. Every name this group will use was chosen in
+        // phase 1, so a child forked here inherits the complete set and not
+        // just the names reserved before its own fork. That is the difference
+        // between a child that can identify a sibling's payload and one that
+        // can only glob a shared `/tmp` and guess: `sys_get_temp_dir()` is the
+        // real one for every process on the box (measured on PHP 8.3.6: it is
+        // resolved from the startup environment and a runtime
+        // `putenv('TMPDIR=…')` does not move it, even as a script's first
+        // statement), so a directory listing there cannot tell this group's
+        // files from another sugar-crush run's. Pinned by
+        // {@see \SugarCraft\Crush\Tests\Integration\ParallelToolCallsTest::testAChildsPayloadIsNeverReadableByAnotherUser()},
+        // whose probe child asserts it can see the WHOLE group's ledger.
+        //
+        // Costs nothing when it is not used: reserve() picks a name and, in
+        // production, records nothing (see ToolIpcFiles::$reserved).
         $total = count($jobs);
         $next = 0;
 
-        while ($next < $total) {
+        try {
             foreach ($jobs as $index => $job) {
-                if ($job['settled'] || $job['pid'] === null) {
+                if ($job['settled']) {
                     continue;
                 }
-                $status = 0;
-                // Only ever our own pids, never waitpid(-1): Chat's own tool
-                // children and BackgroundSessionRunner's workers live in this
-                // same process tree and check the pid they get back, so a
-                // blind sweep would steal their exit statuses.
-                if (pcntl_waitpid($job['pid'], $status, WNOHANG) === $job['pid']) {
+
+                $file = (string) $job['file'];
+                $pid = pcntl_fork();
+
+                if ($pid === -1) {
+                    // This call only: run it here, same as the no-pcntl path.
+                    // Nothing was forked, so nothing will ever write the name
+                    // reserved for it in phase 1 — hand it back so the "every
+                    // reserved path is discarded exactly once" invariant holds
+                    // on this branch too, and blank the slot so no later
+                    // collect can go looking for a payload that cannot exist.
+                    ToolIpcFiles::discard($file);
+                    $jobs[$index]['file'] = null;
+                    $jobs[$index]['result'] = $this->executeGuarded($job['tool'], $job['call'], $job['args']);
                     $jobs[$index]['settled'] = true;
+
+                    continue;
                 }
+
+                if ($pid === 0) {
+                    $this->runToolInChild($file, $job['tool'], $job['call'], $job['args']);
+                }
+
+                $jobs[$index]['pid'] = $pid;
             }
 
-            $released = false;
-            while ($next < $total && $jobs[$next]['settled']) {
-                yield $this->release($jobs[$next], $onEvent);
-                $next++;
-                $released = true;
-            }
+            // Phase 3 — reap, then release in provider order.
+            $deadline = microtime(true) + $this->parallelToolDeadlineSeconds;
 
-            if ($next >= $total) {
-                break;
-            }
-
-            if (microtime(true) >= $deadline) {
+            while ($next < $total) {
                 foreach ($jobs as $index => $job) {
                     if ($job['settled'] || $job['pid'] === null) {
                         continue;
                     }
-                    // A tool that never returns would otherwise wedge the turn
-                    // here. It is killed and reported as a failed call; its
-                    // siblings' results survive intact.
-                    if (function_exists('posix_kill')) {
-                        posix_kill($job['pid'], SIGKILL);
+                    $status = 0;
+                    // Only ever our own pids, never waitpid(-1): Chat's own tool
+                    // children and BackgroundSessionRunner's workers live in this
+                    // same process tree and check the pid they get back, so a
+                    // blind sweep would steal their exit statuses.
+                    if (pcntl_waitpid($job['pid'], $status, WNOHANG) === $job['pid']) {
+                        $jobs[$index]['settled'] = true;
                     }
-                    self::reapKilled($job['pid']);
-                    $jobs[$index]['settled'] = true;
                 }
 
-                continue;
-            }
+                $released = false;
+                while ($next < $total && $jobs[$next]['settled']) {
+                    yield $this->release($jobs[$next], $onEvent);
+                    $next++;
+                    $released = true;
+                }
 
-            if (!$released) {
-                usleep(self::PARALLEL_TOOL_POLL_MICROSECONDS);
+                if ($next >= $total) {
+                    break;
+                }
+
+                if (microtime(true) >= $deadline) {
+                    foreach ($jobs as $index => $job) {
+                        if ($job['settled'] || $job['pid'] === null) {
+                            continue;
+                        }
+                        // A tool that never returns would otherwise wedge the turn
+                        // here. It is killed and reported as a failed call; its
+                        // siblings' results survive intact.
+                        if (function_exists('posix_kill')) {
+                            posix_kill($job['pid'], SIGKILL);
+                        }
+                        self::reapKilled($job['pid']);
+                        $jobs[$index]['settled'] = true;
+                    }
+
+                    continue;
+                }
+
+                if (!$released) {
+                    usleep(self::PARALLEL_TOOL_POLL_MICROSECONDS);
+                }
+            }
+        } finally {
+            // EVERY EXIT PATH, including the ones that are not a `return`.
+            // This is a Generator: a consumer that stops iterating part-way
+            // through a group (a `break`, or an exception unwinding through
+            // Runtime::run()'s callers) destroys it while phase 3 is still
+            // suspended, and PHP runs this block then — verified on PHP 8.3.6
+            // rather than assumed. Without it the payloads of every job past
+            // the release cursor are stranded until ToolIpcFiles::sweep()'s
+            // one-hour cutoff, which is a reaper of last resort and not a
+            // lifecycle.
+            //
+            // One non-blocking pass first, so a child that finished during the
+            // abandonment is counted as settled and its payload collected
+            // rather than left for the sweeper.
+            //
+            // WHAT THIS DELIBERATELY DOES NOT DO IS KILL. A child still
+            // running here is left alone, and its payload with it: the
+            // deadline branch above may SIGKILL because a timeout is a verdict
+            // on that call, whereas an abandoned generator is a verdict on the
+            // CONSUMER, and killing a parallel-safe tool mid-flight to tidy up
+            // a temp file would trade a byte in /tmp for a truncated side
+            // effect. Those orphans are exactly the population sweep() was
+            // written for — see ToolIpcFiles' class doc-block.
+            for ($i = $next; $i < $total; $i++) {
+                if (!$jobs[$i]['settled'] && $jobs[$i]['pid'] !== null) {
+                    $status = 0;
+                    if (pcntl_waitpid($jobs[$i]['pid'], $status, WNOHANG) === $jobs[$i]['pid']) {
+                        $jobs[$i]['settled'] = true;
+                    }
+                }
+
+                if ($jobs[$i]['settled'] && $jobs[$i]['file'] !== null) {
+                    ToolIpcFiles::discard((string) $jobs[$i]['file']);
+                }
             }
         }
     }
