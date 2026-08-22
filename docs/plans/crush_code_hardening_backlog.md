@@ -6082,3 +6082,197 @@ design. Reword paragraph 7 to mention `/theme` while correcting it and the guard
 cannot pass by excluding nothing or by excluding the enumeration. Not done in round 44 because
 `tests/Config/` was not this lane's; the change is ~15 lines and carries its own mutation (revert the
 live enumeration to the omitting form, keep the retraction, expect red).
+
+### E123 — `docs/*.md` and `README.md` name `SUGARCRUSH_*` variables that no oracle covers
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, doc-coverage.
+
+**What.** Round 44's `EnvRosterDriftTest` compares the `SUGARCRUSH_*` variables `src/` and `bin/`
+actually read against `docs/ENVIRONMENT.md`'s **tables** — and nothing else. Measured by lane a:
+`README.md` names **10** such variables and the eleven non-`ENVIRONMENT` `docs/*.md` pages name **14**,
+none of them under any oracle.
+
+**Step.** This is a design question, not a scope widening. A second oracle must distinguish a tabulated
+PROMISE from a prose MENTION, because `docs/ENVIRONMENT.md` deliberately discusses
+`SUGARCRUSH_TOOL_CALL_PARSER` and `SUGARCRUSH_REASONING_EFFORT` in prose **precisely because nothing
+reads them** — a naive widening would red on the two sentences that exist to record that fact.
+
+### E124 — `docs/_data/sugar-crush.json` is a fourth documentation surface outside every oracle
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low.
+**Monorepo-root scope — needs a supervisor decision before any lane can own it.**
+
+**What.** `docs/_data/sugar-crush.json` + `docs/_data/sugar-crush.body.html` generate
+`docs/lib/sugar-crush.html` via `tools/gen-docs.php`, and carry env names and glob claims of their own.
+No `sugar-crush` oracle reads them. The generated page must never be hand-edited, so any pin has to sit
+on the `_data` sources, which live outside `sugar-crush/` — outside every lane's file split to date.
+
+**Step.** Decide whether the `_data` sources are in scope for the `sugar-crush` doc-drift guards at all.
+If they are, the guard belongs beside `tools/gen-docs.php`, not in `sugar-crush/tests/`.
+
+### E125 — the `paragraphs()` splitter exists in three independent copies
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, test-quality.
+
+**What.** `GlobFigureDriftTest`, `ConfigWriteProducerDocumentationDriftTest` and
+`ThemePersistenceFramingTest` each carry their own private paragraph splitter. Beyond the duplication
+they share a defect surface: **a stale sentence inside a fenced code block or a table row is one
+paragraph-unit to all three**, so a claim hidden in either is invisible to every doc-drift guard at once.
+
+**Step.** Consolidate into one helper (`tests/Config/Support/` now exists, from `EnvReadScanner`), so the
+fenced-block question is answerable in one place instead of three. Related: E108, E129.
+
+### E126 — `SymbolCitationDriftTest` pins citations to TEST symbols only
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, and it is a
+**stated limit**, not an oversight.
+
+**What.** The new census resolves `{@see …Tests\…::method()}` in four syntactic shapes — 94 citations at
+merge — but only where the TARGET is a test symbol. `{@see self::foo()}`, `{@see Foo::CONST}`,
+`{@see $this->bar}` and plain production class references are far more numerous, have more shapes, and
+none is measured.
+
+**Step.** The test subset was chosen because `src/` cannot autoload `tests/`, so nothing but prose links
+them — that is what makes the test half both cheap and uniquely rot-prone. The production half is a
+separate, larger instrument. The doc-block says so; this entry exists so the limit is not mistaken for
+coverage.
+
+### E127 — `EnvReadScanner`'s S3 forwarding resolves a callee by bare method name within one file
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low.
+**Inherited and re-confirmed in round 44, not introduced by it.**
+
+**What.** The forwarding rule matches the callee's bare method name inside a single file, so two
+same-named methods — a trait's and the using class's — would resolve to whichever the scanner reaches
+first. No such case exists in `src/` today.
+
+**Step.** Resolve through the declaring scope rather than the file. Local fix; worth taking the next time
+the scanner is touched, not on its own.
+
+### E128 — `tabulatedNames()` scrapes the first table column only, deliberately
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low. **A decision,
+recorded so a later round does not "fix" it in isolation.**
+
+**What.** The `docs/ENVIRONMENT.md` table scrape reads column one only. Lane a declined to widen it on
+purpose: the narrow scrape is the conservative direction, because a read-but-undocumented name still reds
+(the code set is built from `src/`), whereas widening would turn **every prose mention inside a cell**
+into a promise the code must keep.
+
+**Step.** None, unless widening — and if it is ever widened, the documented-but-unread direction has to
+be re-thought in the same commit or the guard starts reding on E123's two deliberate prose entries.
+
+### E129 — the stale-figure retraction exemption is still semantic, not an identity test
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, **known
+residual**.
+
+**What.** Round 44 tightened the exemption materially — a paragraph must now quote the glob **and** spell
+the current count to be exempt, where round 43 accepted a bare `\bfive\b` — but it remains semantic. A
+paragraph that quotes `[!B]*`, says "five" for an unrelated reason, and also spells the stale figure
+would be exempt without being a retraction. Measured: three exempt paragraphs in scope today, all
+genuine retractions.
+
+**Step.** None for now. The obvious alternative — a filename exemption list — is **precisely what went
+stale in round 43**, when a copy was fixed and its list entry was not. The trade is taken deliberately.
+
+### E130 — no glob / token / timing / memory claim from round 44 has been exercised on PHP 8.4
+
+**Recorded 2026-08-22 by the supervisor.** Severity: low, coverage. Severity rises if CI's 8.4 leg reds.
+
+**What.** Every figure in all three round-44 lanes is stated for **PHP 8.3.6**, the only interpreter on
+this box; CI runs 8.3 **and** 8.4. The largest new exposure is lane a's token work —
+`T_START_HEREDOC` / `T_END_HEREDOC` / `T_ENCAPSED_AND_WHITESPACE` / `T_CURLY_OPEN` /
+`T_DOLLAR_OPEN_CURLY_BRACES`, with `T_END_HEREDOC` carrying the closing marker's indentation since 7.3 —
+followed by lane b's `fnmatch` and allocator figures, which are deliberately unpinned (E117).
+
+**Step.** CI's 8.4 leg is the first thing to run any of it. Read that run before trusting a round-44
+token or timing figure on 8.4.
+
+### E131 — ~~`LayeredSettings`' 66/68 `strlen` census was stale on arrival at master~~ FIXED in round 44
+
+**Recorded and fixed 2026-08-22 by the supervisor**, at merge, from the round-44 digest.
+
+**What.** `src/Config/LayeredSettings.php` stated that `grep -rl 'strlen(' tests --include='*.php'`
+"counts 66 files and `grep -rl 'strlen'` counts 68". Both were **correct** in
+`/home/sites/crush-lane-a`, where lane a measured them, and both were **wrong** at `98d59bfb` — **71 and
+73** — because lanes b and c each added test files containing `strlen` while lane a was measuring.
+
+**Fixed** by dropping the two cardinalities and keeping the generator. The paragraph's actual claim is a
+NEGATIVE — that no `strlen()` in `tests/` is applied to `COUNTEREXAMPLE_GLOB` or to any spelling of
+`[!B]*` — re-verified at HEAD, and it survived the merge untouched. **The totals never supported the
+claim; they only looked like evidence.**
+
+🔴 **THE TRANSFERABLE RULE: A CARDINALITY MEASURED OVER `tests/` (OR `src/`, OR `docs/`) IN ONE LANE'S
+WORKTREE IS INVALIDATED BY ANY SIBLING LANE'S MERGE.** Either re-take it at merge, or do not ship a
+cardinality at all — ship the generator and the claim it supports. Same family as the assertion-count
+non-additivity measured at this merge (see the round-44 worklog entry).
+
+### E132 — `exitCodeAfter()` cannot read a ternary return, so the bare-`result` guard over-approximates
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-b report.** Severity: low.
+
+**What.** `testAFailureWithNoErrorObjectIsDocumentedExactlyWhenOneExists` collects every `EXIT_*` in the
+enclosing function after a `result`-only document, rather than resolving which one that branch actually
+takes, because `doctor`'s return is a ternary the exact walk cannot read. The over-approximation is in
+the **safe** direction for the claim being pinned, and the test says so in its own comment.
+
+**Residual.** A function emitting a bare `result` on a success path and returning non-zero from an
+unrelated later branch would satisfy it wrongly.
+
+**Step.** Teach `exitCodeAfter()` to read a ternary return.
+
+### E133 — the payload-mode probe still globs shared `/tmp`; only attribution moved
+
+**Recorded 2026-08-22 by the supervisor from the round-44 lane-c report.** Severity: low, flake.
+**E96 is closed for the ASSERTION; this is what E96 did not close.**
+
+**What.** Round 44 moved *attribution* to the parent (`ToolIpcFiles::reservations()`), so a foreign file
+can be sighted but can no longer be read for an answer. The glob itself, and `SETTLE_SECONDS = 0.25`,
+remain. **Residual:** on a box loaded badly enough that a sibling's fork+write exceeds 250 ms after the
+first foreign sighting, `assertCount(1, $mine)` sees 0 and the test **fails** rather than passing
+wrongly — the right direction, still a flake.
+
+**Step.** Closing it properly needs identity **in the child**, i.e. `Runtime::executeConcurrently()`
+reserving every payload name in phase 1 before forking anything — a `src/Runtime.php` change.
+
+🔴 **RECORD THE NEGATIVE RESULT THAT RULED OUT THE CHEAP FIX:** on PHP 8.3.6 `sys_get_temp_dir()`
+resolves and **caches on first use** and does NOT honour a runtime `putenv('TMPDIR=…')` — measured
+directly by lane c. A test therefore cannot isolate itself into a private temp directory after the fact,
+which is why attribution moved instead of the directory being narrowed.
+
+### E134 — a mutation harness must refuse a dirty tree, not merely revert
+
+**Recorded 2026-08-22 by the supervisor.** Severity: low, process. **Round 44 produced two independent
+instances, in opposite directions.**
+
+**What.** Lane b ran a mutation (`R4b`) that created a **directory**; `git checkout -- .` does not remove
+one, and the harness's pre-flight **refused** the next three mutations rather than attributing their
+verdicts to a tree still carrying someone else's change. **The refusal, not the revert, is what saved
+that run.** Lane c hit the mirror image: reverting a mutation with `git checkout -- <file>` destroyed
+~250 lines of its own uncommitted work in that file (redone, verified identical at 18 tests / 62
+assertions).
+
+**Step.** Make the standing harness contract explicit in every brief: a pre-flight clean check that
+**refuses** rather than cleans, `git clean -fdq` alongside `git checkout -- .`, and a scratchpad backup
+of any file carrying uncommitted work **before** it is mutated.
+
+### E135 — round-44 lanes allocated overlapping backlog E-numbers, and the reports still cite the losers
+
+**Recorded 2026-08-22 by the supervisor.** Severity: low, process. **Partially fixed at merge.**
+
+**What.** Lane b filed E112–E114 (implementer) then E115–E117 (fix agent), while lane c independently
+filed its own E112–E116 from the same base. The merge renumbered lane c's five to **E118–E122**. The
+consequence is silent and durable: **report-c's prose still cites its lane-local numbers**, so its
+"E112"→E118, "E113"→E119, "E114"→E120, "E115"→E121, "E116"→E122 — and every one of those numbers now
+means an unrelated lane-b entry in the shipped backlog.
+
+**Fixed at merge, for code only:** lane c had already written `E112`/`E113` into
+`BootstrapTranscriptSeamCallSiteCensusTest`'s doc-blocks and failure messages, including the tripwire
+that tells a future reader which entry to consult; those were renumbered in `c4a799ab`. **An in-code
+citation of a backlog id is a cross-file reference the merge cannot see** — checking for one is now part
+of the merge step.
+
+**Step.** Either a supervisor-allocated number block per lane, or lane-prefixed provisional ids
+(`Eb1`, `Ec1`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
+shared scratchpad but not this.
