@@ -20,6 +20,7 @@ use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookManager;
@@ -872,6 +873,24 @@ final class Bootstrap
         // reaches {@see filterToolSet()} and raises the notice.
         self::$launchNotices = [];
         self::$launchNoticesDropped = [];
+
+        // THE MID-SESSION HALF OF THE SAME SEAM, armed here and for the same
+        // reason the two lines above are reset here (E171). The list above is
+        // drained into {@see Chat::withLaunchNotices()} exactly ONCE, at the
+        // end of this method, so a warning raised after that — by a tool-call
+        // parser mid-turn, by a provider that degraded on turn forty — has no
+        // reader at all. {@see RuntimeNoticeSink} is that reader's inbox, and
+        // {@see Chat::subscriptions()} is what polls it.
+        //
+        // ARMED HERE SPECIFICALLY BECAUSE OF THE FORK, not for tidiness.
+        // {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}
+        // runs the whole engine loop — provider, parser, tools — inside a
+        // `pcntl_fork()`ed child, and a child can only inherit a transport that
+        // already existed when it was forked. A turn cannot start before the
+        // `Chat` this method returns, so anywhere in here is before every fork;
+        // anywhere later would not be.
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::installProcessTransport();
 
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell

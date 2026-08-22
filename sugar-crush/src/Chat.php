@@ -23,6 +23,7 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
@@ -391,6 +392,27 @@ final class Chat implements Model
      * exists to make impossible.
      */
     private const STATUS_LINE_SUBSCRIPTION = 'crush.status-line';
+
+    /**
+     * Reconciliation id of the runtime-notice poll subscription (E171).
+     * Stable across rebuilds for {@see BACKGROUND_POLL_SUBSCRIPTION}'s reason.
+     */
+    private const RUNTIME_NOTICE_SUBSCRIPTION = 'crush.runtime-notice-poll';
+
+    /**
+     * How often the runtime-notice inbox is polled (seconds) while the tick is
+     * declared at all.
+     *
+     * SLOWER THAN {@see TOOL_EVENT_POLL_SECONDS} ON PURPOSE, and the difference
+     * is not a guess about cost. A tool event is a two-state walk the user
+     * watches — running, then done — so a tenth of a second is the difference
+     * between a visible transition and a jump. A notice is one static row of
+     * prose about something that already went wrong; half a second later it
+     * reads identically, and the slower tick halves the wake-ups on the exact
+     * path (a turn in flight) where the loop is also servicing the tool-event
+     * pump, the provider socket and the spinner.
+     */
+    private const RUNTIME_NOTICE_POLL_SECONDS = 0.5;
 
     /**
      * Stable head of the context-usage reminder {@see contextReminderMessage()}
@@ -1117,6 +1139,9 @@ final class Chat implements Model
         }
         if ($msg instanceof ToolEventPumpMsg) {
             return $this->pumpLiveToolEvents();
+        }
+        if ($msg instanceof RuntimeNoticePumpMsg) {
+            return $this->pumpRuntimeNotices();
         }
         if ($msg instanceof StatusLineTickMsg) {
             // The `statusLine` command's ONE side-effecting call site. Runs
@@ -10724,6 +10749,35 @@ final class Chat implements Model
             );
         }
 
+        // The mid-session transcript seam's poll (E171). Declared on the same
+        // terms as the two above and for the same stated reason: an
+        // unconditional tick would keep a timer waking the loop and repainting
+        // forever on a launch where nothing ever warns, which is the
+        // overwhelmingly common one.
+        //
+        // `hasPending()` is a QUERY, never a drain — see its doc-block. It is
+        // one array check, or on the cross-fork transport one `stream_select()`
+        // with a zero timeout. It runs once per `Program` reconcile, i.e. once
+        // per Msg, not on a timer of its own.
+        //
+        // ORed WITH $inFlight RATHER THAN RELYING ON hasPending() ALONE, and
+        // that is the load-bearing half. Every mid-session emitter E171 names
+        // — the two tool-call parsers, `SglangProvider`, `AgentWorkerPool`,
+        // `WorktreeManager` — raises its notice DURING a turn, and on the
+        // interactive path it does so inside
+        // {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
+        // forked child. Waiting for `hasPending()` to go true would work, but
+        // only on whatever Msg happened to arrive next; arming for the whole
+        // turn means the row appears while the turn is still running, which is
+        // the entire point of a seam that is not launch-only.
+        if ($this->inFlight || RuntimeNoticeSink::hasPending()) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::RUNTIME_NOTICE_SUBSCRIPTION,
+                self::RUNTIME_NOTICE_POLL_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new RuntimeNoticePumpMsg(),
+            );
+        }
+
         // The `statusLine` command's clock. Declared only while one is
         // CONFIGURED, which is the same conditionality the two above have and
         // for the reason this docblock gives: an unconditional tick would keep
@@ -10816,6 +10870,52 @@ final class Chat implements Model
             'history' => [...$this->history, ...$notices],
             'backgroundStatuses' => $statuses,
         ]), null];
+    }
+
+    /**
+     * Drain {@see RuntimeNoticeSink} into the transcript (E171).
+     *
+     * THE READER THAT THE LAUNCH SEAM DOES NOT HAVE. Warnings raised while
+     * `Bootstrap` was BUILDING this Chat reach the transcript through
+     * {@see withLaunchNotices()}, which is called once at construction.
+     * Warnings raised after that — a tool-call parser refusing a malformed
+     * invoke on turn forty, a provider degrading mid-session — had only
+     * `error_log()`, i.e. fd 2, i.e. a frame the renderer believes it owns and
+     * a primary buffer the user does not see again until they quit.
+     *
+     * {@see Role::System} rows, the same shape `withLaunchNotices()` uses and
+     * for its reason: {@see Renderer} already lays out, wraps and scrolls that
+     * role at every width, so a warning routed here inherits a correct surface
+     * instead of a banner that would have to learn all of it again.
+     *
+     * ONE APPEND FOR THE WHOLE BATCH, unlike {@see pumpLiveToolEvents()}. That
+     * method renders between entries because a tool call has a running→done
+     * walk worth seeing; a notice is finished prose the moment it exists, and
+     * rendering between two of them would only cost a repaint. The batch is
+     * bounded at the sink — see {@see RuntimeNoticeSink::drain()} — so "the
+     * whole batch" cannot be unbounded.
+     *
+     * $this UNCHANGED when nothing was pending, which the tick makes the
+     * common case: `Program` re-renders after every update, and returning a
+     * new-but-identical Chat would repaint the transcript twice a second for
+     * the whole of every turn.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function pumpRuntimeNotices(): array
+    {
+        $notices = RuntimeNoticeSink::drain();
+
+        if ($notices === []) {
+            return [$this, null];
+        }
+
+        $messages = [];
+        foreach ($notices as $notice) {
+            $messages[] = Message::system($notice);
+        }
+
+        return [$this->mutate(['history' => [...$this->history, ...$messages]]), null];
     }
 
     /**
