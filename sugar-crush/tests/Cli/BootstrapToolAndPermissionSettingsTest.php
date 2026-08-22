@@ -583,11 +583,32 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
      * transposing `\count($removed)` and `\count($withoutProject)` at the call
      * site takes this class to `Tests: 57, Assertions: 136, Failures: 1`.
      *
-     * THE TEXT'S SECOND PARTY IS README.md, VIA
-     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest}, and it
-     * is named here so that whoever deletes that file's `assertSame` knows what
-     * else they are removing. MEASURED, same mutation, scope = that class:
-     * `Tests: 5, Assertions: 30, Failures: 1`. That is the whole reason this
+     * THE TEXT'S SECOND PARTIES ARE TWO DOC PAGES, BOTH VIA
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest}, and
+     * they are named here so that whoever deletes one of that file's
+     * `assertSame`s knows what else they are removing:
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()}
+     * renders README.md's fenced sample from this constant and
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testTheSettingsPageQuotesTheSameLaunchReportByteForByte()}
+     * renders `docs/SETTINGS.md`'s. MEASURED on PHP 8.3.6 at round 46, same
+     * mutation, scope = that class: BOTH of those reds and no other test in it
+     * does.
+     *
+     * WHICH TESTS RED, NOT HOW MANY — and the first version of this paragraph
+     * is why the distinction is written down. WHAT IT SAID:
+     * `Tests: 5, Assertions: 30, Failures: 1`. WHAT IS TRUE NOW: the same
+     * mutation answers `Tests: 6, Assertions: 40, Failures: 2`. Nothing about
+     * the coupling changed — a later commit in the SAME round added the
+     * `docs/SETTINGS.md` guard to that class, and a class total is a cardinality
+     * over `tests/` that every new test invalidates. That is the third time
+     * round 46 shipped a stale count in a doc-block and the reason this one
+     * names its failures instead: a test NAME survives a sibling being added
+     * beside it, and it is also the thing a reader actually has to go and look
+     * at. WHY THE MEASUREMENT STILL EARNS ITS PLACE: without it the sentence
+     * would be an unverified claim that some other file covers the text, which
+     * is exactly the "claim about a grep" this round kept catching.
+     *
+     * That is the whole reason this
      * test needs no independent literal copy of its own, where
      * {@see testAProjectThatRemovesEveryToolReportsTheNoSurvivorsBranch()} does
      * carry one — there is no README sample for the no-survivors branch. The

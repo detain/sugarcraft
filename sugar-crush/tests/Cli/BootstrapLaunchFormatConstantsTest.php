@@ -511,10 +511,20 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // `$o->sprintf(`, `Foo::sprintf(` and `function sprintf(` tokenize the
         // same way and were all counted as calls to the global function, and
         // `\sprintf(` is a single `T_NAME_FULLY_QUALIFIED` and was counted as
-        // none. An assertion that this file's own census is 12/8/0/2 is not
-        // evidence unless something proves the scanner can still tell those
-        // apart — and this control is a KNOWN POSITIVE for every bucket,
-        // including the two whose real-tree expectation is zero.
+        // none. An assertion about this file's own census is not evidence
+        // unless something proves the scanner can still tell those apart — and
+        // this control is a KNOWN POSITIVE for every bucket, including the two
+        // whose real-tree expectation is zero.
+        //
+        // THAT SENTENCE USED TO QUOTE THE REAL-TREE CENSUS AS `12/8/0/2` and it
+        // was stale before the round that wrote it ended: the E164 promotions
+        // three commits later moved two literals into constants, so the figures
+        // the assertions above actually carry are 12 calls / 3 literal /
+        // 9 constant / 0 interpolated. The quote is dropped rather than
+        // refreshed, because it was a SECOND COPY of four numbers that already
+        // sit ten lines up in executable form — a copy that cannot red when it
+        // drifts, which is the whole failure mode this control exists to
+        // prevent. Read the assertions, not a comment about them.
         self::assertSame(
             [
                 'calls' => 6,

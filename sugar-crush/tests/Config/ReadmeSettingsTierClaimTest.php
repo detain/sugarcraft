@@ -304,8 +304,15 @@ final class ReadmeSettingsTierClaimTest extends TestCase
     }
 
     /**
-     * The one fenced block in README.md that shows the launch-report line,
-     * flattened the same way {@see launchReportSample()} flattens its render.
+     * The one fenced block in `$relativePath` that shows the launch-report
+     * line, flattened the same way {@see launchReportSample()} flattens its
+     * render.
+     *
+     * IT READS ANY PAGE, and the header above said "README.md" for as long as
+     * README.md was the only one. `docs/SETTINGS.md` carries the identical
+     * sample — see
+     * {@see testTheSettingsPageQuotesTheSameLaunchReportByteForByte()} — so
+     * every "the README" below means "the page this call was handed".
      *
      * EXACTLY ONE IS ASSERTED. A second block carrying `(disabledTools)` would
      * make "the sample" ambiguous, and picking the first would silently stop
