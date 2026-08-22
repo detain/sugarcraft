@@ -548,6 +548,49 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         }
     }
 
+    /**
+     * The retention DETAIL row carries its own copy of the stderr envelope, and
+     * that relationship is asserted rather than only explained.
+     *
+     * {@see Bootstrap::SESSION_RETENTION_DETAIL_FORMAT}'s doc-block says the
+     * duplication is deliberate — these rows are a continuation indented under
+     * the summary, and routing them through the seam would seed one transcript
+     * row per deleted session. A justification is not a pin: with nothing
+     * checking it, changing {@see Bootstrap::STDERR_LINE_FORMAT}'s label would
+     * leave the summary saying `sugarcrush:` and its own continuation rows
+     * saying something else, and the only symptom is a scrollback that looks
+     * subtly wrong to a human and to nothing else.
+     *
+     * DERIVED FROM THE ENVELOPE, never retyped: the label is whatever
+     * `STDERR_LINE_FORMAT` puts before its conversion, so the two move together
+     * by construction and this test reds only when they come APART.
+     *
+     * The full stop is asserted ABSENT on purpose. The envelope adds one
+     * because it wraps a sentence; a continuation row ending in an id list is
+     * not one, and a `.` after `messages)` would read as part of the count.
+     */
+    public function testTheRetentionDetailRowIndentsUnderTheEnvelopeItDuplicates(): void
+    {
+        $at = strpos(Bootstrap::STDERR_LINE_FORMAT, '%s');
+        self::assertIsInt($at, 'STDERR_LINE_FORMAT no longer has a conversion to take a label from');
+        $label = substr(Bootstrap::STDERR_LINE_FORMAT, 0, $at);
+        self::assertNotSame('', $label, 'the stderr envelope has no label, so there is nothing to indent under');
+
+        self::assertStringStartsWith(
+            $label . '  ',
+            Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+            'the retention detail rows no longer open with the stderr envelope\'s own label plus the indent '
+            . 'that makes them read as a continuation of the summary above them',
+        );
+        self::assertStringEndsWith("\n", Bootstrap::SESSION_RETENTION_DETAIL_FORMAT);
+        self::assertStringEndsWith(
+            ")\n",
+            Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+            'a continuation row gained sentence punctuation; the envelope adds the full stop because it '
+            . 'wraps a sentence, and these rows are not one',
+        );
+    }
+
     // ── the scanners ─────────────────────────────────────────────────────
 
     /** @return array<string, string> constant name => the method obliged to use it */
