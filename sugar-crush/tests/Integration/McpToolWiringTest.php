@@ -1111,6 +1111,141 @@ final class McpToolWiringTest extends TestCase
     }
 
     /**
+     * E86: THE USER LEARNS THE TOOL SET WAS CUT, on a box whose `error_log` ini
+     * points at a FILE.
+     *
+     * The sibling test above pins that the throw path SAYS something, and it
+     * proves that by redirecting `error_log` into a file it can read. That
+     * redirection is not a test artefact — it is an entirely ordinary production
+     * PHP config, and under it the old code's only report went into the
+     * operator's log and NOWHERE ELSE: not the terminal, not the transcript. The
+     * user got a silently reduced tool set. So this test drives the same
+     * start-then-throw config under that exact ini and asserts all THREE
+     * destinations off ONE launch:
+     *
+     *   - the log FILE still gets the operator diagnostic (the `error_log()`
+     *     call is kept, and the sibling test above keeps depending on it);
+     *   - the TRANSCRIPT gets the consequence, which is the half that was
+     *     missing and the half the user actually reads;
+     *   - stderr gets the consequence too, because the transcript seam is BOTH
+     *     CHANNELS and a `-p` run has no transcript to read.
+     *
+     * A REAL LAUNCH IN A CHILD PROCESS, not a reflection call on the seam.
+     * `Bootstrap::warnPermissionConfigInTranscript()` has a construction-time
+     * window, and reachability from THIS site is not inherited from the other
+     * fifteen call sites: `chat()` holds no `self::tools(` call of its own and
+     * only gets here through `backend()` -> `tools()` -> `mcpTools()` ->
+     * `mcpClient()`. Whether that chain completes before `chat()` reads
+     * `launchNotices()` on its last line is a fact about ORDERING, and only a
+     * launch measures ordering. The child also keeps the seam's `fwrite(STDERR,
+     * …)` half out of this suite's own output, which is the property the
+     * sibling test above chose `error_log()` for in the first place.
+     */
+    public function testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog(): void
+    {
+        // ORDER MATTERS, the same way it does in the sibling test: the good
+        // server is first, so it is up by the time the bad entry throws.
+        file_put_contents($this->repo . '/.mcp.json', (string) json_encode(['mcpServers' => [
+            'fake' => [
+                'type' => 'stdio',
+                'command' => PHP_BINARY,
+                'args' => [$this->tempDir . '/server.php', $this->callLog, $this->handshakeLog],
+                'startTimeout' => 5,
+            ],
+            'broken' => ['type' => 'nonsense-transport'],
+        ]]));
+        $this->trustTheRepo();
+
+        $log = $this->tempDir . '/child_error_log.txt';
+        [$stderr, $payload] = $this->launchChatInChild($log);
+
+        $this->assertFileExists($log, 'the throw path said nothing to the operator log');
+        $diagnostic = (string) file_get_contents($log);
+        $this->assertStringContainsString($this->repo . '/.mcp.json', $diagnostic);
+        $this->assertStringContainsString('Unknown MCP server type: nonsense-transport', $diagnostic);
+        $this->assertStringContainsString('continuing without it', $diagnostic);
+
+        // THE ROW ITSELF, matched on the sentence rather than on "the list is
+        // non-empty": a launch under this fixture raises other notices too (the
+        // provider degrading to echo is one), so a count or an emptiness check
+        // would stay green with this site's row gone.
+        $notices = $payload['notices'];
+        $this->assertIsArray($notices);
+        $matching = array_values(array_filter(
+            $notices,
+            fn (mixed $n): bool => \is_string($n)
+                && str_contains($n, 'MCP tools from ' . $this->repo . '/.mcp.json are incomplete'),
+        ));
+        $this->assertCount(1, $matching, "the transcript seam never saw this site; notices were:\n"
+            . var_export($notices, true) . "\nstderr was:\n" . $stderr);
+        $this->assertStringContainsString('only the tools that did load', $matching[0]);
+
+        // AND IT REACHED THE TRANSCRIPT, not merely the accessor. These are two
+        // different claims: launchNotices() is filled at construction time, and
+        // chat() reads it on its LAST line — a site whose notice is recorded
+        // AFTER that read would satisfy the assertion above and still never be
+        // seen by the user.
+        $rows = $payload['rows'];
+        $this->assertIsArray($rows);
+        $this->assertContains(
+            $matching[0],
+            $rows,
+            "the notice was recorded but chat() had already sealed the transcript; rows were:\n"
+            . var_export($rows, true),
+        );
+
+        // BOTH CHANNELS. The consequence is on stderr as well, which is the only
+        // channel a `-p` run and the post-quit scrollback have.
+        $this->assertStringContainsString('MCP tools from ' . $this->repo . '/.mcp.json are incomplete', $stderr);
+    }
+
+    /**
+     * A real `Bootstrap::chat()` in a child `php`, under this test's sandboxed
+     * HOME and with `error_log` pointed at $log, reporting back the transcript
+     * rows and the launch-notice list.
+     *
+     * Modelled on {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest}'s
+     * harness. The child stops its own servers before it prints: an MCP config
+     * that starts a server really does start one, and a leaked `php` fixture
+     * would outlive the suite.
+     *
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    private function launchChatInChild(string $log): array
+    {
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = $this->tempDir . '/child_launch.php';
+        $errFile = $this->tempDir . '/child_launch-stderr.txt';
+        $outFile = $this->tempDir . '/child_launch-stdout.txt';
+
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export($autoload, true) . ";\n"
+            . 'use SugarCraft\Crush\Cli\Bootstrap;' . "\n"
+            . '$chat = Bootstrap::chat(' . var_export($this->repo, true) . ");\n"
+            . '$rows = [];' . "\n"
+            . 'foreach ($chat->history as $m) { $rows[] = $m->content; }' . "\n"
+            . 'Bootstrap::stopMcpServers();' . "\n"
+            . 'echo json_encode(["rows" => $rows, "notices" => Bootstrap::launchNotices()]);' . "\n");
+
+        exec(sprintf(
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s -d %s %s >%s 2>%s',
+            escapeshellarg($this->tempDir . '/home'),
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg('error_log=' . $log),
+            escapeshellarg($script),
+            escapeshellarg($outFile),
+            escapeshellarg($errFile),
+        ));
+
+        $stdout = is_file($outFile) ? (string) file_get_contents($outFile) : '';
+        $stderr = is_file($errFile) ? (string) file_get_contents($errFile) : '';
+
+        $this->assertNotSame('', $stdout, "child launch produced no stdout; stderr was:\n" . $stderr);
+
+        return [$stderr, json_decode($stdout, true, 512, JSON_THROW_ON_ERROR)];
+    }
+
+    /**
      * The hook chain a real launch runs — {@see Bootstrap::chat()}'s, including
      * the {@see \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook} it installs
      * over the mode written to the sandboxed user config.
