@@ -328,56 +328,298 @@ final class GrepInstructionWiringTest extends TestCase
      * that costs the model something. The probe is the three-quarter floor;
      * the result is the FULL cap whenever no rule was surfaced, which under
      * announce-once is almost every call. A hit landing between the two cuts
-     * was therefore VISIBLE while its skill went unannounced — and
-     * announce-once means unannounced for the rest of the session.
+     * was therefore VISIBLE while its skill went unannounced.
      *
-     * MEASURED with this fixture, one cap at a time from 200 to 12,000,
+     * WHAT THIS PARAGRAPH USED TO SAY: "and announce-once means unannounced
+     * for the rest of the session".
+     * WHAT IS TRUE NOW: that half was wrong and E70 caught it.
+     * {@see SkillPathNudge::forPaths()} marks ONLY the entries it actually
+     * emits, so a nudge that is never built spends nothing. DRIVEN at
+     * ae30fee5 over the one-hit fixture: two Grep calls at cap 1,000 both came
+     * back silent with `announced() === []`, and a third at cap 4,000
+     * announced. Unannounced is DEFERRED, not retired.
+     * WHY THIS STILL EARNS ITS PLACE: deferral is cheap but not free — the
+     * model is looking at a hit whose skill it has not been told about, and
+     * whether it is ever told depends on a later call arriving with more room.
+     * Building the nudge off the full stdout rather than off the probe is what
+     * removes that dependence, and it is still the right call.
+     *
+     * MEASURED with the 201-hit fixture, one cap at a time from 200 to 12,000,
      * counting the caps where `target.zzz.php` is in the result and
      * `zzz-audit` is not: 0 at d7919902, 1,745 at 6569891f (caps 5,233 to
      * 6,977), 0 now. The band moves with the length of `sys_get_temp_dir()`,
      * since that prefix is repeated on every hit line, so the sweep below
      * steps in 250s across a range an order of magnitude wider than the band
      * rather than naming caps inside it.
+     *
+     * A COARSE STEP IS THE RIGHT TOOL FOR THAT BAND AND THE WRONG ONE FOR THE
+     * DIVISOR, and the bracket at the foot of this test exists because the two
+     * were confused. The caps at which "an eighth affords the entry" and "a
+     * ninth does not" disagree are 8*$floor .. 9*$floor - 1 — 1,328 to 1,493
+     * with the 166-byte $floor MEASURED at f8272f8f on PHP 8.3.6 — and a
+     * 250-byte step lands on 1,250 and then 1,500, stepping clean over the
+     * whole window. MEASURED at f8272f8f: changing Grep's
+     * `intdiv($this->maxOutputBytes, 8)` to `9` left this entire file green.
+     * So the boundary is bracketed at plus and minus one byte AFTER the sweep,
+     * the way {@see SkillPathScopingTest::testReadSpendsExactlyAnEighthOfMaxBytesOnTheSkillNudge()}
+     * already does for Read.
+     *
+     * WHAT THIS TEST ASSERTED: `!$visible || $announced` at every cap — "a
+     * skill is announced for every hit the model can see" — with the failure
+     * message "announce-once means it will not be announced again this
+     * session".
+     *
+     * WHAT IS TRUE NOW: the law is VIOLABLE and the message was wrong, both
+     * MEASURED at ae30fee5 (E70). The nudge is given an eighth of the cap, and
+     * an eighth of a small cap cannot hold even the header, footer and one
+     * entry. Over a fixture of ONE hit — `sub/target.zzz.php`, whose result is
+     * a single hit line and so moves with the root's length: 75 bytes MEASURED
+     * at f8272f8f under the 38-byte root this fixture builds on this box
+     * (`sys_get_temp_dir()` + `/crush-grep-wiring-` + 12 hex digits + `/r0`).
+     * With the shipped 19-byte description the hit is in the result
+     * and `zzz-audit` is silent at caps 1,000 and 1,250, flipping at 1,500;
+     * with a 400-byte description the dead band runs 1,000 to 3,250 and flips
+     * at 3,500.
+     *
+     * The old fixture never reached that band. Its 200 competing hits kept
+     * `target.zzz.php` out of the capture and out of the result until roughly
+     * cap 5,000, by which point the entry had been affordable for thousands of
+     * bytes — so the two regimes it swept, "hit visible" and "entry
+     * affordable", did not overlap and the law was never evaluated at its own
+     * boundary. Passing on a fixture that cannot reach the boundary is not
+     * evidence.
+     *
+     * WHY A LAW STILL EARNS ITS PLACE HERE: two of them do, and neither is
+     * fixture luck.
+     *
+     * 1. The mark is spent EXACTLY when an entry is emitted — never on a call
+     *    that says nothing. That is what makes silence recoverable, and it is
+     *    the claim the old failure message denied.
+     * 2. Whenever the eighth CAN afford the entry, a visible hit is announced.
+     *    The threshold is derived from the tracker rather than named, so this
+     *    is the qualified form of the old law: true where it is true, and
+     *    asserted from BOTH sides AT the boundary — the two caps one byte
+     *    apart that straddle it — rather than only at whichever caps the
+     *    sweep's step happens to land on.
+     *
+     * Both are swept over two fixtures, because no single one produces all
+     * three regimes: without competing hits the target is visible at every cap
+     * and the dead band is reachable; with 200 of them the clip drops it and
+     * the clipped-but-announced regime is reachable.
      */
-    public function testASkillIsAnnouncedForEveryHitTheModelCanSeeAtEveryCap(): void
+    public function testTheAnnounceOnceMarkIsSpentOnlyOnAHitTheModelWasToldAbout(): void
     {
-        for ($i = 0; $i < 200; $i++) {
-            file_put_contents(sprintf('%s/sub/f%03d.php', $this->dir, $i), "<?php // needle\n");
+        $floor = $this->smallestNudgeBudget();
+
+        $seenVisibleAnnounced = false;
+        $seenVisibleDeferred = false;
+        $seenClippedAnnounced = false;
+
+        foreach ([0, 200] as $competing) {
+            $root = $this->fixture($competing);
+
+            for ($cap = 1000; $cap <= 12000; $cap += 250) {
+                $nudge = $this->zzzNudge();
+                $content = $this->grepIn($root, new Grep($root, $cap, skillNudge: $nudge));
+
+                $visible = str_contains($content, '/sub/target.zzz.php:');
+                $announced = str_contains($content, 'zzz-audit');
+                $affordable = intdiv($cap, 8) >= $floor;
+
+                // Law 1. Nothing may be retired that the model was not shown,
+                // and nothing shown may be left unmarked (it would re-announce
+                // on every later call and burn context saying the same thing).
+                self::assertSame(
+                    $announced ? ['zzz-audit'] : [],
+                    $nudge->announced(),
+                    "$competing competing hits, cap $cap: the announce-once mark and the emitted entry disagree",
+                );
+
+                // Law 2, and its complement one step down. $floor is the
+                // tracker's own price for one entry, so this brackets the
+                // boundary instead of sitting safely to one side of it.
+                if ($affordable && $visible) {
+                    self::assertTrue(
+                        $announced,
+                        "$competing competing hits, cap $cap: an eighth ("
+                        . intdiv($cap, 8) . ") covers the {$floor}-byte entry and the hit is in the "
+                        . 'result, so the skill must be announced',
+                    );
+                }
+                if (!$affordable) {
+                    self::assertFalse(
+                        $announced,
+                        "$competing competing hits, cap $cap: an eighth ("
+                        . intdiv($cap, 8) . ") is under the {$floor}-byte floor, so nothing may be emitted",
+                    );
+                }
+
+                $seenVisibleAnnounced = $seenVisibleAnnounced || ($visible && $announced);
+                $seenVisibleDeferred = $seenVisibleDeferred || ($visible && !$announced);
+                $seenClippedAnnounced = $seenClippedAnnounced || (!$visible && $announced);
+            }
+        }
+
+        // The sweep has to REACH all three regimes or the laws above are being
+        // asserted over a fixture that cannot test them — which is exactly the
+        // defect this test was rewritten for.
+        self::assertTrue($seenVisibleAnnounced, 'the sweep must include caps where the hit survives and is announced');
+        self::assertTrue($seenVisibleDeferred, 'the sweep must include the dead band: the hit is visible and the entry does not fit');
+        self::assertTrue($seenClippedAnnounced, 'the sweep must include caps where the clip dropped the hit and the skill was announced anyway');
+
+        // THE DIVISOR ITSELF, bracketed at the byte. The sweep above steps in
+        // 250s while the window where an eighth and a ninth disagree is
+        // 8*$floor .. 9*$floor - 1, so the sweep alone can never see the
+        // divisor change — see this method's doc-block for that measurement.
+        // $floor is the tracker's own price for one entry, so these two probes
+        // move with SkillPathNudge's pricing and pin only Grep's share.
+        $oneHit = $this->fixture(0);
+        $threshold = 8 * $floor;
+
+        self::assertStringContainsString(
+            'zzz-audit',
+            $this->grepIn($oneHit, new Grep($oneHit, $threshold, skillNudge: $this->zzzNudge())),
+            "cap {$threshold}: an eighth is exactly the {$floor}-byte floor, so the entry fits and must be announced",
+        );
+        self::assertStringNotContainsString(
+            'zzz-audit',
+            $this->grepIn($oneHit, new Grep($oneHit, $threshold - 1, skillNudge: $this->zzzNudge())),
+            'one byte lower an eighth is one byte short of the floor, so nothing may be emitted — without this '
+            . 'half of the bracket every divisor larger than 8 passes too',
+        );
+    }
+
+    /**
+     * A cap too tight for the nudge DEFERS the skill; it does not retire it.
+     * This is the claim the rewritten test's old failure message got backwards,
+     * pinned on its own so a regression in {@see SkillPathNudge::forPaths()}'s
+     * mark-after-emit ordering fails something that names it.
+     */
+    public function testACapTooTightForTheNudgeDefersTheSkillRatherThanRetiringIt(): void
+    {
+        $root = $this->fixture(0);
+        $nudge = $this->zzzNudge();
+        $tight = 8 * $this->smallestNudgeBudget() - 1;
+
+        $first = $this->grepIn($root, new Grep($root, $tight, skillNudge: $nudge));
+        self::assertStringContainsString('/sub/target.zzz.php:', $first, 'the hit itself is well inside the cap');
+        self::assertStringNotContainsString('zzz-audit', $first);
+        self::assertSame([], $nudge->announced(), 'a nudge that was never emitted must spend no mark');
+
+        self::assertStringNotContainsString('zzz-audit', $this->grepIn($root, new Grep($root, $tight, skillNudge: $nudge)));
+        self::assertSame([], $nudge->announced());
+
+        $roomy = $this->grepIn($root, new Grep($root, 12000, skillNudge: $nudge));
+        self::assertStringContainsString('zzz-audit', $roomy, 'the deferred skill announces on the next call with room');
+        self::assertSame(['zzz-audit'], $nudge->announced());
+    }
+
+    /**
+     * The `+ 1` in {@see Grep::execute()}'s
+     * `$nudgeCost = $nudge === null ? 0 : strlen($nudge) + 1;` reserves the
+     * newline `separated()` puts between the hit list and the nudge, and it is
+     * LOAD-BEARING rather than the spare byte it was described as one file
+     * over.
+     *
+     * `separated()` emits nothing when the content already ends on a newline,
+     * so the reservation is EXACT wherever the cap's cut lands mid-line and
+     * spare only where it lands on one — and a hit list cut by a byte cap
+     * lands mid-line at most caps. That is why {@see
+     * \SugarCraft\Crush\Tools\BuiltIn\Glob}'s comment on its own
+     * identically-shaped reservation had to stop calling this one "an
+     * over-reservation by a byte". MEASURED at f8272f8f on PHP 8.3.6 over a
+     * 41-hit `*.zzz.php` fixture, caps 200 to 6,000 one at a time: Grep as
+     * shipped over-ran no cap; with the `+ 1` dropped, cap 3,037 returned
+     * 3,038 bytes.
+     *
+     * One over-running cap out of the 5,801 swept, so the cap is DERIVED here
+     * and not sampled. It is one byte under the length of the UNCAPPED result:
+     * at that cap $bodyCap is exactly the whole hit list, and the separator is
+     * then the only byte nothing has paid for. Both sides are swept because
+     * the unmutated saturation and the mutated over-run are one byte apart and
+     * a probe at either one misses the other. The figure moves with
+     * `sys_get_temp_dir()`, which is why it is measured rather than written
+     * down.
+     */
+    public function testGrepsNudgeReservationHoldsTheResultInsideTheCapAtSaturation(): void
+    {
+        $root = $this->fixture(200);
+
+        $uncapped = $this->grepIn($root, new Grep($root, 0, skillNudge: $this->zzzNudge()));
+        self::assertStringContainsString(
+            '<system-reminder>',
+            $uncapped,
+            'the fixture must produce a nudge, or there is no reservation under test',
+        );
+        $exact = strlen($uncapped);
+
+        $sawSaturation = false;
+        for ($cap = $exact - 8; $cap <= $exact + 8; $cap++) {
+            $length = strlen($this->grepIn($root, new Grep($root, $cap, skillNudge: $this->zzzNudge())));
+            self::assertLessThanOrEqual(
+                $cap,
+                $length,
+                "cap {$cap}: the result overran its own cap by " . ($length - $cap) . ' byte(s)',
+            );
+            $sawSaturation = $sawSaturation || $length === $cap;
+        }
+
+        self::assertTrue(
+            $sawSaturation,
+            'the window must contain the cap the hit list saturates exactly, or the sweep never reached the '
+            . 'boundary the reserved byte exists for',
+        );
+    }
+
+    /**
+     * A fresh root holding one `target.zzz.php` hit plus $competing others.
+     *
+     * Separate roots per regime, and not one shared tree, because the number
+     * of competing hits is what decides which regime a cap lands in.
+     */
+    private function fixture(int $competing): string
+    {
+        $root = $this->dir . '/r' . $competing;
+        if (is_dir($root)) {
+            return $root;
+        }
+
+        mkdir($root . '/sub', 0o777, true);
+        for ($i = 0; $i < $competing; $i++) {
+            file_put_contents(sprintf('%s/sub/f%03d.php', $root, $i), "<?php // needle\n");
         }
         // Sorts last among the hits, so it is the one most likely to land
         // between the probe's cut and the result's.
-        file_put_contents($this->dir . '/sub/target.zzz.php', "<?php // needle\n");
+        file_put_contents($root . '/sub/target.zzz.php', "<?php // needle\n");
 
-        $seenVisible = false;
-        $seenClippedButAnnounced = false;
+        return $root;
+    }
 
-        for ($cap = 1000; $cap <= 12000; $cap += 250) {
-            $content = $this->grep(new Grep($this->dir, $cap, skillNudge: $this->zzzNudge()));
-
-            $visible = str_contains($content, '/sub/target.zzz.php:');
-            $announced = str_contains($content, 'zzz-audit');
-
-            $seenVisible = $seenVisible || ($visible && $announced);
-            $seenClippedButAnnounced = $seenClippedButAnnounced || (!$visible && $announced);
-
-            // The one direction that is a law. A cap small enough that the
-            // CAPTURE itself never reached the file is a hit the tool truly
-            // never had, and silence about it is correct; a hit the model is
-            // looking at is not.
-            self::assertTrue(
-                !$visible || $announced,
-                "cap $cap: the hit is in the result and its path-scoped skill was not announced — "
-                . 'announce-once means it will not be announced again this session',
-            );
+    /**
+     * The smallest budget {@see SkillPathNudge::forPaths()} will spend on the
+     * `zzz-audit` entry, asked of the tracker rather than recomputed here — a
+     * recomputation is a second copy of its pricing that agrees with it only
+     * until one of them changes.
+     */
+    private function smallestNudgeBudget(): int
+    {
+        for ($budget = 1; $budget <= SkillPathNudge::maxBytes(); $budget++) {
+            if ($this->zzzNudge()->forPath('/anything/target.zzz.php', $budget) !== null) {
+                return $budget;
+            }
         }
 
-        // Both regimes have to be in the sweep or the assertion above is only
-        // testing one of them.
-        self::assertTrue($seenVisible, 'the sweep must include caps where the target hit survives');
-        self::assertTrue(
-            $seenClippedButAnnounced,
-            'the sweep must include caps where the clip dropped the hit and the skill was announced anyway',
-        );
+        self::fail('no budget up to the class ceiling produced a nudge');
+    }
+
+    private function grepIn(string $root, Grep $tool): string
+    {
+        return $tool->execute([
+            'id' => 'c1',
+            'pattern' => 'needle',
+            'path' => $root,
+            'description' => 'find the needle',
+        ])->content();
     }
 
     /** A skill scoped to a suffix only ONE fixture file carries. */

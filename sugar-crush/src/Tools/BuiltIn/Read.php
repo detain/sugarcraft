@@ -283,6 +283,13 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
             // the same share {@see Glob} and {@see Grep} give it, for the same
             // reason.
             //
+            // "An eighth" was prose and nothing asserted it: MEASURED at
+            // ae30fee5, changing the 8 here to a 2 survived the whole suite
+            // (E71). It is now pinned as a two-sided threshold by
+            // SkillPathScopingTest::testReadSpendsExactlyAnEighthOfMaxBytesOnTheSkillNudge(),
+            // which asks the tracker what one entry costs rather than writing
+            // a byte figure down.
+            //
             // The FILE's share is again deliberately NOT reduced to pay for
             // it, on the argument set out above for the instruction body: a
             // read that returns less of the file because a skill claims its

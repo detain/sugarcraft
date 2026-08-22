@@ -454,14 +454,37 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             // three-quarter floor; $content is the FULL cap whenever no rule
             // was surfaced, which under announce-once is almost every call. So
             // a hit between the two cuts was VISIBLE in the result while its
-            // skill went unannounced — and announce-once means unannounced
-            // here is unannounced for the session. MEASURED over
-            // `GrepInstructionWiringTest`'s fixture — a `*.zzz.php`-scoped
-            // skill, 201 hits, a 35-byte root — sweeping caps 200 to 12,000
-            // one at a time and counting the caps where the hit is visible and
-            // the skill is silent: 0 at d7919902, 1,745 at 6569891f (caps
-            // 5,233 to 6,977), 0 here. The band moves with the length of the
-            // root, since that prefix is repeated on every hit line.
+            // skill went unannounced.
+            //
+            // WHAT THIS SENTENCE USED TO END WITH: "— and announce-once means
+            // unannounced here is unannounced for the session."
+            // WHAT IS TRUE NOW: that is FALSE, and E70 caught it.
+            // {@see \SugarCraft\Crush\Skills\SkillPathNudge::forPaths()}
+            // marks only the entries it actually EMITS, so a nudge that was
+            // never built spends no mark and the skill is announced by the
+            // next call with room. DRIVEN at ae30fee5 over the one-hit
+            // fixture: two Grep calls at cap 1,000 both came back silent with
+            // `announced() === []`, and a third at cap 4,000 announced.
+            // Unannounced is DEFERRED, not retired — pinned by
+            // `GrepInstructionWiringTest::
+            // testACapTooTightForTheNudgeDefersTheSkillRatherThanRetiringIt()`.
+            // WHY THIS STILL EARNS ITS PLACE: deferral is cheaper than
+            // retirement but it is not free. The model is looking at a hit
+            // whose skill it has not been told about, and whether it is ever
+            // told depends on a later call happening to arrive with more room.
+            // Building the nudge off the full stdout rather than off $probe is
+            // what removes that dependence, so the argument for the input this
+            // line reads survives its overstated consequence intact.
+            //
+            // MEASURED over `GrepInstructionWiringTest`'s fixture as it stood
+            // at 6569891f — a `*.zzz.php`-scoped skill, 201 hits, a 35-byte
+            // flat root; the fixture now nests the hits one directory deeper,
+            // which moves the band without changing its shape — sweeping caps
+            // 200 to 12,000 one at a time and counting the caps where the hit
+            // is visible and the skill is silent: 0 at d7919902, 1,745 at
+            // 6569891f (caps 5,233 to 6,977), 0 here. The band moves with the
+            // length of the root, since that prefix is repeated on every hit
+            // line.
             //
             // BUILT ABOVE, not here, and that is the only difference: its
             // length is subtracted from $bodyCap before the hit list is

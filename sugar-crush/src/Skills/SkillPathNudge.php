@@ -18,8 +18,26 @@ namespace SugarCraft\Crush\Skills;
  * Deliberately kept OFF the hot path: matching is pure in-memory `fnmatch()`
  * against frontmatter already loaded at bootstrap — no filesystem scan of the
  * skills tree and no per-skill syscall on a tool call — and once every
- * path-scoped skill has been announced the tracker short-circuits to null
- * before matching at all, so a long session pays nothing per tool call.
+ * path-scoped skill THE MODEL MAY INVOKE has been announced the tracker
+ * short-circuits to null before matching at all, so a long session pays
+ * nothing per tool call.
+ *
+ * WHAT THAT CLAUSE SAID: "once every path-scoped skill has been announced".
+ * WHAT IS TRUE NOW: it is qualified, because unqualified it was false of any
+ * tree holding a path-scoped skill with `disable-model-invocation: true`
+ * (E72). {@see forPaths()} filters such a skill out and so can never announce
+ * it, while {@see hasPending()} counted it as pending — so the guard stayed
+ * true for the whole session and every tool call walked the registry and ran
+ * `fnmatch()` per pattern per path, which for a {@see
+ * \SugarCraft\Crush\Tools\BuiltIn\Glob} handing over a whole match list is
+ * paths x patterns per call, forever. DRIVEN at ae30fee5: two consecutive
+ * `forPath()` calls both returned null, `announced()` stayed empty, and
+ * `hasPending()` was still true after both.
+ * WHY THIS STILL EARNS ITS PLACE: the short-circuit is the only thing keeping
+ * the steady state of a long session at one array walk instead of a glob match
+ * per skill per tool call, so the claim is worth making — it just has to be
+ * made over the set forPaths() can actually retire. The two predicates have to
+ * agree about what "pending" means or the guard guards nothing.
  */
 final class SkillPathNudge
 {
@@ -314,17 +332,35 @@ final class SkillPathNudge
     }
 
     /**
-     * True while at least one enabled path-scoped skill has yet to be
-     * announced. Guards the match loop so the steady state of a long session
-     * (everything already announced) costs one array walk, not a glob match
-     * per skill per tool call.
+     * True while at least one enabled, auto-invocable path-scoped skill has yet
+     * to be announced. Guards the match loop so the steady state of a long
+     * session (everything announceable already announced) costs one array
+     * walk, not a glob match per skill per tool call.
+     *
+     * "Auto-invocable" is load-bearing and not a refinement: see the class
+     * doc-block for what it cost to leave it out.
      */
     private function hasPending(): bool
     {
         foreach ($this->registry->all() as $skill) {
-            if ($skill->paths !== [] && !isset($this->announced[$skill->name])) {
-                return true;
+            if ($skill->paths === [] || isset($this->announced[$skill->name])) {
+                continue;
             }
+
+            // The SAME filter {@see forPaths()} applies before it builds an
+            // entry, and it has to be the same one: a skill this predicate
+            // calls pending but forPaths() refuses to announce is a skill that
+            // can never stop being pending, and the guard below it then never
+            // fires again for the rest of the session (E72). Routed through
+            // isAutoInvocable() rather than re-reading
+            // $skill->disableModelInvocation here for the reason
+            // {@see SkillRegistry::findForPrompt()} gives: one definition of
+            // "the model may invoke this", so the two stay in lockstep.
+            if (!$this->registry->isAutoInvocable($skill->name)) {
+                continue;
+            }
+
+            return true;
         }
 
         return false;
