@@ -564,6 +564,73 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     }
 
     /**
+     * NO FORMAT IN `Bootstrap.php` IS BUILT THROUGH A printf-FAMILY FUNCTION
+     * {@see sprintfCensus()} CANNOT SEE.
+     *
+     * WHY A SECOND SCANNER RATHER THAN A WIDER CENSUS. Everything this file
+     * asserts about literal formats — which are promoted, which are inline on
+     * purpose, that none is interpolated — is scoped by what the census can
+     * find, and the census recognises the single name `sprintf`. That is the
+     * shape of hole rule 11 is about: an instrument reports zero offenders and
+     * the reason is its alphabet, not the tree. `printf`, `vsprintf`, `vprintf`,
+     * `fprintf` and `vfprintf` all take a format, and a literal one reached
+     * through any of them would be invisible to every guard above.
+     *
+     * MEASURED, AND LATENT RATHER THAN LIVE. On PHP 8.3.6 at round 46 the
+     * real-tree answer is `[]` — every printf-family token in `Bootstrap.php` is
+     * a `sprintf`. Round 46's review reached the same answer by a different
+     * instrument, `grep -nEo '\b(v?s?printf|vfprintf|fprintf)\('`, which
+     * returned 18 hits, all `sprintf`; the two disagree by construction and both
+     * are right, because that grep counts the doc-blocks and this scanner drops
+     * `T_COMMENT`/`T_DOC_COMMENT` before it starts. Neither figure is written
+     * into an assertion — the assertion is the emptiness.
+     *
+     * AND THE EMPTINESS IS NOT EVIDENCE ON ITS OWN, which is why the
+     * known-positive fixture is in THIS test rather than a neighbouring one.
+     * Round 44 emptied a census, asserted "nothing is stale", and stayed green
+     * with the scanner mutated to never match; the fixture is what makes an
+     * assertion of `[]` mean something. It also carries the negative shapes,
+     * because a scanner that matches everything is as useless as one that
+     * matches nothing: `sprintf` itself must stay out (the census owns it), and
+     * so must a method, a nullsafe method, a static, a declaration and the word
+     * inside a string literal.
+     */
+    public function testNoPrintfFamilyCallEscapesTheCensusAlphabet(): void
+    {
+        self::assertSame(
+            [],
+            self::printfFamilyCallsIn(self::bootstrapSource()),
+            'Bootstrap.php reaches a printf-family function other than sprintf(). Every guard in this file '
+            . 'that reasons about literal formats is scoped by sprintfCensus(), which recognises the name '
+            . '`sprintf` and no other, so this call site and whatever format it carries are invisible to '
+            . 'all of them. Either route it through sprintf() or widen the census to cover it — and note '
+            . 'that fprintf()/vfprintf() take the stream first, so classifyFirstArgument() cannot simply '
+            . 'be pointed at their first argument',
+        );
+
+        // KNOWN-POSITIVE FIXTURE FOR THE SCANNER THAT JUST ANSWERED [].
+        self::assertSame(
+            ['printf', 'vsprintf', 'vprintf', 'fprintf', 'vfprintf'],
+            self::printfFamilyCallsIn(
+                "<?php\n"
+                . "printf('a %s', 1);\n"                     // the plain case
+                . "\\vsprintf('b %s', [2]);\n"               // fully qualified — the shape T_STRING misses
+                . "vprintf('c %s', [3]);\n"
+                . "fprintf(STDERR, 'd %s', 4);\n"            // format is the SECOND argument
+                . "vfprintf(STDERR, 'e %s', [5]);\n"
+                . "sprintf('not this', 6);\n"                // the census owns sprintf
+                . "\$o->printf('nor this', 7);\n"            // a method
+                . "\$o?->printf('nor this', 8);\n"
+                . "Other::printf('nor this', 9);\n"          // a static
+                . "function printf(\$x) {}\n"                // a declaration
+                . "\\Foo\\printf('nor this', 10);\n"         // a namespaced function, not the global one
+                . "\$s = 'printf(';\n",                      // the word inside a string
+            ),
+            'the printf-family scanner miscounts a source whose answer is known, so the [] above is vacuous',
+        );
+    }
+
+    /**
      * THE SECOND PARTY, made a real assertion rather than a claim in a
      * doc-block: the two pages that quote the retention summary are rendered
      * FROM {@see Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT}.
@@ -1024,15 +1091,104 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     /** Whether `$token` names the global `sprintf`, qualified or not. */
     private static function isGlobalSprintfName(array|string $token): bool
     {
+        return self::isGlobalFunctionNamed($token, ['sprintf']);
+    }
+
+    /**
+     * Whether `$token` names one of the global functions `$names`, qualified or
+     * not.
+     *
+     * @param list<string> $names
+     */
+    private static function isGlobalFunctionNamed(array|string $token, array $names): bool
+    {
         if (!\is_array($token)) {
             return false;
         }
         if ($token[0] === T_STRING) {
-            return strtolower($token[1]) === 'sprintf';
+            return \in_array(strtolower($token[1]), $names, true);
         }
 
         // `\sprintf(` — one token on PHP 8, and invisible to a T_STRING test.
-        return $token[0] === T_NAME_FULLY_QUALIFIED && strtolower($token[1]) === '\\sprintf';
+        // Only a leading separator is stripped, so `\Foo\sprintf` stays out.
+        if ($token[0] !== T_NAME_FULLY_QUALIFIED) {
+            return false;
+        }
+
+        return \in_array(ltrim(strtolower($token[1]), '\\'), $names, true);
+    }
+
+    /**
+     * Every printf-FAMILY call in `$source` that is NOT `sprintf()`, by name.
+     *
+     * THE CENSUS'S ALPHABET IS ONE FUNCTION NAME, AND THAT IS WHAT THIS GUARDS.
+     * {@see sprintfCensus()} is what lets this file claim that every literal
+     * format in `Bootstrap.php` is either promoted or inline on purpose, and the
+     * whole of that claim rests on finding the call sites. It looks for
+     * `sprintf` and for nothing else. `printf`, `vsprintf`, `vprintf`,
+     * `fprintf` and `vfprintf` each take a format string too, and a literal
+     * format reached through any of them is not merely miscounted — it is
+     * reported as not existing, which reads as "no offender here".
+     *
+     * LATENT, NOT LIVE, AND MEASURED SO: on PHP 8.3.6 at round 46 every
+     * printf-family token in `Bootstrap.php` is a `sprintf`, so the real-tree
+     * answer is `[]`. A hole nothing has fallen into yet is exactly when an
+     * absence guard is cheap to install and worthless to trust — hence the
+     * known-positive fixture inside
+     * {@see testNoPrintfFamilyCallEscapesTheCensusAlphabet()} rather than beside
+     * it.
+     *
+     * IT REPORTS NAMES, NOT A COUNT, because the useful failure message is which
+     * function was reached for.
+     *
+     * IT DOES NOT CLASSIFY THE FORMAT, deliberately, and stops at "one is here".
+     * `fprintf()` and `vfprintf()` take the STREAM first and the format second,
+     * so {@see classifyFirstArgument()} would read the wrong argument for two of
+     * the five and answer `other` — a shape that already means something else.
+     * The honest report is that the census cannot speak for this site at all,
+     * and that is what a red here says.
+     *
+     * @return list<string>
+     */
+    private static function printfFamilyCallsIn(string $source): array
+    {
+        $names = ['printf', 'vprintf', 'vsprintf', 'fprintf', 'vfprintf'];
+
+        $significant = [];
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            $significant[] = $token;
+        }
+
+        $out = [];
+        foreach ($significant as $i => $token) {
+            if (!self::isGlobalFunctionNamed($token, $names)) {
+                continue;
+            }
+            if (($significant[$i + 1] ?? null) !== '(') {
+                continue;
+            }
+
+            // The same method/declaration shapes {@see sprintfCensus()} excludes.
+            $previous = $significant[$i - 1] ?? null;
+            if (\is_array($previous) && \in_array($previous[0], [
+                T_OBJECT_OPERATOR,
+                T_NULLSAFE_OBJECT_OPERATOR,
+                T_DOUBLE_COLON,
+                T_FUNCTION,
+                T_NEW,
+            ], true)) {
+                continue;
+            }
+
+            /** @var array{0: int, 1: string} $token */
+            $out[] = ltrim(strtolower($token[1]), '\\');
+        }
+
+        return $out;
     }
 
     /**
