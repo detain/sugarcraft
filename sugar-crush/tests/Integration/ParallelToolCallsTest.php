@@ -951,9 +951,14 @@ final class ParallelToolCallsTest extends TestCase
 
         $method = new \ReflectionMethod($runtime, 'executeToolCalls');
         $generator = $method->invoke($runtime, [
-            $this->rendezvousCall('slow', peers: 1, wait: 0.0, sleep: 0.5),
-            $this->rendezvousCall('fast1', peers: 1, wait: 0.0),
-            $this->rendezvousCall('fast2', peers: 1, wait: 0.0),
+            // A GROUP DIRECTORY EACH, so `saw=` is 1 for every call and not
+            // whichever of 1..3 markers happened to exist at the first glob:
+            // with peers=1 the rendezvous returns on its first look, so a
+            // shared directory makes the reported count a race. Measured: the
+            // shared-directory version reported saw=3 on a loaded box.
+            $this->rendezvousCall('slow', peers: 1, wait: 0.0, sleep: 0.5, group: 'abandon0'),
+            $this->rendezvousCall('fast1', peers: 1, wait: 0.0, group: 'abandon1'),
+            $this->rendezvousCall('fast2', peers: 1, wait: 0.0, group: 'abandon2'),
         ], $app, null, null);
 
         // Drives phase 1 + 2 and suspends at the first release.
