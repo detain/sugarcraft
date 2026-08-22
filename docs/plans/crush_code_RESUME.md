@@ -6,6 +6,47 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 47 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-22 from master `7af5293b`, tree clean.** Run `wf_59d605f0-d50` (task `wt49qnf18`),
+9 agents, three lanes × implement → adversarial review → fix, concurrency 3.
+
+**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-47-wf_59d605f0-d50.js`
+(copied there deliberately — the scratchpad copy does not survive a session end).
+🔴 **If a limit kills agents mid-round, RESUME, do not relaunch:**
+`Workflow({scriptPath, resumeFromRunId: 'wf_59d605f0-d50'})`. This has now worked twice.
+
+**Base floor `9378 / 131610 / 1 / rc 0` was measured AT `7af5293b` itself** (E167), and the briefs say so.
+
+**Lane dirs `/home/sites/crush-lane-{a,b,c}`** are `cp -a` copies at `7af5293b`, verified clean with 18/18
+symlinks resolving inside by `realpath()`. ⚠️ **DO NOT DELETE until the merged floor is measured.**
+
+| lane | label | items |
+| --- | --- | --- |
+| `a` | seam | **E171** (the mid-session notice seam — the round's headline and the backlog's highest-leverage item) · **E170** (route the 18 tool-call-parser sites onto it) |
+| `b` | forks | **E177/E178/E180** (three live bare-exit offenders, one in production `WorkflowEngine`) · **E179** (widen reaper adoption; **E181** is its known consequence) · **E182** |
+| `c` | formats | **E187** (sweep every promoted format across the doc pages) · **E188** (three stale `tests/` cardinalities) · **E173** (`--output-format json` carries no permission refusal) |
+
+### WHAT THE SUPERVISOR MUST DO WHEN IT LANDS
+
+Merge `a` → `b` → `c`. Expect a conflict in `docs/plans/crush_code_hardening_backlog.md` ONLY; keep both
+sides and renumber **from E191**, then grep the whole tree for `Ea47-`/`Eb47-`/`Ec47-`. Check real overlap
+with `git diff --name-only <base>..HEAD` per lane plus `comm -12`, never the lanes' self-reports.
+
+🔴 **CHECK EVERY LANE TREE FOR A DIRTY WORKTREE BEFORE MERGING** (E168) — and if a lane's HEAD is ahead of
+what its report describes, that is E190: a killed agent committed before dying. Verify, do not redo.
+
+⚠️ **Read-side hazards this round.** Lane `a` owns `Bootstrap.php`; lane `c`'s
+`BootstrapLaunchFormatConstantsTest` and `ReadmeSettingsTierClaimTest` READ its constants, and
+`BootstrapTranscriptSeamCallSiteCensusTest` pins its seam call-site count at 16 — **lane a adding a seam
+call reds that census by design.** Bump it; never loosen it. `docs/ENVIRONMENT.md` is carved out to lane
+`a` this round, applying round 46's guard-compels-a-breach lesson in advance.
+
+**Predict tests additively; predict assertions as a LOWER BOUND — and per E191 do NOT promise an overshoot
+just because a guard walks a directory a sibling touched.**
+
+---
+
 ## 0-NOW-47. ROUND 46 CLOSED (floor 9378) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR: `9378 / 131610 / 1 skipped / rc 0` at `dbb8e834`** (renumbering `15fb34ff`, backlog
