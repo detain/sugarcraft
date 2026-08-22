@@ -5784,7 +5784,10 @@ lists are the two most likely to become checkable, since both are already enumer
 ### E112 — `bin/sugarcrush` carries a comment saying README.md is still wrong; it is not, as of round 44
 
 **Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, comment-correctness.
-**Not fixed here — `bin/sugarcrush` was read-only for this lane** (it is item 1's SOURCE, not its target).
+**Not fixed at record time — `bin/sugarcrush` was read-only for that lane** (it is item 1's SOURCE, not
+its target). **CLOSED in the same round by the lane-b fix agent**, which was not under that restriction:
+the last two sentences were rewritten in the three-part form, keeping the load-bearing half and adding
+the pointer at `ReadmeJsonErrorContractDriftTest` as the README end's guard.
 
 **What.** The `$args->usageError` block in `bin/sugarcrush` ends with *"README.md's list still names both;
 correcting it is lane c's file this round and is recorded as a deferred finding."* Round 44 lane b did
@@ -5817,6 +5820,18 @@ pre-autoload guard would reopen it.
 
 **Step.** If a second pre-autoload document is ever added, make the guard scan collect all pairs and
 assert the set, the way the `NonInteractive` side already does. Related: E94/E98.
+
+**CLOSED in the same round by the lane-b fix agent, and by removing the asymmetry rather than by
+documenting it.** The reviewer's F1 showed the two-file window was the defect, not the two scans: a
+third producer (`src/Cli/Subcommands.php`) emitted two error types neither scan could see. The
+derivation now reads ALL of `src/` and `bin/` in one pass, in three shapes — an `emitErrorDocument()`
+call, an `'error' => ['type' => …]` array literal, and a raw JSON envelope string — so the guard is
+found the same way every other producer is and "the first `'type' =>` and stop" is gone. The two
+unbounded scans this entry did not name (`$message = '<literal>'` and `exit(<int>)`, both first-match
+over the whole script) are bounded to the enclosing function, and a second `$message` literal inside the
+guard now reds rather than being silently ignored. VERIFIED by mutation: a decoy `$message` placed
+earlier in the file and outside the guard is read by the old whole-file scan (proved standalone) and
+correctly ignored by the bounded one.
 
 ### E114 — the round-44 lane scratchpad was shared between lanes and one lane's suite output overwrote another's
 
