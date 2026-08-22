@@ -6881,3 +6881,117 @@ budget chasing a red it did not cause.
 dirty worktree before merging** — round 44's checklist only checked at the end. Lane c's `mut.sh` is the
 model: refuses a dirty tree before mutating, exits 94 on a no-op, prints the actual `+`/`-` lines, and
 re-verifies clean after restoring.
+
+### Ea46-1 — the 58-vs-38 `error_log()` disagreement is settled: 38 calls, 20 comment mentions, 0 residue
+
+**Recorded 2026-08-22 by round-46 lane a.** Severity: none — **the brief's premise was resolved in the
+census's favour, and the finding is that the naive count was the wrong instrument.**
+
+**What.** Round 45's token census reported 38 `error_log()` sites across 11 files; a naive
+`grep -rn 'error_log(' src/ | sed 's/:.*//' | sort | uniq -c` gives 58 across 13. Neither an alphabet
+problem nor a depth-walk early return: every one of the 20 extra occurrences sits inside a `T_COMMENT` or
+`T_DOC_COMMENT`, and **nothing at all sits in a string literal**. `src/Cli/Bootstrap.php` is 1 call plus 9
+doc-block mentions; `src/Skills/SkillDiscovery.php` and `src/Workflows/WorkflowRegistry.php` are the two
+files that appear only in the grep, and both are 1 comment mention and 0 calls. This application writes
+about `error_log()` more often than it calls it.
+
+**Landed.** `StderrEmitterCensusTest::testTheNaiveGrepCountReconcilesWithTheTokenScan()` asserts the
+identity **per file** — naive occurrences = token-scanned calls + comment mentions — with both totals
+known-positive in the same test. It reds on a residue, which is the case neither count can see: an
+`error_log(` inside a string literal, smuggled in by a `sprintf()` template or a heredoc. Mutating one in
+(`const A46_RESIDUE_PROBE = 'error_log(';` in `SkillDiscovery`) kills it and nothing else.
+
+**Step.** None. Do not re-derive the 58 — it is not a count of anything.
+
+### Ea46-2 — the 18 tool-call-parser `error_log()` sites need a MID-SESSION notice sink, not a gate
+
+**Recorded 2026-08-22 by round-46 lane a.** Severity: medium, user-visible. **Not attempted: the fix needs
+files outside this lane's set.**
+
+**What.** `DsmlToolCallParser` (11) and `MinimaxXmlFallbackToolCallParser` (7) hold 18 of the 38 sites, and
+every one of them says some version of *the model requested a tool call and this parser dropped or
+degraded it*. They fire from `parse()`, i.e. on the model's response, i.e. mid-turn with the alternate
+screen up — so today the user does not receive that sentence, they receive a corrupted frame. The
+diagnostic is the right diagnostic and the channel is wrong.
+
+**Why not gated like `Chat`'s.** Both classes are `final readonly`, so there is no `skipped()`-style
+accumulator to gate against, and gating without one is deletion-by-env (rule 6). Both also have tests that
+capture and assert the `error_log()` text via `ini_set('error_log', …)` —
+`tests/Providers/ToolCallParser/DsmlToolCallParserTest.php` and its MiniMax sibling — which are outside
+this lane's file set, so a gate could not be landed green.
+
+**Step.** The real fix is a mid-session notice sink the parsers can push to, which is the same missing
+seam Ea46-3 names. Second best, and much cheaper: drop `readonly`, add a `degradations()` accumulator
+mirroring `SkillLoader::skipped()`, gate the `error_log()` behind `SUGARCRUSH_DEBUG_TOOLCALLS`, and update
+the two parser test files to set the flag. One lane, three src files plus two test files.
+
+### Ea46-3 — the transcript seam is LAUNCH-ONLY, and four subsystems need a mid-session one
+
+**Recorded 2026-08-22 by round-46 lane a.** Severity: medium, architectural. **Verified at the source.**
+
+**What.** `Bootstrap::warnPermissionConfigInTranscript()` appends to the static `$launchNotices`, which
+`Bootstrap::chat()` drains into `Chat::withLaunchNotices()` **once, at construction** (and once more on the
+second-scan path, as a delta). Every round from 42 to 45 has described it as "the transcript seam" without
+that qualifier, and the qualifier is what decides most of E154's remaining triage: a subsystem that warns
+mid-turn cannot use it. A row recorded there after the drain goes into a static array nobody reads.
+
+**Who needs one.** The two tool-call parsers (Ea46-2, 18 sites); `SglangProvider`'s three
+(malformed/degraded tool arguments and the MiniMax truncation warning, all per-response);
+`AgentWorkerPool::warnSequentialFallback()` (one site, fires when a pool first degrades to sequential);
+`WorktreeManager`'s four (agent worktree creation and include-file refusals, all mid-session).
+`HeadlessPermissionPrompt`'s four `sugarcrush:` shapes are the same shape of problem seen from the
+headless side and are analysed in that class's docblock (E155) — they are correct on stderr precisely
+because nothing on their paths opens the alternate screen.
+
+**Step.** A `Chat`-side notice inbox reachable from a `Cmd`, or a process-wide sink `Chat` polls in
+`subscriptions()`. Design it once; six subsystems queue behind it.
+
+### Ea46-4 — three CommandLoader `error_log()` sites duplicate a message already on the seam
+
+**Recorded 2026-08-22 by round-46 lane a.** Severity: low. **Verified, not fixed.**
+
+**What.** `CommandLoader`'s `$refusedDirectories` doc-block says, of its `error_log()` calls: *"The
+`error_log()` calls stay: a refusal that reaches a log AND the launch report is reported twice, and a
+refusal that reaches only a log is the failure being fixed."* That was written while the drain was new.
+It is now wired: `Bootstrap::chat()` spreads `refusedDirectories()` and `refusedCommands()` into
+`$projectTierRefusals`, and `reportProjectTierRefusals()` puts each on
+`warnPermissionConfigInTranscript()`. So the three collector-paired sites put the SAME text on stderr
+twice — once raw and unprefixed from the loader, once `sugarcrush: `-prefixed from the seam — plus a
+transcript row. The other two sites (`Skipping command file outside …`, `Failed to load command from …`)
+are per-FILE and have **no** collector at all, so they are stderr-only.
+
+**Why the harm is small, stated so nobody over-values this.** `CommandLoader` walks inside the `Chat`
+constructor and `mutate()` carries the loaded map across clones, so all five fire at LAUNCH, before the
+alternate screen. The cost is duplicate noise on `-p`, not a corrupted frame.
+
+**Step.** Gate the three duplicates behind a `SUGARCRUSH_DEBUG_COMMANDS` flag on
+`SkillLoader::DEBUG_SKIPS_ENV`'s contract, and give the two per-file ones a `skippedFiles()` accumulator
+before gating them — then rewrite that doc-block paragraph in the three-part form rather than deleting it.
+No test in `tests/` asserts any of the five messages, so this is a one-file change.
+
+### Ea46-5 — `--output-format json` never carries a permission refusal
+
+**Recorded 2026-08-22 by round-46 lane a.** Severity: medium, and it is Phase 9 step 1's constraint.
+
+**What.** Three of `HeadlessPermissionPrompt`'s four shapes are refusals, and all three land on stderr
+only. That class's own docblock names its caller as one *"whose entire view of the run is stdout plus an
+exit code"* — and that caller gets a turn that completed with a tool quietly not run.
+`NonInteractive::format()` promises exactly one JSON object on stdout and puts no refusal in it.
+
+**Step.** Add a refusals array to the JSON document. This is a gap in the OUTPUT FORMAT, not in the
+routing of those lines — see the E155 section of `HeadlessPermissionPrompt`'s docblock for why stderr is
+right for them.
+
+### Ea46-6 — `StderrEmitterCensusTest` and its sibling still carry two copies of `flattened()`
+
+**Recorded 2026-08-22 by round-46 lane a; inherited from round 45's own deferred note.** Severity: low.
+
+**What.** The private `flattened()` in `StderrEmitterCensusTest` is a deliberate second copy of
+`BootstrapTranscriptSeamCallSiteCensusTest`'s. Round 45 recorded the duplication rather than resolving it
+because the shared home is a test-support trait and `tests/Support/` was outside its lane. It was outside
+round 46 lane a's too (it is lane b's). `topLevelArguments()` in the new
+`HeadlessPermissionPromptAttachmentTest` is now a THIRD copy of the depth walk, deliberately carrying
+E161's array-token openers so it does not repeat that defect.
+
+**Step.** One `tests/Support/` trait holding `flattened()`, `significantTokens()` and the depth walk, in a
+round where that directory is in scope. Until then, every copy must carry the array-token openers.

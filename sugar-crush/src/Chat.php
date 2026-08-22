@@ -4967,24 +4967,6 @@ final class Chat implements Model
     public const INTERRUPTED_TOOL_CALL = 'Tool call interrupted by restart';
 
     /**
-     * The env var that puts the streaming-observer diagnostic back on stderr.
-     *
-     * OFF BY DEFAULT, and the argument is written out in full where the one
-     * gated line is raised — {@see scheduleBackendCompletion()}, in the
-     * `$onToken` observer it builds. In short: the write happens mid-turn under
-     * the alternate screen, and its audience is an embedder rather than the
-     * person at the terminal. Named on the class so
-     * a test and an embedder can both reach the spelling without repeating the
-     * string — the same shape
-     * {@see \SugarCraft\Crush\Skills\SkillLoader::DEBUG_SKIPS_ENV} uses, which
-     * is the only other `SUGARCRUSH_DEBUG_*` this application has.
-     *
-     * `unset`, empty and `0` all read as off, via {@see envFlag()} — the
-     * convention every other `SUGARCRUSH_*` switch in this class follows.
-     */
-    public const DEBUG_STREAM_ENV = 'SUGARCRUSH_DEBUG_STREAM';
-
-    /**
      * True when $result is a refusal - a call the user or a hook stopped -
      * rather than a call that ran and failed.
      *
@@ -7194,26 +7176,34 @@ final class Chat implements Model
         // delta does not disable the embedder's sink forever) and reported
         // once through error_log rather than once per token.
         //
-        // WHAT THAT LAST CLAUSE SAID, and it settled the FREQUENCY without ever
-        // asking about the CHANNEL: "reported once through error_log rather
-        // than once per token".
-        // WHAT IS TRUE NOW: once is still right, and `error_log()` is fd 2. This
-        // closure runs inside the streaming loop of a turn already in flight, so
-        // by the time it can fire the alternate screen has been up for the whole
-        // session — the write lands on a frame the renderer believes it owns and
-        // the user gets a corrupted row, not a message. Every other stderr write
-        // this application makes at launch has been routed for exactly this
-        // reason ({@see \SugarCraft\Crush\Cli\Bootstrap} 's transcript seam);
-        // this one cannot use that seam, because the seam feeds the notices
-        // `chat()` builds a transcript FROM and this fires long after that.
-        // WHY IT STILL EARNS ITS PLACE, gated rather than dropped: the audience
-        // is the EMBEDDER whose `onToken` threw, not the person at the terminal.
-        // "Your logger raised" is not advice a user of this CLI can act on, and
-        // the UI consequence they CAN see — the turn completing normally — is
-        // already the designed behaviour. So the line goes behind
-        // {@see DEBUG_STREAM_ENV} for whoever is debugging their own sink, on
-        // the same quiet-by-default contract and for the same measured reason as
-        // {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()}.
+        // NOT GATED, AND THE DECISION WAS MADE RATHER THAN DEFERRED (E154).
+        // That last clause settled the FREQUENCY without ever asking about the
+        // CHANNEL, and the channel is the interesting half: this closure runs
+        // inside the streaming loop of a turn already in flight, so by the time
+        // it can fire the alternate screen has been up for the whole session and
+        // the write lands on a frame the renderer believes it owns. Every
+        // launch-time stderr write in this application was routed for exactly
+        // that reason, onto
+        // {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}.
+        //
+        // THE SEAM IS UNREACHABLE FROM HERE, verified rather than assumed: it
+        // appends to a static list `Bootstrap::chat()` drains into
+        // {@see withLaunchNotices()} ONCE, at construction, and this fires
+        // mid-turn long afterwards. So the choice is between fd 2 and a
+        // `SUGARCRUSH_DEBUG_*` gate on
+        // {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()}'s
+        // quiet-by-default contract — and the gate is the better answer, because
+        // the audience is the EMBEDDER whose `onToken` threw rather than the
+        // person at the terminal, who cannot act on "your logger raised" and
+        // whose turn completes normally either way.
+        //
+        // WHY IT IS STILL UNCONDITIONAL: `StreamingWiringTest::
+        // testAThrowingObserverLosesItsOwnDeltasButNotTheTurn()` asserts this
+        // line reaches `error_log()`, and it is right to — "the failure is not
+        // swallowed silently" is the contract as it stands. Gating is therefore
+        // a two-file change and belongs in a round where both files are in one
+        // lane's hands. Do not gate this without amending that test in the same
+        // commit, and do not delete this paragraph instead of doing so.
         $userSink = $next->onToken;
         $onToken = !$next->streaming ? null : static function (string $delta) use ($inbox, $generation, &$userSink): void {
             if ($delta === '') {
@@ -7228,13 +7218,7 @@ final class Chat implements Model
                 $userSink($delta);
             } catch (\Throwable $e) {
                 $userSink = null;
-
-                // The DETACH is unconditional and only the report is gated: the
-                // env var decides whether anyone is told, never whether the
-                // turn survives.
-                if (self::envFlag(self::DEBUG_STREAM_ENV)) {
-                    error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
-                }
+                error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
             }
         };
 

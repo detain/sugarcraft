@@ -77,6 +77,34 @@ final class CommandLoader
     private const MAX_DEPTH = 4;
 
     /**
+     * The env var that puts this loader's refusals back on stderr.
+     *
+     * OFF BY DEFAULT. Three of the five `error_log()` calls below are paired
+     * with a collector that {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+     * drains onto the transcript seam, so by default they were saying the same
+     * thing twice on one channel; the other two
+     * ({@see loadFromDirectory()}'s containment skip and its parse failure) are
+     * per-FILE and are collected on {@see skippedFiles()} instead. Nothing is
+     * dropped either way — see {@see $refusedDirectories} for the routing
+     * argument and {@see \SugarCraft\Crush\Skills\SkillLoader::DEBUG_SKIPS_ENV}
+     * for the contract this copies.
+     *
+     * `unset`, empty and `0` all read as off, matching every other
+     * `SUGARCRUSH_*` switch.
+     */
+    public const DEBUG_REFUSALS_ENV = 'SUGARCRUSH_DEBUG_COMMANDS';
+
+    /**
+     * @param bool|null $reportRefusals Force stderr reporting on (true) or off
+     *        (false) for this loader; null — the default every production
+     *        caller uses — lets {@see DEBUG_REFUSALS_ENV} decide. Present for
+     *        the reason {@see \SugarCraft\Crush\Skills\SkillLoader}'s
+     *        equivalent is: a test must be able to exercise the reporting half
+     *        without a `putenv()` that leaks into whatever runs next.
+     */
+    public function __construct(private readonly ?bool $reportRefusals = null) {}
+
+    /**
      * Tier directories refused by the anchor check, path => reason.
      *
      * ACCUMULATED ON THE INSTANCE rather than only written to `error_log()`,
@@ -85,16 +113,41 @@ final class CommandLoader
      * app is under the alternate screen, i.e. nowhere the user will read it. The
      * shape is {@see \SugarCraft\Crush\Skills\SkillLoader::refusedDirectories()}'s
      * so {@see \SugarCraft\Crush\Cli\Bootstrap}'s existing collector can drain
-     * it with the same one-liner it drains the other feeders with. The
-     * `error_log()` calls stay: a refusal that reaches a log AND the launch
-     * report is reported twice, and a refusal that reaches only a log is the
-     * failure being fixed.
+     * it with the same one-liner it drains the other feeders with.
+     *
+     * WHAT THIS SAID ABOUT THE `error_log()` CALLS: "they stay: a refusal that
+     * reaches a log AND the launch report is reported twice, and a refusal that
+     * reaches only a log is the failure being fixed."
+     * WHAT IS TRUE NOW: the drain is wired, and VERIFIED wired rather than
+     * assumed. {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} spreads both
+     * this and {@see refusedCommands()} into its `$projectTierRefusals`
+     * immediately after constructing the `Chat`, and
+     * `Bootstrap::reportProjectTierRefusals()` puts every entry on
+     * `Bootstrap::warnPermissionConfigInTranscript()` — which writes a
+     * `sugarcrush: `-prefixed line to stderr AND seeds a transcript row. That
+     * one call site is the ONLY place in `src/` that hands a `CommandLoader` to
+     * a `Chat`, so on the only path this class runs on, the drain is
+     * unconditional. The second half of the old sentence was therefore right
+     * and the first half stopped being: a raw unprefixed copy on the same
+     * channel is the "reported twice" it was willing to accept as the price of
+     * a risk that has since been retired.
+     * WHY THE CALLS STILL EARN THEIR PLACE, gated rather than deleted: the
+     * seam clips a long message ({@see \SugarCraft\Crush\Cli\Bootstrap}'s
+     * `LAUNCH_NOTICE_MAX_CHARS`) and caps how many rows it will carry, so the
+     * raw line remains the complete record for anyone debugging discovery.
+     * {@see DEBUG_REFUSALS_ENV} is how they ask for it.
      *
      * DIRECTORY REFUSALS ONLY, matching the name and the collector's subject. A
      * single `*.md` skipped for pointing outside, or for failing to parse, is a
-     * per-FILE event and stays on `error_log()` — the collector's readers print
-     * one line per refused directory, and a malformed command file is an
-     * authoring mistake rather than a containment answer.
+     * per-FILE event — the collector's readers print one line per refused
+     * directory, and a malformed command file is an authoring mistake rather
+     * than a containment answer.
+     * WHAT THAT SAID: such a file "stays on `error_log()`". WHAT IS TRUE NOW:
+     * it goes on {@see $skippedFiles} and reaches stderr only behind
+     * {@see DEBUG_REFUSALS_ENV}, like everything else here. WHY THE SPLIT STILL
+     * EARNS ITS PLACE: it was never about the CHANNEL, it was about which
+     * collector answers for what, and that distinction is unchanged — this
+     * array is still directory refusals and still the one Bootstrap drains.
      *
      * @var array<string, string>
      */
@@ -134,6 +187,38 @@ final class CommandLoader
     private array $commandSources = [];
 
     /**
+     * `*.md` files skipped during a walk that otherwise succeeded,
+     * path => reason.
+     *
+     * THE COLLECTOR THE TWO PER-FILE REFUSALS NEVER HAD. Before this, a command
+     * file that resolved outside its directory, or that failed to parse, was
+     * reported ONLY by `error_log()` — so gating that line would have been a
+     * deletion rather than a routing decision. The information now survives the
+     * walk regardless of what any channel does with it.
+     *
+     * SEPARATE FROM {@see $refusedCommands}, which that property's doc-block
+     * already distinguishes: that one is the single per-file refusal the launch
+     * report carries, because a control-plane name means a command the user can
+     * SEE is not the command they wrote. These two are answers about one
+     * malformed or misplaced `*.md`, which is an authoring mistake.
+     *
+     * NOT DRAINED ANYWHERE YET, and that is deliberate rather than unfinished.
+     * The natural consumer is {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}'s
+     * `$projectTierRefusals` spread, and the reason not to add it there in the
+     * same change is that the launch report prints one line per entry: a
+     * directory holding twenty unparseable `*.md` files would push twenty rows
+     * into a transcript bounded at `LAUNCH_NOTICE_LIMIT` and evict the
+     * capability warnings the seam exists for. Draining it wants a summary row
+     * — "N command files could not be read" — of the shape
+     * {@see \SugarCraft\Crush\Skills\SkillLoader} already built for skills.
+     * {@see \SugarCraft\Crush\Tests\Commands\CommandLoaderRefusalReportingTest}
+     * pins the dormancy so it cannot be mistaken for an oversight.
+     *
+     * @var array<string, string>
+     */
+    private array $skippedFiles = [];
+
+    /**
      * Tier directories this loader refused to read, path => reason — drained at
      * launch by {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierRefusals()}.
      *
@@ -162,6 +247,20 @@ final class CommandLoader
     public function refusedCommands(): array
     {
         return $this->refusedCommands;
+    }
+
+    /**
+     * `*.md` files this loader skipped, path => reason — see
+     * {@see $skippedFiles} for why nothing drains it yet.
+     *
+     * CUMULATIVE ACROSS CALLS on one instance, like {@see refusedDirectories()}:
+     * one loader serves both tiers.
+     *
+     * @return array<string, string>
+     */
+    public function skippedFiles(): array
+    {
+        return $this->skippedFiles;
     }
 
     /**
@@ -223,7 +322,7 @@ final class CommandLoader
                 realpath($anchoredIn) === $realDir ? 'which is exactly' : 'outside',
                 $anchoredIn,
             );
-            error_log($reason);
+            $this->report($reason);
             // Keyed on the path as GIVEN, not on $realDir: the collector's
             // readers print the directory the user can go and look at, and
             // $realDir is the far end of the link that caused the refusal.
@@ -252,7 +351,9 @@ final class CommandLoader
             // {@see ContainedPath} rather than a local prefix compare, so this
             // class is not a fourth spelling of the predicate.
             if (!ContainedPath::within($file->getPathname(), $realDir)) {
-                error_log("Skipping command file outside {$realDir}: {$file->getPathname()}");
+                $skip = "Skipping command file outside {$realDir}: {$file->getPathname()}";
+                $this->skippedFiles[$file->getPathname()] = $skip;
+                $this->report($skip);
 
                 continue;
             }
@@ -265,7 +366,9 @@ final class CommandLoader
                 $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier);
                 $this->commandSources[$name] = $realPath;
             } catch (\Throwable $e) {
-                error_log("Failed to load command from {$realPath}: {$e->getMessage()}");
+                $skip = "Failed to load command from {$realPath}: {$e->getMessage()}";
+                $this->skippedFiles[$realPath] = $skip;
+                $this->report($skip);
             }
         }
 
@@ -312,7 +415,7 @@ final class CommandLoader
             $reason = 'Skipping user commands: this process cannot establish that $HOME is this user\'s own '
                 . 'directory (see HomeDirectory::owned()), so there is no anchor to hold '
                 . '~/.sugar-crush/commands inside.';
-            error_log($reason);
+            $this->report($reason);
             // Recorded under the literal `~/...` spelling because there is no
             // resolved path to name — establishing one is exactly what failed.
             $this->refusedDirectories['~/.sugar-crush/commands'] = $reason;
@@ -387,7 +490,7 @@ final class CommandLoader
                 $reserved,
                 implode(', ', CommandRegistry::CONTROL_PLANE),
             );
-            error_log($reason);
+            $this->report($reason);
             // Keyed on the FILE, not the name, so the launch report prints
             // something the user can open. {@see $commandSources} holds the path
             // of the file that won the merge, which is the one being refused.
@@ -437,5 +540,28 @@ final class CommandLoader
         $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
 
         return substr($relative, 0, -strlen('.md'));
+    }
+
+    /**
+     * Put one refusal on stderr, if anyone asked for it.
+     *
+     * ONE FUNNEL RATHER THAN FIVE INLINE `if`s, so the five call sites cannot
+     * drift on the gate — which is how one of them would end up unconditional
+     * again without anyone noticing. See {@see DEBUG_REFUSALS_ENV}.
+     */
+    private function report(string $message): void
+    {
+        if ($this->reportRefusals ?? self::debugRefusalsRequested()) {
+            error_log($message);
+        }
+    }
+
+    private static function debugRefusalsRequested(): bool
+    {
+        $value = getenv(self::DEBUG_REFUSALS_ENV);
+
+        // Same flag-variable convention every other SUGARCRUSH_* switch uses:
+        // unset, empty and `0` all read as off.
+        return $value !== false && $value !== '' && $value !== '0';
     }
 }

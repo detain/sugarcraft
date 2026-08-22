@@ -57,12 +57,18 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — THIRTY-EIGHT sites across eleven files. MEASURED on this
+ *  3. `error_log(…)` — THIRTY-FOUR sites across eleven files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
  *     baseline capture of a full suite run. It is by a wide margin the largest
  *     stderr channel in the application and it was not in the census at all.
+ *     A NAIVE `grep -c 'error_log('` OVER `src/` DISAGREES WITH THAT NUMBER by
+ *     more than twenty, and the census is the one that is right: the surplus is
+ *     entirely this application's own doc-blocks discussing `error_log()`,
+ *     which it does more often than it calls it.
+ *     {@see testTheNaiveGrepCountReconcilesWithTheTokenScan()} asserts the
+ *     identity per file rather than restating either figure.
  *  4. Literal message SHAPES that themselves carry the `sugarcrush: ` prefix.
  *     A LITERAL-BORNE PREFIX AND NOT "THE ROSTER A USER READS", which is what
  *     this line said when it was written, and the difference is the whole of
@@ -167,7 +173,7 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Agents/WorktreeManager.php' => 4,
         'src/Chat.php' => 1,
         'src/Cli/Bootstrap.php' => 1,
-        'src/Commands/CommandLoader.php' => 5,
+        'src/Commands/CommandLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
         'src/Providers/SglangProvider.php' => 3,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 11,
@@ -251,6 +257,7 @@ final class StderrEmitterCensusTest extends TestCase
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23,
+        'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
     ];
