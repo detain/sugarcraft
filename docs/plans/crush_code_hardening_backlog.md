@@ -6276,3 +6276,97 @@ of the merge step.
 **Step.** Either a supervisor-allocated number block per lane, or lane-prefixed provisional ids
 (`Eb1`, `Ec1`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
 shared scratchpad but not this.
+
+### Eb45-1 — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: medium, correctness. **Measured, not inferred.**
+
+**What.** `Team::claimTask()` does two things and calls itself atomic: it takes the per-task `flock()` in
+`TaskList::claimTask()` (which commits `status = in_progress, assigned_to = X` and releases), and then,
+*outside* that lock, runs `WorktreeManager::sweepIfDue()` and `createWorktree()`. Its own doc-block
+already says "If the task claim succeeds but worktree creation fails, the task claim is NOT rolled back"
+— so a throw from `createWorktree()` leaves the task **in progress, assigned to an agent that has no
+worktree and returned `false`**, and no other agent can ever claim it because it is no longer `Pending`.
+
+**How it was observed.** This is the second link of E80's chain (see the round-45 report and
+`2a9b4c65`). A coder that won both tasks asked for a second worktree under the same agent id,
+`createWorktree()` threw `Worktree for agent "…" already exists.`, and the task list was left with
+`task-a` in progress and assigned — which is why the parent's winner list came back **empty** rather
+than showing a double claim. Reproduced 2 times in 700 runs of `MultiAgentRefactorTest` under 48
+CPU-burner processes on this host (PHP 8.3.6).
+
+**Why it was not fixed here.** Round 45 fixed the *test's* half (a coder now takes at most one task, and
+a throw in a forked child can no longer run PHPUnit's teardown). The production half is a change to what
+a claim MEANS under contention — either roll the claim back on a worktree failure, or move worktree
+creation inside the per-task lock so the pair really is atomic — and both want their own mutation work
+against `TaskList`'s lock semantics. `src/Session.php` and `src/Agents/WorktreeManager.php` were also
+off-limits to this lane.
+
+**Step.** Decide between rollback-on-failure and claim-inside-the-lock, then pin it with a test that
+makes `createWorktree()` throw (pre-creating the agent's worktree is enough — see
+`MultiAgentRefactorTest::testAThrowInsideAForkedCoderCannotRunPhpunitsTeardownInTheChild()`) and asserts
+the task is claimable again afterwards.
+
+### Eb45-2 — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: low today, latent. **Source-verified, not observed.**
+
+**What.** `TaskList::acquireTaskLock()`, `TaskList::openForWrite()` and `WorktreeManager::loadRegistry()`
+all take a **blocking** `flock()` with no `LOCK_NB` and no timeout; `WorktreeManager::saveRegistry()`
+writes with `LOCK_EX`. A holder that stalls (a wedged `git worktree add` under the DB write lock, a
+paused process) blocks every contender indefinitely, and the caller has no way to report why.
+
+**The useful negative that goes with it.** The blocking acquire is also why round 45's brief was wrong to
+read the coder retry loop's capped backoff as a lock-starvation shape: a contender **waits** for the
+lock, it never fails to get one and comes back round, so the backoff cannot be reached by contention.
+Measured: over 700 runs under load, every coder — winner and loser alike — recorded `attempts=0`. The
+backoff has never executed. It was left armed and documented as unexercised rather than deleted.
+
+**Step.** Not a fix request yet: a measurement. Decide whether any of these four sites wants
+`LOCK_NB` + a bounded retry with a diagnosable failure, or whether blocking is correct and the
+justification should just say so. `src/Session.php` uses `flock()` too and belongs in the same sweep.
+
+### Eb45-3 — nothing stops the next forked child in `tests/` from ending in a plain `exit()`
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: low, process. **Mechanism measured.**
+
+**What.** `ForkedChild`'s class doc-block says every `pcntl_fork()`'d child in this codebase MUST end
+with `exitNow()`; `src/` obeys it and `tests/Integration/MultiAgentRefactorTest.php` did not, which is
+what let a forked child run PHPUnit's `tearDown()` and delete the parent's temp tree (measured directly:
+the child ran tearDown, removed the shared directory, and printed a second `ERRORS! Tests: 1` summary).
+There is no guard, so the next forking test reintroduces it.
+
+A second, independent reason the rule matters in `tests/`: `React\EventLoop\Loop::get()` registers a
+shutdown function that RUNS the loop, so a child inheriting a loop with any live watcher blocks forever
+at `exit()`. Measured on PHP 8.3.6 — with a periodic timer armed the child never exited; with an empty
+loop, or one that had already run, it exited at once. **This suite is currently shielded only because
+`tests/bootstrap.php` installs the loop with `Loop::set()`, which never registers that hook** — a shield
+installed for an entirely unrelated reason (pinning `StreamSelectLoop`) and one that could be reworked
+away without anyone connecting it to forked children.
+
+**Step.** A guard test that finds each `pcntl_fork()` site under `tests/` and asserts its child branch
+does not reach a bare `exit(`. Two constraints from this round's rules: it must run a **known-positive
+fixture** through the same scanner in the same test (an absence assertion with a dead scanner is green),
+and it must assert **per occurrence, not a count** — a cardinality over `tests/` is invalidated the
+moment a sibling lane merges. It was left unwritten here for exactly that reason: it scans files three
+lanes were editing concurrently.
+
+### Eb45-4 — E133's recorded negative about `sys_get_temp_dir()` is right but understated
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: none, correction. **Re-measured as instructed.**
+
+**What E133 says.** "on PHP 8.3.6 `sys_get_temp_dir()` resolves and **caches on first use** and does NOT
+honour a runtime `putenv('TMPDIR=…')`".
+
+**What is true.** The conclusion holds and the mechanism is stronger than "first use". Re-measured on
+PHP 8.3.6, three ways: `putenv('TMPDIR=<existing dir>')` as the **very first statement of the script**,
+before any `sys_get_temp_dir()` or `tempnam()` call, still yields `/tmp`; the same variable present in
+the environment at exec time yields the named directory; and a target that does not exist is accepted
+just the same, so nothing is being rejected for being missing. So it is not a userland-first-call cache
+that a sufficiently early `putenv()` could win — the value comes from the startup environment and
+userland cannot move it at all.
+
+**Why this still earns its place.** The practical rule E133 drew is unchanged and, if anything, safer: a
+test cannot relocate itself into a private temp directory after the fact, so attribution has to move
+instead of the directory. `tests/bootstrap.php`'s `putenv('TMPDIR=…')` is not contradicted by this — it
+is documented there as working on **children** only, which is exactly what the measurement above shows.
