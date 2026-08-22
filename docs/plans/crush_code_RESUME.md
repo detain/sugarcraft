@@ -29,6 +29,37 @@ implement.** Put it in the brief. The cheap cross-check that found it in one com
 `git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'` — do this per
 lane BEFORE merging and reconcile it against the reported delta.
 
+### 🔴 CORRECTION, ROUND 42 — THE `candy-buffer` "1,621 -> 1,661" PROOF WAS NOISE. Do not cite it again.
+
+Round 41 recorded that `candy-buffer`'s assertion count moved **1,621 -> 1,661** the moment it tested
+the real `candy-core`, and used that +40 as the measure of how blind the stale run had been. **That
+figure cannot support the claim.** Measured 2026-08-22 on one identical, clean, correctly-linked tree
+(4/4 symlinks, vendored `Width.php` md5 `270fc3f2...` = live), three consecutive full runs of
+`candy-buffer`:
+
+```
+274 tests, 1569 assertions
+274 tests, 1545 assertions
+274 tests, 1507 assertions
+```
+
+Spread **62**, comfortably larger than the +40 that was treated as signal. The source is
+`candy-buffer/tests/BufferTest.php`, which uses `rand()`/`mt_rand()`/`random_int()`; that one file alone
+measured **1246** then **1098** assertions on consecutive runs. **`candy-buffer`'s assertion count is
+not a measurement of anything and must never be used as a closure signal.** Its *test* count (274) is
+stable and is the only figure of its worth quoting.
+
+🟢 **THE CONCLUSION SURVIVES; ONLY THE EVIDENCE DIED.** `check-path-repos.php --fix --strict-closure`
+really does inject **zero** path repos for `candy-buffer` — verified this round directly, by running
+`--fix --strict-closure` and then reading the manifest (`injected repositories:` empty) rather than by
+inferring it from a suite total. Its only sibling dep, `sugarcraft/candy-core`, sits in `require-dev`,
+and `--fix`'s injection path does not read that section (the checker's validation and `--unused` paths
+do). `scripts/refresh-deps.php` computes its own closure for exactly this reason.
+
+**The transferable rule, which this plan already had and did not apply:** *a figure without its
+generator is not a measurement.* A single before/after pair from a suite with a randomised test is a
+coin flip with a decimal point on it. Run it three times before you call a delta signal.
+
 ### 🔴 READ THIS BEFORE YOU TRUST ANY SUITE FIGURE — the closure can be gone and the suite still says OK
 
 **A `composer install` or `composer update` ANYWHERE in this monorepo replaces `vendor/sugarcraft/*`
@@ -109,6 +140,33 @@ the merged-total prediction.
 
 🔴 **NEVER commit that `repositories[]` block** (hard fatal in a split-repo clone);
 `php tools/check-path-repos.php --no-lib-path-repos` must exit 0 before you commit.
+
+### 🟢 VENDOR STATE AS OF ROUND 42's CLOSE — EVERY LIB IS LINKED, AND THE ROOT UPDATE IS DONE
+
+- **Root `composer update -v -o -W` ran and is COMMITTED** as `2d78013d` — 118 insertions / 115
+  deletions, aws-sdk 3.390.4 -> 3.393.4 and friends, byte-identical in shape to the change round 41
+  wrongly reverted. The debt to the user is paid. The root lock is TRACKED and belongs in git; do not
+  `git checkout --` it the way you would a lib manifest.
+- **`php scripts/refresh-deps.php --mode=linked` ran over all 57 non-`sugar-crush` libs**: 0 failures,
+  **53 linked / 0 published / 0 mixed** (it was 12 linked / 12 mixed / 30 fully-Packagist before),
+  guard rc 0, zero tracked per-lib locks, working tree clean afterwards.
+- **`sugar-crush` was deliberately EXCLUDED** from that refresh so the floor measured minutes earlier
+  at `c204015e` stays comparable. It remains 18/18 linked. When its third-party deps are eventually
+  refreshed, **re-measure the floor in the same commit** and say so in this file.
+- **Sibling sweep against the live `candy-core`, all rc 0** — candy-core 799/7210/25skip,
+  candy-sprinkles 751/2629, candy-buffer 274/(unstable, see the correction above), candy-async 69/141,
+  candy-testing 129/230/1skip, candy-mouse 121/269, candy-input 276/40696/1skip, honey-bounce 193/5571,
+  candy-zone 120/339, candy-shell 333/691, candy-shine 339/667/1warn, candy-forms 1823/2973,
+  sugar-bits 493/1015, sugar-charts 543/1259, candy-kit 143/486, candy-pty 606/1476/1warn/16skip,
+  candy-vt 598/2355, candy-vcr 743/3432/14skip. **This is the first sweep in which the 30 previously
+  Packagist-only libs were actually testing the working tree.** The tail of the sweep list
+  (candy-mosaic, candy-palette, candy-query, sugar-dash, sugar-table, candy-files, candy-flip) was
+  still running at write-up; re-run it if you need those.
+
+⚠️ **PUBLISHED MODE IS CURRENTLY BLOCKED, CORRECTLY.** `scripts/refresh-deps.php` (default
+`--mode=published`) refuses while commits are unpushed, and there are ~24. That guard is the whole
+point: Packagist cannot serve what has not been pushed. Push, let `sync-sugarcraft.yml` and the
+Packagist webhook run, then a published-mode pass verifies what an outside consumer actually gets.
 
 ### CONCURRENCY IS **3**, BY EXPLICIT USER INSTRUCTION — the round-40 cap is LIFTED
 
