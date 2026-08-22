@@ -116,14 +116,13 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  * thing this helper's own scan got wrong, which is why {@see unclosedFenceAt()}
  * exists and is asserted over the whole census scope rather than trusted.
  *
- * THE DOC-BLOCK LEADER STRIP is inherited unchanged: the opening `/**`, its
- * closing marker and a leading `*` are removed, so a `*`-prefixed doc-block
- * line and a markdown line reach the same shape. IT WOULD EAT A MARKDOWN `*`
- * BULLET MARKER, and the item would silently re-merge into whatever precedes
- * it — the exact blind spot this helper closes for `-` bullets. No page in
- * scope uses `*` bullets at round 45 (PHP 8.3.6), so the hazard is latent
- * rather than live. It is pinned by a test that runs its probe over a known
- * positive first, rather than left to be rediscovered.
+ * THE DOC-BLOCK LEADER STRIP IS CONDITIONAL ON THE TEXT BEING PHP, which is
+ * the one behavioural change this helper makes to the rule it inherited. On a
+ * doc-comment the opening `/**`, its closing marker and a leading `*` are
+ * removed, so a `*`-prefixed doc-block line and a markdown line reach the same
+ * shape; on markdown nothing is removed, because there `*` is a markdown
+ * character. The measurement that forced it, and the narrower pin it replaces,
+ * are on {@see isPhpSource()}.
  *
  * @internal
  */
@@ -247,18 +246,55 @@ final class DocumentParagraphs
     }
 
     /**
-     * Lines with the doc-block leader removed.
+     * Lines, with the doc-block leader removed IF the text is PHP.
      *
      * @return list<string>
      */
     private static function lines(string $text): array
     {
+        $strip = self::isPhpSource($text);
+
         $lines = [];
         foreach (preg_split('/\R/', $text) ?: [] as $line) {
-            $lines[] = preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line) ?? $line;
+            $lines[] = $strip ? (preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line) ?? $line) : $line;
         }
 
         return $lines;
+    }
+
+    /**
+     * Is this text PHP — a whole source file, or one reflected doc-comment?
+     *
+     * THE LEADER STRIP IS CONDITIONAL, AND THE CONDITION IS THE WHOLE POINT.
+     * WHAT THE CLASS DOC-BLOCK USED TO SAY: the strip "WOULD EAT A MARKDOWN `*`
+     * BULLET MARKER", but "no page in scope uses `*` bullets at round 45, so the
+     * hazard is latent rather than live", pinned by a probe for `* item`
+     * bullets.
+     * WHAT IS TRUE: the pin was scoped narrower than the family. The same strip
+     * also eats the FIRST asterisk of a line-leading `**bold**` lead, turning
+     * `**Bold lead**` into `*Bold lead**`, and the probe — which required
+     * whitespace after the marker — could not match one of those. That shape is
+     * not latent: it is the overwhelming majority of the line-leading asterisks
+     * in scope on PHP 8.3.6, across every markdown page that has any. No guard
+     * needle sat on such a line, so nothing was broken; the pin simply gave
+     * cover the family did not have.
+     * WHY THE STRIP STILL EARNS ITS PLACE: on PHP it is indispensable — a
+     * reflected doc-comment is nothing but leader-prefixed lines. It was only
+     * ever wrong to apply it to markdown, where `*` is a markdown character.
+     * Discriminating on the text rather than on the caller keeps the two
+     * callers ({@see of()} and {@see unclosedFenceAt()}) from disagreeing.
+     *
+     * `<?php` COVERS THE CASE THAT MAKES A NAIVE `/**` TEST WRONG:
+     * `GlobFigureDriftTest`'s census feeds WHOLE `.php` FILES through this
+     * window, not reflected doc-comments, so a discriminator keyed only to a
+     * leading `/**` would switch the strip off for every file in the larger of
+     * its two halves. The classification is asserted over the live scope by
+     * {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest::testTheLeaderStripAppliesToPhpSourceOnly()}
+     * rather than trusted.
+     */
+    private static function isPhpSource(string $text): bool
+    {
+        return preg_match('#^\s*(<\?php|/\*\*)#', $text) === 1;
     }
 
     /** The opening fence marker this line starts, or `null`. */

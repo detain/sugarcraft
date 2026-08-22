@@ -409,41 +409,105 @@ final class DocumentParagraphsTest extends TestCase
     }
 
     /**
-     * NO PAGE IN SCOPE USES `*` BULLETS, AND THAT IS LOAD-BEARING.
+     * THE LEADER STRIP RUNS ON PHP AND LEAVES MARKDOWN ALONE.
      *
-     * The inherited leader strip removes a line's leading `*` so a doc-block
-     * line and a markdown line reach the same shape. On a markdown `* item`
-     * bullet that eats the marker, and the item stops being a list item — it
-     * re-merges into whatever precedes it, which is the exact blind spot this
-     * helper closes for `-` bullets. The hazard is latent rather than live and
-     * is pinned here so the first page to use `*` bullets reds instead of
-     * silently losing its window.
+     * WHAT THIS TEST SAID, until this round: "NO PAGE IN SCOPE USES `*`
+     * BULLETS, AND THAT IS LOAD-BEARING" — the strip would eat a markdown
+     * `* item` marker, no page used one, so the hazard was "latent rather than
+     * live", pinned by a probe for `/^[ \t]*\*[ \t]+\S/m`.
+     *
+     * WHAT IS TRUE NOW: the pin was scoped narrower than the family it belonged
+     * to, and the hazard was never latent. The same strip eats the first
+     * asterisk of a line-leading `**bold**` lead — `**Bold lead**` became
+     * `*Bold lead**` — and the probe required whitespace after the marker, so
+     * it could not match one of those. The live count is derived below rather
+     * than written into this sentence; it is the large majority of the
+     * line-leading asterisks in scope, spread across every markdown page that
+     * has any. Nothing was broken by it: no needle any Config guard uses sits
+     * on such a line. What was wrong was the pin, which gave cover the family
+     * did not have.
+     *
+     * WHY THE CONCERN STILL EARNS A TEST: the strip is now conditional on the
+     * text being PHP ({@see DocumentParagraphs}' `isPhpSource()`), so both
+     * shapes are safe — but a discriminator is a thing that can be got wrong in
+     * two directions, and the census feeds WHOLE `.php` FILES through this
+     * window as well as reflected doc-comments. So both directions are asserted
+     * here on fixtures, and the classification is asserted over the live scope.
      */
-    public function testNoPageInScopeUsesAsteriskBullets(): void
+    public function testTheLeaderStripAppliesToPhpSourceOnly(): void
     {
-        $this->assertTrue(
-            $this->usesAsteriskBullets("intro\n\n* one\n* two\n"),
-            'the asterisk-bullet probe cannot see an asterisk bullet, so the census below is not evidence',
+        $this->assertSame(
+            ['one claim.', '- a bullet', '- another bullet'],
+            DocumentParagraphs::of("/**\n * one claim.\n *\n * - a bullet\n * - another bullet\n */"),
+            'the leader strip no longer runs on a reflected doc-comment, which is nothing but '
+            . 'leader-prefixed lines — every doc-block unit in every Config guard is now wrong',
         );
-
-        $offenders = [];
-        foreach ($this->scope() as $label => $text) {
-            if (str_ends_with($label, '.md') && $this->usesAsteriskBullets($text)) {
-                $offenders[] = $label;
-            }
-        }
+        $this->assertSame(
+            ['<?php', 'a claim in a doc-block.'],
+            DocumentParagraphs::of("<?php\n\n/**\n * a claim in a doc-block.\n */\n"),
+            'the leader strip no longer runs on a whole .php file, which is how '
+            . 'GlobFigureDriftTest::censusScope() feeds src/ through this window',
+        );
 
         $this->assertSame(
-            [],
-            $offenders,
-            'a markdown page in scope uses `*` bullets, whose marker the doc-block leader strip eats; '
-            . 'either switch the page to `-` bullets or make the strip conditional on the text being PHP',
+            ['intro', '* one', '* two'],
+            DocumentParagraphs::of("intro\n\n* one\n* two\n"),
+            'the leader strip is eating a markdown `*` bullet marker, so the item re-merges into '
+            . 'whatever precedes it — the exact blind spot this window closes for `-` bullets',
         );
-    }
+        $this->assertSame(
+            ['**Bold lead** and the rest of the sentence.'],
+            DocumentParagraphs::of("**Bold lead** and the rest of the sentence.\n"),
+            'the leader strip is eating the first asterisk of a line-leading `**bold**` lead',
+        );
 
-    private function usesAsteriskBullets(string $text): bool
-    {
-        return preg_match('/^[ \t]*\*[ \t]+\S/m', $text) === 1;
+        // AND THE DISCRIMINATOR AGREES WITH THE FILE EXTENSIONS IN LIVE SCOPE.
+        // A fixture pair proves the two branches exist; only this proves the
+        // right branch is taken for the documents the guards actually read.
+        //
+        // THE FIRST FORM OF THIS CHECK ASKED THE WRONG QUESTION and reported
+        // ten false offenders, which is worth recording because the mistake is
+        // the one rule 2 names. It compared `of($text)` against `of($text)`
+        // with the classification forced to markdown, and called them "the same"
+        // evidence of "not stripped". For a `.php` file with no doc-comment
+        // line at all the two are identical because there is nothing to strip,
+        // not because the wrong branch was taken. The probe below asks the
+        // discriminator directly: an appended leader-prefixed sentinel survives
+        // as `* SENTINEL` on markdown and as `SENTINEL` on PHP, and appending
+        // cannot change a classification keyed to the start of the text. It is
+        // safe only because `testNoDocumentInScopeLeavesAFenceOpen()` holds —
+        // an unclosed fence would swallow the sentinel.
+        $misfiled = [];
+        foreach ($this->scope() as $label => $text) {
+            $probed = DocumentParagraphs::of($text . "\n\n * SENTINEL\n");
+            $treatedAsPhp = \in_array('SENTINEL', $probed, true);
+            if (!$treatedAsPhp && !\in_array('* SENTINEL', $probed, true)) {
+                $misfiled[$label] = 'the sentinel did not survive in either form, so this row measured nothing';
+
+                continue;
+            }
+            if ($treatedAsPhp !== str_ends_with($label, '.php')) {
+                $misfiled[$label] = $treatedAsPhp ? 'stripped, but is not PHP' : 'not stripped, but is PHP';
+            }
+        }
+        $this->assertSame([], $misfiled, 'the leader-strip discriminator disagrees with the file extension');
+
+        // AND THE CORRUPTING SHAPE IS LIVE, so the conditional strip is a
+        // repair rather than a hypothetical. Derived, not quoted: a count over
+        // docs/ is wrong the next time anyone edits a page.
+        $boldLead = 0;
+        foreach ($this->scope() as $label => $text) {
+            if (!str_ends_with($label, '.md')) {
+                continue;
+            }
+            $boldLead += preg_match_all('/^[ \t]*\*\*/m', $text);
+        }
+        $this->assertGreaterThan(
+            0,
+            $boldLead,
+            'no markdown page in scope has a line-leading `**bold**` lead any more, so the '
+            . 'justification above has stopped describing this tree — rewrite it, do not delete it',
+        );
     }
 
     /**
