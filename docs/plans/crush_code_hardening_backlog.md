@@ -6882,7 +6882,7 @@ dirty worktree before merging** — round 44's checklist only checked at the end
 model: refuses a dirty tree before mutating, exits 94 on a no-op, prints the actual `+`/`-` lines, and
 re-verifies clean after restoring.
 
-### Ea46-1 — the 58-vs-38 `error_log()` disagreement is settled: 38 calls, 20 comment mentions, 0 residue
+### E169 — the 58-vs-38 `error_log()` disagreement is settled: 38 calls, 20 comment mentions, 0 residue
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: none — **the brief's premise was resolved in the
 census's favour, and the finding is that the naive count was the wrong instrument.**
@@ -6906,7 +6906,7 @@ the full suite.**
 
 **Step.** None. Do not re-derive the 58 — it is not a count of anything.
 
-### Ea46-2 — the 18 tool-call-parser `error_log()` sites need a MID-SESSION notice sink, not a gate
+### E170 — the 18 tool-call-parser `error_log()` sites need a MID-SESSION notice sink, not a gate
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: medium, user-visible. **Not attempted: the fix needs
 files outside this lane's set.**
@@ -6924,11 +6924,11 @@ capture and assert the `error_log()` text via `ini_set('error_log', …)` —
 this lane's file set, so a gate could not be landed green.
 
 **Step.** The real fix is a mid-session notice sink the parsers can push to, which is the same missing
-seam Ea46-3 names. Second best, and much cheaper: drop `readonly`, add a `degradations()` accumulator
+seam E171 names. Second best, and much cheaper: drop `readonly`, add a `degradations()` accumulator
 mirroring `SkillLoader::skipped()`, gate the `error_log()` behind `SUGARCRUSH_DEBUG_TOOLCALLS`, and update
 the two parser test files to set the flag. One lane, three src files plus two test files.
 
-### Ea46-3 — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one
+### E171 — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: medium, architectural. **Verified at the source.**
 
@@ -6941,7 +6941,7 @@ mid-turn cannot use it. A row recorded there after the drain goes into a static 
 **Who needs one — FIVE CLASSES, 26 SITES, and the generator is the roster.** This entry originally said
 "four" in its heading, "six" in its Step and enumerated five; none of the three carried a way to check it.
 Counted off `StderrEmitterCensusTest::ERROR_LOG_SITES` (which a test keeps honest), the classes that warn
-mid-turn are: `DsmlToolCallParser` (11) and `MinimaxXmlFallbackToolCallParser` (7), together Ea46-2;
+mid-turn are: `DsmlToolCallParser` (11) and `MinimaxXmlFallbackToolCallParser` (7), together E170;
 `SglangProvider` (3 — malformed/degraded tool arguments and the MiniMax truncation warning, all
 per-response); `AgentWorkerPool` (1 — `warnSequentialFallback()`, fires when a pool first degrades to
 sequential); and `WorktreeManager` (4 — agent worktree creation and include-file refusals, all
@@ -6953,7 +6953,7 @@ because nothing on their paths opens the alternate screen.
 **Step.** A `Chat`-side notice inbox reachable from a `Cmd`, or a process-wide sink `Chat` polls in
 `subscriptions()`. Design it once; the five classes above queue behind it.
 
-### Ea46-4 — three CommandLoader `error_log()` sites duplicate a message already on the seam
+### E172 — three CommandLoader `error_log()` sites duplicate a message already on the seam
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low. **Verified, not fixed.**
 
@@ -6982,7 +6982,7 @@ read" — of the shape `SkillLoader` already built, because the launch report pr
 `LAUNCH_NOTICE_LIMIT` bounds the transcript. Draining it raw would let a directory of twenty unparseable
 `*.md` files evict the capability warnings the seam exists for.
 
-### Ea46-5 — `--output-format json` never carries a permission refusal
+### E173 — `--output-format json` never carries a permission refusal
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: medium, and it is Phase 9 step 1's constraint.
 
@@ -6995,7 +6995,7 @@ exit code"* — and that caller gets a turn that completed with a tool quietly n
 routing of those lines — see the E155 section of `HeadlessPermissionPrompt`'s docblock for why stderr is
 right for them.
 
-### Ea46-6 — `StderrEmitterCensusTest` and its sibling still carry two copies of `flattened()`
+### E174 — `StderrEmitterCensusTest` and its sibling still carry two copies of `flattened()`
 
 **Recorded 2026-08-22 by round-46 lane a; inherited from round 45's own deferred note.** Severity: low.
 
@@ -7009,7 +7009,7 @@ E161's array-token openers so it does not repeat that defect.
 **Step.** One `tests/Support/` trait holding `flattened()`, `significantTokens()` and the depth walk, in a
 round where that directory is in scope. Until then, every copy must carry the array-token openers.
 
-### Ea46-7 — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
+### E175 — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low, blocked. **Analysed and deliberately not done.**
 
@@ -7017,7 +7017,7 @@ round where that directory is in scope. Until then, every copy must carry the ar
 inside the `$onToken` closure `scheduleBackendCompletion()` builds, i.e. mid-turn with the alternate screen
 up for the whole session. It is the clearest bucket-B site in E154's set: the audience is the EMBEDDER
 whose sink threw, not the person at the terminal, who cannot act on it and whose turn completes normally
-either way. The transcript seam is unreachable from there (Ea46-3).
+either way. The transcript seam is unreachable from there (E171).
 
 **Why it did not land.** `tests/Integration/StreamingWiringTest::
 testAThrowingObserverLosesItsOwnDeltasButNotTheTurn()` redirects `error_log` to a file and asserts the
@@ -7031,7 +7031,7 @@ have to rediscover it.
 decide whether anyone is told, never whether the turn survives), amend the integration test to set the
 flag, and add the row `EnvRosterDriftTest` will demand on `docs/ENVIRONMENT.md`. That last one is not
 optional: the page claims to list every variable `src/` reads and a guard enforces it.
-### Eb46-1 — the E156 attribution is wrong for `tests/Integration/`: the 62 stderr lines are in-process, not inherited
+### E176 — the E156 attribution is wrong for `tests/Integration/`: the 62 stderr lines are in-process, not inherited
 
 **Recorded 2026-08-22 by round-46 lane b.** Severity: process, and it redirected a whole lane item.
 **Measured at `62f4e5d1`, PHP 8.3.6, one file per `vendor/bin/phpunit <file>` run, counted with
@@ -7077,7 +7077,7 @@ change. Before that lands, point `ChildStderrCaptureScanner` at `tests/Cli/` by 
 `ChildStderrCaptureTest::SCOPE` to `''` and see whether ANY of the 62 is a spawn — this lane's answer for
 `tests/Integration/` is no.
 
-### Eb46-2 — `tests/Agents/MailboxTest.php`'s forked child ends in a plain `exit(0)` inside PHPUnit
+### E177 — `tests/Agents/MailboxTest.php`'s forked child ends in a plain `exit(0)` inside PHPUnit
 
 **Recorded 2026-08-22 by round-46 lane b. Out of lane (`tests/Agents/`).** Severity: low today, latent.
 **Found by `ForkedChildExitScanner`; recorded in `ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT`
@@ -7091,7 +7091,7 @@ watcher — a property of what the test happens to do, not a reason.
 **Step.** `ForkedChild::exitNow(0)`, then delete the `Agents/MailboxTest.php` row from
 `ACCEPTED_BARE_EXIT` (`testEveryAcceptedBareExitFileStillHasOne()` will demand it).
 
-### Eb46-3 — `WorkflowEngine`'s interrupt handler leaves a forked child through a plain `exit()`
+### E178 — `WorkflowEngine`'s interrupt handler leaves a forked child through a plain `exit()`
 
 **Recorded 2026-08-22 by round-46 lane b. Out of lane (`src/`).** Severity: medium. **Measured.**
 
@@ -7113,7 +7113,7 @@ over a path nothing had touched.
 convert the two sentinels and delete the `Integration/WorkflowResumptionTest.php` row. The parent-side
 assertions read `pcntl_wifexited()`/`wexitstatus()` and will need `wifsignaled()`/`wtermsig()` instead.
 
-### Eb46-4 — the reaper trait is adopted only under `tests/Integration/`
+### E179 — the reaper trait is adopted only under `tests/Integration/`
 
 **Recorded 2026-08-22 by round-46 lane b. Out of lane.** Severity: low. **Derived, not listed.**
 
@@ -7148,7 +7148,7 @@ Each needs `use ReapsForkedChildrenTrait;`, `$this->forkTracked()` in place of `
 `$this->reapTrackedForkedChildren()` as the FIRST statement of `tearDown()` — before anything that
 removes a temp tree.
 
-### Eb46-5 — `tests/Agents/TaskListTest.php` forks twice with `\pcntl_fork()` and leaves both children through `exit(0)`
+### E180 — `tests/Agents/TaskListTest.php` forks twice with `\pcntl_fork()` and leaves both children through `exit(0)`
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage), out of lane.** Severity: medium. **Measured.**
 
@@ -7167,7 +7167,7 @@ forks at all. The scanner now reads both token types and the file is recorded in
 `use ReapsForkedChildrenTrait;` at the same time — the loop forks up to `$childCount` sleepers whose only
 bound is a 2-second deadline the child enforces on itself.
 
-### Eb46-6 — `ReapsForkedChildrenTraitTest` will need an untracked-fork exemption when the reaper's scope widens
+### E181 — `ReapsForkedChildrenTraitTest` will need an untracked-fork exemption when the reaper's scope widens
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured.**
 
@@ -7178,10 +7178,10 @@ purpose and must stay that way: `forkSleeper()`'s sleeper, which several tests t
 ledger — routing it through `forkTracked()` would empty the ledger and delete the test. Both are outside
 `ForkedChildReaperAdoptionTest::SCOPE` today (`Integration/`), so nothing is red.
 
-**Step.** When Eb46-4 widens `SCOPE` to `''`, add `Support/ReapsForkedChildrenTraitTest.php` to
+**Step.** When E179 widens `SCOPE` to `''`, add `Support/ReapsForkedChildrenTraitTest.php` to
 `UNTRACKED_FORKS_ALLOWED` with the count and the two reasons above. Do not "fix" either site.
 
-### Eb46-7 — two known limits in `ChildStderrCaptureScanner`, both documented and neither enforced
+### E182 — two known limits in `ChildStderrCaptureScanner`, both documented and neither enforced
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured.**
 
@@ -7197,7 +7197,7 @@ doc-blocks so the next reader is not misled, neither closed:
    backward walk at the enclosing function's opening brace, which `ForkedChildExitScanner::functionRanges()`
    already computes for the other scanner.
 
-### Eb46-8 — the reaper's ext-pcntl-without-ext-posix branch is fixed but cannot be pinned on this box
+### E183 — the reaper's ext-pcntl-without-ext-posix branch is fixed but cannot be pinned on this box
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured, and deliberately not
 closed.**
@@ -7219,7 +7219,7 @@ runs. The fix is committed on its argument, not on a green test, and this entry 
 **What would close it.** Either the seam above plus a subclass that reports "cannot signal" and asserts
 the reaper returns promptly with the pid absent from `$killed`, or a CI job on a build without ext-posix.
 Neither is worth a round on its own; fold it into whichever round next touches the trait.
-### Ec46-1 — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
+### E184 — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
 
 **Recorded 2026-08-22 by round-46 lane c. Not done because that file is outside lane c's ownership this
 round.** Severity: low. **Observed, measured.**
@@ -7235,10 +7235,10 @@ it is the half E118 spent a round on for the two formats it promoted.
 skipped-skills aggregate, the capped-fan-out overflow row (both the `assertSame()` and the two later
 `assertStringContainsString()`s), the retention summary (transcript copy and stderr copy), and the
 `'<id> (last used …'` detail fragment. **Careful:** rendering the expectation from the same constant the
-child renders from is a TAUTOLOGY with respect to the constant's TEXT — see Ec46-2. Keep exactly one
+child renders from is a TAUTOLOGY with respect to the constant's TEXT — see E185. Keep exactly one
 independent copy per format, or keep the doc-page guard that already provides one.
 
-### Ec46-2 — rendering a test expectation from the constant under test cannot pin that constant's text
+### E185 — rendering a test expectation from the constant under test cannot pin that constant's text
 
 **Recorded 2026-08-22 by round-46 lane c. Measured against round 46's own fix, which is the only
 acceptance test a fix gets.** Severity: medium, methodological. **Observed.**
@@ -7259,7 +7259,7 @@ The independent copy is best held by a second party that is not a test — READM
 test. The general form: **whenever a guard's expected and actual values are both derived from the code
 under test, name what the tautology costs before shipping it.**
 
-### Ec46-3 — some `sprintf()` formats in `Bootstrap.php` are inline on purpose; others only looked that way, and a mutation is what told them apart
+### E186 — some `sprintf()` formats in `Bootstrap.php` are inline on purpose; others only looked that way, and a mutation is what told them apart
 
 **Recorded 2026-08-22 by round-46 lane c.** Severity: informational. **Measured.**
 
@@ -7307,7 +7307,7 @@ are corrected in place rather than deleted, because the reasoning around them st
 rendered SENTENCE rather than a clause — a README sample, a `docs/*.md` code block, or an `assertSame()`
 on the line. That is the same test E164 applied.
 
-### Ec46-4 — nothing sweeps the doc pages for unguarded quotes of a promoted format
+### E187 — nothing sweeps the doc pages for unguarded quotes of a promoted format
 
 **Recorded 2026-08-22 by round-46 lane c's fix agent. The two instances the sweep found this round were
 both closed; the SWEEP itself is what is deferred.** Severity: low. **Observed, measured.**
@@ -7340,7 +7340,7 @@ guarded readers. New page quoting a format, or a newly promoted format some page
 with "this page quotes a format nothing checks" instead of going unnoticed. Formats whose longest span is
 below the length threshold must be listed as unsweepable rather than dropped.
 
-### Ec46-5 — a class-total figure in a doc-block is a cardinality over `tests/`, and round 46 shipped three stale ones
+### E188 — a class-total figure in a doc-block is a cardinality over `tests/`, and round 46 shipped three stale ones
 
 **Recorded 2026-08-22 by round-46 lane c's fix agent, during the verification pass over the same round's own
 commits.** Severity: informational, but it recurred four times in three rounds. **Measured.**
@@ -7369,7 +7369,7 @@ mutation that reds NOTHING, say), say so qualitatively: "no test in that class r
 **Step.** No code change. When a doc-block cites a mutation verdict, cite the failing test names. Only the
 `Failures: 0` / "nothing red" case needs no name.
 
-### Ec46-6 — two guards whose failure message will misdescribe the failure
+### E189 — two guards whose failure message will misdescribe the failure
 
 **Recorded 2026-08-22 by round-46 lane c's fix agent, from the review's NOTE 8 plus one found beside it.**
 Severity: low. **Observed.**
