@@ -399,17 +399,85 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      */
     public function testTheLiteralFormatCensusHasAGenerator(): void
     {
-        [$calls, $literal] = self::sprintfCensus(self::bootstrapSource());
+        $census = self::sprintfCensus(self::bootstrapSource());
 
-        self::assertSame(12, $calls, "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block");
-        self::assertSame(10, $literal, 'a sprintf() in Bootstrap.php gained or lost a literal format');
-
-        // Known-answer control for the census itself.
         self::assertSame(
-            [2, 1],
-            self::sprintfCensus("<?php sprintf('a %s', 1); sprintf(self::F, 2); \$x = 'sprintf(';"),
+            12,
+            $census['calls'],
+            "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
+        );
+        self::assertSame(10, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
+        self::assertSame(
+            \count(self::NAMED_FORMATS),
+            $census['constant'],
+            'Bootstrap.php formats from a different number of constants than this file names as promoted',
+        );
+
+        // A RE-INLINED INTERPOLATED FORMAT IS THE FAILURE E163 NAMES, and until
+        // this round it read as a promotion rather than as a regression. Zero
+        // is the whole of the claim: any `sprintf("… {$x} …")` in this file reds.
+        self::assertSame(
+            0,
+            $census['interpolated'],
+            'a sprintf() in Bootstrap.php builds its format by interpolation. That is neither a promoted '
+            . 'constant nor an inline literal any of the guards above can read: METHOD_LITERALS sees the '
+            . 'pieces, not the sentence, and formatLiteralsIn() sees a fragment with no conversion in it',
+        );
+        self::assertSame(
+            [],
+            $census['other'],
+            'a sprintf() first argument this census cannot classify: ' . implode(' | ', $census['other'])
+            . '. Widen classifyFirstArgument() or hand-classify the site; a shape counted as "not a '
+            . 'literal" by default reads as a promotion, which is the direction that hides a regression',
+        );
+
+        // KNOWN-ANSWER CONTROL FOR THE CENSUS ITSELF, widened to the shapes the
+        // scanner can actually MEET (E162). The version this replaced covered a
+        // literal, a constant reference and the word inside a string — none of
+        // which exercise the reason a bare `T_STRING` + `(` is not enough:
+        // `$o->sprintf(`, `Foo::sprintf(` and `function sprintf(` tokenize the
+        // same way and were all counted as calls to the global function, and
+        // `\sprintf(` is a single `T_NAME_FULLY_QUALIFIED` and was counted as
+        // none. An assertion that this file's own census is 12/8/0/2 is not
+        // evidence unless something proves the scanner can still tell those
+        // apart — and this control is a KNOWN POSITIVE for every bucket,
+        // including the two whose real-tree expectation is zero.
+        self::assertSame(
+            [
+                'calls' => 6,
+                'literal' => 2,
+                'interpolated' => 1,
+                'constant' => 2,
+                'other' => ["T_VARIABLE '\$format'"],
+            ],
+            self::sprintfCensus(
+                "<?php\n"
+                . "sprintf('a %s', 1);\n"                    // literal
+                . "\\sprintf('b %s', 2);\n"                  // literal, fully qualified — was invisible
+                . "sprintf(self::F, 3);\n"                   // constant reference
+                . "sprintf(\\Some\\Where::G, 4);\n"          // constant reference, qualified
+                . "sprintf(\"c {\$x} d\", 5);\n"             // interpolated — was read as a constant
+                . "sprintf(\$format, 6);\n"                  // a variable: neither, and must be named
+                . "\$o->sprintf('not this', 7);\n"           // a method
+                . "\$o?->sprintf('nor this', 8);\n"
+                . "Other::sprintf('nor this', 9);\n"
+                . "function sprintf(\$x) {}\n"               // a declaration
+                . "\$s = 'sprintf(';\n",                     // the word inside a string
+            ),
             'the sprintf census miscounts a source whose answer is known',
         );
+
+        // …and the `other` bucket is a KNOWN POSITIVE too, in the same test:
+        // an assertion of [] above is not evidence that anything can populate it.
+        $unclassifiable = self::sprintfCensus("<?php sprintf(\$format, 1); sprintf(self::pick(), 2);");
+        self::assertSame(2, $unclassifiable['calls']);
+        self::assertSame(0, $unclassifiable['literal'] + $unclassifiable['constant']);
+        self::assertCount(
+            2,
+            $unclassifiable['other'],
+            'the census can no longer name a first argument it does not understand, so the [] above is vacuous',
+        );
+        self::assertStringContainsString('T_VARIABLE', $unclassifiable['other'][0]);
     }
 
     // ── the scanners ─────────────────────────────────────────────────────
@@ -635,9 +703,42 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     }
 
     /**
-     * `[sprintf call sites, of which with a literal first argument]`.
+     * Every `sprintf()` CALL SITE in `$source`, classified by what its first
+     * argument is.
      *
-     * @return array{0: int, 1: int}
+     * WHY THREE BUCKETS AND NOT TWO — E163, and it is the direction of the lie
+     * that makes it worth the code. The first cut asked one question,
+     * "is the first token `T_CONSTANT_ENCAPSED_STRING`?", and everything else
+     * fell into a single not-a-literal bucket. MEASURED on PHP 8.3.6:
+     * `sprintf("a {$x} b", 1)` does not open with that token at all — the lexer
+     * splits an interpolated double-quoted string into a bare `"` character
+     * token, `T_ENCAPSED_AND_WHITESPACE`, the interpolation, and a closing `"`.
+     * So an INTERPOLATED format landed in the same bucket as
+     * `self::STDERR_LINE_FORMAT`. Today both non-literal sites in
+     * `Bootstrap.php` really are constants, so the two-bucket census answered
+     * correctly by accident — and the accident is load-bearing: re-inline a
+     * promoted format as `"… {$path} …"` and the census would have read it as
+     * one MORE promoted site. The classifier said the opposite of the truth in
+     * precisely the case the guard exists to catch.
+     *
+     * `other` IS LOUD, NOT A SHRUG. A heredoc, a nowdoc, a variable, a call —
+     * anything this classifier has not met — is named in `other` rather than
+     * quietly counted as a constant, so
+     * {@see testTheLiteralFormatCensusHasAGenerator()} reds and someone
+     * classifies it. A guard that silently ignores what it cannot parse has a
+     * hole shaped exactly like the next defect.
+     *
+     * THE CALL-SITE TEST IS ALSO NARROWER THAN IT WAS (E162). `sprintf` as a
+     * bare `T_STRING` followed by `(` is also how `$o->sprintf(`,
+     * `Foo::sprintf(` and `function sprintf(` tokenize — measured, same box —
+     * so all three used to be counted as calls to the global function. They are
+     * excluded by their preceding token now, and the fixture in
+     * {@see testTheScannersAnswerCorrectlyOnSourcesWhoseAnswerIsKnown()} runs
+     * each shape through this scanner. In the other direction, `\sprintf(` is
+     * `T_NAME_FULLY_QUALIFIED` on PHP 8 and was MISSED entirely; it is counted
+     * now.
+     *
+     * @return array{calls: int, literal: int, interpolated: int, constant: int, other: list<string>}
      */
     private static function sprintfCensus(string $source): array
     {
@@ -650,23 +751,119 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             $significant[] = $token;
         }
 
-        $calls = 0;
-        $literal = 0;
+        $out = ['calls' => 0, 'literal' => 0, 'interpolated' => 0, 'constant' => 0, 'other' => []];
         foreach ($significant as $i => $token) {
-            if (!\is_array($token) || $token[0] !== T_STRING || strtolower($token[1]) !== 'sprintf') {
+            if (!self::isGlobalSprintfName($token)) {
                 continue;
             }
             if (($significant[$i + 1] ?? null) !== '(') {
                 continue;
             }
 
-            $calls++;
-            $first = $significant[$i + 2] ?? null;
-            if (\is_array($first) && $first[0] === T_CONSTANT_ENCAPSED_STRING) {
-                $literal++;
+            // A method or a declaration wearing the same name. `$o->sprintf(`,
+            // `$o?->sprintf(`, `Foo::sprintf(`, `function sprintf(` and
+            // `new sprintf(` all put `sprintf` in a T_STRING followed by `(`.
+            $previous = $significant[$i - 1] ?? null;
+            if (\is_array($previous) && \in_array($previous[0], [
+                T_OBJECT_OPERATOR,
+                T_NULLSAFE_OBJECT_OPERATOR,
+                T_DOUBLE_COLON,
+                T_FUNCTION,
+                T_NEW,
+            ], true)) {
+                continue;
             }
+
+            $out['calls']++;
+            $kind = self::classifyFirstArgument($significant, $i + 2);
+            if ($kind === 'other') {
+                $out['other'][] = self::describeToken($significant[$i + 2] ?? null);
+
+                continue;
+            }
+            $out[$kind]++;
         }
 
-        return [$calls, $literal];
+        return $out;
+    }
+
+    /** Whether `$token` names the global `sprintf`, qualified or not. */
+    private static function isGlobalSprintfName(array|string $token): bool
+    {
+        if (!\is_array($token)) {
+            return false;
+        }
+        if ($token[0] === T_STRING) {
+            return strtolower($token[1]) === 'sprintf';
+        }
+
+        // `\sprintf(` — one token on PHP 8, and invisible to a T_STRING test.
+        return $token[0] === T_NAME_FULLY_QUALIFIED && strtolower($token[1]) === '\\sprintf';
+    }
+
+    /**
+     * `literal`, `interpolated`, `constant` or `other` for the argument
+     * starting at `$at`.
+     *
+     * @param list<array{0: int, 1: string}|string> $significant
+     */
+    private static function classifyFirstArgument(array $significant, int $at): string
+    {
+        $token = $significant[$at] ?? null;
+        if ($token === null) {
+            return 'other';
+        }
+
+        // The lexer's own answer: a double-quoted string it had to split for an
+        // interpolation opens with a bare `"`, never with the encapsed-string
+        // token. A backtick opens a shell-exec expression, which is neither.
+        if ($token === '"') {
+            return 'interpolated';
+        }
+        if (!\is_array($token)) {
+            return 'other';
+        }
+        if ($token[0] === T_CONSTANT_ENCAPSED_STRING) {
+            return 'literal';
+        }
+
+        // A name, possibly `A::B` or `\A\B::C`. It is a CONSTANT reference only
+        // if nothing calls it — `self::format()` is a computed format and has
+        // to be classified by hand rather than counted as a promotion.
+        $nameTokens = [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE];
+        if (!\in_array($token[0], $nameTokens, true)) {
+            return 'other';
+        }
+
+        $i = $at;
+        while (true) {
+            $next = $significant[$i + 1] ?? null;
+            if (\is_array($next) && $next[0] === T_DOUBLE_COLON) {
+                $after = $significant[$i + 2] ?? null;
+                if (!\is_array($after) || !\in_array($after[0], $nameTokens, true)) {
+                    return 'other';
+                }
+                $i += 2;
+
+                continue;
+            }
+
+            break;
+        }
+
+        return ($significant[$i + 1] ?? null) === '(' ? 'other' : 'constant';
+    }
+
+    /** A short, stable description of a token for an `other` row's failure message. */
+    private static function describeToken(array|string|null $token): string
+    {
+        if ($token === null) {
+            return '<end of file>';
+        }
+        if (!\is_array($token)) {
+            return 'char ' . var_export($token, true);
+        }
+
+        return token_name($token[0]) . ' ' . var_export($token[1], true);
     }
 }
