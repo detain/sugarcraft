@@ -565,12 +565,34 @@ final class WorkflowResumptionTest extends TestCase
      *
      * WHAT THE ASSERTIONS USED TO SAY, and why they changed (E178). They read
      * `pcntl_wifexited()` plus `wexitstatus() === 143`, because the handler's
-     * forked-child branch was a plain `exit(143)`. That plain exit ran PHP's
-     * whole shutdown sequence — under PHPUnit, PHPUnit's own after-test hooks
-     * — a second time in this child, over a copy of this process's object
-     * graph. The branch is now `ForkedChild::exitNow()`, which SIGKILLs
-     * itself, so the child is signalled rather than exited and the shape a
-     * waiter sees is `wifsignaled()`/`wtermsig() === SIGKILL`.
+     * forked-child branch was a plain `exit(143)`. The branch is now
+     * `ForkedChild::exitNow()`, which SIGKILLs itself, so the child is
+     * signalled rather than exited and the shape a waiter sees is
+     * `wifsignaled()`/`wtermsig() === SIGKILL`.
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY about WHY that plain exit was wrong:
+     * that it ran PHP's whole shutdown sequence "under PHPUnit, PHPUnit's own
+     * after-test hooks" a second time in this child. WHAT IS TRUE NOW,
+     * measured rather than reasoned about — a two-process probe under this
+     * lane's own vendored PHPUnit 10.5.64 on PHP 8.3.6, forking from inside a
+     * test method and logging `getmypid()` from `tearDown()` and from a
+     * `register_shutdown_function` callback. The shutdown callback fired
+     * under the CHILD's pid; `tearDown()` fired exactly once, under the
+     * PARENT's. PHPUnit's after-test hooks are driven by
+     * `TestCase::runBare()` RETURNING, and a child that exits never returns
+     * anywhere. So what a plain exit re-runs here is the inherited object
+     * graph's own cleanup — every destructor and every
+     * `register_shutdown_function` callback in the copy this child holds —
+     * and NOT PHPUnit's hooks. The shape that does re-run those is a child
+     * that FALLS THROUGH, which is a different defect with a different
+     * blast radius; {@see \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}
+     * carries the probe that separates the two.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the conclusion is unchanged — a plain
+     * exit in this child was wrong and `exitNow()` is the fix — but naming
+     * the wrong mechanism sends the next reader hunting for the damage in the
+     * test runner instead of in the object graph, and a reader who looks
+     * there and finds nothing deletes the guard.
      *
      * That is why the `exit(98)` sentinel below STAYS a plain exit and is not
      * "fixed" to match. It is the discriminator: an exited-98 status means the
