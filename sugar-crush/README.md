@@ -312,8 +312,8 @@ The same three exit codes govern every subcommand below.
 | exit | meaning |
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
-| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding` |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that
@@ -391,21 +391,23 @@ outside is the only retry it gets.
 
 With `--output-format json`, stdout is always exactly one JSON object: either
 `{"result": "..."}` or `{"result": null, "error": {"type": "usage" |
-"provider_configuration" | "backend" | "encoding", "message": "...",
-"provider": "..."}}` (`provider` present only when a selection is to blame), so
+"provider_configuration" | "installation" | "backend" | "encoding", "message":
+"...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
 a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
 and `--root` usage errors too, which `bin/sugarcrush` catches before the one-shot
 path is entered, and for a reply or an error message carrying bytes that are
 not valid UTF-8 (they are substituted, not dropped along with the whole
-document). `error.type` is not the exit code renamed — `usage` and
-`provider_configuration` are both `2`, `backend` and `encoding` are both `1` —
-it is how a consumer that kept the code tells apart the two kinds of each.
+document). `error.type` is not the exit code renamed — `usage`,
+`provider_configuration` and `installation` are all `2`, `backend` and
+`encoding` are both `1` — it is how a consumer that kept the code tells apart
+the kinds of each. `installation` is the newest of the five and the only one
+`NonInteractive::emitErrorDocument()` never emits; see the one exception below
+for where it comes from and why.
 
-There are exactly two exceptions, and both are cases where the JSON renderer
-itself is unavailable.
-
-The first is an **`--output-format` value that is not `text` or `json`**. That
-run exits `2` with an **empty stdout** and its message on stderr: the requested
+There is exactly one exception, and it is not a case of the JSON renderer
+being unavailable — it is the caller asking for a rendering nothing implements:
+an **`--output-format` value that is not `text` or `json`**. That run exits `2`
+with an **empty stdout** and its message on stderr, because the requested
 rendering is the thing being rejected, so there is no format left to honour —
 emitting the JSON document anyway would mean guessing that `--output-format
 xml` meant `json`, and `text` is what an unrecognised value has always fallen
@@ -414,11 +416,42 @@ bytes.) Note the scope: it is the **invalid value** that is exempt, not the
 flag — a *valid* `--output-format json` alongside any other usage error, such
 as `--output-format json --config /nonexistent`, still emits the document.
 
-The second is a checkout with no `vendor/autoload.php`: that exits
-`2` with an empty stdout, because the class that owns the JSON document shape
-is precisely the one that could not be loaded, and hand-rolling a second copy
-of the shape in `bin/sugarcrush` to cover it would be the drift that having one
-definition prevents. Run `composer install`.
+**A checkout with no `vendor/autoload.php` is no longer an exception**, and this
+section used to say it was.
+
+> **What this used to say.** That there were *exactly two exceptions*, the second
+> being a checkout with no `vendor/autoload.php`, which "exits `2` with an empty
+> stdout, because the class that owns the JSON document shape is precisely the
+> one that could not be loaded, and hand-rolling a second copy of the shape in
+> `bin/sugarcrush` to cover it would be the drift that having one definition
+> prevents".
+>
+> **What is true now.** That branch emits the document, and has since the
+> autoload guard was given one. On a checkout with no `vendor/autoload.php`,
+> `sugarcrush --output-format json -p hi` prints
+> `{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot
+> find composer autoload.php"}}` and a newline on stdout, the same message on
+> stderr, and exits `2`. The old reasoning had the wrong half of the problem:
+> the shape's **owner** is unreachable there, the shape itself never was.
+> `json_encode()` is a core function and needs no autoloader, so the choice was
+> never "document or no document" — it was "one duplicated document, or an
+> empty pipe", and an empty pipe is the worse of the two by this contract's own
+> argument, because a consumer cannot tell "empty because the binary died before
+> it could speak" from "empty because there was nothing to say".
+>
+> **Why the old worry still earns its place.** Hand-rolling a second copy of the
+> shape really is the drift that one definition exists to prevent, so it is paid
+> for rather than waved away: the guard in `bin/sugarcrush` and
+> `NonInteractive::emitErrorDocument()` each name the other, and
+> `BinSugarcrushAutoloadGuardTest` asserts the two documents key-for-key **and**
+> the two `json_encode()` flag expressions token-for-token — a key comparison
+> alone cannot see an encode flag. Run `composer install` all the same: the
+> document reports a broken checkout, it does not repair one.
+>
+> The guard also honours `--output-format` only when this invocation actually
+> asked for `json`, read straight out of raw `argv` because the option parser is
+> behind the same missing autoloader. Any other value leaves stdout empty, which
+> is what the working binary does on that same input.
 
 With no provider configured at all, one-shot mode still answers offline from
 the `EchoProvider` and exits 0 — nothing was substituted for anything — but
