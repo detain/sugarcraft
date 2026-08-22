@@ -387,6 +387,58 @@ final class Bootstrap
     public const PROJECT_TIER_REFUSAL_FORMAT = 'ignoring %s — %s';
 
     /**
+     * The diagnostic {@see mcpClient()} sends to `error_log()` when a `.mcp.json`
+     * threw part-way through starting its servers.
+     *
+     * PROMOTED BECAUSE ITS SECOND PARTY AGREES ON THE SENTENCE, NOT ON AN IDEA
+     * (E164). This looked like a fragment reader —
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest} asserts
+     * `'could not be fully started'`, which is a clause. MEASURED on PHP 8.3.6:
+     * rewording `'; continuing without it.'` — a span no documented fragment
+     * covers — takes that file to `Tests: 263, Assertions: 1157, Failures: 3`.
+     * It pins THREE separate clauses of this line, because the point of that
+     * file's `testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()`
+     * is that this line and
+     * {@see MCP_PARTIAL_START_NOTICE_FORMAT} must not collapse into each other.
+     * Two lines whose distinctness is the assertion are two names.
+     *
+     * IT CARRIES ITS OWN `sugarcrush: ` PREFIX for the reason
+     * {@see SESSION_RETENTION_DETAIL_FORMAT} does: this one goes through
+     * `error_log()`, which prepends a timestamp and no label of ours, so the
+     * label has to be in the message. It does NOT go through
+     * {@see STDERR_LINE_FORMAT}, and its own full stop is here for the same
+     * reason.
+     *
+     * `%s` the config path, `%s` the exception class, `%s` its message.
+     */
+    public const MCP_PARTIAL_START_LOG_FORMAT =
+        'sugarcrush: MCP config %s could not be fully started (%s: %s); continuing without it.';
+
+    /**
+     * The transcript-and-stderr notice {@see mcpClient()} raises for the same
+     * failure {@see MCP_PARTIAL_START_LOG_FORMAT} logs.
+     *
+     * PROMOTED AS THE OTHER LINE OF A PAIR WHOSE DISTINCTNESS IS ASSERTED
+     * (E164). MEASURED: rewording `'this session has only the tools that did
+     * load'` gives
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest}
+     * `Tests: 263, Assertions: 1164, Failures: 2`. That file's doc-block records
+     * a round where one of these two wordings was nested inside the other and
+     * the guard went red; the shared clause `could not be fully started` is
+     * deliberate, and what must differ is everything around it.
+     *
+     * NO `sugarcrush: ` PREFIX AND NO FULL STOP, unlike its sibling: this one
+     * reaches stderr through {@see warnPermissionConfigInTranscript()}, so
+     * {@see STDERR_LINE_FORMAT} adds both — and the transcript copy takes
+     * neither, which is why they are not in the message.
+     *
+     * `%s` the config path, `%s` the exception message.
+     */
+    public const MCP_PARTIAL_START_NOTICE_FORMAT =
+        'MCP tools from %s are incomplete: the server list could not be fully started (%s); '
+        . 'this session has only the tools that did load';
+
+    /**
      * How many CALL sites in this file route a warning onto
      * {@see warnPermissionConfigInTranscript()}.
      *
@@ -4786,7 +4838,7 @@ final class Bootstrap
             // LENGTH, which matters here because `$e->getMessage()` interpolates
             // a `type` string the project's `.mcp.json` chose.
             error_log(sprintf(
-                'sugarcrush: MCP config %s could not be fully started (%s: %s); continuing without it.',
+                self::MCP_PARTIAL_START_LOG_FORMAT,
                 $path,
                 $e::class,
                 $e->getMessage(),
@@ -4801,8 +4853,7 @@ final class Bootstrap
             // by
             // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()}.
             self::warnPermissionConfigInTranscript(sprintf(
-                'MCP tools from %s are incomplete: the server list could not be fully started (%s); '
-                    . 'this session has only the tools that did load',
+                self::MCP_PARTIAL_START_NOTICE_FORMAT,
                 $path,
                 $e->getMessage(),
             ));

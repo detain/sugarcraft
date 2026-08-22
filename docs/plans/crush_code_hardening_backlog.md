@@ -6922,7 +6922,7 @@ The independent copy is best held by a second party that is not a test — READM
 test. The general form: **whenever a guard's expected and actual values are both derived from the code
 under test, name what the tautology costs before shipping it.**
 
-### Ec46-3 — five `sprintf()` formats in `Bootstrap.php` are inline on purpose; a sixth was not, and a mutation found it
+### Ec46-3 — three `sprintf()` formats in `Bootstrap.php` are inline on purpose; three others were not, and only a mutation found them
 
 **Recorded 2026-08-22 by round-46 lane c.** Severity: informational. **Measured.**
 
@@ -6934,11 +6934,20 @@ entry worth keeping. `reportProjectTierRefusals()`'s `'ignoring %s — %s'` enve
 (`Tests: 177, Assertions: 615, Failures: 1`), which reconstructs the whole envelope twice. **`grep` for a
 format's words finds the files that talk about it; only a mutation finds the files that depend on it.**
 
-The other five were left inline because every reader they have really does assert a FRAGMENT — a loose
-coupling to an idea, not two parties agreeing on a sentence: `mcpConfigDecision()`'s out-of-tree and untrusted refusals (`'outside the project tree'`,
+**The same mistake was then made twice more, and the corrected instrument is the finding.** The two
+`mcpClient()` messages were also classified fragment-only, on the shared clause `'could not be fully
+started'`. Rewording the spans that clause does NOT cover gives `McpToolWiringTest` `Failures: 3` and
+`Failures: 2` — it pins three separate clauses across the pair, because its subject is that the two lines
+must not collapse into each other. Both are promoted. **A mutation testing "does anything read this
+sentence?" has to land OUTSIDE every fragment already known to be asserted**; the first attempt reworded
+words that sat inside the known fragments, "killed" four times, and told me nothing. Re-placed outside,
+two of those four survived.
+
+The remaining three were left inline because every reader they have really does assert a FRAGMENT — a
+loose coupling to an idea, not two parties agreeing on a sentence, and that is now measured rather than
+grepped: `mcpConfigDecision()`'s out-of-tree and untrusted refusals (`'outside the project tree'`,
 `'running programs this repository chose'`, `assertStringStartsWith('resolves to ')`, and a `docs/MCP.md`
-paragraph that narrates the policy rather than quoting the message); `mcpClient()`'s `error_log` and
-transcript notices (both read via the shared clause `'could not be fully started'`); and
+paragraph that narrates the policy rather than quoting the message); and
 `trustedConfigDirPath()`'s home-ownership refusal (two `expectExceptionMessageMatches()` regexes on a
 clause). Not writing the count into prose is deliberate — the census is derived by
 `BootstrapLaunchFormatConstantsTest::testTheLiteralFormatCensusHasAGenerator()`.

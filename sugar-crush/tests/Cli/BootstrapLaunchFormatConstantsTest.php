@@ -73,28 +73,44 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * applied to the two formats that happened to come up. WHAT THIS PARAGRAPH SAID:
  * "promoting the rest is recorded as a deferred finding rather than done".
  * WHAT IS TRUE NOW: every `sprintf()` in `Bootstrap.php` with a literal format
- * was walked and asked the question, five more were promoted, and the ones left
- * inline were left inline ON PURPOSE — every reader they have asserts a
- * FRAGMENT (`'outside the project tree'`, `'could not be fully started'`,
- * `/cannot be established as yours/`), which is a deliberately loose coupling to
- * an idea, not two parties agreeing on a sentence. WHY THE ORIGINAL SENTENCE
+ * was walked and asked the question, seven more were promoted, and the three
+ * left inline were left inline ON PURPOSE — `mcpConfigDecision()`'s two refusal
+ * reasons and `trustedConfigDirPath()`'s home-ownership refusal. Every reader
+ * those three have asserts a FRAGMENT (`'outside the project tree'`,
+ * `'running programs this repository chose'`,
+ * `/cannot be established as yours/`), a deliberately loose coupling to an idea
+ * rather than two parties agreeing on a sentence — and unlike E164's first
+ * answer, that is MEASURED rather than grepped: rewording each of the three
+ * OUTSIDE its documented fragment leaves the classes that could plausibly
+ * cover them green. WHY THE ORIGINAL SENTENCE
  * STILL EARNS ITS PLACE: its reasoning is the reason the walk did not end in
  * promoting all ten. "Every literal is a constant" buys nothing and costs a
  * reader one indirection per line; the finding is which ones have a reader, and
  * saying "this one does not" is as much of an answer as promoting it.
  *
  * A WALK IS A CLAIM AND HAS TO BE MEASURED LIKE ONE, which E164's own first
- * answer was not. It read the readers of `reportProjectTierRefusals()`'s
- * `'ignoring %s — %s'` off two files that mention the envelope in COMMENTS,
- * concluded "fragment only", and left it inline. Rewording it `ignoring` →
- * `skipping` took
- * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest}
- * and its neighbours to `Tests: 177, Assertions: 615, Failures: 1` — a third
- * file reconstructs the whole envelope twice. It is
- * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT} now. THE LESSON FOR THE NEXT
- * WALK: `grep` for the format's WORDS finds the files that talk about it;
- * only a mutation finds the files that depend on it, and those are not the
- * same set.
+ * answer was not, and it was wrong three times. (1) It read the readers of
+ * `reportProjectTierRefusals()`'s `'ignoring %s — %s'` off two files that
+ * mention the envelope in COMMENTS, concluded "fragment only", and left it
+ * inline; rewording `ignoring` → `skipping` took
+ * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest} and
+ * its neighbours to `Tests: 177, Assertions: 615, Failures: 1`, because a third
+ * file reconstructs the whole envelope twice. (2) and (3) The two `mcpClient()`
+ * messages looked like fragment readers too — the clause everything asserts is
+ * `'could not be fully started'`, which both of them carry. Rewording the spans
+ * that clause does NOT cover gives `Failures: 3` and `Failures: 2`:
+ * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest} pins three
+ * separate clauses across the pair, because its whole subject is that those two
+ * lines must not collapse into each other.
+ *
+ * THE LESSON FOR THE NEXT WALK, and it is the reusable part: `grep` for a
+ * format's WORDS finds the files that TALK about it; only a mutation finds the
+ * files that DEPEND on it, and those are not the same set. And the mutation has
+ * to land OUTSIDE every fragment already known to be asserted — a reword inside
+ * the fragment kills for the reason you already knew and tells you nothing new.
+ * That mistake was made here first: four "kills" that were all reruns of a
+ * fragment, and re-placing the same four mutations outside the fragments turned
+ * two of them into survivals.
  *
  * ONE PROMOTED CONSTANT USED NOT TO SATISFY THAT RULE, and the repair is worth
  * recording because the shape of it applies to the next such constant.
@@ -148,6 +164,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
         'PROJECT_TIER_REFUSAL_FORMAT' => ['method' => 'reportProjectTierRefusals', 'conversions' => 2],
+        'MCP_PARTIAL_START_LOG_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
+        'MCP_PARTIAL_START_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
     ];
 
     /**
@@ -210,6 +228,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // The full stop rtrim()ed off the reason, because STDERR_LINE_FORMAT
         // adds one of its own and two would read as a typo.
         'reportProjectTierRefusals' => ["'.'"],
+        // The two decision keys it reads; both messages are named now.
+        'mcpClient' => ["'path'", "'status'"],
     ];
 
     public function testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt(): void
@@ -450,7 +470,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
-        self::assertSame(5, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
+        self::assertSame(3, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
         self::assertSame(
             \count(self::NAMED_FORMATS),
             $census['constant'],
