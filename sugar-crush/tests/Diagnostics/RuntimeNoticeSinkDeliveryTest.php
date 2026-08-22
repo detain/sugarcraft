@@ -275,6 +275,55 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     }
 
     /**
+     * THE POLL INTERVAL'S DOC-BLOCK MAKES A CHECKABLE CLAIM, so it is checked.
+     *
+     * `Chat::RUNTIME_NOTICE_POLL_SECONDS`' doc-block argues at length that it
+     * is "SLOWER THAN {@see Chat::TOOL_EVENT_POLL_SECONDS} ON PURPOSE" and
+     * gives the reason: a tool event is a two-state transition the user
+     * watches, a notice is one static row of prose that reads identically half
+     * a second later, and the slower tick halves the wake-ups on the one path
+     * where the loop is already servicing the tool-event pump, the provider
+     * socket and the spinner. Nothing held that. MEASURED, round 47: changing
+     * `RUNTIME_NOTICE_POLL_SECONDS` from 0.5 to 30.0 was green.
+     *
+     * THE RELATION AND NOT THE LITERAL, deliberately. Both figures are
+     * judgement calls that a later round may reasonably retune, and a test
+     * that pins `0.5` would red on the retune while saying nothing about
+     * whether the retune broke the argument. What must not silently invert is
+     * the ORDER, and that the notice tick is a real interval rather than a
+     * busy loop. Read off the live `Subscriptions` the runtime builds, not off
+     * the constants, so a tick wired to the wrong constant also reds.
+     */
+    public function testTheNoticePollIsSlowerThanTheToolEventPollAsItsDocBlockClaims(): void
+    {
+        // In flight, so BOTH ticks are declared by the same call.
+        $subscriptions = self::ownerChat(inFlight: true)->subscriptions();
+        self::assertNotNull($subscriptions);
+
+        $seconds = [];
+        foreach ($subscriptions->all() as $subscription) {
+            if ($subscription->kind === Kind::Tick) {
+                $seconds[$subscription->id] = $subscription->params['seconds'];
+            }
+        }
+
+        self::assertArrayHasKey('crush.tool-event-poll', $seconds, 'the tool-event tick is gone; there is nothing to compare against');
+        self::assertArrayHasKey('crush.runtime-notice-poll', $seconds);
+
+        self::assertGreaterThan(
+            0.0,
+            $seconds['crush.runtime-notice-poll'],
+            'the notice tick has a zero interval; that is a busy loop, not a poll',
+        );
+        self::assertGreaterThan(
+            $seconds['crush.tool-event-poll'],
+            $seconds['crush.runtime-notice-poll'],
+            'the notice poll is no longer slower than the tool-event poll, which is the whole of '
+                . 'RUNTIME_NOTICE_POLL_SECONDS\' doc-block',
+        );
+    }
+
+    /**
      * A CHAT NOBODY APPOINTED DOES NOT POLL, even with rows waiting.
      *
      * `RuntimeNoticeSink::drain()` is DESTRUCTIVE. Two Chats polling the one
