@@ -57,7 +57,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — TWENTY-SEVEN sites across twelve files. MEASURED on this
+ *  3. `error_log(…)` — TWENTY-ONE sites across eleven files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -71,7 +71,15 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     documents all five behind one flag. A fall here is a fall in EMITTERS;
  *     read it as a fall in diagnostics and you will go hunting for four that
  *     were never deleted.
- *     IT FELL AGAIN IN ROUND 47, BY EIGHT, AND AGAIN NO MESSAGE WAS DELETED.
+ *     IT FELL TWICE MORE, BY EIGHT AND THEN BY SIX, AND AGAIN NO MESSAGE WAS
+ *     DELETED. Round 48 (E192) routed `WorktreeManager`'s four and two of
+ *     `SglangProvider`'s three onto the same seam, which is why this channel
+ *     no longer names `src/Agents/WorktreeManager.php` at all. Read the
+ *     absence of a whole file here as six emitters moving, not as six
+ *     diagnostics disappearing: every one of them still reaches stderr,
+ *     because `RuntimeNoticeSink::warn()` calls `error_log()` for them, and
+ *     channel 6 is where they are counted now. Round 47's move, which said the
+ *     same thing one round earlier:
  *     Eight of the two tool-call parsers' diagnostics were routed through
  *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, which
  *     calls `error_log()` itself and then ALSO puts the row on the mid-session
@@ -95,8 +103,8 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — EIGHT
- *     of them, in TWO files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — FOURTEEN
+ *     of them, in FOUR files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -231,13 +239,24 @@ final class StderrEmitterCensusTest extends TestCase
     private const ERROR_LOG_SITES = [
         'src/Agents/AgentWorkerPool.php' => 1,
         'src/Agents/ForeignAgentPresetRegistry.php' => 2,
-        'src/Agents/WorktreeManager.php' => 4,
+        // WorktreeManager HAD FOUR AND HAS NONE, which is the largest single
+        // move this roster has recorded, and it is the reason to read a fall
+        // here as a fall in EMITTERS rather than in diagnostics: all four of
+        // its messages still reach stderr, through
+        // RuntimeNoticeSink::warn()'s own error_log(), and all four now reach
+        // the transcript too. The file is absent rather than zero because
+        // census() omits files with no sites; testEveryFileTheRostersNameExists()
+        // is what keeps that from hiding a deletion.
         'src/Chat.php' => 1,
         'src/Cli/Bootstrap.php' => 1,
         'src/Commands/CommandLoader.php' => 1,
         'src/Diagnostics/RuntimeNoticeSink.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
-        'src/Providers/SglangProvider.php' => 3,
+        // 3 until round 48 routed the two argument-decode refusals onto the
+        // seam (E192). The one left is flagTruncationRiskInLatestToolResults(),
+        // which PREDICTS a risk rather than reporting a failure — the routing
+        // rule's answer, and that method's doc-block states it.
+        'src/Providers/SglangProvider.php' => 1,
         // 11 and 7 until round 47 routed eight of the eighteen onto the
         // transcript seam through RuntimeNoticeSink::warn(), which error_log()s
         // for them. Channel 6 is where those eight are counted now; not one
@@ -309,6 +328,15 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const RUNTIME_NOTICE_SITES = [
+        // E192, round 48: all four of this class's diagnostics. Its own
+        // doc-block records the per-site decision, including the one that
+        // looks like a recovery and is not — a failed `git worktree remove`
+        // leaves the path registered and `prunable`, so the NEXT
+        // createWorktree() for that agent id is refused.
+        'src/Agents/WorktreeManager.php' => 4,
+        // E192, round 48: the two argument-decode refusals. The third site in
+        // that file stayed on channel 3 — see its entry there.
+        'src/Providers/SglangProvider.php' => 2,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 4,
         'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
     ];

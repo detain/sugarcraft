@@ -1231,6 +1231,26 @@ final class AgentWorkerPool
      * sequential (non-parallel) execution because pcntl_fork() is
      * unavailable. Only fires once per pool instance — subsequent agents
      * hitting the same fallback path would otherwise spam the log.
+     *
+     * DELIBERATELY STILL `error_log()` AND NOT THE MID-SESSION TRANSCRIPT SEAM
+     * (E192), and this class was on E192's list of three emitters to route, so
+     * the reason is recorded rather than left as an omission. The rule the two
+     * tool-call parsers' class doc-blocks state — a notice goes to
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} if and
+     * only if the emitter did not produce what the caller asked for — answers
+     * NO here, and it is checkable at the one call site rather than a matter of
+     * taste: {@see executeOne()}'s `pcntlForkAvailable()` arm falls straight
+     * through to `$executor->execute($agent, $request)` and `storeResult()`,
+     * so every agent still runs and every result is still stored and reaped.
+     * What the caller loses is CONCURRENCY, not an action. A seam row is a
+     * `Role::System` message re-sent to the model on every subsequent turn, and
+     * "your agents ran one after another" is neither something the model can
+     * act on nor something the user cannot infer from the wall clock.
+     *
+     * WHAT WOULD CHANGE THE ANSWER: an agent that does not run at all. That is
+     * a different site — see the DEFERRED FINDING recorded against the
+     * `pcntl_fork() === -1` arm in {@see executeOne()}, which degrades to the
+     * same sequential execution and warns about NOTHING, not even on stderr.
      */
     protected function warnSequentialFallback(): void
     {
