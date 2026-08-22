@@ -445,6 +445,16 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     /**
      * A TURN THAT REFUSES NOTHING SAYS NOTHING — the negative that keeps the
      * three tests above from being satisfied by a notice on every turn.
+     *
+     * TWO CASES, AND THE SECOND IS THE ONE THAT BITES. A turn with no tool
+     * events never calls the observer at all, so on its own it would pass
+     * against a `noticeRefusal()` moved OUTSIDE the `$refusal !== null` guard.
+     * The second case emits a tool that RAN AND FAILED with a text the roster
+     * does not carry: the observer fires, {@see NonInteractive::refusalFrom()}
+     * must return null, and nothing must be written. That is also the line this
+     * file's whole classification rests on — a failed call is a result the
+     * model acted on, a refusal is a call that never happened — so announcing
+     * the first as the second would teach the operator to distrust the notice.
      */
     public function testATurnThatRefusesNothingWritesNoRefusalLine(): void
     {
@@ -453,6 +463,21 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertSame(0, $code, "child failed:\n{$stderr}");
         self::assertSame("the answer\n", $stdout);
         self::assertStringNotContainsString('was not run', $stderr);
+    }
+
+    public function testAToolThatRanAndFailedIsNotAnnouncedAsARefusal(): void
+    {
+        [$stdout, $stderr, $code] = self::runOneShotInAChildProcess('No such file or directory', 'text');
+
+        self::assertSame(0, $code, "child failed:\n{$stderr}");
+        self::assertSame("the answer\n", $stdout);
+        self::assertStringNotContainsString('was not run', $stderr);
+
+        // KNOWN-POSITIVE (rule 15): the same child harness, the same channel,
+        // one roster-matching text away — so "nothing on stderr" above is an
+        // absence the instrument could have detected.
+        [, $announced] = self::runOneShotInAChildProcess('Hook denied: rm -rf is not allowed', 'text');
+        self::assertStringContainsString('was not run', $announced);
     }
 
     /**
