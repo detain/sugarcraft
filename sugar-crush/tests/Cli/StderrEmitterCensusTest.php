@@ -57,7 +57,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — THIRTY-FOUR sites across eleven files. MEASURED on this
+ *  3. `error_log(…)` — TWENTY-SEVEN sites across twelve files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -71,6 +71,15 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     documents all five behind one flag. A fall here is a fall in EMITTERS;
  *     read it as a fall in diagnostics and you will go hunting for four that
  *     were never deleted.
+ *     IT FELL AGAIN IN ROUND 47, BY EIGHT, AND AGAIN NO MESSAGE WAS DELETED.
+ *     Eight of the two tool-call parsers' diagnostics were routed through
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, which
+ *     calls `error_log()` itself and then ALSO puts the row on the mid-session
+ *     transcript seam — so eight call sites became one, plus a new file on this
+ *     roster, and every one of the eight lines still reaches stderr. That is
+ *     the shape channel 5 was invented for, one round later, which is why
+ *     channel 6 below exists: without it, eight user-visible stderr writes
+ *     would have become invisible to every scanner in this file.
  *     A NAIVE `grep -c 'error_log('` OVER `src/` DISAGREES WITH THAT NUMBER by
  *     more than twenty, and the census is the one that is right: the surplus is
  *     entirely this application's own doc-blocks discussing `error_log()`,
@@ -85,6 +94,22 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     applies the prefix at the EMITTER, via
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
+ *  6. Call sites of
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — EIGHT
+ *     of them, in TWO files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     alphabet trap as channel 5 one round later: `warn()` writes
+ *     `error_log()` from inside the sink, so channel 3 credits the whole family
+ *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
+ *     see the eight places that decided to emit. Not a subset of another
+ *     channel and not double-counted by one — these sites contain no
+ *     `error_log(` token and no `sugarcrush:` literal, which
+ *     {@see testTheTwoEmitterFunnelsDoNotCountTheSameWrite()} asserts rather
+ *     than assumes.
+ *     WHAT ITS ALPHABET CANNOT EXPRESS, stated here rather than discovered
+ *     later: a call reached through an aliased import (`use … as X;
+ *     X::warn()`). There is none; the scanner reads the class token before
+ *     `::` and accepts the bare, qualified and fully-qualified spellings, and
+ *     an alias would make a site INVISIBLE rather than mis-attributed.
  *
  * WHY CHANNEL 5 EXISTS, AND IT IS THIS FILE'S OWN ALPHABET TRAP SPRUNG ON
  * ITSELF. WHAT THE LINE ABOVE SAID: channel 4 is "the roster a user actually
@@ -182,10 +207,15 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Chat.php' => 1,
         'src/Cli/Bootstrap.php' => 1,
         'src/Commands/CommandLoader.php' => 1,
+        'src/Diagnostics/RuntimeNoticeSink.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
         'src/Providers/SglangProvider.php' => 3,
-        'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 11,
-        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 7,
+        // 11 and 7 until round 47 routed eight of the eighteen onto the
+        // transcript seam through RuntimeNoticeSink::warn(), which error_log()s
+        // for them. Channel 6 is where those eight are counted now; not one
+        // message was deleted.
+        'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 7,
+        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 3,
         'src/Skills/SkillLoader.php' => 2,
     ];
 
@@ -230,6 +260,29 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private const PREFIXED_WRITER_SITES = [
         'src/Cli/Bootstrap.php' => 22,
+    ];
+
+    /**
+     * Channel 6: call sites of `RuntimeNoticeSink::warn()`.
+     *
+     * THE SECOND EMITTER-SIDE FUNNEL — see this class's doc-block. Channel 3
+     * sees one `error_log()` inside the sink; these are the places that decided
+     * a user should hear about something.
+     *
+     * WHAT A MOVE HERE MEANS, AND IT IS NOT WHAT A MOVE IN CHANNEL 3 MEANS.
+     * Every site here writes stderr AND appends a `Role::System` row to the
+     * transcript, which is sent to the model on every subsequent turn. A new
+     * row is therefore a token cost on every later request, not just a line on
+     * a terminal. The question to answer before bumping this is the routing
+     * rule the two parsers' class doc-blocks state: did the parser fail to
+     * produce the call the model asked for? If it recovered, the notice belongs
+     * on `error_log()` and in channel 3.
+     *
+     * @var array<string, int>
+     */
+    private const RUNTIME_NOTICE_SITES = [
+        'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 4,
+        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
     ];
 
     /**
@@ -282,6 +335,7 @@ final class StderrEmitterCensusTest extends TestCase
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23,
+        'twenty-seven' => 27,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
@@ -305,6 +359,47 @@ final class StderrEmitterCensusTest extends TestCase
     public function testTheSugarcrushMessageShapeRosterIsUnchanged(): void
     {
         self::assertSame(self::MESSAGE_SHAPES, self::census('shape'), self::message('`sugarcrush: ` message'));
+    }
+
+    public function testTheRuntimeNoticeSeamRosterIsUnchanged(): void
+    {
+        self::assertSame(
+            self::RUNTIME_NOTICE_SITES,
+            self::census('runtime_notice'),
+            self::message('RuntimeNoticeSink::warn()'),
+        );
+    }
+
+    /**
+     * CHANNEL 6 IS DISJOINT FROM THE OTHERS AND NOT A RE-COUNT OF ONE.
+     *
+     * The doc-block's claim that the two funnels describe different writes is
+     * checkable, so it is checked rather than asserted in prose. If `warn()`
+     * were ever inlined back to `error_log()` at a call site, or a call site
+     * grew a `sugarcrush: ` literal of its own, two rosters would start
+     * describing one write and both would look healthy.
+     */
+    public function testTheTwoEmitterFunnelsDoNotCountTheSameWrite(): void
+    {
+        foreach (self::RUNTIME_NOTICE_SITES as $file => $sites) {
+            self::assertGreaterThan(0, $sites, "{$file} is on the channel-6 roster with no sites");
+
+            $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/' . $file);
+            self::assertSame(
+                0,
+                self::scan('shape', $source),
+                "{$file} routes through RuntimeNoticeSink::warn() AND carries a `sugarcrush: ` literal; "
+                    . 'one of the two channels is now describing the other\'s write',
+            );
+        }
+
+        // The sink itself is the one place the two channels legitimately meet:
+        // it holds channel 3's single site for the whole family, and none of
+        // channel 6's.
+        $sink = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Diagnostics/RuntimeNoticeSink.php');
+        self::assertSame(1, self::scan('error_log', $sink), 'the sink stopped writing stderr, or writes twice');
+        self::assertSame(0, self::scan('runtime_notice', $sink), 'the sink calls its own warn()');
+        self::assertArrayNotHasKey('src/Diagnostics/RuntimeNoticeSink.php', self::RUNTIME_NOTICE_SITES);
     }
 
     public function testThePrefixedWriterRosterIsUnchanged(): void
@@ -812,6 +907,35 @@ final class StderrEmitterCensusTest extends TestCase
             '<?php warnPermissionConfigOnce("x");',
             0,
         ];
+        yield 'a runtime-notice seam call' => ['runtime_notice', '<?php RuntimeNoticeSink::warn("x");', 1];
+        yield 'a qualified runtime-notice seam call' => [
+            'runtime_notice',
+            '<?php Diagnostics\\RuntimeNoticeSink::warn("x");',
+            1,
+        ];
+        yield 'a fully-qualified runtime-notice seam call' => [
+            'runtime_notice',
+            '<?php \\SugarCraft\\Crush\\Diagnostics\\RuntimeNoticeSink::warn("x");',
+            1,
+        ];
+        yield 'some other class\'s warn() is not the seam' => ['runtime_notice', '<?php Logger::warn("x");', 0];
+        yield 'an instance warn() is not the seam' => ['runtime_notice', '<?php $this->warn("x");', 0];
+        yield 'the seam named in a doc-block is not a call' => [
+            'runtime_notice',
+            "<?php /** {@see RuntimeNoticeSink::warn()} */\n\$x = 1;",
+            0,
+        ];
+        yield 'a seam first-class callable is not a call' => [
+            'runtime_notice',
+            '<?php $f = RuntimeNoticeSink::warn(...);',
+            0,
+        ];
+        yield 'the seam record() is not the warn funnel' => [
+            'runtime_notice',
+            '<?php RuntimeNoticeSink::record("x");',
+            0,
+        ];
+        yield 'nor on the runtime-notice channel' => ['runtime_notice', '<?php echo 1;', 0];
         yield 'a php:// stderr stream' => ['other', '<?php fopen("php://stderr", "w");', 1];
         yield 'a php:// output stream' => ['other', '<?php file_put_contents("php://output", $x);', 1];
         yield 'error_log with a destination' => ['other', '<?php error_log("x", 3, "/tmp/f");', 1];
@@ -977,6 +1101,16 @@ final class StderrEmitterCensusTest extends TestCase
                 'anchor' => '/sites across ([a-z]+) files\. MEASURED/',
                 'expected' => \count(self::ERROR_LOG_SITES),
                 'what' => 'channel 3, the number of files it spans',
+            ],
+            [
+                'anchor' => '/RuntimeNoticeSink::warn\(\)} — ([A-Z]+) of them, in [A-Z]+ files/',
+                'expected' => array_sum(self::RUNTIME_NOTICE_SITES),
+                'what' => 'channel 6, the RuntimeNoticeSink::warn() total',
+            ],
+            [
+                'anchor' => '/of them, in ([A-Z]+) files\. THE SECOND EMITTER/',
+                'expected' => \count(self::RUNTIME_NOTICE_SITES),
+                'what' => 'channel 6, the number of files it spans',
             ],
             [
                 'anchor' => '/it — ([A-Z-]+) call sites in/',
@@ -1148,6 +1282,14 @@ final class StderrEmitterCensusTest extends TestCase
                 continue;
             }
 
+            if ($channel === 'runtime_notice') {
+                if ($name === 'warn' && self::isRuntimeNoticeSinkCall($significant, $i)) {
+                    $count++;
+                }
+
+                continue;
+            }
+
             if ($channel === 'other') {
                 if (
                     \is_array($token)
@@ -1203,6 +1345,57 @@ final class StderrEmitterCensusTest extends TestCase
         }
 
         return $count;
+    }
+
+    /**
+     * Whether the `warn` token at `$i` is `RuntimeNoticeSink::warn(` — in any of
+     * the three spellings PHP lexes differently — rather than a declaration or
+     * a first-class callable.
+     *
+     * THE CLASS TOKEN IS REQUIRED AND THAT IS THE POINT. `warn` is an ordinary
+     * method name: `src/Agents/ForeignAgentPresetRegistry.php` calls
+     * `$this->warn(` three times (MEASURED, PHP 8.3.6) and none of those is a
+     * write of this shape. A scanner keyed on the method name alone would
+     * credit channel 6 with them.
+     *
+     * THREE SPELLINGS, because PHP 8.3.6 lexes them as three different tokens
+     * and an alphabet that knows only the first is how a census goes blind:
+     * `RuntimeNoticeSink` is `T_STRING`, `Diagnostics\RuntimeNoticeSink` is
+     * `T_NAME_QUALIFIED`, `\SugarCraft\…\RuntimeNoticeSink` is
+     * `T_NAME_FULLY_QUALIFIED`. All three are matched on their last segment.
+     * An ALIASED import is not matched, and is named as this channel's known
+     * blind spot in the class doc-block.
+     *
+     * @param list<array{0: int, 1: string}|string> $significant
+     */
+    private static function isRuntimeNoticeSinkCall(array $significant, int $i): bool
+    {
+        $operator = $significant[$i - 1] ?? null;
+        if (!\is_array($operator) || $operator[0] !== T_DOUBLE_COLON) {
+            return false;
+        }
+
+        $class = $significant[$i - 2] ?? null;
+        if (
+            !\is_array($class)
+            || !\in_array($class[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+        ) {
+            return false;
+        }
+
+        $segments = explode('\\', trim($class[1], '\\'));
+        if (end($segments) !== 'RuntimeNoticeSink') {
+            return false;
+        }
+
+        if (($significant[$i + 1] ?? null) !== '(') {
+            return false;
+        }
+
+        // `RuntimeNoticeSink::warn(...)` is a first-class callable, not a call.
+        $after = $significant[$i + 2] ?? null;
+
+        return !(\is_array($after) && $after[0] === T_ELLIPSIS);
     }
 
     /**

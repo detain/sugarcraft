@@ -104,6 +104,23 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
     }
 
     /**
+     * WHERE EACH DIAGNOSTIC GOES, AND THE RULE IS THE SIBLING'S (E170/E171).
+     * {@see DsmlToolCallParser::parseDsml()} states it in full: a notice goes
+     * on the mid-session transcript seam,
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, if and
+     * only if the parser did not produce the call the model asked for; a
+     * recovery stays on `error_log()` alone, because a seam row is a
+     * `Role::System` message re-sent to the model on every subsequent turn.
+     *
+     * FOUR OF THIS CLASS'S SEVEN ARE ON THE SEAM: every envelope fenced, an
+     * `<invoke>` with no readable name, an invoke refused whole, and an
+     * unclosed invoke with no parameter recovered. The other three describe a
+     * call that still fired, or a parameter-level refusal whose consequence the
+     * invoke-level notice already reports. Both sides are counted from the
+     * token stream by
+     * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s channels
+     * 3 and 6 rather than written down here as a pair of integers.
+     *
      * @return array<ToolCall>|null
      */
     private function parseXml(string $content): ?array

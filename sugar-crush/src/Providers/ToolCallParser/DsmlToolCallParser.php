@@ -183,6 +183,33 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
      * call is logged, visible, and something the model can retry. Refusing is
      * not silent; dropping the argument was.
      *
+     * WHERE EACH DIAGNOSTIC GOES, AND THE RULE IS ONE SENTENCE (E170/E171).
+     * A notice goes on the mid-session transcript seam,
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, IF AND
+     * ONLY IF this parser did not produce the call the model asked for.
+     * Everything else - a recovery, a coercion - stays on `error_log()` alone.
+     *
+     * WHY THAT LINE AND NOT "EVERYTHING THE USER MIGHT LIKE TO KNOW". A seam
+     * row is a `Role::System` message in the CONVERSATION, so it is re-sent to
+     * the model on every subsequent turn for the rest of the session. That
+     * makes it worth paying for when the model needs to know its call did not
+     * run - it can then retry - and not worth paying for when the call DID run
+     * and something was merely repaired on the way. `error_log()` keeps the
+     * complete record either way; it is unclipped and it costs no tokens.
+     *
+     * FOUR OF THIS CLASS'S ELEVEN DIAGNOSTICS ARE ON THE SEAM: no envelope was
+     * positioned like an action, an invoke with no readable name, an invoke
+     * refused whole for an unreadable parameter, and a truncated invoke with
+     * nothing recovered. The other seven describe a call that still fired - an
+     * unclosed envelope whose invokes were recovered, a truncated invoke whose
+     * parameters were complete, a duplicate parameter where the first was kept,
+     * a `string=` flag that was neither value, a `string="false"` whose payload
+     * was not JSON - plus the two parameter-level refusals whose consequence is
+     * already reported by the invoke-level one. THAT SPLIT IS NOT WRITTEN DOWN
+     * AS A COUNT ANYWHERE THAT MATTERS: it is derived by
+     * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s channels
+     * 3 and 6, which count both sides from the token stream.
+     *
      * @return array<ToolCall>|null
      */
     private function parseDsml(string $content): ?array
