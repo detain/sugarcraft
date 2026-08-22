@@ -251,8 +251,21 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     }
 
     /**
-     * A KNOWN-POSITIVE THROUGH THE SAME WALK, on files the answer is known
-     * for, in the same test that uses that walk to assert an absence.
+     * A KNOWN-POSITIVE THROUGH THE SAME PREDICATE, on files whose answer is
+     * known, in the same test that uses it to assert an absence.
+     *
+     * PREDICATE, NOT WALK, and the distinction is measured rather than
+     * pedantic. {@see unreapedForkOffendersUnder()} - the directory walk this
+     * fixture drives - is called by exactly ONE of the three tests that
+     * assert an absence, {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()};
+     * the other two iterate `tests/` inline. What all three share, and what
+     * this fixture therefore proves is alive, is the pair that DECIDES:
+     * {@see ForkedChildExitScanner::scan()} finding the sites and
+     * {@see missingHalves()} judging them. Measured: mutating either to a
+     * constant answer reds every real-tree test in this file. So the claim
+     * this method supports is "the predicate is alive", which is what the
+     * absences depend on - not "this exact walk is alive", which would be
+     * true of one caller in three.
      *
      * WHY THIS EXISTS AT ALL, and it is the whole reason it was written in
      * the commit that emptied {@see OUT_OF_SCOPE} rather than in a later one.
@@ -585,10 +598,28 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      * about something already done, and the next reader widens SCOPE by
      * deleting a row rather than by measuring).
      *
-     * The scanner used here is the SAME one the in-scope assertion uses, and
-     * this test is the known-positive fixture for it: it asserts a PRESENCE.
-     * A scanner that stopped matching would fail here loudly instead of
-     * turning the absence assertion above silently green.
+     * WHAT THIS SAID: "the scanner used here is the SAME one the in-scope
+     * assertion uses, and this test is the known-positive fixture for it: it
+     * asserts a PRESENCE. A scanner that stopped matching would fail here
+     * loudly instead of turning the absence assertion above silently green."
+     *
+     * WHAT IS TRUE NOW: {@see OUT_OF_SCOPE} is empty, so the loop below runs
+     * zero times and this test asserts no presence against the tree at all.
+     * The sentence described the file as it stood while `Backend/` still had
+     * a row; the commit that adopted `Backend/` deleted the row and, with it,
+     * the only real-tree positive this predicate had. Leaving the claim
+     * standing tells the next reader that the absence assertions elsewhere in
+     * this file are backed by a positive here, and they are not.
+     *
+     * WHY THE REASONING STILL EARNS ITS PLACE: it was right about the hazard
+     * and wrong only about which mechanism now covers it. An absence asserted
+     * by a dead scanner is a green run about nothing, and the answer is still
+     * a positive through the same predicate - it just has to be one the tree
+     * cannot get healthier than, which a synthetic fixture is and a row in a
+     * legitimately-empty map is not. That is
+     * {@see assertTheOffenderWalkIsAlive()}, called on the first line below.
+     * Delete this paragraph and the next reader restores a known-positive
+     * duty to a map that is allowed to be empty.
      */
     public function testEveryOutOfScopeDirectoryStillHasAnUnreapedFork(): void
     {

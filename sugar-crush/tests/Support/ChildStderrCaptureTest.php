@@ -78,9 +78,12 @@ final class ChildStderrCaptureTest extends TestCase
      *
      * WHAT THIS WAS: three prefixes - `Agents/`, `Integration/`, `Support/` -
      * the directories round 47's lane split gave that lane, widened from the
-     * single `Integration/` that was all anyone had censused. Alongside them
-     * it recorded that `Chat/` and `MCP/` had been measured clean and were
-     * "free to adopt", left for whichever round owned them.
+     * single `Integration/` that was all anyone had censused. That `Chat/`
+     * and `MCP/` had been measured clean and were "free to adopt" was
+     * recorded in the hardening backlog and NOT here - attributed correctly
+     * because a reader who goes looking for it in this file's history will
+     * not find it, and a "WHAT IT SAID" that was never said is the same rot
+     * as a stale one.
      *
      * WHAT IS TRUE NOW: round 48 owned them and adopted both, plus
      * `Backend/`. The census was re-run rather than inherited - a count taken
@@ -91,8 +94,11 @@ final class ChildStderrCaptureTest extends TestCase
      * `stty ... 2>/dev/null` - a COPY of the helper round 47 fixed in
      * `Support/ForkedChildTest.php`, sitting one directory away with the
      * opposite behaviour because it was in no lane's file list. It was FIXED
-     * the same way rather than exempted, so widening to five directories
-     * still added no row to {@see ACCEPTED_DISCARDED_STDERR}.
+     * the same way rather than exempted, so the widening added no row at all
+     * to {@see ACCEPTED_DISCARDED_STDERR}. (The count of prefixes is not
+     * written out here: it was wrong in the commit that shipped it, said
+     * "five" over a list of six, and it is a number a reader can take from
+     * {@see SCOPE} itself.)
      *
      * WHY THE REMAINDER IS STILL OUT, stated rather than silently omitted:
      * every other directory under `tests/` either holds non-captures that
