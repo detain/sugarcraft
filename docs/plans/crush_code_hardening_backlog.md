@@ -7388,3 +7388,44 @@ uses `assertStringContainsString` against the FLATTENED page, so its failure out
 **Step.** For the first, either assert the per-constant call count explicitly or reword the message to name
 both possibilities. For the second, narrow the haystack to the flattened paragraph containing `ignoring `
 before asserting, so a failure prints a sentence rather than a page.
+
+### E190 — on resume, a cached review's stated HEAD is stale if the killed fix agent committed before dying
+
+**Recorded 2026-08-22 by the supervisor, from round-46 lane c.** Severity: medium, wasted work and
+misread evidence. **Observed.**
+
+**What.** Round 46's weekly limit killed `fix:a-stderr` and `fix:c-formats`. On resume, the review that
+lane c's replacement fix agent received was replayed **from cache**, and it described HEAD as `0df3fe89`
+with all its findings outstanding. The lane's actual HEAD on arrival was `4e45e555` — **six further
+commits by the killed fix agent**, whose subjects map one-to-one onto the review's MAJOR 1–4 and MINOR
+5–6. The earlier agent had committed and then died before reporting. This is exactly the rule-19 scenario
+seen from the other side: E168 covers the agent that dies mid-MUTATION leaving dirt; this covers the agent
+that dies mid-REPORT leaving committed work nobody has been told about.
+
+The replacement handled it correctly — it re-derived HEAD, verified the six commits by mutation rather
+than trusting them, did not redo the work, and said so. **That behaviour was not in its brief.**
+
+**Step.** Add to the fix-agent brief: 🔴 **re-derive HEAD yourself with `git log --oneline <base>..HEAD`
+before believing any sha in the review or the brief. If commits exist that the review does not mention,
+a previous incarnation of you died after committing — verify them by mutation, do not redo them, and say
+so in your report.** Anyone re-reading such a review against its stated sha is reading a tree three or
+more commits behind.
+
+### E191 — the census-additivity rule is about a guard's PREDICATE, not its scan SCOPE
+
+**Recorded 2026-08-22 by the supervisor.** Severity: process. **Measured; corrects an over-broad rule.**
+
+**What.** Round 44 established that a lane shipping a tree-walking census gains assertions when a sibling
+adds prose, so merged assertion totals are not additive. Round 46's supervisor prediction applied that as
+"any new census walking `tests/` while a sibling adds test files ⇒ strict overshoot" and **predicted an
+overshoot that did not happen** — the merged total landed exactly on the additive lower bound, 131610.
+
+**Why.** Lane b's new scanners walk all of `tests/` but assert **per fork site and per fixture**, not per
+file scanned; lane a's two new test files contain **zero** `pcntl_fork` calls. Nothing a sibling added
+fell inside the predicate, so nothing inflated. Round 44's stale-figure census asserted **once per
+paragraph of every file**, where every sibling addition necessarily matches.
+
+**Step.** State the rule precisely in each round's brief: **a new census inflates a merged total only when
+a sibling's additions fall inside its PREDICATE, not merely inside its scan scope.** Assertions are still
+a lower bound, not an equality — but "walks a directory a sibling touches" is not sufficient reason to
+expect an overshoot, and predicting one and being wrong costs the prediction its credibility.
