@@ -248,6 +248,24 @@ final class RuntimeNoticeSink
      * must survive, and a sink whose transport has gone away (see the
      * `errno=111` case in this class's doc-block) must not be able to take the
      * forensic record down with it.
+     *
+     * WHAT IS PINNED AND WHAT IS NOT, measured rather than assumed, because a
+     * round-47 review read this paragraph as claiming a property nothing held
+     * and only half of that was right. MEASURED by mutation, PHP 8.3.6:
+     *   - Making the stderr copy CONDITIONAL on `record()` succeeding —
+     *     `if (self::record($m)) { error_log($m); }` — is KILLED, three
+     *     failures. So the CONSEQUENCE of the ordering, the one this paragraph
+     *     is actually about, is held: the forensic copy is unconditional and
+     *     survives an unarmed, full or torn-down sink.
+     *   - Swapping the two statements outright SURVIVES. So the literal
+     *     ORDER is not pinned, and deliberately is not: the only way the swap
+     *     could matter is `record()` throwing before `error_log()` ran, and
+     *     `record()` has no throwing path — every failure mode it has returns
+     *     `false`. A test for it would need a seam invented purely to be
+     *     broken, which is a worse guard than none.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE: it is the reason the order is
+     * not to be "tidied" if `record()` ever DOES grow a throwing path — at
+     * which point the swap becomes observable and gets a test.
      */
     public static function warn(string $message): void
     {
