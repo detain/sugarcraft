@@ -20,10 +20,24 @@ use SugarCraft\Crush\Commands\CommandLoader;
  * simply removed: gating a diagnostic that has nowhere else to go is a deletion
  * wearing a flag.
  *
- * THE COLLECTOR ASSERTIONS ARE THE POINT, not the gate ones. A gate can be
- * tested with two `putenv()`s and prove only that a conditional works; what
- * matters is that the refusal still EXISTS after the walk regardless of what
- * any channel did with it.
+ * THE COLLECTOR ASSERTIONS ARE THE POINT, and the env one is not optional
+ * either. WHAT THIS SAID: "a gate can be tested with two `putenv()`s and prove
+ * only that a conditional works; what matters is that the refusal still EXISTS
+ * after the walk regardless of what any channel did with it."
+ * WHAT IS TRUE NOW: the first clause talked this file out of the one test that
+ * covers the switch users are told to set, and the omission was load-bearing.
+ * Every reporting test here forced the constructor override
+ * (`reportRefusals: true`), which never reaches `getenv()`; the off-by-default
+ * ones assert silence, which is also what a loader that ignores the env
+ * produces. MEASURED: with `debugRefusalsRequested()` mutated to
+ * `return false;` the WHOLE suite stayed green — the documented switch was
+ * inert and nothing noticed. {@see testTheDebugEnvVarPutsTheRefusalsBackOnStderr()}
+ * is what closes that, and {@see testZeroReadsAsOff()} only distinguishes `0`
+ * from "on" because that test proves "on" is reachable at all.
+ * WHY THE SECOND CLAUSE STILL EARNS ITS PLACE: it is still the reason the
+ * collector assertions come first and the reason the per-file skip got a
+ * collector before it got a gate. The refusal surviving the walk is the
+ * invariant; which channel carries it is a routing choice.
  */
 final class CommandLoaderRefusalReportingTest extends TestCase
 {
@@ -126,6 +140,55 @@ final class CommandLoaderRefusalReportingTest extends TestCase
 
         self::assertArrayHasKey($outside, $loader->refusedDirectories());
         self::assertStringContainsString('Skipping commands directory', $this->captured());
+    }
+
+    /**
+     * THE ENV SWITCH ITSELF, exercised through the null default.
+     *
+     * `new CommandLoader()` and not `new CommandLoader(reportRefusals: true)`:
+     * the override short-circuits `debugRefusalsRequested()` entirely, so every
+     * other reporting test in this file passes whether `getenv()` is consulted
+     * or not. This is the only test in the suite that reds when the env read is
+     * removed — verified by mutating that method to `return false;`, which
+     * leaves the rest of the suite untouched.
+     *
+     * The exemplar is
+     * {@see \SugarCraft\Crush\Tests\Skills\SkillLoaderTest::testTheDebugEnvVarPutsTheSkipsBackOnTheLog()},
+     * which this loader's gate was copied from and whose test this file had not
+     * copied with it.
+     */
+    public function testTheDebugEnvVarPutsTheRefusalsBackOnStderr(): void
+    {
+        $previous = getenv(CommandLoader::DEBUG_REFUSALS_ENV);
+        putenv(CommandLoader::DEBUG_REFUSALS_ENV . '=1');
+
+        try {
+            $this->writeUnparseableCommand();
+            $outside = $this->root . '/outside';
+            mkdir($outside, 0o700, true);
+
+            $loader = new CommandLoader();
+            $loader->loadFromDirectory($this->root . '/.sugar-crush/commands');
+            $loader->loadFromDirectory($outside, $this->root . '/.sugar-crush/commands');
+
+            // Both arms of the gate: the per-FILE skip, whose only other reader
+            // is the dormant collector, and the DIRECTORY refusal, which the
+            // transcript seam also carries.
+            $captured = $this->captured();
+            self::assertStringContainsString('Failed to load command from', $captured);
+            self::assertStringContainsString('Skipping commands directory', $captured);
+
+            // ...and the collectors still hold them, so this is the reporting
+            // half being switched on rather than the walk behaving differently.
+            self::assertNotSame([], $loader->skippedFiles());
+            self::assertArrayHasKey($outside, $loader->refusedDirectories());
+        } finally {
+            if ($previous === false) {
+                putenv(CommandLoader::DEBUG_REFUSALS_ENV);
+            } else {
+                putenv(CommandLoader::DEBUG_REFUSALS_ENV . '=' . $previous);
+            }
+        }
     }
 
     /**
