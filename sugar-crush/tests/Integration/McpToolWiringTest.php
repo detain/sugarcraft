@@ -510,20 +510,30 @@ final class McpToolWiringTest extends TestCase
      * this test prints one line into the suite's own output.
      *
      * WHAT THAT SENTENCE USED TO SAY: "(MEASURED: exactly one)", stated
-     * unconditionally. WHAT IS TRUE NOW, re-measured in round 44 (E95) on PHP
-     * 8.3.6, three takes each, counting `^sugarcrush:` on a combined
-     * stdout+stderr capture: running THIS FILE alone prints exactly one — the
-     * claim holds at the scope it was taken at. Running `tests/Integration`
-     * prints TWO: this line and the workflow-tier refusal the paragraph below
-     * cites, which the old sentence named without counting. WHY THE MEASUREMENT
-     * STILL EARNS ITS PLACE: the number is the argument. "One line" is a cost
-     * worth accepting and "some lines" is not, so the count has to carry the
-     * scope it was taken at or the next reader re-decides on a figure that was
-     * never about their situation. THE FULL SUITE PRINTS NEITHER LINE, which is
-     * an unexplained third figure and is recorded as such rather than smoothed
-     * over — see the backlog entry for E95; a diagnostic that vanishes when the
-     * suite grows is a hazard, not a convenience, and nobody should read the
-     * zero as this decision working.
+     * unconditionally, as though one line were the suite's whole stderr budget.
+     * WHAT IS TRUE NOW, re-measured in round 44 (E95) on PHP 8.3.6 by counting
+     * `sugarcrush:` in a combined stdout+stderr capture: this file alone prints
+     * ONE, `tests/Integration` prints TWO (this and the workflow-tier refusal
+     * cited below), and THE FULL SUITE PRINTS 62, from about twenty distinct
+     * warnings — `provider …` nine times, `no prompt given` six, the one-shot
+     * backend refusal seven, retention rows, permission-rule rejections and the
+     * rest. This line is one sixty-second of a channel the suite already uses
+     * heavily and has always used.
+     *
+     * WHY THAT MAKES THE DECISION EASIER RATHER THAN HARDER, which is the
+     * opposite of how the original sentence framed it: the cost of accepting
+     * this line is not "the suite stops being clean", because it is not clean
+     * and no round has proposed making it so. The cost is one more row in an
+     * existing sixty-two, against a coupling that fails open. That is not a
+     * close call.
+     *
+     * A MEASUREMENT NOTE THAT COST AN HOUR, recorded because it will recur: the
+     * first take of the full-suite figure came back ZERO, and it was a broken
+     * harness, not a finding. PHPUnit's captured output contains control bytes,
+     * `grep` classifies the file as binary, and `grep -c` then prints NOTHING at
+     * all and exits 1 — a silent no-answer that reads exactly like a real zero.
+     * `grep -a` gives 62. Any census over a captured suite log needs `-a` and
+     * needs a case whose answer is already known run through the same command.
      *
      * LEFT PRINTING RATHER THAN SILENCED, deliberately, and round 44 re-argued
      * it rather than inheriting it. The only way to quiet it is to pre-seed

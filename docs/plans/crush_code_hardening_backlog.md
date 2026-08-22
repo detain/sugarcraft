@@ -5780,3 +5780,93 @@ constants, but too volatile to pin without building a change-detector, which is 
 
 **Step.** Take them one at a time as each acquires a machine-readable source. The roster and preset
 lists are the two most likely to become checkable, since both are already enumerated in `src/`.
+
+### E112 — promote the transcript-seam call-site count to a `public const` on `Bootstrap`
+
+**Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low.
+
+**What.** `tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest::EXPECTED_CALL_SITES` (16) holds the count
+of `warnPermissionConfigInTranscript(` call sites because `src/Cli/Bootstrap.php` belonged to lane `a`
+the round the test was written. It belongs next to the thing it counts, as
+`Bootstrap::TRANSCRIPT_SEAM_CALL_SITES`, so the four prose sites can `{@see}` it instead of spelling an
+English number word.
+
+**Step.** Add the const; have the test assert the const and its own token scan agree, so
+`EXPECTED_CALL_SITES` becomes a second opinion rather than the only one. Sibling of **E104** (extracting
+`Bootstrap`'s stderr `sprintf` formats to constants) — same file, same motive, worth one PR.
+
+### E113 — `Bootstrap.php` still says "eleven other sources" on the skill-skip seam call
+
+**Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low.
+
+**What.** E97 corrected the stale seam call-site count in `src/Chat.php` and
+`tests/Cli/BootstrapLaunchNoticeRoutingTest.php` and pinned all of them with
+`BootstrapTranscriptSeamCallSiteCensusTest`. A **fourth** instance is in `src/Cli/Bootstrap.php`, in the
+comment above `reportSkillSkips()`'s seam call: "safe to put in a transcript that also has to carry
+**eleven** other sources". The token scan counts 16 call sites, so it should read fifteen.
+
+`Bootstrap.php` was lane `a`'s file in round 44, so lane `c` could not edit it. Everything else in that
+file is correct at `8ade35dd`: the "SIXTEEN call sites now routed" comment and the "the other fifteen
+call sites" comment in `mcpClient()`'s catch both check out.
+
+**Step.** Fix the one word, then add the site to `BootstrapTranscriptSeamCallSiteCensusTest::PROSE_SITES`
+with `offset: 1`. The guard is built to take the row and refuses an anchor it cannot match, so adding it
+is three lines.
+
+### E114 — the suite prints 62 unowned `sugarcrush:` stderr lines, and only one of them was ever argued for
+
+**Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low, but see the measurement trap.
+
+**What.** Measured on PHP 8.3.6 with `grep -ac 'sugarcrush:'` over a combined stdout+stderr capture:
+this file alone → 1; `tests/Integration` → 2; **the full suite → 62**, across about twenty distinct
+warnings (`provider …` 9, the one-shot different-backend refusal 7, `no prompt given` 6,
+`permissionRules*` 8 across four spellings, retention/pruning rows 8, `trustedProjectHooks*` 3,
+`ignoring …` 2, `permissionMode in` 2, plus singletons including E95's MCP line, `piped stdin exceeds`,
+`agent presets unavailable`, `no provider configured`, `unrecognized option`).
+
+Rounds 43 and 44 both reasoned about E95's MCP line as though it were nearly the suite's only unowned
+stderr output — round 43 accepted it partly because "one diagnostic line is what this suite already
+tolerates elsewhere (the workflow-tier refusal prints one too)", naming one sibling where there are 61.
+The decision survives the correction and the rewritten doc-block on
+`McpToolWiringTest::testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()` now
+argues it from 62 rather than from 1. What does not survive is the idea that anyone would notice a new
+line: with no baseline, 63 looks exactly like 62.
+
+**🔴 THE MEASUREMENT TRAP, recorded because it burned an hour and will recur.** The first take of the
+full-suite figure came back **0**, and it was very nearly written into two doc-blocks as a finding
+("a diagnostic that vanishes when the suite grows"). It was a broken harness: PHPUnit's captured output
+contains control bytes, `grep` classifies the file as binary, and **`grep -c` then prints nothing at all
+and exits 1** — indistinguishable at a glance from a real zero. `grep -a` gives 62. A second harness in
+the same round failed the same way, reporting 0 PHP children for a file that spawns 33, because it
+wrapped `php` on `PATH` while the spawns use `PHP_BINARY`. Both were caught only by running a
+known-answer control through the same command. **Do that first, always.**
+
+**Step.** Record the per-warning roster as a checked-in figure (with its generator: the `grep -a`
+command, PHP version, and full-suite scope) so a 63rd line is visible. Then triage per warning — several
+are real diagnostics whose own tests assert they were emitted, so silencing is the wrong default.
+
+### E115 — the shared-`/tmp` before/after census: run, negative, and its residual
+
+**Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: informational.
+
+**What.** Two leak detectors have now been converted from a before/after `glob()` over the shared temp
+directory to `ToolIpcFiles`' identity ledger, one round apart and each after firing on a sibling lane's
+files: `ChatTest` (E63, round 38) and `ParallelToolCallsTest` (E96, round 44 — its two call sites both
+failed on round 44's own baseline run). Nobody had swept for a third.
+
+**The census was run and found none.** Pattern: `glob(`/`scandir(` whose argument reaches
+`sys_get_temp_dir()` or a literal `/tmp`, over `src/` and `tests/`. Deliberately **not** keyed on the
+`sc_runtime_tool_`/`sc_chat_tool_` prefixes — an alphabet built from the two known cases can only
+rediscover them, and `crush-hook-payload-` is a third prefix `ToolIpcFiles` sweeps. Results: zero in
+`src/`; in `tests/`, only
+`ChatTest::testTheStrandedPayloadDetectorAttributesByIdentityNotByWindow()`, which is **not** this defect
+— it globs in order to `assertContains()` its own fixture, and a concurrent lane adding files cannot
+falsify a containment check the way it falsifies a before/after diff.
+
+**Residual, which is why this is recorded rather than closed.** The census reads syntax, so it cannot see
+a snapshot assembled indirectly (a helper returning a listing, a `FilesystemIterator` over a path built
+elsewhere), and it says nothing about shared directories other than the temp dir. The defect is
+"before/after diff of anything concurrently written"; only the temp-dir spelling has been swept.
+
+**Step.** Re-run the census when a new dispatcher or payload prefix appears, and widen it to
+`FilesystemIterator`/`DirectoryIterator` if either ever shows up in a test.

@@ -45,9 +45,13 @@ use PHPUnit\Framework\TestCase;
  * it would sit next to the thing it counts, and the prose sites could `{@see}`
  * it instead of spelling a word. It is not there because `Bootstrap.php` was
  * another lane's file in the round that wrote this test, and reaching into it
- * would have collided. Promoting it is backlog **E104**; when that happens,
+ * would have collided. Promoting it is backlog **E112**; when that happens,
  * {@see EXPECTED_CALL_SITES} becomes a second opinion rather than the only one,
- * and this test should assert the two agree.
+ * and this test should assert the two agree. (E112 and not E104: round 44's
+ * brief cited E104 for this, and E104 is a different item — extracting
+ * `Bootstrap`'s stderr `sprintf` FORMATS to constants. The two are neighbours
+ * and want the same treatment, so they are worth doing together, but they are
+ * not the same entry.)
  *
  * @see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest for the
  *      behavioural guard — which call sites actually reach the transcript on a
