@@ -60,21 +60,38 @@ use SugarCraft\Crush\Tools\ToolCall;
  * {@see testTheGateDecisionForAnMcpNameMatchesBashInFiveModesAndDivergesUnderPlan()},
  * which pins the six actions rather than any sentence about them.
  *
- * WHAT THIS FILE COSTS, MEASURED (E102, round 44). PHP 8.3.6, 48 cores, load1
- * ~5.9 with a sibling lane running its own suite, three takes: wall 3.25 /
- * 3.26 / 3.24 s, user+sys 1.22 s. `strace -f -e trace=execve` counts 22
- * `execve` of a php binary, i.e. TWENTY-ONE child interpreters — not the two
- * `launchChatInChild()` calls a reader counts in the source, because every MCP
- * fixture server is itself a php process.
+ * WHAT THIS FILE COSTS, MEASURED (E102, round 44; re-derived in that round's
+ * review, which could not reproduce the first version of this paragraph
+ * because it did not say what it had subtracted).
  *
- * THE COST IS NOT THE CHILDREN. Wall 3.25 s against 1.22 s of CPU means ~2 s of
- * this file is WAITING — fixture-server startup and the stdio handshake — and
- * fewer, fatter children would wait exactly as long. That is the opposite of
- * {@see BinSugarcrushAutoloadGuardTest}, whose 1.6 s is ~91% interpreter
- * startup, and it is why the two files do not get the same answer despite both
- * looking like "an integration test that spawns a lot". The lever here would be
- * the handshake timeout, not the process count; nothing today is close enough
- * to matter to reach for it.
+ * THE GENERATOR. PHP 8.3.6, 48 cores, `/proc/loadavg` 1-minute figure 5.1-5.8
+ * with a sibling lane running its own suite, three takes,
+ * `/usr/bin/time -f 'wall=%e user=%U sys=%S' php vendor/bin/phpunit --filter
+ * McpToolWiringTest`. RAW: wall 4.90 / 4.93 / 4.90 s, user+sys ~2.89 s. A
+ * phpunit run selecting NO tests costs 1.71 / 1.72 / 1.73 s wall and ~1.71 s
+ * user+sys on the same box in the same window, so THIS FILE'S OWN cost is
+ * ~3.19 s wall against ~1.18 s of CPU. WHAT THE FIRST VERSION SAID: "wall 3.25
+ * / 3.26 / 3.24 s, user+sys 1.22 s" — the subtracted figures, labelled as raw
+ * ones. The subtraction is the right quantity and is kept; it is now stated,
+ * with both terms, so it can be checked.
+ *
+ * `strace -f -qq -e trace=execve php vendor/bin/phpunit --filter
+ * McpToolWiringTest` counts 22 `execve` of a php binary (21 `/usr/bin/php8.3`
+ * plus phpunit's own `/usr/bin/php`), i.e. TWENTY-ONE child interpreters — not
+ * the two `launchChatInChild()` calls a reader counts in the source, because
+ * every MCP fixture server is itself a php process. The explicit `php` in that
+ * command is load-bearing; see
+ * {@see BinSugarcrushAutoloadGuardTest}'s class doc-block for what tracing the
+ * shebang wrapper instead does to the number.
+ *
+ * THE COST IS NOT THE CHILDREN. ~3.19 s of wall against ~1.18 s of CPU means
+ * ~2 s of this file is WAITING — fixture-server startup and the stdio
+ * handshake — and fewer, fatter children would wait exactly as long. That is
+ * the opposite of {@see BinSugarcrushAutoloadGuardTest}, whose own ~1.58 s is
+ * ~87% interpreter startup, and it is why the two files do not get the same
+ * answer despite both looking like "an integration test that spawns a lot". The
+ * lever here would be the handshake timeout, not the process count; nothing
+ * today is close enough to matter to reach for it.
  */
 final class McpToolWiringTest extends TestCase
 {
@@ -570,8 +587,9 @@ final class McpToolWiringTest extends TestCase
         // given one of its own ON PURPOSE: a second test driving this path would
         // start a second MCP server and print a SECOND copy of the very line it
         // was counting (measured, when it was briefly written that way: two
-        // lines, and the file went 3.25s -> 4.05s). A guard that doubles what it
-        // bounds is not a guard.
+        // lines, and the file's own cost went from ~3.2s to ~4.0s -- both net
+        // of the ~1.7s phpunit boot, on the generator in this class's
+        // doc-block). A guard that doubles what it bounds is not a guard.
         //
         // HOW IT COUNTS WITHOUT READING THE MESSAGE.
         // Bootstrap::warnPermissionConfigOnce() writes to stderr if and only if

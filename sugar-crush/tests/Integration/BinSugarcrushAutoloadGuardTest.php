@@ -53,26 +53,68 @@ use SugarCraft\Crush\Cli\NonInteractive;
  * THIS one is. What is unique here is that the seam's class cannot even be
  * loaded.
  *
- * WHAT THIS FILE COSTS, MEASURED, AND WHY IT IS NOT FOLDED (E102, round 44).
- * PHP 8.3.6, this box, 48 cores, load1 ~5.9 with a sibling lane running its own
- * suite, three takes: wall 1.54 / 1.59 / 1.64 s, user+sys 1.61 s — CPU-bound,
- * not waiting. `strace -f -e trace=execve` counts 100 `execve` in total, and
- * they factor exactly: 33 `sh`, 33 `timeout`, 33 `php8.3`, 1 `php`. So
- * THIRTY-THREE child interpreters — the lone `php` is phpunit itself — each
- * reached through the `/bin/sh -c` that `exec()` implies and the `timeout -s
- * KILL 60` this file wraps every spawn in. Three processes per row, one of
- * which is the interpreter that costs.
+ * WHAT THIS FILE COSTS, MEASURED, AND WHY IT IS NOT FOLDED (E102, round 44;
+ * figures re-derived in that round's review because the first version of this
+ * paragraph did not state its generator and could not be reproduced from what
+ * it did say).
  *
- * The control that makes those numbers trustworthy: the same census run against
- * a file that spawns nothing reports 1. It is worth having, because an earlier
- * attempt at this census — a `php` shim placed first on `PATH` — reported 0 for
- * THIS file, and 0 was wrong: the spawns use `PHP_BINARY`, an absolute path,
- * and never consult `PATH` at all. The broken harness agreed with the control
- * and disagreed only with reality.
+ * THE GENERATOR, IN FULL, because every number below is worthless without it.
+ * PHP 8.3.6, this box, 48 cores, `/proc/loadavg` 1-minute figure between 5.1
+ * and 5.8 across the run with a sibling lane running its own suite, three
+ * takes each, `/usr/bin/time -f 'wall=%e user=%U sys=%S'`, and the command is
+ * always `php vendor/bin/phpunit --filter <Class>` — the explicit `php`
+ * matters, see the census note below. RAW, not net of anything:
  *
- * Thirty-three bare `php -r 'exit(0);'` startups on this box cost 1.45 s (three
- * takes: 1.48 / 1.44 / 1.44). So ~91% of this file's runtime is interpreter
- * startup and the test bodies are ~0.14 s of it.
+ *   - this file:                   wall 3.33 / 3.30 / 3.28 s, user+sys ~3.27 s
+ *   - a phpunit run that selects
+ *     NO tests (`--filter ZzzNoSuchTestClassXyz`):
+ *                                  wall 1.71 / 1.72 / 1.73 s, user+sys ~1.71 s
+ *   - 33 bare `php -r 'exit(0);'`: wall 1.39 / 1.38 / 1.35 s
+ *
+ * So this file's OWN cost is ~1.58 s wall and ~1.56 s user+sys — CPU-bound,
+ * not waiting — and the ~1.72 s underneath it is phpunit booting, which every
+ * file in the suite pays once and no change here can move.
+ *
+ * WHAT THE FIRST VERSION OF THIS PARAGRAPH SAID: "wall 1.54 / 1.59 / 1.64 s,
+ * user+sys 1.61 s". WHAT IS TRUE NOW: those are the SUBTRACTED numbers and the
+ * paragraph called them wall, so a reader who re-measured as instructed got
+ * roughly double and would have "corrected" a correct figure to a wrong one.
+ * The subtraction is right and it is kept — the interesting quantity is what
+ * this file adds — but it is now stated, and both terms are given so it can be
+ * checked. (PHPUnit's own reported `Time:` matches neither: it excludes some of
+ * the boot and includes some of the teardown. Use `/usr/bin/time`.)
+ *
+ * `strace -f -qq -e trace=execve php vendor/bin/phpunit --filter <Class>`
+ * counts 100 `execve`, and they factor exactly: 33 `/bin/sh`, 33
+ * `/usr/bin/timeout`, 33 `/usr/bin/php8.3`, 1 `/usr/bin/php`. So THIRTY-THREE
+ * child interpreters — the lone `php` is phpunit itself — each reached through
+ * the `/bin/sh -c` that `exec()` implies and the `timeout -s KILL 60` this file
+ * wraps every spawn in. Three processes per row, one of which is the
+ * interpreter that costs.
+ *
+ * THE EXPLICIT `php` IN THAT COMMAND IS LOAD-BEARING and its absence is why
+ * the review could not reproduce the census either. Run as `strace …
+ * vendor/bin/phpunit …`, the shebang wrapper is itself an `execve` and the
+ * kernel's `PATH` search adds six ENOENT probes: 107 lines, 101 of them
+ * successful. Same run, same file, different number, because the thing being
+ * traced is a different program.
+ *
+ * The control that makes those numbers trustworthy: the same census against a
+ * file that spawns nothing (`--filter BootstrapTranscriptSeamCallSiteCensusTest`)
+ * reports exactly 1 — and, run the other way, 8 lines of which 2 succeed, which
+ * is the same +1/+6 offset and confirms the offset is the invocation and not
+ * the file. The control is worth having twice over, because an earlier attempt
+ * at this census — a `php` shim placed first on `PATH` — reported 0 for THIS
+ * file, and 0 was wrong: the spawns use `PHP_BINARY`, an absolute path, and
+ * never consult `PATH` at all. That broken harness agreed with its control and
+ * disagreed only with reality.
+ *
+ * Against 33 bare startups at 1.37 s, ~87% of this file's own 1.58 s is
+ * interpreter startup and the test bodies are ~0.2 s of it. (The earlier
+ * ~91% came from dividing 1.45 by 1.60; the ratio is the claim, and it is
+ * ~87% on this round's numbers. Neither is precise: the bare-startup loop
+ * pays no `sh` and no `timeout`, so it under-counts the per-row overhead this
+ * file actually carries.)
  *
  * THE OBVIOUS FIX IS NOT AVAILABLE, and this is the part worth writing down
  * because it looks available. Folding the differential table into one child
@@ -88,9 +130,9 @@ use SugarCraft\Crush\Cli\NonInteractive;
  * fresh process per argv IS the thing under test.
  *
  * WHAT WOULD CHANGE THE ANSWER, so "fine for now" is not what this says. The
- * threshold is the ROW COUNT, since cost is ~44 ms per row and nothing else
- * moves: at today's 33 children this file is 1.6 s of a roughly four-minute
- * suite (~0.7%). At ~110 children it would be 5 s, which is where a single file
+ * threshold is the ROW COUNT, since cost is ~48 ms per row (1.58 s / 33) and
+ * nothing else moves: at today's 33 children this file is 1.6 s of a roughly
+ * four-minute suite (~0.7%). At ~110 children it would be 5 s, which is where a single file
  * starts being felt in a local edit-test loop, and that is the point to stop
  * adding rows and start asking whether the marginal argv vector is buying
  * coverage or reassurance. Nothing about the STRUCTURE will have improved by
