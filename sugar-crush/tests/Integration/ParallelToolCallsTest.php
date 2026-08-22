@@ -20,6 +20,7 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\ParallelSafe;
@@ -1000,6 +1001,143 @@ final class ParallelToolCallsTest extends TestCase
         );
     }
 
+    /**
+     * WHAT HAPPENS WHEN `fork()` ITSELF FAILS -- exercised, not described.
+     *
+     * WHAT THE CODE SAID: that {@see Runtime::executeConcurrently()}'s
+     * fork-failure branch is "NOT EXERCISED BY THE SUITE", because reaching it
+     * "needs a real fork(2) failure, i.e. RLIMIT_NPROC exhausted, which no test
+     * here can arrange without setting a process-wide rlimit that would then
+     * apply to every other test in the same PHPUnit process".
+     *
+     * WHAT IS TRUE NOW: an rlimit is per-PROCESS, and this suite already forks.
+     * A child that caps its OWN `RLIMIT_NPROC` gets `pcntl_fork() === -1`
+     * (EAGAIN) for the rest of its short life while the parent goes on forking
+     * normally, and the cap dies with the child. Measured on PHP 8.3.6, this
+     * box: `setrlimit=true fork=-1` in the child, parent still forking. So the
+     * degraded path was arrangeable all along, and this drives a whole
+     * three-call group down it -- every fork fails, every call runs in this
+     * process instead, and the provider-ordered results are still exactly the
+     * results.
+     *
+     * WHAT IT STILL DOES NOT COVER, said plainly because a green test is easy
+     * to over-read: the two BOOKKEEPING statements on that branch --
+     * `ToolIpcFiles::discard($file)` and blanking the job's `file` -- have no
+     * observable effect, here or anywhere. Nothing was ever written at the
+     * reserved name, so the discard is two no-op `@unlink`s; and
+     * `Runtime::release()` reads `$job['result'] ?? collectChildResult($job)`,
+     * so a blanked `file` is never looked at. Deleting both lines leaves this
+     * file green (measured). The reason they cannot be mutation-killed is
+     * UNOBSERVABILITY, not unreachability -- which is a different claim, and
+     * the one the branch comment now makes.
+     *
+     * The child catches everything and leaves via
+     * {@see ForkedChild::exitNow()} for the reason
+     * {@see MultiAgentRefactorTest::runCoderChild()} spells out: this class's
+     * tearDown() deletes a directory the parent is still using.
+     */
+    public function testAGroupWhoseForksAllFailStillReturnsEveryResultAndStrandsNothing(): void
+    {
+        if (!function_exists('posix_setrlimit') || !defined('POSIX_RLIMIT_NPROC')) {
+            $this->markTestSkipped('Arranging a fork(2) failure needs posix_setrlimit() + RLIMIT_NPROC.');
+        }
+
+        $tool = new class () implements Tool, ParallelSafe {
+            public function name(): string { return 'plain'; }
+            public function description(): string { return 'returns its marker'; }
+            public function inputSchema(): array { return ['type' => 'object']; }
+            public function isParallelSafe(): bool { return true; }
+            public function execute(array $args): ToolResult
+            {
+                return new ToolResult(toolCallId: '', content: 'ok ' . $args['marker'] . ' pid=' . getmypid());
+            }
+        };
+
+        $report = $this->dir . '/forkfail.json';
+
+        $pid = pcntl_fork();
+        $this->assertNotSame(-1, $pid, 'the harness fork itself must succeed');
+
+        if ($pid === 0) {
+            try {
+                // THIS PROCESS ONLY. Per-process, gone when this child is, and
+                // the parent keeps forking throughout -- which is the whole
+                // reason the branch is reachable from inside a suite.
+                $armed = posix_setrlimit(POSIX_RLIMIT_NPROC, 1, 1);
+
+                // POSITIVE CONTROL for the arrangement itself: without this, a
+                // silently-ineffective setrlimit would make the group below
+                // fork normally and this test would pass while covering
+                // nothing at all.
+                $probe = @pcntl_fork();
+                if ($probe === 0) {
+                    ForkedChild::exitNow(0);
+                }
+
+                $childPid = getmypid();
+                $results = $this->execute([
+                    new ToolCall('call_f1', 'plain', ['marker' => 'a']),
+                    new ToolCall('call_f2', 'plain', ['marker' => 'b']),
+                    new ToolCall('call_f3', 'plain', ['marker' => 'c']),
+                ], [$tool]);
+
+                $reserved = array_values(array_filter(
+                    ToolIpcFiles::reservations(),
+                    static fn (string $p): bool => str_contains(basename($p), ToolIpcFiles::RUNTIME_PREFIX),
+                ));
+
+                // KNOWN-POSITIVE FIXTURE, same scanner, same test. An empty
+                // stranded list is evidence only if the scanner could still
+                // see a file: plant one on a path this group reserved, confirm
+                // it is reported, take it away again.
+                $planted = $reserved[0] ?? '';
+                @file_put_contents($planted, 'x');
+                $withPlant = ToolIpcFiles::strandedReservations();
+                @unlink($planted);
+
+                @file_put_contents($report, (string) json_encode([
+                    'armed' => $armed,
+                    'probe' => $probe,
+                    'contents' => array_map(static fn ($m): string => $m->content(), $results),
+                    'childPid' => $childPid,
+                    'reserved' => count($reserved),
+                    'withPlant' => $withPlant,
+                    'stranded' => ToolIpcFiles::strandedReservations(),
+                ]));
+            } catch (\Throwable $e) {
+                @file_put_contents($report, (string) json_encode(['threw' => $e::class . ': ' . $e->getMessage()]));
+            }
+
+            ForkedChild::exitNow(0);
+        }
+
+        $status = 0;
+        pcntl_waitpid($pid, $status);
+
+        $this->assertFileExists($report, 'the child reported nothing at all');
+        $observed = json_decode((string) file_get_contents($report), true);
+        $this->assertIsArray($observed);
+        $this->assertArrayNotHasKey('threw', $observed, (string) ($observed['threw'] ?? ''));
+
+        $this->assertTrue($observed['armed'], 'posix_setrlimit() refused the cap');
+        $this->assertSame(-1, $observed['probe'], 'the cap did not actually stop this child forking');
+
+        // Every call still produced its result, in provider order, from the
+        // dispatching process itself.
+        $this->assertSame(
+            ['ok a pid=' . $observed['childPid'], 'ok b pid=' . $observed['childPid'], 'ok c pid=' . $observed['childPid']],
+            $observed['contents'],
+            'a group whose forks all failed must still answer every call, in process',
+        );
+
+        $this->assertSame(3, $observed['reserved'], 'phase 1 reserves a name per call whether or not the fork lands');
+        $this->assertCount(
+            1,
+            $observed['withPlant'],
+            'the leak scanner is dead: it did not report a file planted on one of this group\'s own reserved paths',
+        );
+        $this->assertSame([], $observed['stranded'], 'a failed fork writes no payload, so nothing may be left behind');
+    }
     /**
      * The same thing with the REAL production wiring: two concurrent `Read`s
      * under a directory carrying a nested CLAUDE.md.

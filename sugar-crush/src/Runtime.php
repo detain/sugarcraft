@@ -713,16 +713,36 @@ final class Runtime
                     // on this branch too, and blank the slot so no later
                     // collect can go looking for a payload that cannot exist.
                     //
-                    // NOT EXERCISED BY THE SUITE, AND SAID SO ON PURPOSE.
-                    // Reaching it needs a real fork(2) failure, i.e. RLIMIT_NPROC
-                    // exhausted, which no test here can arrange without setting
-                    // a process-wide rlimit that would then apply to every other
-                    // test in the same PHPUnit process. Deleting these two lines
-                    // and running this file is green (measured), so nothing
-                    // below is load-bearing today: they are the bookkeeping that
-                    // keeps the invariant true the day something does read
-                    // `file` on a settled-in-process job. Left in rather than
-                    // trimmed to what the tests can see.
+                    // WHAT THIS SAID: "NOT EXERCISED BY THE SUITE, AND SAID SO
+                    // ON PURPOSE. Reaching it needs a real fork(2) failure,
+                    // i.e. RLIMIT_NPROC exhausted, which no test here can
+                    // arrange without setting a process-wide rlimit that would
+                    // then apply to every other test in the same PHPUnit
+                    // process."
+                    //
+                    // WHAT IS TRUE NOW: an rlimit is per-PROCESS, and the suite
+                    // already forks. A child that caps its OWN RLIMIT_NPROC
+                    // fails every later fork(2) with EAGAIN while the parent
+                    // goes on forking normally, and the cap dies with the child
+                    // (measured on PHP 8.3.6: `setrlimit=true fork=-1` in the
+                    // child, parent unaffected). So the branch is reachable
+                    // from a test after all, and
+                    // {@see \SugarCraft\Crush\Tests\Integration\ParallelToolCallsTest::testAGroupWhoseForksAllFailStillReturnsEveryResultAndStrandsNothing()}
+                    // now drives a whole three-call group down it.
+                    //
+                    // WHY THE TWO BOOKKEEPING LINES BELOW STILL EARN THEIR
+                    // PLACE, AND WHY NO MUTATION OF THEM CAN BE KILLED:
+                    // reaching them is not the same as observing them, and what
+                    // keeps them green when deleted is UNOBSERVABILITY, not
+                    // unreachability -- a different claim from the one this
+                    // comment used to make, and the accurate one. discard() on
+                    // a name nothing ever wrote is two no-op @unlink()s, and
+                    // release() takes `$job['result'] ?? collectChildResult()`,
+                    // whose left side is filled in on the line after next, so
+                    // `file` is never read on this path. They are the
+                    // bookkeeping that keeps the invariant true the day
+                    // something DOES read `file` on a settled-in-process job.
+                    // Left in rather than trimmed to what the tests can see.
                     ToolIpcFiles::discard($file);
                     $jobs[$index]['file'] = null;
                     $jobs[$index]['result'] = $this->executeGuarded($job['tool'], $job['call'], $job['args']);
