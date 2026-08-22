@@ -70,6 +70,77 @@ SKILL;
         $this->assertSame('New description', $retrieved->description);
     }
 
+    /**
+     * E67 — the incoming array key is ignored; the SKILL'S OWN NAME decides
+     * where it is filed.
+     *
+     * Every lookup on this class is by name, so a list-shaped register() stored
+     * skills under `0, 1, 2 …` and then `isAutoInvocable($skill->name)` missed:
+     * every skill in that batch loaded, listed, and silently never fired. No
+     * shipped caller passes a list — {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()}
+     * is the only one, twice, and both arrays come from
+     * {@see \SugarCraft\Crush\Skills\ForeignSkillDiscovery::discover()} keyed
+     * by name — so this pins a trap shut rather than fixing a live failure.
+     */
+    public function testRegisterKeysByTheSkillsOwnNameNotTheIncomingArrayKey(): void
+    {
+        // Arrange — a LIST, exactly the shape that used to go dark.
+        $registry = new SkillRegistry();
+        $skill1 = $this->createSkill('list-one', 'First skill');
+        $skill2 = $this->createSkill('list-two', 'Second skill');
+
+        // Act
+        $registry->register([$skill1, $skill2]);
+
+        // Assert — the four name-indexed lookups the old keying broke.
+        $this->assertSame(['list-one', 'list-two'], $registry->names());
+        $this->assertNotNull($registry->get('list-one'));
+        $this->assertNotNull($registry->get('list-two'));
+        $this->assertTrue($registry->isAutoInvocable('list-one'));
+        $this->assertTrue($registry->isAutoInvocable('list-two'));
+        $this->assertTrue($registry->isUserInvocable('list-one'));
+        $this->assertSame(['list-one', 'list-two'], array_keys($registry->all()));
+    }
+
+    /**
+     * And a WRONG key does not win over the skill's own name either — the
+     * list case above is only the commonest way to supply one.
+     */
+    public function testAMislabelledKeyDoesNotDecideWhereASkillIsFiled(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $skill = $this->createSkill('real-name', 'A skill filed under a lie');
+
+        // Act
+        $registry->register(['wrong-key' => $skill]);
+
+        // Assert
+        $this->assertSame(['real-name'], $registry->names());
+        $this->assertNull($registry->get('wrong-key'));
+        $this->assertNotNull($registry->get('real-name'));
+        $this->assertTrue($registry->isAutoInvocable('real-name'));
+        $this->assertFalse($registry->isAutoInvocable('wrong-key'));
+    }
+
+    /**
+     * The disable ledger is keyed by name too, so filing by name is what makes
+     * `disable($skill->name)` reach the skill a list-shaped register() stored.
+     */
+    public function testASkillRegisteredFromAListCanStillBeDisabledByName(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $registry->register([$this->createSkill('list-disable', 'Disable me')]);
+
+        // Act
+        $registry->disable('list-disable');
+
+        // Assert
+        $this->assertNull($registry->get('list-disable'));
+        $this->assertSame([], array_keys($registry->all()));
+    }
+
     public function testRegisterEmptyArray(): void
     {
         // Arrange

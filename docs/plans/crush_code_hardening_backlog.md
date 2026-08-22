@@ -4239,6 +4239,51 @@ often but not how much.
 
 **Step.** Clip the nudge, and count it against the same budget as the tool body rather than beside it.
 
+**FIXED, round 40 `cmd`.** Both halves. The four-row table above re-measured independently in the lane
+and reproduced EXACTLY (345 / 20,253 / 1,000,773 / 10,002,823 bytes). End-to-end, over a 30-file
+fixture, 20 skills x 20,000-byte descriptions: `Grep` at cap 1,000 returned 401,372 bytes (401.4x),
+`Glob` 401,378 (401.4x), `Read` at `maxBytes` 200 returned 400,406 (2,002.0x) — and ONE skill with a
+200-byte description already overran at 1,334 / 1,340 (1.3x), so it was never a
+pathological-input-only defect.
+
+`SkillPathNudge::forPaths()` now bounds itself in COUNT (`MAX_ENTRIES` = 8) and in BYTES per entry
+(`MAX_ENTRY_BYTES` = 300, cut with `mb_strcut` so a clip cannot emit a partial UTF-8 sequence and
+marked `... [clipped]`), giving a class ceiling `SkillPathNudge::maxBytes()` = 2,636 bytes. Overflow is
+DEFERRED, not dropped — a held-back entry is left unannounced, so `hasPending()` still reports it and a
+later call surfaces it, which is the rule `instructionSection()` follows for the same reason.
+`forPaths()` also takes an optional caller budget; a budget too small for one entry returns null and
+marks NOTHING.
+
+For the second half, `Grep` and `Glob` build the nudge BEFORE clipping the body and subtract its
+length from the body's cap; `Grep`, `Glob` and `Read` give it an eighth of their cap where the
+instruction section takes a quarter, making `Read`'s stated total 1.375x `maxBytes`. `Edit`/`Write`
+pass no budget — their result is a one-line success message with no cap to spend — so the class
+ceiling is the whole bound there, the analogue of their flat `DEFAULT_MAX_INSTRUCTION_BYTES`.
+
+Residual, stated: below a cap of roughly 4,120 bytes (1,960 for a short entry) an eighth cannot hold
+the chrome plus one entry, so no nudge is emitted at all — deferred, not spent. The shipped cap is
+65,536.
+
+The `Grep::execute()` cross-reference is corrected from E57 to E66, and the two comments in `Grep` and
+`Glob` that described the nudge as living outside the cap are rewritten. `sugar-crush/docs/SKILLS.md`'s
+`paths` row now states the bound.
+
+Tests: `SkillPathNudgeTest::testTheNudgeIsBoundedHoweverManySkillsMatchAndHoweverLongTheirDescriptions`,
+`::testManyShortSkillsAreBoundedByCountAndOneLongSkillByBytes`, `::testAClippedEntrySaysItWasClipped`,
+`::testAClippedDescriptionStaysValidUtf8`, `::testASkillHeldBackByTheCountBoundIsAnnouncedByTheNextCall`,
+`::testTheNudgeNeverExceedsTheBudgetItIsGiven`,
+`::testABudgetTooSmallForOneEntrySurfacesNothingAndSpendsNothing`,
+`ToolOutputBudgetTest::testGrepAndGlobStayInsideTheirCapWithAnOversizeSkillNudge`,
+`::testTheSkillNudgeCannotStarveTheAnswer`, `::testReadBoundsTheSkillNudgeItAppends`,
+`::testACallWithNoNudgeToShowGetsTheWholeCap`, `::testASkillTheReservationCannotHoldIsNotSpent`.
+**12** new tests.
+
+**A warning for the next fixture.** The first cut of the cap test used 30 matches under a 65,536-byte
+cap. The hit list was then far inside the budget, so deleting the reservation outright left the whole
+file GREEN — the mutation the test exists to kill SURVIVED it. A cap test needs the body to overflow
+the cap on its own AND the nudge to be present, or it proves nothing. It now uses 400 matches at caps
+8,192 and 16,384 and asserts `<system-reminder>` at each.
+
 ---
 
 ### E67 — `SkillRegistry::register()` keys by array key, not by skill name
@@ -4258,6 +4303,31 @@ this is a latent trap for the next caller; if one does, auto-invocation is broke
 (`src/Runtime.php:857`, `src/Chat.php:3250`). Runtime's comment — *a hook is OBSERVABILITY, not the
 answer* — makes this deliberate. Flagged only because a user writing a PostToolUse hook that returns
 DENY gets silence. A documentation gap at most.
+
+**SETTLED AND FIXED, round 40 `cmd`.** The caller question is closed: `SkillRegistry::register()` has
+exactly TWO shipped call sites, both in `SkillManager::loadAll()`
+(`register($this->foreign->discoverClaude(...))` and the `discoverOpencode()` sibling). Both arrays come
+from `ForeignSkillDiscovery::discover()`, which builds `$skills[$name] = $this->tag($skill, $source)`
+over `SkillLoader::loadFromDirectory()`, which itself builds `$skills[$skill->name] = $skill` after
+`withName($skillName)`; `tag()` copies `name` through unchanged. Repo-wide grep for `SkillRegistry`
+outside the class and its tests finds no third producer. **So auto-invocation was NOT broken in
+production — this was a latent trap, sized S, and it is now shut**: `register()` keys by `$skill->name`
+and ignores the incoming key. The `array<string, Skill>` signature is kept, because a name-keyed array
+is still the shape to pass; the key is now redundant rather than load-bearing.
+
+**The `all()` cast STAYS, and the two defences do not disagree.** The backlog asked whether keying by
+`$skill->name` makes the decimal-integer-string coercion unreachable. It does NOT, and the reason is
+worth recording: PHP coerces `"123"` to `int(123)` on ANY array-key insert, so
+`$this->skills[$skill->name] = $skill` for a skill named `123` stores under `int(123)` exactly as the
+caller's own key did. The coercion is a property of the array, not of where the key was read.
+`register()` decides WHICH name a skill is filed under; the cast decides what type comes back out of
+`array_keys()`/`ARRAY_FILTER_USE_KEY`. Both comments now say so.
+
+The `PostToolUse` note above is untouched, as briefed.
+
+Tests: `SkillRegistryTest::testRegisterKeysByTheSkillsOwnNameNotTheIncomingArrayKey`,
+`::testAMislabelledKeyDoesNotDecideWhereASkillIsFiled`,
+`::testASkillRegisteredFromAListCanStillBeDisabledByName`. **3** new tests.
 ---
 
 ### E68 — `AgentDashboardPane` over-runs its caller's width on a single emoji

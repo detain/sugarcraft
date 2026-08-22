@@ -15,12 +15,44 @@ final class SkillRegistry
     /**
      * Register skills from an array.
      *
+     * KEYED BY `$skill->name`, AND THE INCOMING KEY IS IGNORED — E67. Every
+     * lookup on this class is by name: {@see get()}, {@see isAutoInvocable()},
+     * {@see isUserInvocable()}, {@see isContextFork()} and {@see isDisabled()}
+     * all index `$this->skills` (or `$this->disabledSkills`) with a skill NAME.
+     * Storing under whatever key the caller happened to use made every one of
+     * those a coin toss on the caller's array shape: a list-shaped
+     * `register([$a, $b])` stored under `0` and `1`, after which
+     * `isAutoInvocable($skill->name)` missed and EVERY skill in that batch was
+     * silently non-auto-invocable — a skill that loads, lists, and never fires.
+     *
+     * VERIFIED, not assumed, that no shipped caller passed a list. There are
+     * exactly two: {@see SkillManager::loadAll()}'s
+     * `register($this->foreign->discoverClaude(...))` and its `discoverOpencode`
+     * sibling. Both come from {@see ForeignSkillDiscovery::discover()}, which
+     * builds `$skills[$name] = $this->tag($skill, $source)` over
+     * {@see SkillLoader::loadFromDirectory()}, which itself builds
+     * `$skills[$skill->name] = $skill` after `withName($skillName)` — and
+     * `tag()` copies `name` through. So this is a latent trap the next caller
+     * would spring, not a live defect, and the fix is to remove the trap rather
+     * than to document the convention.
+     *
+     * The signature still declares `array<string, Skill>` because a name-keyed
+     * array remains the shape callers should pass — the key is now redundant
+     * rather than load-bearing, which is a weaker promise to make than "get it
+     * right or your skills go dark".
+     *
+     * This does NOT make {@see all()}'s cast unreachable, and that cast stays.
+     * PHP coerces a decimal-integer STRING to `int` on any array-key insert, so
+     * a skill genuinely named `123` is stored under `int(123)` whether the key
+     * came from the caller's array or from `$skill->name` — the coercion is a
+     * property of the array, not of where the key was read.
+     *
      * @param array<string, Skill> $skills
      */
     public function register(array $skills): void
     {
-        foreach ($skills as $name => $skill) {
-            $this->skills[$name] = $skill;
+        foreach ($skills as $skill) {
+            $this->skills[$skill->name] = $skill;
         }
     }
 
@@ -50,6 +82,13 @@ final class SkillRegistry
             // `int(123)` and reaches this callback as an int, which
             // isDisabled(string) rejects with a TypeError — crashing every
             // caller of all() for the whole session.
+            //
+            // STILL NEEDED AFTER E67 made register() key by `$skill->name`.
+            // The coercion is a property of the array, not of where the key
+            // came from: `$this->skills[$skill->name]` with a name of `123`
+            // stores under `int(123)` exactly as the caller's own key did.
+            // The two defences do not disagree — register() decides WHICH name
+            // a skill is filed under, this decides what type comes back out.
             fn($name) => !$this->isDisabled((string) $name),
             ARRAY_FILTER_USE_KEY
         );
