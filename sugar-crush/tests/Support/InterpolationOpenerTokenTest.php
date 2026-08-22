@@ -122,6 +122,36 @@ final class InterpolationOpenerTokenTest extends TestCase
                 . 'longer measures what it claims to',
         );
 
+        // THE ALPHABET IS THE COVERAGE, and a derivation is only as wide as
+        // the spellings it was handed. Deleting a row from
+        // {@see INTERPOLATIONS} shrinks the roster, and a shrunk roster makes
+        // the "every scanner names every opener" assertion weaker without
+        // making it fail - measured: removing the `${a}` row left that test
+        // green with a roster of one. Graceful shrinking is the DESIGNED
+        // behaviour for the day PHP removes the syntax, so it cannot simply
+        // be forbidden; what can be checked is that the shrink was the
+        // language's doing and not an edit's.
+        //
+        // The interpreter is asked directly. If it still defines the
+        // deprecated opener, this file must still be handing it a spelling
+        // that produces one. On a PHP that has removed the syntax the
+        // constant goes too, and the roster is then allowed to be smaller
+        // with nothing here reddening. THE TRADE-OFF, stated because it is a
+        // real one: a PHP that kept the constant while removing the syntax
+        // would red here spuriously. That is the safe polarity - it stops on
+        // a human rather than quietly narrowing the guard - and this box has
+        // only PHP 8.3.6, so no version beyond it has been exercised.
+        if (\defined('T_DOLLAR_OPEN_CURLY_BRACES')) {
+            $this->assertContains(
+                'T_DOLLAR_OPEN_CURLY_BRACES',
+                array_keys($openers),
+                'this PHP still defines the deprecated `${a}` opener, but no spelling in '
+                    . 'INTERPOLATIONS produces one any more. Either a row was deleted - put it '
+                    . 'back, the scanners still have to handle the token - or the lexer changed '
+                    . 'and the roster needs a new spelling to keep finding it.',
+            );
+        }
+
         // A source with NO interpolation must produce none of them - the
         // other polarity, without which a derivation that returned every
         // array token would look correct above.
