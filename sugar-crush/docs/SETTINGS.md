@@ -343,8 +343,11 @@ The three warnings this paragraph used to name as still-stderr-only — an
 unusable provider, a skipped hook file, a rejected permission pattern — have
 since migrated through the same seam, along with the agent-preset degradations,
 the refused project directories, the skipped skill files and the empty tool set:
-**fifteen** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
-src/Cli/Bootstrap.php`). The rule that decided the split is on
+**sixteen** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
+src/Cli/Bootstrap.php`, which agrees with the token scan in
+`BootstrapTranscriptSeamCallSiteCensusTest` today; `grep` for the bare
+identifier does **not** — it reports 31, because most occurrences in that file
+are prose). The rule that decided the split is on
 `Bootstrap::warnPermissionConfigInTranscript()` — a warning earns a transcript
 row iff it names something **the session can no longer do**. Warnings that
 report a malformed config entry without the session being diminished
@@ -352,8 +355,15 @@ report a malformed config entry without the session being diminished
 is empty so it was ignored`) stay on stderr, because a transcript row per bad
 config entry is how a useful notice becomes a wall you scroll past.
 
-**What this paragraph used to say, and what changed.** The count above read
-*fourteen*, and the stderr-only list above named a third example: `retention
+**What this paragraph used to say, and what changed.** The count above has read
+*fourteen*, then *fifteen*, and both were left behind by the seam it counts:
+round 42 (E78) routed `reportPrunedSessions()`'s retention summary on as the
+fifteenth, round 43 (E86) routed `mcpClient()`'s start-then-throw catch on as
+the sixteenth, and neither round came back to this page. Round 44 corrected it
+and then wired it: this sentence is now one of the rows in
+`BootstrapTranscriptSeamCallSiteCensusTest::PROSE_SITES`, so the next round that
+adds a call site fails a test here instead of leaving a reader to notice. The
+stderr-only list above also used to name a third example: `retention
 removed 3 sessions`. Both are now wrong, and the second one was the more
 interesting mistake — it was the one entry on that list whose subject was data
 the launch had **destroyed** rather than a setting it had declined to honour.
