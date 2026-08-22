@@ -397,6 +397,11 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
      * both of its doors. Two bullets each naming one key and its two doors
      * pass; one bullet naming `provider` and only the palette row does not,
      * which is the original defect. The old form could not tell those apart.
+     * The "AND" in that sentence was ITSELF false for one of the two keys when
+     * it was first written, because `Switch Theme` and `/theme` each contain
+     * the word `theme`; {@see unitNamesKeyWithBothDoors()} carries the
+     * measurement and the repair, and {@see doorUnits()} keeps the surviving
+     * mutation as a fixture.
      *
      * THE ENUMERATION IS A SPAN, NOT A UNIT, and it has to be, because the
      * finer window is what split it. It is the sole unit containing
@@ -443,17 +448,11 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
         foreach (self::DOORS as $key => $doors) {
             $complete = null;
             foreach ($span as $unit) {
-                if (stripos($unit, $key) === false) {
-                    continue;
-                }
-                foreach ($doors as $door) {
-                    if (stripos($unit, $door) === false) {
-                        continue 2;
-                    }
-                }
-                $complete = $unit;
+                if ($this->unitNamesKeyWithBothDoors($unit, $key, $doors)) {
+                    $complete = $unit;
 
-                break;
+                    break;
+                }
             }
 
             $this->assertNotNull(
@@ -464,6 +463,90 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
                 . 'that credited the palette alone for `provider`',
             );
         }
+    }
+
+    /**
+     * Does this unit name `$key` IN ITS OWN RIGHT, and both of its doors?
+     *
+     * THE KEY IS LOOKED FOR IN THE UNIT WITH THE DOOR SPANS CUT OUT, and that
+     * is the whole substance of this method rather than a tidy-up.
+     * WHAT IT SAID, until this round: the rule was `stripos($unit, $key)`
+     * followed by a `stripos()` per door, described as "some unit must name the
+     * key AND both of its doors".
+     * WHAT IS TRUE NOW: for `theme` the first conjunct was SUBSUMED by the
+     * second. `Switch Theme` and `/theme` both contain the string `theme`, so a
+     * bullet that had lost its key name entirely still satisfied every clause.
+     * MEASURED on PHP 8.3.6 at round 45: deleting `` `theme`: `` from
+     * {@see LayeredSettings}' theme bullet left this test — and 149 tests
+     * across the Config and Chat doc-drift suites — entirely green. The
+     * round-45 mutation table missed it because all three of its mutations
+     * deleted DOOR names, never a KEY name, so the surviving conjunct was never
+     * the one under test.
+     * WHY THE RULE STILL EARNS ITS PLACE: the defect it exists to refuse is a
+     * bullet crediting one door and leaving the other to a neighbour, and that
+     * is unchanged. What changed is that the key half is now falsifiable for
+     * both keys instead of one. Cutting the doors out rather than requiring a
+     * particular spelling (`` `theme` ``, `"theme"`) keeps the rule indifferent
+     * to how a document quotes its keys, which is what
+     * {@see testTheRetractedProviderCreditAppearsOnlyInsideItsRetraction()}
+     * learned the hard way about quote characters.
+     *
+     * @param list<string> $doors
+     */
+    private function unitNamesKeyWithBothDoors(string $unit, string $key, array $doors): bool
+    {
+        $withoutDoors = $unit;
+        foreach ($doors as $door) {
+            if (stripos($unit, $door) === false) {
+                return false;
+            }
+            $withoutDoors = str_ireplace($door, ' ', $withoutDoors);
+        }
+
+        return stripos($withoutDoors, $key) !== false;
+    }
+
+    /**
+     * The predicate above, over units whose answer is known.
+     *
+     * A GUARD WHOSE ONLY EXERCISE IS THE LIVE DOCUMENT CANNOT DISTINGUISH "the
+     * prose is correct" FROM "the rule accepts anything". Row 2 is the mutation
+     * that survived the whole suite before this round — the theme bullet with
+     * its key name deleted — kept here as a fixture so it cannot survive again
+     * silently if the predicate is ever loosened back.
+     *
+     * @return iterable<string, array{0: string, 1: string, 2: bool}>
+     */
+    public static function doorUnits(): iterable
+    {
+        yield 'the shipped theme bullet' => [
+            '- `theme`: the Ctrl+P palette\'s "Switch Theme" row, and `/theme <name>`.', 'theme', true,
+        ];
+        yield 'the theme bullet with its key name deleted' => [
+            '- the Ctrl+P palette\'s "Switch Theme" row, and `/theme <name>`.', 'theme', false,
+        ];
+        yield 'the theme bullet missing the slash command' => [
+            '- `theme`: the Ctrl+P palette\'s "Switch Theme" row.', 'theme', false,
+        ];
+        yield 'the shipped provider bullet' => [
+            '- `provider`: the Ctrl+P palette\'s "Switch Model" row, and `/model <name>`.', 'provider', true,
+        ];
+        yield 'the provider bullet with its key name deleted' => [
+            '- the Ctrl+P palette\'s "Switch Model" row, and `/model <name>`.', 'provider', false,
+        ];
+        yield 'the pre-drift provider sentence, palette only' => [
+            '- `provider`, from the Ctrl+P palette\'s "Switch Model" action.', 'provider', false,
+        ];
+    }
+
+    /** @dataProvider doorUnits */
+    public function testThePerKeyPredicateAnswersKnownUnitsCorrectly(string $unit, string $key, bool $expected): void
+    {
+        $this->assertSame(
+            $expected,
+            $this->unitNamesKeyWithBothDoors($unit, $key, self::DOORS[$key]),
+            'the per-key door predicate no longer gives the answer this row records',
+        );
     }
 
     /**
