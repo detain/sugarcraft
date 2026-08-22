@@ -324,8 +324,11 @@ final class SkillRegistry
      * rewrites in the fallback buys correctness for uncompilable patterns and
      * buys exactly nothing for narrowing. WHY THE CLAIM STILL EARNS ITS PLACE:
      * because it is now measured on two independent samples rather than
-     * deduced from one. (1) The 42 x 50 = 2,100-pair grid captured against the
-     * old predicate at 8416d98e: 0 of its 290 matches lost, 41 gained. (2) A
+     * deduced from one. (1) The 45 x 54 = 2,430-pair grid captured against the
+     * old predicate at 8416d98e: 0 of its 326 matches lost, 49 gained — and
+     * its alphabet was WIDENED this round by exactly the four paths and two
+     * patterns the three families below need, so the grid can now see what it
+     * was previously green over. (2) A
      * seeded differential fuzz — `mt_srand(20260822)`, 200,000 trials, pattern
      * alphabet including `**`, `***`, `[ab]`, `[!a]`, `[a-c]`, `[\d]` and
      * `\*`, path alphabet including `\n`, both 1-8 tokens, PHP 8.3.6 — which
