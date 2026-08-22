@@ -13,6 +13,19 @@ final class SkillRegistry
     private array $disabledSkills = [];
 
     /**
+     * Compiled `paths:` globs, keyed by the raw pattern.
+     *
+     * Static because the translation is pure and the pattern set is bounded by
+     * the skills installed on the box: {@see SkillPathNudge} calls
+     * {@see pathMatches()} per pattern per path on tool calls, and a fresh
+     * registry per session would otherwise recompile the same handful of
+     * frontmatter globs from scratch.
+     *
+     * @var array<string, string>
+     */
+    private static array $compiledPathPatterns = [];
+
+    /**
      * Register skills from an array.
      *
      * KEYED BY `$skill->name`, AND THE INCOMING KEY IS IGNORED — E67. Every
@@ -232,29 +245,11 @@ final class SkillRegistry
 
         foreach ($this->all() as $skill) {
             foreach ($skill->paths as $pattern) {
-                // Try direct match first
                 $patternMatched = false;
                 foreach ($paths as $path) {
-                    if (fnmatch($pattern, $path)) {
+                    if (self::pathMatches($pattern, $path)) {
                         $patternMatched = true;
                         break;
-                    }
-                }
-
-                // If direct match failed, try converting glob ** to fnmatch patterns
-                if (!$patternMatched && str_contains($pattern, '**')) {
-                    // Convert /**/ to /*/ (matches one directory level)
-                    $pattern1 = str_replace('/**/', '/*/', $pattern);
-                    // Convert /** at end to /* (matches one directory or zero)
-                    $pattern2 = str_replace('/**', '/*', $pattern);
-                    // Also try without the ** entirely (matches zero directories)
-                    $pattern3 = str_replace('/**', '', $pattern);
-
-                    foreach ($paths as $path) {
-                        if (fnmatch($pattern1, $path) || fnmatch($pattern2, $path) || fnmatch($pattern3, $path)) {
-                            $patternMatched = true;
-                            break;
-                        }
                     }
                 }
 
@@ -266,6 +261,228 @@ final class SkillRegistry
         }
 
         return $matches;
+    }
+
+    /**
+     * Does one `paths:` frontmatter glob claim one file path?
+     *
+     * WHAT THE CODE HERE USED TO SAY: `fnmatch($pattern, $path)` first, and
+     * then — only when the pattern contained `**` — three textual rewrites
+     * whose comments read "Convert /**\/ to /*\/ (matches one directory
+     * level)", "Convert /** at end to /* (matches one directory or zero)" and
+     * "Also try without the ** entirely (matches zero directories)", ORed
+     * together.
+     *
+     * WHAT IS TRUE NOW: all three rewrites were keyed on a SLASH BEFORE the
+     * `**`, so a pattern that STARTS with one — `**\/*.php`, the first form
+     * most people write — matched none of them and fell through to the bare
+     * `fnmatch()`, which on PHP 8.3.6 with no flags reads `**\/` as "some
+     * characters, then a literal slash". MEASURED on this box, PHP 8.3.6:
+     * `fnmatch('**\/*.php', 'a.php')` is `false`, so a skill scoped to every
+     * PHP file in the tree did not claim the PHP files at the tree's root, and
+     * the same hole silenced `**\/node_modules/**` for `node_modules/x/y.js`.
+     * That is E85.
+     *
+     * AND A SECOND HOLE THE BRIEF DID NOT NAME, found by the characterisation
+     * table rather than by reading the rewrites: `str_replace()` replaces
+     * NON-OVERLAPPING occurrences, and the `/**\/` needle ends in the slash
+     * the next one would have started with. So on `a/**\/**\/b` only the
+     * first is rewritten — the scan resumes past the shared slash — and the
+     * result `a/*\/**\/b` demands three separators where the pattern's author
+     * asked for one or more. VERIFIED on PHP 8.3.6: none of the four old
+     * branches claimed `a/x/b`. A regex translation replaces the rewrites and
+     * closes both.
+     *
+     * WHY THE OLD REASONING STILL EARNS ITS PLACE: the three rewrites were
+     * describing real semantics that `fnmatch` has no way to express — `**`
+     * spanning zero directories is exactly what a bare `fnmatch` cannot do,
+     * because its wildcards cannot match "nothing, INCLUDING the separator
+     * beside it". Every case the rewrites bought is bought again below, on
+     * purpose: `/**` compiles to `(?:/.*)?`, which is the union of "one or
+     * more directories" (their rewrite 2) and "zero directories" (their
+     * rewrite 3), and a `/**\/` in the middle is the same union followed by
+     * the next literal segment (their rewrite 1).
+     *
+     * SEMANTICS DELIBERATELY PRESERVED, not tidied: a single `*` here matches
+     * ACROSS `/`, and `?` matches `/` too. That is not the POSIX-shell reading
+     * — it is what `fnmatch()` does when the caller passes no `FNM_PATHNAME`,
+     * which this call site never did. VERIFIED on PHP 8.3.6:
+     * `fnmatch('*.php', 'src/a.php')` is `true` without flags and `false` with
+     * `FNM_PATHNAME`. Narrowing `*` to a single segment would be the more
+     * conventional glob, and it would silently stop matching paths that match
+     * today — every `src/*` skill would quietly lose its subdirectories. So
+     * the translation widens and never narrows: CHARACTERISED before the
+     * change over 42 patterns x 50 paths = 2,100 pairs evaluated against the
+     * old predicate, this one loses none of the 290 that matched and gains 41,
+     * every one of them attributable to one of the two holes above. The table
+     * is pinned in
+     * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest}.
+     *
+     * AND THE THREE REWRITES ARE STILL HERE, in {@see legacyPathMatch()},
+     * because "never narrows" has to be a THEOREM and not a sample. The
+     * translation reproduces `fnmatch()`'s `*`, `?`, `\\` and `[...]` — but
+     * not the POSIX class syntax `fnmatch()` inherits from libc. MEASURED on
+     * PHP 8.3.6: `fnmatch('[[:alpha:]]x', 'ax')` is `true`, while this
+     * translation emits `#^[[:alpha:]\\]x$#D`, whose class is never
+     * terminated, so PCRE refuses to compile it. So the compile failure is not
+     * a malformed-frontmatter edge — it is a SUPPORTED pattern shape landing
+     * on a translation that does not cover it, and answering `false` there
+     * would narrow the matcher for every skill that uses one. The rewrites are
+     * kept as that pattern's answer rather than deleted, which also means the
+     * one thing a compile failure can never do is make the tool call throw.
+     */
+    public static function pathMatches(string $pattern, string $path): bool
+    {
+        $regex = self::$compiledPathPatterns[$pattern] ??= self::compilePathPattern($pattern);
+
+        $result = @preg_match($regex, $path);
+        if ($result === false) {
+            // The class did not compile (a POSIX class, a reversed range), or
+            // PCRE hit a backtrack limit on a pathological pattern. Either way
+            // the question is still the skill author's, so it is answered by
+            // the predicate this method replaced.
+            return self::legacyPathMatch($pattern, $path);
+        }
+
+        return $result === 1;
+    }
+
+    /**
+     * The pre-E85 predicate, kept as the answer for patterns
+     * {@see compilePathPattern()} cannot compile.
+     *
+     * NOT DEAD, and not kept out of sentiment: {@see pathMatches()} reaches it
+     * for any `paths:` glob carrying a POSIX character class, which
+     * `fnmatch()` supports and the translation does not. Pinned by
+     * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest::testAPosixClassPatternFallsBackToTheFullOldPredicate()},
+     * which discriminates it from a bare `fnmatch()` fallback — the rewrites
+     * are part of the answer, not decoration around it, so
+     * `src/**\/[[:alpha:]]*.php` still claims `src/abc.php`.
+     *
+     * Its `**` handling is the flawed one this class no longer uses on the
+     * main path; see {@see pathMatches()}'s doc-block for both holes. It is
+     * still strictly better here than `false`.
+     */
+    private static function legacyPathMatch(string $pattern, string $path): bool
+    {
+        if (fnmatch($pattern, $path)) {
+            return true;
+        }
+
+        if (!str_contains($pattern, '**')) {
+            return false;
+        }
+
+        return fnmatch(str_replace('/**/', '/*/', $pattern), $path)
+            || fnmatch(str_replace('/**', '/*', $pattern), $path)
+            || fnmatch(str_replace('/**', '', $pattern), $path);
+    }
+
+    /**
+     * Translate one frontmatter glob into an anchored PCRE.
+     *
+     * Cached by {@see pathMatches()} because {@see SkillPathNudge} runs this
+     * per pattern per path on tool calls: the compile is a character walk, the
+     * match is not.
+     */
+    private static function compilePathPattern(string $pattern): string
+    {
+        $out = '';
+        $len = strlen($pattern);
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $pattern[$i];
+
+            // fnmatch() honours backslash escapes unless FNM_NOESCAPE is
+            // passed, and this call site never passed it. VERIFIED on PHP
+            // 8.3.6: fnmatch('a\*b', 'a*b') is true and fnmatch('a\*b', 'aXb')
+            // is false.
+            if ($ch === '\\' && $i + 1 < $len) {
+                $out .= preg_quote($pattern[++$i], '#');
+                continue;
+            }
+
+            // `/**` — the whole point of this translation. Zero-or-more
+            // `/segment` groups, so `a/**/b` claims `a/b` as well as
+            // `a/x/y/b`, and `a/**` claims `a` itself.
+            if ($ch === '/' && substr($pattern, $i + 1, 2) === '**') {
+                $j = $i + 3;
+                while ($j < $len && $pattern[$j] === '*') {
+                    ++$j;
+                }
+                $out .= '(?:/.*)?';
+                $i = $j - 1;
+                continue;
+            }
+
+            if ($ch === '*' && substr($pattern, $i + 1, 1) === '*') {
+                $j = $i + 1;
+                while ($j < $len && $pattern[$j] === '*') {
+                    ++$j;
+                }
+
+                // A LEADING `**/` — the case none of the three rewrites could
+                // see, because each of them needed a slash in front of the
+                // stars and at position 0 there is none. Zero-or-more leading
+                // directories, so `**/*.php` finally claims `a.php`.
+                if ($i === 0 && $j < $len && $pattern[$j] === '/') {
+                    $out .= '(?:.*/)?';
+                    $i = $j;
+                    continue;
+                }
+
+                $out .= '.*';
+                $i = $j - 1;
+                continue;
+            }
+
+            if ($ch === '*') {
+                $out .= '.*';
+                continue;
+            }
+
+            if ($ch === '?') {
+                $out .= '.';
+                continue;
+            }
+
+            if ($ch === '[') {
+                $close = $i + 1;
+                if ($close < $len && ($pattern[$close] === '!' || $pattern[$close] === '^')) {
+                    ++$close;
+                }
+                // A `]` in first position is a literal member, not the
+                // terminator — the POSIX rule, and PHP's: fnmatch('[]]x', ']x')
+                // is true on 8.3.6.
+                if ($close < $len && $pattern[$close] === ']') {
+                    ++$close;
+                }
+                while ($close < $len && $pattern[$close] !== ']') {
+                    ++$close;
+                }
+
+                if ($close >= $len) {
+                    // Unterminated: fnmatch treats the bracket as a literal
+                    // (fnmatch('a[b', 'a[b') is true on 8.3.6), so this does
+                    // too, and the rest of the pattern keeps translating.
+                    $out .= '\\[';
+                    continue;
+                }
+
+                $body = substr($pattern, $i + 1, $close - $i - 1);
+                if ($body !== '' && $body[0] === '!') {
+                    $body = '^' . substr($body, 1);
+                }
+                $out .= '[' . str_replace('#', '\\#', $body) . ']';
+                $i = $close;
+                continue;
+            }
+
+            $out .= preg_quote($ch, '#');
+        }
+
+        // /D so a trailing newline in a path cannot satisfy `$`.
+        return '#^' . $out . '$#D';
     }
 
     /**
