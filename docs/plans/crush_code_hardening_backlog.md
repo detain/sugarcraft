@@ -7047,3 +7047,26 @@ doc-blocks so the next reader is not misled, neither closed:
    tree has that shape today, which is why it is recorded rather than fixed; the fix is to stop the
    backward walk at the enclosing function's opening brace, which `ForkedChildExitScanner::functionRanges()`
    already computes for the other scanner.
+
+### Eb46-8 — the reaper's ext-pcntl-without-ext-posix branch is fixed but cannot be pinned on this box
+
+**Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured, and deliberately not
+closed.**
+
+**What.** `ReapsForkedChildrenTrait::reapTrackedForkedChildren()` has two exits from its survivor loop:
+the `function_exists('posix_kill') && defined('SIGKILL')` branch, which SIGKILLs and then collects the
+corpse with a blocking `pcntl_waitpid()`; and the branch taken when there is no way to signal, which now
+reaps `WNOHANG` instead of waiting a live child out. The second branch was the round-46 review's MINOR-9:
+the blocking wait originally sat outside the guard, so on an ext-pcntl-without-ext-posix build the reaper
+would sit in `tearDown()` for as long as a live child chose to run, with the per-test alarm already spent.
+
+**Why it is not pinned.** Reaching that branch needs a PHP build with ext-pcntl and without ext-posix.
+This box has both (PHP 8.3.6), and `ReapsForkedChildrenTraitTest::setUp()` skips the whole file when
+`posix_kill` is absent — so no test in the tree executes the branch, and none can here. Making it
+reachable would mean injecting the capability check (a `protected function canSignal(): bool` seam the
+test overrides), which is a production-shaped change to a test helper for a build nobody in this project
+runs. The fix is committed on its argument, not on a green test, and this entry is the record of that.
+
+**What would close it.** Either the seam above plus a subclass that reports "cannot signal" and asserts
+the reaper returns promptly with the pid absent from `$killed`, or a CI job on a build without ext-posix.
+Neither is worth a round on its own; fold it into whichever round next touches the trait.
