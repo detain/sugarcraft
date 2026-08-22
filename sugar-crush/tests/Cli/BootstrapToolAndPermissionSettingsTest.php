@@ -555,6 +555,199 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
     }
 
     /**
+     * THE WHOLE LINE'S WIRING, rendered from the launcher's own formats and
+     * matched against a real child launch's stderr.
+     *
+     * WHAT WAS MISSING AND WHY IT MATTERED (E153).
+     * {@see testATrustedProjectsToolRemovalsAreReportedWhateverTheGlobLooksLike()}
+     * and its siblings assert only
+     * FRAGMENTS — the file name, the word `disabledTools`, three tool names,
+     * `leaving: Bash`. Between them they never touch the BODY of
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT}: the clause that says
+     * how many of how many were taken. The launcher could have gone on printing
+     * a sentence with the counts silently transposed and no behavioural guard
+     * anywhere would have noticed.
+     *
+     * WHAT THIS TEST PINS, AND WHAT IT DOES NOT — stated exactly, because the
+     * first version of this doc-block did not and round 46's review was right
+     * to call it. WHAT IT SAID: that the fragments never reach the body, over a
+     * measurement of the pre-fix tree, in a paragraph a reader would finish
+     * believing this test closed that. WHAT IS TRUE NOW, MEASURED on PHP 8.3.6
+     * at round 46, scope = this class under `--filter`: with
+     * `PROJECT_TIER_TOOL_REMOVAL_FORMAT` mutated `disabled` → `removed`, this
+     * whole class stays green at `OK (57 tests, 136 assertions)`. Of course it
+     * does — the expectation below is rendered FROM the constant the child
+     * process also renders from, so with respect to the constant's TEXT it is a
+     * tautology, the general shape the backlog records for this round. What it
+     * DOES pin is the WIRING, and that is the half nothing else covered:
+     * transposing `\count($removed)` and `\count($withoutProject)` at the call
+     * site takes this class to `Tests: 57, Assertions: 136, Failures: 1`.
+     *
+     * THE TEXT'S SECOND PARTIES ARE TWO DOC PAGES, BOTH VIA
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest}, and
+     * they are named here so that whoever deletes one of that file's
+     * `assertSame`s knows what else they are removing:
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()}
+     * renders README.md's fenced sample from this constant and
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testTheSettingsPageQuotesTheSameLaunchReportByteForByte()}
+     * renders `docs/SETTINGS.md`'s. MEASURED on PHP 8.3.6 at round 46, same
+     * mutation, scope = that class: BOTH of those reds and no other test in it
+     * does.
+     *
+     * WHICH TESTS RED, NOT HOW MANY — and the first version of this paragraph
+     * is why the distinction is written down. WHAT IT SAID:
+     * `Tests: 5, Assertions: 30, Failures: 1`. WHAT IS TRUE NOW: the same
+     * mutation answers `Tests: 6, Assertions: 40, Failures: 2`. Nothing about
+     * the coupling changed — a later commit in the SAME round added the
+     * `docs/SETTINGS.md` guard to that class, and a class total is a cardinality
+     * over `tests/` that every new test invalidates. That is the third time
+     * round 46 shipped a stale count in a doc-block and the reason this one
+     * names its failures instead: a test NAME survives a sibling being added
+     * beside it, and it is also the thing a reader actually has to go and look
+     * at. WHY THE MEASUREMENT STILL EARNS ITS PLACE: without it the sentence
+     * would be an unverified claim that some other file covers the text, which
+     * is exactly the "claim about a grep" this round kept catching.
+     *
+     * That is the whole reason this
+     * test needs no independent literal copy of its own, where
+     * {@see testAProjectThatRemovesEveryToolReportsTheNoSurvivorsBranch()} does
+     * carry one — there is no README sample for the no-survivors branch. The
+     * pair is the pin and neither half is one alone: that file says the
+     * constant is THAT SENTENCE, this one says the running program wires THOSE
+     * ARGUMENTS into it in that order.
+     *
+     * RENDERED, NOT RETYPED, for the reason that sibling was repaired for in
+     * the same round: a checker that keeps its own copy of the string drifts
+     * with it. Every argument here is MEASURED — the census, the removals, the
+     * survivors — so a twelfth built-in tool moves the expectation and the
+     * launcher's output together instead of reding this.
+     *
+     * THE ASSERTION IS CONTAINMENT AND THAT IS DELIBERATE, not the `assertSame`
+     * its README sibling uses: stderr from a real launch carries the
+     * `sugarcrush: ` envelope, a trailing newline and whatever else the launch
+     * had to say, so the body is a needle inside it. What containment cannot
+     * catch is a mutation that only SHORTENS the needle — see that sibling,
+     * where dropping {@see Bootstrap::STDERR_LINE_FORMAT}'s full stop survived
+     * a contains() — and the envelope is exactly what is NOT asserted here,
+     * because it is asserted exactly there.
+     */
+    public function testTheReportedLineIsRenderedFromTheLaunchersOwnFormat(): void
+    {
+        $ceiling = $this->toolNames();
+
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
+        Bootstrap::useProjectRootForSettings($this->projectRoot);
+
+        $survivors = $this->toolNames();
+        $removed = array_values(array_diff($ceiling, $survivors));
+
+        self::assertNotSame([], $removed, 'the fixture removed nothing, so there is no line to assert');
+        self::assertNotSame([], $survivors, 'this is the survivors branch; the empty one is the test below');
+
+        self::assertStringContainsString(
+            sprintf(
+                Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT,
+                $this->projectRoot . '/' . LayeredSettings::SHARED_PATH,
+                count($removed),
+                count($ceiling),
+                implode(', ', $removed),
+                Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING . implode(', ', $survivors),
+            ),
+            $this->stderrOfToolSet(),
+            'the launch-report line a real child printed is not what Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT '
+            . 'renders for the measured census — the format and the launcher have come apart',
+        );
+    }
+
+    /**
+     * THE OTHER BRANCH OF THE SAME FIELD, and the reason it needed a test of
+     * its own: {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} had no
+     * external reader at all.
+     *
+     * MEASURED before this test existed:
+     * `grep -rn 'leaving no tools at all' src/ tests/ docs/ README.md` returned
+     * exactly one hit — the constant's own declaration. It was pinned only
+     * STRUCTURALLY, by {@see BootstrapLaunchFormatConstantsTest}'s
+     * `METHOD_LITERALS` allowlist, which says the emitting method may not hold
+     * a second copy but says nothing about what the launcher prints. A constant
+     * whose only reader is the test asserting that it exists is circular: the
+     * reader has to be the running program.
+     *
+     * `["*"]` FROM A TRUSTED PROJECT is the fixture because it is the one the
+     * code documents — {@see Bootstrap::filterToolSet()} names
+     * `disabledTools: ["*"]` as the supported way to ask for a toolless agent,
+     * so this is a configuration the launcher must report rather than refuse.
+     *
+     * DISTINCT FROM THE SIBLING WARNING, and that is asserted rather than
+     * assumed. `filterToolSet()` ALSO raises "allowedTools/disabledTools left no
+     * tools at all …" for an empty set, and `no tools at all` is a substring of
+     * both sentences — so a guard written on that fragment would pass with this
+     * branch of the format deleted outright. The constant's full value carries
+     * `leaving`, which the sibling does not.
+     */
+    public function testAProjectThatRemovesEveryToolReportsTheNoSurvivorsBranch(): void
+    {
+        $ceiling = $this->toolNames();
+
+        $this->trustTheProject();
+        $this->writeProjectSettings(['disabledTools' => ['*']]);
+        Bootstrap::useProjectRootForSettings($this->projectRoot);
+
+        self::assertSame([], $this->toolNames(), 'the fixture left survivors, so this is not the none branch');
+
+        $stderr = $this->stderrOfToolSet();
+
+        self::assertStringContainsString(
+            sprintf(
+                Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT,
+                $this->projectRoot . '/' . LayeredSettings::SHARED_PATH,
+                count($ceiling),
+                count($ceiling),
+                implode(', ', $ceiling),
+                Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE,
+            ),
+            $stderr,
+            'a trusted project that removed every tool did not print the no-survivors branch of '
+            . 'Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT',
+        );
+
+        // …and the survivor branch is genuinely absent rather than both being
+        // printed, which a report that appended the clause unconditionally
+        // would do while satisfying the assertion above.
+        self::assertStringNotContainsString(Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING, $stderr);
+
+        // THE ONE INDEPENDENT COPY OF THIS SENTENCE IN THE TREE, and it is a
+        // deliberate second copy rather than the retyping E118 spent a round
+        // removing. THE REASON IS A SURVIVED MUTATION OF THIS VERY FIX, which
+        // is the only acceptance test a fix gets. Everything above renders its
+        // expectation FROM the constant the child process also renders from, so
+        // with respect to the constant's TEXT it is a tautology: MEASURED on
+        // PHP 8.3.6 with `PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE` mutated
+        // `'leaving no tools at all'` → `'leaving nothing at all'`, this class
+        // stayed at `OK (57 tests, 135 assertions)`. What those assertions DO
+        // pin is the wiring, and that is not nothing: deleting the branch
+        // outright — the ternary replaced by the survivors clause alone — takes
+        // the same class to `Tests: 57, Assertions: 134, Failures: 1`.
+        //
+        // So the pair is the pin, and neither half is one alone. The
+        // assertion above says the running program prints THIS CONSTANT; this
+        // one says the constant is THAT SENTENCE. The sibling constants need no
+        // such copy because README.md holds theirs — see
+        // {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest},
+        // which renders the page's sample from them and kills a text mutation
+        // outright. There is no README sample for the no-survivors branch,
+        // so until a doc page grows one this line is the second party.
+        self::assertSame(
+            'leaving no tools at all',
+            Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE,
+            'the no-survivors clause was reworded. Nothing outside src/ reads it except this line, so '
+            . 'rewording it silently is exactly what this assertion exists to prevent; if the new wording '
+            . 'is wanted, change it here in the same commit',
+        );
+    }
+
+    /**
      * CONTROL for the report — the trust gate is upstream of everything here,
      * and it is the reason this finding's blast radius is narrower than it was
      * first recorded as. An untrusted project's `disabledTools` never reaches

@@ -54,9 +54,8 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * see this round's mutation table.
  *
  * WHAT IS *NOT* PINNED HERE, stated because the absence looks like an
- * oversight. `Bootstrap.php` holds more `sprintf()` call sites with a literal
- * format than it has promoted constants — HOW MANY MORE IS DELIBERATELY NOT
- * WRITTEN HERE, and that is this round's rule rather than laziness: a
+ * oversight. `Bootstrap.php` still holds `sprintf()` call sites with a literal
+ * format — HOW MANY IS DELIBERATELY NOT WRITTEN HERE, and that is this round's rule rather than laziness: a
  * cardinality in prose is invalidated by the next commit that adds a
  * `sprintf()`, and round 44 shipped one into `src/` that was correct in its
  * lane and wrong at master an hour later. The pair is asserted, with its
@@ -68,26 +67,80 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * by `README.md`, `docs/SETTINGS.md` or a drift guard has a second party that
  * must agree with it, and a name is how two parties agree. A format read by
  * exactly one method is not improved by moving it away from the only code that
- * cares. Promoting the rest is recorded as a deferred finding rather than done,
- * because "every literal is a constant" buys nothing and costs a reader one
- * indirection per line.
+ * cares.
  *
- * ONE PROMOTED CONSTANT DOES NOT SATISFY THAT RULE, and saying so is cheaper
- * than pretending. WHAT THE RULE IMPLIES: every name here has a second party.
- * WHAT IS TRUE NOW, measured — `grep -rn "leaving no tools at all" src/ tests/
- * docs/ README.md` returns exactly one hit, its own declaration.
- * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} has no external
- * reader at all: {@see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest}
- * reads the FORMAT and the `leaving: ` prefix, never this one, because the
- * README's sample is the branch where tools survive.
- * WHY IT STILL EARNS ITS PLACE: it is the other branch of ONE field —
- * `PROJECT_TIER_TOOL_REMOVAL_FORMAT`'s last `%s` is either
- * `PROJECT_TIER_TOOL_REMOVAL_LEAVING` plus a list or this — and splitting a
- * two-branch field across a constant and a literal is worse than either
- * choice made consistently. What makes it a real obligation rather than a
- * decoration is {@see METHOD_LITERALS}, not a second party; until the
- * no-survivors branch has a behavioural assertion of its own (recorded as a
- * deferred finding), that is the whole of what pins it.
+ * THAT RULE HAS NOW BEEN WALKED ACROSS THE WHOLE FILE (E164) rather than
+ * applied to the formats that happened to come up. WHAT THIS PARAGRAPH SAID:
+ * "promoting the rest is recorded as a deferred finding rather than done".
+ * WHAT IS TRUE NOW: every `sprintf()` in `Bootstrap.php` with a literal format
+ * was walked and asked the question, the ones with a reader were promoted into
+ * {@see NAMED_FORMATS}, and the rest were left inline ON PURPOSE —
+ * `mcpConfigDecision()`'s two refusal
+ * reasons and `trustedConfigDirPath()`'s home-ownership refusal. THE COUNTS
+ * THAT USED TO BE IN THIS SENTENCE ARE GONE, and that is round 46's review
+ * (MINOR 5) rather than tidying: it read "seven more were promoted, and the
+ * three left inline" two paragraphs after the rule forbidding a cardinality in
+ * prose, and those same two numbers had already been wrong once inside this
+ * round — they were written as four and six and left behind by the next two
+ * commits. The promoted set is `NAMED_FORMATS`, which is a list and counts
+ * itself; the inline set is named here, which is what a reader actually needs.
+ * Every reader
+ * those three have asserts a FRAGMENT (`'outside the project tree'`,
+ * `'running programs this repository chose'`,
+ * `/cannot be established as yours/`), a deliberately loose coupling to an idea
+ * rather than two parties agreeing on a sentence — and unlike E164's first
+ * answer, that is MEASURED rather than grepped: rewording each of the three
+ * OUTSIDE its documented fragment leaves the classes that could plausibly
+ * cover them green. WHY THE ORIGINAL SENTENCE
+ * STILL EARNS ITS PLACE: its reasoning is the reason the walk did not end in
+ * promoting every literal it found. "Every literal is a constant" buys nothing and costs a
+ * reader one indirection per line; the finding is which ones have a reader, and
+ * saying "this one does not" is as much of an answer as promoting it.
+ *
+ * A WALK IS A CLAIM AND HAS TO BE MEASURED LIKE ONE, which E164's own first
+ * answer was not, and it was wrong three times. (1) It read the readers of
+ * `reportProjectTierRefusals()`'s `'ignoring %s — %s'` off two files that
+ * mention the envelope in COMMENTS, concluded "fragment only", and left it
+ * inline; rewording `ignoring` → `skipping` took
+ * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest} and
+ * its neighbours to `Tests: 177, Assertions: 615, Failures: 1`, because a third
+ * file reconstructs the whole envelope twice. (2) and (3) The two `mcpClient()`
+ * messages looked like fragment readers too — the clause everything asserts is
+ * `'could not be fully started'`, which both of them carry. Rewording the spans
+ * that clause does NOT cover gives `Failures: 3` and `Failures: 2`:
+ * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest} pins three
+ * separate clauses across the pair, because its whole subject is that those two
+ * lines must not collapse into each other.
+ *
+ * THE LESSON FOR THE NEXT WALK, and it is the reusable part: `grep` for a
+ * format's WORDS finds the files that TALK about it; only a mutation finds the
+ * files that DEPEND on it, and those are not the same set. And the mutation has
+ * to land OUTSIDE every fragment already known to be asserted — a reword inside
+ * the fragment kills for the reason you already knew and tells you nothing new.
+ * That mistake was made here first: four "kills" that were all reruns of a
+ * fragment, and re-placing the same four mutations outside the fragments turned
+ * two of them into survivals.
+ *
+ * ONE PROMOTED CONSTANT USED NOT TO SATISFY THAT RULE, and the repair is worth
+ * recording because the shape of it applies to the next such constant.
+ * WHAT THIS PARAGRAPH SAID: {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE}
+ * "has no external reader at all" — measured, `grep -rn "leaving no tools at
+ * all" src/ tests/ docs/ README.md` returned exactly one hit, its own
+ * declaration — and "until the no-survivors branch has a behavioural assertion
+ * of its own (recorded as a deferred finding), {@see METHOD_LITERALS} is the
+ * whole of what pins it".
+ * WHAT IS TRUE NOW: it has one.
+ * {@see \SugarCraft\Crush\Tests\Cli\BootstrapToolAndPermissionSettingsTest::testAProjectThatRemovesEveryToolReportsTheNoSurvivorsBranch()}
+ * makes a real child launch remove every tool, which is the only thing in the
+ * tree that makes the running program take that branch — deleting the branch
+ * reds it. WHY THE OLD READING STILL EARNS ITS PLACE, and this is the part a
+ * later reader needs: that behavioural case does NOT pin the constant's TEXT.
+ * Its expectation renders from the same constant the child renders from, so with
+ * respect to the wording it is a tautology — measured, a rewording of the
+ * constant left it at `OK (57 tests, 135 assertions)`. A separate literal copy
+ * of the sentence lives beside it for exactly that reason, and the pair is the
+ * pin. The sibling constants need no such copy because README.md and the two
+ * docs pages hold theirs.
  *
  * @see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest for the README end
  *      of the same claim — that file compares the constants to the page.
@@ -115,6 +168,13 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'method' => 'reportProjectTierToolRemovals',
             'conversions' => 5,
         ],
+        'SKILL_SKIP_NOTICE_FORMAT' => ['method' => 'reportSkillSkips', 'conversions' => 5],
+        'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
+        'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
+        'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
+        'PROJECT_TIER_REFUSAL_FORMAT' => ['method' => 'reportProjectTierRefusals', 'conversions' => 2],
+        'MCP_PARTIAL_START_LOG_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
+        'MCP_PARTIAL_START_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
     ];
 
     /**
@@ -166,6 +226,19 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     private const METHOD_LITERALS = [
         'warnPermissionConfig' => [],
         'reportProjectTierToolRemovals' => ["'disabledTools'", "', '"],
+        // The three agreement slots the notice interpolates. Every one of them
+        // is plumbing for ONE sentence, which is why the sentence has a name
+        // and these do not.
+        'reportSkillSkips' => ["''", "'s'", "'was'", "'were'", "'it'", "'them'"],
+        'launchNotices' => ["''", "'s'"],
+        // Both halves of the retention report are named, so what is left here
+        // is the plural pair and the four `$row` keys the detail line reads.
+        'reportPrunedSessions' => ["'session'", "'sessions'", "'id'", "'updated_at'", "'messages'", "'message'"],
+        // The full stop rtrim()ed off the reason, because STDERR_LINE_FORMAT
+        // adds one of its own and two would read as a typo.
+        'reportProjectTierRefusals' => ["'.'"],
+        // The two decision keys it reads; both messages are named now.
+        'mcpClient' => ["'path'", "'status'"],
     ];
 
     public function testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt(): void
@@ -399,16 +472,312 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      */
     public function testTheLiteralFormatCensusHasAGenerator(): void
     {
-        [$calls, $literal] = self::sprintfCensus(self::bootstrapSource());
+        $census = self::sprintfCensus(self::bootstrapSource());
 
-        self::assertSame(12, $calls, "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block");
-        self::assertSame(10, $literal, 'a sprintf() in Bootstrap.php gained or lost a literal format');
-
-        // Known-answer control for the census itself.
         self::assertSame(
-            [2, 1],
-            self::sprintfCensus("<?php sprintf('a %s', 1); sprintf(self::F, 2); \$x = 'sprintf(';"),
+            12,
+            $census['calls'],
+            "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
+        );
+        self::assertSame(3, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
+        self::assertSame(
+            \count(self::NAMED_FORMATS),
+            $census['constant'],
+            'Bootstrap.php formats from a different number of constants than this file names as promoted',
+        );
+
+        // A RE-INLINED INTERPOLATED FORMAT IS THE FAILURE E163 NAMES, and until
+        // this round it read as a promotion rather than as a regression. Zero
+        // is the whole of the claim: any `sprintf("… {$x} …")` in this file reds.
+        self::assertSame(
+            0,
+            $census['interpolated'],
+            'a sprintf() in Bootstrap.php builds its format by interpolation. That is neither a promoted '
+            . 'constant nor an inline literal any of the guards above can read: METHOD_LITERALS sees the '
+            . 'pieces, not the sentence, and formatLiteralsIn() sees a fragment with no conversion in it',
+        );
+        self::assertSame(
+            [],
+            $census['other'],
+            'a sprintf() first argument this census cannot classify: ' . implode(' | ', $census['other'])
+            . '. Widen classifyFirstArgument() or hand-classify the site; a shape counted as "not a '
+            . 'literal" by default reads as a promotion, which is the direction that hides a regression',
+        );
+
+        // KNOWN-ANSWER CONTROL FOR THE CENSUS ITSELF, widened to the shapes the
+        // scanner can actually MEET (E162). The version this replaced covered a
+        // literal, a constant reference and the word inside a string — none of
+        // which exercise the reason a bare `T_STRING` + `(` is not enough:
+        // `$o->sprintf(`, `Foo::sprintf(` and `function sprintf(` tokenize the
+        // same way and were all counted as calls to the global function, and
+        // `\sprintf(` is a single `T_NAME_FULLY_QUALIFIED` and was counted as
+        // none. An assertion about this file's own census is not evidence
+        // unless something proves the scanner can still tell those apart — and
+        // this control is a KNOWN POSITIVE for every bucket, including the two
+        // whose real-tree expectation is zero.
+        //
+        // THAT SENTENCE USED TO QUOTE THE REAL-TREE CENSUS AS `12/8/0/2` and it
+        // was stale before the round that wrote it ended: the E164 promotions
+        // three commits later moved two literals into constants, so the figures
+        // the assertions above actually carry are 12 calls / 3 literal /
+        // 9 constant / 0 interpolated. The quote is dropped rather than
+        // refreshed, because it was a SECOND COPY of four numbers that already
+        // sit ten lines up in executable form — a copy that cannot red when it
+        // drifts, which is the whole failure mode this control exists to
+        // prevent. Read the assertions, not a comment about them.
+        self::assertSame(
+            [
+                'calls' => 6,
+                'literal' => 2,
+                'interpolated' => 1,
+                'constant' => 2,
+                'other' => ["T_VARIABLE '\$format'"],
+            ],
+            self::sprintfCensus(
+                "<?php\n"
+                . "sprintf('a %s', 1);\n"                    // literal
+                . "\\sprintf('b %s', 2);\n"                  // literal, fully qualified — was invisible
+                . "sprintf(self::F, 3);\n"                   // constant reference
+                . "sprintf(\\Some\\Where::G, 4);\n"          // constant reference, qualified
+                . "sprintf(\"c {\$x} d\", 5);\n"             // interpolated — was read as a constant
+                . "sprintf(\$format, 6);\n"                  // a variable: neither, and must be named
+                . "\$o->sprintf('not this', 7);\n"           // a method
+                . "\$o?->sprintf('nor this', 8);\n"
+                . "Other::sprintf('nor this', 9);\n"
+                . "function sprintf(\$x) {}\n"               // a declaration
+                . "\$s = 'sprintf(';\n",                     // the word inside a string
+            ),
             'the sprintf census miscounts a source whose answer is known',
+        );
+
+        // …and the `other` bucket is a KNOWN POSITIVE too, in the same test:
+        // an assertion of [] above is not evidence that anything can populate it.
+        $unclassifiable = self::sprintfCensus("<?php sprintf(\$format, 1); sprintf(self::pick(), 2);");
+        self::assertSame(2, $unclassifiable['calls']);
+        self::assertSame(0, $unclassifiable['literal'] + $unclassifiable['constant']);
+        self::assertCount(
+            2,
+            $unclassifiable['other'],
+            'the census can no longer name a first argument it does not understand, so the [] above is vacuous',
+        );
+        self::assertStringContainsString('T_VARIABLE', $unclassifiable['other'][0]);
+    }
+
+    /**
+     * NO FORMAT IN `Bootstrap.php` IS BUILT THROUGH A printf-FAMILY FUNCTION
+     * {@see sprintfCensus()} CANNOT SEE.
+     *
+     * WHY A SECOND SCANNER RATHER THAN A WIDER CENSUS. Everything this file
+     * asserts about literal formats — which are promoted, which are inline on
+     * purpose, that none is interpolated — is scoped by what the census can
+     * find, and the census recognises the single name `sprintf`. That is the
+     * shape of hole rule 11 is about: an instrument reports zero offenders and
+     * the reason is its alphabet, not the tree. `printf`, `vsprintf`, `vprintf`,
+     * `fprintf` and `vfprintf` all take a format, and a literal one reached
+     * through any of them would be invisible to every guard above.
+     *
+     * MEASURED, AND LATENT RATHER THAN LIVE. On PHP 8.3.6 at round 46 the
+     * real-tree answer is `[]` — every printf-family token in `Bootstrap.php` is
+     * a `sprintf`. Round 46's review reached the same answer by a different
+     * instrument, `grep -nEo '\b(v?s?printf|vfprintf|fprintf)\('`, which
+     * returned 18 hits, all `sprintf`; the two disagree by construction and both
+     * are right, because that grep counts the doc-blocks and this scanner drops
+     * `T_COMMENT`/`T_DOC_COMMENT` before it starts. Neither figure is written
+     * into an assertion — the assertion is the emptiness.
+     *
+     * AND THE EMPTINESS IS NOT EVIDENCE ON ITS OWN, which is why the
+     * known-positive fixture is in THIS test rather than a neighbouring one.
+     * Round 44 emptied a census, asserted "nothing is stale", and stayed green
+     * with the scanner mutated to never match; the fixture is what makes an
+     * assertion of `[]` mean something. It also carries the negative shapes,
+     * because a scanner that matches everything is as useless as one that
+     * matches nothing: `sprintf` itself must stay out (the census owns it), and
+     * so must a method, a nullsafe method, a static, a declaration and the word
+     * inside a string literal.
+     */
+    public function testNoPrintfFamilyCallEscapesTheCensusAlphabet(): void
+    {
+        self::assertSame(
+            [],
+            self::printfFamilyCallsIn(self::bootstrapSource()),
+            'Bootstrap.php reaches a printf-family function other than sprintf(). Every guard in this file '
+            . 'that reasons about literal formats is scoped by sprintfCensus(), which recognises the name '
+            . '`sprintf` and no other, so this call site and whatever format it carries are invisible to '
+            . 'all of them. Either route it through sprintf() or widen the census to cover it — and note '
+            . 'that fprintf()/vfprintf() take the stream first, so classifyFirstArgument() cannot simply '
+            . 'be pointed at their first argument',
+        );
+
+        // KNOWN-POSITIVE FIXTURE FOR THE SCANNER THAT JUST ANSWERED [].
+        self::assertSame(
+            ['printf', 'vsprintf', 'vprintf', 'fprintf', 'vfprintf'],
+            self::printfFamilyCallsIn(
+                "<?php\n"
+                . "printf('a %s', 1);\n"                     // the plain case
+                . "\\vsprintf('b %s', [2]);\n"               // fully qualified — the shape T_STRING misses
+                . "vprintf('c %s', [3]);\n"
+                . "fprintf(STDERR, 'd %s', 4);\n"            // format is the SECOND argument
+                . "vfprintf(STDERR, 'e %s', [5]);\n"
+                . "sprintf('not this', 6);\n"                // the census owns sprintf
+                . "\$o->printf('nor this', 7);\n"            // a method
+                . "\$o?->printf('nor this', 8);\n"
+                . "Other::printf('nor this', 9);\n"          // a static
+                . "function printf(\$x) {}\n"                // a declaration
+                . "\\Foo\\printf('nor this', 10);\n"         // a namespaced function, not the global one
+                . "\$s = 'printf(';\n",                      // the word inside a string
+            ),
+            'the printf-family scanner miscounts a source whose answer is known, so the [] above is vacuous',
+        );
+    }
+
+    /**
+     * THE SECOND PARTY, made a real assertion rather than a claim in a
+     * doc-block: the two pages that quote the retention summary are rendered
+     * FROM {@see Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT}.
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY, and why it is rewritten rather than
+     * deleted (round 46's review, MAJOR 3). IT SAID: "the only one of the six
+     * promoted formats whose external reader is a DOC PAGE rather than a test …
+     * the other five have their readers in `tests/`". Two things were wrong
+     * with that. First the arithmetic: it was written when
+     * {@see NAMED_FORMATS} held six, and two later commits in the same round
+     * promoted three more without moving the sentence — which is precisely why
+     * this file's own class doc-block refuses to write a cardinality into prose,
+     * and the rule was broken one screen below where it is stated. Second, and
+     * worse, the CLAIM. MEASURED at round 46 by rendering each promoted format's
+     * longest literal span and searching the flattened pages:
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} is quoted by README.md
+     * AND by `docs/SETTINGS.md`, and {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT}
+     * by `docs/TROUBLESHOOTING.md`. Doc-page readers are the normal case here,
+     * not the exception this claimed to be.
+     *
+     * WHY THE CASE STILL EARNS ITS OWN TEST: not scarcity, but that a page an
+     * operator reads and a line the launcher prints have to agree and neither
+     * one is going to notice the other drifting. The tool-removal sample has had
+     * that guard since E152 — see
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest}, which
+     * covers both of its pages. The retention summary's pages are covered here,
+     * and the refusal format's page is covered by nothing yet; it quotes the
+     * shape with `<path>`/`<reason>` placeholders rather than a rendered sample,
+     * so it needs a different instrument and is recorded rather than faked.
+     *
+     * THE SAMPLE ARGUMENTS ARE THE PAGES' OWN — three sessions, thirty days —
+     * because these are illustrative sentences, not captures. What is pinned is
+     * the SHAPE around them: reword the format and both pages stop matching.
+     *
+     * WHITESPACE IS FLATTENED, and that is load-bearing rather than defensive.
+     * MEASURED: `docs/SETTINGS.md` wraps this very sentence across a line break
+     * between `30+ days` and `(ids on stderr)`, so a raw `str_contains()`
+     * against the file finds nothing at all — the same trap a doc-block's
+     * ` * ` continuation markers set for prose matching in source.
+     */
+    public function testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints(): void
+    {
+        $rendered = sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 3, 'sessions', 30);
+
+        foreach (['docs/ENVIRONMENT.md', 'docs/SETTINGS.md'] as $page) {
+            $path = \dirname(__DIR__, 2) . '/' . $page;
+            self::assertFileExists($path, "{$page} is quoted as a reader of the retention summary but is gone");
+
+            $flat = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($path));
+
+            self::assertStringContainsString(
+                $rendered,
+                $flat,
+                "{$page} no longer quotes what Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT renders. Either "
+                . 'the launcher was reworded and the page was not, or the page was edited away from the '
+                . 'line it is describing; both are the drift a name exists to make loud',
+            );
+        }
+    }
+
+    /**
+     * THE OTHER DOC PAGE THAT QUOTES A PROMOTED FORMAT, and it quotes a SHAPE
+     * rather than a sample, which is why it needed its own instrument.
+     *
+     * HOW IT WAS FOUND, and the method is the part worth keeping. Round 46
+     * closed the same hole twice on the tool-removal line — README.md had a
+     * guard, `docs/SETTINGS.md` carried a byte-for-byte copy of the identical
+     * sample and had none. So every promoted format was then swept the same
+     * way: take its longest span of literal text between conversions, flatten
+     * every page, and ask which pages contain it. MEASURED on PHP 8.3.6, that
+     * sweep leaves exactly this one unguarded reader.
+     *
+     * A WEAK NEEDLE IS PART OF THE SWEEP'S ALPHABET AND IT LIED ONCE, which is
+     * why this is recorded rather than trusted. This format's longest literal
+     * span is `'ignoring '` — nine characters of ordinary English. The sweep
+     * reported README.md as a reader too, and README.md's hit is the unrelated
+     * sentence "reject one at exit `2` rather than ignoring it". A span short
+     * enough to occur by accident cannot answer "who reads this"; it can only
+     * nominate candidates for a human to check, and that check is what removed
+     * README.md from this test's page list.
+     *
+     * PLACEHOLDERS, NOT ARGUMENTS. `docs/TROUBLESHOOTING.md` shows operators
+     * the shape of the line rather than a rendered instance, so the expectation
+     * substitutes the page's own `<path>` and `<reason>` for the two `%s`. That
+     * pins strictly less than a rendered sample would — the fields are the
+     * page's invention, not the launcher's — but it pins the ENVELOPE, which is
+     * the part that carries meaning: the word `ignoring`, the field order, and
+     * the spaced em-dash between them.
+     */
+    public function testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints(): void
+    {
+        $page = 'docs/TROUBLESHOOTING.md';
+        $path = \dirname(__DIR__, 2) . '/' . $page;
+
+        self::assertFileExists($path, "{$page} is quoted as a reader of the project-tier refusal but is gone");
+
+        $flat = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($path));
+
+        self::assertStringContainsString(
+            sprintf(Bootstrap::PROJECT_TIER_REFUSAL_FORMAT, '<path>', '<reason>'),
+            $flat,
+            "{$page} no longer quotes the shape Bootstrap::PROJECT_TIER_REFUSAL_FORMAT renders. Either the "
+            . 'launcher was reworded and the page was not, or the page renamed its placeholders; the first '
+            . 'is drift and the second means this expectation has to learn the new names',
+        );
+    }
+
+    /**
+     * The retention DETAIL row carries its own copy of the stderr envelope, and
+     * that relationship is asserted rather than only explained.
+     *
+     * {@see Bootstrap::SESSION_RETENTION_DETAIL_FORMAT}'s doc-block says the
+     * duplication is deliberate — these rows are a continuation indented under
+     * the summary, and routing them through the seam would seed one transcript
+     * row per deleted session. A justification is not a pin: with nothing
+     * checking it, changing {@see Bootstrap::STDERR_LINE_FORMAT}'s label would
+     * leave the summary saying `sugarcrush:` and its own continuation rows
+     * saying something else, and the only symptom is a scrollback that looks
+     * subtly wrong to a human and to nothing else.
+     *
+     * DERIVED FROM THE ENVELOPE, never retyped: the label is whatever
+     * `STDERR_LINE_FORMAT` puts before its conversion, so the two move together
+     * by construction and this test reds only when they come APART.
+     *
+     * The full stop is asserted ABSENT on purpose. The envelope adds one
+     * because it wraps a sentence; a continuation row ending in an id list is
+     * not one, and a `.` after `messages)` would read as part of the count.
+     */
+    public function testTheRetentionDetailRowIndentsUnderTheEnvelopeItDuplicates(): void
+    {
+        $at = strpos(Bootstrap::STDERR_LINE_FORMAT, '%s');
+        self::assertIsInt($at, 'STDERR_LINE_FORMAT no longer has a conversion to take a label from');
+        $label = substr(Bootstrap::STDERR_LINE_FORMAT, 0, $at);
+        self::assertNotSame('', $label, 'the stderr envelope has no label, so there is nothing to indent under');
+
+        self::assertStringStartsWith(
+            $label . '  ',
+            Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+            'the retention detail rows no longer open with the stderr envelope\'s own label plus the indent '
+            . 'that makes them read as a continuation of the summary above them',
+        );
+        self::assertStringEndsWith("\n", Bootstrap::SESSION_RETENTION_DETAIL_FORMAT);
+        self::assertStringEndsWith(
+            ")\n",
+            Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+            'a continuation row gained sentence punctuation; the envelope adds the full stop because it '
+            . 'wraps a sentence, and these rows are not one',
         );
     }
 
@@ -635,9 +1004,42 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     }
 
     /**
-     * `[sprintf call sites, of which with a literal first argument]`.
+     * Every `sprintf()` CALL SITE in `$source`, classified by what its first
+     * argument is.
      *
-     * @return array{0: int, 1: int}
+     * WHY THREE BUCKETS AND NOT TWO — E163, and it is the direction of the lie
+     * that makes it worth the code. The first cut asked one question,
+     * "is the first token `T_CONSTANT_ENCAPSED_STRING`?", and everything else
+     * fell into a single not-a-literal bucket. MEASURED on PHP 8.3.6:
+     * `sprintf("a {$x} b", 1)` does not open with that token at all — the lexer
+     * splits an interpolated double-quoted string into a bare `"` character
+     * token, `T_ENCAPSED_AND_WHITESPACE`, the interpolation, and a closing `"`.
+     * So an INTERPOLATED format landed in the same bucket as
+     * `self::STDERR_LINE_FORMAT`. Today both non-literal sites in
+     * `Bootstrap.php` really are constants, so the two-bucket census answered
+     * correctly by accident — and the accident is load-bearing: re-inline a
+     * promoted format as `"… {$path} …"` and the census would have read it as
+     * one MORE promoted site. The classifier said the opposite of the truth in
+     * precisely the case the guard exists to catch.
+     *
+     * `other` IS LOUD, NOT A SHRUG. A heredoc, a nowdoc, a variable, a call —
+     * anything this classifier has not met — is named in `other` rather than
+     * quietly counted as a constant, so
+     * {@see testTheLiteralFormatCensusHasAGenerator()} reds and someone
+     * classifies it. A guard that silently ignores what it cannot parse has a
+     * hole shaped exactly like the next defect.
+     *
+     * THE CALL-SITE TEST IS ALSO NARROWER THAN IT WAS (E162). `sprintf` as a
+     * bare `T_STRING` followed by `(` is also how `$o->sprintf(`,
+     * `Foo::sprintf(` and `function sprintf(` tokenize — measured, same box —
+     * so all three used to be counted as calls to the global function. They are
+     * excluded by their preceding token now, and the fixture in
+     * {@see testTheScannersAnswerCorrectlyOnSourcesWhoseAnswerIsKnown()} runs
+     * each shape through this scanner. In the other direction, `\sprintf(` is
+     * `T_NAME_FULLY_QUALIFIED` on PHP 8 and was MISSED entirely; it is counted
+     * now.
+     *
+     * @return array{calls: int, literal: int, interpolated: int, constant: int, other: list<string>}
      */
     private static function sprintfCensus(string $source): array
     {
@@ -650,23 +1052,208 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             $significant[] = $token;
         }
 
-        $calls = 0;
-        $literal = 0;
+        $out = ['calls' => 0, 'literal' => 0, 'interpolated' => 0, 'constant' => 0, 'other' => []];
         foreach ($significant as $i => $token) {
-            if (!\is_array($token) || $token[0] !== T_STRING || strtolower($token[1]) !== 'sprintf') {
+            if (!self::isGlobalSprintfName($token)) {
                 continue;
             }
             if (($significant[$i + 1] ?? null) !== '(') {
                 continue;
             }
 
-            $calls++;
-            $first = $significant[$i + 2] ?? null;
-            if (\is_array($first) && $first[0] === T_CONSTANT_ENCAPSED_STRING) {
-                $literal++;
+            // A method or a declaration wearing the same name. `$o->sprintf(`,
+            // `$o?->sprintf(`, `Foo::sprintf(`, `function sprintf(` and
+            // `new sprintf(` all put `sprintf` in a T_STRING followed by `(`.
+            $previous = $significant[$i - 1] ?? null;
+            if (\is_array($previous) && \in_array($previous[0], [
+                T_OBJECT_OPERATOR,
+                T_NULLSAFE_OBJECT_OPERATOR,
+                T_DOUBLE_COLON,
+                T_FUNCTION,
+                T_NEW,
+            ], true)) {
+                continue;
             }
+
+            $out['calls']++;
+            $kind = self::classifyFirstArgument($significant, $i + 2);
+            if ($kind === 'other') {
+                $out['other'][] = self::describeToken($significant[$i + 2] ?? null);
+
+                continue;
+            }
+            $out[$kind]++;
         }
 
-        return [$calls, $literal];
+        return $out;
+    }
+
+    /** Whether `$token` names the global `sprintf`, qualified or not. */
+    private static function isGlobalSprintfName(array|string $token): bool
+    {
+        return self::isGlobalFunctionNamed($token, ['sprintf']);
+    }
+
+    /**
+     * Whether `$token` names one of the global functions `$names`, qualified or
+     * not.
+     *
+     * @param list<string> $names
+     */
+    private static function isGlobalFunctionNamed(array|string $token, array $names): bool
+    {
+        if (!\is_array($token)) {
+            return false;
+        }
+        if ($token[0] === T_STRING) {
+            return \in_array(strtolower($token[1]), $names, true);
+        }
+
+        // `\sprintf(` — one token on PHP 8, and invisible to a T_STRING test.
+        // Only a leading separator is stripped, so `\Foo\sprintf` stays out.
+        if ($token[0] !== T_NAME_FULLY_QUALIFIED) {
+            return false;
+        }
+
+        return \in_array(ltrim(strtolower($token[1]), '\\'), $names, true);
+    }
+
+    /**
+     * Every printf-FAMILY call in `$source` that is NOT `sprintf()`, by name.
+     *
+     * THE CENSUS'S ALPHABET IS ONE FUNCTION NAME, AND THAT IS WHAT THIS GUARDS.
+     * {@see sprintfCensus()} is what lets this file claim that every literal
+     * format in `Bootstrap.php` is either promoted or inline on purpose, and the
+     * whole of that claim rests on finding the call sites. It looks for
+     * `sprintf` and for nothing else. `printf`, `vsprintf`, `vprintf`,
+     * `fprintf` and `vfprintf` each take a format string too, and a literal
+     * format reached through any of them is not merely miscounted — it is
+     * reported as not existing, which reads as "no offender here".
+     *
+     * LATENT, NOT LIVE, AND MEASURED SO: on PHP 8.3.6 at round 46 every
+     * printf-family token in `Bootstrap.php` is a `sprintf`, so the real-tree
+     * answer is `[]`. A hole nothing has fallen into yet is exactly when an
+     * absence guard is cheap to install and worthless to trust — hence the
+     * known-positive fixture inside
+     * {@see testNoPrintfFamilyCallEscapesTheCensusAlphabet()} rather than beside
+     * it.
+     *
+     * IT REPORTS NAMES, NOT A COUNT, because the useful failure message is which
+     * function was reached for.
+     *
+     * IT DOES NOT CLASSIFY THE FORMAT, deliberately, and stops at "one is here".
+     * `fprintf()` and `vfprintf()` take the STREAM first and the format second,
+     * so {@see classifyFirstArgument()} would read the wrong argument for two of
+     * the five and answer `other` — a shape that already means something else.
+     * The honest report is that the census cannot speak for this site at all,
+     * and that is what a red here says.
+     *
+     * @return list<string>
+     */
+    private static function printfFamilyCallsIn(string $source): array
+    {
+        $names = ['printf', 'vprintf', 'vsprintf', 'fprintf', 'vfprintf'];
+
+        $significant = [];
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            $significant[] = $token;
+        }
+
+        $out = [];
+        foreach ($significant as $i => $token) {
+            if (!self::isGlobalFunctionNamed($token, $names)) {
+                continue;
+            }
+            if (($significant[$i + 1] ?? null) !== '(') {
+                continue;
+            }
+
+            // The same method/declaration shapes {@see sprintfCensus()} excludes.
+            $previous = $significant[$i - 1] ?? null;
+            if (\is_array($previous) && \in_array($previous[0], [
+                T_OBJECT_OPERATOR,
+                T_NULLSAFE_OBJECT_OPERATOR,
+                T_DOUBLE_COLON,
+                T_FUNCTION,
+                T_NEW,
+            ], true)) {
+                continue;
+            }
+
+            /** @var array{0: int, 1: string} $token */
+            $out[] = ltrim(strtolower($token[1]), '\\');
+        }
+
+        return $out;
+    }
+
+    /**
+     * `literal`, `interpolated`, `constant` or `other` for the argument
+     * starting at `$at`.
+     *
+     * @param list<array{0: int, 1: string}|string> $significant
+     */
+    private static function classifyFirstArgument(array $significant, int $at): string
+    {
+        $token = $significant[$at] ?? null;
+        if ($token === null) {
+            return 'other';
+        }
+
+        // The lexer's own answer: a double-quoted string it had to split for an
+        // interpolation opens with a bare `"`, never with the encapsed-string
+        // token. A backtick opens a shell-exec expression, which is neither.
+        if ($token === '"') {
+            return 'interpolated';
+        }
+        if (!\is_array($token)) {
+            return 'other';
+        }
+        if ($token[0] === T_CONSTANT_ENCAPSED_STRING) {
+            return 'literal';
+        }
+
+        // A name, possibly `A::B` or `\A\B::C`. It is a CONSTANT reference only
+        // if nothing calls it — `self::format()` is a computed format and has
+        // to be classified by hand rather than counted as a promotion.
+        $nameTokens = [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE];
+        if (!\in_array($token[0], $nameTokens, true)) {
+            return 'other';
+        }
+
+        $i = $at;
+        while (true) {
+            $next = $significant[$i + 1] ?? null;
+            if (\is_array($next) && $next[0] === T_DOUBLE_COLON) {
+                $after = $significant[$i + 2] ?? null;
+                if (!\is_array($after) || !\in_array($after[0], $nameTokens, true)) {
+                    return 'other';
+                }
+                $i += 2;
+
+                continue;
+            }
+
+            break;
+        }
+
+        return ($significant[$i + 1] ?? null) === '(' ? 'other' : 'constant';
+    }
+
+    /** A short, stable description of a token for an `other` row's failure message. */
+    private static function describeToken(array|string|null $token): string
+    {
+        if ($token === null) {
+            return '<end of file>';
+        }
+        if (!\is_array($token)) {
+            return 'char ' . var_export($token, true);
+        }
+
+        return token_name($token[0]) . ' ' . var_export($token[1], true);
     }
 }

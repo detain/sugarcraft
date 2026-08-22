@@ -93,9 +93,23 @@ final class ReadmeSettingsTierClaimTest extends TestCase
 
     private function readme(): string
     {
-        $path = __DIR__ . '/../../README.md';
+        return $this->document('README.md');
+    }
+
+    /**
+     * Any page in the package root, read as bytes.
+     *
+     * PATH-RELATIVE AND ASSERTED PRESENT, because a page that has been renamed
+     * or moved must red as "the reader is gone" rather than as a containment
+     * miss against an empty string.
+     */
+    private function document(string $relativePath): string
+    {
+        $path = \dirname(__DIR__, 2) . '/' . $relativePath;
+        self::assertFileExists($path, "{$relativePath} is quoted as a reader of the launch report but is gone");
+
         $text = file_get_contents($path);
-        self::assertIsString($text, 'README.md is unreadable');
+        self::assertIsString($text, "{$relativePath} is unreadable");
 
         return $text;
     }
@@ -197,12 +211,230 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         // The README quotes this census twice — "out of the eleven built-in
         // tools" and a launch-report sample reading "disabled 10 of the 11".
         // Both are figures, so both get a generator rather than a proof-read.
+        //
+        // THIS BLOCK USED TO SAY "both get a generator" WHILE GENERATING ONE.
+        // WHAT IT SAID: the two quotes are covered. WHAT WAS TRUE: only the
+        // launch-report sample was asserted; the spelled "eleven" was prose
+        // nothing read, so a twelfth built-in tool moved the digits and left
+        // the word behind. WHY THE SENTENCE STILL EARNS ITS PLACE: the claim
+        // was the right one, it just had no second assertion under it — so the
+        // spelled count is derived below rather than the sentence softened.
         $flat = (string) preg_replace('/\s+/', ' ', $this->readme());
-        self::assertStringContainsString(
-            sprintf('disabled %d of the %d tools your own settings left', count($removed), count($ceiling)),
-            $flat,
-            "README.md's launch-report sample no longer matches the measured tool census",
+        // LOUD ON WHAT IT CANNOT SPELL, never silently ''. A const-array miss
+        // on PHP 8.3.6 is a `Warning: Undefined array key` evaluating to null,
+        // NOT a throw — measured, not assumed — and `'out of the  built-in
+        // tools'` is a needle the page will never contain, so the failure
+        // would arrive as an unexplained miss rather than as "widen the map".
+        self::assertArrayHasKey(
+            count($ceiling),
+            self::SPELLED_COUNTS,
+            'the built-in tool census has moved outside the range self::SPELLED_COUNTS can spell; '
+            . 'add the word, and check that README.md now uses it',
         );
+        self::assertStringContainsString(
+            'out of the ' . self::SPELLED_COUNTS[count($ceiling)] . ' built-in tools',
+            $flat,
+            "README.md's retraction spells a built-in tool count that is not the measured one",
+        );
+
+        // EXACT, NOT CONTAINED, and the difference is not pedantry — it is a
+        // survived mutation. `assertStringContainsString($rendered, $flat)` was
+        // written first and MEASURED: with {@see Bootstrap::STDERR_LINE_FORMAT}
+        // mutated `"sugarcrush: %s.\n"` → `"sugarcrush: %s\n"`, the rendered
+        // needle loses its trailing full stop and is then a PREFIX of the
+        // page's sample, so the containment passed —
+        // `OK (5 tests, 27 assertions)` on PHP 8.3.6. Any mutation that only
+        // SHORTENS the envelope is invisible to a containment check. So the
+        // fenced sample block is extracted and compared whole.
+        self::assertSame(
+            $this->launchReportSample($ceiling, $removed),
+            $this->launchReportBlockIn('README.md'),
+            "README.md's launch-report sample is not what the launcher would print",
+        );
+    }
+
+    /**
+     * THE SECOND PAGE CARRYING THE SAME SAMPLE, and until round 46 nothing read
+     * it at all.
+     *
+     * HOW IT WAS FOUND. E152 repaired README.md's copy of the launch report and
+     * the doc-block written for it said the README held "the only other copy of
+     * the phrase". That was a claim about a grep, not a measurement, and it was
+     * wrong: `docs/SETTINGS.md` fences the identical line and then tells the
+     * reader, in prose, "That is the stderr form, byte for byte." MEASURED on
+     * PHP 8.3.6, scope = the nine classes in `tests/` that read `SETTINGS.md`:
+     * with {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} mutated
+     * `disabled` → `removed`, exactly one of them redded, and it was
+     * {@see ReadmeRosterDriftTest::testTheLaunchReportSampleIsStillTheLineTheLauncherWouldPrint()}
+     * reading README.md. A page that promises byte-for-byte agreement and is
+     * checked by nothing is worse than one that paraphrases, because its
+     * promise is what stops the next reader from checking it by hand.
+     *
+     * RENDERED FROM THE SAME HELPER AS THE README ASSERTION, deliberately, and
+     * this is NOT the render-from-the-code-under-test tautology the backlog
+     * records for this round. The tautology is when expectation and actual both
+     * come from `src/`. Here the actual is a MARKDOWN PAGE — a byte string no
+     * part of the launcher can move — so rendering the expectation from the
+     * launcher's constants is exactly what makes the two parties independent.
+     *
+     * THE PATH FIELD IS THE PAGE'S OWN EXAMPLE, `/repo/…`, which is why
+     * {@see launchReportSample()} substitutes it rather than measuring it. Both
+     * pages chose the same example; if one changes it, this reds and the answer
+     * is to make them agree rather than to soften the assertion.
+     */
+    public function testTheSettingsPageQuotesTheSameLaunchReportByteForByte(): void
+    {
+        $ceiling = $this->toolCeiling();
+
+        $removed = array_values(array_filter(
+            $ceiling,
+            static function (string $name): bool {
+                return PermissionRule::matchesToolName(self::COUNTEREXAMPLE_GLOB, $name);
+            },
+        ));
+
+        self::assertNotSame([], $removed, 'the counterexample removed nothing, so there is no sample to check');
+
+        self::assertSame(
+            $this->launchReportSample($ceiling, $removed),
+            $this->launchReportBlockIn('docs/SETTINGS.md'),
+            "docs/SETTINGS.md calls its launch-report sample the stderr form byte for byte, and it is not "
+            . 'what the launcher would print',
+        );
+    }
+
+    /**
+     * The one fenced block in `$relativePath` that shows the launch-report
+     * line, flattened the same way {@see launchReportSample()} flattens its
+     * render.
+     *
+     * IT READS ANY PAGE, and the header above said "README.md" for as long as
+     * README.md was the only one. `docs/SETTINGS.md` carries the identical
+     * sample — see
+     * {@see testTheSettingsPageQuotesTheSameLaunchReportByteForByte()} — so
+     * every "the README" below means "the page this call was handed".
+     *
+     * EXACTLY ONE IS ASSERTED. A second block carrying `(disabledTools)` would
+     * make "the sample" ambiguous, and picking the first would silently stop
+     * checking the other — the shape of hole rule 14 is about.
+     *
+     * EVERY FENCE, NOT ONLY A `text`-TAGGED ONE, AND THE OLD ALPHABET IS WHY.
+     * WHAT IT SAID: scan for `text`-tagged fences only and assert one hit, on
+     * the reasoning that a second sample would make "the sample" ambiguous.
+     * WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 46: that assertion could
+     * not SEE a second sample unless it happened to carry that one tag.
+     * Appending to README.md a BARE-fenced block reading `sugarcrush: …
+     * (disabledTools) disabled 99 of the 3 tools your own settings left — Nope
+     * — leaving: Nope.` left the full suite green and its totals unchanged to
+     * the assertion. README.md already carries bare-fenced blocks, so the shape
+     * was live rather than hypothetical. WHY THIS STILL EARNS ITS PLACE: the
+     * reasoning above was right and only its alphabet was wrong — rule 11, an
+     * instrument reporting zero because of what it cannot express.
+     *
+     * THE FENCES ARE COUNTED BEFORE THEY ARE PAIRED, because a widened opener
+     * can also mis-pair: if some block's body held a line opening with three
+     * backticks, that inner line would close its parent early and every later
+     * block would be offset by one, quietly. The regex yields one match per
+     * PAIR, so `2 × matches === fence lines` is the parse check. It fails loudly
+     * on a README this extractor cannot read, rather than comparing against
+     * whatever a shifted pairing happened to select.
+     */
+    private function launchReportBlockIn(string $relativePath): string
+    {
+        $page = $this->document($relativePath);
+
+        preg_match_all('/^```[^\n]*\n(.*?)^```/ms', $page, $blocks);
+
+        self::assertSame(
+            preg_match_all('/^```/m', $page),
+            2 * count($blocks[1]),
+            "{$relativePath} has an odd or nested run of ``` fences, so this extractor cannot say which "
+            . 'lines belong to which block; the launch-report sample it would compare is not trustworthy',
+        );
+
+        $samples = array_values(array_filter(
+            $blocks[1],
+            static function (string $block): bool {
+                return str_contains($block, '(disabledTools)');
+            },
+        ));
+
+        self::assertCount(
+            1,
+            $samples,
+            "{$relativePath} no longer holds exactly one fenced block showing the (disabledTools) launch "
+            . 'report; this guard cannot say which one it is comparing',
+        );
+
+        return trim((string) preg_replace('/\s+/', ' ', $samples[0]));
+    }
+
+    /**
+     * The digit-to-word map the README's retraction paragraph is written in.
+     *
+     * Deliberately SHORT: a census outside this range is a tree this file has
+     * never seen, and {@see testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()}
+     * asserts the key is present BEFORE reading it, so the answer is "widen this
+     * map" rather than a containment miss on a needle with a hole in it.
+     *
+     * @var array<int, string>
+     */
+    private const SPELLED_COUNTS = [
+        9 => 'nine',
+        10 => 'ten',
+        11 => 'eleven',
+        12 => 'twelve',
+        13 => 'thirteen',
+    ];
+
+    /**
+     * The launch-report line README.md prints as its sample, RENDERED FROM THE
+     * LAUNCHER'S OWN FORMATS rather than retyped here.
+     *
+     * WHY THIS IS THE WHOLE POINT OF E118 HAVING PROMOTED THEM. This file used
+     * to retype `sprintf('disabled %d of the %d tools your own settings left',
+     * …)` and compare that to the page. MEASURED in round 45: with
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} mutated
+     * `disabled`→`removed`, neither
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest} nor
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapToolAndPermissionSettingsTest}
+     * reds, and this file held the only other copy of the phrase in `tests/` —
+     * so the copy that was supposed to catch the drift drifted WITH it, in the
+     * one direction that leaves the README describing a line the launcher no
+     * longer prints. A promoted constant the checker does not read is a second
+     * copy with a nicer name.
+     *
+     * FOUR CONSTANTS AND NOT ONE, because the sample carries the whole
+     * envelope: {@see Bootstrap::STDERR_LINE_FORMAT} contributes the
+     * `sugarcrush: ` prefix and the trailing full stop,
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} the body, and
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING} the survivor clause.
+     * The path is the README's own illustrative one — it is a sample, not a
+     * capture — and everything else comes from the measured census.
+     *
+     * WHITESPACE IS FLATTENED ON BOTH SIDES. The page wraps this sample across
+     * three lines inside a fenced block, so a raw containment would fail on the
+     * line breaks alone; the same flattening the README guards below use.
+     *
+     * @param list<string> $ceiling
+     * @param list<string> $removed
+     */
+    private function launchReportSample(array $ceiling, array $removed): string
+    {
+        $line = sprintf(
+            Bootstrap::STDERR_LINE_FORMAT,
+            sprintf(
+                Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT,
+                '/repo/' . LayeredSettings::SHARED_PATH,
+                count($removed),
+                count($ceiling),
+                implode(', ', $removed),
+                Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING
+                    . implode(', ', array_values(array_diff($ceiling, $removed))),
+            ),
+        );
+
+        return trim((string) preg_replace('/\s+/', ' ', $line));
     }
 
     /**

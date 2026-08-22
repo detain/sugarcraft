@@ -7219,3 +7219,172 @@ runs. The fix is committed on its argument, not on a green test, and this entry 
 **What would close it.** Either the seam above plus a subclass that reports "cannot signal" and asserts
 the reaper returns promptly with the pid absent from `$killed`, or a CI job on a build without ext-posix.
 Neither is worth a round on its own; fold it into whichever round next touches the trait.
+### Ec46-1 — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
+
+**Recorded 2026-08-22 by round-46 lane c. Not done because that file is outside lane c's ownership this
+round.** Severity: low. **Observed, measured.**
+
+**What.** E164 promoted `SKILL_SKIP_NOTICE_FORMAT`, `LAUNCH_NOTICE_OVERFLOW_FORMAT`,
+`SESSION_RETENTION_SUMMARY_FORMAT` and `SESSION_RETENTION_DETAIL_FORMAT` out of `Bootstrap.php` precisely
+because `tests/Cli/BootstrapLaunchNoticeRoutingTest.php` reproduces what they render — in one case with a
+whole-sentence `assertSame()`. Those reproductions are still hand-typed, so the promotion made
+`Bootstrap.php` single-source without yet making the reader read the source. That is half the repair, and
+it is the half E118 spent a round on for the two formats it promoted.
+
+**Step.** Point each retyped expectation at `sprintf(Bootstrap::<CONST>, …)`. The four call sites are the
+skipped-skills aggregate, the capped-fan-out overflow row (both the `assertSame()` and the two later
+`assertStringContainsString()`s), the retention summary (transcript copy and stderr copy), and the
+`'<id> (last used …'` detail fragment. **Careful:** rendering the expectation from the same constant the
+child renders from is a TAUTOLOGY with respect to the constant's TEXT — see Ec46-2. Keep exactly one
+independent copy per format, or keep the doc-page guard that already provides one.
+
+### Ec46-2 — rendering a test expectation from the constant under test cannot pin that constant's text
+
+**Recorded 2026-08-22 by round-46 lane c. Measured against round 46's own fix, which is the only
+acceptance test a fix gets.** Severity: medium, methodological. **Observed.**
+
+**What.** E153 asked for a behavioural case that gives `PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE` "the
+external reader it lacks". The case was written: a real child launch whose trusted project removes every
+tool, expectation rendered from the constant. MEASURED on PHP 8.3.6 — with the constant reworded
+`'leaving no tools at all'` → `'leaving nothing at all'`, that class stayed at
+`OK (57 tests, 135 assertions)`. The child and the expectation both moved. What the case DOES pin is the
+wiring: deleting the ternary branch gives `Tests: 57, Assertions: 134, Failures: 1`. Two different claims,
+and only one of them is "the sentence is this sentence".
+
+**Step.** State the claim a render-from-constant assertion supports ("the running program prints THIS
+CONSTANT") and pair it with exactly one independent copy of the text ("the constant is THAT SENTENCE").
+The independent copy is best held by a second party that is not a test — README.md holds it for
+`PROJECT_TIER_TOOL_REMOVAL_FORMAT`, `docs/ENVIRONMENT.md` and `docs/SETTINGS.md` for
+`SESSION_RETENTION_SUMMARY_FORMAT` — and only failing that by a deliberate, documented literal in the
+test. The general form: **whenever a guard's expected and actual values are both derived from the code
+under test, name what the tautology costs before shipping it.**
+
+### Ec46-3 — some `sprintf()` formats in `Bootstrap.php` are inline on purpose; others only looked that way, and a mutation is what told them apart
+
+**Recorded 2026-08-22 by round-46 lane c.** Severity: informational. **Measured.**
+
+**What.** E164's walk asked, per literal format, whether an external reader exists. The ones that had one
+were promoted into `BootstrapLaunchFormatConstantsTest::NAMED_FORMATS`, which is the list to read; several
+of them only after a mutation falsified the walk's own first answer, which is the part of this entry worth
+keeping. (This sentence gave a count when it was written and the count was stale within the same round —
+see the amendment at the end of this entry.) `reportProjectTierRefusals()`'s `'ignoring %s — %s'` envelope was classified
+"fragment only" on the strength of two files that mention it in COMMENTS; rewording it `ignoring` →
+`skipping` reds `BootstrapLaunchNoticeRoutingTest::testARefusedProjectDirectoryReachesBothChannels()`
+(`Tests: 177, Assertions: 615, Failures: 1`), which reconstructs the whole envelope twice. **`grep` for a
+format's words finds the files that talk about it; only a mutation finds the files that depend on it.**
+
+**The same mistake was then made twice more, and the corrected instrument is the finding.** The two
+`mcpClient()` messages were also classified fragment-only, on the shared clause `'could not be fully
+started'`. Rewording the spans that clause does NOT cover gives `McpToolWiringTest` `Failures: 3` and
+`Failures: 2` — it pins three separate clauses across the pair, because its subject is that the two lines
+must not collapse into each other. Both are promoted. **A mutation testing "does anything read this
+sentence?" has to land OUTSIDE every fragment already known to be asserted**; the first attempt reworded
+words that sat inside the known fragments, "killed" four times, and told me nothing. Re-placed outside,
+two of those four survived.
+
+The remaining three were left inline because every reader they have really does assert a FRAGMENT — a
+loose coupling to an idea, not two parties agreeing on a sentence, and that is now measured rather than
+grepped: `mcpConfigDecision()`'s out-of-tree and untrusted refusals (`'outside the project tree'`,
+`'running programs this repository chose'`, `assertStringStartsWith('resolves to ')`); and
+`trustedConfigDirPath()`'s home-ownership refusal (two `expectExceptionMessageMatches()` regexes on a
+clause). No count is written here — the census is derived by
+`BootstrapLaunchFormatConstantsTest::testTheLiteralFormatCensusHasAGenerator()` and the promoted set is
+`NAMED_FORMATS`, which counts itself.
+
+**AMENDED 2026-08-22 by round-46 lane c's fix agent, after review.** Two claims above were wrong and both
+are corrected in place rather than deleted, because the reasoning around them still holds.
+
+1. **`docs/MCP.md` does not paraphrase.** It was cited as narrating `mcpConfigDecision()`'s untrusted
+   refusal "rather than quoting the message". MEASURED: `docs/MCP.md` and `src/Cli/Bootstrap.php` share
+   the verbatim nine-word span `before any tool call and in every permission mode`. That is a quoted
+   clause, so the mutation that survived did so despite an existing shared span, not because the page
+   paraphrases — the mutation simply landed elsewhere in the sentence. The conclusion (leave the format
+   inline) is unchanged, since a shared clause is still a fragment coupling; the stated reason was not.
+2. **The counts were stale on arrival**, the same defect this round found twice in `tests/`. They are
+   replaced by names and by the derived census above.
+
+**Step.** No action now. The trigger for revisiting any one of them is a second party reproducing a whole
+rendered SENTENCE rather than a clause — a README sample, a `docs/*.md` code block, or an `assertSame()`
+on the line. That is the same test E164 applied.
+
+### Ec46-4 — nothing sweeps the doc pages for unguarded quotes of a promoted format
+
+**Recorded 2026-08-22 by round-46 lane c's fix agent. The two instances the sweep found this round were
+both closed; the SWEEP itself is what is deferred.** Severity: low. **Observed, measured.**
+
+**What.** Round 46 closed the same hole twice. `README.md` had a guard on the tool-removal launch report;
+`docs/SETTINGS.md` carried a byte-for-byte copy of the identical sample, said so in prose ("That is the
+stderr form, byte for byte"), and had none. Sweeping the rest of the promoted formats the same way — take
+each one's longest span of literal text between conversions, flatten every page under `README.md` and
+`docs/`, ask which pages contain it — turned up one more: `docs/TROUBLESHOOTING.md` quotes
+`ignoring <path> — <reason>`, which is `Bootstrap::PROJECT_TIER_REFUSAL_FORMAT` with its two `%s` replaced
+by placeholder names. Both now have guards
+(`ReadmeSettingsTierClaimTest::testTheSettingsPageQuotesTheSameLaunchReportByteForByte()` and
+`BootstrapLaunchFormatConstantsTest::testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints()`).
+
+**What is still missing is the sweep.** It was run by hand, once, at one commit. The next format promoted,
+or the next page that decides to quote a launch line, restores the same silence — and the failure mode is
+the quiet one: a page that PROMISES agreement and is checked by nothing is worse than one that
+paraphrases, because the promise is what stops the next reader from checking it by hand.
+
+**Careful — the sweep's alphabet is part of its answer, and it lied once here.** The longest literal span
+of `PROJECT_TIER_REFUSAL_FORMAT` is `'ignoring '`, nine characters of ordinary English, and the sweep duly
+nominated `README.md`, whose actual sentence is "reject one at exit `2` rather than ignoring it". A span
+short enough to occur by accident nominates candidates; it does not identify readers. Any automated
+version has to either impose a minimum span length and REPORT the formats it therefore cannot check —
+rather than passing them silently — or compare rendered samples instead of spans.
+
+**Step.** Turn the sweep into a test: for each entry in `BootstrapLaunchFormatConstantsTest::NAMED_FORMATS`,
+derive its longest literal span, and assert that every page containing that span is on a declared list of
+guarded readers. New page quoting a format, or a newly promoted format some page already quotes, then reds
+with "this page quotes a format nothing checks" instead of going unnoticed. Formats whose longest span is
+below the length threshold must be listed as unsweepable rather than dropped.
+
+### Ec46-5 — a class-total figure in a doc-block is a cardinality over `tests/`, and round 46 shipped three stale ones
+
+**Recorded 2026-08-22 by round-46 lane c's fix agent, during the verification pass over the same round's own
+commits.** Severity: informational, but it recurred four times in three rounds. **Measured.**
+
+**What.** Three doc-blocks landed this round quoting a PHPUnit total as evidence, and all three were wrong
+by the time the round ended — each invalidated by a LATER COMMIT OF THE SAME ROUND, not by drift:
+
+1. `BootstrapToolAndPermissionSettingsTest` said the tool-removal text mutation answers
+   `Tests: 5, Assertions: 30, Failures: 1` in its sibling class. Measured at the round's head it answers
+   `Tests: 6, Assertions: 40, Failures: 2` — a later commit added the `docs/SETTINGS.md` guard to that class.
+2. `BootstrapLaunchFormatConstantsTest`'s census control quoted the real-tree answer as `12/8/0/2`; the E164
+   promotions took it to 12 calls / 3 literal / 9 constant / 0 interpolated.
+3. The `six`/`five` doc-page counts already caught as the review's MAJOR 3, same mechanism.
+
+**Why it keeps happening.** The existing rule is stated as "do not write a cardinality into prose", which
+reads as being about counts of FILES or FORMATS. A PHPUnit `Tests:` / `Assertions:` total does not look like
+a cardinality — it looks like a measurement, and measurements are what these doc-blocks are supposed to
+carry. It is both: it is a measurement whose value is a count of the tests in a class, so **any sibling test
+added anywhere in that class invalidates it**, with no relationship to the thing being measured.
+
+**The form that survives.** Report WHICH TESTS RED, by name, and assert nothing about how many. A test name
+is stable under a sibling being added beside it, it is what the reader has to go and look at anyway, and
+when it rots it rots loudly — the `{@see}` stops resolving. Where a total genuinely is the finding (a
+mutation that reds NOTHING, say), say so qualitatively: "no test in that class reds".
+
+**Step.** No code change. When a doc-block cites a mutation verdict, cite the failing test names. Only the
+`Failures: 0` / "nothing red" case needs no name.
+
+### Ec46-6 — two guards whose failure message will misdescribe the failure
+
+**Recorded 2026-08-22 by round-46 lane c's fix agent, from the review's NOTE 8 plus one found beside it.**
+Severity: low. **Observed.**
+
+**What.** `BootstrapLaunchFormatConstantsTest::testTheLiteralFormatCensusHasAGenerator()` asserts
+`assertSame(\count(self::NAMED_FORMATS), $census['constant'])`, which holds only because each promoted
+format is `sprintf()`ed exactly once. A legitimate SECOND call site for any promoted format — the same
+constant rendered in two places, which is a normal thing to want — reds with "Bootstrap.php formats from a
+different number of constants than this file names as promoted". That is not what happened, and the message
+sends the reader to the roster rather than to the new call site.
+
+Second instance, found while mutating: `testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints()`
+uses `assertStringContainsString` against the FLATTENED page, so its failure output dumps all ~17 KB of
+`docs/TROUBLESHOOTING.md` on one line. The assertion is correct and the diagnosis is unreadable.
+
+**Step.** For the first, either assert the per-constant call count explicitly or reword the message to name
+both possibilities. For the second, narrow the haystack to the flattened paragraph containing `ignoring `
+before asserting, so a failure prints a sentence rather than a page.

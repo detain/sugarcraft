@@ -271,6 +271,189 @@ final class Bootstrap
     public const PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE = 'leaving no tools at all';
 
     /**
+     * The aggregate row {@see reportSkillSkips()} raises for unreadable skill
+     * files.
+     *
+     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164).
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testSkippedSkillFilesReachBothChannelsAsOneAggregateRow()}
+     * reproduces a rendered span of this sentence, plural machinery included —
+     * and the plural machinery is the part that drifts, because `%s` here is
+     * three separate agreement slots (`file/files`, `was/were`, `it/them`) that
+     * a reworded message silently desynchronises.
+     *
+     * `%d` the count, `%s` the noun plural, `%s` the verb, `%s` the env var
+     * that lists the paths, `%s` the object pronoun. Five, and the count is
+     * asserted rather than intended — `sprintf()` on PHP 8 throws
+     * `ArgumentCountError` when a format asks for more than it is given, so a
+     * sixth conversion is a launch-time fatal, not a cosmetic drift.
+     */
+    public const SKILL_SKIP_NOTICE_FORMAT =
+        '%d skill file%s could not be read and %s skipped; set %s=1 to list %s';
+
+    /**
+     * The tail row {@see launchNotices()} synthesises when this launch raised
+     * more warnings than {@see LAUNCH_NOTICE_LIMIT} could seat.
+     *
+     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164), and this one reproduces
+     * the sentence WHOLE:
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testAFanOutOfNoticesIsCappedAndTheOverflowIsCounted()}
+     * `assertSame()`s the rendered line rather than a fragment of it. It is
+     * also the odd one out of its own family: {@see LAUNCH_NOTICE_LIMIT} and
+     * {@see LAUNCH_NOTICE_CLIP_SUFFIX} are already named, and the sentence that
+     * tells a reader the cap was hit was the only part of the cap contract
+     * living as an inline literal.
+     *
+     * `%d` the number dropped, `%s` the plural marker.
+     */
+    public const LAUNCH_NOTICE_OVERFLOW_FORMAT =
+        '…and %d more launch warning%s this transcript could not fit; the full list is on stderr';
+
+    /**
+     * The one-line summary {@see reportPrunedSessions()} seeds the transcript
+     * with.
+     *
+     * PROMOTED BECAUSE TWO DOC PAGES QUOTE THE RENDERED LINE (E164) —
+     * `docs/ENVIRONMENT.md`'s `SUGARCRUSH_SESSION_RETENTION_DAYS` row and
+     * `docs/SETTINGS.md`'s routing section both carry
+     * `retention removed 3 unnamed sessions untouched for 30+ days (ids on
+     * stderr)` verbatim. That is the strongest form of the readership rule this
+     * class promotes on: a page an operator reads and this line have to agree,
+     * and a name is how two parties agree.
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchFormatConstantsTest}
+     * renders both pages' copy from this constant.
+     *
+     * `%d` the count, `%s` the noun plural, `%d` the retention window in days.
+     * The `+` after the last conversion is literal text, not part of it.
+     */
+    public const SESSION_RETENTION_SUMMARY_FORMAT =
+        'retention removed %d unnamed %s untouched for %d+ days (ids on stderr)';
+
+    /**
+     * The per-session detail row {@see reportPrunedSessions()} writes to stderr
+     * and deliberately does NOT seed into the transcript.
+     *
+     * PROMOTED AS THE OTHER HALF OF ONE REPORT, which is the same argument
+     * {@see PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} is kept under rather than a
+     * second-party one: `docs/ENVIRONMENT.md` and `docs/SETTINGS.md` document
+     * the SPLIT — summary to both channels, ids to stderr alone — so the two
+     * lines are one contract, and splitting a contract across a constant and an
+     * inline literal is worse than either choice made consistently. Its own
+     * external readers assert fragments (`'<id> (last used …'`), not the line.
+     *
+     * IT CARRIES ITS OWN ENVELOPE, and that is not a mistake to be tidied away:
+     * the leading `sugarcrush:   ` and the trailing newline duplicate what
+     * {@see STDERR_LINE_FORMAT} adds, because these rows are a CONTINUATION of
+     * the summary above them and are indented under it by the two extra spaces.
+     * The two obvious tidyings each cost something, and they cost DIFFERENT
+     * things — which is why they are named separately rather than as one
+     * "route it through the helper". Sending these rows through
+     * {@see warnPermissionConfig()} would keep them on stderr and only lose the
+     * indent and gain a full stop after an id list. Sending them through
+     * {@see warnPermissionConfigInTranscript()} — the seam the SUMMARY takes —
+     * would additionally seed one transcript row per deleted session, which is
+     * the per-entry fan-out into a list the model is re-sent every turn that
+     * {@see LAUNCH_NOTICE_LIMIT} exists to refuse, and that `docs/SETTINGS.md`
+     * names as the reason this half of the report did not migrate with the
+     * other half.
+     *
+     * `%s` the session id, `%s` its last-used timestamp, `%d` the message
+     * count, `%s` that count's noun plural.
+     */
+    public const SESSION_RETENTION_DETAIL_FORMAT = "sugarcrush:   %s (last used %s UTC, %d %s)\n";
+
+    /**
+     * The envelope {@see reportProjectTierRefusals()} wraps every refused
+     * project directory in — the path this launch would not read, and the
+     * reason, joined by an em dash.
+     *
+     * PROMOTED AFTER A MUTATION FALSIFIED THE JUDGEMENT THAT LEFT IT INLINE
+     * (E164), and the correction is worth recording because the mis-reading is
+     * an easy one to repeat. WHAT E164'S WALK CONCLUDED: this envelope has no
+     * external reader, because the two files that mention it — `McpToolWiringTest`
+     * and `WorkflowRegistryTest` — name it only in COMMENTS and assert the
+     * `%s` REASON rather than the sentence. WHAT IS TRUE: MEASURED on PHP 8.3.6
+     * by rewording it `ignoring` → `skipping`,
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testARefusedProjectDirectoryReachesBothChannels()}
+     * goes red — `Tests: 177, Assertions: 615, Failures: 1`. It reconstructs
+     * the whole envelope twice, `'ignoring ' . $path . ' — ' . $reason` for the
+     * transcript row and `'ignoring ' . $path` for a `substr_count()` on
+     * stderr. That is a second party agreeing on a SENTENCE, which is the test
+     * the walk applies, and the walk answered it from the wrong two files.
+     *
+     * `%s` the path, `%s` the reason with its own full stop already stripped —
+     * the stop belongs to {@see STDERR_LINE_FORMAT}, which adds one, and two
+     * would read as a typo.
+     */
+    public const PROJECT_TIER_REFUSAL_FORMAT = 'ignoring %s — %s';
+
+    /**
+     * The diagnostic {@see mcpClient()} sends to `error_log()` when a `.mcp.json`
+     * threw part-way through starting its servers.
+     *
+     * PROMOTED BECAUSE ITS SECOND PARTY AGREES ON THE SENTENCE, NOT ON AN IDEA
+     * (E164). This looked like a fragment reader —
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest} asserts
+     * `'could not be fully started'`, which is a clause. MEASURED on PHP 8.3.6:
+     * rewording `'; continuing without it.'` — a span no documented fragment
+     * covers — takes that file to `Tests: 263, Assertions: 1157, Failures: 3`.
+     * It pins THREE separate clauses of this line, because the point of that
+     * file's `testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()`
+     * is that this line and
+     * {@see MCP_PARTIAL_START_NOTICE_FORMAT} must not collapse into each other.
+     * Two lines whose distinctness is the assertion are two names.
+     *
+     * IT CARRIES ITS OWN `sugarcrush: ` PREFIX because nothing else will add
+     * one: this line goes through `error_log()` rather than
+     * {@see STDERR_LINE_FORMAT}, and its own full stop is here for the same
+     * reason.
+     *
+     * WHAT THIS PARAGRAPH SAID, corrected under round 46's review (MAJOR 4):
+     * "`error_log()`, which prepends a timestamp and no label of ours". WHAT IS
+     * TRUE NOW — MEASURED on PHP 8.3.6, and it depends on the destination the
+     * OPERATOR configured, which is the whole difficulty with this call.
+     * `php -d error_log= -r 'error_log("probe");'` puts `probe` on stderr with
+     * NO prefix whatsoever; pointed at a file, the same call writes
+     * `[22-Aug-2026 15:00:37 UTC] probe`. So the timestamp is the file
+     * destination's, not `error_log()`'s, and the unset-ini box is exactly the
+     * one
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()}
+     * runs, where the reworded claim would have been wrong about the very case
+     * three lines above it. WHY THE SENTENCE STILL EARNS ITS PLACE: its
+     * CONCLUSION survives both destinations unchanged — neither one contributes
+     * a `sugarcrush: ` label, so the label has to be in the message — and the
+     * same distinction is drawn correctly at this call's site in
+     * {@see mcpClient()}, which is where the destination question is argued out.
+     *
+     * `%s` the config path, `%s` the exception class, `%s` its message.
+     */
+    public const MCP_PARTIAL_START_LOG_FORMAT =
+        'sugarcrush: MCP config %s could not be fully started (%s: %s); continuing without it.';
+
+    /**
+     * The transcript-and-stderr notice {@see mcpClient()} raises for the same
+     * failure {@see MCP_PARTIAL_START_LOG_FORMAT} logs.
+     *
+     * PROMOTED AS THE OTHER LINE OF A PAIR WHOSE DISTINCTNESS IS ASSERTED
+     * (E164). MEASURED: rewording `'this session has only the tools that did
+     * load'` gives
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest}
+     * `Tests: 263, Assertions: 1164, Failures: 2`. That file's doc-block records
+     * a round where one of these two wordings was nested inside the other and
+     * the guard went red; the shared clause `could not be fully started` is
+     * deliberate, and what must differ is everything around it.
+     *
+     * NO `sugarcrush: ` PREFIX AND NO FULL STOP, unlike its sibling: this one
+     * reaches stderr through {@see warnPermissionConfigInTranscript()}, so
+     * {@see STDERR_LINE_FORMAT} adds both — and the transcript copy takes
+     * neither, which is why they are not in the message.
+     *
+     * `%s` the config path, `%s` the exception message.
+     */
+    public const MCP_PARTIAL_START_NOTICE_FORMAT =
+        'MCP tools from %s are incomplete: the server list could not be fully started (%s); '
+        . 'this session has only the tools that did load';
+
+    /**
      * How many CALL sites in this file route a warning onto
      * {@see warnPermissionConfigInTranscript()}.
      *
@@ -1140,7 +1323,9 @@ final class Bootstrap
             // {@see LAUNCH_NOTICE_LIMIT} exists: the eight feeders named above
             // are bounded, but $commandLoader->refusedCommands() is one entry
             // per refused FILE and nothing caps that.
-            self::warnPermissionConfigInTranscript(sprintf('ignoring %s — %s', $path, rtrim($reason, '.')));
+            self::warnPermissionConfigInTranscript(
+                sprintf(self::PROJECT_TIER_REFUSAL_FORMAT, $path, rtrim($reason, '.')),
+            );
         }
     }
 
@@ -2662,7 +2847,7 @@ final class Bootstrap
         // PROSE_SITES and a declaration in {@see TRANSCRIPT_SEAM_CALL_SITES}, so
         // a seventeenth site reds this sentence rather than dating it.
         self::warnPermissionConfigInTranscript(sprintf(
-            '%d skill file%s could not be read and %s skipped; set %s=1 to list %s',
+            self::SKILL_SKIP_NOTICE_FORMAT,
             $count,
             $count === 1 ? '' : 's',
             $count === 1 ? 'was' : 'were',
@@ -4209,7 +4394,7 @@ final class Bootstrap
         return [
             ...self::$launchNotices,
             sprintf(
-                '…and %d more launch warning%s this transcript could not fit; the full list is on stderr',
+                self::LAUNCH_NOTICE_OVERFLOW_FORMAT,
                 $dropped,
                 $dropped === 1 ? '' : 's',
             ),
@@ -4668,7 +4853,7 @@ final class Bootstrap
             // LENGTH, which matters here because `$e->getMessage()` interpolates
             // a `type` string the project's `.mcp.json` chose.
             error_log(sprintf(
-                'sugarcrush: MCP config %s could not be fully started (%s: %s); continuing without it.',
+                self::MCP_PARTIAL_START_LOG_FORMAT,
                 $path,
                 $e::class,
                 $e->getMessage(),
@@ -4683,8 +4868,7 @@ final class Bootstrap
             // by
             // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()}.
             self::warnPermissionConfigInTranscript(sprintf(
-                'MCP tools from %s are incomplete: the server list could not be fully started (%s); '
-                    . 'this session has only the tools that did load',
+                self::MCP_PARTIAL_START_NOTICE_FORMAT,
                 $path,
                 $e->getMessage(),
             ));
@@ -5504,14 +5688,14 @@ final class Bootstrap
     {
         $count = count($report);
         self::warnPermissionConfigInTranscript(sprintf(
-            'retention removed %d unnamed %s untouched for %d+ days (ids on stderr)',
+            self::SESSION_RETENTION_SUMMARY_FORMAT,
             $count,
             $count === 1 ? 'session' : 'sessions',
             $retentionDays,
         ));
         foreach ($report as $row) {
             fwrite(STDERR, sprintf(
-                "sugarcrush:   %s (last used %s UTC, %d %s)\n",
+                self::SESSION_RETENTION_DETAIL_FORMAT,
                 $row['id'],
                 $row['updated_at'],
                 $row['messages'],
