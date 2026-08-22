@@ -6301,16 +6301,36 @@ half-claims satisfy it" shape that round 45 replaced with a per-key rule in
 retraction-exclusion machinery is different enough that it needs its own measurement rather than a
 transplant.
 
+**Read this before transplanting the per-key rule (added by the round-45 lane-c fix agent).** The
+per-key rule as first written was UNFALSIFIABLE FOR `theme`: it required a unit to name the key AND both
+doors, but `stripos($unit, 'theme')` is satisfied by `Switch Theme` and by `/theme`, so the theme bullet
+could lose its key name entirely and stay green — measured, and green across 149 tests of the Config and
+Chat doc-drift suites. The repair looks for the key in the unit with the DOOR SPANS CUT OUT
+(`ConfigWriteProducerDocumentationDriftTest::unitNamesKeyWithBothDoors()`), and keeps the surviving
+mutation as a fixture row. This file's own `DOORS` is a flat list of four door names with no key
+conjunct, so it does not carry the defect today — it would acquire it the moment the per-key shape is
+transplanted. Transplant the repaired form, not the round-45 one.
+
 ### Ec2 — the mention oracle has no way to record a variable another page deliberately says is unread
 
 **Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135.**
 
 **What.** E123's new `EnvRosterDriftTest::testEveryVariableAnotherPageNamesIsOneTheCodeReads()` treats
 every `SUGARCRUSH_*` name on any page except `docs/ENVIRONMENT.md` as a promise the code must keep. The
-roster page is excluded from that scrape precisely so its two deliberate not-read discussions
-(`SUGARCRUSH_TOOL_CALL_PARSER`, `SUGARCRUSH_REASONING_EFFORT`) stay out of the rule — **verified by
-mutation**: removing the `continue` that skips it reds three tests, two of them on exactly those two
-names.
+roster page is excluded from that scrape precisely so its deliberate not-read discussion of
+`SUGARCRUSH_TOOL_CALL_PARSER` stays out of the rule — **verified by mutation**: removing the `continue`
+that skips it reds three tests, and both of the set comparisons among them red on a one-element diff
+naming `SUGARCRUSH_TOOL_CALL_PARSER` and nothing else.
+
+**Corrected 2026-08-22 by the round-45 lane-c fix agent.** The paragraph above originally said "its two
+deliberate not-read discussions (`SUGARCRUSH_TOOL_CALL_PARSER`, `SUGARCRUSH_REASONING_EFFORT`) … two of
+them on exactly those two names". `SUGARCRUSH_REASONING_EFFORT` does not appear on `docs/ENVIRONMENT.md`
+at all — not in a table, not in prose, not in a fence — so it cannot become a mention when the exclusion
+is removed. It exists in exactly one place in the package, a doc-block in
+`src/Providers/ProviderFactory.php`. The pairing was inherited from `EnvRosterDriftTest`'s own class
+doc-block, which names the two together for a different reason, and was then re-stamped "verified by
+mutation". The exclusion is still load-bearing and the mutation still reds; only the arithmetic was
+borrowed.
 
 **The residual.** A page OTHER than the roster that legitimately says "nothing reads this" now reds, and
 there is no exemption. No such sentence exists on any other page at round 45 (measured: every name on
@@ -6365,3 +6385,78 @@ every `getenv('HOME')` read, so the fix is available here in a way it was not th
 confined to `tests/Agents/*` as interference, re-run those files alone, and say so — which is what the
 round-45 brief already asks for `/tmp`, extended to `$HOME`. Do NOT bulk-delete
 `~/.sugar-crush/teams/*` while sibling lanes are running.
+
+### Ec5 — the mention oracle's surface alphabet stops at `README.md` + `docs/*.md`
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id per
+E135.**
+
+**What.** `EnvRosterDriftTest::mentionSurfaces()` is `README.md` plus a NON-RECURSIVE `glob('docs/*.md')`.
+Round 45's report filed the gap as untested. It is now measured, on PHP 8.3.6, by
+`scratchpad/r45c/alpha.php`: `docs/` has **no subdirectories** today, so the non-recursive glob costs
+nothing yet; outside the surface set there are **17** other `.md` files under `sugar-crush/` (including
+every `src/Skills/BuiltIn/**/SKILL.md`, which is shipped prose a user reads), of which **two** name a
+prefixed variable — `CALIBER_LEARNINGS.md` (`SUGARCRUSH_SEARCH_ENDPOINT`) and `CHANGELOG.md`
+(`SUGARCRUSH_SESSION_RETENTION_DAYS`) — plus `bin/sugarcrush`, which is not `.md` at all and names
+`SUGARCRUSH_DISABLE_MOUSE`.
+
+**Why it is not urgent.** All three of those names are ALREADY in the oracle's scope through an in-scope
+page (`README.md` names all three), so every one of them is already compared. The gap is real and
+currently empty.
+
+**Step.** Walk `docs/` recursively, the way `GlobFigureDriftTest::censusScope()` already does and for the
+reason recorded there, and decide deliberately whether `SKILL.md` files are mention surfaces. Whatever is
+decided, the decision belongs in `mentionSurfaces()`' doc-block with the measurement, not in a filename
+list.
+
+### Ec6 — the mention scrape reads raw text, so a line-wrapped variable name is invisible
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id.**
+
+**What.** `EnvRosterDriftTest::prefixedNamesIn()` runs `/\b(SUGAR_?CRUSH_[A-Z0-9_]+)\b/` over raw page
+text, while `DocumentParagraphs::of()` — the window the Config guards read through, and for exactly this
+reason — normalises whitespace first. A `SUGARCRUSH_*` name broken across a markdown line wrap would be
+two fragments and would be scraped as neither.
+
+**Measured, PHP 8.3.6, 2026-08-22:** no prefixed name ends a line in `README.md` or any `docs/*.md`
+(`grep -nE 'SUGAR_?CRUSH_[A-Z0-9_]*$'` finds nothing), and there are no lowercase spellings. The hazard is
+empty today.
+
+**Step.** Normalise the text through `DocumentParagraphs::of()` and scrape the units, which also brings
+the two censuses onto one window. Do it when a name first wraps, and pin it with a wrapped fixture.
+
+### Ec7 — a lane-c guard's span is anchored to a prose phrase on two read-side surfaces
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: informational, merge hazard.
+
+**What.** `ConfigWriteProducerDocumentationDriftTest::ENUMERATION_LEAD_IN` is the literal `'two
+producers'`, and `enumerationSpan()` asserts it identifies EXACTLY ONE unit in each of two documents —
+`docs/SETTINGS.md` and `SugarCraft\Crush\Config\LayeredSettings`' class doc-block. Both are read-side
+surfaces a sibling lane may be rewriting. The `assertCount(1, $leadIn)` makes the coupling fail loudly
+rather than silently, which is the right shape.
+
+**Step.** None. Recorded so a merge-time failure on that assertion is read as prose drift on a page
+someone else edited, not as a lane-c defect. Fix it by restoring the phrase or by moving the anchor,
+never by loosening the `assertCount(1, …)`.
+
+### Ec8 — the shared window is COARSER inside a fenced block, and that weakens a live exemption
+
+**Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Documented and pinned this
+round; NOT fixed.**
+
+**What.** E125's window makes a fenced code block ONE unit, opening fence to closing fence. The old
+blank-line rule cut such a block in two wherever it contained a blank line. So the new window is not
+uniformly finer: within a fenced block it is coarser, and
+`GlobFigureDriftTest::carriesTheStaleFigure()`'s retraction exemption — which spares a unit that spells
+the current count AND quotes the glob — now spares a stale figure sitting elsewhere in the SAME block as
+a retraction. Nothing in scope exploits this today.
+
+**What was done this round.** The trade is now measured rather than unmentioned:
+`DocumentParagraphsTest::windowFixtures()` carries a `a fence welds two claims a blank line used to
+separate` row (old `false` / new `true`), `testTheTableContainsFixturesTheOldWindowCouldNotSee()` counts
+a `$widened` column and asserts it is non-empty, and the class doc-block's "either direction" bullet says
+which direction it means.
+
+**Step, if it ever matters.** Do not re-split fences on blank lines — that reintroduces the unbalanced
+halves E125 removed. Scope the retraction exemption so that inside a fenced unit the retraction must be
+on the same LINE as, or adjacent to, the figure it exempts.
