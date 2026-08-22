@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Cli;
 
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
 
 /**
@@ -203,11 +205,29 @@ final class NonInteractive
 
         $history = self::historyFrom($args->prompt, self::readStdinIfPiped());
 
+        // E173. Every refusal this turn raises reaches the operator on stderr
+        // and reached the JSON consumer nowhere at all: the document said
+        // `{"result": "<the answer>"}` for a turn in which a tool was stopped
+        // and the model answered around it. The tool-lifecycle observer is the
+        // only seam this class has for it — the approver itself is built four
+        // frames away inside {@see Bootstrap::backend()} — and it is enough,
+        // because a blocked call terminates through
+        // {@see \SugarCraft\Crush\Runtime::failure()}, which emits a
+        // {@see ToolFinished} carrying the reason.
+        /** @var list<array{tool: string, reason: string}> $refusals */
+        $refusals = [];
+        $observeRefusals = static function (object $event) use (&$refusals): void {
+            $refusal = self::refusalFrom($event);
+            if ($refusal !== null) {
+                $refusals[] = $refusal;
+            }
+        };
+
         try {
-            $message = $backend->complete($history);
+            $message = $backend->complete($history, null, $observeRefusals);
         } catch (\Throwable $e) {
             \fwrite(\STDERR, $e->getMessage() . "\n");
-            self::emitErrorDocument($outputFormat, 'backend', $e->getMessage(), null);
+            self::emitErrorDocument($outputFormat, 'backend', $e->getMessage(), null, $refusals);
 
             return self::EXIT_FAILURE;
         }
@@ -217,10 +237,10 @@ final class NonInteractive
         // stdout keeps the JSON contract intact on this branch too, and 1
         // rather than 2 because something really did run.
         try {
-            $rendered = self::format($message, $outputFormat);
+            $rendered = self::format($message, $outputFormat, $refusals);
         } catch (\JsonException $e) {
             \fwrite(\STDERR, 'sugarcrush: the answer could not be encoded as JSON: ' . $e->getMessage() . "\n");
-            self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null);
+            self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
 
             return self::EXIT_FAILURE;
         }
@@ -394,6 +414,38 @@ final class NonInteractive
      * A consumer that kept the exit code and wants to know WHICH kind of 2 it
      * got is exactly who `type` is for.
      *
+     * ## `refusals`, and why it is the one OPTIONAL key (E173)
+     *
+     * Every other key in these documents is unconditional. `refusals` is
+     * emitted only when the run actually blocked a tool call, and that
+     * asymmetry is a decision with two measurements behind it rather than a
+     * shortcut.
+     *
+     * FIRST, THE DOCUMENT WITH NO REFUSALS HAS TO STAY BYTE-IDENTICAL TO THE
+     * ONE THIS PACKAGE ALREADY SHIPS, because a second party is compared
+     * against it key-for-key.
+     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}
+     * asserts `array_keys()` equality between this method's document and the
+     * one `bin/sugarcrush`'s autoload guard hand-rolls — and that guard runs
+     * BEFORE `vendor/autoload.php` has been found, in a process where no tool
+     * could ever have run, so it can never grow the key. An unconditional
+     * `refusals` would therefore have to be added to a hand-rolled literal in
+     * the binary purely to satisfy a comparison, which is the drift that
+     * comparison exists to prevent.
+     *
+     * SECOND, IT RIDES ON THE ERROR DOCUMENT AS WELL AS THE ANSWER, because a
+     * turn can refuse a tool call and then throw. Attaching it only to
+     * {@see self::format()}'s success document would lose the refusals of
+     * exactly the runs whose consumer has least other information — which is
+     * the shape of the gap E173 recorded in the first place.
+     *
+     * WHAT IT IS NOT: it is not a list of tool calls that FAILED. A tool that
+     * ran and returned an error is a result, and it is the model's business —
+     * it saw the error and answered around it. A refusal is a call the run
+     * stopped, which the model also saw, and which the OPERATOR could not
+     * see at all from stdout. {@see self::refusalFrom()} draws that line, and
+     * draws it with the roster the TUI renderer already uses.
+     *
      * THREE MORE TYPES EXIST THAT THIS METHOD NEVER EMITS, and this table used
      * to name one of them and call it the only one.
      *
@@ -447,8 +499,13 @@ final class NonInteractive
      * `JSON_THROW_ON_ERROR` expected on this side only (the guard has no
      * exception handler and tests the `string|false` return directly).
      */
-    private static function emitErrorDocument(string $outputFormat, string $type, string $message, ?string $provider): void
-    {
+    private static function emitErrorDocument(
+        string $outputFormat,
+        string $type,
+        string $message,
+        ?string $provider,
+        array $refusals = [],
+    ): void {
         if ($outputFormat !== self::FORMAT_JSON) {
             return;
         }
@@ -458,15 +515,23 @@ final class NonInteractive
             $error['provider'] = $provider;
         }
 
+        $document = ['result' => null, 'error' => $error];
+        if ($refusals !== []) {
+            $document['refusals'] = $refusals;
+        }
+
         try {
-            $json = self::encodeDocument(['result' => null, 'error' => $error]);
+            $json = self::encodeDocument($document);
         } catch (\JsonException) {
             // Unreachable with the flags below, and handled anyway because an
             // empty stdout is the one outcome this whole method exists to
             // prevent. $type is always one of this class's own ASCII literals,
-            // so the replacement document is encodable by construction; only
-            // the provider-supplied message — the sole field that can carry
-            // bytes we do not control — is dropped.
+            // so the replacement document is encodable by construction; the
+            // provider-supplied message and the refusal list — the two fields
+            // that can carry bytes we do not control — are dropped. Losing the
+            // refusals here rather than in the ordinary document is the right
+            // trade in the one branch where the alternative is an empty pipe,
+            // and stderr still carried every one of them.
             $json = \sprintf(
                 '{"result":null,"error":{"type":"%s","message":"error message could not be encoded as JSON"}}',
                 $type,
@@ -608,7 +673,13 @@ final class NonInteractive
      *
      * `text` (default): the assistant's raw content, matching the plain
      * stdout contract of every tool surveyed in crush_feat.md section 2.
-     * `json`: `{"result": "<content>"}`. This is a deliberately minimal
+     * `json`: `{"result": "<content>"}`, plus a `refusals` array when the turn
+     * blocked at least one tool call — see {@see self::emitErrorDocument()}
+     * for why that key alone is conditional, and {@see self::refusalFrom()}
+     * for what counts as one. `text` carries no refusals, and does not need
+     * to: on that format the operator is reading the terminal, where
+     * {@see HeadlessPermissionPrompt} has already written every one of them to
+     * stderr. This is a deliberately minimal
      * first cut of crush_feat.md Recommendation 3 — the recommendation's own
      * sketch also includes `session_id` and `usage` (token-cost) fields,
      * which this step does not yet surface; a caller piping through `jq
@@ -628,12 +699,65 @@ final class NonInteractive
      *   {@see self::run()} turns this into an `encoding`-typed document at
      *   {@see self::EXIT_FAILURE}; never into an empty stdout.
      */
-    public static function format(Message $message, string $outputFormat): string
+    public static function format(Message $message, string $outputFormat, array $refusals = []): string
     {
         if ($outputFormat === self::FORMAT_JSON) {
-            return self::encodeDocument(['result' => $message->content]);
+            $document = ['result' => $message->content];
+            if ($refusals !== []) {
+                $document['refusals'] = $refusals;
+            }
+
+            return self::encodeDocument($document);
         }
 
         return $message->content;
+    }
+
+    /**
+     * `$event` as one `refusals` entry, or null when it is not a refusal.
+     *
+     * THE CLASSIFICATION IS NOT THIS CLASS'S TO INVENT, and that is the whole
+     * design of the method. {@see Chat::DENIED_ERROR_PREFIXES} already names
+     * the error texts that mean "this call never ran" rather than "this call
+     * ran and failed" — it is what {@see Chat::isDeniedResult()} reads to draw
+     * a refusal as its own struck-through state in the TUI. Reusing the roster
+     * makes the headless document and the interactive frame agree on what a
+     * refusal IS by construction; a second list here would be two parties
+     * disagreeing about the same tool call depending on which surface the
+     * operator happened to be looking at.
+     *
+     * {@see Chat} IS TOUCHED LAZILY, ON PURPOSE. The `-p` path exists partly
+     * so a run can avoid building a `Chat` at all, and a class constant is
+     * still a class load. The roster is read only after an errored
+     * {@see ToolFinished} has arrived, so a turn that refuses nothing — which
+     * is nearly all of them — never loads it.
+     *
+     * KNOWN LIMIT, stated because the field's NAME over-promises against it: a
+     * permission refusal and a plain hook DENY are indistinguishable here, and
+     * the reason is upstream of this class rather than a shortcut taken in it.
+     * {@see \SugarCraft\Crush\Hooks\HookManager::resolveAsk()} settles a
+     * refused ASK as `HookResult::deny($ask->message)`, and
+     * {@see \SugarCraft\Crush\Runtime::gate()} renders every non-allowed
+     * verdict as `Hook denied: <message>` — so by the time an event exists the
+     * two have already been collapsed into one string. Both ARE refusals and
+     * both belong in the array; only the sub-classification is missing, and
+     * recovering it needs a distinguishable verdict from `Runtime`.
+     *
+     * @return array{tool: string, reason: string}|null
+     */
+    private static function refusalFrom(object $event): ?array
+    {
+        if (!$event instanceof ToolFinished || !$event->result->isError()) {
+            return null;
+        }
+
+        $reason = $event->result->content();
+        foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
+            if (\str_starts_with($reason, $prefix)) {
+                return ['tool' => $event->toolName, 'reason' => $reason];
+            }
+        }
+
+        return null;
     }
 }
