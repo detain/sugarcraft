@@ -47,7 +47,29 @@ use PHPUnit\Framework\TestCase;
  */
 final class ForkedChildTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private const O_RDWR = 0x0002;
+
+    /**
+     * Both children below leave the instant they are forked, and both are
+     * waited for with a bounded {@see waitWithTimeout()} - so on the PASSING
+     * path this reaper has nothing to do.
+     *
+     * It is here for the path where the assertion between the fork and the
+     * wait fails, or where the per-test `pcntl_alarm()` fires: either one
+     * unwinds past `waitWithTimeout()`, and the alarm reaches this process
+     * only ({@see ReapsForkedChildrenTrait} for why). A child left behind by
+     * one of those still holds an inherited copy of a raw-mode `Tty` over the
+     * shared kernel pty this file is measuring, which is the one resource in
+     * the suite where an orphan is not merely untidy.
+     */
+    protected function tearDown(): void
+    {
+        $this->reapTrackedForkedChildren();
+
+        parent::tearDown();
+    }
 
     private function requirePtySyscalls(): void
     {
@@ -71,11 +93,31 @@ final class ForkedChildTest extends TestCase
     private function isRaw(string $slavePath): bool
     {
         // BSD/macOS stty takes the device flag lowercase (-f); GNU/Linux
-        // coreutils uses uppercase (-F). Using the wrong one silently
-        // fails (empty output), which reads as "not raw" regardless of
-        // the real terminal state.
+        // coreutils uses uppercase (-F). Using the wrong one fails with an
+        // EMPTY stdout, which is indistinguishable from "the terminal is
+        // cooked" - so the message on fd 2 is the only thing that tells those
+        // two apart, and it used to go to /dev/null.
+        //
+        // It cannot be folded into stdout with `2>&1` either: the return
+        // value below is a substring match for `-icanon`/`-echo`, and stty's
+        // diagnostic would be searched as if it were flag output. So fd 2
+        // goes to a file this helper reads back and fails on.
         $flag = PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
-        $out = trim((string) shell_exec('stty ' . $flag . ' ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
+        $stderrFile = (string) tempnam(sys_get_temp_dir(), 'sc_forkedchild_stty_');
+
+        $out = trim((string) shell_exec(
+            'stty ' . $flag . ' ' . escapeshellarg($slavePath) . ' -a 2>' . escapeshellarg($stderrFile),
+        ));
+
+        $stderr = trim((string) @file_get_contents($stderrFile));
+        @unlink($stderrFile);
+
+        self::assertSame(
+            '',
+            $stderr,
+            'stty could not read the pty, so this helper cannot answer whether raw mode is set '
+                . 'and a bare false would be read as "cooked": ' . $stderr,
+        );
 
         // A raw-mode tty reports "-icanon -echo" (leading dash = disabled);
         // cooked mode reports the bare "icanon echo" flags instead.
@@ -129,7 +171,7 @@ final class ForkedChildTest extends TestCase
         try {
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before forking');
 
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             $this->assertNotSame(-1, $pid, 'fork failed - cannot exercise this path');
 
             if ($pid === 0) {
@@ -178,7 +220,7 @@ final class ForkedChildTest extends TestCase
         try {
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before forking');
 
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             $this->assertNotSame(-1, $pid, 'fork failed - cannot exercise this path');
 
             if ($pid === 0) {

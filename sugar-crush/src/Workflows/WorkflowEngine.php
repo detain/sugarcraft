@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Workflows;
 
+use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentResult;
@@ -1781,10 +1782,46 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * pause() would race an unsynchronized file write against the true
      * parent and short-circuit its own exit(0) reaping path. The handler
      * below checks getmypid() against $installPid and, for any forked
-     * child, just exits with the signal-convention code without touching
-     * pause() at all — i.e. the child dies the same way it always did
-     * before this fix (silently, on the signal), and only the parent
+     * child, leaves without touching pause() at all; only the parent
      * persists anything.
+     *
+     * THE TWO EXITS IN THAT HANDLER ARE DELIBERATELY DIFFERENT SHAPES, and
+     * the difference is the point rather than an oversight:
+     *
+     *  - THE FORKED CHILD leaves through {@see ForkedChild::exitNow()}, which
+     *    SIGKILLs itself and so runs no destructor and no shutdown function
+     *    over the copy of this process's object graph it is holding. Nothing
+     *    is lost by that: an AgentWorkerPool worker's entire IPC surface is
+     *    `file_put_contents()` ({@see AgentWorkerPool::storeResult()} and
+     *    {@see AgentWorkerPool::publishProgress()}), which is already in the
+     *    kernel by the time it returns, so PHP's shutdown sequence has
+     *    nothing of the child's left to flush. What it would run instead is
+     *    somebody else's cleanup: every destructor and every
+     *    `register_shutdown_function` callback in the inherited graph, N extra
+     *    times — including {@see AgentWorkerPool::__destruct()}, whose
+     *    `$resultDirOwnerPid` check is the only thing standing between a
+     *    forked worker's shutdown and the deletion of the result directory
+     *    the parent is still polling. (It is NOT PHPUnit's after-test hooks:
+     *    an exiting child never returns into the runner, so those fire in the
+     *    parent only. Measured — see
+     *    {@see \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}.)
+     *    The cost is that the child now dies by signal, so a parent reading
+     *    its wait status sees `wifsignaled()`/SIGKILL rather than exit code
+     *    130/143; {@see AgentWorkerPool::workerDiedResult()} already reports
+     *    that shape ("was killed by signal 9") and no in-repo caller branches
+     *    on the code.
+     *
+     *  - THE INSTALLING PROCESS keeps a plain `exit()`, and MUST. It is not a
+     *    fork: {@see \SugarCraft\Crush\Chat::driveWorkflowFiber()} resumes
+     *    `run()` inside a \Fiber on the live TUI's own ReactPHP loop, so the
+     *    process that installs this handler is the process holding the
+     *    raw-mode terminal. candy-core's `PosixBackend::restore()` is
+     *    PID-aware and THIS pid is the owner, so the plain exit's destructor
+     *    chain is what puts the user's terminal back into cooked mode after
+     *    Ctrl-C; a SIGKILL here would leave them typing blind. It is also
+     *    what runs {@see \SugarCraft\Crush\Cli\Bootstrap}'s
+     *    `register_shutdown_function` hook, without which every MCP server
+     *    this launch started is orphaned on every interrupt.
      *
      * @param string              $interruptId         Identifier used to correlate the pause file with this run.
      * @param string              $resolvedWorkflowId  The workflow ID the in-flight run is executing under.
@@ -1858,10 +1895,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
         ): void {
             // See the fork-safety note on installInterruptHandlers(): a
             // forked 'parallel'-stage child inherits this same handler. It
-            // must not call pause() — that's the parent's job for this
-            // run — so it just exits under the signal convention.
+            // must not call pause() — that's the parent's job for this run —
+            // and it must not run PHP's shutdown sequence over the copy of
+            // the parent's object graph it is holding, so it leaves through
+            // ForkedChild::exitNow() rather than a plain exit(). The code is
+            // still computed and passed for the signal it stands for, but a
+            // SIGKILLed process reports `wifsignaled()`, not this code; see
+            // the doc-block for why that trade is the right one here and the
+            // wrong one for the installing process below.
             if (getmypid() !== $installPid) {
-                exit($signo === \SIGINT ? 130 : 143);
+                ForkedChild::exitNow($signo === \SIGINT ? 130 : 143);
             }
 
             $partialResult = new WorkflowResult(
@@ -1893,6 +1936,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // worse than exiting with nothing captured.
             }
 
+            // DELIBERATELY a plain exit() and not ForkedChild::exitNow():
+            // this branch only ever runs in the process that installed the
+            // handler, which is the live TUI/CLI process itself. Its
+            // shutdown sequence is load-bearing here — the PID-aware
+            // candy-core terminal restore and Bootstrap's MCP-server stop
+            // hook both hang off it. See installInterruptHandlers()'s
+            // doc-block.
             exit($signo === \SIGINT ? 130 : 143);
         };
 

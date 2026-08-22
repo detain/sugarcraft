@@ -7,12 +7,16 @@ namespace SugarCraft\Crush\Tests\Agents;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Mailbox;
 use SugarCraft\Crush\Agents\TeamMessage;
+use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Tests for Mailbox — append-only JSON-lines inter-teammate messaging.
  */
 final class MailboxTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $basePath;
 
     protected function setUp(): void
@@ -22,6 +26,12 @@ final class MailboxTest extends TestCase
 
     protected function tearDown(): void
     {
+        // FIRST: the forked sender below writes into $this->basePath, and an
+        // abort at the per-test time limit reaches only this process
+        // (pcntl_alarm() is not inherited across fork()). Reaping before the
+        // delete keeps a survivor from writing into a tree that is going away.
+        $this->reapTrackedForkedChildren();
+
         $this->recursiveDelete($this->basePath);
     }
 
@@ -383,7 +393,7 @@ final class MailboxTest extends TestCase
         $basePath = $this->basePath;
         $mailbox = new Mailbox($basePath);
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         $this->assertNotSame(-1, $pid, 'fork failed');
 
         if ($pid === 0) {
@@ -400,7 +410,15 @@ final class MailboxTest extends TestCase
                 payload: ['ok' => true],
                 sentAt: new \DateTimeImmutable(),
             ));
-            exit(0);
+
+            // Not a plain exit(): that runs PHP's shutdown sequence in this
+            // child, over a COPY of the parent's object graph - every
+            // inherited destructor and every register_shutdown_function
+            // callback. (NOT PHPUnit's after-test hooks; an exiting child
+            // never returns into the runner. {@see
+            // \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}
+            // has the probe that separates the two shapes.)
+            ForkedChild::exitNow(0);
         }
 
         $start = microtime(true);

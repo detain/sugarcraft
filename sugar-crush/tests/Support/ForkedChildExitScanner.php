@@ -95,7 +95,7 @@ final class ForkedChildExitScanner
     {
         $tokens = \token_get_all($source);
         $never = self::neverReturningMethods($tokens);
-        $functions = self::functionRanges($tokens);
+        $functions = TokenFunctionRanges::scan($tokens);
 
         /** @var list<array{line:int,spelling:string,shape:string}> $sites */
         $sites = [];
@@ -118,7 +118,12 @@ final class ForkedChildExitScanner
             $sites[] = [
                 'line' => $token[2],
                 'spelling' => $spelling,
-                'shape' => self::classify($tokens, $i, $never, self::enclosingFunction($functions, $i)),
+                'shape' => self::classify(
+                    $tokens,
+                    $i,
+                    $never,
+                    TokenFunctionRanges::enclosing($functions, $i)['name'] ?? null,
+                ),
             ];
         }
 
@@ -527,87 +532,6 @@ final class ForkedChildExitScanner
         $name = \ltrim($tokens[$at][1], '\\');
 
         return \in_array($name, self::FORK_SPELLINGS, true) ? $name : null;
-    }
-
-    /**
-     * Every named function/method in the file, with the token range of its
-     * body, so a fork site can be attributed to the function it sits in.
-     *
-     * Anonymous functions and arrow functions are deliberately absent: they
-     * have no name to match against {@see FORK_SPELLINGS}, so a fork inside
-     * one is attributed to the named function enclosing it, which is the
-     * honest answer.
-     *
-     * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @return list<array{name:string,from:int,to:int}>
-     */
-    private static function functionRanges(array $tokens): array
-    {
-        $ranges = [];
-
-        foreach ($tokens as $i => $token) {
-            if (!\is_array($token) || $token[0] !== \T_FUNCTION) {
-                continue;
-            }
-            $nameAt = self::next($tokens, $i);
-            if ($nameAt === null || !\is_array($tokens[$nameAt]) || $tokens[$nameAt][0] !== \T_STRING) {
-                continue;
-            }
-            $openParen = self::next($tokens, $nameAt);
-            if ($openParen === null || self::tokenText($tokens[$openParen]) !== '(') {
-                continue;
-            }
-            $closeParen = self::matching($tokens, $openParen, '(', ')');
-            if ($closeParen === null) {
-                continue;
-            }
-
-            // Walk to the body, stepping over a return type; an abstract or
-            // interface method ends at `;` and has no body to record.
-            $brace = null;
-            for ($j = $closeParen + 1, $n = \count($tokens); $j < $n; $j++) {
-                $text = self::tokenText($tokens[$j]);
-                if (\is_string($tokens[$j]) && $text === ';') {
-                    break;
-                }
-                if (\is_string($tokens[$j]) && $text === '{') {
-                    $brace = $j;
-
-                    break;
-                }
-            }
-            if ($brace === null) {
-                continue;
-            }
-            $end = self::matching($tokens, $brace, '{', '}');
-            if ($end === null) {
-                continue;
-            }
-
-            $ranges[] = ['name' => $tokens[$nameAt][1], 'from' => $brace, 'to' => $end];
-        }
-
-        return $ranges;
-    }
-
-    /**
-     * The name of the INNERMOST named function whose body contains $at.
-     *
-     * @param list<array{name:string,from:int,to:int}> $ranges
-     */
-    private static function enclosingFunction(array $ranges, int $at): ?string
-    {
-        $best = null;
-        $bestFrom = -1;
-
-        foreach ($ranges as $range) {
-            if ($at > $range['from'] && $at < $range['to'] && $range['from'] > $bestFrom) {
-                $best = $range['name'];
-                $bestFrom = $range['from'];
-            }
-        }
-
-        return $best;
     }
 
     /** @param list<array{0:int,1:string,2:int}|string> $tokens */

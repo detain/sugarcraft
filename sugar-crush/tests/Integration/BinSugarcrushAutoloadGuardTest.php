@@ -617,20 +617,33 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
         $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
         $script = $this->tmpDir . '/owner_document.php';
         $outFile = $this->tmpDir . '/owner_out.txt';
+        $errFile = $this->tmpDir . '/owner_err.txt';
 
         file_put_contents($script, "<?php\n"
             . 'require ' . var_export($autoload, true) . ";\n"
             . 'SugarCraft\Crush\Cli\NonInteractive::failUsage("sugarcrush: probe", "json");' . "\n");
 
+        // fd 2 goes to a FILE, not to /dev/null. It has to leave the suite's
+        // own stderr either way - `failUsage()` writes a human half there that
+        // has nothing to do with this comparison - but a sink would also throw
+        // away the only evidence available when this probe produces nothing,
+        // which is the failure the assertion below actually has to diagnose.
+        // {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureScanner}.
         exec(sprintf(
-            'timeout -s KILL 60 %s %s >%s 2>/dev/null',
+            'timeout -s KILL 60 %s %s >%s 2>%s',
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
             escapeshellarg($outFile),
+            escapeshellarg($errFile),
         ));
 
         $document = is_file($outFile) ? (string) file_get_contents($outFile) : '';
-        self::assertNotSame('', $document, 'the owner probe produced no document to compare against');
+        self::assertNotSame(
+            '',
+            $document,
+            'the owner probe produced no document to compare against; its stderr said: '
+                . (is_file($errFile) ? (string) file_get_contents($errFile) : '(nothing)'),
+        );
 
         return $document;
     }

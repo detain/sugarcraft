@@ -8,12 +8,16 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Task;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Agents\TaskStatus;
+use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Tests for TaskList — SQLite-backed task list with schema init and core CRUD.
  */
 final class TaskListTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $dbPath;
 
     protected function setUp(): void
@@ -25,6 +29,12 @@ final class TaskListTest extends TestCase
 
     protected function tearDown(): void
     {
+        // FIRST, and the ordering is the whole point: the claimants below
+        // hammer $this->dbPath in a retry loop, so an abort at the per-test
+        // time limit (which is pcntl_alarm() and fires in this process only)
+        // must stop them before the unlink underneath them.
+        $this->reapTrackedForkedChildren();
+
         if (\file_exists($this->dbPath)) {
             \unlink($this->dbPath);
         }
@@ -806,7 +816,7 @@ final class TaskListTest extends TestCase
 
         $pids = [];
         for ($i = 0; $i < $childCount; $i++) {
-            $pid = \pcntl_fork();
+            $pid = $this->forkTracked();
             $this->assertNotSame(-1, $pid, 'pcntl_fork() must succeed.');
 
             if ($pid === 0) {
@@ -826,7 +836,16 @@ final class TaskListTest extends TestCase
                 if ($claimed) {
                     \file_put_contents($resultDir . "/{$i}.won", "teammate-{$i}");
                 }
-                exit(0);
+
+                // Not a plain exit(): that runs PHP's shutdown sequence in
+                // every one of these children, over a COPY of this process's
+                // object graph - each inherited destructor and each
+                // register_shutdown_function callback, N extra times. (NOT
+                // PHPUnit's after-test hooks: an exiting child never returns
+                // into the runner, so those fire only in the parent. See
+                // {@see \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}
+                // for the probe that separates the two shapes.)
+                ForkedChild::exitNow(0);
             }
 
             $pids[] = $pid;
@@ -835,13 +854,13 @@ final class TaskListTest extends TestCase
         // Completer: satisfies the dependency shortly after the claimants
         // start racing, so the task transitions from blocked to claimable
         // while many of them are mid-retry-loop.
-        $completerPid = \pcntl_fork();
+        $completerPid = $this->forkTracked();
         $this->assertNotSame(-1, $completerPid, 'pcntl_fork() must succeed.');
         if ($completerPid === 0) {
             \usleep(50_000);
             $completerList = new TaskList($this->dbPath);
             $completerList->completeTask('dep-fork', 'done');
-            exit(0);
+            ForkedChild::exitNow(0);
         }
         $pids[] = $completerPid;
 

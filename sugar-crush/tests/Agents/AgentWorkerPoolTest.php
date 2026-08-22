@@ -13,12 +13,15 @@ use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Tests for AgentWorkerPool - parallel execution worker pool.
  */
 final class AgentWorkerPoolTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private CompleteRequest $request;
 
     /** @var string Per-test temp root to ensure test isolation */
@@ -44,6 +47,16 @@ final class AgentWorkerPoolTest extends TestCase
 
     protected function tearDown(): void
     {
+        // FIRST. Several helpers below fork a child that sleeps for 120
+        // seconds, and `phpunit.xml`'s 60-second `defaultTimeLimit` is a
+        // `pcntl_alarm()` that fires in THIS process only - it is not
+        // inherited across `pcntl_fork()`. On the abort path the parent is
+        // the only process that stops; without this the sleepers run on for
+        // another minute, holding the pool's result directory and this test's
+        // temp root open underneath whatever test runs next.
+        // {@see \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait}.
+        $this->reapTrackedForkedChildren();
+
         // Clean up per-test temp directory and all result files
         if (!empty($this->tempRoot) && is_dir($this->tempRoot)) {
             $files = glob($this->tempRoot . '*');
@@ -193,7 +206,7 @@ final class AgentWorkerPoolTest extends TestCase
      */
     private function forkChildThatDiesSilently(): int
     {
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             ForkedChild::exitNow(0);
         }
@@ -229,7 +242,7 @@ final class AgentWorkerPoolTest extends TestCase
 
         [$parentEnd, $childEnd] = $pair;
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             // Nothing to do but die: the child's copy of $childEnd closes with
             // the process, and that close is exactly what the parent reads as
@@ -2094,7 +2107,7 @@ final class AgentWorkerPoolTest extends TestCase
         // unlink it and the rmdir would succeed regardless of ordering.
         $marker = $resultDir . '/worker-is-still-writing';
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             fclose($parentEnd);
             pcntl_async_signals(true);
@@ -2385,7 +2398,7 @@ final class AgentWorkerPoolTest extends TestCase
      */
     private function forkSleepingChild(): int
     {
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             pcntl_signal(SIGTERM, SIG_DFL);
             sleep(120);
