@@ -735,19 +735,41 @@ final class Width
         return substr($s, $i, $bytes);
     }
 
-    /** @return list<string> */
+    /**
+     * Split `$s` into grapheme clusters — the SAME segmentation every
+     * truncation path in this class already used via {@see nextCluster()}.
+     *
+     * This used to prefer `grapheme_str_split()`, which is PHP 8.4+, and fall
+     * back to `mb_str_split()` on 8.3. That made `string()` measure per
+     * CODEPOINT while `truncateAnsi()`/`takeAnsi()`/`dropAnsi()` measured per
+     * CLUSTER, and the two disagreed on any multi-codepoint cluster that the
+     * ZWJ special-case in {@see compute()} did not happen to compensate — an
+     * emoji + skin-tone modifier being the common one. The consequence was
+     * E68: `truncateAnsi()` correctly stopped BEFORE a cluster it could not
+     * fit, then the caller scored the result with `string()` and got a number
+     * over the budget it had just asked for. Both sides now walk one function,
+     * so `string(truncateAnsi($s, $n)) <= $n` holds by construction rather
+     * than by the two measures coincidentally agreeing.
+     *
+     * @return list<string>
+     */
     private static function graphemes(string $s): array
     {
-        if (function_exists('grapheme_str_split')) {
-            $g = grapheme_str_split($s);
-            if (is_array($g)) {
-                return $g;
+        $len = strlen($s);
+        $out = [];
+        $i = 0;
+        while ($i < $len) {
+            $cluster = self::nextCluster($s, $i);
+            if ($cluster === '') {
+                // nextCluster() is contracted to return at least one byte;
+                // this guards the loop against a future regression rather
+                // than a reachable state.
+                $cluster = $s[$i];
             }
+            $out[] = $cluster;
+            $i += strlen($cluster);
         }
-        if (function_exists('mb_str_split')) {
-            return mb_str_split($s, 1, 'UTF-8');
-        }
-        return preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return $out;
     }
 
     private static function graphemeWidth(string $g): int
@@ -759,6 +781,14 @@ final class Width
         if ($cp === 0) {
             return 0;
         }
+        // A regional-indicator PAIR is a single flag glyph occupying 2 cells;
+        // a lone regional indicator renders as a 1-cell letter box. Neither
+        // codepoint is in the wide ranges below, so without this the pair
+        // scored 1 as a cluster while the old per-codepoint sum scored 2 —
+        // the +1 half of E68's over-run.
+        if ($cp >= 0x1f1e6 && $cp <= 0x1f1ff) {
+            return self::isRegionalIndicatorPair($g) ? 2 : 1;
+        }
         if (self::isZeroWidth($cp)) {
             return 0;
         }
@@ -766,6 +796,20 @@ final class Width
             return 2;
         }
         return 1;
+    }
+
+    /**
+     * True when `$g` is a cluster whose first two codepoints are both
+     * regional indicators — i.e. a flag. Each regional indicator is exactly
+     * 4 bytes in UTF-8, so the second one starts at byte 4.
+     */
+    private static function isRegionalIndicatorPair(string $g): bool
+    {
+        if (strlen($g) < 8) {
+            return false;
+        }
+        $second = self::firstCodepoint(substr($g, 4));
+        return $second >= 0x1f1e6 && $second <= 0x1f1ff;
     }
 
     private static function firstCodepoint(string $g): int

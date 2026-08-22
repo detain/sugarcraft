@@ -316,4 +316,78 @@ final class WidthTest extends TestCase
     {
         $this->assertSame('', Width::takeAnsi('', 5));
     }
+
+    /**
+     * E68, minimised. `truncateAnsi()` is a budget, and its result measured by
+     * `string()` — the measure every caller in the repo clamps with — must
+     * never exceed it.
+     *
+     * The specific input is the one recorded in the finding: THUMBS UP SIGN
+     * followed by EMOJI MODIFIER FITZPATRICK TYPE-4, then `xy`, at budget 3.
+     * It used to return 5 cells.
+     */
+    public function testTruncateAnsiNeverReturnsMoreCellsThanItsBudget(): void
+    {
+        $this->assertSame(3, Width::string(Width::truncateAnsi("\u{1F44D}\u{1F3FD}xy", 3)));
+
+        // Cluster shapes on which the two segmentations used to disagree:
+        // emoji + skin-tone modifier, regional-indicator pair (a flag),
+        // ZWJ sequence, variation selector, and a combining mark.
+        $fixtures = [
+            "\u{1F44D}\u{1F3FD}xy",
+            "\u{1F1E6}\u{1F1F8}xy",
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}xy",
+            "\u{2600}\u{FE0F}xy",
+            "e\u{0301}xy",
+            "\u{1F3FD}\u{1F1E6}\u{0301}",
+            "\x1b[31m\u{1F44D}\u{1F3FD}\x1b[0mxy",
+            '日本語abc',
+        ];
+        foreach ($fixtures as $s) {
+            for ($budget = 1; $budget <= 8; $budget++) {
+                $this->assertLessThanOrEqual(
+                    $budget,
+                    Width::string(Width::truncateAnsi($s, $budget)),
+                    sprintf('truncateAnsi(%s, %d) came back over budget', bin2hex($s), $budget),
+                );
+            }
+        }
+    }
+
+    /**
+     * The reason E68 existed: `string()` and every truncation path have to
+     * agree on where one grapheme ends and the next begins. They did not —
+     * `string()` split per codepoint on PHP 8.3 (its preferred
+     * `grapheme_str_split()` is 8.4+) while `truncateAnsi()` split per
+     * cluster. This pins the agreement itself, so a future edit that gives
+     * either side its own splitter fails here rather than in a pane.
+     */
+    public function testStringScoresAWholeClusterAsOneGlyph(): void
+    {
+        // Emoji + skin-tone modifier is ONE glyph in ONE 2-cell box; the
+        // per-codepoint sum used to score it 4.
+        $this->assertSame(2, Width::string("\u{1F44D}\u{1F3FD}"));
+        // A regional-indicator pair is one flag in 2 cells; a lone regional
+        // indicator is a 1-cell letter box.
+        $this->assertSame(2, Width::string("\u{1F1E6}\u{1F1F8}"));
+        $this->assertSame(1, Width::string("\u{1F1E6}"));
+        // Already true before the fix, via a ZWJ special case — pinned here
+        // so that special case cannot be dropped silently.
+        $this->assertSame(2, Width::of("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"));
+        // Truncation and measurement must charge the same cluster the same
+        // number of cells, which is the invariant, stated directly.
+        foreach (["\u{1F44D}\u{1F3FD}", "\u{1F1E6}\u{1F1F8}", "\u{2600}\u{FE0F}", "e\u{0301}", '日'] as $cluster) {
+            $w = Width::string($cluster);
+            $this->assertSame(
+                $cluster,
+                Width::truncateAnsi($cluster, $w),
+                sprintf('%s did not survive truncation at its own width %d', bin2hex($cluster), $w),
+            );
+            $this->assertSame(
+                '',
+                Width::truncateAnsi($cluster, $w - 1),
+                sprintf('%s was emitted whole into a budget of %d', bin2hex($cluster), $w - 1),
+            );
+        }
+    }
 }
