@@ -216,10 +216,12 @@ final class CompiledPatternCacheBoundTest extends TestCase
         ksort($distinct);
 
         $expected = [
-            'the built-in count' => self::WORDS[count($roster)] . ' shipped built-ins',
-            'the distinct-glob count' => self::WORDS[count($distinct)] . ' distinct',
-            'the entry count' => 'across ' . self::WORDS[$entries] . ' `paths:` entries',
-            'the per-skill maximum' => 'no skill declares more than ' . self::WORDS[$mostPerSkill],
+            'the built-in count' => $this->word(count($roster), 'built-ins') . ' shipped built-ins',
+            'the distinct-glob count' => $this->word(count($distinct), 'distinct globs') . ' distinct',
+            'the entry count' => 'across ' . $this->word($entries, '`paths:` entries')
+                . ' `paths:` entries',
+            'the per-skill maximum' => 'no skill declares more than '
+                . $this->word($mostPerSkill, 'globs on one skill'),
             'the headroom multiple' => number_format(intdiv($cap, count($distinct))) . 'x that',
             'the roster size that would reach the cap' => '~'
                 . number_format((int) (round($cap / 5 / 100) * 100)) . ' skills each declaring five',
@@ -256,6 +258,30 @@ final class CompiledPatternCacheBoundTest extends TestCase
         6 => 'six', 7 => 'seven', 8 => 'eight', 9 => 'nine', 10 => 'ten',
         11 => 'eleven', 12 => 'twelve',
     ];
+
+    /**
+     * The number word for $n, or a failure saying the doc-block's vocabulary
+     * has run out.
+     *
+     * EXPLICIT because the bare lookup went red with `Undefined array key 13`
+     * when a thirteenth built-in was added — the right verdict read out of a
+     * PHP warning instead of an assertion, which is a guard failing to say what
+     * it found. A count past the table is a real event (this roster grows), and
+     * the person who hits it needs to be told to extend the table and the
+     * prose, not to debug a test.
+     */
+    private function word(int $n, string $what): string
+    {
+        self::assertArrayHasKey(
+            $n,
+            self::WORDS,
+            "the shipped roster now has {$n} {$what}, which is past the number words this test can "
+            . "spell. Extend self::WORDS and MAX_COMPILED_PATTERNS's doc-block together — the "
+            . 'doc-block is what states the count, and it is now stale.',
+        );
+
+        return self::WORDS[$n];
+    }
 
     /**
      * `MAX_COMPILED_PATTERNS`'s doc-block, flattened.
