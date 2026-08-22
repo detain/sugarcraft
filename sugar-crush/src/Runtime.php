@@ -712,6 +712,17 @@ final class Runtime
                     // reserved path is discarded exactly once" invariant holds
                     // on this branch too, and blank the slot so no later
                     // collect can go looking for a payload that cannot exist.
+                    //
+                    // NOT EXERCISED BY THE SUITE, AND SAID SO ON PURPOSE.
+                    // Reaching it needs a real fork(2) failure, i.e. RLIMIT_NPROC
+                    // exhausted, which no test here can arrange without setting
+                    // a process-wide rlimit that would then apply to every other
+                    // test in the same PHPUnit process. Deleting these two lines
+                    // and running this file is green (measured), so nothing
+                    // below is load-bearing today: they are the bookkeeping that
+                    // keeps the invariant true the day something does read
+                    // `file` on a settled-in-process job. Left in rather than
+                    // trimmed to what the tests can see.
                     ToolIpcFiles::discard($file);
                     $jobs[$index]['file'] = null;
                     $jobs[$index]['result'] = $this->executeGuarded($job['tool'], $job['call'], $job['args']);
