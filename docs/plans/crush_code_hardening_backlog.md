@@ -7966,3 +7966,105 @@ and only the second one still needs the finding acted on.
 **Step.** None — recorded so the pattern is countable. The rule it supports is already standing: measure a
 prescription against the tree before implementing it.
 
+
+### Eb48-1 — a forked child's plain `exit()` republishes the parent's OUTPUT BUFFER
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: harness. **Measured.** Extends E201; does not
+contradict it.
+
+**What.** E201 was re-derived independently this round rather than inherited, with a fresh two-process
+probe under the vendored PHPUnit 10.5.64 on PHP 8.3.6, and it holds exactly as written: a child leaving
+through a plain `exit()` runs destructors and `register_shutdown_function` callbacks under its own pid
+and never reaches `tearDown()`/`@after`, which fire once in the parent. The FALL-THROUGH child is the one
+that re-enters the runner — the probe's fall-through child ran `tearDown()`, then went on to run the NEXT
+test method, forked a grandchild of its own, and printed a second complete PHPUnit summary.
+
+**The new part.** The probe also showed a THIRD consequence of the plain exit that no doc-block in this
+tree carried. `TestCase::runBare()` calls `startOutputBuffering()` before invoking the test method, so at
+the moment a test forks, the child inherits a COPY of an open `ob_start()` level holding everything the
+parent has echoed. PHP flushes open buffers during shutdown, so the child writes that copy out and one
+`echo` appears TWICE in the runner's output. Observed directly: `ob_level=1`, `ob_len=21` inside the
+child, and the marker printed twice.
+
+**Why it matters more than the other two.** Both consequences already written down are DEFUSED in this
+tree — candy-core's PID-aware `PosixBackend::restore()` defuses the termios destructor, and
+`tests/bootstrap.php`'s `StreamSelectLoop` defuses React's shutdown hook. Nothing defuses an inherited
+output buffer, and it is the one a scanner cannot see.
+
+**Status.** Pinned behaviourally by
+`ForkedChildExitConventionTest::testAPlainExitInAForkedChildRepublishesTheOutputBufferItInherited()`, in a
+plain `php` subprocess so the demonstration's duplicate lands on a pipe rather than on the suite's own
+stdout, with the `exitNow()` control asserted FIRST (a count of 1 in both runs would otherwise read as a
+pass). The class doc-block's consequence list gained the third bullet.
+
+### Eb48-2 — E208's hazard does not reproduce, and its file count is wrong
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: doc accuracy. **Measured**, PHP 8.3.6.
+
+**What E208 said.** `T_DOLLAR_OPEN_CURLY_BRACES` is 8.2-deprecated, is referenced from two files, and "a
+deprecation notice on 8.4 is a real risk you cannot test".
+
+**What is true.** The constant is defined (value 395). REFERENCING it emits nothing — the 8.2 deprecation
+is on the `"${a}"` SYNTAX, not on the token. `token_get_all()` over a source that does use that syntax
+still produces the token and still emits nothing, because it lexes rather than compiles. And the syntax
+occurs ZERO times across `src/` and `tests/` combined. So there is no 8.4 deprecation notice to risk.
+The real hazard is REMOVAL — further out than 8.4, and a hard `Error: Undefined constant` rather than a
+notice. The token is also referenced from NINE files, not two, which is why editing the literal pair was
+the wrong shape of fix: most of them belong to other lanes.
+
+**Status.** Handled by construction instead: `tests/Support/InterpolationOpenerTokenTest.php` derives the
+opener roster from the running interpreter (tokenise real interpolation spellings, keep any array token
+whose text ends in `{`) and requires every brace-walking scanner under `tests/Support/` to name every
+token in it. The deprecated spelling is supplied as a single-quoted SOURCE STRING, so the file never
+compiles it and adds zero occurrences to the census.
+
+**A hole it had, and closed.** The derivation is only as wide as its own alphabet — mutation M10 deleted
+the `${a}` row and the guard stayed green with a roster of one. Graceful shrinking is the DESIGNED
+behaviour for the day PHP removes the syntax, so it cannot be forbidden; the guard now asks the
+interpreter whether the constant is still defined and requires a spelling to still produce it if so.
+
+### Eb48-3 — E205's two false positives have ZERO occurrences, and the first census that said otherwise was a window artefact
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: informational. **Measured, twice, and the first
+measurement was wrong.**
+
+**What.** E205 asks whoever attempts the predicate fix to run a tree-wide census before and after. Half
+of that is now done: the blast radius of the two known false positives, over all 95 spawn sites
+`ChildStderrCaptureScanner` finds under `tests/`. Shape A (a quoted inner shell, `sh -c '…'`): **0**.
+Shape B (more than one fd-2 redirection in one command): **0**. Neither false positive has a single
+occurrence anywhere in `tests/`, which is a stronger statement than E205's "no in-scope site has either
+shape" and bounds the value of fixing the predicate at zero live sites today.
+
+**THE FIRST RUN SAID 13, AND ALL THIRTEEN WERE THE HARNESS.** The census read a THREE-LINE window around
+each site's line number, and this tree is full of consecutive one-line `exec('… 2>&1');` calls — so the
+window spanned adjacent calls and counted their redirections together. `MCP/GitCommandHandlersTest.php`
+lines 27 and 28 are two separate `exec()`s with one fd-2 redirection each. Re-run with a one-line window:
+0. The generator's controls passed both times; the controls tested the PREDICATE and the defect was in
+the WINDOW, which is the failure this project has now recorded from three directions.
+
+**Bound on the figure.** A one-line window undercounts a call whose command string wraps. Both numbers
+are stated so the next reader can pick, and the generator is
+`scratchpad/r48b/e205.php` — re-derive rather than trust either.
+
+**Not fixed.** E205's argument stands unchanged: a real fix has to model fd 1's destination as it is
+reassigned, and there is nothing in the tree to verify it against. The per-site before/after census
+harness the entry asks for now exists (`scratchpad/r48b/sites.php`): it prints
+`file line call shape` for every site under `tests/`, with four known-answer controls at the top.
+
+### Eb48-4 — a copied test helper drifted because only one copy was ever in a lane's file list
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: process. **Observed.**
+
+**What.** `Backend/EngineBackendTest::isRaw()` and `Support/ForkedChildTest::isRaw()` are the same
+helper: run `stty -a` against a pty and substring-match `-icanon`/`-echo`. Round 47 fixed the `Support/`
+copy — a wrong `-F`/`-f` flag fails with an EMPTY stdout, indistinguishable from "the terminal is
+cooked", so the diagnostic on fd 2 is the only thing telling them apart and it was going to
+`/dev/null`. The `Backend/` copy was in no lane's file list and kept the bug for a full round, one
+directory away from its fixed twin.
+
+**How it surfaced.** Not by reading: by pointing `ChildStderrCaptureScanner` at `tests/Backend/` while
+adopting `Chat/` and `MCP/` for E206. The guard named the site.
+
+**Step.** The general shape is worth a guard of its own — two same-named private helpers in different
+test directories whose bodies have diverged. Nothing checks for it today, and the lane split makes it
+likelier rather than less likely: a fix lands in whichever copy the round happened to own.
