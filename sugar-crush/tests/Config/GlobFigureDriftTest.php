@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\LayeredSettings;
 
 /**
@@ -66,8 +67,15 @@ final class GlobFigureDriftTest extends TestCase
      */
     private const GLOB = '[!B]*';
 
-    /** Number words this file knows how to read, low enough to cover any plausible glob. */
+    /**
+     * Number words this file knows how to read, low enough to cover any
+     * plausible glob — and `zero`, which is not decoration: the `src/` census
+     * below is now empty, and the page's cardinality is spelled from
+     * `word(count($census))` in exactly the same way it was spelled when the
+     * count was one.
+     */
     private const WORDS = [
+        0 => 'zero',
         1 => 'one', 2 => 'two', 3 => 'three', 4 => 'four', 5 => 'five', 6 => 'six',
         7 => 'seven', 8 => 'eight', 9 => 'nine', 10 => 'ten', 11 => 'eleven', 12 => 'twelve',
     ];
@@ -86,7 +94,31 @@ final class GlobFigureDriftTest extends TestCase
 
     private function layeredSettingsSource(): string
     {
-        return (string) file_get_contents((string) (new \ReflectionClass(LayeredSettings::class))->getFileName());
+        return $this->sourceOf(LayeredSettings::class);
+    }
+
+    private function bootstrapSource(): string
+    {
+        return $this->sourceOf(Bootstrap::class);
+    }
+
+    private function sourceOf(string $class): string
+    {
+        $file = (new \ReflectionClass($class))->getFileName();
+        self::assertIsString($file, $class . ' has no file on disk, so nothing can be asserted about its prose');
+        $text = file_get_contents($file);
+        self::assertIsString($text, $file . ' is unreadable, so nothing can be asserted about its prose');
+
+        return $text;
+    }
+
+    private function pageText(string $which): string
+    {
+        return match ($which) {
+            'source' => $this->layeredSettingsSource(),
+            'bootstrap' => $this->bootstrapSource(),
+            'settings' => $this->settingsPage(),
+        };
     }
 
     /**
@@ -186,7 +218,7 @@ final class GlobFigureDriftTest extends TestCase
     /** @dataProvider pagesThatSpellTheLength */
     public function testTheSpelledGlobLengthIsTheLengthOfTheGlob(string $which): void
     {
-        $text = $which === 'source' ? $this->layeredSettingsSource() : $this->settingsPage();
+        $text = $this->pageText($which);
         $para = $this->soleParagraphContaining($text, 'characters of glob', $which);
 
         $matched = preg_match_all('/([A-Za-z]+) characters of glob/', $para, $m);
@@ -201,21 +233,45 @@ final class GlobFigureDriftTest extends TestCase
     }
 
     /**
+     * Every page carrying the retraction, and the phrase that locates it there.
+     *
+     * THREE PAGES, NOT TWO. `Bootstrap::reportProjectTierToolRemovals()` joined
+     * the list in round 44, when its clause "closes the eight-character version
+     * and nothing else" was rewritten to name the glob and to carry the same
+     * three counts. Its retraction was UNPINNED for the length of one commit —
+     * the arithmetic that justified the rewrite lived only in the doc-block it
+     * was rewriting — which is the state this whole file exists to prevent.
+     *
+     * Each row carries its own LOCATOR because the three paragraphs do not open
+     * alike, and a locator is deliberately never made of the figure under test:
+     * one that was would move with the defect and find nothing to complain
+     * about.
+     *
+     * @return iterable<string, array{0: string, 1: string}>
+     */
+    public static function pagesThatCarryTheRetraction(): iterable
+    {
+        yield 'LayeredSettings PROJECT_TIER_KEYS doc-block' => ['source', '"eight characters" until'];
+        yield 'docs/SETTINGS.md' => ['settings', '"eight characters" until'];
+        yield 'Bootstrap::reportProjectTierToolRemovals() doc-block' => [
+            'bootstrap',
+            'THAT CLAUSE COUNTED THE GLOB INSTEAD OF NAMING IT',
+        ];
+    }
+
+    /**
      * And the RETRACTION's arithmetic, which is the part that made the
      * correction believable: `[!B]*` five, `"[!B]*"` seven, `["[!B]*"]` nine.
      *
      * Pinned because a retraction carrying its own wrong numbers is worse than
      * no retraction — it is the sentence a reader stops re-deriving.
      *
-     * @dataProvider pagesThatSpellTheLength
+     * @dataProvider pagesThatCarryTheRetraction
      */
-    public function testTheRetractionsThreeCountsAreStillArithmetic(string $which): void
+    public function testTheRetractionsThreeCountsAreStillArithmetic(string $which, string $locator): void
     {
-        $text = $which === 'source' ? $this->layeredSettingsSource() : $this->settingsPage();
-        // Located by the retraction's OPENING, not by any of the numbers it
-        // asserts: a locator made of the figure under test would move with the
-        // defect and find nothing to complain about.
-        $para = $this->soleParagraphContaining($text, '"' . $this->word(8) . ' characters" until', $which);
+        $text = $this->pageText($which);
+        $para = $this->soleParagraphContaining($text, $locator, $which);
 
         $bare = self::GLOB;
         $quoted = '"' . self::GLOB . '"';
@@ -242,39 +298,106 @@ final class GlobFigureDriftTest extends TestCase
     // ── the census of what is still stale ────────────────────────────────
 
     /**
-     * Every `src/` paragraph that spells the OLD count without retracting it.
+     * Unicode separators folded onto their ASCII equivalents.
      *
-     * PARAGRAPH-SCOPED and not file-scoped: {@see LayeredSettings} legitimately
-     * contains the word "eight" inside the sentence retracting it, and a file
-     * census would either flag the retraction or need an exemption keyed to a
-     * filename — which is the exemption that goes stale the moment the file is
-     * fixed. The rule instead is semantic: a paragraph that says the old figure
-     * and does not also say the new one is carrying it.
+     * WHY THIS EXISTS: the census's number WORD is derived from `word(8)`, so
+     * it moves with the glob — but its CONNECTOR was hand-written as `[- ]`,
+     * one ASCII hyphen or one ASCII space, and a class that narrow is a list of
+     * the spellings whoever wrote it happened to think of. Everything in
+     * {@see connectorSpellings()} slipped past it. A census cannot find what
+     * its alphabet cannot spell, and this is that alphabet.
      *
-     * @return array<string, int>
+     * The dashes fold to `-`, the spaces fold to ` `, and the two INVISIBLE
+     * characters (zero-width space, soft hyphen) fold to nothing at all —
+     * a soft hyphen is what a word processor leaves behind when it breaks a
+     * word, and it renders as either a hyphen or nothing depending on where the
+     * line lands, so treating it as an absent separator is the reading that
+     * matches what a human sees.
      */
-    private function paragraphsStillCarryingTheStaleFigure(): array
+    private function normaliseSeparators(string $text): string
     {
-        $root = realpath(__DIR__ . '/../../src');
-        self::assertIsString($root);
+        return strtr($text, [
+            "\u{2010}" => '-', "\u{2011}" => '-', "\u{2012}" => '-', "\u{2013}" => '-',
+            "\u{2014}" => '-', "\u{2015}" => '-', "\u{2212}" => '-', "\u{FE58}" => '-',
+            "\u{FE63}" => '-', "\u{FF0D}" => '-',
+            "\u{00A0}" => ' ', "\u{1680}" => ' ', "\u{2000}" => ' ', "\u{2001}" => ' ',
+            "\u{2002}" => ' ', "\u{2003}" => ' ', "\u{2004}" => ' ', "\u{2005}" => ' ',
+            "\u{2006}" => ' ', "\u{2007}" => ' ', "\u{2008}" => ' ', "\u{2009}" => ' ',
+            "\u{200A}" => ' ', "\u{202F}" => ' ', "\u{205F}" => ' ', "\u{3000}" => ' ',
+            "\u{200B}" => '', "\u{FEFF}" => '', "\u{00AD}" => '',
+        ]);
+    }
 
-        $stale = $this->word(8);
-        $current = $this->word(\strlen(self::GLOB));
+    /**
+     * Does this ONE paragraph spell the retracted count without retracting it?
+     *
+     * TWO RULES, and both are load-bearing.
+     *
+     * THE MATCH is `\beight`, any run of spaces and hyphens (including none),
+     * then `character`. The word is derived from `word(8)`; the separator run
+     * is permissive because every narrower spelling of it has already been
+     * evaded once — see {@see connectorSpellings()} for the fixture table, in
+     * which the OLD `[- ]` class misses ten of twelve true positives. The `\b`
+     * is not cosmetic either: without it the old pattern matched
+     * `weight-character`, so the census over-reported as well as under-reported.
+     *
+     * THE RETRACTION EXEMPTION is a paragraph that also spells the CURRENT
+     * count. It is semantic rather than keyed to a filename on purpose: both
+     * surviving mentions of "eight" in `src/` live inside sentences retracting
+     * it, and an exemption list naming those files would have to be edited
+     * every time one of them was fixed — which is precisely the maintenance
+     * step round 43 skipped and shipped stale.
+     */
+    private function carriesTheStaleFigure(string $paragraph): bool
+    {
+        $normalised = (string) preg_replace('/\s+/', ' ', $this->normaliseSeparators($paragraph));
 
+        $stale = $this->matchOrFail('/\b' . $this->word(8) . '[\s\-]*character/i', $normalised, 'stale-figure probe');
+        if (!$stale) {
+            return false;
+        }
+
+        return !$this->matchOrFail('/\b' . $this->word(\strlen(self::GLOB)) . '\b/i', $normalised, 'retraction probe');
+    }
+
+    /**
+     * `preg_match()` that FAILS on a compile or backtrack error rather than
+     * reading `false` as "no".
+     *
+     * A guard must go red on what it cannot parse. The previous census wrote
+     * `if (preg_match(…) !== 1) { continue; }`, which treats `false` — a PCRE
+     * error, a backtrack-limit blowout on a long paragraph — as a clean miss,
+     * and would have reported an empty census for a reason that has nothing to
+     * do with the tree being clean.
+     */
+    private function matchOrFail(string $pattern, string $subject, string $what): bool
+    {
+        $result = preg_match($pattern, $subject);
+        $this->assertIsInt($result, $what . ': preg_match() errored (' . preg_last_error_msg() . '), so its answer means nothing');
+
+        return $result === 1;
+    }
+
+    /**
+     * The census, over any set of labelled texts.
+     *
+     * Parameterised rather than hard-wired to `src/` so the SAME scanner can be
+     * run over fixtures whose answer is known. That is the whole defence for an
+     * assertion that the real census is empty: `assertSame([], …)` also passes
+     * in a tree where the scanner has silently stopped matching anything.
+     *
+     * @param iterable<string, string> $texts label => text
+     *
+     * @return array<string, int> label => count of carrying paragraphs
+     */
+    private function census(iterable $texts): array
+    {
         $hits = [];
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root)) as $file) {
-            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
-                continue;
-            }
-            foreach ($this->paragraphs((string) file_get_contents($file->getPathname())) as $para) {
-                if (preg_match('/' . $stale . '[- ]character/i', $para) !== 1) {
-                    continue;
+        foreach ($texts as $label => $text) {
+            foreach ($this->paragraphs($text) as $paragraph) {
+                if ($this->carriesTheStaleFigure($paragraph)) {
+                    $hits[$label] = ($hits[$label] ?? 0) + 1;
                 }
-                if (preg_match('/\b' . $current . '\b/i', $para) === 1) {
-                    continue;
-                }
-                $rel = 'src/' . ltrim(str_replace($root, '', $file->getPathname()), '/');
-                $hits[$rel] = ($hits[$rel] ?? 0) + 1;
             }
         }
         ksort($hits);
@@ -283,36 +406,201 @@ final class GlobFigureDriftTest extends TestCase
     }
 
     /**
-     * The census, and `docs/SETTINGS.md`'s list of known-stale copies, must be
-     * the same set.
+     * Every `.php` file under `src/`, keyed by repo-relative path.
      *
-     * THIS REDS IN BOTH DIRECTIONS, which is the whole point. A new `src/`
-     * paragraph spelling the old count reds it. So does FIXING the one that is
-     * left without updating the page that advertises it as outstanding — the
-     * exact defect that shipped in round 43, where the commit correcting
-     * `LayeredSettings` left `docs/SETTINGS.md` naming `LayeredSettings` as
-     * still stale two paragraphs later.
+     * SCOPE IS `src/`, AND THAT EXCLUSION IS THE IMPLICIT HALF OF THIS CENSUS —
+     * written down here because round 43 left it unstated and the next reader
+     * would have had to re-derive it. At the time of writing,
+     * `grep -rn 'eight[- ]character'` over `src/`, `docs/`, `README.md` and
+     * `tests/` hits four places, and three of them must NOT be census entries:
+     *
+     * - `docs/SETTINGS.md` — excluded BY SCOPE. It is the page this test reads
+     *   the retraction out of; censusing it would red against itself.
+     * - `tests/App/AppModelTest.php` — excluded BY SCOPE. Its "eight characters
+     *   of tail" is about a cursor fixture and has nothing to do with the glob.
+     *   It is also the shape that shows why scope is doing real work: the same
+     *   sentence inside `src/` WOULD be a false positive, because the match is
+     *   on the phrase and not on the subject.
+     * - `src/Config/LayeredSettings.php` — excluded SEMANTICALLY, by
+     *   {@see carriesTheStaleFigure()}'s retraction rule, because its paragraph
+     *   spells the current count too. This is the only one of the three that
+     *   survives a change of scope, and it is the one that must survive: it is
+     *   a rule-7 citation, not a stale figure.
+     *
+     * @return iterable<string, string>
      */
-    public function testTheSettingsPageNamesExactlyTheSourceFilesStillCarryingTheStaleFigure(): void
+    private function sourceFiles(): iterable
     {
-        $census = $this->paragraphsStillCarryingTheStaleFigure();
+        $root = realpath(__DIR__ . '/../../src');
+        self::assertIsString($root);
+
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root)) as $file) {
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $text = file_get_contents($file->getPathname());
+            self::assertIsString($text, $file->getPathname() . ' is unreadable, so the census over it is void');
+
+            yield 'src/' . ltrim(str_replace($root, '', $file->getPathname()), '/') => $text;
+        }
+    }
+
+    /**
+     * Every connector spelling between "eight" and "character", with what the
+     * OLD hand-written `[- ]` class did and what the current one does.
+     *
+     * MEASURED ON PHP 8.3.6, 2026-08-22, by running both patterns over these
+     * exact fixtures; the table is generated by
+     * {@see testTheConnectorClassCatchesTheSpellingsTheHandWrittenOneMissed()}
+     * rather than transcribed, so it cannot drift into decoration. `strtr()`
+     * and a non-`/u` `preg_match()` over these byte sequences behave the same
+     * on 8.3 and 8.4 — the stamp is provenance, and CI runs both.
+     *
+     * | fixture                       | OLD `[- ]` | current |
+     * |-------------------------------|------------|---------|
+     * | ASCII hyphen                  | HIT        | HIT     |
+     * | ASCII space                   | HIT        | HIT     |
+     * | U+2010 hyphen                 | miss       | HIT     |
+     * | U+2011 non-breaking hyphen    | miss       | HIT     |
+     * | U+2013 en dash                | miss       | HIT     |
+     * | U+2014 em dash                | miss       | HIT     |
+     * | U+2212 minus sign             | miss       | HIT     |
+     * | U+00A0 no-break space         | miss       | HIT     |
+     * | U+202F narrow no-break space  | miss       | HIT     |
+     * | U+200B zero-width space       | miss       | HIT     |
+     * | U+00AD soft hyphen            | miss       | HIT     |
+     * | hyphenated across doc lines   | miss       | HIT     |
+     * | "eighteen-character" (control)| miss       | miss    |
+     * | "weight-character" (control)  | HIT        | miss    |
+     * | "eight words … a character"   | miss       | miss    |
+     *
+     * The last three are controls, and the `weight-character` row is the one
+     * worth pausing on: the old class had no word boundary, so it did not only
+     * under-report, it also matched a word that merely ENDS in "eight".
+     *
+     * @return iterable<string, array{0: string, 1: bool, 2: bool}>
+     *                                                fixture => [paragraph, current census sees it, old `[- ]` class saw it]
+     */
+    public static function connectorSpellings(): iterable
+    {
+        yield 'ASCII hyphen' => ['closes the eight-character version', true, true];
+        yield 'ASCII space' => ['closes the eight characters version', true, true];
+        yield 'U+2010 hyphen' => ["closes the eight\u{2010}character version", true, false];
+        yield 'U+2011 non-breaking hyphen' => ["closes the eight\u{2011}character version", true, false];
+        yield 'U+2013 en dash' => ["closes the eight\u{2013}character version", true, false];
+        yield 'U+2014 em dash' => ["closes the eight\u{2014}character version", true, false];
+        yield 'U+2212 minus sign' => ["closes the eight\u{2212}character version", true, false];
+        yield 'U+00A0 no-break space' => ["closes the eight\u{00A0}characters version", true, false];
+        yield 'U+202F narrow no-break space' => ["closes the eight\u{202F}characters version", true, false];
+        yield 'U+200B zero-width space' => ["closes the eight\u{200B}character version", true, false];
+        yield 'U+00AD soft hyphen' => ["closes the eight\u{00AD}character version", true, false];
+        yield 'hyphenated across doc lines' => ["     * closes the eight-\n     * character version", true, false];
+        yield 'control: eighteen-character' => ['closes the eighteen-character version', false, false];
+        yield 'control: weight-character' => ['a weight-character encoding', false, true];
+        yield 'control: eight words about a character' => ['eight words about a character set', false, false];
+    }
+
+    /**
+     * @dataProvider connectorSpellings
+     */
+    public function testTheConnectorClassCatchesTheSpellingsTheHandWrittenOneMissed(
+        string $fixture,
+        bool $mustBeSeen,
+        bool $oldSawIt,
+    ): void {
+        $this->assertSame(
+            $mustBeSeen ? ['fixture' => 1] : [],
+            $this->census(['fixture' => $fixture]),
+            'the census disagrees with the table in connectorSpellings()',
+        );
+    }
+
+    /**
+     * The old `[- ]` class really did miss these — asserted, not remembered.
+     *
+     * WITHOUT THIS, the table above is a claim about a pattern that no longer
+     * exists anywhere in the tree, which is the kind of sentence that gets
+     * copied forward until someone re-narrows the class believing nothing was
+     * ever wrong with it. Here the old pattern is reconstructed and run.
+     *
+     * @dataProvider connectorSpellings
+     */
+    public function testTheHandWrittenConnectorClassIsMeasurablyWeakerThanTheCurrentOne(
+        string $fixture,
+        bool $ignoredCurrent,
+        bool $oldSawIt,
+    ): void {
+        $seenByOld = false;
+        foreach ($this->paragraphs($fixture) as $paragraph) {
+            // The pre-round-44 census's matcher, verbatim: one ASCII hyphen or
+            // one ASCII space, and no word boundary in front of the number word.
+            $seenByOld = $seenByOld || preg_match('/eight[- ]character/i', $paragraph) === 1;
+        }
 
         $this->assertSame(
-            ['src/Cli/Bootstrap.php' => 1],
-            $census,
-            'the set of src/ paragraphs still spelling the old glob length has changed; '
-            . "update docs/SETTINGS.md's list of remaining sites in the same commit",
+            $oldSawIt,
+            $seenByOld,
+            'the third column of the table in connectorSpellings() no longer describes what the '
+            . 'hand-written class did, so the case for widening it is being made from a stale figure',
+        );
+    }
+
+    /**
+     * `src/` is clean, `docs/SETTINGS.md` says so, and the scanner still works.
+     *
+     * THREE ASSERTIONS AND NOT ONE, because an empty census is a strictly
+     * weaker guard than a census of one. `assertSame([], …)` passes in a tree
+     * where the retracted figure is everywhere and the scanner is broken, so
+     * the same scanner is run over a known-stale fixture and a known-retracted
+     * fixture in the same test — a positive control and a negative control for
+     * an assertion whose real result is "nothing".
+     *
+     * IT STILL REDS IN BOTH DIRECTIONS. A new `src/` paragraph spelling the old
+     * count reds the first assertion. Re-introducing the figure in a paragraph
+     * that also retracts it does NOT red — that is the retraction exemption
+     * working, and the negative control pins it. And `docs/SETTINGS.md`
+     * disagreeing with the census's cardinality reds the third.
+     */
+    public function testNoSourceFileStillCarriesTheStaleFigureAndTheSettingsPageAgrees(): void
+    {
+        // POSITIVE CONTROL, first: if this does not fire, nothing below means
+        // anything, because the emptiness would be the scanner's and not the
+        // tree's.
+        $this->assertSame(
+            ['known-stale.php' => 1],
+            $this->census([
+                'known-stale.php' => "/**\n * closes the eight-character version and nothing else.\n */",
+            ]),
+            'the census scanner no longer finds a paragraph it is meant to find, '
+            . 'so its verdict on src/ is worthless',
         );
 
-        $para = $this->soleParagraphContaining($this->settingsPage(), 'is the one remaining site', 'docs/SETTINGS.md');
+        // NEGATIVE CONTROL: the shape LayeredSettings actually has.
+        $this->assertSame(
+            [],
+            $this->census([
+                'known-retracted.php' => "/**\n * THE COUNT SAID \"eight characters\" until it was re-derived:\n"
+                    . " * `[!B]*` is five, so the figure is corrected here.\n */",
+            ]),
+            'the retraction exemption stopped working, so every rule-7 citation of the old '
+            . 'figure would now be reported as a fresh defect',
+        );
 
-        // The IDENTITY and the CARDINALITY in one phrase, both derived. A page
-        // that named the right file while still implying there were two would
-        // send the next reader looking for a second one that no longer exists.
+        $census = $this->census($this->sourceFiles());
+
+        $this->assertSame(
+            [],
+            $census,
+            'a src/ paragraph spells the old glob length without retracting it; '
+            . "fix it and move docs/SETTINGS.md's cardinality in the same commit",
+        );
+
+        $para = $this->soleParagraphContaining($this->settingsPage(), 'remaining site', 'docs/SETTINGS.md');
+
         $this->assertStringContainsString(
-            '`Bootstrap::reportProjectTierToolRemovals()` is the ' . $this->word(\count($census)) . ' remaining site',
+            'The census finds ' . $this->word(\count($census)) . ' remaining site',
             $para,
-            'docs/SETTINGS.md no longer names exactly the src/ sites the census finds still carrying the figure',
+            'docs/SETTINGS.md no longer states the number of src/ sites the census actually finds',
         );
     }
 }

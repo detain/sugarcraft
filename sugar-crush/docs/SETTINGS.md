@@ -276,15 +276,20 @@ The point the figure was making — that the value names none of the ten tools i
 removes — is what survives, so the sentence stays and the number is corrected.
 This line once continued
 "`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
-still carry the old figure in their doc-blocks", and half of that is no longer
-true: `LayeredSettings` was corrected in round 43 and now carries the retraction
-rather than the figure. **`Bootstrap::reportProjectTierToolRemovals()` is the one
-remaining site**, in the sentence about refusing negated character classes. The
-naming is kept rather than dropped because a list of known-stale copies is the
-only thing that makes the next one findable — and it is now asserted rather
-than believed: `Tests\Config\GlobFigureDriftTest` censuses `src/` for paragraphs
-that spell the old count without retracting it, and reds both if a new one
-appears and if this sentence names a file that has since been fixed. A THIRD
+still carry the old figure in their doc-blocks", and neither half is true any
+more: `LayeredSettings` was corrected in round 43 and
+`Bootstrap::reportProjectTierToolRemovals()` in round 44 — its clause about
+refusing negated character classes now names the glob instead of counting it —
+so both carry the retraction rather than the figure. **The census finds zero
+remaining sites.** The naming is kept rather than dropped because a list of
+known-stale copies is the only thing that makes the next one findable — and it
+is asserted rather than believed: `Tests\Config\GlobFigureDriftTest` censuses
+`src/` for paragraphs that spell the old count without retracting it, and reds
+both if a new one appears and if this sentence stops agreeing with what the
+census finds. An empty census is a weaker claim than a census of one, because
+it also passes in a tree where the scanner has quietly stopped working, so the
+same scanner is run against a known-stale fixture in the same test and must
+still find it. A THIRD
 occurrence was in this file, in the paragraph beginning "The report is the
 *effect*, not the pattern" — located by its words rather than by "sixty lines
 below", because an offset in prose is the same rot one level up — and is

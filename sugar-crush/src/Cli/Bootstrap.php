@@ -5062,8 +5062,11 @@ final class Bootstrap
      *
      * THE RESTRICTION THE BACKLOG PROPOSED WAS NOT TAKEN, and the measurement
      * says why. "Refuse negated character classes at the project tier" closes
-     * the eight-character version and nothing else: `["[C-Z]*", "[a-z]*"]`
-     * contains no negation, is barely longer, and also leaves only `Bash`.
+     * the `[!B]*` spelling and nothing else: `["[C-Z]*", "[a-z]*"]` contains no
+     * negation, is one character longer per glob, and also leaves only `Bash`.
+     * MEASURED end-to-end on PHP 8.3.6, 2026-08-22, against the eleven-tool
+     * ceiling this file builds — both values leave exactly `Bash`; PHP 8.4 was
+     * NOT exercised, because this box has only 8.3.6 while CI runs both.
      * Shipping that restriction would have replaced a false claim about the
      * dialect with a false claim about the fix. Restricting the tier to LITERAL
      * names closes it completely, but it also deletes the legitimate use the
@@ -5072,6 +5075,28 @@ final class Bootstrap
      * had rather than the attacker one they did not, since reaching this code at
      * all already required the operator to list this checkout under
      * {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY}.
+     *
+     * THAT CLAUSE COUNTED THE GLOB INSTEAD OF NAMING IT, AND THE COUNT WAS
+     * WRONG. WHAT IT SAID: "closes the eight-character version and nothing
+     * else". WHAT IS TRUE NOW: nothing in the counterexample is eight
+     * characters. `[!B]*` is five, `"[!B]*"` seven and `["[!B]*"]` nine, so the
+     * phrase pointed at a value that does not exist and a reader could not tell
+     * which of the three was meant; round 42 retracted the same figure on
+     * `docs/SETTINGS.md` and in {@see LayeredSettings::PROJECT_TIER_KEYS}, and
+     * this was the last copy of it left in `src/`. The clause now names the
+     * glob. WHY THE SENTENCE STILL EARNS ITS PLACE: the length was never the
+     * argument, and it was load-bearing only by accident. The argument is that
+     * the proposed rule is keyed to a SPELLING while the hazard is an EFFECT —
+     * `["[C-Z]*", "[a-z]*"]` is a different spelling of the same effect, one
+     * character longer per glob, with no negation anywhere for the rule to
+     * catch. That holds whatever the first spelling's length happens to be,
+     * which is exactly why quoting the value reads better than counting it.
+     * The three counts above now have a generator rather than a proof-read, in
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest}, which also
+     * censuses `src/` for paragraphs still spelling the retracted figure
+     * without retracting it — the census is EMPTY as of this rewrite, and it is
+     * asserted empty alongside a known-stale fixture, so an assertion of
+     * nothing cannot pass by scanning nothing.
      *
      * So what is repaired is the PROPERTY, not the grammar: the effect is
      * visible, whatever spelling produced it. The capability is unchanged and
