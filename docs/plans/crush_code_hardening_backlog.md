@@ -5462,25 +5462,40 @@ precisely to be cited from there. Not lane `a`'s file in round 43.
 `SkillPathNudge::smallestUnclippedCallerCap()` and at the margin guard, so the loop closes for a
 reader who arrives at the cap first.
 
-### E92 — the `paths:` translation still does not implement POSIX character classes
+### E92 — ~~the `paths:` translation still does not implement POSIX character classes~~ FIXED in round 43; the escaped-`]` half remains
 
-**Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low. **Strictly no worse than
-before E85.**
+**Recorded and then superseded 2026-08-22 by the round-43 lane-a fix agent.**
 
-**What.** `SkillRegistry::compilePathPattern()` does not translate `[[:alpha:]]`, which `fnmatch()`
-supports via libc. Such a pattern emits an uncompilable regex and routes to `legacyPathMatch()` — the
-pre-E85 predicate — so a glob combining both, `**/[[:alpha:]]*.php`, gets the OLD `**` handling and
-still misses root-level files. No shipped skill uses one. Round 43 also left a second uncompilable
-shape deliberately: a backslash-escaped `]` inside a class (`a[\]]b`), because the scan that finds a
-class's closing `]` is not escape-aware, and making that body compile would make it compile *wrong*
-(see `SkillRegistry::compileClassBody()`'s doc-block and
-`SkillPathPatternTest::testAnEscapedClassTerminatorIsLeftToTheFallback()`).
+**Recorded as** "low severity, strictly no worse than before E85: `[[:alpha:]]` emits an
+uncompilable regex and routes to `legacyPathMatch()`, so a glob combining it with `**` gets the OLD
+`**` handling."
 
-**Step.** Teach the bracket scanner to skip escapes and to pass `[:class:]` through — PCRE supports
-the syntax natively. **Whoever does it must find a NEW uncompilable input first**, or the fallback
-branch stops being pinned and the M6-class mutation (fallback → `return false`) goes back to
-surviving. The 45x54 characterisation grid and the seeded differential fuzz described in
-`SkillRegistry::pathMatches()` are the harness to prove no narrowing.
+**What was actually true.** That premise was wrong, and it was wrong in the direction that matters.
+The class only reached the fallback when the malformed regex it produced *also failed to compile*.
+`[[:alpha:]]x` emits `#^[[:alpha:]\]x$#Ds`, which PCRE refuses — fine. But a second bracket group
+supplies the missing `]`: `[[:alpha:]][!a]` emits `#^[[:alpha:]\][^a]$#Ds`, which **compiles**,
+folds the second group into the first class, and answers false for `ab` where `fnmatch()` answers
+true. A silently wrong match with no fallback under it. Found by widening the differential fuzz's own
+pattern alphabet to include `[[:alpha:]]`; four seeds x 200,000 trials each reported 12-18 such
+narrowings.
+
+**Fixed** in round 43: `compilePathPattern()`'s terminator scan now skips `[:...:]`, so POSIX classes
+are translated (PCRE spells them identically to libc) rather than routed anywhere. Pinned by
+`SkillPathPatternTest::testAPosixClassIsTranslatedRatherThanRoutedToTheFallback()` and by the grid
+row `[[:alpha:]][!a]`.
+
+**What is left.** One uncompilable shape remains **deliberately**: a backslash-escaped `]` inside a
+class (`a[\]]b`). The bracket scan is not escape-aware, so the body arrives as the fragment `\`;
+left alone the regex will not compile and the pattern routes to `legacyPathMatch()`, which reads it
+correctly. Making it compile would make it compile *wrong* — the same mistake the POSIX scan was
+making. See `SkillRegistry::compileClassBody()`'s doc-block.
+
+**Step, if anyone wants that last shape too.** Make the bracket scan escape-aware. **Whoever does it
+must find a NEW uncompilable input first**, or `legacyPathMatch()` stops being reachable, the
+M6-class mutations (fallback → `return false`, fallback → bare `fnmatch()`) go back to surviving, and
+the never-remove rule leaves an unpinnable method behind. The 46x54 characterisation grid and the
+four-seed differential fuzz described in `SkillRegistry::pathMatches()` are the harness to prove no
+narrowing.
 
 ### E93 — a `preg_match()` backtrack-limit hit is silently absorbed by the fallback
 
