@@ -6,7 +6,55 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW-45. ROUND 44 CLOSED (floor 9215) — read this first, then §0 for the standing rules
+## ⏳ ROUND 45 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-22 from master `06126017`, tree clean.** Run `wf_36783de1-2cf` (task `wdqwon5p1`),
+9 agents, three lanes × implement → adversarial review → fix, concurrency 3. Expect ~90–110 min.
+
+**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-45-wf_36783de1-2cf.js`
+(copied there deliberately — the scratchpad copy it was launched from does not survive a session end).
+
+**Lane dirs `/home/sites/crush-lane-{a,b,c}`** are full-repo `cp -a` copies at `06126017`, each verified
+clean with 18/18 `vendor/sugarcraft/*` symlinks resolving INSIDE the lane. ⚠️ **DO NOT DELETE THEM until
+the merged floor has been measured** — round 44 needed lane a's tree alive to attribute a +48 assertion
+gap, and it would have been unrecoverable an hour later.
+
+| lane | label | items |
+| --- | --- | --- |
+| `a` | seam | **E119** (correct "eleven other sources", add to `PROSE_SITES` with `'offset' => 1`, **delete the tripwire test in the same commit**) · **E118 + E104** (`public const` formats on `Bootstrap`, drop `bootstrapMethodSource()`/`soleMatch()`) · **E120** (source census for the 62 unowned `sugarcrush:` stderr lines) |
+| `b` | fork | **E133** (`Runtime::executeConcurrently()` reserves every payload name in phase 1, before forking) · **E80** (the fork/`flock` flake — lane `b` runs under two concurrent suites, which is the deliberate load its Step has always asked for and never had) |
+| `c` | oracles | **E125** (one `paragraphs()` helper, and ANSWER the fenced-block/table-row question) · **E123** (env names on `README.md` and eleven other `docs/*.md` pages, distinguishing a tabulated promise from a prose mention) · **E132** (`exitCodeAfter()` and the ternary return) |
+
+### WHAT THE SUPERVISOR MUST DO WHEN IT LANDS — round 44's merge lessons, as a checklist
+
+1. **Merge order `a` → `b` → `c`.** Expect a conflict in `docs/plans/crush_code_hardening_backlog.md`
+   only; resolve by keeping both sides and renumbering the later lane's entries **highest-first**.
+2. 🔴 **AFTER RENUMBERING, GREP THE MERGED DIFF FOR THE RENUMBERED RANGE.** Round 44's lane c had already
+   written `E112`/`E113` into a test's doc-blocks **and into a failure message that tells a reader which
+   entry to consult**; the merge cannot see a cross-file reference like that. Numbering continues from
+   **E135**.
+3. **Check the real overlap** with `git -C <lane> diff --name-only <base>..HEAD` per lane and `comm -12`
+   between the sorted lists — not by trusting each lane's own `outOfLaneFiles`.
+4. **Measure the merged floor yourself**, `sugar-crush` LINKED, after confirming `ps -C php` is empty.
+   **Predict tests additively; predict assertions as a LOWER BOUND** — see §0-NOW-45's additivity rule.
+5. **Verify the invariants at merge:** 18/18 by `is_link()` · config md5 `05480c743aff302fd6c06c5a4a4c2210` ·
+   `check-path-repos --no-lib-path-repos` rc 0 · zero tracked per-lib locks · **skips exactly 1**.
+6. **Then, and only then**, confirm every lane file is byte-identical in master, confirm
+   `git branch --merged master` lists all three drain branches, and delete branches and lane dirs — in
+   that order.
+7. **File the lanes' deferred findings into the backlog yourself.** Round 44's lane a filed nothing
+   deliberately (to dodge the three-way append conflict) and nine findings would otherwise have existed
+   only in a scratchpad report.
+
+⚠️ **Two things to watch for specifically in this round's merge.** Lane `a`'s `ReadmeRosterDriftTest`
+**reads** `README.md`, which is lane `c`'s file — a reworded anchor reds lane `a` only at merge, and
+neither lane can see it. And lane `b` is editing the **live concurrency path** (`Runtime.php`), not a test
+helper, so a green lane suite is necessary and not sufficient: re-read its enumeration of the release
+paths (failed `fork()`, child dying before write) before believing it.
+
+---
+
+## 0-NOW-45. ROUND 44 CLOSED (floor 9215) — read this after the in-flight block above, then §0 for the standing rules
 
 **SUITE FLOOR: `9215 / 127781 / 1 skipped / rc 0` at `98d59bfb`**, supervisor-measured in the live tree
 after merging all three round-44 lanes (04:17.446, 276 MB). Supersedes every earlier figure (9078 held

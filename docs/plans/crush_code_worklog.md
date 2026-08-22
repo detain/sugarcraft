@@ -10538,3 +10538,34 @@ still exactly 1 · every lane file byte-identical in master except the two knowi
 **Backlog: 105 → 129 entries.** E112–E117 (lane b), E118–E122 (lane c, renumbered), **E123–E135 filed by
 the supervisor** from the three reports — nine of them lane a's, which deliberately filed nothing to avoid
 the three-way append conflict that lanes b and c then hit.
+
+## ROUND 45 — IN FLIGHT (launched from `06126017`, run `wf_36783de1-2cf`)
+
+**Not yet closed.** Three lanes at `06126017`, concurrency 3, nine agents, implement → adversarial review
+→ fix. Lane dirs `/home/sites/crush-lane-{a,b,c}` are live and **must not be deleted before the merged
+floor is measured**. `docs/plans/crush_code_RESUME.md`'s in-flight block carries the lane table and the
+merge checklist; this entry exists so the worklog is not silent about a round that was running when the
+session compacted.
+
+- **Lane `a` (seam)** — E119, E118 + E104, E120.
+- **Lane `b` (fork)** — E133, E80. Deliberately scheduled while two sibling suites load the box, which is
+  the reproduction condition E80's Step has asked for since round 42 and never had.
+- **Lane `c` (oracles)** — E125, E123, E132.
+
+**Two briefing changes shipped with this round**, both from round 44's post-mortem:
+
+1. **The review prompt now BINDS the reviewer to the file split.** Round 44's lane c edited a sibling's
+   file on its reviewer's explicit instruction; the prompt had told reviewers to *check* the boundary and
+   never that they were bound by it when prescribing. A finding in another lane's file is now reported,
+   never prescribed as a BLOCKING or MAJOR the fix agent cannot satisfy without breaching the split.
+2. **Both prompts now name the READ side.** The doc-drift guards read across `src/`, `docs/`, `README.md`
+   and `bin/`, so a guard in one lane can be reading prose a sibling is rewriting — invisible until merge.
+   Lane a's `ReadmeRosterDriftTest` reading lane c's `README.md` is this round's live instance, and both
+   lanes were told.
+
+**Rules 15–18 were added to the standing preamble:** a guard asserting an absence needs a known-positive
+fixture in the same test; a reviewer's prescription is a hypothesis whose acceptance test is a mutation of
+*the fix*; doc-blocks wrap at 80 columns so a sentence is never those bytes in a row; and never ship a
+cardinality measured over a tree in a lane worktree — ship the generator. The mutation-harness contract
+(refuse a dirty tree, `git clean -fdq`, scratchpad backup before mutating, known-answer control,
+`git diff --numstat` after applying) is now its own section rather than scattered advice.
