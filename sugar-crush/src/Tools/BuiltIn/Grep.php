@@ -275,9 +275,13 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // Nothing is lost by building it early: forPaths() returns null unless
         // it has something new to say, and a null costs nothing.
         //
-        // AN EIGHTH of the cap, where the instruction section takes a quarter,
-        // so the hit list still keeps at least five eighths of what it was
-        // asked for. A budget too small for one entry surfaces nothing and
+        // AN EIGHTH of the cap — {@see SkillPathNudge::CALLER_BUDGET_DIVISOR},
+        // which is where the eighth is now DECIDED rather than restated. This
+        // site, Glob's and Read's each held their own literal 8 plus a note
+        // asking the other two to agree with it (E87); a shared constant is
+        // that agreement instead of a request for it. The instruction section
+        // takes a quarter, so the hit list still keeps at least five eighths
+        // of what it was asked for. A budget too small for one entry surfaces nothing and
         // SPENDS nothing, so the skill is announced by the next call with room
         // rather than retired unseen — the same resolution
         // {@see TruncatesOutput::instructionSection()} takes for a reserve
@@ -285,7 +289,9 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // class's own ceiling.
         $nudge = $this->skillNudge?->forPaths(
             self::hitFiles($filtered['run']['stdout'], $path),
-            $this->maxOutputBytes > 0 ? intdiv($this->maxOutputBytes, 8) : null,
+            $this->maxOutputBytes > 0
+                ? intdiv($this->maxOutputBytes, SkillPathNudge::CALLER_BUDGET_DIVISOR)
+                : null,
         );
 
         // +1 for the newline separated() adds. Charged against the cap even

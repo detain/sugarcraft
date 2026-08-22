@@ -393,10 +393,14 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         //
         // AN EIGHTH of the cap, matching {@see Grep::execute()}; the two tools
         // answer the same shape of question and must not disagree about this
-        // one either.
+        // one either — which is why the eighth is
+        // {@see SkillPathNudge::CALLER_BUDGET_DIVISOR} and no longer a literal
+        // repeated here, in Grep and in Read (E87).
         $nudge = $this->skillNudge?->forPaths(
             $files,
-            $this->maxOutputBytes > 0 ? intdiv($this->maxOutputBytes, 8) : null,
+            $this->maxOutputBytes > 0
+                ? intdiv($this->maxOutputBytes, SkillPathNudge::CALLER_BUDGET_DIVISOR)
+                : null,
         );
 
         // +1 for the newline the nudge is appended behind at the foot of

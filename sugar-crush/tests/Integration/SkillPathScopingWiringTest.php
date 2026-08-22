@@ -26,6 +26,21 @@ use SugarCraft\Crush\Tools\BuiltIn\Read;
  */
 final class SkillPathScopingWiringTest extends TestCase
 {
+    /**
+     * How much bigger than {@see SkillPathNudge::maxBytes()} the tightest
+     * shipped nudge budget must stay.
+     *
+     * 2.0 and not 1.0: at 1.0 the guard fires the instant the nudge starts
+     * being clipped, which is also the instant the only free answer has
+     * already been spent. Two means the tracker's ceiling can DOUBLE — twice
+     * the entries, or twice the bytes per entry — before anyone has to argue
+     * about a model-facing output cap. See
+     * {@see testTheShippedCapsClearTheCeilingByTheDecidedMargin()} for the
+     * decision and {@see SkillPathNudge}'s `MAX_ENTRIES` for the ranked way
+     * out.
+     */
+    private const REQUIRED_CEILING_MARGIN = 2.0;
+
     private string $tempDir = '';
     private string $originalHome = '';
     private mixed $originalServerHome;
@@ -206,6 +221,30 @@ final class SkillPathScopingWiringTest extends TestCase
      * `maxBytes()` the real margin on Glob and Grep is 8,192 / 2,636 = 3.1x —
      * half an order of magnitude, not three — and the cap at which this test
      * reds is 8 x 2,636 = 21,088, fifteen times the figure recorded.
+     *
+     * AND THE ROUND-43 BRIEF FOR E87 WAS WRONG IN THE OTHER DIRECTION. It
+     * states that raising `MAX_ENTRIES` from 8 to 20 "reds the new ceiling
+     * guard without anyone touching a cap". The two ceiling figures it quotes
+     * both reproduce — 2,636 at 8 and 6,248 at 20 — but 6,248 is comfortably
+     * UNDER the 8,192 the tightest shipped budget carries, so this test stays
+     * green. MEASURED by mutation at 26bcdb42 on PHP 8.3.6, with only
+     * `MAX_ENTRIES` changed: 20 green, 26 green, 27 RED (ceiling 8,355), 40
+     * red. The tipping point is 27, and it is now derived rather than
+     * remembered — {@see SkillPathNudge::largestEntryCountWithin()} over the
+     * tightest shipped budget answers 26.
+     *
+     * WHAT WAS DECIDED FOR E87, since the brief asked for a choice and not a
+     * survey: the ABSOLUTE caps stay, and the required relationship is
+     * ASSERTED rather than engineered. Expressing each tool's nudge budget as
+     * a multiple of `maxBytes()` would make the relationship structural and
+     * would also hand a `Grep` constructed with `maxOutputBytes: 1_000` a
+     * 2,636-byte nudge budget inside a 1,000-byte result — E66 inverted. The
+     * nudge is spent INSIDE the caller's cap by design, so the margin can only
+     * ever be a property of the DEFAULT caps. What DID change is that the
+     * eighth is one constant instead of three literals
+     * ({@see SkillPathNudge::CALLER_BUDGET_DIVISOR}), and that the margin is
+     * now stated out loud with an action attached by
+     * {@see testTheShippedCapsClearTheCeilingByTheDecidedMargin()}.
      */
     public function testEveryShippedNudgeBudgetClearsTheTrackerCeiling(): void
     {
@@ -233,6 +272,114 @@ final class SkillPathScopingWiringTest extends TestCase
                 ),
             );
         }
+    }
+
+    /**
+     * E87 — the margin over the ceiling, stated as a number with an action
+     * attached rather than left as an accident of two unrelated constants.
+     *
+     * {@see testEveryShippedNudgeBudgetClearsTheTrackerCeiling()} asserts the
+     * HARD property: a shipped budget must be able to hold a whole nudge, or
+     * the model gets a clipped one. That guard reds at the moment the
+     * behaviour breaks, which is the worst moment to find out, because the
+     * three ways out of it are ranked and two of them are model-facing
+     * changes that need their own measurement (see
+     * {@see SkillPathNudge}'s `MAX_ENTRIES` doc-block for the ranked list).
+     *
+     * THIS ONE REDS ONE STEP EARLIER, ON PURPOSE. The decided requirement is
+     * that the tightest shipped budget carries at least {@see
+     * REQUIRED_CEILING_MARGIN} times the tracker's ceiling — enough room to
+     * roughly DOUBLE `MAX_ENTRIES`, or `MAX_ENTRY_BYTES`, without anyone
+     * having to touch a tool's output cap. A guard that only fires once the
+     * nudge is already being clipped tells you to make a model-facing change
+     * under time pressure; this one tells you while option 1 (come back under
+     * the ceiling) is still free.
+     *
+     * MEASURED on this tree, PHP 8.3.6, and every figure below is re-derived
+     * at run time rather than asserted from memory: ceiling 2,636, tightest
+     * shipped budget 8,192 (Grep and Glob, 65,536 / 8), actual margin 3.1x,
+     * `MAX_ENTRIES` 8 against the 26 that budget carries. The hard guard reds
+     * at `MAX_ENTRIES` 27; this one reds at 13.
+     *
+     * SO IF YOU ARE HERE HAVING REDDED IT: nothing is broken yet. The nudge
+     * still fits. You have spent the headroom that existed so the next person
+     * would not have to argue about a cap, and the cheap answer is to give
+     * some back.
+     */
+    public function testTheShippedCapsClearTheCeilingByTheDecidedMargin(): void
+    {
+        $shipped = $this->nudgeSpendRoster()['spend'];
+        self::assertNotSame([], $shipped, 'no tool spends a share of its cap on the nudge any more');
+
+        // One dial, not three. A tool that deliberately spends a different
+        // share has to say so here, which is the point of the constant.
+        foreach ($shipped as $tool => $spend) {
+            self::assertSame(
+                SkillPathNudge::CALLER_BUDGET_DIVISOR,
+                $spend['divisor'],
+                $tool . ' spends a share of its cap the other nudge-spending tools do not; if that is '
+                . 'deliberate say why here, because the margin below is derived from the tightest of them',
+            );
+        }
+
+        $tightest = min(array_column($shipped, 'budget'));
+        $margin = $tightest / SkillPathNudge::maxBytes();
+
+        self::assertGreaterThanOrEqual(
+            self::REQUIRED_CEILING_MARGIN,
+            $margin,
+            sprintf(
+                'the tightest shipped nudge budget is %d bytes against a tracker ceiling of %d — a margin '
+                . 'of %.2fx, under the %.1fx this tree decided to keep. Nothing is clipped yet; the hard '
+                . 'guard is at 1.0x. The cheap fix is to bring SkillPathNudge::MAX_ENTRIES down to %d or '
+                . 'below (it is %d), which is what that budget carries at the decided margin. Raising a '
+                . "tool's default output cap or lowering CALLER_BUDGET_DIVISOR are the other two answers "
+                . 'and both move what the model sees, so both are their own item.',
+                $tightest,
+                SkillPathNudge::maxBytes(),
+                $margin,
+                self::REQUIRED_CEILING_MARGIN,
+                SkillPathNudge::largestEntryCountWithin((int) ($tightest / self::REQUIRED_CEILING_MARGIN)),
+                $this->configuredMaxEntries(),
+            ),
+        );
+
+        // AND THE INVERSE IS PINNED AT ITS BOUNDARY, not merely sanity-checked.
+        // The message above is only actionable if largestEntryCountWithin()
+        // really is the inverse of maxBytes(), and `>= MAX_ENTRIES` is far too
+        // loose a window to notice that it is not: dropping the fixed-parts
+        // subtraction from it leaves every such comparison green while the
+        // number it prints is one too high. The exact round-trip is the
+        // property — maxBytes() is by construction the price of exactly
+        // MAX_ENTRIES entries, so one byte less must buy exactly one fewer.
+        $entries = $this->configuredMaxEntries();
+
+        self::assertSame(
+            $entries,
+            SkillPathNudge::largestEntryCountWithin(SkillPathNudge::maxBytes()),
+            'the tracker ceiling does not buy exactly the entry count it is priced from',
+        );
+        self::assertSame(
+            $entries - 1,
+            SkillPathNudge::largestEntryCountWithin(SkillPathNudge::maxBytes() - 1),
+            'one byte under the ceiling still buys a full nudge, so largestEntryCountWithin() is not '
+            . "maxBytes()'s inverse and the remedy this test prints is off by at least one entry",
+        );
+    }
+
+    /**
+     * `SkillPathNudge::MAX_ENTRIES`, read rather than copied.
+     *
+     * Private on the tracker on purpose — it is not a knob callers turn — but
+     * the failure message above is only actionable if it can name the value
+     * the reader has to change.
+     */
+    private function configuredMaxEntries(): int
+    {
+        $value = (new \ReflectionClass(SkillPathNudge::class))->getConstant('MAX_ENTRIES');
+        self::assertIsInt($value);
+
+        return $value;
     }
 
     /**
@@ -378,9 +525,21 @@ final class SkillPathScopingWiringTest extends TestCase
             }
 
             $budgetSource = ((array) $arguments)[1];
+            // THE DIVISOR IS NOW EITHER A LITERAL OR THE SHARED CONSTANT, and
+            // both shapes are read rather than one being blessed. E87 moved
+            // Grep, Glob and Read off three literal 8s onto
+            // SkillPathNudge::CALLER_BUDGET_DIVISOR — and this derivation
+            // rejected all three loudly, which is the roster working. Keeping
+            // the literal branch is not dead weight: a tool that deliberately
+            // spends a different share writes the number, and the guards below
+            // must still cover it.
             self::assertSame(
                 1,
-                preg_match('/intdiv\(\$this->(\w+),\s*(\d+)\)/', $budgetSource, $captured),
+                preg_match(
+                    '/intdiv\(\$this->(\w+),\s*(?:(\d+)|SkillPathNudge::CALLER_BUDGET_DIVISOR)\s*\)/',
+                    $budgetSource,
+                    $captured,
+                ),
                 sprintf(
                     '%s spends a nudge budget written in a shape this derivation cannot read: `%s`. '
                     . 'Leaving it out is not an option — a tool dropped here is a tool the ceiling '
@@ -397,7 +556,9 @@ final class SkillPathScopingWiringTest extends TestCase
             $cap = $capProperty->getValue($tool);
             self::assertIsInt($cap, $short . '::$' . $captured[1] . ' is not an int cap');
 
-            $divisor = (int) $captured[2];
+            $divisor = ($captured[2] ?? '') !== ''
+                ? (int) $captured[2]
+                : SkillPathNudge::CALLER_BUDGET_DIVISOR;
             self::assertGreaterThan(0, $divisor);
 
             $spend[$short] = [

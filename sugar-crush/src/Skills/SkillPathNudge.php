@@ -105,6 +105,35 @@ final class SkillPathNudge
      * retire a skill for the whole session without ever having named it — the
      * same failure `instructionSection()` bounds its count BEFORE loading a
      * body to avoid.
+     *
+     * RAISING THIS MOVES {@see maxBytes()}, AND {@see maxBytes()} IS WHAT THE
+     * SHIPPED TOOL BUDGETS ARE GUARDED AGAINST — so this constant is one of
+     * the two dials that can red
+     * {@see \SugarCraft\Crush\Tests\Integration\SkillPathScopingWiringTest::testEveryShippedNudgeBudgetClearsTheTrackerCeiling()}
+     * without anyone touching a tool. MEASURED on this tree, PHP 8.3.6: at 8
+     * the ceiling is 2,636 bytes against a Grep/Glob budget of 8,192, a 3.1x
+     * margin; {@see largestEntryCountWithin()} answers the tipping point
+     * exactly, and it is 26 — the first value that reds the guard is 27, where
+     * the ceiling reaches 8,355. (The round-43 brief for E87 asserted that 20
+     * would red it. It does not: 20 prices the ceiling at 6,248, comfortably
+     * under 8,192. VERIFIED by mutation at 26bcdb42 — 20 and 26 green, 27 and
+     * 40 red.)
+     *
+     * IF YOU REDDED THAT GUARD, here is the decided order to work through.
+     * The guard firing is correct; what it is telling you is that the nudge
+     * can now be CLIPPED inside a shipped tool's result.
+     *
+     *  1. Come back under the ceiling. `largestEntryCountWithin()` over the
+     *     tightest shipped budget prints the largest count that fits. This is
+     *     the default answer: the nudge is a pointer at a skill, not the
+     *     skill, and a nudge that needs more than 26 entries is one the model
+     *     will not read anyway.
+     *  2. Raise the tool's DEFAULT output cap. That is a model-facing change —
+     *     it moves what every Grep returns, not just a nudge — so it is its
+     *     own item with its own measurement, never a side effect of this one.
+     *  3. Lower {@see CALLER_BUDGET_DIVISOR}, spending a bigger share on the
+     *     nudge. Also model-facing, and it takes the room out of the ANSWER,
+     *     which is the trade E66 was about. Last resort.
      */
     private const MAX_ENTRIES = 8;
 
@@ -263,6 +292,61 @@ final class SkillPathNudge
         // this clip — an entry IS one line — so the byte cut is the only cut.
         return mb_strcut($line, 0, self::MAX_ENTRY_BYTES - strlen(self::ENTRY_CLIP_MARKER), 'UTF-8')
             . self::ENTRY_CLIP_MARKER;
+    }
+
+    /**
+     * The share of its own output cap a tool spends on the nudge: one eighth.
+     *
+     * ONE CONSTANT AND NOT THREE LITERALS. {@see \SugarCraft\Crush\Tools\BuiltIn\Grep},
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Glob} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Read} each wrote `intdiv($cap, 8)`
+     * and each carried a comment saying the others must agree with it. Three
+     * copies of a number plus three notes asking them to stay equal is a
+     * convention, not a relationship; a fourth caller would have inherited the
+     * note and not the number.
+     *
+     * A SHARE, DELIBERATELY, AND NOT A MULTIPLE OF {@see maxBytes()}. Tying
+     * the budget to the tracker's ceiling would make the relationship
+     * structural — and would also hand a Grep constructed with
+     * `maxOutputBytes: 1_000` a 2,636-byte nudge budget inside a 1,000-byte
+     * result, which is E66 inverted. The nudge is spent INSIDE the caller's
+     * cap; a caller that asks for a small result has to get a small nudge. So
+     * the margin over the ceiling can only be a property of the DEFAULT caps,
+     * and it is asserted rather than imposed — see
+     * {@see smallestUnclippedCallerCap()}.
+     */
+    public const CALLER_BUDGET_DIVISOR = 8;
+
+    /**
+     * The smallest tool output cap whose {@see CALLER_BUDGET_DIVISOR} share
+     * can still hold a whole worst-case nudge — margin exactly 1.0x.
+     *
+     * MEASURED on this tree, PHP 8.3.6: 21,088, against shipped caps of 65,536
+     * (Grep, Glob) and 1,048,576 (Read) — margins of 3.1x and 49.7x. Both
+     * figures are re-derived by
+     * {@see \SugarCraft\Crush\Tests\Integration\SkillPathScopingWiringTest}
+     * rather than written into it, so neither can rot in place.
+     */
+    public static function smallestUnclippedCallerCap(): int
+    {
+        return self::maxBytes() * self::CALLER_BUDGET_DIVISOR;
+    }
+
+    /**
+     * How many entries a nudge of at most $budget bytes can carry.
+     *
+     * The inverse of {@see maxBytes()}, and the actionable half of the ceiling
+     * guard: when a shipped budget stops clearing the ceiling, this is the
+     * number {@see MAX_ENTRIES} has to come back to. Clamped at zero because a
+     * budget below the fixed parts buys nothing rather than a negative count.
+     */
+    public static function largestEntryCountWithin(int $budget): int
+    {
+        $fixed = strlen(self::HEADER)
+            + strlen(sprintf(self::DEFERRED_NOTE, PHP_INT_MAX))
+            + strlen(self::FOOTER);
+
+        return max(0, intdiv($budget - $fixed, self::MAX_ENTRY_BYTES + 1));
     }
 
     /**
