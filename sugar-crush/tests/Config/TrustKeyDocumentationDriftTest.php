@@ -48,7 +48,13 @@ final class TrustKeyDocumentationDriftTest extends TestCase
                 continue;
             }
             $source = (string) file_get_contents($file->getPathname());
-            if (preg_match_all('/[\'"](trustedProject[A-Za-z]+)[\'"]/', $source, $matches) === 0) {
+            // `[A-Za-z0-9_]` and not `[A-Za-z]`: round 43 measured a sibling
+            // census silently SKIPPING a call because its key class rejected
+            // one character of the key — a narrow identifier class does not
+            // report "unrecognised key", it reports nothing at all. Every trust
+            // key is camelCase today, so this widening changes no result; it
+            // changes what happens the day one is not.
+            if (preg_match_all('/[\'"](trustedProject[A-Za-z0-9_]+)[\'"]/', $source, $matches) === 0) {
                 continue;
             }
             foreach ($matches[1] as $key) {

@@ -34,16 +34,51 @@ use SugarCraft\Crush\Support\ContainedPath;
  * version of this paragraph did) tells a reader to migrate off the only file
  * that gets written. It is the file
  * {@see \SugarCraft\Crush\Cli\Bootstrap::writeUserConfig()} writes, and
- * EXACTLY TWO KEYS reach it: `provider`, from the Ctrl+P palette's
- * "Switch Model" action, and `theme`, from the palette and from `/theme`.
- * Those are the two values `onConfigChange` is ever invoked with. No MODEL is
- * persisted by either — the palette action is named for what a user thinks
- * they are choosing, not for the key it writes.
+ * EXACTLY TWO KEYS reach it: `provider` and `theme`. Those are the two values
+ * `onConfigChange` is ever invoked with, and EACH HAS TWO PRODUCERS — a
+ * palette row and a slash command:
  *
- * Ranked the other way round, a `settings.json` that names `theme` would make
- * every `/theme` appear to do nothing, with no error anywhere and nothing in
- * the UI pointing at the file responsible. The file that WRITES has to be the
- * file that DECIDES, or the control silently does not work.
+ *  - `provider`: the Ctrl+P palette's "Switch Model" row, and `/model <name>`.
+ *  - `theme`:    the Ctrl+P palette's "Switch Theme" row, and `/theme <name>`.
+ *
+ * AN EARLIER VERSION OF THIS SENTENCE CREDITED THE PALETTE ALONE FOR
+ * `provider`, and the omission is the interesting half rather than a typo.
+ * WHAT IT SAID: "`provider`, from the Ctrl+P palette's 'Switch Model' action".
+ * WHAT IS TRUE NOW: `/model <name>` reaches the identical write. FOLLOWED, not
+ * inferred: {@see \SugarCraft\Crush\Chat}'s `handleModelCommand()` ends in
+ * `selectPaletteProvider($args[0])`, and `selectPaletteProvider()` is the sole
+ * site that calls `$onConfigChange('provider', …)` — the palette row and the
+ * command are not two writers, they are one writer with two doors. WHY THIS
+ * STILL EARNS ITS PLACE: the palette is still the discoverable door, and a
+ * reader who only ever presses Ctrl+P is not misled by naming it first. What
+ * the old wording cost was the reader hunting for where a `/model` choice went,
+ * on a page that had just told them exhaustively which keys are written.
+ * `README.md`'s layer table already credited `/model`; two documents disagreed
+ * and the less-read one was right. Pinned by
+ * {@see \SugarCraft\Crush\Tests\Config\ConfigWriteProducerDocumentationDriftTest}.
+ *
+ * No MODEL is persisted by any of the four — the palette row is named for what
+ * a user thinks they are choosing, not for the key it writes.
+ *
+ * Ranked the other way round, a `settings.json` that names `theme` would break
+ * PERSISTENCE, not the visible command, and the distinction is the whole
+ * diagnosis. MEASURED on PHP 8.3.6 on 2026-08-22 (8.4 was NOT exercised on this
+ * box; nothing in the path is believed version-sensitive): `/theme dracula`
+ * against a `Chat` constructed with `themeName: 'dark'` returns a `Chat` whose
+ * `theme()->name` is already `dracula` — `/theme` mutates the live `Chat`, so
+ * it repaints at once whatever any file says — and fires
+ * `onConfigChange('theme', 'dracula')` in the same update. Only the NEXT launch
+ * reads the merge, so under the reversed ordering the session would repaint,
+ * then silently revert, with no error anywhere and nothing in the UI pointing
+ * at the file responsible. AN EARLIER VERSION OF THIS PARAGRAPH said every
+ * `/theme` would "appear to do nothing", which is the coarser and wrong
+ * version: it sends a reader looking for a broken command instead of a
+ * settings file. It is rewritten rather than dropped because the CONCLUSION it
+ * reached is still the right one — the file that WRITES has to be the file
+ * that DECIDES — and a reader who finds only the conclusion re-derives the
+ * wrong reason for it. `docs/SETTINGS.md` carried the persistence framing
+ * first; this is the doc-block catching up. Pinned by
+ * {@see \SugarCraft\Crush\Tests\Config\ThemePersistenceFramingTest}.
  *
  * WHAT IS NOT LAYERED, and this is the security boundary rather than a scoping
  * shortcut: any key absent from {@see LAYERED_KEYS} is answered by layer 4
@@ -297,10 +332,53 @@ final class LayeredSettings
      * {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()} matches with
      * {@see \SugarCraft\Crush\Permissions\PermissionRule::matchesToolName()},
      * which is bare `fnmatch()`, and `fnmatch()` honours NEGATED character
-     * classes. MEASURED end-to-end: a project-tier
-     * `{"disabledTools": ["[!B]*"]}` — eight characters, one key this tier is
-     * allowed — leaves exactly `Bash` and removes everything else, which is
-     * the same tool set `allowedTools: ["Bash"]` produces.
+     * classes. MEASURED end-to-end on PHP 8.3.6, 2026-08-22 — PHP 8.4 was NOT
+     * exercised, because this box has only 8.3.6 while CI runs both; nothing in
+     * this path is believed version-sensitive (`fnmatch()`'s `[!…]` is not a
+     * recent addition and no ICU is involved), and the version is recorded as
+     * provenance rather than as a caveat. A project-tier
+     * `{"disabledTools": ["[!B]*"]}` — FIVE characters of glob, in one key this
+     * tier is allowed — leaves exactly `Bash` and removes everything else,
+     * which is the same tool set `allowedTools: ["Bash"]` produces.
+     *
+     * THE COUNT SAID "eight characters" until `docs/SETTINGS.md` re-derived it,
+     * and this doc-block was named there as one of the two places still
+     * carrying the stale figure. WHAT IT SAID: eight. WHAT IS TRUE NOW: `[!B]*`
+     * is five, `"[!B]*"` seven and `["[!B]*"]` nine — nothing in the example is
+     * eight. WHY THE SENTENCE STILL EARNS ITS PLACE: the number was never the
+     * argument. The point is that a value this short names NONE of the ten
+     * tools it removes, which is exactly the auditability the retracted claim
+     * promised, so the sentence is corrected rather than dropped.
+     *
+     * AND THE CORRECTION ONCE CITED THE WRONG GENERATOR, which is worth more
+     * space than the number was. WHAT IT SAID: the figure "is re-derived every
+     * run by `ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()`,
+     * so it reds instead of rotting". WHAT IS TRUE NOW: that test derives the
+     * TOOL SET this glob leaves. It never measures the glob's LENGTH — the glob
+     * is a class constant there, and at the time of writing no `strlen()`
+     * anywhere in `tests/` was applied to it (VERIFIED at `8416d98e`: `tests/`
+     * uses `strlen()` in 66 files, none of them on `COUNTEREXAMPLE_GLOB`; an
+     * earlier draft of THIS sentence said "no `strlen()` appears anywhere in
+     * `tests/`", which is plainly false and is corrected here rather than
+     * dropped, since a doc-block that catches a false claim by writing a second
+     * one has learnt nothing) — so the citation was a number written down beside
+     * the name of something that does not produce it. MEASURED on PHP 8.3.6, 2026-08-22: restoring
+     * "eight" to this very paragraph left that test and its five sibling
+     * doc-drift suites at `OK (80 tests, 297 assertions)`. WHY THE SENTENCE
+     * STILL EARNS ITS PLACE: its instinct was right and only its address was
+     * wrong. A figure in a doc-block either has a generator or it rots, and
+     * "eight" is what rotting looked like. The count has one now —
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest} derives
+     * every number in this paragraph from `strlen()` of the glob the paragraph
+     * quotes, on both pages that carry it. The BEHAVIOUR — that this value
+     * leaves exactly `Bash` — is the half
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()}
+     * generates, and the two are not interchangeable.
+     *
+     * `Bootstrap::reportProjectTierToolRemovals()` is the other site
+     * `SETTINGS.md` named and is not this lane's file; that it is the ONLY
+     * remaining one is itself asserted, by
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::testTheSettingsPageNamesExactlyTheSourceFilesStillCarryingTheStaleFigure()}.
      *
      * So the shape argument DOES NOT survive on its own, and the honest
      * statement of where this key stands is: a project-tier `disabledTools`

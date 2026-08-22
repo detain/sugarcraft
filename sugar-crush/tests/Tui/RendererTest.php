@@ -251,15 +251,80 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('[Tab] Switch Pane', $output);
     }
 
-    public function testRenderWithDifferentPaneShowsCorrectLabel(): void
+    /**
+     * SELECTING A PANE HAS TO CHANGE THE PANE, not just the caption above it.
+     *
+     * WHAT THIS TEST USED TO BE: `testRenderWithDifferentPaneShowsCorrectLabel()`,
+     * asserting `Skills` and `Currently: Skills` are somewhere in the frame.
+     * Both come from {@see \SugarCraft\Crush\Tui\Components\MenuBar}'s caption,
+     * which is painted from `$app->pane` before any pane body is built — so the
+     * whole of {@see Renderer::rightSidebar()} could return `''` for every pane
+     * and the test stayed green. Its NAME promised pane rendering and its body
+     * checked a label, which is worse than having no test at all: a name that
+     * overstates its coverage is what stops the next person looking.
+     *
+     * WHAT IT CHECKS NOW: the pane's own BODY, differentially. `Skills` renders
+     * {@see \SugarCraft\Crush\Tui\Components\SkillsPane}, whose empty state
+     * is the string `(no skills enabled)`; `Tools` renders `ToolsPane`, titled
+     * ` tools `. Neither string is in the default `Chat` frame, and asserting
+     * their ABSENCE there is the half that makes the presence assertions mean
+     * something — a needle that also matched the chat frame would be pinning
+     * chrome, which is exactly the defect being fixed.
+     *
+     * The caption assertions are KEPT rather than replaced. They were not wrong,
+     * only insufficient, and the caption is a real claim: it is how a user knows
+     * which pane they are in.
+     *
+     * MEASURED, on PHP 8.3.6: deleting the `Pane::Skills` arm from
+     * `Renderer::rightSidebar()` leaves the old assertions green and reds this
+     * one on `(no skills enabled)`.
+     *
+     * The HOSTED shape — the same question asked of an `App` that is hosting a
+     * live `Chat` — is
+     * {@see \SugarCraft\Crush\Tests\App\HostedFrameReadsThePaneTest}'s and is not
+     * duplicated here.
+     */
+    public function testRenderWithADifferentPaneRendersThatPanesBodyAndNotJustItsCaption(): void
     {
         Renderer::setSize(120, 40);
-        $app = App::new($this->provider, 'test-model')->withPane(Pane::Skills);
 
-        $output = Renderer::render($app);
+        $chat = Renderer::render(App::new($this->provider, 'test-model')->withPane(Pane::Chat));
+        $skills = Renderer::render(App::new($this->provider, 'test-model')->withPane(Pane::Skills));
+        $tools = Renderer::render(App::new($this->provider, 'test-model')->withPane(Pane::Tools));
 
-        $this->assertStringContainsString('Skills', $output);
-        $this->assertStringContainsString('Currently: Skills', $output);
+        // The caption — the original claim, kept.
+        $this->assertStringContainsString('Skills', $skills);
+        $this->assertStringContainsString('Currently: Skills', $skills);
+        $this->assertStringContainsString('Currently: Tools', $tools);
+
+        // The body, and the differential that gives the body assertion its teeth.
+        $this->assertStringContainsString(
+            '(no skills enabled)',
+            $skills,
+            'Pane::Skills renders the caption but not SkillsPane itself',
+        );
+        $this->assertStringNotContainsString(
+            '(no skills enabled)',
+            $chat,
+            'this needle also matches the chat frame, so it pins chrome rather than the pane',
+        );
+
+        // `(tool history empty)` and not ToolsPane's ` tools ` TITLE, which is
+        // what this assertion first used: a title needle carrying its own
+        // padding is a change-detector waiting for a restyle, and it sits one
+        // space away from the `[Tools]` menu-bar caption this test is trying to
+        // distinguish itself from. The empty-state string is body content, has
+        // no whitespace contract, and mirrors `(no skills enabled)` above.
+        $this->assertStringContainsString(
+            '(tool history empty)',
+            $tools,
+            'Pane::Tools renders the caption but not ToolsPane itself',
+        );
+        $this->assertStringNotContainsString(
+            '(tool history empty)',
+            $chat,
+            'this needle also matches the chat frame, so it pins chrome rather than the pane',
+        );
     }
 
     public function testRenderWithErrorShowsErrorInStatusBar(): void
