@@ -127,42 +127,128 @@ final class HostedFrameReadsThePaneTest extends TestCase
      *
      * `App\SelectPaneMsg` is handled by {@see App::update()} and would reach
      * the host from a Cmd this Chat returned — {@see App::delegateToChat()}
-     * passes Chat's Cmd straight up. Nothing in `src/` builds one, which is
-     * the whole reason `Chat::selectPane()` answers pane clicks with the
-     * keyboard's own entry points instead.
+     * passes Chat's Cmd straight up. Nothing in `src/` or `bin/` builds one,
+     * which is the whole reason `Chat::selectPane()` answers pane clicks with
+     * the keyboard's own entry points instead.
      *
      * This test reds the day someone wires it. That is the point: the
      * `selectPane()` docblock's ⚠️ paragraph becomes wrong on that same
      * commit and has to move with it.
+     *
+     * ## ⚠️ Why there are TWO assertions, and why the first one alone was a hole
+     *
+     * WHAT THIS USED TO DO: one regex,
+     * `/\bnew\s+(\\[\w\\]+\\)?SelectPaneMsg\s*\(/`, over `src/*.php`.
+     * The optional namespace group REQUIRES a leading backslash, so it sees
+     * `new SelectPaneMsg(` and `new \Fully\Qualified\SelectPaneMsg(` and is
+     * blind to `new App\SelectPaneMsg(` — the RELATIVE form, which is the one
+     * `Chat.php` would use, since it sits in `SugarCraft\Crush` and imports no
+     * `SelectPaneMsg`. Measured: adding
+     * `Pane::Files => [$this, static fn () => new App\SelectPaneMsg(Pane::Files)]`
+     * to `Chat::selectPane()`'s match left this test green while the seam was
+     * genuinely wired — reflection on the mutated `selectPane('files')` really
+     * did return a `SugarCraft\Crush\App\SelectPaneMsg`.
+     *
+     * WHAT IS TRUE NOW: the producer regex accepts any namespace prefix,
+     * relative or absolute, and the scan covers `bin/` as well as `src/` — the
+     * scope the entry in `docs/plans/crush_code_hardening_backlog.md` already
+     * claimed.
+     *
+     * The `use … as` alias form is resolved rather than assumed away: a file
+     * that imports the class under another name is scanned for `new <alias>(`
+     * too. Measured — without that, `use …\SelectPaneMsg as PaneJump;` plus
+     * `new PaneJump(Pane::Files)` in `Chat.php` survived BOTH assertions,
+     * because `Chat.php` already mentions the symbol in a docblock and so was
+     * already on the allowlist below.
+     *
+     * WHY THE SECOND ASSERTION STILL EARNS ITS PLACE: it catches the wiring
+     * that lands in a file not on this list at all, whatever syntax it uses —
+     * including the one form still outside the producer regex,
+     * `$c = SelectPaneMsg::class; new $c(…)`. That form remains invisible in a
+     * file already on the list. Stated rather than papered over: a textual
+     * census has a floor, and this is where it is.
      */
     public function testNothingInSrcConstructsASelectPaneMsg(): void
     {
-        $src = \dirname(__DIR__, 2) . '/src';
-        $found = [];
+        $producers = [];
+        $mentions = [];
+
+        foreach ($this->productionFiles() as $relative => $path) {
+            $body = (string) file_get_contents($path);
+            if (!str_contains($body, 'SelectPaneMsg')) {
+                continue;
+            }
+
+            $mentions[] = $relative;
+
+            // Every name the class can be constructed under in this file: its
+            // own, plus any `use … as` alias, which a regex looking only for
+            // the class name would never see.
+            $names = ['SelectPaneMsg'];
+            if (preg_match('/\buse\s+[\\\\\w]*\bSelectPaneMsg\s+as\s+(\w+)\s*;/i', $body, $alias) === 1) {
+                $names[] = $alias[1];
+            }
+
+            foreach ($names as $name) {
+                // Any namespace prefix, relative or absolute, or none at all.
+                if (preg_match('/\bnew\s+[\\\\\w]*\b' . preg_quote($name, '/') . '\s*\(/', $body) === 1) {
+                    $producers[] = $relative;
+                    break;
+                }
+            }
+        }
+
+        sort($producers);
+        sort($mentions);
+
+        $this->assertSame(
+            [],
+            $producers,
+            'SelectPaneMsg now has a production producer. That is a fine thing to '
+            . 'have built — but Chat::selectPane()\'s docblock still records it as a '
+            . 'dormant seam, and this assertion exists to make the two move together.',
+        );
+
+        $this->assertSame(
+            ['src/App/App.php', 'src/Chat.php'],
+            $mentions,
+            'The set of production files that so much as name SelectPaneMsg has '
+            . 'changed. App.php declares it and answers it; Chat.php records it as a '
+            . 'dormant seam in selectPane()\'s docblock. A third file — or an alias '
+            . 'import the producer regex above cannot see — means the seam moved.',
+        );
+    }
+
+    /**
+     * Every shipped PHP file, keyed by its package-relative path.
+     *
+     * `bin/sugarcrush` has no extension and is the launcher the whole E76
+     * correction turns on, so it is listed explicitly rather than discovered
+     * by suffix.
+     *
+     * @return array<string, string> relative path => absolute path
+     */
+    private function productionFiles(): array
+    {
+        $root = \dirname(__DIR__, 2);
+        $files = [];
 
         /** @var \SplFileInfo $file */
         foreach (
             new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+                new \RecursiveDirectoryIterator($root . '/src', \FilesystemIterator::SKIP_DOTS),
             ) as $file
         ) {
             if ($file->getExtension() !== 'php') {
                 continue;
             }
 
-            $body = (string) file_get_contents($file->getPathname());
-            if (preg_match('/\bnew\s+(\\\\[\w\\\\]+\\\\)?SelectPaneMsg\s*\(/', $body) === 1) {
-                $found[] = substr($file->getPathname(), strlen($src) + 1);
-            }
+            $files['src/' . substr($file->getPathname(), strlen($root) + 5)] = $file->getPathname();
         }
 
-        $this->assertSame(
-            [],
-            $found,
-            'SelectPaneMsg now has a production producer. That is a fine thing to '
-            . 'have built — but Chat::selectPane()\'s docblock still records it as a '
-            . 'dormant seam, and this assertion exists to make the two move together.',
-        );
+        $files['bin/sugarcrush'] = $root . '/bin/sugarcrush';
+
+        return $files;
     }
 
     private function hostedFrame(Pane $pane): string
