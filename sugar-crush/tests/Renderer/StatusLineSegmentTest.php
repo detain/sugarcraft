@@ -131,14 +131,21 @@ final class StatusLineSegmentTest extends TestCase
      * status line takes the columns the scroll offset was about to claim.
      *
      * The fixture is built to DISCRIMINATE between the two orders rather than
-     * merely to exercise one. At 80 columns the idle bar is 54 and the scroll
-     * readout's long form is 20, so 74 of 80 — the long form fits, and 3
-     * columns are left for a status line after the ` · ` separator. A 60-column
-     * status line fitted FIRST would put the bar at 117, leaving the scroll
-     * readout no room at all and downgrading it (to the 4-column compact form,
-     * or off the row entirely). So the assertion is on the LONG form still
-     * being the one chosen, which is false under the wrong order and true under
-     * the right one.
+     * merely to exercise one, and the arithmetic is stated with its DOMAIN
+     * attached because the two numbers below belong to different bars.
+     * Measured at 80 columns, PHP 8.3.6, on this class's own two-message
+     * fixture: the IDLE bar (no scroll readout) is 75 columns; the same bar
+     * built WITH 20 columns reserved for the scroll readout's long form is 54,
+     * because the reserve pushes `contextIndicator()` down to a bare `0%`. It
+     * is 54 + 20 = 74 of 80 that leaves the 3 columns after ` · ` that a status
+     * line could use — not 75, and not the 54 alone. (54 is also the idle bar's
+     * width at cols=57, which is how the wrong domain got attached to it.)
+     *
+     * A 60-column status line fitted FIRST would have taken those columns and
+     * more, leaving the scroll readout no room and downgrading it to the
+     * 4-column compact form or off the row entirely. So the assertion is on the
+     * LONG form still being the one chosen, which is false under the wrong
+     * order and true under the right one.
      */
     public function testTheScrollReadoutOutranksTheStatusLine(): void
     {
@@ -177,6 +184,32 @@ final class StatusLineSegmentTest extends TestCase
      * Swept, and stated as a DELTA against the bar the same fixture produces
      * with no status line, because the bar is already over-wide below 36
      * columns on its own. A pre-existing over-run is not licence to deepen it.
+     *
+     * TWO INSTRUMENTS, because the first one alone was vacuous twice over and
+     * both holes were live:
+     *
+     *  - EVERY BASELINE IS MEASURED WITH NO COMMAND INSTALLED. The previous
+     *    revision measured `$baseline` inside the `cols` loop with the PREVIOUS
+     *    iteration's command still configured, so the baseline absorbed the
+     *    over-run it was supposed to bound and `max($baseline, $cols)` was
+     *    self-referential. Measured at db20c568: mutating
+     *    `Renderer::withStatusLineCommand()`'s `if ($room < 1)` to
+     *    `if ($room < 0)` — a real one-column over-run at cols 57/68/78, where
+     *    the idle bar is exactly `cols - 3` and `$room` is therefore 0 —
+     *    SURVIVED that form and fails this one. The baselines are taken in
+     *    their own pass here, which also drops the sweep from 800 `proc_open()`s
+     *    to six.
+     *  - AND THE ROW COUNT IS ASSERTED SEPARATELY FROM THE WIDTH, because
+     *    `Width::of()` treats LF as zero-width and SUMS across it: a bar that
+     *    has already wrapped into two physical rows measures NARROWER than
+     *    either instrument's bound, so a width assertion cannot see the very
+     *    failure this test's docblock names. Measured at db20c568 with a
+     *    `printf "b\377m\nSECOND"` status line, the bar was two physical rows
+     *    at 123 of 200 widths and the width assertion failed at none of them.
+     *
+     * The last two payloads carry a malformed UTF-8 byte for that reason —
+     * they are the inputs that used to defeat the runner's collapse outright
+     * ({@see \SugarCraft\Crush\Config\StatusLineCommand::oneLine()}).
      */
     public function testTheSegmentNeverWidensTheBarBeyondWhatItAlreadyWasAtAnyWidth(): void
     {
@@ -185,18 +218,32 @@ final class StatusLineSegmentTest extends TestCase
             'echo ' . str_repeat('x', 400),
             'printf "%s" ' . str_repeat('主', 200),
             'printf "e\\314\\201%.0s" 1 2 3 4 5 6 7 8 9 0',
+            'printf "b\\377m\\nSECOND"',
+            'printf "ok\\377\\rrm -rf /"',
         ];
 
+        $baselines = [];
+        StatusLineCommand::reset();
         for ($cols = 1; $cols <= 200; $cols++) {
-            $chat = $this->chat($cols);
-            $baseline = Width::of($this->bar($chat));
+            $baselines[$cols] = Width::of($this->bar($this->chat($cols)));
+        }
 
-            foreach ($outputs as $command) {
-                self::install($command);
-                $width = Width::of($this->bar($chat));
+        foreach ($outputs as $command) {
+            self::install($command);
 
+            for ($cols = 1; $cols <= 200; $cols++) {
+                $bar = $this->bar($this->chat($cols));
+
+                $rows = (array) preg_split('/\r\n|\r|\n/', $bar);
+                self::assertCount(
+                    1,
+                    $rows,
+                    sprintf('cols=%d command=%s: the bar is %d physical rows', $cols, $command, \count($rows)),
+                );
+
+                $width = Width::of($bar);
                 self::assertLessThanOrEqual(
-                    max($baseline, $cols),
+                    max($baselines[$cols], $cols),
                     $width,
                     sprintf('cols=%d command=%s: bar grew to %d', $cols, $command, $width),
                 );

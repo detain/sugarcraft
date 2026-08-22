@@ -142,6 +142,20 @@ final class StatusLineCommand
     public const MAX_OUTPUT_BYTES = 16384;
 
     /**
+     * Codepoint substituted for each malformed byte sequence by
+     * {@see utf8Safe()}: U+FFFD REPLACEMENT CHARACTER, one column wide.
+     *
+     * U+FFFD and not `'?'` — the figure
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock::UTF8_SUBSTITUTE} uses,
+     * because that block's bytes are read by a MODEL and `?` is a character a
+     * path can really contain. This one is read by a human in a one-row bar,
+     * where a glyph that cannot be mistaken for real content is worth more than
+     * one that survives a copy-paste, and it is what
+     * {@see Sanitize::cellValue()} already substitutes for the same reason.
+     */
+    private const UTF8_SUBSTITUTE = 0xFFFD;
+
+    /**
      * Longest one {@see drain()} `stream_select()` waits before the deadline is
      * re-checked — {@see \SugarCraft\Crush\Hooks\ScriptHook::DRAIN_SLICE_SECONDS}'
      * 200ms, for its reason: nothing wakes a select when the only thing that
@@ -414,7 +428,7 @@ final class StatusLineCommand
      * Foreign bytes reduced to something that can be painted inside trusted
      * chrome, on ONE row.
      *
-     * Two strippings, and only the first is the obvious one:
+     * Three strippings, and only the first is the obvious one:
      *
      *  - {@see Sanitize::untrusted()} removes every ANSI escape and the C0/C1
      *    control ranges. Without it a status command emitting raw SGR repaints
@@ -429,6 +443,20 @@ final class StatusLineCommand
      *    clip exists to prevent. A CR is worse than an LF: it returns the
      *    cursor to column 0 and repaints the row from the start, so
      *    `printf 'ok\rrm -rf /'` would show only the second half.
+     *  - AND THE BYTES ARE MADE VALID UTF-8 FIRST ({@see utf8Safe()}), because
+     *    the collapse above is the `/u` form and `/u` FAILS ON MALFORMED INPUT:
+     *    `preg_replace()` returns null with `PREG_BAD_UTF8_ERROR` and the
+     *    previous `?? $clean` fallback then handed back the UNCOLLAPSED string,
+     *    LF and CR intact. Measured at db20c568 on PHP 8.3.6: a `statusLine` of
+     *    `printf "b\377m\nSECOND"` made `Renderer::render()` return 31
+     *    physical rows for a 30-row terminal, and the CR variant
+     *    `printf "ok\377\rrm -rf /"` put a raw CR in the painted bar — i.e.
+     *    ONE non-UTF-8 byte disabled both defences the two bullets above argue
+     *    for. The scrub is unconditional on PHP version (`mb_convert_encoding`,
+     *    the same repair {@see \SugarCraft\Crush\Context\EnvironmentBlock::utf8Safe()}
+     *    and {@see Sanitize::cellValue()} already use) and the fallback below is
+     *    now a BYTE-WISE collapse with no `/u`, so the failure it covers cannot
+     *    reintroduce a newline even if some future input defeats the scrub.
      *
      * COLLAPSED RATHER THAN CUT AT THE FIRST NEWLINE, which is the other
      * defensible reading and is what Claude Code does. Both produce one row;
@@ -453,13 +481,60 @@ final class StatusLineCommand
      */
     private static function oneLine(string $output): string
     {
-        $clean = Sanitize::untrusted($output);
+        $clean = self::utf8Safe(Sanitize::untrusted($output));
 
         // \s with /u also folds NBSP and the Unicode line separators, which are
         // not control characters and so survive the sweep above.
         $collapsed = preg_replace('/\s+/u', ' ', $clean);
 
-        return trim($collapsed ?? $clean);
+        if ($collapsed === null) {
+            // FAILS CLOSED. The scrub above makes PREG_BAD_UTF8_ERROR
+            // unreachable, so what is left is the resource errors (backtrack /
+            // recursion / JIT stack), which no input under MAX_OUTPUT_BYTES is
+            // known to reach. Whatever reached it, the one answer that must
+            // never be given is the UNCOLLAPSED string — that is the bug this
+            // branch replaced. The ASCII class is the C0 whitespace the
+            // sanitiser above preserves plus the space; no `/u`, so it cannot
+            // fail on encoding, and a null from it degrades to '' (no segment)
+            // rather than to a bar that wraps.
+            $collapsed = (string) preg_replace('/[\t\n\v\f\r ]+/', ' ', $clean);
+        }
+
+        return trim($collapsed);
+    }
+
+    /**
+     * The same bytes, guaranteed to be valid UTF-8.
+     *
+     * Malformed sequences become U+FFFD rather than being dropped, so a byte a
+     * command emitted is still visible as one column of "something was here" —
+     * {@see Sanitize::cellValue()}'s policy, and the reason
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock::utf8Safe()} gives for
+     * substituting rather than deleting.
+     *
+     * NOT ANNOUNCED, which is where this departs from `EnvironmentBlock`: that
+     * one appends a note because a model reading `caf?` would take it for a
+     * filename spelled that way. This is a one-row readout with no room for a
+     * note and no reader who could act on it, and U+FFFD is itself the
+     * announcement.
+     *
+     * `mb_substitute_character()` is global mbstring state, so it is restored in
+     * a `finally` — `EnvironmentBlock::utf8Safe()`'s reason, unchanged.
+     */
+    private static function utf8Safe(string $bytes): string
+    {
+        if (mb_check_encoding($bytes, 'UTF-8')) {
+            return $bytes;
+        }
+
+        $previous = mb_substitute_character();
+        mb_substitute_character(self::UTF8_SUBSTITUTE);
+
+        try {
+            return mb_convert_encoding($bytes, 'UTF-8', 'UTF-8');
+        } finally {
+            mb_substitute_character($previous);
+        }
     }
 
     /**

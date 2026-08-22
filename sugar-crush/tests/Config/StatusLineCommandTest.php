@@ -358,6 +358,106 @@ final class StatusLineCommandTest extends TestCase
         self::assertSame('main', self::command('echo main')->run());
     }
 
+    /**
+     * ONE NON-UTF-8 BYTE MUST NOT DISABLE THE COLLAPSE ABOVE. This is the
+     * regression: the collapse is `preg_replace('/\s+/u', …)`, and `/u` returns
+     * NULL with `PREG_BAD_UTF8_ERROR` on malformed input, so the old
+     * `?? $clean` fallback handed back the UNCOLLAPSED string with its LF
+     * intact. Measured at db20c568 on PHP 8.3.6, before the fix:
+     * `Renderer::render()` on a 30-row Chat returned 31 physical rows.
+     *
+     * The malformed byte itself becomes U+FFFD (one column) rather than being
+     * dropped, so what the command emitted is still visible as something.
+     */
+    public function testAMalformedUtf8ByteDoesNotDefeatTheNewlineCollapse(): void
+    {
+        $line = self::command('printf "b\377m\nSECOND"')->run();
+
+        self::assertSame(1, preg_match('/\A[^\r\n]*\z/', $line), 'hex: ' . bin2hex($line));
+        self::assertSame("b\u{FFFD}m SECOND", $line);
+    }
+
+    /**
+     * AND THE CR VARIANT, which is the worse half: a CR returns the cursor to
+     * column 0 and repaints the row from the start, so `printf 'ok\rrm -rf /'`
+     * shows only the second half — a FORGED bar rather than a wrapped one.
+     * Same malformed byte, same defeat before the fix.
+     */
+    public function testAMalformedUtf8ByteDoesNotSmuggleACarriageReturnThrough(): void
+    {
+        $line = self::command('printf "ok\377\rrm -rf /"')->run();
+
+        self::assertStringNotContainsString("\r", $line, 'hex: ' . bin2hex($line));
+        self::assertSame("ok\u{FFFD} rm -rf /", $line);
+    }
+
+    /**
+     * WHOLLY BINARY OUTPUT IS STILL ONE ROW AND STILL VALID UTF-8 — the
+     * `/dev/urandom` case, which reaches every malformed shape at once rather
+     * than the one hand-placed byte above. Sixteen bytes, well under
+     * {@see StatusLineCommand::MAX_OUTPUT_BYTES}, so the cap plays no part and
+     * what is measured is the scrub alone.
+     */
+    public function testBinaryOutputIsScrubbedToValidUtf8OnOneRow(): void
+    {
+        $line = self::command('head -c 16 /dev/urandom')->run();
+
+        self::assertTrue(mb_check_encoding($line, 'UTF-8'), 'hex: ' . bin2hex($line));
+        self::assertSame(1, preg_match('/\A[^\r\n]*\z/', $line), 'hex: ' . bin2hex($line));
+    }
+
+    /**
+     * AND WHEN THE COLLAPSE FAILS OUTRIGHT, THE ANSWER IS NOTHING — never the
+     * uncollapsed string. That `?? $clean` was the shipped bug's exact shape,
+     * and the UTF-8 scrub above closes the only route to it that a command's
+     * own bytes control, so what is pinned here is the FAIL-CLOSED RULE rather
+     * than a route to it: PCRE is starved until BOTH collapses return null,
+     * and the value that comes back must still be safe to paint.
+     *
+     * IN A CHILD PROCESS, and that is not incidental. `pcre.jit=0` plus
+     * `pcre.backtrack_limit=1` makes `\s+` over a hundred-space run exhaust
+     * immediately, but PHP's compiled-pattern cache is keyed by the pattern
+     * text alone: a `/\s+/u` already compiled WITH the JIT in this process
+     * ignores a later `ini_set('pcre.jit', '0')` and matches fine. Measured on
+     * PHP 8.3.6 / PCRE2 — an in-process version of this test passed for that
+     * reason and proved nothing. The ini values therefore have to be in force
+     * before the first compile, which means `php -d` on a fresh interpreter.
+     */
+    public function testACollapseThatFailsOutrightPaintsNothingRatherThanARawNewline(): void
+    {
+        $script = $this->probe('failclosed');
+        file_put_contents($script, <<<'CHILD'
+            <?php
+            require $argv[1];
+            $subject = 'a' . str_repeat(' ', 100) . "\nSECOND";
+            if (preg_replace('/\s+/u', ' ', $subject) !== null) {
+                fwrite(STDOUT, 'STARVE-FAILED');
+                exit(0);
+            }
+            $line = (new ReflectionMethod(
+                SugarCraft\Crush\Config\StatusLineCommand::class,
+                'oneLine',
+            ))->invoke(null, $subject);
+            fwrite(STDOUT, 'HEX:' . bin2hex((string) $line));
+            CHILD);
+
+        $command = escapeshellarg(PHP_BINARY)
+            . ' -d pcre.jit=0 -d pcre.backtrack_limit=1 '
+            . escapeshellarg($script) . ' '
+            . escapeshellarg(\dirname(__DIR__, 2) . '/vendor/autoload.php');
+
+        $output = [];
+        $status = 0;
+        exec($command . ' 2>/dev/null', $output, $status);
+
+        self::assertSame(0, $status, 'the child did not run: ' . implode("\n", $output));
+        self::assertSame(
+            'HEX:',
+            implode('', $output),
+            'a failed collapse returned something other than the empty string',
+        );
+    }
+
     /** A wide grapheme survives intact; the sanitiser is not a byte filter. */
     public function testMultiByteOutputSurvives(): void
     {
