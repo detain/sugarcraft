@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Cli\Bootstrap;
 
 /**
  * Every place in `src/` and `bin/` that can put a line on the user's stderr,
@@ -49,13 +50,43 @@ use PHPUnit\Framework\TestCase;
  *     destination configured, this IS stderr. Three of them appear in the
  *     baseline capture of a full suite run. It is by a wide margin the largest
  *     stderr channel in the application and it was not in the census at all.
- *  4. Literal message SHAPES carrying the `sugarcrush: ` prefix — forty-three
- *     chunks across six files, which is the roster a user actually reads.
+ *  4. Literal message SHAPES that themselves carry the `sugarcrush: ` prefix.
+ *     A LITERAL-BORNE PREFIX AND NOT "THE ROSTER A USER READS", which is what
+ *     this line said when it was written, and the difference is the whole of
+ *     the paragraph below.
+ *  5. Call sites of the `warnPermissionConfig*` family — the funnel that
+ *     applies the prefix at the EMITTER, via
+ *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
+ *     message that does not carry it.
+ *
+ * WHY CHANNEL 5 EXISTS, AND IT IS THIS FILE'S OWN ALPHABET TRAP SPRUNG ON
+ * ITSELF. WHAT THE LINE ABOVE SAID: channel 4 is "the roster a user actually
+ * reads". WHAT IS TRUE NOW, measured: channel 4 counts a literal that CONTAINS
+ * `sugarcrush:`, and the largest producer of user-visible stderr in this
+ * application does not write one. `Bootstrap`'s warnings are handed to
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
+ * prefix on the way out, so the message literals are invisible to a scan for
+ * it — TWENTY-TWO call sites in `src/Cli/Bootstrap.php`, each producing a
+ * distinct `sugarcrush: ` line, against a channel-4 credit of four for that
+ * file. Off by roughly four times, in the blind direction.
+ *
+ * IT WAS NOT A THEORY. Round 45's review added one
+ * `self::warnPermissionConfigOnce('a brand new user visible warning nobody
+ * censused');` to `Bootstrap::reportProjectTierToolRemovals()` and ran all four
+ * rosters: `OK (55 tests, 221 assertions)`, rc 0 — and PHPUnit's own output
+ * carried the new line. A user-visible stderr write arrived unnoticed in the
+ * same process as the census built to notice it, which is the defect this file
+ * names in its first sentence.
  *
  * SO THE HEADLINE IS NOT "ELEVEN WAS WRONG", it is that a census reports what
  * its alphabet can express and this one's alphabet was written to match the
  * sites already known. Round 43's headline finding came from widening a fuzz's
- * pattern alphabet; this is the same lesson in a different instrument.
+ * pattern alphabet; round 45's first attempt at this file repeated the mistake
+ * one channel over, and channel 5 is the repair. WHEN A CENSUS HERE REPORTS A
+ * NUMBER, ASK WHAT ITS ALPHABET CANNOT EXPRESS BEFORE BELIEVING IT — the
+ * shapes this one still cannot express are named by
+ * {@see testNoStderrChannelOutsideTheScannedOnesHasAppeared()}, which is
+ * the closest thing here to a claim of exhaustiveness.
  *
  * TRIAGE — WHY NOTHING IS SILENCED HERE, and silencing was the tempting
  * default. The baseline capture yields 36 distinct shapes under the
@@ -152,6 +183,28 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/Subcommands.php' => 11,
     ];
 
+    /**
+     * Channel 5: call sites of the `warnPermissionConfig*` family.
+     *
+     * THE ONE CHANNEL WHOSE MESSAGES CHANNEL 4 CANNOT SEE, and the reason it
+     * exists — see this class's doc-block. The prefix these lines carry is
+     * applied by {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}
+     * at the emitter, so the message literal at the call site contains no
+     * `sugarcrush:` for channel 4 to count.
+     *
+     * COUNTED AS CALL SITES AND NOT AS MESSAGES, which is a real difference:
+     * one call site inside a loop is one row here and any number of lines on
+     * the terminal. The event this roster exists to notice is a new PLACE that
+     * warns, because that is the thing that gets a routing decision — stderr
+     * alone, the transcript seam, or nowhere. How many times it then fires is a
+     * property of the run.
+     *
+     * @var array<string, int>
+     */
+    private const PREFIXED_WRITER_SITES = [
+        'src/Cli/Bootstrap.php' => 22,
+    ];
+
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
     {
         self::assertSame(self::DIRECT_SITES, self::census('direct'), self::message('fwrite(STDERR, …)'));
@@ -170,6 +223,99 @@ final class StderrEmitterCensusTest extends TestCase
     public function testTheSugarcrushMessageShapeRosterIsUnchanged(): void
     {
         self::assertSame(self::MESSAGE_SHAPES, self::census('shape'), self::message('`sugarcrush: ` message'));
+    }
+
+    public function testThePrefixedWriterRosterIsUnchanged(): void
+    {
+        self::assertSame(
+            self::PREFIXED_WRITER_SITES,
+            self::census('prefixed'),
+            self::message('warnPermissionConfig*()'),
+        );
+    }
+
+    /**
+     * Channel 5's one file decomposes into its three entry points, and the
+     * transcript one is the count `Bootstrap` already declares.
+     *
+     * WHY THIS IS NOT A SECOND HAND-MAINTAINED INTEGER, which is the objection
+     * the sibling census raises against exactly that shape and is right to.
+     * `PREFIXED_WRITER_SITES` says 22 and
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::TRANSCRIPT_SEAM_CALL_SITES}
+     * says 16; this test is what makes the second a COMPONENT of the first
+     * rather than an unrelated number that happens to be smaller. Add a seam
+     * call and both move together; add a stderr-only warning and only the total
+     * moves, which is the distinction a reader of either census wants and
+     * neither could previously make.
+     *
+     * WHICH CENSUS OWNS WHAT: the seam count and its ten prose sentences belong
+     * to
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest},
+     * and nothing here duplicates them. This file owns the OTHER two entry
+     * points, which that file does not count and no census did before channel 5.
+     */
+    public function testTheWarnFamilyDecomposesIntoItsThreeEntryPoints(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+
+        $direct = self::scan('prefixed:warnPermissionConfig', $source);
+        $once = self::scan('prefixed:warnPermissionConfigOnce', $source);
+        $seam = self::scan('prefixed:warnPermissionConfigInTranscript', $source);
+
+        self::assertSame(
+            Bootstrap::TRANSCRIPT_SEAM_CALL_SITES,
+            $seam,
+            'the transcript-seam component of channel 5 no longer equals Bootstrap::'
+                . 'TRANSCRIPT_SEAM_CALL_SITES. One of the two scans is wrong, or a seam call was added '
+                . 'without the sibling census noticing; do not bump either number until you know which.',
+        );
+        self::assertSame(1, $direct, 'the number of warnings that go to stderr and bypass the once-guard moved');
+        self::assertSame(5, $once, 'the number of stderr-only, once-per-process warnings moved');
+        self::assertSame(
+            self::PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php'],
+            $direct + $once + $seam,
+            'the three entry points no longer add up to the channel-5 roster; the scanner is double-counting '
+                . 'or the family gained a fourth entry point',
+        );
+    }
+
+    /**
+     * NO STDERR CHANNEL OUTSIDE THE SCANNED ONES HAS APPEARED.
+     *
+     * This is the only claim of exhaustiveness this file makes, and it is
+     * deliberately a narrow one: it does not prove that no other way to reach
+     * fd 2 exists in PHP, it proves that the three OTHER ways this application
+     * could plausibly acquire one have not been used. `php://stderr` and
+     * `php://output` opened as streams, and `error_log()`'s three-argument
+     * destination form, which routes somewhere channel 3's reasoning about
+     * `ini_get('error_log')` does not cover.
+     *
+     * AN ASSERTION OF ZERO IS NOT EVIDENCE, so the positive control is IN THIS
+     * TEST and not in the shared provider: round 44 emptied a census in this
+     * tree, blinded the scanner, and watched "nothing is stale" pass with
+     * 18,228 assertions green. If the scanner below stops working, the
+     * synthetic source reds here before the zero can be believed.
+     */
+    public function testNoStderrChannelOutsideTheScannedOnesHasAppeared(): void
+    {
+        self::assertSame(
+            2,
+            self::scan('other', '<?php fopen("php://stderr", "w"); error_log("x", 3, "/tmp/f");'),
+            'the other-channel scanner no longer sees a channel it exists to find; the [] below is vacuous',
+        );
+        self::assertSame(
+            0,
+            self::scan('other', '<?php error_log("x"); fwrite(STDERR, "y");'),
+            'the other-channel scanner reports channels 1 and 3 as unscanned ones',
+        );
+
+        self::assertSame(
+            [],
+            self::census('other'),
+            'src/ or bin/ acquired a stderr channel no scanner in this file covers — a php:// stream handle, '
+                . 'or error_log()\'s destination form. Give it a channel and a roster: an emitter nothing '
+                . 'counts is exactly what this file exists to prevent.',
+        );
     }
 
     /**
@@ -264,8 +410,48 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a prefixed literal' => ['shape', "<?php \$x = 'sugarcrush: nope';", 1];
         yield 'a prefixed interpolation' => ['shape', '<?php $x = "sugarcrush: {$y} nope";', 1];
         yield 'the prefix only in a comment' => ['shape', "<?php // sugarcrush: nope\n\$x = 1;", 0];
+        yield 'a warn call' => ['prefixed', '<?php self::warnPermissionConfigOnce("x");', 1];
+        yield 'all three entry points' => [
+            'prefixed',
+            '<?php self::warnPermissionConfig("a"); self::warnPermissionConfigOnce("b"); '
+                . 'self::warnPermissionConfigInTranscript("c");',
+            3,
+        ];
+        yield 'one entry point out of three' => [
+            'prefixed:warnPermissionConfigOnce',
+            '<?php self::warnPermissionConfig("a"); self::warnPermissionConfigOnce("b"); '
+                . 'self::warnPermissionConfigInTranscript("c");',
+            1,
+        ];
+        yield 'the declaration is not a call' => [
+            'prefixed',
+            '<?php private static function warnPermissionConfig(string $m): void {}',
+            0,
+        ];
+        yield 'a {@see} reference is not a call' => [
+            'prefixed',
+            "<?php /** {@see warnPermissionConfigOnce()} */\n\$x = 1;",
+            0,
+        ];
+        yield 'a first-class callable is not a call' => [
+            'prefixed',
+            '<?php $f = self::warnPermissionConfigOnce(...);',
+            0,
+        ];
+        yield 'an unscoped same-named function is not one of ours' => [
+            'prefixed',
+            '<?php warnPermissionConfigOnce("x");',
+            0,
+        ];
+        yield 'a php:// stderr stream' => ['other', '<?php fopen("php://stderr", "w");', 1];
+        yield 'a php:// output stream' => ['other', '<?php file_put_contents("php://output", $x);', 1];
+        yield 'error_log with a destination' => ['other', '<?php error_log("x", 3, "/tmp/f");', 1];
+        yield 'plain error_log is not an other channel' => ['other', '<?php error_log("x");', 0];
+        yield 'error_log with a type but no destination' => ['other', '<?php error_log("x", 0);', 0];
         yield 'a source with nothing at all' => ['direct', '<?php echo 1;', 0];
         yield 'and nothing on the other channels' => ['error_log', '<?php echo 1;', 0];
+        yield 'nor on channel five' => ['prefixed', '<?php echo 1;', 0];
+        yield 'nor on the unscanned-channel scan' => ['other', '<?php echo 1;', 0];
     }
 
     /** @dataProvider scannerCases */
@@ -275,6 +461,22 @@ final class StderrEmitterCensusTest extends TestCase
         int $expected,
     ): void {
         self::assertSame($expected, self::scan($channel, $source));
+    }
+
+    /**
+     * A channel name this file cannot answer for is a FAILURE, not a zero.
+     *
+     * `scan('prefixed:noSuchThing', …)` used to be indistinguishable from a
+     * genuine zero, which is a hole shaped exactly like the next typo: a
+     * decomposition test asking for an entry point that had been renamed would
+     * have reported 0 sites and passed.
+     */
+    public function testTheScannerRedsOnAnEntryPointItCannotAnswerFor(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('noSuchEntryPoint');
+
+        self::scan('prefixed:noSuchEntryPoint', '<?php echo 1;');
     }
 
     /**
@@ -366,9 +568,57 @@ final class StderrEmitterCensusTest extends TestCase
             $significant[] = $token;
         }
 
+        $warnFamily = [
+            'warnPermissionConfig' => true,
+            'warnPermissionConfigOnce' => true,
+            'warnPermissionConfigInTranscript' => true,
+        ];
+        $onlyEntryPoint = str_starts_with($channel, 'prefixed:')
+            ? substr($channel, \strlen('prefixed:'))
+            : null;
+        if ($onlyEntryPoint !== null && !isset($warnFamily[$onlyEntryPoint])) {
+            throw new \RuntimeException("no warnPermissionConfig entry point named {$onlyEntryPoint}()");
+        }
+
         $count = 0;
         foreach ($significant as $i => $token) {
             $name = self::callableName($token);
+
+            if ($channel === 'prefixed' || $onlyEntryPoint !== null) {
+                if ($name === null || !isset($warnFamily[$name])) {
+                    continue;
+                }
+                if ($onlyEntryPoint !== null && $name !== $onlyEntryPoint) {
+                    continue;
+                }
+                if (self::isSelfScopedCall($significant, $i)) {
+                    $count++;
+                }
+
+                continue;
+            }
+
+            if ($channel === 'other') {
+                if (
+                    \is_array($token)
+                    && \in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
+                    && preg_match('#php://(?:stderr|output)#i', $token[1]) === 1
+                ) {
+                    $count++;
+                }
+
+                // error_log()'s THREE-argument form: the destination argument
+                // takes it somewhere channel 3's `ini_get('error_log')` is ''
+                // reasoning does not describe, so it is a separate channel and
+                // not a third error_log site.
+                if ($name === 'error_log' && ($significant[$i + 1] ?? null) === '(') {
+                    if (self::argumentCount($significant, $i + 1) >= 3) {
+                        $count++;
+                    }
+                }
+
+                continue;
+            }
 
             if ($channel === 'shape') {
                 if (
@@ -403,6 +653,74 @@ final class StderrEmitterCensusTest extends TestCase
         }
 
         return $count;
+    }
+
+    /**
+     * Whether the token at `$i` is a scoped call — `self::name(`, `$x->name(`
+     * — rather than a declaration or a first-class callable.
+     *
+     * ALL THREE CLAUSES ARE LOAD-BEARING, and the sibling seam census measured
+     * why: requiring the scope token is what excludes `function name(`, and
+     * excluding `(...)` is what stops a first-class callable being counted as a
+     * call — PHP 8.3.6 lexes `self::f(...)` as T_STRING, `(`, T_ELLIPSIS, `)`,
+     * so the paren requirement alone does not exclude it. Round 44's review
+     * planted one in that file and got a fabricated extra site out of the scan.
+     *
+     * @param list<array{0: int, 1: string}|string> $significant
+     */
+    private static function isSelfScopedCall(array $significant, int $i): bool
+    {
+        $previous = $significant[$i - 1] ?? null;
+        if (!\is_array($previous) || !\in_array($previous[0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR], true)) {
+            return false;
+        }
+        if (($significant[$i + 1] ?? null) !== '(') {
+            return false;
+        }
+
+        $after = $significant[$i + 2] ?? null;
+
+        return !(\is_array($after) && $after[0] === T_ELLIPSIS);
+    }
+
+    /**
+     * How many top-level arguments the call whose `(` sits at `$open` passes.
+     *
+     * Depth-tracked, so a comma inside a nested call or array is not an
+     * argument of this one. A call with no arguments answers 0.
+     *
+     * @param list<array{0: int, 1: string}|string> $significant
+     */
+    private static function argumentCount(array $significant, int $open): int
+    {
+        $depth = 0;
+        $commas = 0;
+        $sawToken = false;
+
+        for ($i = $open; $i < \count($significant); $i++) {
+            $token = $significant[$i];
+            if (\in_array($token, ['(', '[', '{'], true)) {
+                $depth++;
+
+                continue;
+            }
+            if (\in_array($token, [')', ']', '}'], true)) {
+                $depth--;
+                if ($depth === 0) {
+                    return $sawToken ? $commas + 1 : 0;
+                }
+
+                continue;
+            }
+            if ($depth === 1) {
+                $sawToken = true;
+                if ($token === ',') {
+                    $commas++;
+                }
+            }
+        }
+
+        throw new \RuntimeException('a call opened at this token never closes; the scan cannot answer for it');
     }
 
     /**
