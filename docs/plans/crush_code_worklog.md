@@ -10113,3 +10113,202 @@ identical clean tree give 1569, 1545, 1507: `BufferTest.php` uses `rand()`, and 
 manifest after running it rather than by inferring from a total — but the evidence was never evidence.
 "A figure without its generator is not a measurement" was already a rule in the brief; it was not
 applied to the plan's own prose.
+
+---
+
+## ROUND 43 — a real glob translation, two contract holes closed, and the first prediction that matched on both figures
+
+**Merged at `628f50f1`. Floor `9078 / 105590 / 1 skipped / rc 0`**, supervisor-measured in the live tree,
+04:12.390, 270 MB. Base `8416d98e` (8996 / 105179). Run `wf_63a9dbf5-5e5`, 9 agents, 0 errors, ~97 min.
+Three lanes, each a full-repo `cp -a` at `8416d98e` verified clean with 18/18 in-lane symlinks, running
+implement → adversarial review → fix.
+
+### The prediction matched on BOTH figures, which has not happened before
+
+Predicted **9078 / 105590** from the lane deltas (a +18/+159, b +32/+92, c +32/+160). Discovery
+announced 9078; the run ended on 105590. Round 42 missed by 2 tests because a lane carried a figure
+forward from its implement stage; the two rules added to the brief in response both worked:
+
+- **every fix agent re-measured at its own final commit**, and
+- **every fix agent ran `git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'`
+  and reconciled it against the suite delta in writing.**
+
+The reconciliations are worth keeping, because in two of three lanes the two numbers legitimately
+disagreed and the lane said exactly why:
+
+- **Lane a: 18 vs +18.** One-to-one; no providers, no abstract base. The E89-style rename showed as one
+  `+` and one `-` of a *signature line*, which does not move the count.
+- **Lane b: 9 vs +32.** 9 added methods, 1 removed (a rename), 2 of the 9 provider-driven with 9 and 17
+  rows — and `grep -c '^+ *yield '` = **26** = 9 + 17. So 7 plain + 26 rows − 1 removed = +32.
+- **Lane c: 28 vs +32.** 28 added, 1 removed (the E89 rename), four provider-driven contributing +5.
+  27 + 5 = 32. Lane c could not re-run at the base without a second vendor tree, so it stated its
+  baseline as **derived, not observed** — the right disclosure, and it agreed with the other two lanes.
+
+**A cross-check that disagrees is not a failure of the cross-check.** Its value is that the disagreement
+has to be *explained*, and `grep -c '^+ *yield '` turned out to be the cheap way to close the arithmetic.
+
+### Lane a — E85 + E87, the skills subsystem. 15 commits, `ad51a740`.
+
+**E85 replaced the three hand-rolled `str_replace` rewrites with a real pattern→regex translation**, and
+the fix is a **live, user-visible behaviour change**: three of the four shipped skills
+(`php-best-practices`, `security-audit`, `phpunit-master`) declare a leading-`**` pattern, and a leading
+`**` matched none of the three old rewrites. Verified independently by the supervisor after the merge:
+`**/*.php` against `foo.php` is **0** under bare `fnmatch()` and **1** now; `**/*Test.php` against
+`FooTest.php` likewise. Those three skills previously never fired on a tree-root file. That is what the
+author plainly intended, which is why it ships — but it is a behaviour change and nothing user-facing
+says so, which is E90.
+
+🔴 **THE ROUND'S MOST VALUABLE FINDING WAS THE LANE REFUTING ITS OWN DEFERRAL.** The lane, its reviewer
+and its own backlog entry E92 all shared one premise: that a POSIX character class "routes to
+`legacyPathMatch()`" and is therefore "strictly no worse than before E85". **False.** It reaches the
+fallback only when the malformed class it emits also fails to COMPILE. `[[:alpha:]]x` emits
+`#^[[:alpha:]\]x$#Ds`, which PCRE refuses — fine. But a **second bracket group supplies the missing
+`]`**: `[[:alpha:]][!a]` emits `#^[[:alpha:]\][^a]$#Ds`, which **compiles**, folds the second group into
+the first class, and answers false for `ab` where `fnmatch` answers true. A silently wrong match with no
+fallback under it — a correctness defect, not an unsupported-shape gap. Found by widening the
+differential fuzz's **own alphabet** to include `[[:alpha:]]`; four seeds × 200,000 trials reported
+12–18 such narrowings. Fixed at `cf35074f`; E92 was **superseded in place**, not deleted.
+
+The transferable part: **the fuzz alphabet is part of the fuzz's coverage, and it had been written to
+match the cases already known.** Same defect family as E69's "0 unexplained" over an alphabet containing
+no ZWJ.
+
+The reviewer also found the **newline family** — `fnmatch('*.php', "a\nb.php")` is true on PHP 8.3.6 and
+the translation answered false — fixed with `/D` and `/s`, which are independent and both load-bearing
+(`/D` governs a trailing newline before `$`, `/s` whether a wildcard crosses an embedded one), each now
+with its own assertion. And it killed an **inverted "theorem"**: the claim that the translation "never
+narrows" was justified by the fallback, but the fallback runs only when the regex does not compile, so a
+compiling pattern never consults it and it can neither rescue nor witness a narrowing. Rewritten
+three-part. The test named `testTheTranslationNeverNarrowsWhatTheOldRewritesMatched` — a universal it
+never was — is now `testNoPairInTheFrozenGridStoppedMatching`.
+
+**The structural fix was widening the grid until it can SEE all four families**: 42×50 = 2,100 → **46×54
+= 2,484**, and `BEFORE` is no longer trusted — `testTheFrozenBeforeTableIsWhatTheOldPredicateActuallyAnswers()`
+re-derives all 2,484 pairs from a local re-implementation of the `8416d98e` predicate, **because the
+cheapest way to make a narrowing disappear is to edit a `1` to a `0`.** Final: 0 lost, 49 gained, all
+classified by cause.
+
+**E87 was decided, not deferred.** `maxBytes()` re-derived from the constants as **2,636**
+(HEADER 115 · FOOTER 19 · `sprintf(DEFERRED_NOTE, PHP_INT_MAX)` 94 · `MAX_ENTRY_BYTES` 300);
+`smallestUnclippedCallerCap()` **21,088**; margins **3.11×** (Grep/Glob) and **49.72×** (Read).
+
+⚠️ **A benchmark in the review did not reproduce in absolute terms** — the untouched *old* side moved 17%
+between takes. Only the **ratio** (0.31–0.33) survived, and the doc-block now says so rather than quoting
+absolute times. Rule 3, applied to the lane's own tooling.
+
+⚠️ **And once inside the tooling used to check the review:** the fix agent's mutation runner appended a
+hard-coded `--filter` that silently overrode the one passed to it, so every "hard-guard-only" row
+actually ran both guards. Fixed harness reproduced the reviewer exactly. **The window defect the review
+was about, occurring in the instrument built to check it.**
+
+### Lane b — E86 + E84, the launch/CLI contract holes. 3 commits, `5a38127a`.
+
+**E86: both channels, not a swap.** The brief was explicit that the existing `error_log()` justification
+was partly sound — it is the only seam `McpToolWiringTest` can observe, by pointing the ini at a file —
+so the transcript seam was added *beside* it. The reviewer then found the new comment's mechanism claim
+**inverted**: it said sentence-matching was needed because "a launch under this fixture raises other
+notices too". Re-measured: removing the seam call leaves `notices` as `array()`, so an emptiness check
+would have killed the mutation. The lane found *why* the claim felt true — the offline-provider notice is
+`NonInteractive::noticeOfflineDefault()`, on the one-shot path, and this launch is `Bootstrap::chat()`,
+which never reaches it. Third round running that a confidently-written mechanism was inverted in fact.
+
+**A measurement that partly falsified its own rationale.** A new test launches a child with an *empty*
+`error_log` ini (CLI default = stderr) and reads both lines back. The first assertion — neither line's
+wording inside the other's — went **red**: both carry `could not be fully started`, the path, and the
+exception message. So "diagnostic + consequence" overstated the separation. The overlap is now **itself
+asserted**, so it cannot be quietly removed and re-justified from the old prose.
+
+**E84 closed a family rather than narrowing a claim.** The guard's argv scan claimed to mirror
+`ArgvParser` and did not: `-- --output-format=json -p hi`, `--root --output-format json -p hi` and
+`session delete -- --output-format=json` each parse to `text` in the parser and each made the guard emit
+the JSON document — **the broken checkout answering a question the working one refuses.** The scan now
+models the POSIX `--` separator and ArgvParser's *two* value-consumption flavours (`--root` and
+`--output-format` swallow unconditionally; `-p`/`--prompt`/`--config`/`--model`/`--permission-mode` refuse
+a flag-shaped value). `run` is deliberately not modelled, and the comment says why. The agreement is now
+**asserted**: a 17-row table run through `ArgvParser::parse()` in-process and through the copied guard in
+a bare fixture, compared decision by decision.
+
+⚠️ **The reviewer's own residual was imprecise and the lane said so.** It asked for the `--root`/`--model`
+divergence to be named; `--model` is **not** a divergence source, because its branch is strict.
+
+⚠️ **A token scan that passed for entirely the wrong reason.** A `T_STRING`-only walk read
+`encodeDocument()` as having **zero** flags, because it writes `\JSON_UNESCAPED_SLASHES` and PHP 8 lexes a
+root-qualified constant as `T_NAME_FULLY_QUALIFIED`. Both kinds are accepted now and the trap is recorded.
+
+**A mutation that survived, and was documented rather than dressed up.** Moving the guard's scan from
+`$argv[0]` to `$argv[1]` is unobservable — PHP fills `$argv[0]` with the script path and no path can be
+spelled `--output-format=…`. The comment says outright that the alignment is untested on purpose.
+**A pin that does not exist is not claimed.**
+
+### Lane c — E81 + E82 + E83 + E89, doc and test truth. 10 commits, `9eebe204`.
+
+**The census moved off regex and onto the token stream.** The `onConfigChange` key census now walks
+`token_get_all()`, recognises both PHP closure-property call shapes (`?->__invoke(...)` and
+`($this->onConfigChange)(...)`), and — the important part — records a non-literal argument as
+`<not a literal>` rather than skipping it: **a call the census cannot read must red, not vanish.** A new
+test refuses the two routes a token walk cannot follow (`call_user_func`, assignment to a local), turning
+a stated blind spot into an unreachable one.
+
+**E83 produced the generator the prose claimed to have.** `GlobFigureDriftTest` re-derives *every*
+character count either page spells about the counterexample glob — including the three inside round 42's
+retraction (5 / 7 / 9) — from `strlen()` of the glob the page itself quotes, on both pages, and requires
+both pages to quote the same constant. It also censuses `src/` for paragraphs still spelling the stale
+figure and requires `docs/SETTINGS.md`'s list of remaining sites to name **exactly** that set, with the
+cardinality derived from `count($census)`. That census is why E103 exists and why fixing E103 will
+deliberately red this test.
+
+**Three reading rules converted from `preg_match` to `preg_match_all` + `assertSame(1, $n)`**, so the
+class doc-block's stated reading rule is the implemented one.
+
+🔴 **The lane caught an inverted mechanism claim of its own that the reviewer missed.** A comment read
+"`merge()` takes them lowest-first"; the signature is `merge($userConfig, $userSettings,
+$projectSettings)` — **highest** first. It is the `array_merge()` *inside* the method that is written
+lowest-first, and the comment had read that line and described the parameter list with it.
+
+🔴 **And it refuted its reviewer, correctly.** F6 claimed the README fence asserts a line the launcher
+would not print, "because nothing appends a period". `Bootstrap::warnPermissionConfig()` is
+`fwrite(STDERR, "sugarcrush: {$message}.\n")` — it prepends the prefix **and** appends the full stop. The
+reviewer had inspected the *transcript* seam, which carries neither. The defensible half — the word
+"TRANSCRIPT" in a doc-block, confusing when the app has a literal transcript surface carrying the same
+sentence without either affix — was fixed, and both affixes are now read out of
+`warnPermissionConfig()`'s own literal instead of retyped.
+
+🔴 **A self-correction after the review, propagated from the reviewer's phrasing.** The lane had written
+"there is no `strlen()` anywhere in `tests/`" into two doc-blocks. False, and false at `8416d98e` too —
+`strlen()` appears in **66** files under `tests/`. The true claim is narrow: none of them applies it to
+`COUNTEREXAMPLE_GLOB` or any spelling of the counterexample. **A reviewer's phrasing is not a
+measurement either.**
+
+Two guards were tautological and are no longer: the retraction needle now folds quote characters so its
+exemption branch can actually fire (plus an `assertCount(1, …)` making the exemption load-bearing — the
+test passes *because* it forgave the retraction, not because it found nothing), and a bare `array_merge()`
+was replaced with the same counterfactual driven through `LayeredSettings::merge()`.
+
+**E89** was renamed rather than merely strengthened —
+`testRenderWithADifferentPaneRendersThatPanesBodyAndNotJustItsCaption` — and its needle moved from
+`' tools '` (a padded *title*, one space away from the `[Tools]` caption the test distinguishes itself
+from) to `'(tool history empty)'`: body content, no whitespace contract.
+
+### Twenty-two new backlog entries, E90–E111
+
+E90–E93 (lane a) · E94–E98 (lane b, renumbered from E90–E94 at merge — both lanes appended from the same
+base and collided) · E99–E111 recorded by the supervisor from the three reports, because thirteen findings
+would otherwise have existed only inside agent transcripts. The backlog is now **105** entries, from 83.
+
+The ones that will bite soonest: **E103** (fixing it deliberately reds `GlobFigureDriftTest` — by design,
+and `docs/SETTINGS.md` must move in the same commit), **E94/E98** (`README.md` has four spots E84
+falsified, not the two originally filed), and **E106** (a one-line `/model` omission in `Chat`'s
+doc-block, the identical shape to E81, one file over).
+
+### What the split did right this round
+
+Round 42's file split leaked through `docs/SETTINGS.md`. This round it was assigned to exactly one lane
+**by name in all three briefs**, and `git diff --name-only` per lane confirms **the only shared file was
+the backlog**, which every lane appends to and which is expected to conflict. Zero code conflicts.
+
+### Standing caveat, restated because it is the axis this box cannot test
+
+**PHP 8.4 was not exercised.** This box has only 8.3.6; CI runs 8.3 **and** 8.4. Lane c flagged the one
+thing in its diff whose token stream has only been observed on 8.3.6: `token_get_all()`'s emission for
+the parenthesised-closure-call shape. Lane a's whole `fnmatch`/PCRE translation is stdlib-behaviour work
+and carries the same caveat, though PCRE semantics are the stable half.
