@@ -59,6 +59,39 @@ use SugarCraft\Crush\Tools\ToolCall;
  * That claim used to live in a doc-block and nowhere else; it is now
  * {@see testTheGateDecisionForAnMcpNameMatchesBashInFiveModesAndDivergesUnderPlan()},
  * which pins the six actions rather than any sentence about them.
+ *
+ * WHAT THIS FILE COSTS, MEASURED (E102, round 44; re-derived in that round's
+ * review, which could not reproduce the first version of this paragraph
+ * because it did not say what it had subtracted).
+ *
+ * THE GENERATOR. PHP 8.3.6, 48 cores, `/proc/loadavg` 1-minute figure 5.1-5.8
+ * with a sibling lane running its own suite, three takes,
+ * `/usr/bin/time -f 'wall=%e user=%U sys=%S' php vendor/bin/phpunit --filter
+ * McpToolWiringTest`. RAW: wall 4.90 / 4.93 / 4.90 s, user+sys ~2.89 s. A
+ * phpunit run selecting NO tests costs 1.71 / 1.72 / 1.73 s wall and ~1.71 s
+ * user+sys on the same box in the same window, so THIS FILE'S OWN cost is
+ * ~3.19 s wall against ~1.18 s of CPU. WHAT THE FIRST VERSION SAID: "wall 3.25
+ * / 3.26 / 3.24 s, user+sys 1.22 s" — the subtracted figures, labelled as raw
+ * ones. The subtraction is the right quantity and is kept; it is now stated,
+ * with both terms, so it can be checked.
+ *
+ * `strace -f -qq -e trace=execve php vendor/bin/phpunit --filter
+ * McpToolWiringTest` counts 22 `execve` of a php binary (21 `/usr/bin/php8.3`
+ * plus phpunit's own `/usr/bin/php`), i.e. TWENTY-ONE child interpreters — not
+ * the two `launchChatInChild()` calls a reader counts in the source, because
+ * every MCP fixture server is itself a php process. The explicit `php` in that
+ * command is load-bearing; see
+ * {@see BinSugarcrushAutoloadGuardTest}'s class doc-block for what tracing the
+ * shebang wrapper instead does to the number.
+ *
+ * THE COST IS NOT THE CHILDREN. ~3.19 s of wall against ~1.18 s of CPU means
+ * ~2 s of this file is WAITING — fixture-server startup and the stdio
+ * handshake — and fewer, fatter children would wait exactly as long. That is
+ * the opposite of {@see BinSugarcrushAutoloadGuardTest}, whose own ~1.58 s is
+ * ~87% interpreter startup, and it is why the two files do not get the same
+ * answer despite both looking like "an integration test that spawns a lot". The
+ * lever here would be the handshake timeout, not the process count; nothing
+ * today is close enough to matter to reach for it.
  */
 final class McpToolWiringTest extends TestCase
 {
@@ -491,23 +524,94 @@ final class McpToolWiringTest extends TestCase
      * `error_log()` call, because the ini destination is the OPERATOR's and a
      * box pointing it at a file left the USER with a silently reduced tool set.
      * That seam's stderr half is a `fwrite(STDERR, …)` no ini can redirect, so
-     * this test now DOES print one line into the suite's own output (MEASURED:
-     * exactly one, `sugarcrush: MCP tools from …/.mcp.json are incomplete…`).
+     * this test prints one line into the suite's own output.
      *
-     * LEFT PRINTING RATHER THAN SILENCED, deliberately. The only way to quiet it
-     * is to pre-seed `Bootstrap::$reportedPermissionConfigWarnings` by
-     * reflection so the de-dup returns early — which would work, since the seam
-     * records the transcript row BEFORE delegating for stderr, but it would
-     * couple this test to a private map whose purpose is unrelated and would
-     * silently stop working the day the message is reworded. One diagnostic line
-     * is what this suite already tolerates elsewhere (the workflow-tier refusal
-     * prints one too), and by this doc-block's own standard a real diagnostic is
-     * not something to silence. What the line SAYS is asserted, in
+     * WHAT THAT SENTENCE USED TO SAY: "(MEASURED: exactly one)", stated
+     * unconditionally, as though one line were the suite's whole stderr budget.
+     * WHAT IS TRUE NOW, re-measured in round 44 (E95) on PHP 8.3.6 by counting
+     * `sugarcrush:` in a combined stdout+stderr capture: this file alone prints
+     * ONE, `tests/Integration` prints TWO (this and the workflow-tier refusal
+     * cited below), and THE FULL SUITE PRINTS 62, in 32 distinct message
+     * shapes. Counted exactly, nothing rounded and nothing dropped: session
+     * retention/pruning 9, `provider …` 9, the one-shot different-backend
+     * refusal 7, `permissionRules*` 7 across three spellings, `no prompt
+     * given` 6, refused project hook files 6, `trustedProjectHooks*` 3,
+     * `disabledTools` cut-tool reports 2, `permissionMode in …` 2, `ignoring
+     * …` 2, skipped skill files 2, and 7 singletons — this line, `piped stdin
+     * exceeds`, `agent presets unavailable`, `no provider configured`,
+     * `allowedTools/disabledTools left no tools`, `unrecognized option` and
+     * `--root …: no such directory`. This line is one sixty-second of a
+     * channel the suite already uses heavily and has always used.
+     *
+     * WHY THAT MAKES THE DECISION EASIER RATHER THAN HARDER, which is the
+     * opposite of how the original sentence framed it: the cost of accepting
+     * this line is not "the suite stops being clean", because it is not clean
+     * and no round has proposed making it so. The cost is one more row in an
+     * existing sixty-two, against a coupling that fails open. That is not a
+     * close call.
+     *
+     * A MEASUREMENT NOTE THAT COST AN HOUR, recorded because it will recur: the
+     * first take of the full-suite figure came back ZERO, and it was a broken
+     * harness, not a finding. PHPUnit's captured output contains control bytes,
+     * `grep` classifies the file as binary, and `grep -c` then prints NOTHING at
+     * all and exits 1 — a silent no-answer that reads exactly like a real zero.
+     * `grep -a` gives 62. Any census over a captured suite log needs `-a` and
+     * needs a case whose answer is already known run through the same command.
+     *
+     * LEFT PRINTING RATHER THAN SILENCED, deliberately, and round 44 re-argued
+     * it rather than inheriting it. The only way to quiet it is to pre-seed
+     * `Bootstrap::$reportedPermissionConfigWarnings` by reflection so the
+     * de-dup returns early. That WOULD work — the seam records the transcript
+     * row BEFORE delegating for stderr — but the pre-seed has to reproduce the
+     * message verbatim, and the message interpolates a tmpdir path and a
+     * `$e->getMessage()`. So the coupling is not to a private map, which would
+     * be tolerable; it is to the exact TEXT of a sentence this test does not
+     * otherwise care about, and it fails OPEN: reword the message and the
+     * pre-seeded key stops matching, the line comes back, and every assertion
+     * here still passes. A guard that fails open is worse than the thing it was
+     * guarding against.
+     *
+     * WHAT IS PINNED INSTEAD, because accepting a line is not the same as
+     * accepting any number of them:
+     * this test reads the SIZE of that same private map across the call. Size is reword-proof where a
+     * pre-seeded key is not — a reworded message still adds exactly one entry —
+     * so the acceptance is bounded without inheriting the fragility that made
+     * silencing the wrong choice. What the line SAYS stays asserted in
      * {@see testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()},
      * which drives the same config in a child process for exactly that reason.
      */
     public function testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam(): void
     {
+        // THE ACCEPTED LINE IS ONE LINE, and this is the bound that makes that a
+        // decision rather than a hope. It is folded into this test rather than
+        // given one of its own ON PURPOSE: a second test driving this path would
+        // start a second MCP server and print a SECOND copy of the very line it
+        // was counting (measured, when it was briefly written that way: two
+        // lines, and the file's own cost went from ~3.2s to ~4.0s -- both net
+        // of the ~1.7s phpunit boot, on the generator in this class's
+        // doc-block). A guard that doubles what it bounds is not a guard.
+        //
+        // HOW IT COUNTS WITHOUT READING THE MESSAGE.
+        // Bootstrap::warnPermissionConfigOnce() writes to stderr if and only if
+        // it adds a key to $reportedPermissionConfigWarnings — it returns early
+        // when the key is present, and otherwise records and delegates. So the
+        // GROWTH of that map across this call is the number of stderr lines the
+        // seam emitted, and it is reword-proof: a reworded message is still one
+        // new key. That is exactly why this reads the map's SIZE while this
+        // test's doc-block rejects pre-seeding it by KEY — the size survives a
+        // reword and the key does not.
+        //
+        // WHAT IT DOES NOT COVER, so nobody over-trusts it: two raw
+        // fwrite(STDERR, …) sites in Bootstrap bypass the map entirely —
+        // warnPermissionConfig() itself, which IS the channel, and
+        // reportPrunedSessions()'s per-session rows. Neither is on this path,
+        // which is mcpClient()'s catch and nothing else, so the figure is exact
+        // HERE and would not be on a launch path. A bound on this test, not a
+        // census of the suite. The map is process-global and other files feed
+        // it, so this measures the DELTA and never the absolute size.
+        $seen = new \ReflectionProperty(Bootstrap::class, 'reportedPermissionConfigWarnings');
+        $before = \count((array) $seen->getValue());
+
         $log = $this->tempDir . '/error_log.txt';
         $previousErrorLog = (string) ini_get('error_log');
         ini_set('error_log', $log);
@@ -517,6 +621,15 @@ final class McpToolWiringTest extends TestCase
         } finally {
             ini_set('error_log', $previousErrorLog);
         }
+
+        self::assertSame(
+            1,
+            \count((array) $seen->getValue()) - $before,
+            'this path is accepted as costing the suite ONE unowned stderr line (see this test\'s '
+                . 'doc-block on why it is not silenced). It now emits a different number, so either a '
+                . 'second warning was routed onto the seam from here or the one that was there has '
+                . 'gone — re-argue the acceptance, do not update the number.',
+        );
     }
 
     private function driveTheStartThenThrowPath(string $log): void

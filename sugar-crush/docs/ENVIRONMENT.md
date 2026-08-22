@@ -15,8 +15,10 @@ Two groups are listed separately because they behave differently:
   as the vendor SDKs spell them.
 
 Environment variables are the highest-precedence configuration tier: they win
-over a choice persisted to `~/.sugar-crush/config.json` by the Ctrl+P palette,
-which is what makes them the right override for scripting and CI.
+over a choice persisted to `~/.sugar-crush/config.json` — written by the Ctrl+P
+palette's Switch Model row, by `/model <name>`, by the palette's Switch Theme
+row, or by `/theme <name>`, all four of which reach the identical write — which
+is what makes them the right override for scripting and CI.
 
 ---
 

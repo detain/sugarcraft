@@ -466,9 +466,33 @@ final class Chat implements Model
         /** Ctrl+P command palette state; null when closed. */
         private readonly ?PaletteState $palette = null,
         /**
-         * Optional callable(string $key, string $value): void, fired when
-         * the Switch Model/Switch Theme palette actions (or /theme) apply a
-         * choice - the persistence side effect itself (writing to
+         * Optional callable(string $key, string $value): void, fired by FOUR
+         * DOORS: the Ctrl+P palette's Switch Model row, `/model <provider>`,
+         * the palette's Switch Theme row, and `/theme <name>`.
+         *
+         * TWO WRITERS WITH TWO DOORS EACH, and the route was followed rather
+         * than inferred: {@see handleModelCommand()} ends in
+         * {@see selectPaletteProvider()}, which is also the palette row's own
+         * handler and holds the only `('provider', …)` invoke in the class;
+         * {@see selectPaletteTheme()} and {@see handleThemeCommand()} are the
+         * `theme` pair. That is why a `/model` choice persists exactly as a
+         * palette choice does with no separate persistence code for it.
+         *
+         * WHAT THIS SAID: "the Switch Model/Switch Theme palette actions (or
+         * /theme)". WHAT IS TRUE NOW: that names three doors out of four, and
+         * the missing one is `/model` — so a reader debugging a `provider` that
+         * persisted when they expected it not to had the wrong mental model,
+         * and one written down twice in this file. WHY THE ENUMERATION STILL
+         * EARNS ITS PLACE rather than being cut back to "whenever a choice is
+         * applied": the doors are ordinary private-method calls with no shared
+         * marker or interface, so no tooling can list them and this sentence is
+         * the only index a reader has. It is the identical drift E81 corrected
+         * in {@see \SugarCraft\Crush\Config\LayeredSettings} one file over;
+         * E106 found this file still carrying it, and
+         * {@see \SugarCraft\Crush\Tests\Chat\ChatConfigChangeDoorsDocumentationDriftTest}
+         * now reds on the fourth instance instead of leaving it to a reader.
+         *
+         * The persistence side effect itself (writing to
          * ~/.sugar-crush/config.json) lives in Bootstrap::chat()'s wiring,
          * not here, so this stays a no-op by default for tests/embedders
          * that never call withOnConfigChange()/pass one to the constructor.
@@ -5266,10 +5290,23 @@ final class Chat implements Model
     }
 
     /**
-     * Register a callback(string $key, string $value): void fired when the
-     * Switch Model/Switch Theme palette actions (or /theme) apply a choice
-     * - see the constructor param's docblock for why the actual persistence
-     * side effect lives in Bootstrap::chat()'s wiring, not this class.
+     * Register a callback(string $key, string $value): void fired when any of
+     * FOUR DOORS applies a choice: the Ctrl+P palette's Switch Model row,
+     * `/model <provider>`, the palette's Switch Theme row, and `/theme <name>`.
+     *
+     * WHAT THIS SAID: "the Switch Model/Switch Theme palette actions (or
+     * /theme)", omitting `/model`. WHY IT IS SPELLED OUT HERE AND NOT MERELY
+     * CROSS-REFERENCED to the constructor param that says the same thing: an
+     * embedder deciding whether to install a callback reads the method they are
+     * about to call, not the promoted-property doc-block one screen up, and an
+     * enumeration that is short by one door is what makes them believe `/model`
+     * is session-only. Both copies are pinned together by
+     * {@see \SugarCraft\Crush\Tests\Chat\ChatConfigChangeDoorsDocumentationDriftTest},
+     * so the duplication cannot drift apart silently.
+     *
+     * See the constructor param's docblock for the route each door takes, and
+     * for why the actual persistence side effect lives in Bootstrap::chat()'s
+     * wiring rather than in this class.
      */
     public function withOnConfigChange(callable $callback): self
     {
@@ -5304,8 +5341,31 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * FOURTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
-     * SITES ARE ROUTED HERE, and the rest deliberately are not. The rule the split was
+     * SIXTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * SITES ARE ROUTED HERE, and the rest deliberately are not.
+     *
+     * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier
+     * `warnPermissionConfigInTranscript` occurs about twice as often in
+     * `Bootstrap.php` as it is CALLED, because most occurrences are the
+     * declaration and `{@see}` references in the doc-blocks explaining this
+     * very split. The count is a token scan: `token_get_all()` with whitespace
+     * and comments stripped, counting each T_STRING of that name both preceded
+     * by `::` and followed by `(`. One command re-derives it —
+     * `vendor/bin/phpunit --filter BootstrapTranscriptSeamCallSiteCensusTest` —
+     * and {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}
+     * fails this sentence, by name, the moment a call site is added.
+     *
+     * WHAT THIS SAID: FOURTEEN. WHAT IS TRUE NOW: sixteen — E78 (round 42)
+     * routed `reportPrunedSessions()`'s retention summary onto the seam and E86
+     * (round 43) routed `mcpClient()`'s start-then-throw catch, and neither
+     * round updated this paragraph. WHY THE SENTENCE STILL EARNS ITS PLACE: the
+     * number is not decoration, it is the claim that the split below is a
+     * DECISION applied to a known set rather than a description of wherever the
+     * calls happen to be; without a count a reader cannot tell those apart.
+     * That is also why round 44 (E97) made it a test instead of just correcting
+     * it for the third time.
+     *
+     * The rule the split was
      * made on lives on
      * {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}:
      * a warning earns a row iff it names something the session can no longer DO

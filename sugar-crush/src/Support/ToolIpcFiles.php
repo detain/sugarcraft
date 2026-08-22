@@ -142,6 +142,39 @@ final class ToolIpcFiles
     }
 
     /**
+     * Every path handed out by {@see reserve()} since the ledger was armed,
+     * collected or not.
+     *
+     * {@see strandedReservations()} answers "did anything leak"; this answers
+     * "was there anything that COULD have leaked". A leak detector needs both,
+     * because the empty-set answer is ambiguous on its own: a run that reserved
+     * nothing at all -- a dispatcher that stopped forking, a fixture that
+     * stopped producing parallel-safe calls, a `pcntl` skip -- is
+     * indistinguishable from a run that reserved and cleaned up perfectly, and
+     * only the second one is the thing under test. A caller that asserts
+     * "stranded is empty" without also asserting "reservations is not" has a
+     * detector that passes hardest when it is looking at nothing.
+     *
+     * THE SAME AMBIGUITY LIVES HERE, one level down, and saying so is the
+     * point: an UNARMED ledger and an armed-but-empty one both answer `[]`, so
+     * a caller who forgets {@see recordReservations()} gets an empty answer
+     * from this method and from {@see strandedReservations()} alike. That is
+     * why the useful assertion is a POSITIVE count -- `assertSame(3, …)` fails
+     * on a forgotten arm, `assertSame([], …)` does not. Left as an ambiguity
+     * rather than closed with a third method or an exception because every
+     * caller is a test that arms in `setUp()` and asserts a known count, and a
+     * throwing accessor would turn "this suite forgot to arm" into a fatal in
+     * production code that production never calls. Pinned by
+     * {@see \SugarCraft\Crush\Tests\Support\ToolIpcFilesTest::testAnUnarmedLedgerAndAnEmptyArmedOneAreIndistinguishable()}.
+     *
+     * @return list<string>
+     */
+    public static function reservations(): array
+    {
+        return self::$reserved ?? [];
+    }
+
+    /**
      * Of the paths reserved since the ledger was armed, those still on disk --
      * either the payload itself or the `.partial` a child SIGKILLed mid-write
      * leaves beside it.
