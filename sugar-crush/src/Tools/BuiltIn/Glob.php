@@ -399,9 +399,32 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             $this->maxOutputBytes > 0 ? intdiv($this->maxOutputBytes, 8) : null,
         );
 
-        // +1 for the newline separated() adds. max(1, ...) below and not the
-        // raw subtraction: 0 is truncateOutput()'s "no cap" sentinel, so a cap
-        // the nudge alone exceeds would hand the list an UNBOUNDED budget.
+        // +1 for the newline the nudge is appended behind at the foot of
+        // execute().
+        //
+        // WHAT THIS SAID: "+1 for the newline separated() adds".
+        // WHAT IS TRUE NOW: it named the wrong call. separated() is what the
+        // prune, gitignore and symlink notes and the instruction section go
+        // behind, and it emits NOTHING when the output already ends on a
+        // newline — a path list always does. The nudge's own append is
+        // `$output .= "\n" . $nudge`, unconditional, so this reservation is
+        // EXACT where {@see \SugarCraft\Crush\Tools\BuiltIn\Grep}'s
+        // identically-shaped one (which really does go through separated()) is
+        // an over-reservation by a byte.
+        // WHY THIS STILL EARNS ITS PLACE: exact means the byte is load-bearing.
+        // Drop it and the result overruns its own cap by one on the single cap
+        // where truncateOutput() hands the list back saturating $bodyCap
+        // exactly. MEASURED at ae30fee5 over a 40-file fixture under
+        // sys_get_temp_dir(): every cap from 1,392 to 3,000 landed inside the
+        // cap with the +1, and cap 1,934 returned 1,935 bytes without it.
+        // Pinned by SkillPathScopingTest::
+        // testGlobsNudgeReservationHoldsTheResultInsideTheCapAtSaturation(),
+        // which derives that cap at runtime rather than naming it, since it
+        // moves with the length of the temp path.
+        //
+        // max(1, ...) below and not the raw subtraction: 0 is
+        // truncateOutput()'s "no cap" sentinel, so a cap the nudge alone
+        // exceeds would hand the list an UNBOUNDED budget.
         $nudgeCost = $nudge === null ? 0 : strlen($nudge) + 1;
         $bodyCap = $this->maxOutputBytes > 0
             ? max(1, $this->maxOutputBytes - $nudgeCost)
