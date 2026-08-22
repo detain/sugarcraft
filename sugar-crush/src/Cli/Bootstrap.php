@@ -5081,10 +5081,12 @@ final class Bootstrap
      * else". WHAT IS TRUE NOW: nothing in the counterexample is eight
      * characters. `[!B]*` is five, `"[!B]*"` seven and `["[!B]*"]` nine, so the
      * phrase pointed at a value that does not exist and a reader could not tell
-     * which of the three was meant; round 42 retracted the same figure on
-     * `docs/SETTINGS.md` and in {@see LayeredSettings::PROJECT_TIER_KEYS}, and
-     * this was the last copy of it left in `src/`. The clause now names the
-     * glob. WHY THE SENTENCE STILL EARNS ITS PLACE: the length was never the
+     * which of the three was meant. Round 42 retracted the same figure on
+     * `docs/SETTINGS.md` (E74, `02fdc3f5`) and round 43 in
+     * {@see LayeredSettings::PROJECT_TIER_KEYS} (E81, `7dab9c4b`) — an earlier
+     * draft of THIS paragraph put both in round 42, which is the kind of
+     * confident mechanism claim rule 8 exists for and is corrected rather than
+     * dropped. This was the last copy left. The clause now names the glob. WHY THE SENTENCE STILL EARNS ITS PLACE: the length was never the
      * argument, and it was load-bearing only by accident. The argument is that
      * the proposed rule is keyed to a SPELLING while the hazard is an EFFECT —
      * `["[C-Z]*", "[a-z]*"]` is a different spelling of the same effect, one

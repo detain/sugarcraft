@@ -373,7 +373,13 @@ final class GlobFigureDriftTest extends TestCase
     private function matchOrFail(string $pattern, string $subject, string $what): bool
     {
         $result = preg_match($pattern, $subject);
-        $this->assertIsInt($result, $what . ': preg_match() errored (' . preg_last_error_msg() . '), so its answer means nothing');
+        if ($result === false) {
+            // `fail()` rather than `assertIsInt()`: this runs once per paragraph
+            // of every file in scope, and an assertion per call added ~34,000
+            // to the suite's assertion count while pinning nothing that the
+            // failure path does not already pin.
+            $this->fail($what . ': preg_match() errored (' . preg_last_error_msg() . '), so its answer means nothing');
+        }
 
         return $result === 1;
     }
@@ -406,43 +412,70 @@ final class GlobFigureDriftTest extends TestCase
     }
 
     /**
-     * Every `.php` file under `src/`, keyed by repo-relative path.
+     * Everything the census reads: every `.php` file under `src/` and every
+     * `.md` page under `docs/`, keyed by repo-relative path.
      *
-     * SCOPE IS `src/`, AND THAT EXCLUSION IS THE IMPLICIT HALF OF THIS CENSUS —
-     * written down here because round 43 left it unstated and the next reader
-     * would have had to re-derive it. At the time of writing,
-     * `grep -rn 'eight[- ]character'` over `src/`, `docs/`, `README.md` and
-     * `tests/` hits four places, and three of them must NOT be census entries:
+     * `docs/` IS IN SCOPE, AND THAT IS THE CORRECTION ROUND 44 MADE. The
+     * round-43 census walked `src/` only, and the defect it was written to
+     * catch had shipped in `docs/SETTINGS.md` — a sentence naming
+     * `LayeredSettings` as still stale two paragraphs after the commit that
+     * fixed it. A census scoped away from the place the last defect appeared is
+     * a census aimed at the wrong wall.
      *
-     * - `docs/SETTINGS.md` — excluded BY SCOPE. It is the page this test reads
-     *   the retraction out of; censusing it would red against itself.
-     * - `tests/App/AppModelTest.php` — excluded BY SCOPE. Its "eight characters
-     *   of tail" is about a cursor fixture and has nothing to do with the glob.
-     *   It is also the shape that shows why scope is doing real work: the same
-     *   sentence inside `src/` WOULD be a false positive, because the match is
-     *   on the phrase and not on the subject.
-     * - `src/Config/LayeredSettings.php` — excluded SEMANTICALLY, by
-     *   {@see carriesTheStaleFigure()}'s retraction rule, because its paragraph
-     *   spells the current count too. This is the only one of the three that
-     *   survives a change of scope, and it is the one that must survive: it is
-     *   a rule-7 citation, not a stale figure.
+     * WHAT THE SCOPE AND THE EXEMPTION EACH EXCLUDE — written down because this
+     * was the load-bearing half and it was implicit. Measured on PHP 8.3.6,
+     * 2026-08-22: `grep -rn 'eight[- ]character'` over `src/`, `docs/`,
+     * `README.md` and `tests/` hits five files. Twelve of the hits are in THIS
+     * file, which is the census's own fixture alphabet; of the other four:
+     *
+     * - `src/Cli/Bootstrap.php` and `src/Config/LayeredSettings.php` — both IN
+     *   scope, both excluded SEMANTICALLY by {@see carriesTheStaleFigure()}'s
+     *   retraction rule, because each paragraph spells the current count too.
+     *   These are rule-7 citations, not stale figures, and they must survive.
+     * - `docs/SETTINGS.md` — also in scope now, also exempt for the same
+     *   semantic reason. It used to be excluded by scope, which is exactly why
+     *   a stale sentence could live there unremarked.
+     * - `tests/App/AppModelTest.php` — excluded BY SCOPE, and the only thing
+     *   scope still excludes. Its "eight characters of tail" is about a cursor
+     *   fixture and has nothing to do with the glob. It is also the shape that
+     *   shows scope doing real work: the same sentence inside `src/` WOULD be a
+     *   false positive, because the match is on the phrase, not the subject.
+     *
+     * `README.md` carries no spelling of the figure at all (measured: the word
+     * "eight" does not occur in it), so admitting it would neither add nor
+     * remove a hit today; it is left out because it belongs to a different
+     * lane's file set this round, and its absence is a gap rather than a rule.
      *
      * @return iterable<string, string>
      */
-    private function sourceFiles(): iterable
+    private function censusScope(): iterable
     {
-        $root = realpath(__DIR__ . '/../../src');
-        self::assertIsString($root);
+        $lib = realpath(__DIR__ . '/../..');
+        self::assertIsString($lib);
 
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root)) as $file) {
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($lib . '/src')) as $file) {
             if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
                 continue;
             }
-            $text = file_get_contents($file->getPathname());
-            self::assertIsString($text, $file->getPathname() . ' is unreadable, so the census over it is void');
 
-            yield 'src/' . ltrim(str_replace($root, '', $file->getPathname()), '/') => $text;
+            yield substr($file->getPathname(), \strlen($lib) + 1) => self::readOrFail($file->getPathname());
         }
+
+        $pages = glob($lib . '/docs/*.md');
+        self::assertIsArray($pages);
+        self::assertNotSame([], $pages, 'docs/ produced no pages, so half the census scope is silently empty');
+        sort($pages);
+        foreach ($pages as $page) {
+            yield substr($page, \strlen($lib) + 1) => self::readOrFail($page);
+        }
+    }
+
+    private static function readOrFail(string $path): string
+    {
+        $text = file_get_contents($path);
+        self::assertIsString($text, $path . ' is unreadable, so the census over it is void');
+
+        return $text;
     }
 
     /**
@@ -546,7 +579,8 @@ final class GlobFigureDriftTest extends TestCase
     }
 
     /**
-     * `src/` is clean, `docs/SETTINGS.md` says so, and the scanner still works.
+     * Nothing in scope is stale, `docs/SETTINGS.md` says so, and the scanner
+     * still works.
      *
      * THREE ASSERTIONS AND NOT ONE, because an empty census is a strictly
      * weaker guard than a census of one. `assertSame([], …)` passes in a tree
@@ -555,13 +589,13 @@ final class GlobFigureDriftTest extends TestCase
      * fixture in the same test — a positive control and a negative control for
      * an assertion whose real result is "nothing".
      *
-     * IT STILL REDS IN BOTH DIRECTIONS. A new `src/` paragraph spelling the old
-     * count reds the first assertion. Re-introducing the figure in a paragraph
+     * IT STILL REDS IN BOTH DIRECTIONS. A new `src/` or `docs/` paragraph
+     * spelling the old count reds the first assertion. Re-introducing the figure in a paragraph
      * that also retracts it does NOT red — that is the retraction exemption
      * working, and the negative control pins it. And `docs/SETTINGS.md`
      * disagreeing with the census's cardinality reds the third.
      */
-    public function testNoSourceFileStillCarriesTheStaleFigureAndTheSettingsPageAgrees(): void
+    public function testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees(): void
     {
         // POSITIVE CONTROL, first: if this does not fire, nothing below means
         // anything, because the emptiness would be the scanner's and not the
@@ -586,19 +620,19 @@ final class GlobFigureDriftTest extends TestCase
             . 'figure would now be reported as a fresh defect',
         );
 
-        $census = $this->census($this->sourceFiles());
+        $census = $this->census($this->censusScope());
 
         $this->assertSame(
             [],
             $census,
-            'a src/ paragraph spells the old glob length without retracting it; '
+            'a src/ or docs/ paragraph spells the old glob length without retracting it; '
             . "fix it and move docs/SETTINGS.md's cardinality in the same commit",
         );
 
         $para = $this->soleParagraphContaining($this->settingsPage(), 'remaining site', 'docs/SETTINGS.md');
 
         $this->assertStringContainsString(
-            'The census finds ' . $this->word(\count($census)) . ' remaining site',
+            'the census finds ' . $this->word(\count($census)) . ' remaining site',
             $para,
             'docs/SETTINGS.md no longer states the number of src/ sites the census actually finds',
         );
