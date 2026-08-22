@@ -5485,3 +5485,43 @@ false red under any parallel or multi-checkout run, including two developers on 
 **Step.** Scope the sweep to files this process created — the runner already knows its own pid — or point
 `ToolIpcFiles` at a per-run subdirectory under `sys_get_temp_dir()` and glob that. Do not "fix" it by
 widening the assertion; the leak-detection is the point.
+
+### E93 — the "fourteen call sites" seam count is stale in three places outside `Bootstrap.php`
+
+**Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
+documentation-correctness. **Not fixed here — `sugar-crush/src/Chat.php` and
+`sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php` were outside lane `b`'s file split.**
+
+**What.** The verified number of `self::warnPermissionConfigInTranscript(` CALL sites in
+`sugar-crush/src/Cli/Bootstrap.php` is **16** — counted with `token_get_all()` and a `::`/`(` adjacency
+test, not `grep`, so doc-comment mentions of the name are excluded. E86 (round 43) corrected the count
+inside `Bootstrap.php` itself and deliberately left the other three, which still say fourteen/fifteen:
+
+- `sugar-crush/src/Chat.php`, `Chat::withLaunchNotices()`'s doc-block — the paragraph opening
+  `FOURTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL`.
+- `sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php`, class doc-block — "the guard for the
+  other fourteen" and "the retention summary onto the seam as the fifteenth call site".
+- The same file, on the method whose doc-block says "a transcript that also carries fourteen".
+
+**Step.** Set all three to 16 in one edit with the other two, and say in each how the number is obtained
+(the token scan above), so the next reader re-derives it in one command instead of grepping a name that
+also appears 15 times in prose. Better still, assert it: a small test that token-scans `Bootstrap.php`
+and compares the count against a constant these doc-blocks cite would make the next drift red rather
+than merely wrong.
+
+### E94 — `README.md` has a THIRD spot E84 falsified, beyond the two E90 names
+
+**Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
+documentation-correctness. **Not fixed here — `sugar-crush/README.md` belonged to lane `c`.** Fold this
+into E90 before touching that file, or E90 will be closed with the file still wrong.
+
+**What.** E90 names two spots: the `There are exactly two exceptions` paragraph (README.md, and confirmed
+the only file under `sugar-crush/` carrying that phrase) and the exit-code table's row for `2`. There is
+a third: the sentence enumerating the `error.type` values, which reads *"`usage` and
+`provider_configuration` are both `2`, `backend` and `encoding` are both `1`"* and omits `installation`
+entirely. The JSON schema block a few lines above it lists the same four types in its `"type":` union and
+omits `installation` too.
+
+**Step.** Add `installation` to both the union in the schema block and the exit-code sentence, mapping it
+to `2`, alongside E90's two edits. `NonInteractive::emitErrorDocument()`'s doc-block already carries the
+full five-type table and is the source to copy from.
