@@ -204,6 +204,15 @@ final readonly class Write implements Tool
 
         // Fired only after the write landed -- a rejected or failed write did
         // not actually touch the path, so it must not burn the one-shot nudge.
+        //
+        // No budget passed, so {@see \SugarCraft\Crush\Skills\SkillPathNudge::maxBytes()}
+        // is the whole bound -- E66. This result has no cap of its own for the
+        // nudge to be spent inside: it is a one-line success message plus a
+        // flat {@see DEFAULT_MAX_INSTRUCTION_BYTES} of rules, so the nudge's
+        // own constant ceiling is the analogous flat term, not a share of
+        // something. Before E66 there was no term at all: one line per matching
+        // auto-invocable skill, each carrying that skill's whole frontmatter
+        // `description`.
         $nudge = $this->skillNudge?->forPath($path);
         if ($nudge !== null) {
             $message .= "\n\n" . $nudge;

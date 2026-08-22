@@ -379,6 +379,34 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
 
         $ceiling = $this->instructionSectionCeiling($this->maxOutputBytes);
 
+        // COMPUTED BEFORE THE LIST IS CLIPPED, and that ordering is the second
+        // half of E66. The nudge used to be built after the clip and appended
+        // beside it, so the cap bounded the path list and not the result:
+        // MEASURED at 8add627b over a 30-file fixture, cap 1,000 with one
+        // path-scoped skill carrying a 200-byte description returned 1,340
+        // bytes (1.3x), five skills x 5,000 returned 26,188 (26.2x) and twenty
+        // x 20,000 returned 401,378 (401.4x). Building it first turns its
+        // length into a reservation the path list pays for.
+        //
+        // Its INPUT is unchanged — every MATCHED path, not $shown — for the
+        // reason argued where it is appended below.
+        //
+        // AN EIGHTH of the cap, matching {@see Grep::execute()}; the two tools
+        // answer the same shape of question and must not disagree about this
+        // one either.
+        $nudge = $this->skillNudge?->forPaths(
+            $files,
+            $this->maxOutputBytes > 0 ? intdiv($this->maxOutputBytes, 8) : null,
+        );
+
+        // +1 for the newline separated() adds. max(1, ...) below and not the
+        // raw subtraction: 0 is truncateOutput()'s "no cap" sentinel, so a cap
+        // the nudge alone exceeds would hand the list an UNBOUNDED budget.
+        $nudgeCost = $nudge === null ? 0 : strlen($nudge) + 1;
+        $bodyCap = $this->maxOutputBytes > 0
+            ? max(1, $this->maxOutputBytes - $nudgeCost)
+            : 0;
+
         // Probed at the FLOOR — the smallest budget the final list can be
         // given — so every path whose instruction file is loaded below is
         // guaranteed to still be in the result. Loading against the FULL list
@@ -402,7 +430,7 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // tighter than the final clip below, which is the property the
         // announce-once mark depends on.
         $floor = $this->maxOutputBytes > 0
-            ? max(1, $this->maxOutputBytes - $ceiling - 1)
+            ? max(1, $bodyCap - $ceiling - 1)
             : 0;
         $probe = $this->truncateOutput($output, $floor);
         $shown = self::pathsIn($probe, $files);
@@ -438,7 +466,7 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // directory; every call after it has no section and takes the whole
         // cap, byte-identical to the same tool built with no loader at all.
         $output = $section === ''
-            ? $this->truncateOutput($output, $this->maxOutputBytes)
+            ? $this->truncateOutput($output, $bodyCap)
             : $probe;
 
         // The pruning has to announce itself for the same reason the byte cap
@@ -448,9 +476,12 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // exist. Naming what was skipped, and how to ask for it, is the whole
         // difference between a partial answer and a wrong one.
         //
-        // Appended AFTER the clip, like the nudge: it is one line, it is the
-        // only place the escape hatch appears in the result, and it must not
-        // be the thing the budget sacrifices.
+        // Appended AFTER the clip: it is one line, it is the only place the
+        // escape hatch appears in the result, and it must not be the thing the
+        // budget sacrifices. The nudge no longer keeps it company out here —
+        // E66 moved that inside the cap, because "one line" was never true of
+        // it (one line PER MATCHING SKILL, each carrying that skill's whole
+        // frontmatter `description`).
         if ($found['pruned'] !== []) {
             $output = self::separated($output);
             $output .= sprintf(
@@ -507,7 +538,10 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // path — so a nudge earned by a path the cap dropped is still a true
         // and actionable statement, where an instruction body shown for an
         // unseen path is neither.
-        $nudge = $this->skillNudge?->forPaths($files);
+        //
+        // BUILT ABOVE, not here, and that is the only difference: its length
+        // is subtracted from $bodyCap before the list is clipped, so this
+        // append cannot push the result past the cap.
         if ($nudge !== null) {
             $output .= "\n" . $nudge;
         }

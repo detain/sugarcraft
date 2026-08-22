@@ -6,6 +6,9 @@ namespace SugarCraft\Crush\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
@@ -877,6 +880,250 @@ final class ToolOutputBudgetTest extends TestCase
 
             self::assertTrue(mb_check_encoding($content, 'UTF-8'), "hit cut at cap $cap");
         }
+    }
+
+    // =========================================================================
+    // E66 — the skill nudge is spent INSIDE the cap, not beside it
+    // =========================================================================
+
+    /**
+     * The nudge was appended after the clip and carried each matching skill's
+     * whole frontmatter `description`, so the cap bounded the ANSWER and not
+     * the RESULT.
+     *
+     * MEASURED at 8add627b over a 30-file fixture, twenty `paths:`-scoped
+     * auto-invocable skills with 20,000-byte descriptions: Grep at cap 1,000
+     * returned 401,372 bytes (401.4x) and Glob 401,378 (401.4x). Five skills
+     * with 5,000-byte descriptions gave 26,182 and 26,188 (26.2x), and ONE
+     * skill with a 200-byte description was already over at 1,334 and 1,340
+     * (1.3x) — so this is not a pathological-input defect.
+     */
+    public function testGrepAndGlobStayInsideTheirCapWithAnOversizeSkillNudge(): void
+    {
+        // ADVERSARIAL IN BOTH DIRECTIONS AT ONCE, and the first cut of this
+        // test was not. 30 matches under a 65,536-byte cap leaves the answer
+        // far inside the budget, so removing the reservation entirely — the
+        // mutation this test exists to kill — left the whole file GREEN. The
+        // hit list has to overflow the cap on its own before a nudge appended
+        // beside it can be seen to push the total past it. 400 matches is
+        // ~33,000 bytes of hits and ~22,000 of paths, over both caps below.
+        //
+        // The caps are also both above the threshold at which a nudge fits its
+        // eighth (MEASURED, and see below for the four figures: 4,232 for two
+        // or more maximum-length entries), which is what the
+        // `<system-reminder>` assertions guard — a bound satisfied by never
+        // emitting a nudge would prove nothing.
+        $this->seedMatches(400);
+
+        foreach ([[1, 200], [5, 5000], [20, 20000]] as [$count, $descLen]) {
+            foreach ([8192, 16384] as $cap) {
+                $shape = "$count skills x $descLen-byte descriptions at cap $cap";
+
+                $grep = (new Grep($this->dir, $cap, null, $this->fatNudge($count, $descLen)))
+                    ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+                    ->content();
+                self::assertLessThanOrEqual($cap, strlen($grep), "Grep overrun by $shape");
+                self::assertStringContainsString('<system-reminder>', $grep, "Grep emitted no nudge for $shape");
+                self::assertGreaterThanOrEqual(1, $this->hitCount($grep), "Grep lost every hit for $shape");
+
+                $glob = (new Glob($this->dir, null, [], $this->fatNudge($count, $descLen), $cap))
+                    ->execute(['pattern' => 'sub/*.php', 'path' => $this->dir])
+                    ->content();
+                self::assertLessThanOrEqual($cap, strlen($glob), "Glob overrun by $shape");
+                self::assertStringContainsString('<system-reminder>', $glob, "Glob emitted no nudge for $shape");
+                self::assertGreaterThanOrEqual(1, $this->pathCount($glob), "Glob lost every path for $shape");
+            }
+        }
+    }
+
+    /**
+     * The answer is not what the reservation sacrifices. A cap spent entirely
+     * on a nudge would satisfy the bound above and be a worse tool than the
+     * one that overran it.
+     */
+    public function testTheSkillNudgeCannotStarveTheAnswer(): void
+    {
+        $this->seedMatches(30);
+
+        foreach ([1024, 4096, 16384, 65536] as $cap) {
+            $grep = (new Grep($this->dir, $cap, null, $this->fatNudge(20, 20000)))
+                ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+                ->content();
+            $glob = (new Glob($this->dir, null, [], $this->fatNudge(20, 20000), $cap))
+                ->execute(['pattern' => 'sub/*.php', 'path' => $this->dir])
+                ->content();
+
+            self::assertGreaterThanOrEqual(1, $this->hitCount($grep), "no hit survived at cap $cap");
+            self::assertGreaterThanOrEqual(1, $this->pathCount($glob), "no path survived at cap $cap");
+        }
+
+        // And at the SHIPPED default the nudge is still there, so the bound
+        // above is not being satisfied by never emitting one. The eighth is a
+        // real reserve at every cap that can hold an entry.
+        //
+        // MEASURED by binary sweep on SkillPathNudge::forPaths(), PHP 8.3.6 —
+        // and note there is no single threshold, because the deferred-note
+        // reserve is charged only when something is actually held back
+        // (`$reserve = $seen === $total ? 0 : $noteReserve`):
+        //
+        //   pending x desc | min budget | min cap (x8)
+        //    1 x 20,000    |    434     |    3,472
+        //    2 x 20,000    |    529     |    4,232
+        //    1 x 30        |    173     |    1,384
+        //   20 x 30        |    268     |    2,144
+        //
+        // Chrome is strlen(HEADER) + strlen(FOOTER) = 115 + 19 = 134; one
+        // clipped entry is at most MAX_ENTRY_BYTES = 300; the note reserve
+        // adds 95. An earlier revision of this comment said "515 bytes" and a
+        // single threshold of 4,120 (1,960 for a short entry); all three
+        // figures were wrong and none named which of the four cases it meant.
+        // Below the applicable threshold the nudge is deferred, not dropped —
+        // see {@see testASkillTheReservationCannotHoldIsNotSpent()}.
+        $default = (new Grep($this->dir, 65536, null, $this->fatNudge(20, 20000)))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+        self::assertStringContainsString('<system-reminder>', $default);
+        self::assertGreaterThanOrEqual(1, $this->hitCount($default));
+    }
+
+    /**
+     * Read's cap is a per-file READ bound, so — exactly as for the instruction
+     * body prepended above it — the FILE's share is not reduced to pay for the
+     * nudge. The nudge instead takes its own eighth, which makes the stated
+     * total 1.375x $maxBytes where before it was an unbounded multiple:
+     * MEASURED at 8add627b at $maxBytes 200, twenty skills with 20,000-byte
+     * descriptions returned 400,406 bytes — 2,002.0x.
+     */
+    public function testReadBoundsTheSkillNudgeItAppends(): void
+    {
+        // A file large enough that the BODY saturates its cap. With the short
+        // fixture this test used to carry, Read returned 22 bytes against a
+        // 1.375x-of-65,536 assertion — the bound was never approached and the
+        // ceiling proved nothing. MEASURED on this fixture (PHP 8.3.6): the
+        // worst ratio reached is 1.111x at maxBytes 21,000.
+        file_put_contents(
+            $this->dir . '/sub/target.php',
+            "<?php\n" . str_repeat("// filler line to make this file large\n", 5000),
+        );
+
+        // Read gives the nudge an EIGHTH of its cap, and one clipped entry
+        // costs 434 bytes (115 header + 300 entry + 19 footer, no deferred-note
+        // reserve when a single skill is all there is). So below a cap of
+        // 8 x 434 = 3,472 the eighth cannot hold even one entry and the nudge
+        // is DEFERRED, not spent. Both regimes are asserted, because a test
+        // that only checks the ceiling passes when the nudge never appears —
+        // measured: replacing Read::execute()'s forPath(...) call with `null`
+        // left the old version of this test green.
+        $affordable = [8192, 21000, 65536];
+        $tooSmall = [200, 1024];
+
+        foreach ([...$tooSmall, ...$affordable] as $maxBytes) {
+            $content = (new Read($this->dir, $maxBytes, null, null, [], $this->fatNudge(20, 20000)))
+                ->execute(['file_path' => $this->dir . '/sub/target.php'])
+                ->content();
+
+            self::assertLessThanOrEqual(
+                (int) ($maxBytes * 1.375),
+                strlen($content),
+                "Read at maxBytes $maxBytes overran its stated 1.375x",
+            );
+
+            if (\in_array($maxBytes, $affordable, true)) {
+                self::assertStringContainsString(
+                    '<system-reminder>',
+                    $content,
+                    "Read at maxBytes $maxBytes can afford a nudge and must emit one, "
+                    . 'or the ceiling above is vacuous',
+                );
+                continue;
+            }
+
+            self::assertStringNotContainsString(
+                '<system-reminder>',
+                $content,
+                "Read at maxBytes $maxBytes cannot fit one entry in an eighth, so the "
+                . 'nudge must be deferred rather than half-emitted',
+            );
+        }
+
+        // …and the ceiling is not vacuous BECAUSE the body really saturates:
+        // at the cap where the ratio peaks, the result must exceed the cap
+        // itself, which is only possible if a nudge was appended beside it.
+        $peak = (new Read($this->dir, 21000, null, null, [], $this->fatNudge(20, 20000)))
+            ->execute(['file_path' => $this->dir . '/sub/target.php'])
+            ->content();
+        self::assertGreaterThan(21000, strlen($peak), 'the 1.375x headroom must actually be used');
+    }
+
+    /**
+     * A tool built with no nudge tracker, and a tool whose every scoped skill
+     * has already been announced, must be BYTE-IDENTICAL to what they returned
+     * before the reservation existed — the reservation is taken only where a
+     * nudge is actually produced.
+     */
+    public function testACallWithNoNudgeToShowGetsTheWholeCap(): void
+    {
+        $this->seedMatches(30);
+        $nudge = $this->fatNudge(3, 100);
+
+        $withNudge = (new Grep($this->dir, 65536, null, $nudge))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+        self::assertStringContainsString('<system-reminder>', $withNudge, 'the first call must nudge');
+
+        // Same tracker, second call: announce-once means there is nothing left
+        // to say, so the cap is the hit list's alone.
+        $spent = (new Grep($this->dir, 65536, null, $nudge))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+        $unwired = (new Grep($this->dir, 65536))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+
+        self::assertSame($unwired, $spent, 'a call with nothing to nudge must match the unwired tool');
+        self::assertNotSame($unwired, $withNudge, 'and the first call must genuinely differ, or this proves nothing');
+    }
+
+    /**
+     * A skill withheld because the reservation could not hold it is NOT spent:
+     * the next call surfaces it. Spending a mark on a nudge the model never
+     * received retires the skill for the session.
+     */
+    public function testASkillTheReservationCannotHoldIsNotSpent(): void
+    {
+        $this->seedMatches(30);
+        $nudge = $this->fatNudge(1, 20000);
+
+        // A cap whose eighth (128 bytes) cannot hold the chrome plus one entry.
+        $tight = (new Grep($this->dir, 1024, null, $nudge))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+        self::assertStringNotContainsString('<system-reminder>', $tight, 'nothing should fit at this cap');
+
+        $roomy = (new Grep($this->dir, 65536, null, $nudge))
+            ->execute(['pattern' => 'NEEDLE_TOKEN', 'path' => $this->dir])
+            ->content();
+        self::assertStringContainsString('<system-reminder>', $roomy, 'the skill must not have been retired unseen');
+    }
+
+    /**
+     * $count `paths:`-scoped auto-invocable skills, each with a $descLen-byte
+     * description, all matching every `.php` file under the fixture root.
+     */
+    private function fatNudge(int $count, int $descLen): SkillPathNudge
+    {
+        $registry = new SkillRegistry();
+        $skills = [];
+        for ($i = 0; $i < $count; $i++) {
+            $name = "fat-$i";
+            $skills[$name] = Skill::parse(
+                "---\ndescription: " . str_repeat('d', $descLen) . "\npaths:\n  - '*'\n---\nbody\n",
+                $name,
+            );
+        }
+        $registry->register($skills);
+
+        return SkillPathNudge::new($registry);
     }
 
     // =========================================================================

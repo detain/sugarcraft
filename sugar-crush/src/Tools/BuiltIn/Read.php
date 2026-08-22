@@ -247,7 +247,9 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
             // actually asked for, and the whole failure being fixed here is a
             // budget spent on the wrong content. So the total is bounded at
             // $maxBytes plus the instruction reserve rather than at $maxBytes
-            // — a stated 1.25x, replacing an unbounded multiple.
+            // — a stated 1.25x, replacing an unbounded multiple. The skill
+            // nudge below takes a further eighth on the same terms, so the
+            // whole result is bounded at 1.375x $maxBytes.
             //
             // max(1, ...) and not the raw quarter: 0 is clipInstructions()'s
             // "no cap" sentinel, so a $maxBytes small enough for intdiv() to
@@ -266,7 +268,36 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
 
             // Appended, not prepended: the file the model asked for stays the
             // head of the result and the reminder trails it.
-            $nudge = $this->skillNudge?->forPath($path);
+            //
+            // BOUNDED, which it was not — E66. It emitted one line per
+            // matching auto-invocable skill carrying that skill's whole
+            // frontmatter `description`, with no clip anywhere. MEASURED at
+            // 8add627b through this tool at $maxBytes 200: five path-scoped
+            // skills with 5,000-byte descriptions returned 25,216 bytes
+            // (126.1x) and twenty with 20,000-byte descriptions returned
+            // 400,406 (2,002.0x).
+            //
+            // An EIGHTH of $maxBytes, where the instruction body takes a
+            // quarter, so the stated total is $maxBytes + 3/8 — 1.375x — and
+            // is a multiple rather than the unbounded one it replaces. It is
+            // the same share {@see Glob} and {@see Grep} give it, for the same
+            // reason.
+            //
+            // The FILE's share is again deliberately NOT reduced to pay for
+            // it, on the argument set out above for the instruction body: a
+            // read that returns less of the file because a skill claims its
+            // directory is a silent content loss against the thing the caller
+            // asked for.
+            //
+            // A budget too small for one entry surfaces nothing and SPENDS
+            // nothing, so the skill is announced by the next call with room
+            // rather than retired unseen. $maxBytes <= 0 is unreachable here —
+            // fread() is called with it above and throws first — so the null
+            // branch is stated for the contract, not for a caller.
+            $nudge = $this->skillNudge?->forPath(
+                $path,
+                $this->maxBytes > 0 ? intdiv($this->maxBytes, 8) : null,
+            );
             if ($nudge !== null) {
                 $content .= "\n\n" . $nudge;
             }
