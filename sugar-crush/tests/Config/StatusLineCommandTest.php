@@ -53,6 +53,27 @@ final class StatusLineCommandTest extends TestCase
         return [StatusLineCommand::KEY => $entry];
     }
 
+    /**
+     * The wall-clock ceiling one killed run may cost, DERIVED from the three
+     * constants that actually bound it plus a named slack for process
+     * scheduling.
+     *
+     * The previous spelling was `TIMEOUT_SECONDS + 1.0 + 1.0` under a docblock
+     * that called those two the grace periods; they are 0.5 each, so the two
+     * numbers were 1.0 of margin each written as if they were the graces. Same
+     * total (3.0 at TIMEOUT_SECONDS = 1.0), different claim: this one moves if
+     * a grace moves, and says which part is slack.
+     */
+    private static function budgetCeiling(float $slack = 1.0): float
+    {
+        $constants = new \ReflectionClass(StatusLineCommand::class);
+
+        return StatusLineCommand::TIMEOUT_SECONDS
+            + (float) $constants->getConstant('TERMINATE_GRACE_SECONDS')
+            + (float) $constants->getConstant('KILL_GRACE_SECONDS')
+            + $slack;
+    }
+
     private static function command(string $command): StatusLineCommand
     {
         $parsed = StatusLineCommand::fromSettings(self::settings([
@@ -222,7 +243,7 @@ final class StatusLineCommandTest extends TestCase
      */
     public function testAHangingCommandIsKilledWithinItsBudget(): void
     {
-        $ceiling = StatusLineCommand::TIMEOUT_SECONDS + 1.0 + 1.0;
+        $ceiling = self::budgetCeiling();
 
         $started = microtime(true);
         $line = self::command('sleep 30')->run();
@@ -244,7 +265,7 @@ final class StatusLineCommandTest extends TestCase
      */
     public function testACommandThatClosesItsPipesAndThenSleepsIsStillBounded(): void
     {
-        $ceiling = StatusLineCommand::TIMEOUT_SECONDS + 1.0 + 1.0;
+        $ceiling = self::budgetCeiling();
 
         $started = microtime(true);
         $line = self::command('printf hi; exec 1>&- 2>&-; sleep 30')->run();
@@ -319,6 +340,62 @@ final class StatusLineCommandTest extends TestCase
         self::assertSame('', self::command('exec printf "%020000d" 0')->run());
     }
 
+    /**
+     * A COMMAND THAT TRAPS TERM IS STILL BOUNDED, which is the whole reason
+     * {@see StatusLineCommand::terminateAndEscalate()} escalates to signal 9.
+     * Every other hang fixture in this file dies on the SIGTERM, so none of
+     * them enters that branch: at db20c568 the two `proc_terminate($process, 9)`
+     * lines could be DELETED and all 32 tests here stayed green.
+     *
+     * Two-sided, because the ceiling alone does not say the escalation
+     * happened. The floor is budget + the TERM grace: reaching it means the
+     * SIGTERM was sent, ignored, and waited out — i.e. the escalation branch
+     * was entered — and the ceiling then says signal 9 got us out of it.
+     * Measured in-lane on PHP 8.3.6: 1.514 s for this command against 1.011 s
+     * for a plain `sleep 30`, i.e. exactly the one extra grace.
+     */
+    public function testACommandThatIgnoresSigtermIsStillKilled(): void
+    {
+        $graceFloor = StatusLineCommand::TIMEOUT_SECONDS
+            + (float) (new \ReflectionClass(StatusLineCommand::class))->getConstant('TERMINATE_GRACE_SECONDS');
+
+        $started = microtime(true);
+        $line = self::command('trap "" TERM; sleep 30')->run();
+        $elapsed = microtime(true) - $started;
+
+        self::assertSame('', $line);
+        self::assertGreaterThanOrEqual(
+            $graceFloor,
+            $elapsed,
+            'the TERM grace never expired, so the escalation branch was not the thing under test',
+        );
+        self::assertLessThan(self::budgetCeiling(), $elapsed);
+    }
+
+    /**
+     * STDIN IS CLOSED BEFORE THE DRAIN, so a command that reads it gets EOF
+     * instead of blocking until the budget kills it once per tick.
+     *
+     * `cat` is the whole discriminator: with the write end closed it returns
+     * immediately and the `echo` after it runs, so the run answers `done` in
+     * milliseconds. With `fclose($pipes[0])` deleted — which passed every test
+     * in this file at db20c568 — `cat` blocks on a pipe this process is still
+     * holding open, the budget expires, and the run answers ''.
+     */
+    public function testACommandThatReadsStdinGetsEofRatherThanTheWholeBudget(): void
+    {
+        $started = microtime(true);
+        $line = self::command('cat; echo done')->run();
+        $elapsed = microtime(true) - $started;
+
+        self::assertSame('done', $line);
+        self::assertLessThan(
+            StatusLineCommand::TIMEOUT_SECONDS,
+            $elapsed,
+            'it waited out the budget, so stdin was still open',
+        );
+    }
+
     // =====================================================================
     // WHAT A FAILING COMMAND PAINTS — nothing
     // =====================================================================
@@ -336,6 +413,34 @@ final class StatusLineCommandTest extends TestCase
     public function testASilentSuccessPaintsNothing(): void
     {
         self::assertSame('', self::command('true')->run());
+    }
+
+    /**
+     * A `statusLine` THAT IS NOT AN OBJECT IS REFUSED, which is the shorthand
+     * a user reaching for `{"statusLine": "git branch --show-current"}` would
+     * write. Refused rather than guessed at, for {@see StatusLineCommand::TYPE_COMMAND}'s
+     * reason: the value names something to EXECUTE, so a shape this build does
+     * not understand must not be executed on the assumption that it means what
+     * the one shape it does understand means.
+     *
+     * WHAT THIS DOES NOT PIN, stated so the next reader does not take it for
+     * more than it is: the `!is_array($entry)` guard itself is unfalsifiable
+     * from here. Deleting it leaves this test green, because `$entry['type']
+     * ?? null` on a string, an int or a bool is null in PHP 8.3 and the `type`
+     * check below then refuses anyway. The guard is a type assertion for the
+     * reader and for static analysis, not a reachable branch; the BEHAVIOUR is
+     * what is pinned.
+     */
+    public function testAStatusLineThatIsNotAnObjectIsRefused(): void
+    {
+        self::assertNull(StatusLineCommand::fromSettings(self::settings([])));
+
+        foreach (['git branch --show-current', 42, true, 1.5] as $entry) {
+            self::assertNull(
+                StatusLineCommand::fromSettings([StatusLineCommand::KEY => $entry]),
+                'a ' . get_debug_type($entry) . ' was accepted as a statusLine entry',
+            );
+        }
     }
 
     // =====================================================================
@@ -601,6 +706,40 @@ final class StatusLineCommandTest extends TestCase
         StatusLineCommand::configure([]);
         self::assertNull(StatusLineCommand::active());
         self::assertSame('', StatusLineCommand::line());
+    }
+
+    /**
+     * THE TTL IS RE-ARMED FROM WHEN THE RUN ENDS, not from when it started —
+     * the clause {@see StatusLineCommand::refresh()}'s docblock states and
+     * nothing asserted. Re-arming from the start makes a command that spends
+     * `s` seconds eligible again `s` seconds early, so a slow command is run
+     * more often than the period says, which is the opposite of what the
+     * period is for.
+     *
+     * 0.6 s of sleep: inside {@see StatusLineCommand::TIMEOUT_SECONDS} (1.0) so
+     * the run genuinely COMPLETES rather than being killed, and far enough
+     * above the 0.0 the mutant would leave that scheduling jitter cannot
+     * confuse the two. Read through reflection because `$refreshedAt` has no
+     * accessor — it is process bookkeeping, not a value the renderer reads.
+     */
+    public function testTheTtlIsRearmedFromWhenTheRunEndsNotFromWhenItStarted(): void
+    {
+        StatusLineCommand::configure(self::settings(['type' => 'command', 'command' => 'sleep 0.6; echo late']));
+
+        $before = microtime(true);
+        StatusLineCommand::refresh();
+        $after = microtime(true);
+
+        self::assertSame('late', StatusLineCommand::line(), 'the run must have completed, not been killed');
+
+        $refreshedAt = (float) (new \ReflectionProperty(StatusLineCommand::class, 'refreshedAt'))->getValue();
+
+        self::assertGreaterThanOrEqual(
+            $before + 0.5,
+            $refreshedAt,
+            'the TTL was armed from the start of the run, so a slow command re-runs early',
+        );
+        self::assertLessThanOrEqual($after, $refreshedAt);
     }
 
     /**

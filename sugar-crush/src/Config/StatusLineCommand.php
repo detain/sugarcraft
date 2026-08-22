@@ -84,21 +84,42 @@ final class StatusLineCommand
      *
      * This is the interval between the STARTS of two refreshes only when the
      * command is fast. {@see refresh()} is called from a subscription tick and
-     * runs synchronously, so a command that spends its whole budget makes the
-     * effective period `REFRESH_SECONDS + TIMEOUT_SECONDS`. Stated because the
-     * two are not the same number and the difference is the one a user chasing
-     * a laggy TUI would measure.
+     * runs synchronously, so a command that spends its whole budget stretches
+     * the effective period by the WHOLE cost of a killed run — which is the
+     * budget plus both grace periods, not the budget alone.
+     *
+     * The previous revision said `REFRESH_SECONDS + TIMEOUT_SECONDS` (3.0 s).
+     * That leaves out {@see TERMINATE_GRACE_SECONDS} and
+     * {@see KILL_GRACE_SECONDS}, 0.5 s each. By construction the worst case is
+     * `REFRESH_SECONDS + TIMEOUT_SECONDS + 1.0` = 4.0 s; MEASURED in-lane on
+     * PHP 8.3.6, `trap '' TERM; sleep 30` costs 1.514 s per run (budget 1.0 +
+     * the TERM grace 0.5, then signal 9 lands at once rather than spending its
+     * own grace), so the measured worst effective period is 3.5 s. Stated
+     * because the numbers are not the same and the difference is what a user
+     * chasing a laggy TUI would actually measure.
      */
     public const REFRESH_SECONDS = 2.0;
 
     /**
      * Wall-clock budget for ONE run.
      *
-     * DERIVED FROM {@see REFRESH_SECONDS}, NOT CHOSEN. Half the refresh period
-     * is the largest budget for which a run cannot still be in progress when
-     * the next tick arrives, with the same margin again to spare — so runs can
-     * never overlap or pile up, and that property survives a future change to
-     * the period without anyone having to remember this constant exists.
+     * DERIVED FROM {@see REFRESH_SECONDS}, NOT CHOSEN — half of it, so the
+     * budget tracks any future change to the period without anyone having to
+     * remember this constant exists.
+     *
+     * WHAT THE DERIVATION DOES NOT BUY, corrected here rather than removed
+     * because the derivation still earns its place as the thing that keeps the
+     * budget proportionate. The previous revision said half the period "is the
+     * largest budget for which a run cannot still be in progress when the next
+     * tick arrives, with the same margin again to spare", which cannot be both
+     * (the largest such budget has no margin left by definition), and neither
+     * half is arithmetically true once the two 0.5 s graces below are counted:
+     * a killed run can cost `TIMEOUT_SECONDS + 1.0` = 2.0 s by construction,
+     * which is the whole period. WHAT ACTUALLY MAKES OVERLAP IMPOSSIBLE is that
+     * {@see refresh()} is SYNCHRONOUS ON THE TUI THREAD — the event loop is
+     * inside `run()` for the whole of it, so no second tick can be delivered
+     * while a first run is outstanding, at any budget. The derivation bounds
+     * how much of the period one run may eat, not whether two can coexist.
      *
      * NOT OPERATOR-CONFIGURABLE, unlike {@see \SugarCraft\Crush\Hooks\ScriptHook::DEFAULT_TIMEOUT_SECONDS},
      * whose entries may raise it with `timeout:`. That key is a per-tool-call
@@ -112,8 +133,15 @@ final class StatusLineCommand
      *
      * WHAT A HANG COSTS, since that is the question the number exists to
      * answer: {@see refresh()} runs on the TUI's own thread, so a command that
-     * never returns freezes the frame for exactly this long, once per tick, and
-     * is then SIGTERMed and SIGKILLed ({@see terminateAndEscalate()}). The
+     * never returns freezes the frame once per tick for this budget PLUS
+     * however much of the two graces the kill needs — NOT "exactly this long",
+     * which is what the previous revision said. Measured in-lane on PHP 8.3.6:
+     * a plain `sleep 30` costs 1.011 s (it dies on the SIGTERM), and
+     * `trap '' TERM; sleep 30` costs 1.514 s (budget + the TERM grace, then
+     * signal 9). Both are pinned, two-sided, by
+     * `StatusLineCommandTest::testAHangingCommandIsKilledWithinItsBudget()` and
+     * `::testACommandThatIgnoresSigtermIsStillKilled()`, against a ceiling
+     * derived from these three constants rather than written down. The
      * previous run's text keeps being painted meanwhile — a hanging command
      * blanks the segment rather than blanking the bar, see {@see refresh()}.
      */
@@ -640,6 +668,21 @@ final class StatusLineCommand
                     // feof() is the EOF test, not the empty read: a
                     // non-blocking pipe legitimately returns '' when the child
                     // has written nothing YET.
+                    //
+                    // AN HONEST GAP: nothing pins this guard, and replacing the
+                    // whole block with a bare `unset($open[$slot]);` keeps this
+                    // lib green. That is not an oversight that a fixture would
+                    // close. For a real pipe the two forms only diverge when
+                    // `stream_select()` reports the descriptor readable and the
+                    // read then yields no bytes WITHOUT the peer having closed
+                    // — a spurious or EINTR wake, which cannot be provoked from
+                    // inside this process; every reachable empty read here is
+                    // an EOF, where both forms unset. The guard is kept because
+                    // the divergent case, though unforceable, is the one that
+                    // costs the tail of a command's output, and because the
+                    // retried-`false` branch above documents that this drain
+                    // does run under a SIGWINCH handler with
+                    // `pcntl_async_signals()` on.
                     if (feof($pipe)) {
                         unset($open[$slot]);
                     }

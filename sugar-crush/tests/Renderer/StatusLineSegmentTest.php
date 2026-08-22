@@ -298,6 +298,35 @@ final class StatusLineSegmentTest extends TestCase
     }
 
     /**
+     * A LINE THAT EXACTLY FILLS THE ROOM IS PAINTED WHOLE. The clip threshold
+     * is `>` and not `>=` for this reason, and at db20c568 the two were
+     * indistinguishable to every test here — a `>=` costs the last column of a
+     * line that fits, replacing it with an ellipsis that announces a truncation
+     * that did not happen.
+     *
+     * `$room` is DERIVED from the bar this fixture actually produces rather
+     * than written down, because it is a function of the terminal width and the
+     * app state: at 100 columns on this class's two-message fixture the idle bar
+     * is 75 and the separator is 3, so the room is 22 — but none of those three
+     * numbers belongs in the assertion.
+     */
+    public function testALineThatExactlyFillsTheRoomKeepsItsLastColumn(): void
+    {
+        $chat = $this->chat(100);
+
+        StatusLineCommand::reset();
+        $room = 100 - Width::of($this->bar($chat)) - Width::of(' · ');
+        self::assertGreaterThan(1, $room, 'the fixture must leave room, or this proves nothing');
+
+        self::install('printf "%s" ' . str_repeat('x', $room));
+        $bar = $this->bar($chat);
+
+        self::assertStringEndsWith(' · ' . str_repeat('x', $room), $bar);
+        self::assertStringEndsNotWith('…', $bar, 'a line that fits was announced as truncated');
+        self::assertSame(100, Width::of($bar));
+    }
+
+    /**
      * NO ROOM AT ALL MEANS NO SEGMENT. The bar is already at or past the
      * terminal width below 36 columns; the segment must simply not appear
      * rather than being clipped to one column of ellipsis.
@@ -380,6 +409,56 @@ final class StatusLineSegmentTest extends TestCase
         );
 
         self::assertNotNull($this->chat()->subscriptions());
+    }
+
+    /**
+     * AND THE TICK CARRIES THE PERIOD AND THE ID IT IS DOCUMENTED TO CARRY.
+     * Both were unasserted at db20c568: the period passed to `withTick()` could
+     * be changed to 3600.0 and the subscription id to `crush.background-poll`
+     * with all 12 tests here staying green — the second being exactly the
+     * reconciliation-key collision the constant's own docblock exists to
+     * prevent, since the runtime diffs the old subscription set against the new
+     * one BY ID.
+     *
+     * The uniqueness half is asserted over every `*_SUBSCRIPTION` constant
+     * `Chat` declares rather than against a written-down list of the other two,
+     * so a fourth subscription added later is covered without anyone editing
+     * this test.
+     */
+    public function testTheTickCarriesTheRefreshPeriodUnderAnIdNoOtherSubscriptionUses(): void
+    {
+        StatusLineCommand::configure(
+            [StatusLineCommand::KEY => ['type' => 'command', 'command' => 'echo hi']],
+        );
+
+        $subscriptions = $this->chat()->subscriptions();
+        self::assertNotNull($subscriptions);
+
+        $all = $subscriptions->all();
+        self::assertCount(1, $all, 'the idle fixture declares no other subscription');
+        $tick = $all[0];
+
+        self::assertSame(
+            StatusLineCommand::REFRESH_SECONDS,
+            $tick->params['seconds'] ?? null,
+            'the tick period is not the runner\'s own refresh period',
+        );
+        self::assertInstanceOf(StatusLineTickMsg::class, ($tick->produce)());
+
+        $ids = [];
+        foreach ((new \ReflectionClass(Chat::class))->getConstants() as $name => $value) {
+            if (str_ends_with($name, '_SUBSCRIPTION')) {
+                $ids[$name] = $value;
+            }
+        }
+
+        self::assertGreaterThanOrEqual(3, \count($ids), 'fewer ids than Chat declares, so uniqueness proves little');
+        self::assertContains($tick->id, $ids, 'the tick is not using any declared subscription constant');
+        self::assertCount(
+            \count($ids),
+            array_unique(array_values($ids)),
+            'two subscriptions share a reconciliation key: ' . json_encode($ids),
+        );
     }
 
     /**
