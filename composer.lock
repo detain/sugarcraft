@@ -62,16 +62,16 @@
         },
         {
             "name": "aws/aws-sdk-php",
-            "version": "3.390.4",
+            "version": "3.393.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/aws/aws-sdk-php.git",
-                "reference": "51115bd27065e978c2a4cf297f8280d8c39e83da"
+                "reference": "a5880510e500aa0fe13a6410183cd222b3263890"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/51115bd27065e978c2a4cf297f8280d8c39e83da",
-                "reference": "51115bd27065e978c2a4cf297f8280d8c39e83da",
+                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/a5880510e500aa0fe13a6410183cd222b3263890",
+                "reference": "a5880510e500aa0fe13a6410183cd222b3263890",
                 "shasum": ""
             },
             "require": {
@@ -153,9 +153,9 @@
             "support": {
                 "forum": "https://github.com/aws/aws-sdk-php/discussions",
                 "issues": "https://github.com/aws/aws-sdk-php/issues",
-                "source": "https://github.com/aws/aws-sdk-php/tree/3.390.4"
+                "source": "https://github.com/aws/aws-sdk-php/tree/3.393.4"
             },
-            "time": "2026-08-04T18:52:58+00:00"
+            "time": "2026-08-21T18:24:57+00:00"
         },
         {
             "name": "brick/math",
@@ -469,16 +469,16 @@
         },
         {
             "name": "google/cloud-ai-platform",
-            "version": "v1.63.0",
+            "version": "v1.64.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/google-cloud-php-ai-platform.git",
-                "reference": "ce48f0528b6cd54d7f71702131ade2c7bc82707a"
+                "reference": "77bbd8b8dee423704de6a950906d19e36400d3a0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/google-cloud-php-ai-platform/zipball/ce48f0528b6cd54d7f71702131ade2c7bc82707a",
-                "reference": "ce48f0528b6cd54d7f71702131ade2c7bc82707a",
+                "url": "https://api.github.com/repos/googleapis/google-cloud-php-ai-platform/zipball/77bbd8b8dee423704de6a950906d19e36400d3a0",
+                "reference": "77bbd8b8dee423704de6a950906d19e36400d3a0",
                 "shasum": ""
             },
             "require": {
@@ -513,9 +513,9 @@
             ],
             "description": "Google Cloud Ai Platform Client for PHP",
             "support": {
-                "source": "https://github.com/googleapis/google-cloud-php-ai-platform/tree/v1.63.0"
+                "source": "https://github.com/googleapis/google-cloud-php-ai-platform/tree/v1.64.0"
             },
-            "time": "2026-07-22T05:23:19+00:00"
+            "time": "2026-08-10T16:39:50+00:00"
         },
         {
             "name": "google/common-protos",
@@ -578,16 +578,16 @@
         },
         {
             "name": "google/gax",
-            "version": "v1.47.0",
+            "version": "v1.48.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/gax-php.git",
-                "reference": "ec67d460a42acaea3b787c73ff29801978d12ae5"
+                "reference": "637096f2c70f6bc903ba24aee3a0d974d739aba8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/gax-php/zipball/ec67d460a42acaea3b787c73ff29801978d12ae5",
-                "reference": "ec67d460a42acaea3b787c73ff29801978d12ae5",
+                "url": "https://api.github.com/repos/googleapis/gax-php/zipball/637096f2c70f6bc903ba24aee3a0d974d739aba8",
+                "reference": "637096f2c70f6bc903ba24aee3a0d974d739aba8",
                 "shasum": ""
             },
             "require": {
@@ -636,9 +636,9 @@
             ],
             "support": {
                 "issues": "https://github.com/googleapis/gax-php/issues",
-                "source": "https://github.com/googleapis/gax-php/tree/v1.47.0"
+                "source": "https://github.com/googleapis/gax-php/tree/v1.48.0"
             },
-            "time": "2026-07-28T00:15:15+00:00"
+            "time": "2026-08-14T23:32:22+00:00"
         },
         {
             "name": "google/grpc-gcp",
@@ -687,16 +687,16 @@
         },
         {
             "name": "google/longrunning",
-            "version": "0.7.1",
+            "version": "0.8.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/php-longrunning.git",
-                "reference": "cac9bedf199239ae2b1acd4a8e4ea2276bd9f55a"
+                "reference": "309705016290679e6fe14b727f4b1a3e04ae52f4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/php-longrunning/zipball/cac9bedf199239ae2b1acd4a8e4ea2276bd9f55a",
-                "reference": "cac9bedf199239ae2b1acd4a8e4ea2276bd9f55a",
+                "url": "https://api.github.com/repos/googleapis/php-longrunning/zipball/309705016290679e6fe14b727f4b1a3e04ae52f4",
+                "reference": "309705016290679e6fe14b727f4b1a3e04ae52f4",
                 "shasum": ""
             },
             "require-dev": {
@@ -725,29 +725,29 @@
             ],
             "description": "Google LongRunning Client for PHP",
             "support": {
-                "source": "https://github.com/googleapis/php-longrunning/tree/v0.7.1"
+                "source": "https://github.com/googleapis/php-longrunning/tree/v0.8.1"
             },
-            "time": "2026-03-31T19:52:22+00:00"
+            "time": "2026-08-14T23:32:22+00:00"
         },
         {
             "name": "google/protobuf",
-            "version": "v5.35.1",
+            "version": "v5.36.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/protocolbuffers/protobuf-php.git",
-                "reference": "55bb4a7d6739b5af0927b96213c1371a3afb7cfb"
+                "reference": "9c105104b54709ecd902494ab340ed2122789b2d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/protocolbuffers/protobuf-php/zipball/55bb4a7d6739b5af0927b96213c1371a3afb7cfb",
-                "reference": "55bb4a7d6739b5af0927b96213c1371a3afb7cfb",
+                "url": "https://api.github.com/repos/protocolbuffers/protobuf-php/zipball/9c105104b54709ecd902494ab340ed2122789b2d",
+                "reference": "9c105104b54709ecd902494ab340ed2122789b2d",
                 "shasum": ""
             },
             "require": {
                 "php": ">=8.2.0"
             },
             "require-dev": {
-                "phpunit/phpunit": ">=11.5.0 <12.0.0"
+                "phpunit/phpunit": ">=11.5.50 <12.0.0"
             },
             "suggest": {
                 "ext-bcmath": "Need to support JSON deserialization"
@@ -769,9 +769,9 @@
                 "proto"
             ],
             "support": {
-                "source": "https://github.com/protocolbuffers/protobuf-php/tree/v5.35.1"
+                "source": "https://github.com/protocolbuffers/protobuf-php/tree/v5.36.0"
             },
-            "time": "2026-06-11T21:19:23+00:00"
+            "time": "2026-08-20T13:06:50+00:00"
         },
         {
             "name": "grpc/grpc",
@@ -819,21 +819,21 @@
         },
         {
             "name": "guzzlehttp/guzzle",
-            "version": "7.15.2",
+            "version": "7.15.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "744101956d78b7c1384d0cbf379db13e859167bf"
+                "reference": "ae311b8f045ea93ce7b1c9cdb7cec06c53f944bc"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/744101956d78b7c1384d0cbf379db13e859167bf",
-                "reference": "744101956d78b7c1384d0cbf379db13e859167bf",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/ae311b8f045ea93ce7b1c9cdb7cec06c53f944bc",
+                "reference": "ae311b8f045ea93ce7b1c9cdb7cec06c53f944bc",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
-                "guzzlehttp/promises": "^2.5.1",
+                "guzzlehttp/promises": "^2.5.2",
                 "guzzlehttp/psr7": "^2.13",
                 "php": "^7.2.5 || ^8.0",
                 "psr/http-client": "^1.0",
@@ -927,7 +927,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/guzzle/issues",
-                "source": "https://github.com/guzzle/guzzle/tree/7.15.2"
+                "source": "https://github.com/guzzle/guzzle/tree/7.15.3"
             },
             "funding": [
                 {
@@ -943,20 +943,20 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-26T23:23:20+00:00"
+            "time": "2026-08-05T19:48:21+00:00"
         },
         {
             "name": "guzzlehttp/promises",
-            "version": "2.5.1",
+            "version": "2.5.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/promises.git",
-                "reference": "9ad1e4fc607446a055b95870c7f668e93b5cff29"
+                "reference": "2823687acff28b2dbe67b2508a6b300e2c3fa4ce"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/promises/zipball/9ad1e4fc607446a055b95870c7f668e93b5cff29",
-                "reference": "9ad1e4fc607446a055b95870c7f668e93b5cff29",
+                "url": "https://api.github.com/repos/guzzle/promises/zipball/2823687acff28b2dbe67b2508a6b300e2c3fa4ce",
+                "reference": "2823687acff28b2dbe67b2508a6b300e2c3fa4ce",
                 "shasum": ""
             },
             "require": {
@@ -1011,7 +1011,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/promises/issues",
-                "source": "https://github.com/guzzle/promises/tree/2.5.1"
+                "source": "https://github.com/guzzle/promises/tree/2.5.2"
             },
             "funding": [
                 {
@@ -1027,7 +1027,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-08T15:48:39+00:00"
+            "time": "2026-08-05T19:30:54+00:00"
         },
         {
             "name": "guzzlehttp/psr7",
@@ -1150,16 +1150,16 @@
         },
         {
             "name": "league/commonmark",
-            "version": "2.9.0",
+            "version": "2.10.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thephpleague/commonmark.git",
-                "reference": "5703d83ba3da3b2e356a5fedc848ed6d8ffb6529"
+                "reference": "d2d1aa8b35e072966c89bc0c66cf926e56767dc4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thephpleague/commonmark/zipball/5703d83ba3da3b2e356a5fedc848ed6d8ffb6529",
-                "reference": "5703d83ba3da3b2e356a5fedc848ed6d8ffb6529",
+                "url": "https://api.github.com/repos/thephpleague/commonmark/zipball/d2d1aa8b35e072966c89bc0c66cf926e56767dc4",
+                "reference": "d2d1aa8b35e072966c89bc0c66cf926e56767dc4",
                 "shasum": ""
             },
             "require": {
@@ -1196,7 +1196,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-main": "2.10-dev"
+                    "dev-main": "2.11-dev"
                 }
             },
             "autoload": {
@@ -1253,7 +1253,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-03T13:42:31+00:00"
+            "time": "2026-08-11T16:06:25+00:00"
         },
         {
             "name": "league/config",
@@ -1405,16 +1405,16 @@
         },
         {
             "name": "nette/schema",
-            "version": "v1.3.5",
+            "version": "v1.3.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nette/schema.git",
-                "reference": "f0ab1a3cda782dbc5da270d28545236aa80c4002"
+                "reference": "c54350438cd6914616f790a49cb424605f421562"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nette/schema/zipball/f0ab1a3cda782dbc5da270d28545236aa80c4002",
-                "reference": "f0ab1a3cda782dbc5da270d28545236aa80c4002",
+                "url": "https://api.github.com/repos/nette/schema/zipball/c54350438cd6914616f790a49cb424605f421562",
+                "reference": "c54350438cd6914616f790a49cb424605f421562",
                 "shasum": ""
             },
             "require": {
@@ -1466,9 +1466,9 @@
             ],
             "support": {
                 "issues": "https://github.com/nette/schema/issues",
-                "source": "https://github.com/nette/schema/tree/v1.3.5"
+                "source": "https://github.com/nette/schema/tree/v1.3.6"
             },
-            "time": "2026-02-23T03:47:12+00:00"
+            "time": "2026-08-16T21:58:41+00:00"
         },
         {
             "name": "nette/utils",
@@ -3214,7 +3214,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-async",
-                "reference": "55a05c13f3eb2bfe78677e8c3cb5ca67c8aab91b"
+                "reference": "951c0afb9d378f9c14fe97a533a3f7aeaa6b0a2a"
             },
             "require": {
                 "php": "^8.3",
@@ -3328,9 +3328,10 @@
             "dist": {
                 "type": "path",
                 "url": "candy-core",
-                "reference": "0a6f36e494222c663c9d88c1b3e85d29e7c0bb39"
+                "reference": "b4e47399c2a5e8bc61d217d64cab677b34a3698c"
             },
             "require": {
+                "ext-intl": "*",
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
@@ -3398,7 +3399,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-files",
-                "reference": "24d2d67cc8ad123d97dde6b04c9dfcab6a585413"
+                "reference": "8c96d5f03144d09465ad9a4710339a2bac0cb668"
             },
             "require": {
                 "php": ">=8.3",
@@ -3462,7 +3463,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flip",
-                "reference": "e725b1eafebbe6e10ac7e0504c82abce1e228187"
+                "reference": "461c702c2678366d5c74c84a8b8c7cc73d713141"
             },
             "require": {
                 "ext-gd": "*",
@@ -3579,7 +3580,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-forms",
-                "reference": "f5a3f4d597827d48aa9c6d61c9d1203b03523f50"
+                "reference": "aa9fc820d114938e858d6cf883a83e8b2d200bc6"
             },
             "require": {
                 "php": "^8.3",
@@ -3640,7 +3641,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-freeze",
-                "reference": "3ee4f843707cec90ba1399c19dde945c503ceb42"
+                "reference": "255157d59afa759f3cdf331b590b7fb39d3e9eb1"
             },
             "require": {
                 "php": "^8.3",
@@ -3760,7 +3761,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-hermit",
-                "reference": "4c09c4f55988918f7d65e9458c6c6fb5ba668247"
+                "reference": "926db38348f306638e7597f5eb5b33279573c377"
             },
             "require": {
                 "php": "^8.3",
@@ -3819,7 +3820,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-input",
-                "reference": "1dd21498e249f92df969b48a4e66e4c93b01e1ab"
+                "reference": "f85e1ad1c049a2652355be7368db66310b2f7e75"
             },
             "require": {
                 "php": "^8.3",
@@ -3879,7 +3880,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-kit",
-                "reference": "7dc87b4f0a1ef012c463f33b6b2a3657f46de425"
+                "reference": "523771a5c3544b2be022249cb0ffe21b9bfb068a"
             },
             "require": {
                 "php": "^8.3",
@@ -3994,7 +3995,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-lister",
-                "reference": "f91b27571bf9f049b895f3a46ef47bbc3eb5b12c"
+                "reference": "cc1fa904d756a69d9a8d0d766db2848d2cbb4c11"
             },
             "require": {
                 "php": "^8.3",
@@ -4052,7 +4053,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-log",
-                "reference": "2acc28c12dafd73755a171b8ade02a60d6bcc31c"
+                "reference": "29dccccfcc0c32d098cc30eb3d6633cf1d2987f0"
             },
             "require": {
                 "php": "^8.3",
@@ -4111,7 +4112,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-metrics",
-                "reference": "5013ddc8dd1f60f7529495b00358e154f0a9b2e2"
+                "reference": "c695e2ebc7d1639db1a0c93bc6aa6f2ae8f563b8"
             },
             "require": {
                 "php": ">=8.3",
@@ -4172,7 +4173,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mines",
-                "reference": "44c0d7d4f49f7159f4fa828314042444e3d67c8a"
+                "reference": "798a11947f0b0177de258098339fd574a6002d3f"
             },
             "require": {
                 "php": ">=8.3",
@@ -4234,7 +4235,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mold",
-                "reference": "ba9ee9b88376b76a2bf453d8f8f0f046a20dc64c"
+                "reference": "d4089260ccaa0c637e40e1f44e0cacb9f4c5d2bb"
             },
             "require": {
                 "php": ">=8.3",
@@ -4296,7 +4297,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "4227562228b9476e9d0d80c1770b77c7d652fd4d"
+                "reference": "8f64181f5cd79a5fb50fced2eaae3ef280347522"
             },
             "require": {
                 "ext-gd": "*",
@@ -4364,7 +4365,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mouse",
-                "reference": "b71e99da86943f6fd9cd6852f428e07a4d1f2e07"
+                "reference": "308696552796256b741de92b003d982b06eb21aa"
             },
             "require": {
                 "php": "^8.3",
@@ -4420,7 +4421,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-palette",
-                "reference": "61af11b379620cf719323f9c65ece0ff23b34bb6"
+                "reference": "7cd7370026ebfc8e8b445bf64398cc2121795fff"
             },
             "require": {
                 "php": "^8.3",
@@ -4479,7 +4480,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-pty",
-                "reference": "75e5270042a92c794cd2f6bb85ae09d8775408ce"
+                "reference": "ed5e917369394c011252c15fcf81dbe802e3a990"
             },
             "require": {
                 "ext-ffi": "*",
@@ -4550,7 +4551,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-query",
-                "reference": "0ab1c2f2cd25f26499220f7ea5ebab2b6d651285"
+                "reference": "0c2071daca07b1aaa8cb083185a9253b6e49a1a3"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -4626,7 +4627,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-serve",
-                "reference": "1f46c6597e15247bc8812bbacd93d2a492ba2a8d"
+                "reference": "670bb3202eafe4c340a190676c0517b5a516d3cc"
             },
             "require": {
                 "ext-json": "*",
@@ -4699,7 +4700,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-shell",
-                "reference": "3e3e28c3fafebc324897ea6070b2203f2226bc8f"
+                "reference": "f9fa54f6fb29a28c49e5211c1db19a05e939a820"
             },
             "require": {
                 "php": "^8.3",
@@ -4771,7 +4772,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-shine",
-                "reference": "8bc9061e54bb16b5c366aedcfa758944c48e3119"
+                "reference": "2345aeb1a9f0027dba026aeafe081ab191903d78"
             },
             "require": {
                 "league/commonmark": "^2.4",
@@ -4833,7 +4834,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-sprinkles",
-                "reference": "70a09253b2702fb8635fea0c1468f57245762404"
+                "reference": "adb4ce01cbfa29c5b4c314a313cfb6d47f6904e3"
             },
             "require": {
                 "php": "^8.3",
@@ -4897,7 +4898,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-testing",
-                "reference": "a52fceb84d6ff0abbed5333a0b3ab9d1e59bf3f0"
+                "reference": "8732026df806700c8052fd064786f4917089d504"
             },
             "require": {
                 "php": "^8.3",
@@ -4956,7 +4957,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-tetris",
-                "reference": "f38f839b72a2d6835d9fd28da277e2b098d45d04"
+                "reference": "dc04722f68b9a2d5100c4b405b83d3dd3c895742"
             },
             "require": {
                 "php": ">=8.3",
@@ -5018,7 +5019,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "95458118da14c4dd1c15c08c3a95039b274c2619"
+                "reference": "f27ef7baf0c5bfe0894f4e90232d121da62a55e3"
             },
             "require": {
                 "php": "^8.3",
@@ -5092,7 +5093,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vt",
-                "reference": "ace99f04aaf721440c3625af9b3eaf6b10de7f56"
+                "reference": "929803aa7a3076457f0be4cf7a46de81dcbf15bb"
             },
             "require": {
                 "php": "^8.3",
@@ -5153,7 +5154,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-wish",
-                "reference": "737b431f042386f59df9ea80f9b7610b683cbe14"
+                "reference": "9c11942c5aef66eb4522a2ee0b10e855efd36933"
             },
             "require": {
                 "php": "^8.3",
@@ -5218,7 +5219,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-zone",
-                "reference": "e6f0200375c10e1b0b7cb5b8045ac7fb607ad6aa"
+                "reference": "522bc1f433d61b06d7ee247dcf2d61840daa1abd"
             },
             "require": {
                 "php": "^8.3",
@@ -5278,7 +5279,7 @@
             "dist": {
                 "type": "path",
                 "url": "honey-bounce",
-                "reference": "b5f9014bf62d9d774642e0990ca4f1e675c0e6a6"
+                "reference": "16986118de976cf2dcbd24aa08b009b1cc7f3c4e"
             },
             "require": {
                 "php": "^8.3",
@@ -5339,7 +5340,7 @@
             "dist": {
                 "type": "path",
                 "url": "honey-flap",
-                "reference": "5d44e011114d6af8e897910a4009a9521caca76d"
+                "reference": "c5b16767e9d7bc6d2f682a4a8c66bd99f19f82e4"
             },
             "require": {
                 "php": ">=8.3",
@@ -5402,7 +5403,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-bits",
-                "reference": "20937660e70c6e8814bada176610a2b6adaa9fca"
+                "reference": "680eed47605e54421cc36dce7e8e73a1cfc9c5a4"
             },
             "require": {
                 "php": "^8.3",
@@ -5472,7 +5473,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-boxer",
-                "reference": "e2ff87eef2d2f70471d16ad3758a1577954e1a81"
+                "reference": "3882d3d663499baf32bdbcfaac83051d955fe690"
             },
             "require": {
                 "php": "^8.3",
@@ -5531,7 +5532,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-calendar",
-                "reference": "2938b06d630fc8d28ccb62d2de14d1533fa264e4"
+                "reference": "b162d9d4ba594764828eafded77b5ddf35cfedfb"
             },
             "require": {
                 "php": "^8.3",
@@ -5588,7 +5589,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-charts",
-                "reference": "899a61b49c04008f77b3020096e171da3091825d"
+                "reference": "70ebbd6be4eb2c3eaad92a45cbc69e5d3dca626f"
             },
             "require": {
                 "php": "^8.3",
@@ -5657,7 +5658,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crumbs",
-                "reference": "cf74d764b1b1bf74d97a87bb8ef0b768f87765f8"
+                "reference": "a4c2ac046819495448f834f04e32bbc5a32cc609"
             },
             "require": {
                 "php": "^8.3",
@@ -5712,7 +5713,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "832a8944b3abb0acdbbce70fc2881585639a6ff1"
+                "reference": "da61f9b55bc5b4f9ee7df40752e85572fe6c27d0"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5723,8 +5724,10 @@
                 "php": "^8.3",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-focus": "@dev",
                 "sugarcraft/candy-forms": "dev-master",
                 "sugarcraft/candy-fuzzy": "dev-master",
+                "sugarcraft/candy-kit": "@dev",
                 "sugarcraft/candy-mosaic": "dev-master",
                 "sugarcraft/candy-mouse": "dev-master",
                 "sugarcraft/candy-shine": "dev-master",
@@ -5794,7 +5797,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-dash",
-                "reference": "2ded762a857f625efa2e2c4543b64078be62d286"
+                "reference": "ca6d9bdf411a74edb0dfd2298ea8fb1d0e5081a4"
             },
             "require": {
                 "php": "^8.3",
@@ -5865,7 +5868,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-gallery",
-                "reference": "b359ecdab50ff87d0482d4e1dfd57ab5a1622755"
+                "reference": "a688b278ae04e1a054561d06ded84e891d464110"
             },
             "require": {
                 "php": "^8.3",
@@ -5925,7 +5928,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-glow",
-                "reference": "1b76aa8fb726d02cdffcfc9a68dd52eaba7d0e71"
+                "reference": "2ec21e46ca76ca32dba239715648ec5280db0fba"
             },
             "require": {
                 "php": "^8.3",
@@ -5990,7 +5993,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-post",
-                "reference": "27a1f1081457f4ecd0e403191cccfaed99ba5923"
+                "reference": "d4046426be414ba80d88c530af50ce28fa099b5e"
             },
             "require": {
                 "php": "^8.3",
@@ -6051,7 +6054,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-prompt",
-                "reference": "d7b260137ed7e65156d5a9b202a12377702723a8"
+                "reference": "0f205de21fb344540fda30ab25dc159f80b1b545"
             },
             "require": {
                 "php": "^8.3",
@@ -6117,7 +6120,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-readline",
-                "reference": "6141a7ba6c7f21fe0d43d06af600f33db45d666e"
+                "reference": "133740b8e4f275956cf14263d43804474a705595"
             },
             "require": {
                 "php": "^8.3",
@@ -6174,7 +6177,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-reel",
-                "reference": "351f9805cbbd7b55daa1c225fa83ad063146bd75"
+                "reference": "682ca1818a65e6f59a91c51f7485358607d0ad5b"
             },
             "require": {
                 "php": "^8.3",
@@ -6242,7 +6245,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-skate",
-                "reference": "4328808e3f16d3c3aeaa04e86ed5322bfe7c4dff"
+                "reference": "c32fffdfca4d0d68852e325ac5199640047e1ffa"
             },
             "require": {
                 "ext-sqlite3": "*",
@@ -6302,7 +6305,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-spark",
-                "reference": "f5de298536f1f75752ba7b358eb8026cfc9c3bfa"
+                "reference": "8fb0cbd3086dd7270ceb876ea480136128a86d50"
             },
             "require": {
                 "php": "^8.3",
@@ -6364,7 +6367,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-stash",
-                "reference": "78b4c4b99853064d465b04b6ec5a7caa58752a04"
+                "reference": "d624c006a4f17e038f259b61ff8f5692e65098bb"
             },
             "require": {
                 "php": ">=8.3",
@@ -6425,7 +6428,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-stickers",
-                "reference": "a476149805695e2ef282853bc8e078715d58de0a"
+                "reference": "9074c5d47fc46a0b0d0aeed8fbf631bba5027f7e"
             },
             "require": {
                 "php": "^8.3",
@@ -6483,7 +6486,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-table",
-                "reference": "aab47d24c425082cd347d4d4304d0acbb270b6b1"
+                "reference": "4062f7742a0d7ae3761f90d391cda21ea318f10c"
             },
             "require": {
                 "php": "^8.3",
@@ -6542,7 +6545,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-tick",
-                "reference": "9c6d39e5f69f63a215690d342fd9060e2f0c3d23"
+                "reference": "07d53702a8a114721d83a408523784664072d2bd"
             },
             "require": {
                 "ext-sqlite3": "*",
@@ -6606,7 +6609,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-toast",
-                "reference": "74e58106f2bfd07f7eb358c130a97f8477186933"
+                "reference": "cc11792d8a0dc3766d203d612c35193a0e8b8150"
             },
             "require": {
                 "php": "^8.3",
@@ -6663,7 +6666,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-veil",
-                "reference": "1d15e8c2f02b89463d94c226306d5597fd0c4332"
+                "reference": "3a382792c07a6988355db77118713f2aa1fe55af"
             },
             "require": {
                 "php": "^8.3",
@@ -6723,7 +6726,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-wishlist",
-                "reference": "10be9f8f31ed74cefc38aa1beaf945e792fe3a0a"
+                "reference": "1cff0ec76fde413e89ee14e724eb4d49f0b6b444"
             },
             "require": {
                 "ext-pcntl": "*",
@@ -6782,16 +6785,16 @@
         },
         {
             "name": "symfony/console",
-            "version": "v7.4.15",
+            "version": "v7.4.16",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/console.git",
-                "reference": "088ec6fe0ef6819cbc301174093b6bfa4ad26930"
+                "reference": "f4c69c9aed03abf933b294257d618bdd9b30a06d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/console/zipball/088ec6fe0ef6819cbc301174093b6bfa4ad26930",
-                "reference": "088ec6fe0ef6819cbc301174093b6bfa4ad26930",
+                "url": "https://api.github.com/repos/symfony/console/zipball/f4c69c9aed03abf933b294257d618bdd9b30a06d",
+                "reference": "f4c69c9aed03abf933b294257d618bdd9b30a06d",
                 "shasum": ""
             },
             "require": {
@@ -6856,7 +6859,7 @@
                 "terminal"
             ],
             "support": {
-                "source": "https://github.com/symfony/console/tree/v7.4.15"
+                "source": "https://github.com/symfony/console/tree/v7.4.16"
             },
             "funding": [
                 {
@@ -6876,7 +6879,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-27T13:51:00+00:00"
+            "time": "2026-07-31T12:37:14+00:00"
         },
         {
             "name": "symfony/deprecation-contracts",
