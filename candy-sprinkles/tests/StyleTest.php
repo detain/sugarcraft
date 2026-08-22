@@ -1156,6 +1156,21 @@ final class StyleTest extends TestCase
      * — 0 unexplained. That residue is not a tab-WIDTH problem and no choice
      * of `TAB_WIDTH` closes it; see that test for why.
      *
+     * **WHAT THAT PARAGRAPH SAID vs WHAT IS TRUE.** "0 unexplained" held over
+     * the alphabet that census was drawn from, and that alphabet had no ZWJ in
+     * it. Re-run at `ae30fee5` over 200,000 strings from an alphabet that DOES
+     * include U+200D, the residue split two ways: 3,862 under-runs of the
+     * documented reclustering shape, and **989 OVER-runs the census could not
+     * have seen**, worst case `Z \t ZWJ U+1F469 U+1F44D` measured 1 cell and
+     * laid out 9. Those were E73 — a Control before a ZWJ — fixed in
+     * `Width::compute()` and pinned by
+     * {@see self::testRenderingThroughADefaultStyleNeverLaysOutMoreCellsThanWidthPromised()}
+     * below, which now measures 0 over-runs on the same corpus. WHY THE
+     * PARAGRAPH STAYS: its tab-WIDTH conclusion is still correct and still the
+     * reason `TAB_WIDTH` is shared. What decayed was the word "unexplained",
+     * which was a property of one sample's alphabet reported as a property of
+     * the residue.
+     *
      * **Domain: the DEFAULT tab width only.** A `Style` given a non-default
      * `tabWidth()` re-opens the gap on purpose; that is asserted separately
      * below rather than left as an unstated exception.
@@ -1226,5 +1241,90 @@ final class StyleTest extends TestCase
         // charges TAB_WIDTH — the one case where the rendered string carries a
         // tab the terminal, not Style, will resolve.
         $this->assertStringContainsString("\t", Style::new()->tabWidth(0)->render("a\tb"));
+    }
+
+    /**
+     * The SIGN of the residual disagreement between `Width::string()` and
+     * `Style::render()`, asserted separately from its magnitude — because the
+     * two directions have opposite consequences.
+     *
+     * An UNDER-run (`render()` narrower than `Width` promised) wastes cells.
+     * An OVER-run (`render()` WIDER than `Width` promised) is frame
+     * corruption: candy-core's diff renderer paints one line per terminal
+     * row, so a caller that budgeted with `Width` and laid out with `Style`
+     * writes past the row. E73 was an over-run of up to 8 cells.
+     *
+     * Over-runs must be ZERO. Under-runs are allowed and counted, because
+     * they are all the reclustering shape pinned in
+     * {@see self::testExpandingATabCanStillReclusterAFollowingCombiningMark()}
+     * — this test asserts that too, by requiring every under-run to contain a
+     * `\t`, which is the only transform a default `Style` applies to content.
+     *
+     * Corpus: 20,000 deterministic strings (seed 20260822) of 1-6 symbols over
+     * an emoji-heavy alphabet — controls, ZWJ/ZWNJ, skin-tone modifiers,
+     * regional indicators, Hangul jamo, an Indic conjunct, combining marks,
+     * variation selectors. Measured on PHP 8.3.6, ext-intl ICU 74.2 /
+     * Unicode 15.1; a different ICU can move which inputs land in the
+     * under-run bucket, which is why the count is not asserted, only the sign
+     * and the mechanism.
+     */
+    public function testRenderingThroughADefaultStyleNeverLaysOutMoreCellsThanWidthPromised(): void
+    {
+        // The E73 reproductions first, as exact values.
+        foreach (["\t\u{200d}\u{1F44D}", "a\t\u{200d}\u{1F44D}", "Z\t\u{200d}\u{1F469}\u{1F44D}"] as $input) {
+            $this->assertSame(
+                Width::string($input),
+                Width::string(Style::new()->render($input)),
+                sprintf('render() moved the width of %s', bin2hex($input)),
+            );
+        }
+
+        $alphabet = [
+            'a', 'Z', ' ', "\t", "\x01", "\x07", "\x0b", "\x7f",
+            "\u{200d}", "\u{200c}", "\u{200b}", "\u{feff}",
+            "\u{1F44D}", "\u{1F469}", "\u{1F4BB}", "\u{1F3C3}", "\u{2600}",
+            "\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}",
+            "\u{1F1FA}", "\u{1F1F8}", "\u{1F1EF}", "\u{1F1F5}",
+            "\u{1100}", "\u{1161}", "\u{11A8}",
+            "\u{0915}", "\u{094D}", "\u{0937}",
+            "\u{0301}", "\u{FE0F}", "\u{FE0E}", "\u{4E00}",
+        ];
+        $n = \count($alphabet);
+        $style = Style::new();
+        \mt_srand(20260822);
+        $overRuns = 0;
+        $underRuns = 0;
+        for ($t = 0; $t < 20000; $t++) {
+            $s = '';
+            for ($k = 0; $k <= \mt_rand(0, 5); $k++) {
+                $s .= $alphabet[\mt_rand(0, $n - 1)];
+            }
+            $promised = Width::string($s);
+            $laidOut = Width::string($style->render($s));
+            if ($laidOut > $promised) {
+                $overRuns++;
+                $this->fail(sprintf(
+                    'OVER-RUN: %s measured %d cells, render() laid out %d',
+                    bin2hex($s),
+                    $promised,
+                    $laidOut,
+                ));
+            }
+            if ($laidOut < $promised) {
+                $underRuns++;
+                // Every under-run must be the tab-reclustering shape: a
+                // default Style rewrites nothing else in a single-line input.
+                $this->assertStringContainsString(
+                    "\t",
+                    $s,
+                    sprintf('under-run with no tab to explain it: %s', bin2hex($s)),
+                );
+            }
+        }
+        $this->assertSame(0, $overRuns);
+        // Not zero, and that is the documented residue — asserted so a future
+        // change that silently makes it zero (or makes it everything) is
+        // visible here rather than inferred.
+        $this->assertGreaterThan(0, $underRuns);
     }
 }

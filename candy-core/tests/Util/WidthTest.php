@@ -415,8 +415,16 @@ final class WidthTest extends TestCase
         // indicator is a 1-cell letter box.
         $this->assertSame(2, Width::string("\u{1F1E6}\u{1F1F8}"));
         $this->assertSame(1, Width::string("\u{1F1E6}"));
-        // Already true before the fix, via a ZWJ special case — pinned here
-        // so that special case cannot be dropped silently.
+        // WHAT THIS SAID: "already true before the fix, via a ZWJ special
+        // case — pinned here so that special case cannot be dropped
+        // silently." WHAT IS TRUE NOW: the special case is gone (E73) and
+        // this assertion holds without it, because ICU returns the whole
+        // family as ONE cluster whose base is U+1F468. WHY THE ASSERTION
+        // STILL EARNS ITS PLACE: it is the check that a ZWJ sequence is
+        // scored once rather than per-emoji — which is what would break if
+        // segmentation ever fell back to a per-codepoint splitter. Measured
+        // on PHP 8.3.6, ext-intl ICU 74.2 / Unicode 15.1: 1 cluster, 2 cells.
+        $this->assertSame(1, \count(self::icuClusters("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")));
         $this->assertSame(2, Width::of("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"));
         // Truncation and measurement must charge the same cluster the same
         // number of cells, which is the invariant, stated directly.
@@ -433,5 +441,167 @@ final class WidthTest extends TestCase
                 sprintf('%s was emitted whole into a budget of %d', bin2hex($cluster), $w - 1),
             );
         }
+    }
+
+    /**
+     * E73. A Control character immediately before a ZWJ made
+     * `Width::string()` score the whole run 0.
+     *
+     * Mechanism, measured on PHP 8.3.6 with ext-intl ICU 74.2 / Unicode 15.1:
+     * UAX #29 GB4 breaks after a Control, so `"\t" ZWJ U+1F44D` comes back as
+     * THREE clusters — the tab, a bare ZWJ, and the emoji — where a joining
+     * ZWJ would have been inside one. `compute()`'s old look-ahead saw the
+     * next cluster was a ZWJ and charged the tab 0; the `$inZwjSequence` flag
+     * it then set charged the emoji 0 as well. Total 0 cells for a run
+     * `Style::new()->render()` lays out as 6.
+     *
+     * This is the OVER-RUN direction — the caller is told a 6-cell run is
+     * free — and an over-wide row is frame corruption here, because the diff
+     * renderer paints one line per terminal row.
+     *
+     * Exact expected values, not bounds, so the sign of any future
+     * disagreement is visible: {@see WidthTest::testATabIsChargedExactlyFourCells}
+     * pins TAB_WIDTH = 4 as a literal in this same file.
+     */
+    public function testAControlBeforeAZwjNoLongerZeroesTheRunAroundIt(): void
+    {
+        // The two inputs recorded in the finding.
+        $this->assertSame(Width::TAB_WIDTH + 2, Width::string("\t\u{200d}\u{1F44D}"));
+        $this->assertSame(1 + Width::TAB_WIDTH + 2, Width::string("a\t\u{200d}\u{1F44D}"));
+
+        // Same defect with no tab in sight: a ZWJ at the START of the string
+        // is also a bare cluster, so the flag zeroed the emoji after it.
+        $this->assertSame(2, Width::string("\u{200d}\u{1F44D}"));
+
+        // Every C0/C1 control breaks the cluster the same way, so none of them
+        // may zero their neighbours either.
+        foreach (["\x01", "\x07", "\x0b", "\x7f", "\n"] as $control) {
+            $this->assertSame(
+                2,
+                Width::string($control . "\u{200d}\u{1F44D}"),
+                sprintf('control %s zeroed the emoji after a ZWJ', bin2hex($control)),
+            );
+        }
+
+        // A ZWJ that actually joins is unaffected: one cluster, 2 cells.
+        $this->assertSame(2, Width::string("\u{1F469}\u{200D}\u{1F4BB}"));
+    }
+
+    /**
+     * The invariant E73's fix installs, stated as a property rather than as a
+     * list of inputs: `string()` carries NO state across cluster boundaries,
+     * so measuring a string equals the sum of measuring its clusters one at a
+     * time.
+     *
+     * The old ZWJ look-ahead violated this by construction — it read
+     * `$clusters[$i + 1]` — which is why a Control could change the score of
+     * a cluster two positions away. Any future cross-cluster rule fails here.
+     *
+     * Corpus: 20,000 deterministic strings (seed 20260822, `mt_srand`) of 1-6
+     * symbols over an alphabet of controls, ZWJ/ZWNJ, skin-tone modifiers,
+     * regional indicators, Hangul jamo, Indic conjunct parts, combining
+     * marks, variation selectors, CJK and ASCII. Segmentation oracle is
+     * ext-intl's `grapheme_extract()`, i.e. the same ICU the class uses.
+     */
+    public function testMeasuringCarriesNoStateAcrossClusterBoundaries(): void
+    {
+        $alphabet = self::widthFuzzAlphabet();
+        $n = \count($alphabet);
+        \mt_srand(20260822);
+        $checked = 0;
+        for ($t = 0; $t < 20000; $t++) {
+            $s = '';
+            for ($k = 0; $k <= \mt_rand(0, 5); $k++) {
+                $s .= $alphabet[\mt_rand(0, $n - 1)];
+            }
+            $sum = 0;
+            foreach (self::icuClusters($s) as $cluster) {
+                $sum += Width::string($cluster);
+            }
+            $this->assertSame(
+                $sum,
+                Width::string($s),
+                sprintf('cross-cluster state moved the width of %s', bin2hex($s)),
+            );
+            $checked++;
+        }
+        $this->assertSame(20000, $checked);
+    }
+
+    /**
+     * No input may be measured NEGATIVE or measured 0 while containing a
+     * cluster that is not zero-width — the shape E73 presented as.
+     *
+     * Same corpus as {@see self::testMeasuringCarriesNoStateAcrossClusterBoundaries()}.
+     */
+    public function testAnInputContainingANonZeroWidthClusterNeverMeasuresZero(): void
+    {
+        $alphabet = self::widthFuzzAlphabet();
+        $n = \count($alphabet);
+        \mt_srand(776611);
+        for ($t = 0; $t < 20000; $t++) {
+            $s = '';
+            for ($k = 0; $k <= \mt_rand(0, 5); $k++) {
+                $s .= $alphabet[\mt_rand(0, $n - 1)];
+            }
+            $w = Width::string($s);
+            $this->assertGreaterThanOrEqual(0, $w, sprintf('%s measured negative', bin2hex($s)));
+            $widest = 0;
+            foreach (self::icuClusters($s) as $cluster) {
+                $widest = \max($widest, Width::string($cluster));
+            }
+            $this->assertGreaterThanOrEqual(
+                $widest,
+                $w,
+                sprintf('%s measured narrower than its widest single cluster', bin2hex($s)),
+            );
+        }
+    }
+
+    /**
+     * Emoji-heavy alphabet shared by the property tests above. Deliberately
+     * includes the shapes each of E68, E69 and E73 turned on: controls
+     * (cluster breakers), ZWJ/ZWNJ, skin-tone modifiers (Extend), regional
+     * indicator pairs, Hangul jamo L/V/T, an Indic conjunct, a combining
+     * mark, and both variation selectors.
+     *
+     * @return list<string>
+     */
+    private static function widthFuzzAlphabet(): array
+    {
+        return [
+            'a', 'Z', ' ', "\t", "\x01", "\x07", "\x0b", "\x7f",
+            "\u{200d}", "\u{200c}", "\u{200b}", "\u{feff}",
+            "\u{1F44D}", "\u{1F469}", "\u{1F4BB}", "\u{1F3C3}", "\u{2600}",
+            "\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}",
+            "\u{1F1FA}", "\u{1F1F8}", "\u{1F1EF}", "\u{1F1F5}",
+            "\u{1100}", "\u{1161}", "\u{11A8}",
+            "\u{0915}", "\u{094D}", "\u{0937}",
+            "\u{0301}", "\u{FE0F}", "\u{FE0E}", "\u{4E00}",
+        ];
+    }
+
+    /**
+     * ICU grapheme clusters of `$s`, via ext-intl — the same segmenter
+     * `Width` walks, used here as an independent oracle rather than by
+     * calling the class's own private splitter.
+     *
+     * @return list<string>
+     */
+    private static function icuClusters(string $s): array
+    {
+        $out = [];
+        $i = 0;
+        $len = \strlen($s);
+        while ($i < $len) {
+            $next = 0;
+            $cluster = \grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
+            if (!\is_string($cluster) || $cluster === '') {
+                $cluster = $s[$i];
+            }
+            $out[] = $cluster;
+            $i += \strlen($cluster);
+        }
+        return $out;
     }
 }

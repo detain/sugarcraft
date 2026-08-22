@@ -94,6 +94,27 @@ final class Width
 
     /**
      * Uncached width computation backing {@see string()}.
+     *
+     * A plain sum of {@see graphemeWidth()} over {@see graphemes()}, with NO
+     * cross-cluster state. That is the whole of it, and the reason it can be
+     * is E68: both sides now walk ICU's UAX#29 segmenter, so a ZWJ that
+     * actually joins two emoji is already INSIDE one cluster and is scored
+     * once, by that cluster's base.
+     *
+     * WHAT THIS USED TO SAY, in code rather than prose: a ZWJ look-ahead plus
+     * an `$inZwjSequence` flag charged the codepoint before a ZWJ 2 cells and
+     * then suppressed every emoji after it. WHAT IS TRUE NOW: that machine
+     * was written when `string()` split per CODEPOINT (pre-E68), where a ZWJ
+     * really did arrive as a sibling of the emoji it joined. Under cluster
+     * segmentation a bare ZWJ cluster means the opposite — UAX#29 broke
+     * BEFORE it, so nothing joined, and each neighbour renders on its own.
+     * WHY THE REMOVAL EARNS ITS PLACE: the machine's two clauses had become
+     * pure loss. `Width::string("\t" . ZWJ . U+1F44D)` scored 0 for a run
+     * `Style::render()` lays out as 6 cells (E73, measured on PHP 8.3.6 with ext-intl
+     * ICU 74.2 / Unicode 15.1): the look-ahead zeroed the tab and the
+     * flag zeroed the emoji.
+     * Under-counting is the frame-corrupting direction here — the diff
+     * renderer paints one line per terminal row — so this is not a tidy-up.
      */
     private static function compute(string $s): int
     {
@@ -102,29 +123,7 @@ final class Width
             return 0;
         }
         $width = 0;
-        $clusters = self::graphemes($clean);
-        $count = count($clusters);
-        $inZwjSequence = false;
-        for ($i = 0; $i < $count; $i++) {
-            $g = $clusters[$i];
-            $cp = self::firstCodepoint($g);
-            if ($cp === 0x200d) {
-                if ($i > 0 && !$inZwjSequence) {
-                    $prevCp = self::firstCodepoint($clusters[$i - 1]);
-                    if (self::isEmoji($prevCp)) {
-                        $width += 2;
-                    }
-                }
-                $inZwjSequence = true;
-                continue;
-            }
-            if ($inZwjSequence && self::isEmoji($cp)) {
-                continue;
-            }
-            $inZwjSequence = false;
-            if ($i + 1 < $count && self::firstCodepoint($clusters[$i + 1]) === 0x200d) {
-                continue;
-            }
+        foreach (self::graphemes($clean) as $g) {
             $width += self::graphemeWidth($g);
         }
         return $width;
