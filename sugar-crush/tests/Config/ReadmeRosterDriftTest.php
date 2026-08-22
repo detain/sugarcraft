@@ -476,28 +476,43 @@ final class ReadmeRosterDriftTest extends TestCase
      * The sample output block is the STDERR FORM of a real line, byte for byte,
      * so it can be regenerated rather than proof-read.
      *
-     * IT IS ASSEMBLED FROM THREE LITERALS IN `src/Cli/Bootstrap.php`, ALL READ
-     * OUT OF THE FILE. `reportProjectTierToolRemovals()` builds the body with
-     * one `sprintf()` and prefixes the survivor list with `'leaving: '`;
-     * `warnPermissionConfig()` then writes `"sugarcrush: {$message}.\n"`, which
-     * is where the `sugarcrush: ` prefix and the trailing full stop in the
-     * README fence come from — the app's own `docs/SETTINGS.md` says so, and
-     * measuring it confirmed it.
+     * IT IS ASSEMBLED FROM FOUR NAMED CONSTANTS ON `Bootstrap`:
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} is the body,
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING} prefixes the survivor
+     * list, and {@see Bootstrap::STDERR_LINE_FORMAT} is the envelope
+     * `warnPermissionConfig()` wraps every message in — which is where the
+     * `sugarcrush: ` prefix and the trailing full stop in the README fence come
+     * from.
      *
-     * THE FORMAT USED TO BE RETYPED HERE, and the doc-block claimed "the
-     * duplication is safe in the direction that matters — change the sprintf
-     * and this reds, which is the point". WHAT IS TRUE: it was safe in the
-     * OPPOSITE direction. MEASURED on PHP 8.3.6, 2026-08-22 — changing the
-     * launcher's format from `disabled %d of the %d` to `removed %d of the %d`
-     * left this file and `ReadmeSettingsTierClaimTest` at
-     * `OK (14 tests, 84 assertions)`. Both copies of the format in `tests/`
-     * were retyped, so nothing read it from source and the only drift the guard
-     * could see was the README moving away from the TEST. WHY THE GUARD STILL
-     * EARNS ITS PLACE: the claim it made was the right claim, and reflection
-     * over the method's SOURCE TEXT — not over its behaviour, which would need
-     * the private method invoked — buys it honestly. The literals are located
-     * by shape, and each is asserted to occur exactly once, so a second
-     * `sprintf()` in that method reds rather than being picked from.
+     * THREE SHAPES OF THIS GUARD HAVE NOW BEEN TRIED AND EACH FAILED
+     * DIFFERENTLY, which is worth the paragraph.
+     *
+     * ONE — THE FORMAT RETYPED HERE. The doc-block claimed "the duplication is
+     * safe in the direction that matters — change the sprintf and this reds,
+     * which is the point". It was safe in the OPPOSITE direction. MEASURED on
+     * PHP 8.3.6, 2026-08-22 — changing the launcher's format from
+     * `disabled %d of the %d` to `removed %d of the %d` left this file and
+     * `ReadmeSettingsTierClaimTest` at `OK (14 tests, 84 assertions)`.
+     *
+     * TWO — THE LITERALS SCRAPED OUT OF `Bootstrap.php`'s SOURCE TEXT by regex,
+     * which is what round 43 replaced shape one with and what round 45 replaced.
+     * It bought the right property, but only against the file staying written
+     * the way the regex expected: the envelope was recovered by matching
+     * `fwrite(STDERR, "…{$message}…")`, and MEASURED — turning that
+     * interpolation into `sprintf(self::STDERR_LINE_FORMAT, $message)`, which
+     * changes not one byte of output, took the scrape to zero matches. A guard
+     * that reds on a pure refactor teaches the next person to weaken it.
+     *
+     * THREE — THE CONSTANTS, which is what is here now, AND THE CONDITION THAT
+     * MAKES IT AN IMPROVEMENT RATHER THAN A REGRESSION: `Bootstrap` must
+     * `sprintf()` FROM those constants. A `public const` that only a test ever
+     * reads is not a shared definition, it is a second copy with a nicer name,
+     * and it drifts from the code silently in exactly the way shape one did.
+     * That condition is not assumed — {@see
+     * \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest} drives a
+     * real launch and reads the line off stderr, so changing a constant without
+     * changing the code that formats moves the launcher's output and reds
+     * there. Mutating exactly that is how this shape was accepted.
      *
      * A SECOND, WEAKER READING OF THE SAME BLOCK WAS ALSO WRONG and is worth a
      * line: this doc-block called the fence "a TRANSCRIPT of a real line". The
@@ -531,9 +546,8 @@ final class ReadmeRosterDriftTest extends TestCase
             static fn(string $n): bool => fnmatch('[!B]*', $n),
         ));
 
-        $reporter = $this->bootstrapMethodSource('reportProjectTierToolRemovals');
-        $format = $this->soleMatch("/'([^']*\\(disabledTools\\)[^']*)'/", $reporter, 'the launch-report sprintf format');
-        $leading = $this->soleMatch("/'(leaving: )'/", $reporter, "the survivor list's 'leaving: ' prefix");
+        $format = Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT;
+        $leading = Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING;
 
         [$prefix, $suffix] = $this->stderrEnvelope();
 
@@ -565,50 +579,29 @@ final class ReadmeRosterDriftTest extends TestCase
     }
 
     /**
-     * The source TEXT of one `Bootstrap` method, brace-matched.
+     * The `sugarcrush: ` prefix and the `.\n` tail the stderr channel adds,
+     * split out of {@see Bootstrap::STDERR_LINE_FORMAT}.
      *
-     * Source text and not reflection-on-behaviour: the method is private and on
-     * another lane's file, and a test that invoked it would pin the
-     * implementation rather than the sentence the README quotes. What is needed
-     * here is only the literals it is built from.
-     */
-    private function bootstrapMethodSource(string $method): string
-    {
-        $file = (string) (new \ReflectionClass(Bootstrap::class))->getFileName();
-        $source = (string) file_get_contents($file);
-
-        $at = strpos($source, 'function ' . $method . '(');
-        $this->assertIsInt($at, 'Bootstrap::' . $method . '() is gone; the README sample has no generator');
-
-        // Methods in this file close on a `    }` at class-body indentation.
-        $close = strpos($source, "\n    }\n", $at);
-        $this->assertIsInt($close, 'Bootstrap::' . $method . '() has no locatable end');
-
-        return substr($source, $at, $close - $at);
-    }
-
-    /**
-     * The `sugarcrush: ` prefix and the `.\n` tail the stderr channel adds.
+     * SPLIT ON THE CONVERSION rather than declared as two constants, because
+     * the single-`%s` shape is itself a property worth asserting: a second
+     * conversion added to that format would make `sprintf()` throw
+     * `ArgumentCountError` at the first warning of every launch that raises one
+     * (measured, PHP 8.3.6), and the split below is what notices.
      *
      * @return array{0: string, 1: string}
      */
     private function stderrEnvelope(): array
     {
-        $writer = $this->bootstrapMethodSource('warnPermissionConfig');
+        $parts = explode('%s', Bootstrap::STDERR_LINE_FORMAT);
 
-        $matched = preg_match_all('/fwrite\(STDERR, "([^"{]*)\{\$message\}([^"]*)"\)/', $writer, $m);
-        $this->assertSame(1, $matched, 'Bootstrap::warnPermissionConfig() no longer wraps the message once on stderr');
+        $this->assertCount(
+            2,
+            $parts,
+            'Bootstrap::STDERR_LINE_FORMAT no longer has exactly one %s; it is sprintf()ed with exactly one '
+                . 'argument, so any other count is a launch-time ArgumentCountError',
+        );
 
-        return [$m[1][0], stripcslashes($m[2][0])];
-    }
-
-    /** The one capture of `$pattern` in `$haystack`; reds if there is not exactly one. */
-    private function soleMatch(string $pattern, string $haystack, string $what): string
-    {
-        $matched = preg_match_all($pattern, $haystack, $m);
-        $this->assertSame(1, $matched, $what . ' is no longer exactly one literal in that method (found ' . $matched . ')');
-
-        return $m[1][0];
+        return [$parts[0], $parts[1]];
     }
 
     // ── the meta-check ───────────────────────────────────────────────────

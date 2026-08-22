@@ -206,6 +206,81 @@ final class Bootstrap
     private const LAUNCH_NOTICE_CLIP_SUFFIX = '… (clipped; full text on stderr)';
 
     /**
+     * The one line every warning this class raises takes on stderr.
+     *
+     * A `public const` AND `sprintf()`ed FROM, not a literal with a copy in a
+     * test. E104 recorded that every `sprintf()` in this class reaching stderr
+     * or the transcript was pinned only by a test re-typing it, and E118 is the
+     * repair: {@see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest}
+     * used to recover this envelope by running a regex over this file's SOURCE
+     * TEXT, which is a scrape that goes quiet the moment the line is reformatted
+     * — measured, it stops matching the moment the interpolation becomes a
+     * `sprintf()`, which is exactly what this commit did to it.
+     *
+     * THE PREFIX AND THE FULL STOP ARE BOTH PART OF IT, and both are load-bearing
+     * to a reader: `README.md` and `docs/SETTINGS.md` quote a launch-report line
+     * complete with `sugarcrush: ` and the trailing `.`, and the transcript copy
+     * {@see warnPermissionConfigInTranscript()} seeds carries NEITHER, because
+     * both are added here on the stderr side.
+     *
+     * A `%` INSIDE `$message` IS NOT A HAZARD, and the first draft of this
+     * paragraph claimed it was. The message is the ARGUMENT, never the format,
+     * so `sprintf()` never scans it — MEASURED on PHP 8.3.6, a message
+     * containing `Bash(*%z*)` comes out byte-identical to the concatenation this
+     * line replaced. What a second conversion in the FORMAT would do is
+     * different and worse: `sprintf()` in PHP 8 throws
+     * `ArgumentCountError: 3 arguments are required, 2 given` (measured, same
+     * box), so a second `%s` here takes the launch down rather than mangling a
+     * line. Hence exactly one, and the count is asserted by the README guard
+     * rather than merely intended.
+     */
+    public const STDERR_LINE_FORMAT = "sugarcrush: %s.\n";
+
+    /**
+     * The launch-report line {@see reportProjectTierToolRemovals()} builds,
+     * promoted out of that method for the reason {@see STDERR_LINE_FORMAT} is.
+     *
+     * `%s` the settings file, `%d` removed, `%d` the ceiling this launch would
+     * otherwise have offered, `%s` the removed names, `%s` the survivor clause —
+     * which is {@see PROJECT_TIER_TOOL_REMOVAL_LEAVING} plus a list, or
+     * {@see PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} when the project's globs took
+     * everything.
+     */
+    public const PROJECT_TIER_TOOL_REMOVAL_FORMAT =
+        '%s (disabledTools) disabled %d of the %d tools your own settings left — %s — %s';
+
+    /** Prefixes the survivor list in {@see PROJECT_TIER_TOOL_REMOVAL_FORMAT}'s last field. */
+    public const PROJECT_TIER_TOOL_REMOVAL_LEAVING = 'leaving: ';
+
+    /** The survivor field when the project's globs left nothing at all. */
+    public const PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE = 'leaving no tools at all';
+
+    /**
+     * How many CALL sites in this file route a warning onto
+     * {@see warnPermissionConfigInTranscript()}.
+     *
+     * IT LIVES HERE BECAUSE THIS IS THE FILE THAT CHANGES. Whoever adds the next
+     * call site is editing this file and nothing else; a count that lived only
+     * in a test they never open is a count they never see. The number is quoted
+     * in prose in ten sentences across `src/`, `tests/` and `docs/` — every one
+     * of them is a row in
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}'s
+     * `PROSE_SITES`, and that file's token scan is what decides whether this
+     * constant is right. Bump this, bump the ten sentences, in one commit.
+     *
+     * IT IS NOT AN ORACLE AND MUST NOT BE READ AS ONE. The oracle is the token
+     * scan; this is a hand-maintained declaration the scan checks. That is also
+     * why the census test no longer keeps a second hand-maintained copy of its
+     * own — two integers that must agree, neither of them measured, is one more
+     * thing to bump and no more evidence than one.
+     *
+     * PUBLIC because the census test is its only reader and a test may not read
+     * a private const; nothing in `src/` branches on it, and nothing should —
+     * see {@see warnPermissionConfigInTranscript()} for the seam itself.
+     */
+    public const TRANSCRIPT_SEAM_CALL_SITES = 16;
+
+    /**
      * Project hook files this process has already reported as skipped, keyed
      * by path — see the notice in {@see hookFiles()} for why it may only fire
      * once per launch. Static because the duplication comes from ONE launch
@@ -2563,7 +2638,13 @@ final class Bootstrap
         // user meets that as `/skill` not offering something they wrote. ONE
         // ROW, whatever the count: this message is already an aggregate, which
         // is what makes it safe to put in a transcript that also has to carry
-        // eleven other sources.
+        // fifteen other sources. THIS SAID ELEVEN, and it said it for long
+        // enough that round 44 could not correct it — this file was out of that
+        // lane's ownership — and instead asserted the gap, with a test whose
+        // failure message was the instruction for closing it (E119). The number
+        // is now a row in BootstrapTranscriptSeamCallSiteCensusTest's
+        // PROSE_SITES and a declaration in {@see TRANSCRIPT_SEAM_CALL_SITES}, so
+        // a seventeenth site reds this sentence rather than dating it.
         self::warnPermissionConfigInTranscript(sprintf(
             '%d skill file%s could not be read and %s skipped; set %s=1 to list %s',
             $count,
@@ -3973,7 +4054,7 @@ final class Bootstrap
      */
     private static function warnPermissionConfig(string $message): void
     {
-        fwrite(STDERR, "sugarcrush: {$message}.\n");
+        fwrite(STDERR, sprintf(self::STDERR_LINE_FORMAT, $message));
     }
 
     /**
@@ -5166,12 +5247,14 @@ final class Bootstrap
         // interactive path stderr alone is a warning nobody can read: measured,
         // this line printed 0.47s before the alternate screen opened over it.
         self::warnPermissionConfigInTranscript(sprintf(
-            '%s (disabledTools) disabled %d of the %d tools your own settings left — %s — %s',
+            self::PROJECT_TIER_TOOL_REMOVAL_FORMAT,
             $source,
             \count($removed),
             \count($withoutProject),
             implode(', ', $removed),
-            $remaining === [] ? 'leaving no tools at all' : 'leaving: ' . implode(', ', $remaining),
+            $remaining === []
+                ? self::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE
+                : self::PROJECT_TIER_TOOL_REMOVAL_LEAVING . implode(', ', $remaining),
         ));
     }
 

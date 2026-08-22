@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Cli\Bootstrap;
 
 /**
  * How many of {@see \SugarCraft\Crush\Cli\Bootstrap}'s launch warnings are
  * routed onto the transcript seam — counted, not remembered.
  *
- * WHY THIS FILE EXISTS. The number is quoted in prose in NINE places (this
+ * WHY THIS FILE EXISTS. The number is quoted in prose in TEN places (this
  * file's {@see PROSE_SITES}) and it has gone stale three rounds running: it
  * read FOURTEEN when the answer was fifteen (round 42, E78), then still
  * FOURTEEN when the answer was sixteen (round 43, E86), and round 44 (E97)
@@ -19,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  * the thing that goes red.
  *
  * WHAT `PROSE_SITES` SAID WHEN IT WAS WRITTEN: "four places". WHAT IS TRUE NOW:
- * nine, and the four it had were not even the whole of what round 44 had
+ * ten, and the four it had were not even the whole of what round 44 had
  * already touched — two more sentences quoting the count live inside files the
  * list ALREADY covered, and were left unanchored because the list was built by
  * remembering which sentences had been edited rather than by searching for the
@@ -66,7 +67,7 @@ use PHPUnit\Framework\TestCase;
  * got a seventeenth call site out of the scan. WHY THIS MATTERS despite there
  * being no first-class callable of this method today: the failure is a
  * FABRICATED extra site, which reads as "someone added a call" and gets
- * answered by editing nine prose sentences to a wrong number. Every branch of
+ * answered by editing ten prose sentences to a wrong number. Every branch of
  * the definition above is exercised on synthetic sources by
  * {@see testTheScanDefinitionAgreesWithItsDocBlock()}, so the definition is
  * tested rather than merely written down.
@@ -83,18 +84,26 @@ use PHPUnit\Framework\TestCase;
  *     &&$x[1]==="warnPermissionConfigInTranscript"&&is_array($t[$i-1]??null)
  *     &&$t[$i-1][0]===T_DOUBLE_COLON&&($t[$i+1]??null)==="("){$n++;}}echo $n,"\n";'
  *
- * WHY THE CONSTANT LIVES HERE AND NOT ON `Bootstrap`. A `public const
- * TRANSCRIPT_SEAM_CALL_SITES` on `Bootstrap` itself would be the better home:
- * it would sit next to the thing it counts, and the prose sites could `{@see}`
- * it instead of spelling a word. It is not there because `Bootstrap.php` was
- * another lane's file in the round that wrote this test, and reaching into it
- * would have collided. Promoting it is backlog **E118**; when that happens,
- * {@see EXPECTED_CALL_SITES} becomes a second opinion rather than the only one,
- * and this test should assert the two agree. (E118 and not E104: round 44's
- * brief cited E104 for this, and E104 is a different item — extracting
- * `Bootstrap`'s stderr `sprintf` FORMATS to constants. The two are neighbours
- * and want the same treatment, so they are worth doing together, but they are
- * not the same entry.)
+ * WHERE THE CONSTANT LIVES, AND WHY THIS FILE NO LONGER KEEPS ONE. WHAT THIS
+ * PARAGRAPH SAID: "a `public const TRANSCRIPT_SEAM_CALL_SITES` on `Bootstrap`
+ * itself would be the better home … when that happens,
+ * `EXPECTED_CALL_SITES` becomes a second opinion rather than the only one, and
+ * this test should assert the two agree." WHAT IS TRUE NOW: E118 landed in
+ * round 45 and the constant is
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::TRANSCRIPT_SEAM_CALL_SITES}, but
+ * the second half of that prescription was NOT implemented, on purpose. Two
+ * hand-maintained integers that must agree with each other carry no more
+ * evidence than one — neither is measured, the token scan is the only oracle
+ * either can be checked against, and the pair's whole effect is that the next
+ * person to add a call site has two places to bump instead of one. So this
+ * file keeps no count of its own and reads `Bootstrap`'s.
+ * WHY THE ORIGINAL REASONING STILL EARNS ITS PLACE: the argument for MOVING it
+ * was right and is the reason it moved — the constant now sits in the file that
+ * changes when the count changes, which is the file the next author has open.
+ * (E118 and not E104: round 44's brief cited E104 for this, and E104 is a
+ * different item — extracting `Bootstrap`'s stderr and launch-report `sprintf`
+ * FORMATS to constants, which round 45 did in the same commit. The two are
+ * neighbours and wanted the same treatment; they are not the same entry.)
  *
  * @see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest for the
  *      behavioural guard — which call sites actually reach the transcript on a
@@ -102,16 +111,6 @@ use PHPUnit\Framework\TestCase;
  */
 final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
 {
-    /**
-     * The number of `warnPermissionConfigInTranscript(` CALL sites in
-     * `Bootstrap.php`, by the definition in this class's doc-block.
-     *
-     * Bumping this is the correct response to adding a call site — but bump the
-     * nine {@see PROSE_SITES} in the same commit, which is the whole point of
-     * {@see testTheProseCountsMatchTheTokenScan()} failing alongside it.
-     */
-    private const EXPECTED_CALL_SITES = 16;
-
     private const SEAM_METHOD = 'warnPermissionConfigInTranscript';
 
     /**
@@ -141,17 +140,35 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      * sixteen fields of an `AgentPreset` and the eleven wired tools among them
      * — so the filtering step is a human reading each hit, and THAT is the part
      * that can go stale. It is written down anyway, because "nine" with a
-     * flawed method beats "four" with none.
+     * flawed method beats "four" with none. BOTH OF THOSE WORDS ARE
+     * HISTORICAL FIGURES — what the two searches produced when the sentence
+     * was written — and the list is TEN now. They are deliberately not
+     * corrected and deliberately not anchored by
+     * {@see SELF_COUNT_ANCHORS}: correcting a quoted measurement to a later
+     * measurement destroys the comparison the sentence exists to make.
      *
-     * ONE SENTENCE IS DELIBERATELY NOT A ROW, and it is not an oversight:
-     * `Bootstrap::reportSkillSkips()`'s comment says a transcript "also has to
-     * carry ELEVEN other sources" and should say fifteen. It is backlog E119
-     * and it lives in `src/Cli/Bootstrap.php`, which this round's lane does not
-     * own — and unlike the two Bootstrap rows below, which only READ the file,
-     * adding this row would red the suite until the sentence is corrected.
-     * {@see testTheKnownStaleSentenceOutsideThisLaneIsStillStale()} pins the
-     * gap so it closes itself: the day E119 lands, that test fails and tells
-     * whoever landed it to move the sentence into this list.
+     * ONE SENTENCE USED TO BE DELIBERATELY NOT A ROW, AND THE PATTERN THAT
+     * CLOSED IT IS THE PART WORTH KEEPING. WHAT THIS SAID:
+     * "`Bootstrap::reportSkillSkips()`'s comment says a transcript 'also has to
+     * carry ELEVEN other sources' and should say fifteen … this round's lane
+     * does not own `src/Cli/Bootstrap.php` … adding this row would red the
+     * suite until the sentence is corrected", and it named a test,
+     * `testTheKnownStaleSentenceOutsideThisLaneIsStillStale()`, that ASSERTED
+     * the gap: it failed the day the sentence was corrected, and its failure
+     * message was the instruction for closing it. WHAT IS TRUE NOW: E119 landed
+     * in round 45, the sentence says fifteen, the row is the
+     * `Bootstrap::reportSkillSkips()` entry below, and that test is gone —
+     * deleted in the commit that corrected the sentence, exactly as its own
+     * message instructed.
+     * WHY THE HISTORY STILL EARNS ITS PLACE, and this is the transferable part:
+     * a lane that finds a defect in a file it may not touch has three options —
+     * write it in a report nobody reads, leave a `TODO` nothing enforces, or
+     * ASSERT THE DEFECT and make the assertion's failure message the repair
+     * instruction. Only the third one closes. The cost is a test that reads
+     * like a lie ("still stale" as a passing assertion) and that cost is worth
+     * paying; the requirement is that the message says, in full, what to do
+     * when it fails. Reach for this shape the next time a census has a hole
+     * with an owner on the other side of it.
      *
      * @var array<string, array{file: string, anchor: string, offset: int}>
      */
@@ -186,6 +203,11 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
             'anchor' => '/is not inherited from the other\s+\*?\s*([a-z]+) call sites/i',
             'offset' => 1,
         ],
+        'Bootstrap::reportSkillSkips(), "carries N other sources"' => [
+            'file' => 'src/Cli/Bootstrap.php',
+            'anchor' => '/also has to carry\s+(?:\/\/)?\s*([a-z]+) other sources/i',
+            'offset' => 1,
+        ],
         'Bootstrap::chat(), the last-read comment' => [
             'file' => 'src/Cli/Bootstrap.php',
             'anchor' => '/([A-Za-z]+) call sites now routed onto the transcript seam/',
@@ -204,6 +226,69 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
     ];
 
     /**
+     * The sentences in THIS file that state how many {@see PROSE_SITES} rows
+     * there are, so that count has a generator too.
+     *
+     * WHY A CENSUS OF THE CENSUS, which does look like a joke. This class's
+     * doc-block argues at length that a number living only in prose goes stale,
+     * and then states its own count of prose sites in every sentence listed
+     * below, in prose, with nothing checking any of them. It read "four" when
+     * the list held four, then "nine", and round 45 made it ten — every step a
+     * hand-edit across all of them, which is the same failure mode one rung up.
+     * (No numeral in this paragraph, deliberately: a sentence saying how many
+     * sentences state the count would need a row of its own, and that recursion
+     * has to stop somewhere. It stops at `count(self::SELF_COUNT_ANCHORS)`,
+     * which is not quoted anywhere.) The
+     * generator here is `count(self::PROSE_SITES)`, which cannot drift from the
+     * list because it IS the list.
+     *
+     * MATCHED AGAINST A FLATTENED COPY OF THE SOURCE, never the raw bytes. A
+     * doc-block wraps at 80 columns with ` * ` on every continuation, so a
+     * sentence is never those bytes in a row — round 44 shipped an
+     * `assertStringNotContainsString(<sentence>, $rawSource)` that survived
+     * re-adding the very sentence it existed to forbid. {@see flattened()}
+     * removes the continuation markers first; its own correctness is checked on
+     * a synthetic wrapped fixture in
+     * {@see testTheProseSiteCountInThisFilesOwnDocBlocksMatchesTheList()},
+     * because a flattener that silently produced nothing would make every
+     * anchor below fail open into a zero-match — which this test treats as a
+     * failure, not a skip.
+     *
+     * ONE SENTENCE IS DELIBERATELY NOT HERE: `"nine" with a flawed method beats
+     * "four" with none`, in {@see PROSE_SITES}' own doc-block. Both words are
+     * HISTORICAL — the figures those two searches produced — and correcting a
+     * quoted measurement to a later one destroys the comparison it exists to
+     * make. That is the one shape of number-in-prose that must NOT be pinned.
+     *
+     * IT IS NOT CONFINED TO THIS FILE, and that is the whole reason it is a
+     * list of `{file, anchor}` and not a list of patterns. E118 moved the count
+     * of CALL sites onto `Bootstrap`, and the doc-block that went with it states
+     * the number of PROSE sites twice — in `src/`, where nothing in `tests/`
+     * would have looked. A self-census that only scans itself is aimed at the
+     * one file whose author was thinking about the problem.
+     *
+     * @var list<array{file: string, anchor: string}>
+     */
+    private const SELF_COUNT_ANCHORS = [
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/quoted in prose in ([A-Za-z]+) places/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/WHAT IS TRUE NOW: ([a-z]+), and the four it had/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/answered by editing ([a-z]+) prose sentences to a wrong number/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/one integer that ([a-z]+) prose sentences are then corrected against/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/the repair is ([a-z]+) sentences edited/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/rather than in the number ([a-z]+) sentences are corrected against/'],
+        ['file' => 'src/Cli/Bootstrap.php',
+            'anchor' => '/quoted in prose in ([a-z]+) sentences across/'],
+        ['file' => 'src/Cli/Bootstrap.php',
+            'anchor' => '/Bump this, bump the ([a-z]+) sentences, in one commit/'],
+    ];
+
+    /**
      * Only the words a count in this family could plausibly take. A number word
      * outside this map is not "unknown, skip it" — it is a sentence this guard
      * cannot read, and {@see testTheProseCountsMatchTheTokenScan()} fails on
@@ -218,13 +303,23 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20,
     ];
 
+    /**
+     * `Bootstrap`'s own declaration of the count agrees with the token scan.
+     *
+     * The DECLARATION is the thing under test and the scan is the oracle, which
+     * is why the constant is not simply computed: the point of
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::TRANSCRIPT_SEAM_CALL_SITES} is
+     * to be a statement a human wrote in the file a human edits, and a statement
+     * nothing can contradict is not a statement.
+     */
     public function testTheTokenScanFindsExactlyTheExpectedNumberOfCallSites(): void
     {
         self::assertSame(
-            self::EXPECTED_CALL_SITES,
+            Bootstrap::TRANSCRIPT_SEAM_CALL_SITES,
             self::countSeamCallSites(),
             'A call site was added to or removed from Bootstrap::warnPermissionConfigInTranscript(). '
-                . 'Update self::EXPECTED_CALL_SITES and every sentence in self::PROSE_SITES in the same commit.',
+                . 'Update Bootstrap::TRANSCRIPT_SEAM_CALL_SITES and every sentence in self::PROSE_SITES '
+                . 'in the same commit.',
         );
     }
 
@@ -266,16 +361,31 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
             self::assertFileExists($path, "{$label}: the file quoting the count has moved");
 
             $source = (string) file_get_contents($path);
-            $matched = preg_match($site['anchor'], $source, $m);
+
+            // preg_match_ALL, and the count asserted. `preg_match()` returns 1
+            // for "the first of two", so it is a presence check wearing a
+            // uniqueness check's clothes — the defect
+            // {@see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest}
+            // measured in its own locators and fixed a round before this file
+            // did. It matters MORE here than there: a second sentence matching
+            // the same anchor is by construction a second copy of the count,
+            // and this guard would have read the first one and reported
+            // agreement while the second said something else. MEASURED on this
+            // tree, PHP 8.3.6: all ten anchors match exactly once today, so
+            // this tightening reds on nothing that exists.
+            $matched = preg_match_all($site['anchor'], $source, $all, PREG_SET_ORDER);
 
             self::assertSame(
                 1,
                 $matched,
-                "{$label}: the anchor no longer matches {$site['file']}. The sentence was rewritten past it. "
-                    . 'Re-point the anchor in self::PROSE_SITES — do not delete the row, that is how the count '
-                    . 'went stale three rounds running.',
+                "{$label}: the anchor matches {$site['file']} {$matched} times, not once. Zero means the "
+                    . 'sentence was rewritten past it — re-point the anchor in self::PROSE_SITES, do not '
+                    . 'delete the row, that is how the count went stale three rounds running. More than one '
+                    . 'means there are now two sentences quoting the count through one anchor, and only one '
+                    . 'of them can be checked.',
             );
 
+            $m = $all[0];
             $word = strtolower($m[1]);
             self::assertArrayHasKey(
                 $word,
@@ -302,9 +412,9 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      * its results table was measuring something other than what it reported,
      * and it was caught only by running it against a case whose answer was
      * already known. This file is a harness of exactly that shape: a scanner
-     * whose whole output is one integer that nine prose sentences are then
+     * whose whole output is one integer that ten prose sentences are then
      * corrected against. If it over-counts by one, the correct response LOOKS
-     * like "someone added a call site" and the repair is nine sentences edited
+     * like "someone added a call site" and the repair is ten sentences edited
      * to a wrong number.
      *
      * The `first-class callable` row is not hypothetical: with the scan as
@@ -331,7 +441,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
 
         // A known-answer control for the harness itself: a source with nothing
         // of the sort in it must answer 0, so a scan that has silently started
-        // counting something else shows up here rather than in the number nine
+        // counting something else shows up here rather than in the number ten
         // sentences are corrected against.
         yield 'a source with no mention at all' => ['<?php echo 1;', 0];
     }
@@ -343,47 +453,100 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
     }
 
     /**
-     * One sentence in the family is knowingly stale and knowingly not a
-     * {@see PROSE_SITES} row. This is the pin that makes the gap close itself.
+     * Every sentence in this file that states the size of {@see PROSE_SITES}
+     * agrees with `count(self::PROSE_SITES)`.
      *
-     * `Bootstrap::reportSkillSkips()` says a transcript "also has to carry
-     * eleven other sources" where the answer is fifteen — backlog E119, in a
-     * file this lane does not own. A silent gap in a census is the shape of the
-     * next defect, so the gap is ASSERTED: when E119 lands, this test fails,
-     * and its message is the instruction for closing it. Delete this test in
-     * the same commit that adds the row.
+     * THE FLATTENER IS CHECKED IN THE SAME TEST, on a fixture whose answer is
+     * known, because an assertion of the form "all seven anchors matched" is
+     * worthless if the thing they were matched against could be empty. Round 44
+     * proved that exact point elsewhere in this tree: a census assertion of
+     * "nothing is stale" passed with 18,228 assertions green while the scanner
+     * had been mutated to never match, and only a known-positive fixture caught
+     * it.
      */
-    public function testTheKnownStaleSentenceOutsideThisLaneIsStillStale(): void
+    public function testTheProseSiteCountInThisFilesOwnDocBlocksMatchesTheList(): void
     {
-        $matched = preg_match(
-            '/also has to carry\s+(?:\/\/)?\s*([a-z]+) other sources/i',
-            self::bootstrapSource(),
-            $m,
+        // KNOWN-POSITIVE CONTROL FIRST. A wrapped doc-block whose sentence is
+        // split across a continuation marker must come back joined; if
+        // flattened() ever returns '' or leaves the markers, this fails here
+        // rather than turning the seven assertions below into vacuous passes.
+        // THE FIXTURE SENTENCE IS ASSEMBLED, not written whole, and that is not
+        // style. This test scans its OWN file, so a fixture spelling the anchor
+        // phrase contiguously in source becomes a second match for it and the
+        // uniqueness assertion below reds on the test's own scaffolding —
+        // measured, it did, before this concatenation.
+        $sentence = 'quoted in prose in ' . 'TEN';
+        $fixture = "    /**\n     * {$sentence}\n     * places, it says.\n     */\n";
+        self::assertSame(
+            ' /** ' . $sentence . ' places, it says. */ ',
+            self::flattened($fixture),
+            'flattened() no longer joins a wrapped doc-block sentence; every anchor below would fail open',
         );
-
         self::assertSame(
             1,
-            $matched,
-            'the known-stale sentence in Bootstrap::reportSkillSkips() has been rewritten past this anchor. '
-                . 'If it now quotes the right number, add it to self::PROSE_SITES with offset 1 and delete '
-                . 'this test; if it still quotes a wrong one, re-point this anchor.',
+            preg_match(self::SELF_COUNT_ANCHORS[0]['anchor'], self::flattened($fixture)),
+            'the first anchor no longer matches a sentence built to satisfy it; the scanner is not working',
         );
 
-        self::assertSame(
-            'eleven',
-            strtolower($m[1]),
-            'E119 appears to have landed: Bootstrap::reportSkillSkips() no longer says "eleven". Move that '
-                . "sentence into self::PROSE_SITES with 'offset' => 1 and delete this test — it exists only "
-                . 'to keep the deliberate hole in the census visible while the sentence is out of this '
-                . "lane's ownership.",
-        );
+        $expected = \count(self::PROSE_SITES);
+        $flat = [];
 
-        self::assertNotSame(
-            self::NUMBER_WORDS['eleven'],
-            self::countSeamCallSites() - 1,
-            'the seam has shrunk to twelve call sites, which would make the "eleven other sources" sentence '
-                . 'accidentally correct and this pin meaningless. Re-derive E119 before trusting either.',
-        );
+        foreach (self::SELF_COUNT_ANCHORS as $site) {
+            $path = \dirname(__DIR__, 2) . '/' . $site['file'];
+            self::assertFileExists($path, "{$site['file']}: the file stating the site count has moved");
+            $flat[$site['file']] ??= self::flattened((string) file_get_contents($path));
+
+            $anchor = $site['anchor'];
+            $matched = preg_match_all($anchor, $flat[$site['file']], $all, PREG_SET_ORDER);
+            self::assertSame(
+                1,
+                $matched,
+                "{$anchor} matches {$site['file']} {$matched} times, not once. A sentence stating the size "
+                    . 'of self::PROSE_SITES was rewritten past its anchor, or a second one now states it '
+                    . 'too. Re-point the anchor; do not drop it.',
+            );
+
+            $word = strtolower($all[0][1]);
+            self::assertArrayHasKey(
+                $word,
+                self::NUMBER_WORDS,
+                "{$anchor} captured \"{$all[0][1]}\", which is not a number word this guard can read",
+            );
+            self::assertSame(
+                $expected,
+                self::NUMBER_WORDS[$word],
+                "{$anchor} in {$site['file']} says \"{$word}\" but self::PROSE_SITES holds "
+                    . "{$expected} rows",
+            );
+        }
+    }
+
+    /**
+     * `$source` with doc-block and line-comment continuation markers removed
+     * and every run of whitespace collapsed to one space.
+     *
+     * See {@see SELF_COUNT_ANCHORS} for why prose in source may not be matched
+     * against the raw bytes. Deliberately NOT used by
+     * {@see testTheProseCountsMatchTheTokenScan()}: those ten anchors each carry
+     * their own explicit handling of the wrap they cross, they are proven
+     * against the files they name, and re-pointing ten working anchors at a
+     * different input to gain nothing is how a guard gets broken by its own
+     * improvement.
+     */
+    private static function flattened(string $source): string
+    {
+        // `\*(?!/)` — the CONTINUATION marker, never the terminator. Letting
+        // `*/` be stripped too would run the end of one doc-block into the
+        // start of the next, and an anchor could then match a "sentence" that
+        // spans two of them and exists in neither.
+        $joined = (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', $source);
+
+        // `\s+` and not `[ \t]+`: the marker strip leaves the newline of any
+        // line it did not match (a bare code line, the last line of a file), and
+        // a sentence that wraps onto one of those would still be split. Caught
+        // by the fixture in the caller, which is the reason the fixture is a
+        // known-POSITIVE and not a smoke test.
+        return (string) preg_replace('/\s+/', ' ', $joined);
     }
 
     /**
