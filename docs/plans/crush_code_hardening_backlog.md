@@ -6338,3 +6338,30 @@ real method and asserts the failure fires. `Subcommands::doctor()` IS this shape
 seam is the split between the two methods; the measured reason to keep it is that the day an error
 document lands on a ternary branch, `shippedTypes()` needs a decision from a person rather than a
 silent `null`.
+
+### Ec4 — the Agents suites share `~/.sugar-crush/teams/` across lanes and go red on each other
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: medium, process + test hygiene. **Lane-local
+provisional id per E135.**
+
+**What.** `tests/Agents/{AgentManagerTest,TeamManagerTest,TeamTest}` register teams in the REAL
+`~/.sugar-crush/teams/` registry — a path outside every lane worktree — and do not remove them. Lane c's
+third full-suite run at round 45 went **rc 1 with 9 failures**, all nine in those three files, and the
+failure diffs are lists of two thousand-plus `~/.sugar-crush/teams/throwing-<uniqid>` entries left by
+sibling lanes' concurrent runs. **All 136 tests in the three files pass when run alone** (136 tests / 469
+assertions, immediately afterwards, same commit), so the failures are interference and not a defect in
+the tree.
+
+**Measured** at round 45 on PHP 8.3.6: `~/.sugar-crush/teams/` held **2,094** entries, **240** of them
+`throwing-*` fixtures. The count grows with every suite run on this box, by anyone.
+
+**Why it is worse than a flake.** E133 already recorded that `sys_get_temp_dir()` caches on first use and
+cannot be redirected at runtime, so a test cannot isolate itself into a private temp directory after the
+fact. This is the same failure mode one directory over, and `HOME` — unlike `TMPDIR` — IS honoured on
+every `getenv('HOME')` read, so the fix is available here in a way it was not there.
+
+**Step.** Give these three suites a per-test `HOME` (or a per-test teams directory injected through the
+`TeamManager` constructor) and remove it in `tearDown()`. Until then, treat an `rc 1` whose failures are
+confined to `tests/Agents/*` as interference, re-run those files alone, and say so — which is what the
+round-45 brief already asks for `/tmp`, extended to `$HOME`. Do NOT bulk-delete
+`~/.sugar-crush/teams/*` while sibling lanes are running.
