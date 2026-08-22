@@ -155,8 +155,10 @@ question through `evaluate()` moved a counter a real call is judged by.
 `action` is one of `allow`, `deny`, `ask`. Rules are evaluated **in order, first
 match wins**, ahead of the mode.
 
-Malformed entries are handled item-wise and reported on stderr rather than
-silently widening or narrowing the whole list: an entry with no string
+Malformed entries are handled item-wise and reported on stderr **and in the
+session transcript** rather than silently widening or narrowing the whole list
+(a dropped `deny` rule denies nothing, and stderr alone is invisible under the
+alt screen — see [`SETTINGS.md`](SETTINGS.md)): an entry with no string
 `pattern`, or an `action` that is not one of the three, is skipped with a named
 index — `permissionRules[2] ('Write') has no valid 'action' … rule skipped
 rather than coerced`. A `permissionRules` key that is not a list at all loads
@@ -315,7 +317,9 @@ substituted:
 - **Fail closed** on every uncertainty: an unresolvable root, an absent key, a
   key of the wrong shape.
 - **A refusal is never silent.** Each prints one stderr line at construction
-  time, before the alt screen is up, at most once per path per process.
+  time, before the alt screen is up, at most once per path per process — and
+  the project-hook and project-directory refusals also seed a system row in the
+  transcript, because an interactive launch paints over stderr 0.47s later.
 
 **One property is NOT shared, and it is the one worth knowing.** A
 `config.json` that exists and cannot be parsed stops the launch for the first

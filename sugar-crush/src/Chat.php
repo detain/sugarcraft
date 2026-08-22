@@ -5175,7 +5175,10 @@ final class Chat implements Model
      * THE SEAM EXISTS BECAUSE stderr IS NOT A SURFACE AN INTERACTIVE USER HAS.
      * {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfig()} writes to
      * stderr, which is the right channel for `-p` and for post-exit scrollback
-     * and is the ONLY channel roughly ten launch warnings have. MEASURED on a
+     * and was, before this seam, the only channel ANY launch warning had. Four
+     * `warnPermissionConfig*` call sites and `Bootstrap::reportPrunedSessions()`
+     * still have only that channel, by the judgement recorded on
+     * `warnPermissionConfigInTranscript()`. MEASURED on a
      * real `bin/sugarcrush` launch under a pty: the line lands 0.47s before
      * `\e[?1049h`, and replaying the captured stream through a `candy-vt`
      * `Terminal(120, 40)` finds no trace of it on the visible screen — the
@@ -5191,12 +5194,27 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * ONLY {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierToolRemovals()}
-     * IS ROUTED THROUGH IT TODAY. The other launch warnings are still
-     * stderr-only; each of them is a separate judgement about whether a user who
-     * did not ask deserves a transcript row, and making that judgement for ten
-     * messages at once is how a useful notice becomes a wall a user scrolls
-     * past. The seam is built wide enough for them to migrate one at a time.
+     * FOURTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * SITES ARE ROUTED HERE, and the rest deliberately are not. The rule the split was
+     * made on lives on
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}:
+     * a warning earns a row iff it names something the session can no longer DO
+     * — a provider that degraded to echo, agent presets that did not load, a
+     * refused project hook file, dropped permission rules, a cut or empty tool
+     * set, a refused project directory, skipped skill files. Warnings that
+     * report a malformed config entry WITHOUT the session being diminished stay
+     * on stderr, because making a transcript row of each of those is how a
+     * useful notice becomes a wall a user scrolls past.
+     *
+     * THE LIST IS CAPPED AT ITS SOURCE, not here — see that method's
+     * `LAUNCH_NOTICE_LIMIT` and `LAUNCH_NOTICE_MAX_CHARS`. This method appends
+     * whatever it is handed, and the reason that is safe is that these rows are
+     * part of the CONVERSATION: they are sent to the model on every turn, so an
+     * unbounded list would be a per-token cost for the whole session.
+     *
+     * APPENDS, and callers depend on that: {@see Bootstrap::app()} calls this a
+     * SECOND time with only the notices its post-`chat()` scan added, because
+     * handing it the whole list again would double every row.
      *
      * @param list<string> $notices sentences, without trailing punctuation
      */

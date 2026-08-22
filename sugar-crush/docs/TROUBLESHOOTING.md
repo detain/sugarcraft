@@ -189,9 +189,11 @@ the pattern to the tool **name**: exact, or prefix if it ends in `*`. Measured:
 matched; `Bash` and `Bash*` → Deny. See
 [`PERMISSIONS.md`](PERMISSIONS.md#pattern-matching-is-name-only--measured).
 
-A malformed entry is skipped **item-wise** and reported on stderr with its index
-— `permissionRules[2] ('Write') has no valid 'action' … rule skipped rather than
+A malformed entry is skipped **item-wise** and reported with its index —
+`permissionRules[2] ('Write') has no valid 'action' … rule skipped rather than
 coerced`. A `permissionRules` that is not a list loads zero rules and says so.
+Both go to stderr **and** to the session transcript as a system row, so an
+interactive session shows them after the alt screen has opened.
 
 **Everything I do is allowed.** The shipped default mode is
 `bypass-permissions`. With no rules configured, that is identical to having no

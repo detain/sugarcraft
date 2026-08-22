@@ -247,10 +247,23 @@ the stderr copy is unchanged and is not going away. Note that the transcript
 copy is part of the conversation, so the model is told as well — which is the
 honest state of affairs, since the model is the party whose tools were taken.
 
-Nothing else has moved: the other launch warnings (an unusable provider, a
-skipped hook file, a rejected permission pattern) are still stderr-only, and are
-still invisible in an interactive session for the same reason. The seam they
-would migrate through is `Chat::withLaunchNotices()`.
+The three warnings this paragraph used to name as still-stderr-only — an
+unusable provider, a skipped hook file, a rejected permission pattern — have
+since migrated through the same seam, along with the agent-preset degradations,
+the refused project directories, the skipped skill files and the empty tool set:
+fourteen call sites in total. The rule that decided the split is on
+`Bootstrap::warnPermissionConfigInTranscript()` — a warning earns a transcript
+row iff it names something **the session can no longer do**. Warnings that
+report a malformed config entry without the session being diminished
+(`trustedProjectHooks[2] is not a project path`, `permissionMode in config.json
+is empty so it was ignored`, `retention removed 3 sessions`) stay on stderr,
+because a transcript row per bad config entry is how a useful notice becomes a
+wall you scroll past.
+
+The transcript copy is capped — 24 rows and 400 characters per row, see
+`Bootstrap::LAUNCH_NOTICE_LIMIT`. The stderr copy is never clipped and never
+capped, so an overflowed launch says so in the transcript and points at the
+channel that has the rest.
 
 The report is the *effect*, not the pattern, and that is deliberate. Refusing
 negated classes at the project tier would close the eight-character version and

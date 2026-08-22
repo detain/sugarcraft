@@ -759,7 +759,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // twelve sources now routed onto the transcript seam. See
+        // fourteen call sites now routed onto the transcript seam. See
         // {@see Chat::withLaunchNotices()}.
         //
         // THE ACCESSOR, not the raw list: {@see launchNotices()} appends the
@@ -987,7 +987,18 @@ final class Bootstrap
 
         foreach ($new as $path => $reason) {
             self::$reportedProjectTierRefusals[$path] = true;
-            self::warnPermissionConfig(sprintf('ignoring %s — %s', $path, rtrim($reason, '.')));
+            // BOTH CHANNELS — see {@see warnPermissionConfigInTranscript()}. A
+            // refused directory is this repository's skills, commands, agents
+            // or workflows absent from the session, and the user meets that by
+            // typing a name that does not resolve. The path plus the reason is
+            // the whole of what they need, which is why this stayed a per-path
+            // line rather than a count.
+            //
+            // THE ONE PER-PATH SOURCE ON THE SEAM, and the reason
+            // {@see LAUNCH_NOTICE_LIMIT} exists: the eight feeders named above
+            // are bounded, but $commandLoader->refusedCommands() is one entry
+            // per refused FILE and nothing caps that.
+            self::warnPermissionConfigInTranscript(sprintf('ignoring %s — %s', $path, rtrim($reason, '.')));
         }
     }
 
@@ -1268,7 +1279,17 @@ final class Bootstrap
         try {
             $presets = $registry->discover($root);
         } catch (\Throwable $e) {
-            fwrite(STDERR, "sugarcrush: foreign agent presets unavailable ({$e->getMessage()}); continuing without them.\n");
+            // BOTH CHANNELS, and the stderr bytes are unchanged — see
+            // {@see warnPermissionConfigInTranscript()}. A launch whose
+            // `.claude/agents` presets did not load is a launch whose `/agents`
+            // roster is short, and the operator finds that out by typing a
+            // name that is not there. Raised from agentRoster(), reached
+            // through agentManager(), which is one of chat()'s named
+            // constructor arguments — so it is recorded before chat() reads the
+            // list on its way out.
+            self::warnPermissionConfigInTranscript(
+                "foreign agent presets unavailable ({$e->getMessage()}); continuing without them",
+            );
             $presets = [];
         }
 
@@ -1344,7 +1365,12 @@ final class Bootstrap
         try {
             $presets = $registry->list();
         } catch (\Throwable $e) {
-            fwrite(STDERR, "sugarcrush: agent presets unavailable ({$e->getMessage()}); continuing with the built-in agents.\n");
+            // The native sibling of the foreign-preset degradation above, and
+            // routed for the same reason: the roster the user configured is not
+            // the roster they got.
+            self::warnPermissionConfigInTranscript(
+                "agent presets unavailable ({$e->getMessage()}); continuing with the built-in agents",
+            );
 
             // Collected on the throwing path TOO: list() records its refusals
             // before it parses anything, so a launch that both refused a
@@ -1497,6 +1523,15 @@ final class Bootstrap
         // that the tool could disagree with.
         $skills = self::skillRegistry($root);
 
+        // RAISED AFTER chat() HAS ALREADY READ THE LIST, which is why the
+        // length is taken here. {@see chat()} seeds the transcript on its way
+        // out (see its last statement), so anything the second scan below
+        // records into {@see $launchNotices} would land in a static that
+        // nothing reads again — a migration onto the transcript seam that looks
+        // like a fix and is a no-op. This is the interactive path, so it is the
+        // one where that matters most.
+        $noticesBeforeSecondScan = \count(self::launchNotices());
+
         // This is a SECOND scan — chat() above already reported what its own
         // scan skipped — and it can find skills that one did not, because it
         // runs after it and reads the same trees. reportSkillSkips() only
@@ -1507,10 +1542,30 @@ final class Bootstrap
         // Same argument for the second scan's directory refusals.
         self::reportProjectTierRefusals();
 
+        // HOISTED out of the `withTools()` argument below rather than inlined:
+        // tools() reaches filterToolSet(), which is itself a transcript source,
+        // so its notices have to be in hand before the delta is taken.
+        $tools = self::tools($root, null, $skills);
+
+        // THE DELTA, never the whole list. {@see Chat::withLaunchNotices()}
+        // APPENDS, and $chat already carries everything chat() had recorded —
+        // passing the full list again would put every launch warning in the
+        // transcript twice. {@see $launchNotices} is append-only within a
+        // launch, so a slice from the old length is exactly what these three
+        // calls added, in the order they added it.
+        //
+        // ONE KNOWN UNDERSTATEMENT, named rather than engineered around: if the
+        // launch had ALREADY overflowed {@see LAUNCH_NOTICE_LIMIT} before this
+        // point, $chat carries an "and N more" row whose N does not grow to
+        // cover what the second scan then dropped. That needs a launch with 24+
+        // distinct warnings before the shell is built, and the row still says
+        // the full list is on stderr, where it is.
+        $chat = $chat->withLaunchNotices(array_slice(self::launchNotices(), $noticesBeforeSecondScan));
+
         return App::new($provider, $model)
             ->withChat($chat)
             ->withSessionId($chat->currentSessionId())
-            ->withTools(self::tools($root, null, $skills))
+            ->withTools($tools)
             ->withAvailableSkills($skills)
             // Same string the tools/skill scan above used, so the shell's
             // Settings pane, the environment block the model reads and every
@@ -1667,7 +1722,17 @@ final class Bootstrap
                 // redundant; it is load-bearing.
                 throw $e;
             } catch (\Throwable $e) {
-                fwrite(STDERR, "sugarcrush: provider '{$providerType}' unavailable ({$e->getMessage()}); falling back to echo.\n");
+                // THE MOST USER-VISIBLE DEGRADATION THIS CLASS REPORTS, and
+                // until now it was reported only to the channel an interactive
+                // launch paints over 0.47s later. "Your model silently became
+                // EchoProvider" is not something an operator should have to
+                // infer from the replies. Both channels — see
+                // {@see warnPermissionConfigInTranscript()}. backend() is
+                // chat()'s FIRST named constructor argument, so this lands well
+                // before chat() reads the list.
+                self::warnPermissionConfigInTranscript(
+                    "provider '{$providerType}' unavailable ({$e->getMessage()}); falling back to echo",
+                );
             }
         }
 
@@ -1698,7 +1763,13 @@ final class Bootstrap
                 // `\Throwable` degrade-to-echo arm below from catching it.
                 throw $e;
             } catch (\Throwable $e) {
-                fwrite(STDERR, "sugarcrush: persisted provider '{$persisted}' unavailable ({$e->getMessage()}); falling back to echo.\n");
+                // The env-var tier's twin, and reachable in the SAME launch as
+                // it: an env-var provider that throws falls through to here,
+                // and a persisted provider that also throws degrades to echo.
+                // Two distinct sentences, so both are recorded.
+                self::warnPermissionConfigInTranscript(
+                    "persisted provider '{$persisted}' unavailable ({$e->getMessage()}); falling back to echo",
+                );
             }
         }
 
@@ -2434,7 +2505,13 @@ final class Bootstrap
         }
 
         $count = \count($new);
-        self::warnPermissionConfig(sprintf(
+        // BOTH CHANNELS — see {@see warnPermissionConfigInTranscript()}. A skill
+        // that did not load is a capability the session does not have, and the
+        // user meets that as `/skill` not offering something they wrote. ONE
+        // ROW, whatever the count: this message is already an aggregate, which
+        // is what makes it safe to put in a transcript that also has to carry
+        // eleven other sources.
+        self::warnPermissionConfigInTranscript(sprintf(
             '%d skill file%s could not be read and %s skipped; set %s=1 to list %s',
             $count,
             $count === 1 ? '' : 's',
@@ -2743,11 +2820,13 @@ final class Bootstrap
             } elseif (is_file($projectFile)) {
                 // NOT a silent drop. Ignoring a file the repo's author expects
                 // to run changes what the session does, so it is reported the
-                // same way a skipped permission rule is — see
-                // {@see warnPermissionConfig()} for why stderr. This runs
-                // during construction, before Program takes the terminal, so
-                // on the interactive path the line lands ahead of the alt
-                // screen rather than inside a frame.
+                // same way a skipped permission rule is — BOTH CHANNELS, see
+                // {@see warnPermissionConfigInTranscript()}. This runs during
+                // construction, before Program takes the terminal, so the
+                // stderr copy lands ahead of the alt screen rather than inside
+                // a frame — but "ahead of the alt screen" is exactly where the
+                // alt screen then paints OVER it, which is why the transcript
+                // copy exists as well.
                 //
                 // ONCE PER PATH PER PROCESS. {@see chat()} builds two hook
                 // managers (its own chain and the engine backend's), so an
@@ -2767,7 +2846,7 @@ final class Bootstrap
                 if (!isset(self::$reportedUntrustedHookFiles[$projectFile])) {
                     self::$reportedUntrustedHookFiles[$projectFile] = true;
 
-                    self::warnPermissionConfig(
+                    self::warnPermissionConfigInTranscript(
                         "{$projectFile} was NOT loaded: honouring a project hook file means running shell "
                         . "this repository's author wrote, every time you open it. Add "
                         . '"' . rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/')
@@ -3713,6 +3792,23 @@ final class Bootstrap
     }
 
     /**
+     * EVERY COMPLAINT HERE GOES TO BOTH CHANNELS — see
+     * {@see warnPermissionConfigInTranscript()}. A dropped rule is a SILENT
+     * WIDENING: {@see PermissionRule} degrades a malformed pattern to a name no
+     * real tool matches, so a `Deny` typo'd this way denies NOTHING and the
+     * session runs wide open for as long as it lasts. That is the one thing on
+     * this path a user has to learn while the session is still running, and
+     * stderr under the alternate screen is precisely where they cannot.
+     *
+     * AND IT WAS SAID TWICE. MEASURED before the migration: {@see chat()}
+     * reaches this method through {@see permissionGate()} AND through
+     * {@see agentManager()}, and these were raw {@see warnPermissionConfig()}
+     * calls with no de-duplication at all — a config with two bad rules printed
+     * four stderr lines on every launch. Routing them through the transcript
+     * seam picks up {@see warnPermissionConfigOnce()}'s per-process map on the
+     * stderr side as well, so the count is now one apiece. That is a change to
+     * stderr, and it is the fix, not a side effect.
+     *
      * @param array<string, mixed> $config the already-read user config
      * @return list<PermissionRule>
      */
@@ -3724,7 +3820,7 @@ final class Bootstrap
         // argument-scoped grammar deny nothing for as long as it did. A user
         // who typed the key believes they configured rules. Absence is not an
         // error (a fresh install has no key at all); presence with no usable
-        // value is, at the same stderr-and-continue level as every other
+        // value is, at the same report-and-continue level as every other
         // item-wise rules complaint.
         if (!\array_key_exists(self::PERMISSION_RULES_CONFIG_KEY, $config)) {
             return [];
@@ -3732,7 +3828,7 @@ final class Bootstrap
 
         $raw = $config[self::PERMISSION_RULES_CONFIG_KEY];
         if ($raw === null) {
-            self::warnPermissionConfig(
+            self::warnPermissionConfigInTranscript(
                 self::PERMISSION_RULES_CONFIG_KEY . ' is present but null rather than a list of rules; '
                 . 'no rules were loaded',
             );
@@ -3741,7 +3837,7 @@ final class Bootstrap
         }
 
         if (!is_array($raw)) {
-            self::warnPermissionConfig(
+            self::warnPermissionConfigInTranscript(
                 self::PERMISSION_RULES_CONFIG_KEY . ' is not a list of rules; no rules were loaded',
             );
 
@@ -3751,7 +3847,7 @@ final class Bootstrap
         $rules = [];
         foreach ($raw as $index => $entry) {
             if (!is_array($entry) || !is_string($entry['pattern'] ?? null)) {
-                self::warnPermissionConfig(
+                self::warnPermissionConfigInTranscript(
                     self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] has no string 'pattern'; rule skipped",
                 );
                 continue;
@@ -3761,7 +3857,7 @@ final class Bootstrap
                 ? PermissionAction::tryFrom($entry['action'])
                 : null;
             if ($action === null) {
-                self::warnPermissionConfig(
+                self::warnPermissionConfigInTranscript(
                     self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') has no valid 'action' "
                     . "(expected allow, deny or ask); rule skipped rather than coerced",
                 );
@@ -3773,8 +3869,9 @@ final class Bootstrap
             // `action` is: {@see PermissionRule} degrades a malformed pattern to
             // a name that matches no real tool, so a `Deny` typo'd this way
             // would silently deny NOTHING. That is the exact failure the
-            // argument-scoped grammar was rewritten to end, and stderr is the
-            // only place it can be noticed.
+            // argument-scoped grammar was rewritten to end, and the two
+            // channels this method's doc-block names are the only places it can
+            // be noticed.
             //
             // THE REASON COMES FROM THE GRAMMAR, not from this call site. This
             // warning used to assert "has an unbalanced parenthesis" for every
@@ -3787,7 +3884,7 @@ final class Bootstrap
             // that produces it.
             $rejection = PermissionRule::patternRejectionReason($entry['pattern']);
             if ($rejection !== null) {
-                self::warnPermissionConfig(
+                self::warnPermissionConfigInTranscript(
                     self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') {$rejection}, so it is "
                     . 'not a Tool or Tool(argument-pattern) pattern; rule skipped rather than loaded as a pattern '
                     . 'that would match nothing',
@@ -3839,10 +3936,9 @@ final class Bootstrap
      * {@see warnPermissionConfigOnce()}, AND a row in the transcript the launch
      * is about to build.
      *
-     * THE ONE WARNING THAT HAS TO BE SEEN WHILE THE SESSION RUNS, rather than
-     * before it or after it. stderr is the right channel for every other
-     * launch warning this class raises and it is not being taken away from
-     * them — `-p` reads it, and so does the scrollback a user gets back when
+     * FOR THE WARNINGS THAT HAVE TO BE SEEN WHILE THE SESSION RUNS, rather than
+     * before it or after it. stderr is not being taken away from any of them —
+     * `-p` reads it, and so does the scrollback a user gets back when
      * they quit. But an interactive launch enters the alternate screen roughly
      * half a second later (MEASURED: 0.47s on a real pty run) and paints over
      * it, and the primary buffer does not come back until the session is over.
@@ -4709,7 +4805,13 @@ final class Bootstrap
         // no line anywhere said so, which from the model's end is
         // indistinguishable from a launch that failed to wire its tools.
         if ($kept === [] && $tools !== []) {
-            self::warnPermissionConfigOnce(
+            // BOTH CHANNELS, and this is the strictly more severe sibling of
+            // the report reportProjectTierToolRemovals() already routes there:
+            // that one says which tools a project took, this one says there are
+            // none left. An operator watching a model refuse to read a file has
+            // no other way to learn why. Reached through tools() <- backend(),
+            // chat()'s first named argument.
+            self::warnPermissionConfigInTranscript(
                 'allowedTools/disabledTools left no tools at all, so the model will be given an empty '
                 . 'tool set and can do nothing but talk',
             );
