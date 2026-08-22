@@ -61,10 +61,18 @@ and then silently revert on the next launch, with no error and nothing
 pointing at the file responsible. What breaks is *persistence*, not the
 visible command.
 
-Exactly two keys are ever written there: `provider` (the Ctrl+P palette's
-"Switch Model" action) and `theme` (the palette and `/theme`). Those are the
-only two values `Chat`'s `onConfigChange` callback is invoked with, and
-`Bootstrap` wires that callback to `writeUserConfig()` at one site.
+Exactly two keys are ever written there, and **each has two producers — a
+palette row and a slash command**: `provider` (the Ctrl+P palette's "Switch
+Model" row, and `/model <name>`) and `theme` (the palette's "Switch Theme" row,
+and `/theme <name>`). Those are the only two values `Chat`'s `onConfigChange`
+callback is invoked with, and `Bootstrap` wires that callback to
+`writeUserConfig()` at one site.
+
+The `/model` half is easy to miss and this page missed it: `Chat`'s
+`handleModelCommand()` ends in `selectPaletteProvider()`, which is the *sole*
+site that invokes `onConfigChange('provider', …)`. The palette row and the
+command are not two writers — they are one writer with two doors, which is also
+why a `/model` choice persists exactly as a palette choice does.
 
 **`settings.local.json` gets the same gate as its tracked sibling.** The name
 says "local" and `.gitignore` says it is not committed, but neither is a
@@ -234,9 +242,15 @@ path. Strictly fewer tools, strictly coarser review.
 attack "by naming every tool it removes — a value you can see when you read the
 file". That is false.** `Bootstrap::filterToolSet()` matches names with
 `PermissionRule::matchesToolName()`, which is bare `fnmatch()`, and `fnmatch()`
-honours negated character classes. Measured end-to-end **on PHP 8.3.6** (the
-version matters here only as provenance — `fnmatch()`'s handling of `[!…]` is
-not version-sensitive, and no ICU is involved), in a project you have listed
+honours negated character classes. Measured end-to-end **on PHP 8.3.6,
+2026-08-22** — and **PHP 8.4 was not exercised**, because this box has only
+8.3.6 while CI runs both. The version and the date matter here only as
+provenance: `fnmatch()`'s handling of `[!…]` is not version-sensitive, negated
+classes are not a recent addition, and no ICU is involved. They are recorded
+anyway because an undated figure is how a PHP-8.3-only defect once got written
+down as unconditional. The figure also has a live generator rather than only a
+date — `Tests\Config\ReadmeSettingsTierClaimTest` re-derives it every run, so
+it reds rather than rots. In a project you have listed
 under `trustedProjectSettings` (an untrusted project's `disabledTools` never
 reaches the merge at all, and all eleven tools survive):
 
