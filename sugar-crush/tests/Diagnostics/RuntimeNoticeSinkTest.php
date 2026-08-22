@@ -402,11 +402,32 @@ final class RuntimeNoticeSinkTest extends TestCase
         // the wrong thing and went red. It does NOT stop a custom
         // `set_error_handler()` from being CALLED — PHPUnit installs one, so
         // does any application error reporter — it narrows `error_reporting()`
-        // for the duration of the expression. Measured on this box: inside the
-        // handler `error_reporting()` is 4437 under `@` and 22527 without, and
-        // `4437 & E_WARNING === 0`. A conforming handler (and PHP's default
-        // one, which is what a production launch has) therefore prints nothing.
-        // So the property to assert is SUPPRESSION, not silence.
+        // for the duration of the expression. A conforming handler (and PHP's
+        // default one, which is what a production launch has) therefore prints
+        // nothing. So the property to assert is SUPPRESSION, not silence.
+        //
+        // TWO FIGURES IN THIS PARAGRAPH WERE WRONG AND ARE CORRECTED HERE,
+        // both re-measured on PHP 8.3.6 / Linux 6.8 by the generator below.
+        // WHAT IT SAID: "inside the handler `error_reporting()` is 4437 under
+        // `@` and 22527 without, and `4437 & E_WARNING === 0`."
+        // WHAT IS TRUE NOW, and what was already true when it was written:
+        //   - under `@` it is 4437. That half stands.
+        //   - WITHOUT `@` it is 32767, i.e. `E_ALL`, NOT 22527. 22527 is
+        //     `ini_get('error_reporting')` on this box — the AMBIENT mask, the
+        //     very thing the `error_reporting(E_ALL)` pin four lines below
+        //     exists to take out of the comparison. The old figure was measured
+        //     before that pin, so it described a test that no longer runs.
+        //   - the diagnostic a dead-datagram `fwrite()` raises is `E_NOTICE`
+        //     (8), NOT `E_WARNING` (2). The conclusion is unchanged —
+        //     `4437 & 8 === 0` as well — but naming the wrong level is how the
+        //     next reader "fixes" the mask and takes the guard with it.
+        // WHY THE PARAGRAPH STILL EARNS ITS PLACE: the mechanism it explains is
+        // the reason the assertion is on `suppressed` and not on an absence of
+        // output, and getting that backwards is what reddened the first draft.
+        // GENERATOR (no PHPUnit, so nothing narrows the mask for you): open a
+        // dgram pair, `fclose()` the read end, install a handler that records
+        // `$errno` and `error_reporting()`, then do one `@fwrite()` and one
+        // bare `fwrite()` on the write end.
         //
         // THE CONTROL IS IN THE SAME TEST, on purpose: an unsuppressed write is
         // driven through the identical handler and must come back UNsuppressed.

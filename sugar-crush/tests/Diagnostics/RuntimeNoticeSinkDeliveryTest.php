@@ -545,16 +545,37 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         self::assertStringContainsString('DsmlToolCallParser', $next->view());
     }
 
-    public function testNoticesFromSeveralChildrenAllArriveWholeAndInOrder(): void
+    /**
+     * WHOLE, NOT ORDERED, AND THE NAME USED TO SAY "IN ORDER".
+     *
+     * WHAT THIS TEST ASSERTED: `$rows[$i] === "child {$i} says …"`, index by
+     * index. WHAT IS TRUE NOW: nothing orders those three writes. The children
+     * are forked in a loop and only reaped afterwards, so all three run
+     * concurrently and the kernel delivers their datagrams in whatever order
+     * the scheduler produced. MEASURED, PHP 8.3.6 / Linux 6.8, on a
+     * byte-faithful replica of this fork/record/waitpid/drain sequence with a
+     * lightweight parent: 19 reorderings in 2700 trials (0.70%), in three
+     * separate takes of 900 (4, 8, 7 — every take non-zero), producing
+     * `[0,2,1]`, `[1,0,2]` and `[1,2,0]`. It has not been seen inside PHPUnit,
+     * where `fork()`'s copy-on-write cost in a ~280 MB process serialises the
+     * children — but "a race the current memory footprint happens to hide" is
+     * not a property, and the footprint is not one this file controls.
+     *
+     * WHY THE TEST STILL EARNS ITS PLACE, UNCHANGED: the property it exists for
+     * was never order. A `SOCK_STREAM` transport would coalesce these three
+     * writes into ONE `stream_socket_recvfrom()` read, and `assertCount(3, …)`
+     * below is what catches someone "simplifying" the pair to `SOCK_STREAM` —
+     * MEASURED by mutating `STREAM_SOCK_DGRAM` and confirming this test still
+     * reddens. Datagram framing is about each write being one indivisible
+     * message, and that is what is asserted: the three messages arrive, whole,
+     * as a set.
+     */
+    public function testNoticesFromSeveralChildrenAllArriveWhole(): void
     {
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
             self::markTestSkipped('ext-pcntl is required to exercise the fork boundary');
         }
 
-        // A SOCK_STREAM transport would interleave these into each other; the
-        // datagram framing is what makes each write one indivisible message.
-        // This is the assertion that would catch someone "simplifying" the pair
-        // to SOCK_STREAM.
         RuntimeNoticeSink::arm();
 
         $pids = [];
@@ -577,10 +598,25 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             $next->history,
             static fn ($m): bool => $m->role === Role::System,
         ));
+
+        // THE COUNT IS THE SOCK_STREAM GUARD and is asserted before the
+        // contents: under a stream transport the three writes coalesce into a
+        // single read and this is 1, whatever the payloads say.
         self::assertCount(3, $rows);
-        foreach ($rows as $i => $row) {
-            self::assertSame("child {$i} says " . str_repeat('.', 200), $row->content);
+
+        $expected = [];
+        for ($k = 0; $k < 3; $k++) {
+            $expected[] = "child {$k} says " . str_repeat('.', 200);
         }
+        $actual = array_map(static fn ($row): string => $row->content, $rows);
+
+        // Compared as SETS. Each row must still be one child's message byte for
+        // byte — a truncated or spliced datagram fails this exactly as an
+        // index-wise comparison would — but which child got to the socket first
+        // is the scheduler's business, not this seam's. See the doc-block.
+        sort($expected);
+        sort($actual);
+        self::assertSame($expected, $actual);
     }
 
     public function testTheTranscriptRowCarriesNoStderrEnvelope(): void
