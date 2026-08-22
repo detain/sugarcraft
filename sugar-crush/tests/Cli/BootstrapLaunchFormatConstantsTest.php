@@ -54,9 +54,8 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * see this round's mutation table.
  *
  * WHAT IS *NOT* PINNED HERE, stated because the absence looks like an
- * oversight. `Bootstrap.php` holds more `sprintf()` call sites with a literal
- * format than it has promoted constants — HOW MANY MORE IS DELIBERATELY NOT
- * WRITTEN HERE, and that is this round's rule rather than laziness: a
+ * oversight. `Bootstrap.php` still holds `sprintf()` call sites with a literal
+ * format — HOW MANY IS DELIBERATELY NOT WRITTEN HERE, and that is this round's rule rather than laziness: a
  * cardinality in prose is invalidated by the next commit that adds a
  * `sprintf()`, and round 44 shipped one into `src/` that was correct in its
  * lane and wrong at master an hour later. The pair is asserted, with its
@@ -68,26 +67,42 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * by `README.md`, `docs/SETTINGS.md` or a drift guard has a second party that
  * must agree with it, and a name is how two parties agree. A format read by
  * exactly one method is not improved by moving it away from the only code that
- * cares. Promoting the rest is recorded as a deferred finding rather than done,
- * because "every literal is a constant" buys nothing and costs a reader one
- * indirection per line.
+ * cares.
  *
- * ONE PROMOTED CONSTANT DOES NOT SATISFY THAT RULE, and saying so is cheaper
- * than pretending. WHAT THE RULE IMPLIES: every name here has a second party.
- * WHAT IS TRUE NOW, measured — `grep -rn "leaving no tools at all" src/ tests/
- * docs/ README.md` returns exactly one hit, its own declaration.
- * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} has no external
- * reader at all: {@see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest}
- * reads the FORMAT and the `leaving: ` prefix, never this one, because the
- * README's sample is the branch where tools survive.
- * WHY IT STILL EARNS ITS PLACE: it is the other branch of ONE field —
- * `PROJECT_TIER_TOOL_REMOVAL_FORMAT`'s last `%s` is either
- * `PROJECT_TIER_TOOL_REMOVAL_LEAVING` plus a list or this — and splitting a
- * two-branch field across a constant and a literal is worse than either
- * choice made consistently. What makes it a real obligation rather than a
- * decoration is {@see METHOD_LITERALS}, not a second party; until the
- * no-survivors branch has a behavioural assertion of its own (recorded as a
- * deferred finding), that is the whole of what pins it.
+ * THAT RULE HAS NOW BEEN WALKED ACROSS THE WHOLE FILE (E164) rather than
+ * applied to the two formats that happened to come up. WHAT THIS PARAGRAPH SAID:
+ * "promoting the rest is recorded as a deferred finding rather than done".
+ * WHAT IS TRUE NOW: every `sprintf()` in `Bootstrap.php` with a literal format
+ * was walked and asked the question, four more were promoted, and the ones left
+ * inline were left inline ON PURPOSE — every reader they have asserts a
+ * FRAGMENT (`'outside the project tree'`, `'could not be fully started'`,
+ * `/cannot be established as yours/`), which is a deliberately loose coupling to
+ * an idea, not two parties agreeing on a sentence. WHY THE ORIGINAL SENTENCE
+ * STILL EARNS ITS PLACE: its reasoning is the reason the walk did not end in
+ * promoting all ten. "Every literal is a constant" buys nothing and costs a
+ * reader one indirection per line; the finding is which ones have a reader, and
+ * saying "this one does not" is as much of an answer as promoting it.
+ *
+ * ONE PROMOTED CONSTANT USED NOT TO SATISFY THAT RULE, and the repair is worth
+ * recording because the shape of it applies to the next such constant.
+ * WHAT THIS PARAGRAPH SAID: {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE}
+ * "has no external reader at all" — measured, `grep -rn "leaving no tools at
+ * all" src/ tests/ docs/ README.md` returned exactly one hit, its own
+ * declaration — and "until the no-survivors branch has a behavioural assertion
+ * of its own (recorded as a deferred finding), {@see METHOD_LITERALS} is the
+ * whole of what pins it".
+ * WHAT IS TRUE NOW: it has one.
+ * {@see \SugarCraft\Crush\Tests\Cli\BootstrapToolAndPermissionSettingsTest::testAProjectThatRemovesEveryToolReportsTheNoSurvivorsBranch()}
+ * makes a real child launch remove every tool, which is the only thing in the
+ * tree that makes the running program take that branch — deleting the branch
+ * reds it. WHY THE OLD READING STILL EARNS ITS PLACE, and this is the part a
+ * later reader needs: that behavioural case does NOT pin the constant's TEXT.
+ * Its expectation renders from the same constant the child renders from, so with
+ * respect to the wording it is a tautology — measured, a rewording of the
+ * constant left it at `OK (57 tests, 135 assertions)`. A separate literal copy
+ * of the sentence lives beside it for exactly that reason, and the pair is the
+ * pin. The sibling constants need no such copy because README.md and the two
+ * docs pages hold theirs.
  *
  * @see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest for the README end
  *      of the same claim — that file compares the constants to the page.
@@ -115,6 +130,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'method' => 'reportProjectTierToolRemovals',
             'conversions' => 5,
         ],
+        'SKILL_SKIP_NOTICE_FORMAT' => ['method' => 'reportSkillSkips', 'conversions' => 5],
+        'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
+        'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
+        'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
     ];
 
     /**
@@ -166,6 +185,14 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     private const METHOD_LITERALS = [
         'warnPermissionConfig' => [],
         'reportProjectTierToolRemovals' => ["'disabledTools'", "', '"],
+        // The three agreement slots the notice interpolates. Every one of them
+        // is plumbing for ONE sentence, which is why the sentence has a name
+        // and these do not.
+        'reportSkillSkips' => ["''", "'s'", "'was'", "'were'", "'it'", "'them'"],
+        'launchNotices' => ["''", "'s'"],
+        // Both halves of the retention report are named, so what is left here
+        // is the plural pair and the four `$row` keys the detail line reads.
+        'reportPrunedSessions' => ["'session'", "'sessions'", "'id'", "'updated_at'", "'messages'", "'message'"],
     ];
 
     public function testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt(): void
@@ -406,7 +433,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
-        self::assertSame(10, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
+        self::assertSame(6, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
         self::assertSame(
             \count(self::NAMED_FORMATS),
             $census['constant'],
@@ -478,6 +505,47 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'the census can no longer name a first argument it does not understand, so the [] above is vacuous',
         );
         self::assertStringContainsString('T_VARIABLE', $unclassifiable['other'][0]);
+    }
+
+    /**
+     * THE SECOND PARTY, made a real assertion rather than a claim in a
+     * doc-block: the two pages that quote the retention summary are rendered
+     * FROM {@see Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT}.
+     *
+     * This is the only one of the six promoted formats whose external reader is
+     * a DOC PAGE rather than a test, and it is the case the promotion rule was
+     * written for — a page an operator reads and a line the launcher prints have
+     * to agree, and neither one is going to notice the other drifting. The
+     * other five have their readers in `tests/`, which red on their own.
+     *
+     * THE SAMPLE ARGUMENTS ARE THE PAGES' OWN — three sessions, thirty days —
+     * because these are illustrative sentences, not captures. What is pinned is
+     * the SHAPE around them: reword the format and both pages stop matching.
+     *
+     * WHITESPACE IS FLATTENED, and that is load-bearing rather than defensive.
+     * MEASURED: `docs/SETTINGS.md` wraps this very sentence across a line break
+     * between `30+ days` and `(ids on stderr)`, so a raw `str_contains()`
+     * against the file finds nothing at all — the same trap a doc-block's
+     * ` * ` continuation markers set for prose matching in source.
+     */
+    public function testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints(): void
+    {
+        $rendered = sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 3, 'sessions', 30);
+
+        foreach (['docs/ENVIRONMENT.md', 'docs/SETTINGS.md'] as $page) {
+            $path = \dirname(__DIR__, 2) . '/' . $page;
+            self::assertFileExists($path, "{$page} is quoted as a reader of the retention summary but is gone");
+
+            $flat = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($path));
+
+            self::assertStringContainsString(
+                $rendered,
+                $flat,
+                "{$page} no longer quotes what Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT renders. Either "
+                . 'the launcher was reworded and the page was not, or the page was edited away from the '
+                . 'line it is describing; both are the drift a name exists to make loud',
+            );
+        }
     }
 
     // ── the scanners ─────────────────────────────────────────────────────

@@ -271,6 +271,90 @@ final class Bootstrap
     public const PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE = 'leaving no tools at all';
 
     /**
+     * The aggregate row {@see reportSkillSkips()} raises for unreadable skill
+     * files.
+     *
+     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164).
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testSkippedSkillFilesReachBothChannelsAsOneAggregateRow()}
+     * reproduces a rendered span of this sentence, plural machinery included —
+     * and the plural machinery is the part that drifts, because `%s` here is
+     * three separate agreement slots (`file/files`, `was/were`, `it/them`) that
+     * a reworded message silently desynchronises.
+     *
+     * `%d` the count, `%s` the noun plural, `%s` the verb, `%s` the env var
+     * that lists the paths, `%s` the object pronoun. Five, and the count is
+     * asserted rather than intended — `sprintf()` on PHP 8 throws
+     * `ArgumentCountError` when a format asks for more than it is given, so a
+     * sixth conversion is a launch-time fatal, not a cosmetic drift.
+     */
+    public const SKILL_SKIP_NOTICE_FORMAT =
+        '%d skill file%s could not be read and %s skipped; set %s=1 to list %s';
+
+    /**
+     * The tail row {@see launchNotices()} synthesises when this launch raised
+     * more warnings than {@see LAUNCH_NOTICE_LIMIT} could seat.
+     *
+     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164), and this one reproduces
+     * the sentence WHOLE:
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testAFanOutOfNoticesIsCappedAndTheOverflowIsCounted()}
+     * `assertSame()`s the rendered line rather than a fragment of it. It is
+     * also the odd one out of its own family: {@see LAUNCH_NOTICE_LIMIT} and
+     * {@see LAUNCH_NOTICE_CLIP_SUFFIX} are already named, and the sentence that
+     * tells a reader the cap was hit was the only part of the cap contract
+     * living as an inline literal.
+     *
+     * `%d` the number dropped, `%s` the plural marker.
+     */
+    public const LAUNCH_NOTICE_OVERFLOW_FORMAT =
+        '…and %d more launch warning%s this transcript could not fit; the full list is on stderr';
+
+    /**
+     * The one-line summary {@see reportPrunedSessions()} seeds the transcript
+     * with.
+     *
+     * PROMOTED BECAUSE TWO DOC PAGES QUOTE THE RENDERED LINE (E164) —
+     * `docs/ENVIRONMENT.md`'s `SUGARCRUSH_SESSION_RETENTION_DAYS` row and
+     * `docs/SETTINGS.md`'s routing section both carry
+     * `retention removed 3 unnamed sessions untouched for 30+ days (ids on
+     * stderr)` verbatim. That is the strongest form of the readership rule this
+     * class promotes on: a page an operator reads and this line have to agree,
+     * and a name is how two parties agree.
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchFormatConstantsTest}
+     * renders both pages' copy from this constant.
+     *
+     * `%d` the count, `%s` the noun plural, `%d` the retention window in days.
+     * The `+` after the last conversion is literal text, not part of it.
+     */
+    public const SESSION_RETENTION_SUMMARY_FORMAT =
+        'retention removed %d unnamed %s untouched for %d+ days (ids on stderr)';
+
+    /**
+     * The per-session detail row {@see reportPrunedSessions()} writes to stderr
+     * and deliberately does NOT seed into the transcript.
+     *
+     * PROMOTED AS THE OTHER HALF OF ONE REPORT, which is the same argument
+     * {@see PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} is kept under rather than a
+     * second-party one: `docs/ENVIRONMENT.md` and `docs/SETTINGS.md` document
+     * the SPLIT — summary to both channels, ids to stderr alone — so the two
+     * lines are one contract, and splitting a contract across a constant and an
+     * inline literal is worse than either choice made consistently. Its own
+     * external readers assert fragments (`'<id> (last used …'`), not the line.
+     *
+     * IT CARRIES ITS OWN ENVELOPE, and that is not a mistake to be tidied away:
+     * the leading `sugarcrush:   ` and the trailing newline duplicate what
+     * {@see STDERR_LINE_FORMAT} adds, because these rows are a CONTINUATION of
+     * the summary above them and are indented under it by the extra spaces. A
+     * naive "route this through warnPermissionConfig() too" would lose the
+     * indent, add a full stop to an id list and — far worse — seed one
+     * transcript row per deleted session, which is the per-entry fan-out
+     * {@see LAUNCH_NOTICE_LIMIT} exists to refuse.
+     *
+     * `%s` the session id, `%s` its last-used timestamp, `%d` the message
+     * count, `%s` that count's noun plural.
+     */
+    public const SESSION_RETENTION_DETAIL_FORMAT = "sugarcrush:   %s (last used %s UTC, %d %s)\n";
+
+    /**
      * How many CALL sites in this file route a warning onto
      * {@see warnPermissionConfigInTranscript()}.
      *
@@ -2662,7 +2746,7 @@ final class Bootstrap
         // PROSE_SITES and a declaration in {@see TRANSCRIPT_SEAM_CALL_SITES}, so
         // a seventeenth site reds this sentence rather than dating it.
         self::warnPermissionConfigInTranscript(sprintf(
-            '%d skill file%s could not be read and %s skipped; set %s=1 to list %s',
+            self::SKILL_SKIP_NOTICE_FORMAT,
             $count,
             $count === 1 ? '' : 's',
             $count === 1 ? 'was' : 'were',
@@ -4209,7 +4293,7 @@ final class Bootstrap
         return [
             ...self::$launchNotices,
             sprintf(
-                '…and %d more launch warning%s this transcript could not fit; the full list is on stderr',
+                self::LAUNCH_NOTICE_OVERFLOW_FORMAT,
                 $dropped,
                 $dropped === 1 ? '' : 's',
             ),
@@ -5504,14 +5588,14 @@ final class Bootstrap
     {
         $count = count($report);
         self::warnPermissionConfigInTranscript(sprintf(
-            'retention removed %d unnamed %s untouched for %d+ days (ids on stderr)',
+            self::SESSION_RETENTION_SUMMARY_FORMAT,
             $count,
             $count === 1 ? 'session' : 'sessions',
             $retentionDays,
         ));
         foreach ($report as $row) {
             fwrite(STDERR, sprintf(
-                "sugarcrush:   %s (last used %s UTC, %d %s)\n",
+                self::SESSION_RETENTION_DETAIL_FORMAT,
                 $row['id'],
                 $row['updated_at'],
                 $row['messages'],
