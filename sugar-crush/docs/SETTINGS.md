@@ -248,9 +248,18 @@ honours negated character classes. Measured end-to-end **on PHP 8.3.6,
 provenance: `fnmatch()`'s handling of `[!…]` is not version-sensitive, negated
 classes are not a recent addition, and no ICU is involved. They are recorded
 anyway because an undated figure is how a PHP-8.3-only defect once got written
-down as unconditional. The figure also has a live generator rather than only a
-date — `Tests\Config\ReadmeSettingsTierClaimTest` re-derives it every run, so
-it reds rather than rots. In a project you have listed
+down as unconditional. Both claims on this page also have live generators
+rather than only a date, and they are **two different generators** because they
+are two different claims: `Tests\Config\ReadmeSettingsTierClaimTest` re-derives
+the *tool set* the glob leaves, and `Tests\Config\GlobFigureDriftTest` re-derives
+every *character count* below — including the ones inside the retraction — from
+`strlen()` of the glob this page quotes. (That sentence used to name the first
+test alone as the generator for both. It is not: it holds the glob as a class
+constant and never measures its length, so the count it was credited with
+keeping fresh was in fact unpinned on this page and in
+`src/Config/LayeredSettings.php` at the same time. The retraction is kept
+because "there is a generator" is exactly the claim a reader stops checking.)
+In a project you have listed
 under `trustedProjectSettings` (an untrusted project's `disabledTools` never
 reaches the merge at all, and all eleven tools survive):
 
@@ -265,11 +274,22 @@ text. (This line said "eight characters" until the count was re-derived:
 `[!B]*` is five, `"[!B]*"` seven, `["[!B]*"]` nine, and nothing here is eight.
 The point the figure was making — that the value names none of the ten tools it
 removes — is what survives, so the sentence stays and the number is corrected.
-`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
-still carry the old figure in their doc-blocks. A THIRD occurrence was in this
-file, sixty lines below — "refusing negated classes would close the
-eight-character version" — and is corrected; a page that re-derives a number and
-then contradicts itself further down is worse than one that never re-derived it.)
+This line once continued
+"`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
+still carry the old figure in their doc-blocks", and half of that is no longer
+true: `LayeredSettings` was corrected in round 43 and now carries the retraction
+rather than the figure. **`Bootstrap::reportProjectTierToolRemovals()` is the one
+remaining site**, in the sentence about refusing negated character classes. The
+naming is kept rather than dropped because a list of known-stale copies is the
+only thing that makes the next one findable — and it is now asserted rather
+than believed: `Tests\Config\GlobFigureDriftTest` censuses `src/` for paragraphs
+that spell the old count without retracting it, and reds both if a new one
+appears and if this sentence names a file that has since been fixed. A THIRD
+occurrence was in this file, in the paragraph beginning "The report is the
+*effect*, not the pattern" — located by its words rather than by "sixty lines
+below", because an offset in prose is the same rot one level up — and is
+corrected; a page that re-derives a number and then contradicts itself further
+down is worse than one that never re-derived it.)
 
 **Two things narrow this, and both are measured.** An *untrusted* project's
 `disabledTools` never reaches the merge — all eleven tools survive — so this

@@ -348,11 +348,32 @@ final class LayeredSettings
      * eight. WHY THE SENTENCE STILL EARNS ITS PLACE: the number was never the
      * argument. The point is that a value this short names NONE of the ten
      * tools it removes, which is exactly the auditability the retracted claim
-     * promised, so the sentence is corrected rather than dropped. The figure is
-     * re-derived every run by
-     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()},
-     * so it reds instead of rotting. `Bootstrap::reportProjectTierToolRemovals()`
-     * is the other site `SETTINGS.md` named and is not this lane's file.
+     * promised, so the sentence is corrected rather than dropped.
+     *
+     * AND THE CORRECTION ONCE CITED THE WRONG GENERATOR, which is worth more
+     * space than the number was. WHAT IT SAID: the figure "is re-derived every
+     * run by `ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()`,
+     * so it reds instead of rotting". WHAT IS TRUE NOW: that test derives the
+     * TOOL SET this glob leaves. It never measures the glob's LENGTH — the glob
+     * is a class constant there and no `strlen()` appears anywhere in `tests/` —
+     * so the citation was a number written down beside the name of something
+     * that does not produce it. MEASURED on PHP 8.3.6, 2026-08-22: restoring
+     * "eight" to this very paragraph left that test and its five sibling
+     * doc-drift suites at `OK (80 tests, 297 assertions)`. WHY THE SENTENCE
+     * STILL EARNS ITS PLACE: its instinct was right and only its address was
+     * wrong. A figure in a doc-block either has a generator or it rots, and
+     * "eight" is what rotting looked like. The count has one now —
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest} derives
+     * every number in this paragraph from `strlen()` of the glob the paragraph
+     * quotes, on both pages that carry it. The BEHAVIOUR — that this value
+     * leaves exactly `Bash` — is the half
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()}
+     * generates, and the two are not interchangeable.
+     *
+     * `Bootstrap::reportProjectTierToolRemovals()` is the other site
+     * `SETTINGS.md` named and is not this lane's file; that it is the ONLY
+     * remaining one is itself asserted, by
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::testTheSettingsPageNamesExactlyTheSourceFilesStillCarryingTheStaleFigure()}.
      *
      * So the shape argument DOES NOT survive on its own, and the honest
      * statement of where this key stands is: a project-tier `disabledTools`
