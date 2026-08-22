@@ -10312,3 +10312,229 @@ the backlog**, which every lane appends to and which is expected to conflict. Ze
 thing in its diff whose token stream has only been observed on 8.3.6: `token_get_all()`'s emission for
 the parenthesised-closure-call shape. Lane a's whole `fnmatch`/PCRE translation is stdlib-behaviour work
 and carries the same caveat, though PCRE semantics are the stable half.
+
+## ROUND 44 — three new oracles, a census that would have passed while broken, and the discovery that assertion counts are not additive
+
+**Merged at `98d59bfb`. Floor `9215 / 127781 / 1 skipped / rc 0`**, supervisor-measured in the live tree,
+04:17.446, 276.40 MB. Base `8ade35dd` (9078 / 105590). Run `wf_8f679ad9-c85`, 9 agents, 0 errors, ~100 min.
+Three lanes, each a full-repo `cp -a` at `8ade35dd`, verified clean with 18/18 in-lane symlinks resolving
+INSIDE the lane before launch, running implement → adversarial review → fix. **Concurrency 3** — the user
+offered 5 mid-round and then preferred 3, so `docs/plans/crush_code_concurrency.md` is unchanged.
+
+### 🔴 THE TEST PREDICTION MATCHED EXACTLY. THE ASSERTION PREDICTION DID NOT, AND THE REASON IS STRUCTURAL
+
+Predicted **9215 / 127733** from the lane deltas (a +87/+21,658, b +23/+379, c +27/+106). Tests hit
+**9215** exactly — two rounds running. Assertions came in at **127,781**, **+48 over prediction**.
+
+**Assertion counts are NOT additive across lanes once a lane ships a census that walks the tree.** Lane a's
+new guards assert per file and per paragraph over `src/` and `docs/`; lanes b and c added prose, so lane a's
+assertion count rose **with no code change on either side**. Measured directly by running lane a's three
+census files in both trees:
+
+| | merged master | lane-a HEAD | delta |
+|---|---|---|---|
+| `GlobFigureDriftTest` | 18,698 | 18,652 | **+46** |
+| `SymbolCitationDriftTest` | 939 | 937 | **+2** |
+| `EnvRosterDriftTest` | 2,110 | 2,110 | 0 |
+| all three | 21,747 | 21,699 | **+48** |
+
+Same **93 tests** on both sides. The +48 is the whole discrepancy, attributed exactly.
+
+🔴 **THE RULE FOR EVERY LATER ROUND: TEST COUNTS STAY ADDITIVE; ASSERTION COUNTS STOP BEING ADDITIVE THE
+MOMENT A LANE SHIPS A TREE-SCANNING CENSUS.** Predict tests from the deltas as before, and predict
+assertions as a **lower bound** whenever any lane's diff contains a guard that enumerates files or
+paragraphs. This is the same family as E131 (below) one level up: a cardinality measured in a lane
+worktree is not a fact about master.
+
+### 🔴 THE ROUND'S CENTRAL DESIGN CLAIM, PROVED BY THE SUPERVISOR RATHER THAN TAKEN FROM THE LANE
+
+E103 emptied the stale-figure census. **An empty census is a weaker guard than a census of one**, because
+an assertion of `[]` also passes in a tree where the scanner has quietly stopped working. The brief said
+so; lane a built the defence; the supervisor mutated the scanner to never match and measured both halves:
+
+- `testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees` — **PASSES**, 1 test, 18,228
+  assertions, entirely green, in a tree where the instrument is dead.
+- `testTheCensusScannerStillFindsAKnownStaleParagraph` — **REDS**: *"the census scanner no longer finds a
+  paragraph it is meant to find, so its verdict on src/ and docs/ is worthless."*
+
+19 tests red in total under that mutation. **This is the "guard that passes whether or not the thing it
+guards is present" class this tree keeps producing — anticipated and closed for once, rather than found
+two rounds later.**
+
+Lane b's new README oracle was attacked the same way: reintroducing the exact E98 defect (dropping
+`installation` from the JSON schema union) reds it with a message naming **both** failure directions.
+⚠️ The supervisor's FIRST mutation attempt was a no-op — a `perl` substitution that matched nothing — and
+produced a **false green**. Rule 13 caught the supervisor, not a lane. `git diff --numstat` after every
+mutation, before believing the run.
+
+### Lane a — E103 + E108 + E111(env). 6 commits, `a45c...`→`6721af50`, +87 tests / +21,658 assertions
+
+E103 was a three-part rewrite, not a number swap: the point of the sentence is that `[!B]*` names none of
+the ten tools it removes, and the length was incidental. With the site gone the census is empty, so
+`docs/SETTINGS.md`'s "is the one remaining site" sentence moved in the same commit and the scope widened
+to `src/` **and** `docs/` — round 43's shipped defect was a stale sentence on that very page, not in
+source. E108 widened the connector alphabet (fixture table 15 → **25** rows, 6 controls).
+
+**The brief was right that the census was not a one-file problem** — four sites carry the phrase, three of
+them legitimate rule-7 retractions — and lane a re-measured the scope exclusion at **7 files, not 5**.
+
+🔴 **LANE A REFUTED ITS REVIEWER'S PRESCRIBED FIX, AND SHIPPING IT WOULD HAVE REDDED CORRECT PROSE.** The
+review said to widen the noun to `char(?:acter)?s?|bytes?` beside the numeral. Measured over the real
+scope on PHP 8.3.6, `\b8[\s\-_]*(?:char(?:acter)?s?|bytes?)\b` reports **eleven** paragraphs — ten are the
+phrase **"UTF-8 byte"** and the eleventh is a true sentence about an 8-byte truncation head. A
+`(?<![\w.\-])` lookbehind kills the ten and not the eleventh, so `bytes?` is admitted after the WORD only
+and refused after the numeral. **Shipping the prescription would have produced an exemption list — the
+exact instrument that went stale in round 43.**
+
+Also: it refuted its **own** shipped figure (87 citations → **94**, after editing 80 lines of
+citation-bearing prose and leaving the number alone), and its own instrument refuted its own first
+rewrite — writing "five characters of glob" into a second paragraph broke `soleParagraphContaining()`'s
+`assertCount(1)`, loudly and immediately. **Zero mutation survivors across 38 rows in three tables**,
+including all seven the reviewer had found.
+
+### Lane b — E94 + E98 + E90 + E91 + E99. 10 commits, `775481e0`→`27343925`, +23 tests / +379 assertions
+
+🔴 **THE CONTRACT HAS SEVEN ERROR TYPES, NOT THE FIVE EVERY SOURCE SAID.** `not-found` and `mcp-config`
+were proven live from `bin/sugarcrush` — `session delete <missing> --output-format json` → `{"type":
+"not-found"}` rc 1, and `mcp list` against a trusted-but-malformed `.mcp.json` → `{"type":"mcp-config"}`
+rc 1. **The old `[a-z_]+` extractor drops both hyphenated names silently**, which is why five looked
+complete. The derivation now reads all of `src/` + `bin/` (288 files, 395,237 tokens, 36 ms) in three
+producer shapes. A **fifth** README-equivalent spot turned up in `NonInteractive::emitErrorDocument()`'s
+own doc-block, beyond the four the brief named.
+
+🔴 **A REVIEWER-PRESCRIBED FIX REOPENED THE HOLE IT CLOSED, AND ONLY MUTATION SHOWED IT.** The review said
+to derive the bystander set with `hasProperty('skillNudge')` — `nudgeSpendRoster()`'s own first gate.
+**Holding a tracker is not spending a budget:** `Write` and `Edit` both hold one and call `forPath($path)`
+with no budget argument. Mutation `f6a` — adding the constant to `Write` under that predicate —
+**SURVIVED**. Re-derived from the doc-block's own sentence (*does the tool pass a budget?*), `f6d` then
+killed. **A prescription in a review is a hypothesis; the acceptance test for a fix is a mutation of THE
+FIX, not of the original defect.**
+
+🔴 **AND LANE B REFUTED ITS OWN NEW ASSERTION IN THE FILE IT WAS FIXING.**
+`assertStringNotContainsString('the one type this method never emits', $doc)` against raw source
+**SURVIVED** re-adding the clause — **a doc-block wraps at 80 columns with ` * ` on every continuation, so
+the sentence is never those bytes in a row.** That is the same defect the fix existed to close, committed
+inside the fix for it. Closed by flattening continuation markers *and* scoping to the doc-block's own
+voice, because a flat byte ban would forbid keeping the retraction's quotation (rule 7).
+
+E99 bounded the pattern cache at `MAX_COMPILED_PATTERNS = 1024` with a full flush (documented: an
+`array_shift()` eviction is O(n)). ⚠️ Supervisor-verified that **`legacyPathMatch()` is still reachable** —
+`a[\]]b` still emits `#^a[\\]\\]b$#Ds`, which PCRE refuses — so the M6-class mutations stay killable and
+the never-remove rule does not leave an unpinnable method behind.
+
+⚠️ **A DOCUMENTED MECHANISM WAS INVERTED, AND SO WAS THE REVIEWER'S EXPLANATION OF IT.** Per-entry memory
+was said to fall with n "because a hashtable's fixed overhead amortises". It **RISES**: 151.3 B/entry at
+1,024 vs 177.5 B/entry at 20,000, and the driver is the generator, not the hashtable
+(`src/gen19999/**/*.php` is four bytes longer than `src/gen0/**/*.php`, carried in both key and value).
+Neither quoted total reproduced. Reflection dispatch measured at **−0.04 µs** over 64,000 calls — below
+noise. The `8.53x–8.68x` band **does** reproduce exactly (8.64/8.65/8.65) and is one corner of a 7.5x–9.7x
+surface in two parameters, invisible to a generator using eight *distinct* patterns.
+
+### Lane c — E97 + E106 + E96 + E95 + E102. 5 commits, `bc9f574e`→`9cc6c3c3`, +27 tests / +106 assertions
+
+**The brief's two corrections both landed.** E106 was filed as "one line"; there were **two** occurrences
+in `Chat.php`, and the family view found a **fifth** member in `docs/ENVIRONMENT.md`'s precedence
+paragraph. E97's three prose sites turned out to be **nine** `PROSE_SITES` rows, and `docs/SETTINGS.md`
+**contradicted itself** — saying *fifteen* while quoting a generator that returns *sixteen*.
+
+🔴 **THE FOUR-DOORS GUARD WAS SATISFIED BY ITS OWN RETRACTION** (BLOCKING-1) — the exclusion now asserts it
+removes **exactly one** paragraph, and `isRetraction()` matches both `WHAT THIS SAID` and `WHAT IT SAID`.
+The token scan also had to learn that a first-class callable `self::seam(...)` lexes as
+`T_STRING '(' T_ELLIPSIS ')'` and must be excluded from a CALL-site count; exercised on 13 synthetic
+sources.
+
+🔴 **A CENSUS THAT ADMITS A BLIND SPOT AND THEN REPORTS ZERO HAS REPORTED NOTHING.** Lane c's own filed
+entry said the shared-`/tmp` sweep "found none — zero in `src/`; in `tests/`, only `ChatTest`". Wrong in
+**both** directions: it missed a benign second instance in `ToolIpcFilesTest`, and it missed a **real** one
+**forty lines from the fix the entry was about** — `ParallelToolCallsTest`'s own probe snapshotting
+`glob('/tmp/sc_runtime_tool_*')`. The census keys on the argument reaching `sys_get_temp_dir()`, and this
+one reaches it through a constructor hop (`new class (sys_get_temp_dir())`, then `glob($this->tmp . '/…')`).
+**The entry's own residual paragraph had named that class of miss in the abstract and then stated a
+concrete negative the same paragraph explains away.**
+
+**E96's fix is identity, not window.** `ToolIpcFiles::strandedReservations()` attributes in the PARENT,
+which is the only place identity exists, and the detector keeps a control — an empty stranded list means
+"nothing leaked" only if something was reserved. ⚠️ **Lane c refuted its own preferred fix first:** on PHP
+8.3.6 `sys_get_temp_dir()` resolves and **caches on first use** and does not honour a runtime
+`putenv('TMPDIR=…')`, so a test cannot isolate itself into a private temp dir after the fact. That
+negative is recorded in E133 so nobody re-attempts it.
+
+**E96 was not hypothetical:** lane c's baseline run went **rc 1** on foreign `sc_runtime_tool_*` files from
+a sibling lane — the first live sighting, exactly as the brief predicted.
+
+⚠️ **Lane c's mutation table is the round's thinnest.** MAJOR-4 (the E102 figure re-derivation, corrected to
+**87%** startup share and **48 ms** per row) carries **no mutation row at all**, and the lane does not
+acknowledge the gap; and it has one trap control but **no vacuity control** — nothing analogous to lane a's
+"scraper matches nothing", so a census that quietly stopped scanning would not be caught by that table.
+
+### THE SUPERVISOR BROKE SOMETHING AT MERGE, AND IT IS A REPEATABLE HAZARD
+
+Lanes b and c both appended to the backlog **starting at E112**. Lane c's five were renumbered E118–E122
+at conflict resolution — but lane c had already written `E112`/`E113` into
+`BootstrapTranscriptSeamCallSiteCensusTest`'s doc-blocks **and into a failure message that tells a future
+reader which entry to consult**, so the tripwire pointed at lane b's README entry. Fixed in `c4a799ab`.
+
+🔴 **AN IN-CODE CITATION OF A BACKLOG ID IS A CROSS-FILE REFERENCE THE MERGE CANNOT SEE.** Grep the merged
+diff for the renumbered range before committing the resolution. This is E135; the reports' own prose still
+carries the losing numbers and cannot be fixed retroactively.
+
+### FILE OWNERSHIP HELD FOR CODE AND LEAKED FOR DOCS — AND THE REVIEWER IS WHY
+
+One genuine same-file collision: **lane c edited `docs/SETTINGS.md`, which was lane a's**, on its
+**reviewer's explicit MAJOR-2 instruction**. It merged cleanly (disjoint sections — lane a around the
+glob-figure paragraph, lane c around the seam-count paragraph) and both survive, so no damage. Lane b's two
+out-of-list edits (`bin/sugarcrush`, `src/Cli/NonInteractive.php`) were **verified comment-only** by
+filtering non-comment lines out of the diff — both empty — and neither file belonged to another lane.
+
+🔴 **THE STRUCTURAL CAUSE: THE REVIEW PROMPT TELLS REVIEWERS TO CHECK THE FILE SPLIT AND NEVER TELLS THEM
+THEY ARE BOUND BY IT WHEN PRESCRIBING A FIX.** All three lanes independently concluded the ownership map
+was wrong for their findings and two acted on it. Round 45's review prompt must say: a finding in another
+lane's file is reported, never prescribed as an edit.
+
+⚠️ **Lane b's `bin/sugarcrush` justification is the weaker half** — it overrode a constraint its own
+*implementer* had accepted, on the grounds that its own brief was silent. "Not explicitly forbidden" is the
+argument shape that erodes ownership over rounds.
+
+### E131 — AND THE SAME LESSON ONE LEVEL DOWN
+
+`LayeredSettings` shipped "counts 66 files and 68" for its `strlen` census. Both were **correct in lane a's
+worktree** and both were **wrong at `98d59bfb`** — 71 and 73 — because the other two lanes added test files
+containing `strlen` while lane a was measuring. Fixed at `e29608d1` by **dropping the cardinalities and
+keeping the generator**: the paragraph's real claim is a NEGATIVE (no `strlen()` in `tests/` reaches
+`COUNTEREXAMPLE_GLOB` or any spelling of `[!B]*`), re-verified at HEAD and untouched by the merge. **The
+totals never supported the claim; they only looked like evidence.**
+
+### FIGURES AND PROVENANCE
+
+| lane | tests | assertions | skipped | rc | commit | baseline |
+|---|---|---|---|---|---|---|
+| a | 9165 | 127,248 | 1 | 0 | `6721af50` | derived |
+| b | 9101 | 105,969 | 1 | 0 | `27343925` | derived |
+| c | 9105 | 105,696 | 1 | 0 | `9cc6c3c3` | derived |
+| **merged** | **9215** | **127,781** | **1** | **0** | **`98d59bfb`** | **observed** |
+
+All three declared the baseline **derived**, which is the honest disclosure. ⚠️ **Lane a's baseline row
+lists rc 0 at `8ade35dd`; lanes b and c both observed rc 1 there**, E96 firing on a sibling's `/tmp` files.
+Lane a's rc 0 is an inherited assumption, and it is the one baseline field the other two lanes contradict.
+
+Cross-checks all reconciled. Lane a: 28 added / 2 removed = +26 declarations, provider surplus 63 − 2 = 61,
+26 + 61 = **+87**; it also explained why `grep -c '^+ *yield '` = 41 is *not* the surplus (a rename rewrote
+a whole block; a provider row contributes rows−1 per consuming method). Lane b: **23/0/0, zero providers**,
+and the four new files run standalone at exactly 23/379 — identical on both numbers to the suite delta,
+which additionally proves no pre-existing test changed its assertion count under its `src/` and README
+edits. Lane c: 13 declarations, 3 provider-driven, (13−3)+2+2+13 = **+27**.
+
+**Independently reproduced by the supervisor at merged HEAD:** the **62** unowned `sugarcrush:` stderr
+lines lane c counted (E120) appear 62 times in the supervisor's own floor log.
+
+### INVARIANTS AT MERGE
+
+18/18 symlinks by `is_link()` · `md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210` ·
+`php tools/check-path-repos.php --no-lib-path-repos` rc 0 · zero tracked per-lib `composer.lock` · skip
+still exactly 1 · every lane file byte-identical in master except the two knowingly shared
+(`docs/SETTINGS.md`, the backlog) · `drain44-{a,b,c}` deleted and `/home/sites/crush-lane-{a,b,c}` removed,
+**after** the byte-identity check and `git branch --merged master`, in that order.
+
+**Backlog: 105 → 129 entries.** E112–E117 (lane b), E118–E122 (lane c, renumbered), **E123–E135 filed by
+the supervisor** from the three reports — nine of them lane a's, which deliberately filed nothing to avoid
+the three-way append conflict that lanes b and c then hit.
