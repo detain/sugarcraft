@@ -7031,3 +7031,191 @@ have to rediscover it.
 decide whether anyone is told, never whether the turn survives), amend the integration test to set the
 flag, and add the row `EnvRosterDriftTest` will demand on `docs/ENVIRONMENT.md`. That last one is not
 optional: the page claims to list every variable `src/` reads and a guard enforces it.
+### Eb46-1 — the E156 attribution is wrong for `tests/Integration/`: the 62 stderr lines are in-process, not inherited
+
+**Recorded 2026-08-22 by round-46 lane b.** Severity: process, and it redirected a whole lane item.
+**Measured at `62f4e5d1`, PHP 8.3.6, one file per `vendor/bin/phpunit <file>` run, counted with
+`grep -ac 'sugarcrush: '`.**
+
+**What.** Round 45 recorded the 62 `sugarcrush: ` lines a full suite prints as a **harness** property —
+"child-process launches whose stderr the PHPUnit process inherits rather than keeping on the pipe the
+test already reads" — and named `tests/Integration/BinSugarcrushDispatchTest.php` and
+`tests/Integration/McpToolWiringTest.php` among the eleven owning files, with per-spawn stderr
+redirection as the fix. Measured:
+
+| file | lines |
+| --- | --- |
+| `tests/Integration/BinSugarcrushDispatchTest.php` | **0** |
+| `tests/Integration/McpToolWiringTest.php` | **1** |
+| `tests/Cli/NonInteractiveProviderFailureTest.php` | 18 |
+| `tests/Cli/NonInteractiveTest.php` | 8 |
+| `tests/Cli/BootstrapHookFileTest.php` | 8 |
+| `tests/Cli/BootstrapToolAndPermissionSettingsTest.php` | 7 |
+| `tests/Cli/BootstrapTrustGateSelfGrantTest.php` | 1 |
+| `tests/Cli/ArgvParserTest.php`, `tests/Cli/HelpTest.php`, `tests/Cli/BootstrapShellOutTierTest.php`, `tests/Cli/BootstrapLaunchNoticeRoutingTest.php` | **0 each** |
+
+`BinSugarcrushDispatchTest::runBin()` already pipes fd 2 (`2 => ['pipe', 'w']`) and always did.
+`McpToolWiringTest`'s single line is not a child's at all: it is an in-process `fwrite(\STDERR, …)`
+reached from `testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()`, which
+already argues for accepting exactly one such line and pins the count by reading the growth of
+`Bootstrap::$reportedPermissionConfigWarnings`. Per-spawn redirection cannot touch it, and silencing it
+was rejected there on its merits.
+
+The dominant mechanism is the same one: **in-process `fwrite(\STDERR, …)`**. `src/Cli/NonInteractive.php`
+holds six such sites and there is no child process anywhere in the two files that account for 26 of the
+62. **A scan of every child-process launch under `tests/Integration/` (15 sites: 5 `exec`/`shell_exec`,
+10 `proc_open`) finds all 15 already capturing fd 2** — that census is now a test,
+`tests/Support/ChildStderrCaptureTest.php`, over `tests/Support/ChildStderrCaptureScanner.php`.
+
+**Lines removed by the prescribed mechanism in this lane: 0.** Not because the work was skipped, but
+because there was none of that shape to do.
+
+**Step.** Closing the 62 needs a **stderr sink seam in `src/`** — one indirection that `NonInteractive`,
+`Bootstrap::warnPermissionConfig()` and `Bootstrap::reportPrunedSessions()` write through, that a test can
+point at a buffer. That is lane a's `error_log()`/`StderrEmitterCensusTest` territory, not a harness
+change. Before that lands, point `ChildStderrCaptureScanner` at `tests/Cli/` by widening
+`ChildStderrCaptureTest::SCOPE` to `''` and see whether ANY of the 62 is a spawn — this lane's answer for
+`tests/Integration/` is no.
+
+### Eb46-2 — `tests/Agents/MailboxTest.php`'s forked child ends in a plain `exit(0)` inside PHPUnit
+
+**Recorded 2026-08-22 by round-46 lane b. Out of lane (`tests/Agents/`).** Severity: low today, latent.
+**Found by `ForkedChildExitScanner`; recorded in `ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT`
+so the guard stays green without the fact being lost.**
+
+**What.** `testCrossProcessWake()` forks in-process, sends a real `Mailbox` message from the child, and
+leaves through `exit(0)`. That runs PHP's whole shutdown sequence a second time over a copy of the
+parent's object graph. It has not bitten because that child inherits no raw-mode `Tty` and no armed loop
+watcher — a property of what the test happens to do, not a reason.
+
+**Step.** `ForkedChild::exitNow(0)`, then delete the `Agents/MailboxTest.php` row from
+`ACCEPTED_BARE_EXIT` (`testEveryAcceptedBareExitFileStillHasOne()` will demand it).
+
+### Eb46-3 — `WorkflowEngine`'s interrupt handler leaves a forked child through a plain `exit()`
+
+**Recorded 2026-08-22 by round-46 lane b. Out of lane (`src/`).** Severity: medium. **Measured.**
+
+**What.** `src/Workflows/WorkflowEngine.php`'s `installInterruptHandlers()` closure ends in
+`exit($signo === \SIGINT ? 130 : 143)`, twice. `pcntl_signal()` dispositions are inherited across
+`pcntl_fork()`, and `AgentWorkerPool::startAgent()` forks — so a real SIGTERM during a parallel stage
+delivers to every worker child, and each leaves through that plain `exit()`. Under PHPUnit that is
+PHPUnit's shutdown running in N extra processes; in production it is every inherited destructor firing in
+a worker, including candy-core's `Tty`. The getmypid() guard added in R28 stops a child calling `pause()`;
+it does not change how the child leaves.
+
+This is why `tests/Integration/WorkflowResumptionTest.php` is listed in
+`ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT` rather than fixed: its two children's visible
+`exit(99)`/`exit(98)` are only the unreachable "the handler did not fire" sentinels. The shape the
+**passing** path takes is the src-side `exit(143)`. Converting the sentinels alone would green the guard
+over a path nothing had touched.
+
+**Step.** `ForkedChild::exitNow($signo === \SIGINT ? 130 : 143)` at both sites in `WorkflowEngine`, then
+convert the two sentinels and delete the `Integration/WorkflowResumptionTest.php` row. The parent-side
+assertions read `pcntl_wifexited()`/`wexitstatus()` and will need `wifsignaled()`/`wtermsig()` instead.
+
+### Eb46-4 — the reaper trait is adopted only under `tests/Integration/`
+
+**Recorded 2026-08-22 by round-46 lane b. Out of lane.** Severity: low. **Derived, not listed.**
+
+**What.** `tests/Support/ReapsForkedChildrenTrait.php` closes the hole where `phpunit.xml`'s
+`defaultTimeLimit` (`pcntl_alarm`, which is not inherited across `fork()`) aborts only the parent and
+leaves its children running unbounded into a temp tree `tearDown()` is about to delete.
+`ForkedChildReaperAdoptionTest` requires it of every in-process fork site it finds — but only under
+`Integration/`, because round 46's file split gave this lane nothing else it could edit.
+
+**⚠️ CORRECTED 2026-08-22, same round, after review.**
+
+- *What it said.* The out-of-scope fork sites are `tests/Agents/AgentWorkerPoolTest.php` (4),
+  `tests/Agents/MailboxTest.php` (1), `tests/Backend/EngineBackendReapTest.php` (4) and
+  `tests/Support/ForkedChildTest.php` (2).
+- *What is true now.* That list was generated by a `ForkedChildExitScanner` that matched `T_STRING`
+  only, so every `\pcntl_fork()` written with a leading backslash was invisible to it. It omitted
+  `tests/Agents/TaskListTest.php` entirely — two sites, both bare-exit, both live. The scanner was fixed
+  in the same round; the list is not reproduced here again, because a hand-written enumeration is exactly
+  what went wrong. Regenerate it instead:
+
+  ```sh
+  cd sugar-crush && vendor/bin/phpunit --filter testEveryInProcessForkInScopeIsCoveredByTheReaper
+  ```
+
+  with `ForkedChildReaperAdoptionTest::SCOPE` set to `''`. It fails loudly and names every file.
+- *Why this still earns its place.* The scope limit is still real and still deliberate, and the reason
+  for it — a guard cannot require an adoption in a directory the change is not allowed to edit — has not
+  changed. Only the enumeration was wrong.
+
+**Step.** Widen `ForkedChildReaperAdoptionTest::SCOPE` to `''`. It will fail loudly and name every file.
+Each needs `use ReapsForkedChildrenTrait;`, `$this->forkTracked()` in place of `pcntl_fork()`, and
+`$this->reapTrackedForkedChildren()` as the FIRST statement of `tearDown()` — before anything that
+removes a temp tree.
+
+### Eb46-5 — `tests/Agents/TaskListTest.php` forks twice with `\pcntl_fork()` and leaves both children through `exit(0)`
+
+**Recorded 2026-08-22 by round-46 lane b (fix stage), out of lane.** Severity: medium. **Measured.**
+
+**What.** `testForkedClaimRace()` forks `$childCount` claimants in a loop and one completer, all spelled
+`\pcntl_fork()`, and every child branch ends in a plain `exit(0)` inside the PHPUnit process. That is the
+shape `ForkedChildExitConventionTest` exists to catch: PHPUnit's after-test hooks run a second time in
+each child, over an object graph the child only has a copy of.
+
+They were invisible until this round. `ForkedChildExitScanner` matched `T_STRING` only, and PHP 8 lexes
+`\pcntl_fork` as a single `T_NAME_FULLY_QUALIFIED` — so the census reported the file as containing no
+forks at all. The scanner now reads both token types and the file is recorded in `ACCEPTED_BARE_EXIT` as
+**recorded open**, not as an exemption, so the guard stays green without the fact being lost;
+`testEveryAcceptedBareExitFileStillHasOne()` forces the row's deletion when it is fixed.
+
+**Step.** `ForkedChild::exitNow(0)` at both sites, then delete the `Agents/TaskListTest.php` row. Consider
+`use ReapsForkedChildrenTrait;` at the same time — the loop forks up to `$childCount` sleepers whose only
+bound is a 2-second deadline the child enforces on itself.
+
+### Eb46-6 — `ReapsForkedChildrenTraitTest` will need an untracked-fork exemption when the reaper's scope widens
+
+**Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured.**
+
+**What.** Two fork sites in `tests/Support/ReapsForkedChildrenTraitTest.php` are raw `pcntl_fork()` on
+purpose and must stay that way: `forkSleeper()`'s sleeper, which several tests then track by hand through
+`trackForkedChild()` to exercise that entry point, and
+`testAChildForkedOutsideTheTraitCannotReapTheLedgerItInherited()`'s child, which must inherit a POPULATED
+ledger — routing it through `forkTracked()` would empty the ledger and delete the test. Both are outside
+`ForkedChildReaperAdoptionTest::SCOPE` today (`Integration/`), so nothing is red.
+
+**Step.** When Eb46-4 widens `SCOPE` to `''`, add `Support/ReapsForkedChildrenTraitTest.php` to
+`UNTRACKED_FORKS_ALLOWED` with the count and the two reasons above. Do not "fix" either site.
+
+### Eb46-7 — two known limits in `ChildStderrCaptureScanner`, both documented and neither enforced
+
+**Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured.**
+
+**What.** Two gaps survive this round's alphabet widening, both now written into the scanner's
+doc-blocks so the next reader is not misled, neither closed:
+
+1. **`2>/dev/null` counts as CAPTURED.** The scanner cannot tell a sink from a file. The standard the
+   guard actually defends is "the test can read it", and silencing was rejected on its merits — for most
+   of these shapes the stderr line IS the assertion. A later round could red `/dev/null` specifically.
+2. **`nearestAssignment()` has no notion of scope.** It walks backwards through the token stream, so a
+   `$descriptors` assigned in an earlier method could answer for a spawn in a later one. No file in the
+   tree has that shape today, which is why it is recorded rather than fixed; the fix is to stop the
+   backward walk at the enclosing function's opening brace, which `ForkedChildExitScanner::functionRanges()`
+   already computes for the other scanner.
+
+### Eb46-8 — the reaper's ext-pcntl-without-ext-posix branch is fixed but cannot be pinned on this box
+
+**Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured, and deliberately not
+closed.**
+
+**What.** `ReapsForkedChildrenTrait::reapTrackedForkedChildren()` has two exits from its survivor loop:
+the `function_exists('posix_kill') && defined('SIGKILL')` branch, which SIGKILLs and then collects the
+corpse with a blocking `pcntl_waitpid()`; and the branch taken when there is no way to signal, which now
+reaps `WNOHANG` instead of waiting a live child out. The second branch was the round-46 review's MINOR-9:
+the blocking wait originally sat outside the guard, so on an ext-pcntl-without-ext-posix build the reaper
+would sit in `tearDown()` for as long as a live child chose to run, with the per-test alarm already spent.
+
+**Why it is not pinned.** Reaching that branch needs a PHP build with ext-pcntl and without ext-posix.
+This box has both (PHP 8.3.6), and `ReapsForkedChildrenTraitTest::setUp()` skips the whole file when
+`posix_kill` is absent — so no test in the tree executes the branch, and none can here. Making it
+reachable would mean injecting the capability check (a `protected function canSignal(): bool` seam the
+test overrides), which is a production-shaped change to a test helper for a build nobody in this project
+runs. The fix is committed on its argument, not on a green test, and this entry is the record of that.
+
+**What would close it.** Either the seam above plus a subclass that reports "cannot signal" and asserts
+the reaper returns promptly with the pid absent from `$killed`, or a CI job on a build without ext-posix.
+Neither is worth a round on its own; fold it into whichever round next touches the trait.

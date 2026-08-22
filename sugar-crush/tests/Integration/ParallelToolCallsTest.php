@@ -50,6 +50,18 @@ use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
  */
 final class ParallelToolCallsTest extends TestCase
 {
+    /**
+     * THE PER-TEST TIME LIMIT DOES NOT REACH A FORKED CHILD. `phpunit.xml`'s
+     * `enforceTimeLimit`/`defaultTimeLimit` is `pcntl_alarm()`, which fires in
+     * the process that armed it and is not inherited across `pcntl_fork()` -
+     * so an abort here stops the parent and leaves every child of this test
+     * running with no clock at all, writing into a temp tree the parent's own
+     * `tearDown()` is about to delete. {@see ReapsForkedChildrenTrait} for the
+     * measurement behind that, and for why `tearDown()` is the right place to
+     * put the net.
+     */
+    use \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+
     private string $dir;
 
     private ProviderInterface $provider;
@@ -107,6 +119,15 @@ final class ParallelToolCallsTest extends TestCase
 
     protected function tearDown(): void
     {
+        // BEFORE the temp tree goes, not after: an orphan still running when
+        // the directory is removed goes on writing into a path that no longer
+        // exists, and the next test inherits the wreckage. Runs on the abort
+        // path too - PHPUnit swallows the time-limit TimeoutException in
+        // runBare() and calls tearDown() anyway.
+        $this->reapTrackedForkedChildren();
+
+        $this->assertEveryRendezvousBarrierCanBeMet();
+
         ToolIpcFiles::recordReservations(false);
 
         $this->removeTree($this->dir);
@@ -539,14 +560,22 @@ final class ParallelToolCallsTest extends TestCase
         $results = $this->execute($calls, [$this->rendezvousTool()], $this->runtime(deadlineSeconds: 1));
         $elapsed = microtime(true) - $started;
 
-        // The survivors report a count rather than an exact one: they ran
-        // beside each other, so either may have seen the other's marker.
+        // WHAT THIS USED TO SAY: "the survivors report a count rather than an
+        // exact one: they ran beside each other, so either may have seen the
+        // other's marker" - and it was true, because the witness reported its
+        // last glob. WHAT IS TRUE NOW: it reports the width of the barrier it
+        // reached, and `peers: 1` is reached on the first look, so both
+        // survivors report exactly 1 whatever the scheduler does. WHY THE
+        // POINT STILL STANDS: the claim was never about the count. It is that
+        // the hung sibling costs its own call and nothing else - so the
+        // survivors must be non-errors with a real witness result, and now
+        // that the result is exact, that is what is asserted.
         $this->assertFalse($results[0]->isError());
-        $this->assertStringStartsWith('saw=', $results[0]->content());
+        $this->assertSame('saw=1', $results[0]->content());
         $this->assertTrue($results[1]->isError());
         $this->assertStringContainsString('killed at the 1s parallel-tool deadline', $results[1]->content());
         $this->assertFalse($results[2]->isError());
-        $this->assertStringStartsWith('saw=', $results[2]->content());
+        $this->assertSame('saw=1', $results[2]->content());
         $this->assertLessThan(20.0, $elapsed, 'the deadline must bound the group, not the hung tool');
     }
 
@@ -1082,7 +1111,7 @@ final class ParallelToolCallsTest extends TestCase
             // Blocks until this test drops the second marker into its group
             // directory. The wait is a ceiling on a wedged box, not a timing
             // assumption: nothing else can ever satisfy `peers: 2` here.
-            $this->rendezvousCall('survivor', peers: 2, wait: 10.0, group: 'nokill1'),
+            $this->rendezvousCall('survivor', peers: 2, wait: 10.0, group: 'nokill1', barrierNeverMet: true),
         ], $app, null, null);
 
         $this->assertSame('saw=1', $generator->current()->content());
@@ -1271,7 +1300,7 @@ final class ParallelToolCallsTest extends TestCase
 
         $report = $this->dir . '/forkfail.json';
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         $this->assertNotSame(-1, $pid, 'the harness fork itself must succeed');
 
         if ($pid === 0) {
@@ -1511,7 +1540,10 @@ final class ParallelToolCallsTest extends TestCase
         string $tool = 'rendezvous',
         bool $throw = false,
         bool $hang = false,
+        bool $barrierNeverMet = false,
     ): ToolCall {
+        $this->recordRendezvousCaller($group, $peers, $marker, $barrierNeverMet);
+
         return new ToolCall('call_' . $marker, $tool, [
             'marker' => $marker,
             'peers' => $peers,
@@ -1521,6 +1553,87 @@ final class ParallelToolCallsTest extends TestCase
             'throw' => $throw,
             'hang' => $hang,
         ]);
+    }
+
+    /**
+     * Every rendezvous caller this test constructs, grouped by the marker
+     * directory it will share.
+     *
+     * @var array<string,array{peers:int,markers:list<string>,neverMet:bool}>
+     */
+    private array $rendezvousGroups = [];
+
+    /**
+     * The class of bug this ledger exists to make impossible, rather than to
+     * be avoided by whoever remembers.
+     *
+     * A rendezvous is only a MEASUREMENT while the number it reports cannot
+     * depend on scheduling. Two things can break that, and they break it in
+     * opposite directions, so both are checked and each is checked at the
+     * only moment it can be:
+     *
+     *  - CALLERS IN ONE GROUP DISAGREEING ABOUT `peers`. They then stop
+     *    waiting at different widths and report different numbers for the
+     *    same overlap. Knowable the moment the second caller is built, so it
+     *    fails here, at construction, with both spellings named.
+     *  - `peers` ABOVE the number of callers in the group. The barrier can
+     *    then never be satisfied, every caller pays the full wait and reports
+     *    whatever it happened to see at ITS deadline - which is a race
+     *    whenever more than one of them is running. Not knowable until the
+     *    last caller has been built, so it is checked in tearDown(); a call
+     *    site that means it says so with `barrierNeverMet: true`.
+     *
+     * The third direction - `peers` BELOW the number of callers - is NOT
+     * checked, because it is no longer a defect: the witness now reports the
+     * width of the barrier it REACHED rather than its last glob, so a group
+     * with more callers than peers reports exactly `peers` from every one of
+     * them. Five groups in this file are deliberately in that shape (a hook
+     * denies one of three calls, so two execute against `peers: 2`), and
+     * requiring `peers` to equal the constructed caller count would fail all
+     * five - construction cannot see which calls a hook will let through.
+     */
+    private function recordRendezvousCaller(string $group, int $peers, string $marker, bool $neverMet): void
+    {
+        if (!isset($this->rendezvousGroups[$group])) {
+            $this->rendezvousGroups[$group] = ['peers' => $peers, 'markers' => [], 'neverMet' => $neverMet];
+        }
+
+        $this->assertSame(
+            $this->rendezvousGroups[$group]['peers'],
+            $peers,
+            "rendezvous group '{$group}' is being built with two different peer counts ("
+                . $this->rendezvousGroups[$group]['peers'] . " and {$peers}). Its callers would stop "
+                . 'waiting at different widths and report different numbers for the same overlap, '
+                . 'which makes the witness a race rather than a measurement.',
+        );
+
+        $this->rendezvousGroups[$group]['markers'][] = $marker;
+        $this->rendezvousGroups[$group]['neverMet'] = $this->rendezvousGroups[$group]['neverMet'] || $neverMet;
+    }
+
+    /**
+     * The half of the ledger's contract that only the finished test knows.
+     * {@see recordRendezvousCaller()} for why it is split this way.
+     */
+    private function assertEveryRendezvousBarrierCanBeMet(): void
+    {
+        foreach ($this->rendezvousGroups as $group => $built) {
+            if ($built['neverMet']) {
+                continue;
+            }
+
+            $this->assertLessThanOrEqual(
+                \count($built['markers']),
+                $built['peers'],
+                "rendezvous group '{$group}' wants " . $built['peers'] . ' peers but only '
+                    . \count($built['markers']) . ' caller(s) were built for it ('
+                    . implode(', ', $built['markers']) . '). That barrier can never be satisfied, so '
+                    . 'every caller pays the full wait and reports whatever it saw at its own '
+                    . 'deadline - a race. If the unmeetable barrier is the point (a call that must '
+                    . 'still be blocked when something else happens to it), say so with '
+                    . '`barrierNeverMet: true`.',
+            );
+        }
     }
 
     /**
@@ -1571,8 +1684,29 @@ final class ParallelToolCallsTest extends TestCase
                 $deadline = microtime(true) + (float) $args['wait'];
                 $seen = 0;
                 do {
+                    // max() rather than a bare assignment because glob()
+                    // answers false on a transient failure and `?: []` turns
+                    // that into 0; the count itself is monotonic, since
+                    // nothing removes a marker while the group is live.
                     $seen = max($seen, count(glob($dir . '/*') ?: []));
                     if ($seen >= $peers) {
+                        // EXACTLY $peers, NOT WHATEVER THE LAST GLOB SAW.
+                        // This is the difference between a witness and a
+                        // race. The loop stops the instant the barrier is
+                        // satisfied, so the final glob reports however many
+                        // markers happened to exist at that instant - which
+                        // is $peers only when no sibling beyond the $peers-th
+                        // has arrived yet. With more callers in the group than
+                        // $peers, the number is a coin flip on scheduling: it
+                        // cost round 45 a 2% flake and, worse, a false KILL
+                        // verdict on an unrelated mutation, because a flaky
+                        // witness contaminates every verdict measured through
+                        // it. Reporting the width of the barrier that was
+                        // REACHED says the same thing about concurrency and
+                        // says it exactly. The timeout path below still
+                        // reports the raw maximum, which is what the
+                        // serialized controls read as 1,2,3.
+                        $seen = $peers;
                         break;
                     }
                     usleep(1_000);
