@@ -272,6 +272,37 @@ final class ChildStderrCaptureTest extends TestCase
             'the order check must hold on the proc_open command-string path too, not just the shell one',
         );
 
+        // TWO KNOWN FALSE POSITIVES, pinned rather than described. Both are
+        // limits of
+        // {@see ChildStderrCaptureScanner::sendsFdTwoToTheNullDevice()} and
+        // both are argued at length in its doc-block; neither occurs under
+        // {@see SCOPE}. They are asserted at their CURRENT answer so that the
+        // day somebody teaches the predicate quote-awareness or last-wins
+        // precedence, these two lines red and get updated deliberately -
+        // instead of the limit quietly outliving the sentence describing it.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $one('proc_open("sh -c \'inner 2>/dev/null\'", [2 => ["pipe", "w"]], $p);')['shape'],
+            'KNOWN LIMIT: a redirection belonging to an INNER shell is read as the outer '
+                . "command's. The outer child's fd 2 is really the pipe. If this now reports a "
+                . 'capture the scanner got quote-aware - delete this line and say so',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $one('exec("sh -c \'inner 2>/dev/null\' 2>$err", $out, $rc);')['shape'],
+            'KNOWN LIMIT: a bare 2>/dev/null matches wherever it appears, so a LATER fd 2 '
+                . 'redirection that overrides it is not consulted. If this now reports a capture '
+                . 'the predicate learned last-wins precedence - delete this line and say so',
+        );
+
+        // ...and the composition that makes the second limit hard to "fix"
+        // naively: here the null device really IS the last word on fd 2.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $one('exec("cmd 2>$err 2>/dev/null", $out, $rc);')['shape'],
+            'a later 2>/dev/null genuinely does override an earlier 2>$err',
+        );
+
         // fd 0 on the null device is an ordinary child with no stdin, and says
         // nothing at all about fd 2.
         $this->assertSame(

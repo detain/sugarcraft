@@ -191,6 +191,31 @@ final class ChildStderrCaptureScanner
      * The literal `/dev/null` is what is matched, not a general notion of a
      * sink. A path in a variable is a file as far as these tokens go; see
      * {@see SHAPE_DISCARDED} for what that leaves open.
+     *
+     * TWO LIMITS ON THE ORDER CHECK, measured on this scanner rather than
+     * reasoned about, and both in the FALSE-POSITIVE direction - this reports
+     * a discard where the truth is a capture, which is the polarity that reds
+     * correct code and buys the next real offender its exemption.
+     *
+     *  - NESTING IS NOT SEEN. The whole argument text is searched, so a
+     *    redirection belonging to an INNER shell counts as if it were the
+     *    outer command's. `proc_open("sh -c 'inner 2>/dev/null'", [2 =>
+     *    ["pipe", "w"]], $p)` reports `discarded`, and the outer child's fd 2
+     *    really is the pipe the caller reads. Telling them apart needs quote
+     *    awareness this scanner does not have.
+     *  - ONLY THE `>/dev/null` + `2>&1` PAIR IS ORDER-CHECKED. A bare
+     *    `2>/dev/null` matches wherever it appears, so a LATER fd 2
+     *    redirection that overrides it is not consulted:
+     *    `exec("sh -c 'inner 2>/dev/null' 2>$err", ...)` reports `discarded`
+     *    though the shell's last fd 2 redirection wins and it is `$err`.
+     *    (The reverse composition is already right for the reason that makes
+     *    this wrong: `cmd 2>$err 2>/dev/null` really is discarded.)
+     *
+     * NEITHER IS LIVE UNDER {@see ChildStderrCaptureTest::SCOPE} - no spawn
+     * in the guarded directories has either shape - which is why the fix is
+     * recorded rather than attempted here: changing this predicate moves
+     * every site in the tree at once, and a shape with no occurrence to
+     * verify against is not a change worth making blind.
      */
     private static function sendsFdTwoToTheNullDevice(string $text): bool
     {
