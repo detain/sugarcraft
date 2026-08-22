@@ -6329,6 +6329,10 @@ read the coder retry loop's capped backoff as a lock-starvation shape: a contend
 lock, it never fails to get one and comes back round, so the backoff cannot be reached by contention.
 Measured: over 700 runs under load, every coder — winner and loser alike — recorded `attempts=0`. The
 backoff has never executed. It was left armed and documented as unexercised rather than deleted.
+**Refinement (same round, after review):** the loop's break clause is `$current !== null && status !==
+Pending`, so a task that comes back **null** — never added, or a task list the child cannot read — does
+not break, and spins the whole budget with the backoff running every iteration. That, not contention, is
+the path the backoff protects; the code comment now says so.
 
 **Step.** Not a fix request yet: a measurement. Decide whether any of these four sites wants
 `LOCK_NB` + a bounded retry with a diagnosable failure, or whether blocking is correct and the

@@ -803,10 +803,20 @@ final class ParallelToolCallsTest extends TestCase
      * phase 1, before it forks anything, so each child inherits the WHOLE
      * group's ledger rather than the prefix that happened to exist at its own
      * fork. The probe reads {@see ToolIpcFiles::reservations()} and polls
-     * exactly those paths. A foreign file can no longer even be sighted, the
-     * termination condition is an exact count rather than a timeout ("every
+     * exactly those paths. A foreign file can no longer even be sighted, and
+     * the termination condition is an exact count rather than a window ("every
      * reserved path except my own, which is not written until after execute()
-     * returns"), and the settle window is gone with nothing to replace it.
+     * returns").
+     *
+     * WHAT IS LEFT OF THE RACE, stated because "the settle window is gone" is
+     * easy to read as "the timing is gone" and it is not: the probe still
+     * carries a 3.0s deadline, so a sibling that takes longer than that to
+     * fork and write still produces a red. What changed is which direction the
+     * timing can hurt in. The window could be ENDED EARLY by a foreign file --
+     * one sighting started a 0.25s clock the sibling then had to beat -- so the
+     * failure mode was a coin flip on an unrelated process's timing. The
+     * deadline can only be exceeded, by our own sibling, with 12x the slack.
+     * A weakened race, not an eliminated one.
      *
      * WHY THIS STILL EARNS ITS PLACE rather than being folded into the leak
      * detector: the leak detector asks whether a payload survived; this asks
