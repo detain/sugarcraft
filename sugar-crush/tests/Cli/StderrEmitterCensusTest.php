@@ -29,7 +29,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * that comes from a new emitter reds here; a 63rd that comes from an existing
  * emitter being exercised once more by a new test does not, and should not.
  *
- * FOUR CHANNELS, AND THE FOURTH IS THE POINT OF THE EXERCISE. The census this
+ * THE CHANNELS, AND THE LAST TWO ARE THE POINT OF THE EXERCISE. The census this
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
@@ -205,6 +205,22 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/Bootstrap.php' => 22,
     ];
 
+    /**
+     * Only the words a count in this file could plausibly take. A word outside
+     * this map is a sentence the guard cannot read, and that is a FAILURE
+     * rather than a skip.
+     *
+     * @var array<string, int>
+     */
+    private const NUMBER_WORDS = [
+        'one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5,
+        'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
+        'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
+        'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23,
+        'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
+        'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
+    ];
+
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
     {
         self::assertSame(self::DIRECT_SITES, self::census('direct'), self::message('fwrite(STDERR, …)'));
@@ -333,11 +349,7 @@ final class StderrEmitterCensusTest extends TestCase
         $path = \dirname(__DIR__, 2) . '/tests/Integration/BinSugarcrushAutoloadGuardTest.php';
         self::assertFileExists($path, 'the file carrying the prose census has moved');
 
-        $flat = (string) preg_replace(
-            '/\s+/',
-            ' ',
-            (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', (string) file_get_contents($path)),
-        );
+        $flat = self::flattened((string) file_get_contents($path));
 
         $matched = preg_match_all(
             '/call sites across `src\/` and `bin\/` is ([A-Z]+)/',
@@ -352,14 +364,25 @@ final class StderrEmitterCensusTest extends TestCase
                 . 'dropping it — an unanchored prose count is how three rounds of staleness happened',
         );
 
-        $words = ['TEN' => 10, 'ELEVEN' => 11, 'TWELVE' => 12, 'THIRTEEN' => 13, 'FOURTEEN' => 14];
-        $word = strtoupper($all[0][1]);
-        self::assertArrayHasKey($word, $words, "the prose census says \"{$word}\", which this guard cannot read");
+        $scanned = array_sum(self::census('direct'));
+        $word = strtolower($all[0][1]);
+        self::assertArrayHasKey(
+            $word,
+            self::NUMBER_WORDS,
+            "the prose census says \"{$all[0][1]}\", which this guard cannot read",
+        );
+
+        // THE SCAN AND NOT THE ROSTER, which is what this compared against
+        // when it was written while its name and its failure message both said
+        // "the scan". Transitively the same thing —
+        // testTheDirectFwriteStderrRosterIsUnchanged() pins roster to scan — but
+        // a reader debugging this failure would have gone looking in the wrong
+        // one of the two.
         self::assertSame(
-            array_sum(self::DIRECT_SITES),
-            $words[$word],
+            $scanned,
+            self::NUMBER_WORDS[$word],
             'BinSugarcrushAutoloadGuardTest still says the raw fwrite(STDERR, …) census is "' . $word
-                . '" while the token scan counts ' . array_sum(self::DIRECT_SITES),
+                . '" while the token scan counts ' . $scanned,
         );
     }
 
@@ -482,12 +505,21 @@ final class StderrEmitterCensusTest extends TestCase
     /**
      * A file the roster names but the tree does not have is a FAILURE.
      *
-     * Without this, deleting `src/Cli/Subcommands.php` would take its two sites
-     * out of the scan AND out of nothing else — the roster would simply stop
-     * mentioning a file, and `assertSame` compares what the scan produced with
-     * what the roster claims, so a file present in the roster and absent from
-     * the tree is caught, while the reverse is what the maps are for. This
-     * asserts the direction the maps cannot: that every named file is real.
+     * WHAT THIS SAID, and it contradicted itself inside one sentence: "deleting
+     * `src/Cli/Subcommands.php` would take its two sites out of the scan AND
+     * out of nothing else — the roster would simply stop mentioning a file …
+     * This asserts the direction the maps cannot."
+     * WHAT IS TRUE NOW: the rosters are `const`s. Deleting the file drops the
+     * key from {@see census()} and leaves it in the roster, so
+     * `assertSame(<roster>, <census>)` reds on its own — the clause immediately
+     * after the dash says exactly that, and the claim before the dash is the
+     * false one. This test is REDUNDANT with the four roster assertions, in
+     * both directions.
+     * WHY IT STILL EARNS ITS PLACE: the message. A roster assertion failing on
+     * a deleted file prints an array diff and leaves the reader to notice that
+     * one key is a path that no longer exists; this prints the path and says
+     * so. It is kept for the diagnosis, not for the coverage, and calling it
+     * coverage is what produced the sentence above.
      */
     public function testEveryFileTheRostersNameExists(): void
     {
@@ -496,6 +528,7 @@ final class StderrEmitterCensusTest extends TestCase
             array_keys(self::INDIRECT_SITES),
             array_keys(self::ERROR_LOG_SITES),
             array_keys(self::MESSAGE_SHAPES),
+            array_keys(self::PREFIXED_WRITER_SITES),
         ));
         self::assertNotSame([], $named, 'the rosters are empty, so every assertion here is vacuous');
 
@@ -504,7 +537,140 @@ final class StderrEmitterCensusTest extends TestCase
         }
     }
 
+    /**
+     * Every cardinality this file states in prose, matched to the roster that
+     * generates it.
+     *
+     * WHY THIS EXISTS AND WHY IT IS EMBARRASSING. This file's whole subject is
+     * that a count nobody derives goes stale, and it shipped six of its own —
+     * one per channel, plus the two in the channel-5 paragraph — hand-typed
+     * from numbers the tests below derive, in a round whose sibling census had
+     * just built the anchoring machinery for exactly this. All six were correct
+     * the day they were written, which is the only thing that is ever true of
+     * them.
+     *
+     * MATCHED AGAINST {@see flattened()} AND NOT THE RAW BYTES, for the reason
+     * the sibling census gives: a doc-block wraps at 80 columns with ` * ` on
+     * every continuation, so a sentence is never those bytes in a row. Two of
+     * the six cross a wrap. The flattener's own known-positive control is the
+     * first assertion in the test, because a flattener returning `''` would
+     * make every anchor fail open into a zero match — which this treats as a
+     * failure, not a skip.
+     *
+     * @return list<array{anchor: string, expected: int, what: string}>
+     */
+    private static function selfCountAnchors(): array
+    {
+        return [
+            [
+                'anchor' => '/`fwrite\(STDERR, …\)` — ([a-z]+) sites/',
+                'expected' => array_sum(self::DIRECT_SITES),
+                'what' => 'channel 1, the fwrite(STDERR, …) total',
+            ],
+            [
+                'anchor' => '/written through later — ([A-Z]+) site,/',
+                'expected' => array_sum(self::INDIRECT_SITES),
+                'what' => 'channel 2, the captured-handle total',
+            ],
+            [
+                'anchor' => '/and which writes ([A-Z]+) distinct/',
+                'expected' => self::MESSAGE_SHAPES['src/Cli/HeadlessPermissionPrompt.php'],
+                'what' => "channel 4's credit for HeadlessPermissionPrompt",
+            ],
+            [
+                'anchor' => '/`error_log\(…\)` — ([A-Z-]+) sites across/',
+                'expected' => array_sum(self::ERROR_LOG_SITES),
+                'what' => 'channel 3, the error_log() total',
+            ],
+            [
+                'anchor' => '/sites across ([a-z]+) files\. MEASURED/',
+                'expected' => \count(self::ERROR_LOG_SITES),
+                'what' => 'channel 3, the number of files it spans',
+            ],
+            [
+                'anchor' => '/it — ([A-Z-]+) call sites in/',
+                'expected' => self::PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php'],
+                'what' => "channel 5's count for Bootstrap",
+            ],
+            [
+                'anchor' => '/against a channel-4 credit of ([a-z]+) for that/',
+                'expected' => self::MESSAGE_SHAPES['src/Cli/Bootstrap.php'],
+                'what' => "channel 4's credit for Bootstrap, the blind one",
+            ],
+        ];
+    }
+
+    public function testEveryCardinalityThisFileStatesInProseHasItsGenerator(): void
+    {
+        // KNOWN-POSITIVE CONTROL FIRST. Assembled rather than written whole:
+        // this test scans its own file, so a fixture spelling an anchor phrase
+        // contiguously here becomes a second match for it and reds the
+        // uniqueness assertion on the scaffolding. The sibling census measured
+        // that happening; so did round 45's first attempt at its own anchors.
+        $sentence = 'written through later — ' . 'NINE' . ' site,';
+        $fixture = "    /**\n     * written through later —\n     * " . 'NINE' . " site, it says.\n     */\n";
+        self::assertSame(
+            ' /** ' . $sentence . ' it says. */ ',
+            self::flattened($fixture),
+            'flattened() no longer joins a wrapped doc-block sentence; every anchor below would fail open',
+        );
+
+        $own = self::flattened((string) file_get_contents(__FILE__));
+
+        foreach (self::selfCountAnchors() as $site) {
+            $matched = preg_match_all($site['anchor'], $own, $all, PREG_SET_ORDER);
+            self::assertSame(
+                1,
+                $matched,
+                "{$site['anchor']} matches this file {$matched} times, not once. Zero means the sentence "
+                    . "stating {$site['what']} was rewritten past its anchor — re-point it, do not drop the "
+                    . 'row. More than one means two sentences now state it through one anchor, and only one '
+                    . 'of them is being checked.',
+            );
+
+            $word = strtolower($all[0][1]);
+            self::assertArrayHasKey(
+                $word,
+                self::NUMBER_WORDS,
+                "{$site['anchor']} captured \"{$all[0][1]}\", which is not a number word this guard can "
+                    . 'read. Widen self::NUMBER_WORDS or re-point the anchor; do not leave it unparsed.',
+            );
+            self::assertSame(
+                $site['expected'],
+                self::NUMBER_WORDS[$word],
+                "the prose for {$site['what']} says \"{$word}\" but its roster generates {$site['expected']}",
+            );
+        }
+    }
+
     // ── the scanners ─────────────────────────────────────────────────────
+
+    /**
+     * `$source` with doc-block and line-comment continuation markers removed
+     * and every run of whitespace collapsed to one space.
+     *
+     * DELIBERATELY A SECOND COPY of
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}'s
+     * private method of the same name, and the duplication is recorded rather
+     * than resolved: the shared home for it is a test-support trait, and adding
+     * one is outside the file set round 45's lane may touch. Consolidating the
+     * two is a deferred finding. What is NOT duplicated is the risk — this copy
+     * has its own known-positive control, in
+     * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()}, and
+     * before this method existed the same expression sat inline in
+     * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} with no
+     * control at all.
+     */
+    private static function flattened(string $source): string
+    {
+        // `\*(?!/)` — the CONTINUATION marker, never the terminator. Letting
+        // `*/` be stripped too would run the end of one doc-block into the
+        // start of the next, and an anchor could then match a "sentence" that
+        // spans two of them and exists in neither.
+        $joined = (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', $source);
+
+        return (string) preg_replace('/\s+/', ' ', $joined);
+    }
 
     private static function message(string $channel): string
     {
