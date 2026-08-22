@@ -1074,6 +1074,13 @@ final class Bootstrap
             // {@see projectCommandShellIsTrusted()}. A null $root cannot be
             // trusted by a list of absolute paths, so it is false without asking.
             projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted($root),
+            // THE APPOINTMENT THAT MAKES THE ARM ABOVE MEAN SOMETHING (E171).
+            // `RuntimeNoticeSink::arm()` at the top of this method opens the
+            // inbox; this is what says WHICH Chat reads it. The two belong
+            // together because `drain()` is destructive — a second Chat that
+            // polled would steal rows rather than duplicate them — and this
+            // method is the only place in `src/` that does either.
+            drainsRuntimeNotices: true,
         );
 
         // Drained AFTER construction for the same reason the workflow registry's

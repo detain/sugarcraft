@@ -990,6 +990,40 @@ final class Chat implements Model
          * permission gate adds on top of it.
          */
         private readonly bool $projectCommandsTrusted = false,
+        /**
+         * Whether THIS Chat is the process's drain owner for
+         * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink} (E171).
+         *
+         * ONE INBOX, ONE READER, AND THAT IS WHY THIS IS A FIELD RATHER THAN A
+         * GLOBAL. The sink is process-wide because the subsystems that write to
+         * it are `final readonly` value objects several layers below anything
+         * holding a model, and on the interactive path they are not even in
+         * this process — see that class's doc-block. Its DRAIN is destructive:
+         * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
+         * takes the rows and clears them. So a second Chat that also polled
+         * would not duplicate the rows, it would STEAL them, and which of the
+         * two transcripts a warning landed in would be whichever one's tick
+         * fired first.
+         *
+         * DEFAULTS TO FALSE, which makes {@see subscriptions()} independent of
+         * process-wide state for every Chat nobody appointed — an embedder's, a
+         * test's, one built by a subcommand. That is not a convenience: it is
+         * MEASURED. With the poll conditioned on the sink alone,
+         * `--filter '(BootstrapTest|DsmlToolCallParserTest|MinimaxXmlFallback`
+         * `ToolCallParserTest|StatusLineSegmentTest|ChatTest|AppModelTest)'`
+         * (PHP 8.3.6) went `Tests: 381, Failures: 2` — two cases in
+         * `tests/Renderer/StatusLineSegmentTest` asserting that an idle Chat
+         * declares no subscription, reddened by a row a parser test twenty
+         * classes earlier had left in a static. The tests were right and the
+         * condition was wrong: an idle Chat that never owned the inbox has
+         * nothing to poll for.
+         *
+         * SET IN EXACTLY ONE PLACE — {@see \SugarCraft\Crush\Cli\Bootstrap::chat()},
+         * which is also the only caller of `RuntimeNoticeSink::arm()` in
+         * `src/`. Appointing the reader and opening the inbox are the same
+         * decision and are made in the same method.
+         */
+        private readonly bool $drainsRuntimeNotices = false,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -5253,6 +5287,11 @@ final class Chat implements Model
             // the trust grant evaporate on the first character typed and turn
             // every project command's !`cmd` into a refusal.
             'projectCommandsTrusted' => $this->projectCommandsTrusted,
+            // A field missing from this map silently resets on the next
+            // keystroke — for this one that would mean the drain owner stops
+            // being the drain owner the moment the user types, and every
+            // mid-session notice for the rest of the session goes nowhere.
+            'drainsRuntimeNotices' => $this->drainsRuntimeNotices,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -10706,7 +10745,12 @@ final class Chat implements Model
      * Declare the recurring work this model needs the runtime to drive
      * (crush_feat.md section 5 E4).
      *
-     * Two things:
+     * FOUR THINGS. IT SAID "TWO" AND ENUMERATED TWO, and both halves were true
+     * when written; the `statusLine` clock and then the runtime-notice poll
+     * arrived below without this sentence moving, so a reader who trusted the
+     * count stopped reading at the second bullet — which is where the two
+     * conditional ticks that are easiest to get wrong begin. The list below is
+     * the first two; the other two document themselves at their `if`.
      *
      *   - waking up often enough to run
      *     {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::tick()},
@@ -10760,6 +10804,12 @@ final class Chat implements Model
         // with a zero timeout. It runs once per `Program` reconcile, i.e. once
         // per Msg, not on a timer of its own.
         //
+        // GATED ON $drainsRuntimeNotices FIRST, and that clause is not
+        // defensive tidiness — see the property's doc-block for the two
+        // StatusLineSegmentTest cases that measured what its absence costs.
+        // `drain()` is destructive, so a second polling Chat would steal rows
+        // from the real transcript rather than duplicate them.
+        //
         // ORed WITH $inFlight RATHER THAN RELYING ON hasPending() ALONE, and
         // that is the load-bearing half. Every mid-session emitter E171 names
         // — the two tool-call parsers, `SglangProvider`, `AgentWorkerPool`,
@@ -10770,7 +10820,7 @@ final class Chat implements Model
         // only on whatever Msg happened to arrive next; arming for the whole
         // turn means the row appears while the turn is still running, which is
         // the entire point of a seam that is not launch-only.
-        if ($this->inFlight || RuntimeNoticeSink::hasPending()) {
+        if ($this->drainsRuntimeNotices && ($this->inFlight || RuntimeNoticeSink::hasPending())) {
             $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
                 self::RUNTIME_NOTICE_SUBSCRIPTION,
                 self::RUNTIME_NOTICE_POLL_SECONDS,

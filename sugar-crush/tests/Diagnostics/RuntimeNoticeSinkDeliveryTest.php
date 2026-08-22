@@ -62,6 +62,21 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         return "here is the format:\n```\n<" . self::T . "tool_calls>\n</" . self::T . "tool_calls>\n```\n";
     }
 
+    /**
+     * A Chat appointed as the process's drain owner, which is what
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} returns.
+     *
+     * NOT A CONVENIENCE WRAPPER. `drainsRuntimeNotices` defaults to false, and
+     * {@see testAChatNobodyAppointedDoesNotPollTheInbox()} is why: `drain()` is
+     * destructive, so a Chat nobody appointed must not be able to take rows out
+     * from under the real transcript. Every test here that expects a poll has
+     * to say so explicitly, exactly as `Bootstrap` does.
+     */
+    private static function ownerChat(bool $inFlight = false): Chat
+    {
+        return new Chat(inFlight: $inFlight, drainsRuntimeNotices: true);
+    }
+
     /** Silence `error_log()`'s half for the duration; only the seam is under test here. */
     private static function withErrorLogDiscarded(callable $body): string
     {
@@ -90,7 +105,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // the notice and its reader are the same process.
         RuntimeNoticeSink::arm(false);
 
-        $chat = new Chat();
+        $chat = self::ownerChat();
         self::assertNull($chat->subscriptions(), 'an idle Chat with an empty sink must arm no timer');
 
         self::withErrorLogDiscarded(static function (): void {
@@ -141,7 +156,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
         });
 
-        [$once] = (new Chat())->update(new RuntimeNoticePumpMsg());
+        [$once] = self::ownerChat()->update(new RuntimeNoticePumpMsg());
         [$twice, $cmd] = $once->update(new RuntimeNoticePumpMsg());
 
         self::assertNull($cmd);
@@ -174,7 +189,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // would be an artefact of a fixture that stopped triggering it.
         self::assertStringContainsString('DsmlToolCallParser', $log);
 
-        $chat = new Chat();
+        $chat = self::ownerChat();
         self::assertNull($chat->subscriptions(), 'an unarmed sink armed the poll anyway');
 
         [$next] = $chat->update(new RuntimeNoticePumpMsg());
@@ -185,8 +200,10 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     {
         // The objection Chat::subscriptions()' doc-block raises against an
         // unconditional tick: a timer waking the loop and repainting forever on
-        // the overwhelmingly common launch where nothing ever warns.
-        self::assertNull((new Chat())->subscriptions());
+        // the overwhelmingly common launch where nothing ever warns. The Chat
+        // is the appointed drain owner, so the null is about the empty inbox and
+        // not about the appointment.
+        self::assertNull(self::ownerChat()->subscriptions());
     }
 
     public function testATurnInFlightArmsThePollBeforeAnythingHasWarned(): void
@@ -195,10 +212,81 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // emitter raises its notice DURING a turn, and on the interactive path
         // from inside a forked child — so the poll has to be running already,
         // not waiting for a Msg that happens to arrive after the row lands.
-        $subscriptions = (new Chat(inFlight: true))->subscriptions();
+        $subscriptions = self::ownerChat(inFlight: true)->subscriptions();
 
         self::assertNotNull($subscriptions);
         self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+    }
+
+    /**
+     * A CHAT NOBODY APPOINTED DOES NOT POLL, even with rows waiting.
+     *
+     * `RuntimeNoticeSink::drain()` is DESTRUCTIVE. Two Chats polling the one
+     * process-wide inbox would not each get the row — the first tick to fire
+     * would take it, and which transcript a mid-session warning landed in would
+     * be a race. So the reader is appointed, once, by the method that opens the
+     * inbox.
+     *
+     * THE POSITIVE CONTROL IS IN THE SAME TEST, because "nothing happened" is
+     * the assertion round 44 proved is worth nothing on its own: the identical
+     * sink state is handed to an appointed Chat and MUST produce the poll.
+     */
+    public function testAChatNobodyAppointedDoesNotPollTheInbox(): void
+    {
+        RuntimeNoticeSink::arm(false);
+        self::assertTrue(RuntimeNoticeSink::record('a row with an owner to find it'));
+
+        self::assertNull(
+            (new Chat())->subscriptions(),
+            'a Chat nobody appointed polled the inbox; it would steal the real transcript\'s rows',
+        );
+        // An in-flight Chat declares the tool-event poll regardless, so this
+        // one asks about the runtime-notice tick specifically rather than about
+        // the set being empty.
+        $inFlight = (new Chat(inFlight: true))->subscriptions();
+        self::assertNotNull($inFlight, 'the tool-event poll vanished; this assertion is now vacuous');
+        self::assertFalse(
+            $inFlight->has('crush.runtime-notice-poll'),
+            'an in-flight turn on an unappointed Chat polled the inbox',
+        );
+
+        // KNOWN-POSITIVE: the same sink, the same row, an appointed reader.
+        $subscriptions = self::ownerChat()->subscriptions();
+        self::assertNotNull($subscriptions, 'the appointed Chat did not poll either; this test proves nothing');
+        self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+    }
+
+    /**
+     * THE APPOINTMENT SURVIVES A KEYSTROKE, which is the `mutate()` half.
+     *
+     * A field missing from `Chat::mutate()`'s constructorProps map is silently
+     * dropped on the next unrelated state change, so a drain owner that stopped
+     * being one the moment the user typed would leave every mid-session notice
+     * for the rest of the session with no reader — E171 exactly, reintroduced
+     * by the omission of one array line.
+     */
+    public function testTheAppointmentSurvivesAnUnrelatedMutation(): void
+    {
+        RuntimeNoticeSink::arm(false);
+
+        [$typed] = self::ownerChat()->update(new \SugarCraft\Core\Msg\KeyMsg(
+            \SugarCraft\Core\KeyType::Char,
+            'x',
+        ));
+
+        self::assertTrue(RuntimeNoticeSink::record('raised after the keystroke'));
+
+        $subscriptions = $typed->subscriptions();
+        self::assertNotNull($subscriptions, 'the drain owner lost its appointment on a keystroke');
+        self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+
+        [$next] = $typed->update(new RuntimeNoticePumpMsg());
+        $rows = array_values(array_filter(
+            $next->history,
+            static fn ($m): bool => $m->role === Role::System,
+        ));
+        self::assertCount(1, $rows);
+        self::assertSame('raised after the keystroke', $rows[0]->content);
     }
 
     public function testANoticeRaisedInAForkedChildReachesTheParentsTranscript(): void
@@ -232,7 +320,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         self::assertStringContainsString('DsmlToolCallParser', (string) file_get_contents($log));
         @unlink($log);
 
-        $chat = new Chat();
+        $chat = self::ownerChat();
         $subscriptions = $chat->subscriptions();
         self::assertNotNull($subscriptions, 'the child\'s notice did not cross the fork');
         self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
@@ -274,7 +362,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             pcntl_waitpid($pid, $status);
         }
 
-        [$next] = (new Chat())->update(new RuntimeNoticePumpMsg());
+        [$next] = self::ownerChat()->update(new RuntimeNoticePumpMsg());
 
         $rows = array_values(array_filter(
             $next->history,
@@ -298,7 +386,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             RuntimeNoticeSink::warn('a bare sentence with no envelope');
         });
 
-        [$next] = (new Chat())->update(new RuntimeNoticePumpMsg());
+        [$next] = self::ownerChat()->update(new RuntimeNoticePumpMsg());
 
         $rows = array_values(array_filter(
             $next->history,
