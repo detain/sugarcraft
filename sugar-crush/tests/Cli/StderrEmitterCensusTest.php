@@ -1527,13 +1527,30 @@ final class StderrEmitterCensusTest extends TestCase
      * {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}'s
      * private method of the same name, and the duplication is recorded rather
      * than resolved: the shared home for it is a test-support trait, and adding
-     * one is outside the file set round 45's lane may touch. Consolidating the
-     * two is a deferred finding. What is NOT duplicated is the risk — this copy
-     * has its own known-positive control, in
+     * one is outside the file set round 45's lane may touch — and outside round
+     * 48's too, which is why E196 is still open. What is NOT duplicated is the
+     * risk: this copy has its own known-positive control, in
      * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()}, and
      * before this method existed the same expression sat inline in
      * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} with no
      * control at all.
+     *
+     * THE DRIFT E196 PREDICTS HAS ALREADY STARTED, AND IT STARTED IN THE PROSE
+     * RATHER THAN IN THE CODE. MEASURED at round 48 by comparing the two
+     * declarations token by token with whitespace and comments dropped: the
+     * bodies are IDENTICAL. The justifications were not — the sibling carried a
+     * paragraph on why the second pattern is `\s+` and not `[ \t]+`, and this
+     * copy did not. It has been brought across rather than left, because the
+     * copy that loses a reason is the copy whose next reader simplifies it. A
+     * consolidation that keeps one implementation and one of the two
+     * justifications would have re-created the same asymmetry in a trait.
+     *
+     * (The instrument that found this was wrong on its first run: anchored on
+     * the token `flattened`, it compared the first CALL site in each file
+     * instead of the declaration, and reported "not identical". Anchoring on
+     * `T_FUNCTION` gave the answer above. Recorded because a comparison harness
+     * that silently compares the wrong two things is the failure this file's
+     * whole subject is about.)
      */
     private static function flattened(string $source): string
     {
@@ -1543,6 +1560,11 @@ final class StderrEmitterCensusTest extends TestCase
         // spans two of them and exists in neither.
         $joined = (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', $source);
 
+        // `\s+` and not `[ \t]+`: the marker strip leaves the newline of any
+        // line it did not match (a bare code line, the last line of a file), and
+        // a sentence that wraps onto one of those would still be split. Caught
+        // by the fixture in the caller, which is the reason the fixture is a
+        // known-POSITIVE and not a smoke test.
         return (string) preg_replace('/\s+/', ' ', $joined);
     }
 

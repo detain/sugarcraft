@@ -7966,3 +7966,86 @@ and only the second one still needs the finding acted on.
 **Step.** None — recorded so the pattern is countable. The rule it supports is already standing: measure a
 prescription against the tree before implementing it.
 
+
+### Ea48-1 — `AgentWorkerPool`'s `pcntl_fork() === -1` arm warns about nothing at all
+
+`src/Agents/AgentWorkerPool.php`'s `executeOne()` has TWO paths to sequential execution and only one of
+them says so. The `!pcntlForkAvailable()` arm calls `warnSequentialFallback()`; the arm immediately below
+it — `$pid = pcntl_fork(); if ($pid === -1)` — falls through to the same synchronous
+`$executor->execute()` + `storeResult()` with **no diagnostic of any kind**, not even on stderr. A real
+`fork()` failure (EAGAIN under an `RLIMIT_NPROC` ceiling, or a memory ceiling) is a far more interesting
+event than a missing extension, and it is the silent one.
+
+Found while applying E192's routing rule to the pool's single site; deliberately not fixed there, because
+adding an emitter is a different change from routing the ones that exist and would have moved the
+channel-3 roster in the same commit as E192's decision not to move it.
+
+**Step.** Give the `-1` arm a diagnostic. It is a fork that FAILED rather than a fork that was never
+available, so unlike `warnSequentialFallback()` it may deserve the seam under the E192 rule — the pool
+still produces every result, but a fork ceiling reached mid-session will keep being reached, and the
+model retrying a large parallel dispatch is exactly the behaviour a transcript row could change. Decide
+that with the rule, not by symmetry with the arm above it.
+
+### Ea48-2 — `removeWorktree()` cannot tell "removed" from "still on disk"
+
+`src/Agents/WorktreeManager.php`'s `removeWorktree()` runs `removeDirectory($worktreePath)` when the
+directory survives git, then unconditionally drops the registry entry and saves. `removeDirectory()`'s
+failure (a permission error, a busy mount, a file the process cannot unlink) is not checked, so the
+method can return normally having left the worktree on disk while the manager now believes it is gone.
+That state is worse than the failure E192 just routed: the NEXT `createWorktree()` for that agent id
+fails `worktreeExists()`-free and then fails at git, and nothing anywhere reported the first failure.
+
+MEASURED (git 2.43.0, Linux 6.8) for the related residue only: with the directory removed behind git's
+back, `git worktree list` reports the path `prunable` and a re-`add` at the same path fails with
+`fatal: '<path>' is a missing but already registered worktree`. The `removeDirectory()` failure itself is
+UNMEASURED — recorded from source.
+
+**Step.** Have `removeDirectory()` report whether it emptied the tree, and refuse to drop the registry
+entry when it did not. A registry that lies about what exists is the thing to fix; the notice is
+secondary and would follow the E192 rule.
+
+### Ea48-3 — the seam has no reader in a hosted `Chat`
+
+E193 gives the mid-session seam an edge-driven wake-up armed from `Chat::init()`. `init()` is called by
+`SugarCraft\Core\Program`, and only by it. A `Chat` driven by an embedder that never builds a `Program` —
+the hosted-pane shape `Chat::withSize()`'s doc-block describes — therefore never arms the watcher, and is
+back to "the notice waits for the next Msg the host happens to deliver". That is strictly no worse than
+before E193 and is not a regression, but it is now the only path where the gap remains and it is not
+written down anywhere in `src/`.
+
+**Step.** Either expose the wake Cmd so a host can run it, or state in `Chat::init()`'s doc-block that the
+seam's idle wake-up is a `Program` feature and a host that drives `update()` itself owns the pumping. Pin
+whichever is chosen; today neither is asserted.
+
+### Ea48-4 — E196's two `flattened()` copies have already drifted, in the prose
+
+MEASURED at round 48 by comparing the two declarations token by token with whitespace and comments
+dropped: `tests/Cli/StderrEmitterCensusTest.php`'s and
+`tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php`'s bodies are IDENTICAL. The justifications were
+not — the sibling carried a paragraph explaining why the second pattern is `\s+` and not `[ \t]+`, and
+the census copy did not. Round 48 brought that paragraph across, so the two are level again, but the
+episode is the evidence E196 was missing: the drift arrives in the reasoning before it arrives in the
+code, and a consolidation that keeps one implementation and one of the two justifications re-creates the
+asymmetry inside the trait.
+
+Not consolidated in round 48: the sibling census file is outside lane `a`'s test file set, and a
+half-consolidation (a trait with one consumer, the duplicate still in place) buys nothing — the drift
+risk is unchanged while the indirection is added.
+
+**Step.** E196 as written, plus: the trait carries the implementation AND the union of both
+justifications, and EACH consuming test keeps its own known-positive control (E125).
+
+### Ea48-5 — E195's Step is wrong about channel 5
+
+E195 says a `use`-statement resolver in `StderrEmitterCensusTest::scan()` "would close the alias case and
+would also strengthen channels 1, 2 and 5". MEASURED, PHP 8.3.6: the channel-5 half is false. Channel 5
+matches on the METHOD name plus a scope operator and never inspects the receiver, so
+`use X\Bootstrap as B; B::warnPermissionConfigOnce("x")` already scans **1**. A class alias cannot hide a
+`warnPermissionConfig*` call from it.
+
+The channels-1-and-2 half is true and was closed in round 48 by a different instrument: `use const
+STDERR as E; fwrite(E, "x")` and `use function fwrite as w; w(STDERR, "x")` both RUN and both write fd 2
+(measured), and under the first, channel 1 scores 0 while channel 2 scores 1 — for the `use` line, not
+for the write.
+
+**Step.** None — recorded so the count of wrong prescriptions stays honest. This is the eighth.
