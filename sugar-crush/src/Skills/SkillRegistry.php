@@ -364,11 +364,15 @@ final class SkillRegistry
      * list. GENERATOR, so the figure can be re-taken: 5 patterns
      * (`**\/*.php`, `src/**\/*.php`, `a/**\/b/**\/c/**\/d`, `docs/**\/*.md`,
      * `**\/node_modules/**`) x 40 paths of the form `src/` + 8 path segments
-     * + a filename, 200 trials = 40,000 pairs, no randomness, PHP 8.3.6. The
-     * old predicate took 0.032s / 0.033s / 0.034s over three runs; this one
-     * 0.0095s / 0.0094s / 0.0095s — 0.29x, one cached `preg_match` where the
-     * old path ran up to four `fnmatch()` calls plus three `str_replace()`
-     * rewrites. A deliberately pathological case (three globstars against a
+     * + a filename, 200 trials = 40,000 pairs, no randomness, PHP 8.3.6.
+     * RE-TAKEN at the commit that closed the three narrowing families, three
+     * runs: old 0.0269s / 0.0277s / 0.0274s, new 0.0087s / 0.0087s / 0.0087s —
+     * 0.31x-0.33x, one cached `preg_match` where the old path ran up to four
+     * `fnmatch()` calls plus three `str_replace()` rewrites. An earlier take on
+     * this same box read 0.033s / 0.0095s = 0.29x; the RATIO is stable to
+     * within the box's own drift and the absolute times are not, so quote the
+     * ratio and re-take the rest. /s and the class-body walk cost nothing here
+     * — the walk happens once per pattern, at compile. A deliberately pathological case (three globstars against a
      * 60-segment non-matching path) ran 2,000 times in 0.0004s: the leading
      * literal anchors it, so PCRE fails before it can backtrack. The
      * `preg_match() === false` branch catches a backtrack limit anyway.

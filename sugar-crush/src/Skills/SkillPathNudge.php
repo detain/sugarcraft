@@ -15,12 +15,29 @@ namespace SugarCraft\Crush\Skills;
  * emits a system-reminder-style nudge on the tool result — mirroring Claude
  * Code's "skills load on first read/edit inside that subdirectory".
  *
- * Deliberately kept OFF the hot path: matching is pure in-memory `fnmatch()`
- * against frontmatter already loaded at bootstrap — no filesystem scan of the
- * skills tree and no per-skill syscall on a tool call — and once every
- * path-scoped skill THE MODEL MAY INVOKE has been announced the tracker
- * short-circuits to null before matching at all, so a long session pays
- * nothing per tool call.
+ * Deliberately kept OFF the hot path: matching runs in memory against
+ * frontmatter already loaded at bootstrap — no filesystem scan of the skills
+ * tree and no per-skill syscall on a tool call — and once every path-scoped
+ * skill THE MODEL MAY INVOKE has been announced the tracker short-circuits to
+ * null before matching at all, so a long session pays nothing per tool call.
+ *
+ * WHAT THAT CLAUSE SAID: "matching is pure in-memory `fnmatch()`".
+ * WHAT IS TRUE NOW: it is a cached `preg_match`. E85 replaced
+ * {@see SkillRegistry::pathMatches()}'s `fnmatch()` plus three `str_replace()`
+ * rewrites with a pattern-to-PCRE translation compiled once per pattern;
+ * `fnmatch()` survives only on {@see SkillRegistry::legacyPathMatch()}, which
+ * answers the patterns PCRE will not compile. MEASURED on PHP 8.3.6, 5
+ * patterns x 40 paths x 200 trials, three runs at the commit that changed it:
+ * the cost went DOWN, 0.027s to 0.0087s, so the sentence was stale in the
+ * direction of pessimism rather than hiding a regression.
+ * WHY THIS STILL EARNS ITS PLACE: because the engine was never the point. The
+ * half of the claim that keeps this off the hot path is "no filesystem scan,
+ * no per-skill syscall on a tool call" — that is what a naive implementation
+ * would get wrong, it is still exactly true, and it is the reason
+ * {@see forPath()} can be called from every Read, Edit and Glob without
+ * anyone pricing it first. Naming the matcher was always incidental detail;
+ * it has been dropped from the claim rather than merely corrected, so the next
+ * engine change does not make this stale again.
  *
  * WHAT THAT CLAUSE SAID: "once every path-scoped skill has been announced".
  * WHAT IS TRUE NOW: it is qualified, because unqualified it was false of any
