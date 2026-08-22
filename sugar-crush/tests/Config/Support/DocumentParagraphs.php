@@ -63,8 +63,23 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  *   prose. It is not excluded: a sample `config.json` showing a wrong default
  *   is a stale claim like any other, and a scanner that quietly ignores what
  *   it cannot parse has a hole shaped exactly like the next defect. Giving it
- *   its own unit is what stops a retraction leaking across the fence in either
- *   direction.
+ *   its own unit is what stops a retraction leaking ACROSS the fence, in
+ *   either direction across that boundary.
+ *   IT DOES NOT STOP LEAKAGE **INSIDE** THE BLOCK, AND THAT IS A TRADE RATHER
+ *   THAN AN OVERSIGHT. WHAT AN EARLIER FORM OF THIS BULLET SAID: that the rule
+ *   stops a retraction leaking "in either direction", full stop. WHAT IS TRUE:
+ *   the same rule makes the window COARSER within a block. A fenced block
+ *   containing a blank line was two units under the old rule and is one now, so
+ *   a retraction anywhere inside it exempts a stale figure anywhere else inside
+ *   it, for `GlobFigureDriftTest::carriesTheStaleFigure()`. WHY THE RULE STILL
+ *   EARNS ITS PLACE: an unbalanced fence in each half is not a span a reader
+ *   can judge on its own, which is the rule this window is stated in terms of,
+ *   and a code block is the one place where a comment and the line it retracts
+ *   genuinely belong to one claim. The trade is measured rather than argued —
+ *   {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest::windowFixtures()}
+ *   carries a fixture for it and
+ *   `testTheTableContainsFixturesTheOldWindowCouldNotSee()` asserts the table
+ *   keeps recording the coarser direction.
  * - A **table row** is its own unit. Each row is an independent promise.
  * - A **list item** is its own unit, together with its continuation lines.
  * - Everything else splits on a blank line, exactly as before.

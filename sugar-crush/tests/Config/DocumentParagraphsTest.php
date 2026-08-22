@@ -112,6 +112,26 @@ final class DocumentParagraphsTest extends TestCase
             $fenceTouchingProse, 1, 3, 'Set the key', 'removes ten', true, false,
         ];
 
+        // ── the direction the new rule is COARSER in ─────────────────────
+        // Not every difference narrows. A fenced block containing a blank line
+        // is TWO units under the old rule and ONE under the new one, so a
+        // retraction anywhere inside a block now exempts a stale figure
+        // elsewhere in the SAME block. That is a real weakening of
+        // GlobFigureDriftTest::carriesTheStaleFigure() and it is here so the
+        // fixture table measures both directions rather than only the flattering
+        // one.
+        $fenceHoldingTwoClaims = <<<'MD'
+            ```json
+            { "disabledTools": "the glob is eight characters long" }
+
+            { "disabledTools": "retracted: `[!B]*` is five characters" }
+            ```
+            MD;
+
+        yield 'a fence welds two claims a blank line used to separate' => [
+            $fenceHoldingTwoClaims, 2, 1, 'eight characters', 'five characters', false, true,
+        ];
+
         // ── the case that must NOT change ────────────────────────────────
         $prose = <<<'MD'
             The first paragraph makes one claim.
@@ -169,24 +189,47 @@ final class DocumentParagraphsTest extends TestCase
     }
 
     /**
-     * At least one fixture must actually EXHIBIT the narrowing.
+     * At least one fixture must EXHIBIT the narrowing — and one the widening.
      *
-     * Without this, every row of the table could quietly become
+     * Without the narrowing check, every row of the table could quietly become
      * `true => true` — a table that proves the two rules agree everywhere,
      * shipped as evidence that one of them is better.
+     *
+     * THE WIDENING CHECK IS THE HALF THAT WAS MISSING, and its absence was the
+     * same instrument failure twice over. The round-45 table counted
+     * `$narrowed` and `$unchanged` only, so it could only ever report that the
+     * new rule was finer; its sibling table in
+     * {@see ReadmeJsonErrorContractDriftTest} already counted a `$widened`
+     * column in the same diff. The new window is NOT uniformly finer: a fenced
+     * block containing a blank line is two units under the old rule and one
+     * under the new, which welds together claims the old window kept apart and
+     * measurably weakens
+     * `GlobFigureDriftTest::carriesTheStaleFigure()`'s retraction exemption
+     * inside such a block. Counting only the flattering direction is how a
+     * trade-off gets shipped as an improvement.
      */
     public function testTheTableContainsFixturesTheOldWindowCouldNotSee(): void
     {
         $narrowed = [];
+        $widened = [];
         $unchanged = [];
         foreach (self::windowFixtures() as $label => [, , , , , $oldHoldsBoth, $newHoldsBoth]) {
             if ($oldHoldsBoth && !$newHoldsBoth) {
                 $narrowed[] = $label;
             }
+            if (!$oldHoldsBoth && $newHoldsBoth) {
+                $widened[] = $label;
+            }
             if ($oldHoldsBoth === $newHoldsBoth) {
                 $unchanged[] = $label;
             }
         }
+
+        $this->assertNotEmpty(
+            $widened,
+            'the fixture table no longer records the direction in which the new window is COARSER '
+            . 'than the old one, so it reads as a table of pure improvement',
+        );
 
         $this->assertGreaterThanOrEqual(
             4,
