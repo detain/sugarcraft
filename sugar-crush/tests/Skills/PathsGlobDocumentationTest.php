@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Skills;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 
 /**
@@ -254,26 +255,38 @@ final class PathsGlobDocumentationTest extends TestCase
      * the docs keep listing it — a reader checking "does this affect me?"
      * against a stale roster is why the list is here at all rather than left as
      * "some skills".
+     *
+     * THE FIRST VERSION CLAIMED BOTH DIRECTIONS AND ASSERTED ONE. It checked
+     * that every derived name appeared in the note, and then checked the note's
+     * LENGTH by counting the roster — so adding a built-in the note has no
+     * business naming (`laravel-best-practices`, which declares no `paths:` at
+     * all) survived, because the count it compared against was the roster's own.
+     * The note's names are now extracted and compared as a SET, which is the
+     * only form in which "exactly" means anything.
+     *
+     * AND THE CENSUS GOES THROUGH {@see Skill::fromFile()} — the production
+     * parser — rather than a regex written from the shapes the four shipped
+     * skills happen to use. The regex was `/^\s*-\s*"(\*\*[^"]*)"\s*$/m`: a
+     * double-quoted block-list item and nothing else. A fourth built-in
+     * declaring `- '**\/*.probe'` or `paths: ["**\/*.probe"]` — both of which
+     * `fromFile()` accepts and both of which are ordinary YAML — was invisible
+     * to it, so the census reported three and the mutation survived. It also
+     * scanned the whole file, so a `- "**\/…"` line in a skill's BODY counted
+     * as a `paths:` declaration. A census whose alphabet is written from the
+     * cases already shipped cannot report a case that is written differently,
+     * and that is the entire failure mode.
      */
     public function testTheAffectedBuiltInsAreExactlyTheOnesTheDocsName(): void
     {
-        $dir = __DIR__ . '/../../src/Skills/BuiltIn';
+        $roster = $this->builtInPaths();
         $affected = [];
-
-        foreach ((array) scandir($dir) as $entry) {
-            if (!is_string($entry) || $entry === '.' || $entry === '..') {
-                continue;
+        foreach ($roster as $name => $paths) {
+            foreach ($paths as $pattern) {
+                if (str_starts_with($pattern, '**')) {
+                    $affected[] = $name;
+                    break;
+                }
             }
-            $skill = $dir . '/' . $entry . '/SKILL.md';
-            if (!is_file($skill)) {
-                continue;
-            }
-            $text = (string) file_get_contents($skill);
-            // The frontmatter list items, e.g. `  - "**/*.php"`.
-            if (preg_match_all('/^\s*-\s*"(\*\*[^"]*)"\s*$/m', $text, $m) === 0) {
-                continue;
-            }
-            $affected[] = $entry;
         }
         sort($affected);
 
@@ -287,40 +300,105 @@ final class PathsGlobDocumentationTest extends TestCase
         $notes = [
             'docs/SKILLS.md' => $this->behaviourNote(
                 'docs/SKILLS.md',
-                'Three shipped built-in skills declare a leading',
+                'shipped built-in skills declare a leading',
                 'this is the note saying it is gone.',
             ),
             'README.md' => $this->behaviourNote(
                 'README.md',
-                'so the three shipped skills scoped',
+                'shipped skills scoped',
                 'has the measured table.',
             ),
         ];
 
         foreach ($notes as $file => $note) {
-            foreach ($affected as $name) {
-                self::assertStringContainsString(
-                    '`' . $name . '`',
-                    $note,
-                    "the leading-`**` built-in '{$name}' is not named in {$file}'s behaviour note. "
-                    . 'Note that this is scoped to the NOTE, not to the whole file: an earlier version '
-                    . 'searched the document, and the mutation that dropped `phpunit-master` from the '
-                    . 'note survived on its unrelated mention in the built-in roster table.',
-                );
-            }
+            self::assertSame(
+                $affected,
+                $this->builtInsNamedIn($note, array_keys($roster)),
+                $file . "'s leading-`**` behaviour note and the shipped frontmatter name different "
+                . 'sets of built-ins. BOTH directions are the defect: a skill the note omits is a '
+                . 'user who never learns their nudges moved, and a skill the note adds is a user who '
+                . 'goes looking for a change that did not happen to them. Note that this is scoped '
+                . 'to the NOTE, not to the whole file — an earlier version searched the document, '
+                . 'and the mutation that dropped `phpunit-master` from the note survived on its '
+                . 'unrelated mention in the built-in roster table.',
+            );
         }
 
-        // And the reverse: the docs' count must be the roster's count.
+        // And the count each document spells out, derived rather than restated.
+        $word = self::COUNT_WORDS[count($affected)] ?? (string) count($affected);
         self::assertStringContainsString(
-            'Three shipped built-in skills declare a leading `**`',
+            $word . ' shipped built-in skills declare a leading `**`',
             $this->doc('docs/SKILLS.md'),
-            'docs/SKILLS.md no longer states how many built-ins are affected',
+            'docs/SKILLS.md no longer states how many built-ins are affected, or states a number '
+            . 'other than the ' . count($affected) . ' the frontmatter declares',
         );
-        self::assertCount(
-            3,
-            $affected,
-            'the number of built-ins declaring a leading-`**` `paths:` pattern is no longer three; '
-            . 'docs/SKILLS.md and README.md both say three. Found: ' . implode(', ', $affected),
+        self::assertStringContainsString(
+            'the ' . strtolower($word) . ' shipped skills scoped',
+            $this->doc('README.md'),
+            'README.md no longer states how many built-ins are affected, or states a number other '
+            . 'than the ' . count($affected) . ' the frontmatter declares',
         );
+    }
+
+    /**
+     * Number words this file can spell, so a document's count is derived from
+     * the roster rather than restated next to it.
+     */
+    private const COUNT_WORDS = [
+        1 => 'One',
+        2 => 'Two',
+        3 => 'Three',
+        4 => 'Four',
+        5 => 'Five',
+        6 => 'Six',
+    ];
+
+    /**
+     * Every shipped built-in's `paths:` list, read by the production parser.
+     *
+     * @return array<string, list<string>> keyed by skill directory name, sorted
+     */
+    private function builtInPaths(): array
+    {
+        $dir = __DIR__ . '/../../src/Skills/BuiltIn';
+        $roster = [];
+
+        foreach ((array) scandir($dir) as $entry) {
+            if (!is_string($entry) || str_starts_with($entry, '.')) {
+                continue;
+            }
+            $file = $dir . '/' . $entry . '/SKILL.md';
+            if (!is_file($file)) {
+                continue;
+            }
+            $roster[$entry] = array_values(Skill::fromFile($file)->paths);
+        }
+        ksort($roster);
+
+        self::assertNotSame([], $roster, 'no built-in skills found; the roster derivation is broken');
+
+        return $roster;
+    }
+
+    /**
+     * The built-in skill names a note mentions, in backticks.
+     *
+     * Intersected with the shipped roster rather than pattern-matched, because
+     * a note legitimately backticks things that are not skill names —
+     * `paths: ["**\/*.php"]` among them — and a rule shaped like "a backticked
+     * hyphenated word is a skill" would either swallow those or need an
+     * exception list written from the cases already there.
+     *
+     * @param list<string> $allBuiltIns
+     *
+     * @return list<string>
+     */
+    private function builtInsNamedIn(string $note, array $allBuiltIns): array
+    {
+        preg_match_all('/`([^`]+)`/u', $note, $m);
+        $named = array_values(array_unique(array_intersect($m[1], $allBuiltIns)));
+        sort($named);
+
+        return $named;
     }
 }
