@@ -7175,6 +7175,35 @@ final class Chat implements Model
         // (per-turn because $userSink is a local of this call, so one bad
         // delta does not disable the embedder's sink forever) and reported
         // once through error_log rather than once per token.
+        //
+        // NOT GATED, AND THE DECISION WAS MADE RATHER THAN DEFERRED (E154).
+        // That last clause settled the FREQUENCY without ever asking about the
+        // CHANNEL, and the channel is the interesting half: this closure runs
+        // inside the streaming loop of a turn already in flight, so by the time
+        // it can fire the alternate screen has been up for the whole session and
+        // the write lands on a frame the renderer believes it owns. Every
+        // launch-time stderr write in this application was routed for exactly
+        // that reason, onto
+        // {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}.
+        //
+        // THE SEAM IS UNREACHABLE FROM HERE, verified rather than assumed: it
+        // appends to a static list `Bootstrap::chat()` drains into
+        // {@see withLaunchNotices()} ONCE, at construction, and this fires
+        // mid-turn long afterwards. So the choice is between fd 2 and a
+        // `SUGARCRUSH_DEBUG_*` gate on
+        // {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()}'s
+        // quiet-by-default contract — and the gate is the better answer, because
+        // the audience is the EMBEDDER whose `onToken` threw rather than the
+        // person at the terminal, who cannot act on "your logger raised" and
+        // whose turn completes normally either way.
+        //
+        // WHY IT IS STILL UNCONDITIONAL: `StreamingWiringTest::
+        // testAThrowingObserverLosesItsOwnDeltasButNotTheTurn()` asserts this
+        // line reaches `error_log()`, and it is right to — "the failure is not
+        // swallowed silently" is the contract as it stands. Gating is therefore
+        // a two-file change and belongs in a round where both files are in one
+        // lane's hands. Do not gate this without amending that test in the same
+        // commit, and do not delete this paragraph instead of doing so.
         $userSink = $next->onToken;
         $onToken = !$next->streaming ? null : static function (string $delta) use ($inbox, $generation, &$userSink): void {
             if ($delta === '') {

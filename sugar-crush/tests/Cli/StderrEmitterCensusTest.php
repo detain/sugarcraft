@@ -57,12 +57,26 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — THIRTY-EIGHT sites across eleven files. MEASURED on this
+ *  3. `error_log(…)` — THIRTY-FOUR sites across eleven files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
  *     baseline capture of a full suite run. It is by a wide margin the largest
  *     stderr channel in the application and it was not in the census at all.
+ *     THIS COUNTS CALL SITES, NOT MESSAGES, and the two moved apart in round
+ *     46: funnelling `CommandLoader`'s five `error_log()` calls through one
+ *     private `report()` took its roster entry from 5 to 1 and this figure from
+ *     thirty-eight to thirty-four while removing no message whatever — that
+ *     loader still has five distinct refusals to report and `docs/ENVIRONMENT.md`
+ *     documents all five behind one flag. A fall here is a fall in EMITTERS;
+ *     read it as a fall in diagnostics and you will go hunting for four that
+ *     were never deleted.
+ *     A NAIVE `grep -c 'error_log('` OVER `src/` DISAGREES WITH THAT NUMBER by
+ *     more than twenty, and the census is the one that is right: the surplus is
+ *     entirely this application's own doc-blocks discussing `error_log()`,
+ *     which it does more often than it calls it.
+ *     {@see testTheNaiveGrepCountReconcilesWithTheTokenScan()} asserts the
+ *     identity per file rather than restating either figure.
  *  4. Literal message SHAPES that themselves carry the `sugarcrush: ` prefix.
  *     A LITERAL-BORNE PREFIX AND NOT "THE ROSTER A USER READS", which is what
  *     this line said when it was written, and the difference is the whole of
@@ -167,7 +181,7 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Agents/WorktreeManager.php' => 4,
         'src/Chat.php' => 1,
         'src/Cli/Bootstrap.php' => 1,
-        'src/Commands/CommandLoader.php' => 5,
+        'src/Commands/CommandLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
         'src/Providers/SglangProvider.php' => 3,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 11,
@@ -219,9 +233,47 @@ final class StderrEmitterCensusTest extends TestCase
     ];
 
     /**
+     * The bracket openers PHP lexes as an ARRAY token while lexing the closer
+     * that balances them as a plain one-byte string token.
+     *
+     * MEASURED on PHP 8.3.6 via `token_get_all()`, which is the only version
+     * this box has; CI also runs 8.4 and the list is not asserted there. A
+     * fourth shape arriving in a later PHP does not silently corrupt the count
+     * — {@see argumentCount()} throws when the walk balances on the wrong
+     * closer, which is precisely what a missing entry here looks like.
+     *
+     *  - `T_ATTRIBUTE` is `#[`, closed by `]`.
+     *  - `T_CURLY_OPEN` is the `{` of `"{$a}"`, closed by `}`.
+     *  - `T_DOLLAR_OPEN_CURLY_BRACES` is `${`, closed by `}`.
+     *
+     * `match (…) { … }` is NOT one of them and was checked: both its braces are
+     * plain string tokens, so the plain opener list already balances it.
+     *
+     * @var list<int>
+     */
+    private const ARRAY_TOKEN_OPENERS = [T_ATTRIBUTE, T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES];
+
+    /**
      * Only the words a count in this file could plausibly take. A word outside
      * this map is a sentence the guard cannot read, and that is a FAILURE
      * rather than a skip.
+     *
+     * WIDER THAN THE ONE WORD IT READS TODAY, ON PURPOSE, and this paragraph
+     * exists because a reviewer read that as softening the rule above. It does
+     * not, and the reason is that BOTH arms of the guard are failures.
+     * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} does
+     * `assertArrayHasKey()` and then `assertSame()` against the live scan, so
+     * for a prose word this map does not carry the verdict is "the guard cannot
+     * read the sentence", and for one it does carry the verdict is "the prose
+     * says N and the scan counts M". A word in this map is still COMPARED; it
+     * is never waved through. Adding an entry therefore cannot turn a red into
+     * a green — it can only exchange the vaguer failure for the one that names
+     * both numbers. What WOULD soften the rule is an `?? continue`, and there
+     * is none.
+     *
+     * The reason to keep the list bounded at all is the other direction: a
+     * sentence saying "several" or "a couple" must not be silently readable,
+     * and it is not.
      *
      * @var array<string, int>
      */
@@ -230,6 +282,7 @@ final class StderrEmitterCensusTest extends TestCase
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23,
+        'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
     ];
@@ -344,6 +397,286 @@ final class StderrEmitterCensusTest extends TestCase
             'src/ or bin/ acquired a stderr channel no scanner in this file covers — a php:// stream handle, '
                 . 'or error_log()\'s destination form. Give it a channel and a roster: an emitter nothing '
                 . 'counts is exactly what this file exists to prevent.',
+        );
+    }
+
+    /**
+     * EVERY `other`-CHANNEL FIXTURE IS REAL PHP, not merely lexable text.
+     *
+     * `token_get_all()` will happily lex a source the compiler rejects, so a
+     * fixture written to exercise a token shape can pin a shape that cannot
+     * occur — which makes the row look like coverage and buy nothing.
+     * `TOKEN_PARSE` runs the parser over the same string, so a fixture that is
+     * not a program reds here rather than sitting in the provider forever.
+     *
+     * ONLY THE `other` CHANNEL, deliberately. The channel-1/2/5 fixtures
+     * include deliberate FRAGMENTS — `<?php private static function
+     * warnPermissionConfig(string $m): void {}` is a method body outside a
+     * class — and they are fragments on purpose, so requiring them to parse
+     * would delete the rows rather than strengthen them.
+     */
+    public function testEveryOtherChannelFixtureIsRealPhp(): void
+    {
+        $checked = 0;
+
+        foreach (self::scannerCases() as $name => [$channel, $source, $_expected]) {
+            if ($channel !== 'other') {
+                continue;
+            }
+
+            $checked++;
+            try {
+                token_get_all($source, TOKEN_PARSE);
+            } catch (\ParseError $e) {
+                self::fail("the `other` fixture \"{$name}\" is not valid PHP: {$e->getMessage()}");
+            }
+        }
+
+        // The loop above asserts nothing when it runs zero times, which is the
+        // vacuous shape this file exists to distrust.
+        self::assertGreaterThan(4, $checked, 'the other-channel fixtures vanished from the provider');
+    }
+
+    /**
+     * The depth walk answers for every `error_log()` call site in `src/` today,
+     * and at least one of them exercises the array-token openers.
+     *
+     * WHY THE SECOND HALF IS THE LOAD-BEARING ONE. The first half is an
+     * absence assertion — "nothing throws" — and round 44 proved what an
+     * absence is worth without a known-positive beside it. The second half
+     * derives, from the tree rather than from prose, that the shape E161 called
+     * latent is in fact live: `error_log()` sites with an interpolated message
+     * already run through this walk on every suite run. If that ever drops to
+     * zero the assertion reds, and the honest response is to keep the
+     * {@see scannerCases()} rows and rewrite this paragraph — not to delete a
+     * guard because the tree stopped needing it this week (rule 6).
+     *
+     * DERIVED AND NEVER WRITTEN DOWN (rule 18): the count lives in the failure
+     * message, so a sibling lane adding or removing a site cannot make a
+     * sentence here false.
+     */
+    public function testEveryLiveErrorLogSiteSurvivesTheDepthWalk(): void
+    {
+        $sites = 0;
+        $withArrayTokenOpener = 0;
+
+        foreach (self::sources() as $relative => $absolute) {
+            $significant = self::significantTokens((string) file_get_contents($absolute));
+
+            foreach ($significant as $i => $token) {
+                if (self::callableName($token) !== 'error_log' || ($significant[$i + 1] ?? null) !== '(') {
+                    continue;
+                }
+
+                $sites++;
+
+                try {
+                    self::argumentCount($significant, $i + 1);
+                } catch (\RuntimeException $e) {
+                    self::fail("argumentCount() cannot answer for the error_log() call in {$relative}: "
+                        . $e->getMessage());
+                }
+
+                if (self::carriesArrayTokenOpener($significant, $i + 1)) {
+                    $withArrayTokenOpener++;
+                }
+            }
+        }
+
+        self::assertGreaterThan(0, $sites, 'the walk found no error_log() call at all; the scan is dead');
+        self::assertGreaterThan(
+            0,
+            $withArrayTokenOpener,
+            "no error_log() site in src/ carries an interpolation or an attribute any more ({$sites} sites "
+                . 'scanned). E161 called that shape latent and it was not; if it has genuinely become '
+                . 'latent, rewrite argumentCount()\'s doc-block to say so — the fixtures stay either way.',
+        );
+    }
+
+    /**
+     * A bracket opener the walk does not recognise is a FAILURE, not a number.
+     *
+     * THE KNOWN-POSITIVE FOR {@see argumentCount()}\'s throw, and the reason it
+     * is here rather than trusted: the throw exists for a token shape that does
+     * not exist yet, so nothing else in this suite can ever reach it. Simulated
+     * by handing the walk a token stream whose `(` is balanced by a `]` — which
+     * is exactly the stream an unrecognised array-token opener produces.
+     */
+    public function testTheDepthWalkRedsOnAnOpenerItDoesNotRecognise(): void
+    {
+        // `error_log(` … `]` — a hand-built stream, because every real source
+        // that produces one is a shape the openers list now balances.
+        $stream = [[T_STRING, 'error_log', 1], '(', [T_LNUMBER, '1', 1], ']'];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ARRAY_TOKEN_OPENERS');
+
+        self::argumentCount($stream, 1);
+    }
+
+    /**
+     * The naive `substr_count('error_log(')` count reconciles, per file and
+     * exactly, with the token scan plus the mentions in comments and doc-blocks.
+     *
+     * THE INSTRUMENT IS NAMED AS THE ONE THE CODE USES. WHAT THIS SAID: "the
+     * naive `grep -c 'error_log('` count". WHAT IS TRUE NOW: the body has
+     * always run `substr_count()`, and the two are different measurements —
+     * `grep -c` counts LINES that match, `substr_count()` counts OCCURRENCES.
+     * They agreed when this was written only because no line in `src/` happens
+     * to carry two (MEASURED at `62f4e5d1`: 58 by both, over thirteen files).
+     * WHY THE COMPARISON STILL EARNS ITS PLACE: the point was never the tool,
+     * it is that the WEAK instrument — whichever one a reader reaches for
+     * first — is reconciled against the token scan rather than trusted or
+     * dismissed. Naming the tool the code actually runs is what lets the next
+     * reader reproduce the number.
+     *
+     * WHY THIS TEST AND NOT A SENTENCE. Two counts of the same thing were in
+     * circulation — the token census\'s and a `grep | uniq -c`\'s — differing by
+     * twenty across thirteen files, with two files appearing in one and not the
+     * other and `src/Cli/Bootstrap.php` at 10 against 1. A census disagreeing
+     * with a grep by that much has an alphabet problem until proven otherwise,
+     * and the proof is an IDENTITY rather than a pair of numbers: every naive
+     * occurrence is either a call the scan counts or a mention inside a
+     * `T_COMMENT`/`T_DOC_COMMENT`, with nothing left over. The token census is
+     * the correct one; the grep was counting this application\'s own prose about
+     * `error_log()`, which it writes more often than it calls it.
+     *
+     * THE RESIDUE IS THE POINT, IN BOTH DIRECTIONS. An occurrence that is
+     * neither a call nor a comment — one inside a string literal, say, which is
+     * how a `sprintf()` template or a heredoc could smuggle one past both
+     * counts — reds this, and neither of the two existing rosters would notice
+     * it. So does the opposite: a real call the naive count cannot SEE, which
+     * `error_log ("x")` with a space before the paren already is on PHP 8.3.6
+     * (MEASURED: `substr_count` 0, token scan 1). That direction used to be
+     * unreachable, because the loop skipped any file whose naive count was
+     * zero — 275 of the 289 files `sources()` walks, at the time that guard was
+     * removed. Asserting an identity only over the files the weaker instrument
+     * already agrees about is not a reconciliation.
+     * {@see testTheTwoInstrumentsDisagreeOnAShapeOnlyOneCanSee()} pins the case
+     * with both instruments side by side.
+     *
+     * NO CARDINALITY IS STATED ABOVE (rule 18). The figures are derived below
+     * and appear only in failure messages, because a count written into prose
+     * here is invalidated by the next lane that adds a call site.
+     */
+    public function testTheNaiveGrepCountReconcilesWithTheTokenScan(): void
+    {
+        $naiveTotal = 0;
+        $callTotal = 0;
+        $commentTotal = 0;
+        $examined = 0;
+
+        foreach (self::sources() as $relative => $absolute) {
+            $source = (string) file_get_contents($absolute);
+            $naive = substr_count($source, 'error_log(');
+
+            // NO `if ($naive === 0) { continue; }` HERE, deliberately. It read
+            // as a cheap skip and was a hole: it dropped every file the weak
+            // instrument cannot see, which is precisely the file this
+            // reconciliation exists to find. For a genuinely empty file the
+            // identity below is `0 === 0` and costs nothing. The `$examined`
+            // counter at the bottom of this body is what keeps the skip from
+            // coming back unnoticed — nothing else in this file reds when it
+            // does.
+            $inComments = 0;
+            foreach (token_get_all($source) as $token) {
+                if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                    $inComments += substr_count($token[1], 'error_log(');
+                }
+            }
+
+            $calls = self::scan('error_log', $source);
+
+            $accounted = $calls + $inComments;
+            $direction = $naive > $accounted
+                ? 'occurrence(s) the token scan cannot account for, most likely inside a string literal — '
+                    . 'neither the channel-3 roster nor a naive count would report that'
+                : 'call(s) or mention(s) the naive count cannot SEE, which is what `error_log (` with a '
+                    . 'space before the paren looks like — the roster is right and the naive figure is blind';
+
+            self::assertSame(
+                $naive,
+                $accounted,
+                "{$relative}: substr_count() finds {$naive} occurrences of `error_log(`, but the token scan "
+                    . "counts {$calls} calls and {$inComments} mentions inside comments — a gap of "
+                    . (string) abs($naive - $accounted) . ' ' . $direction
+                    . '. Find it before trusting either count.',
+            );
+
+            $naiveTotal += $naive;
+            $callTotal += $calls;
+            $commentTotal += $inComments;
+            // LAST STATEMENT IN THE BODY, so that any early exit added above
+            // fails to reach it. This is what pins the removal of the
+            // `if ($naive === 0) { continue; }` skip: re-adding that line
+            // leaves every assertion above green (there is no file in `src/`
+            // today where the two instruments disagree, which is the whole
+            // reason the skip looked free), and only this count notices that
+            // the reconciliation quietly stopped covering most of the tree.
+            // MEASURED: with the skip re-added and this counter absent, the
+            // whole of this file stayed green.
+            ++$examined;
+        }
+
+        self::assertSame(
+            \count(self::sources()),
+            $examined,
+            'the reconciliation did not reach the end of its loop body for every file `sources()` walks. '
+                . 'A file skipped here is a file whose identity is not asserted, and the ones worth '
+                . 'skipping — those the naive instrument reports zero for — are exactly the ones where a '
+                . 'call it cannot see would hide. No cardinality is written here on purpose (rule 18): '
+                . 'both sides are derived from the same walk.',
+        );
+
+        self::assertSame($naiveTotal, $callTotal + $commentTotal, 'the per-file identity holds but the totals do not');
+
+        // KNOWN-POSITIVE, in the same test, on the same instrument. A tree
+        // whose files all happened to have zero occurrences would pass every
+        // assertion above without the scanner working at all.
+        self::assertGreaterThan(0, $callTotal, 'the token scan sees no error_log() call anywhere in src/');
+        self::assertGreaterThan(
+            0,
+            $commentTotal,
+            'no comment in src/ mentions `error_log(` any more, so the reconciliation above is trivially '
+                . 'true and proves nothing about the grep/scan gap it exists to explain',
+        );
+    }
+
+    /**
+     * THE TWO INSTRUMENTS, SIDE BY SIDE, ON A SHAPE ONLY ONE OF THEM CAN SEE.
+     *
+     * The reconciliation above asserts the two agree across `sources()`. That
+     * is worth nothing unless they are capable of disagreeing, and the shape
+     * that makes them disagree is not exotic: PHP allows whitespace between a
+     * function name and its `(`, so `error_log ("x")` is a call the token scan
+     * counts and a literal `error_log(` search cannot match. There is no such
+     * site in `src/` today — which is why it needs a fixture rather than a
+     * sentence, and why the loop above had to stop skipping the files where
+     * the naive count is zero.
+     *
+     * PHP 8.3.6, the only version on this box; CI also runs 8.4 and this is not
+     * asserted there.
+     */
+    public function testTheTwoInstrumentsDisagreeOnAShapeOnlyOneCanSee(): void
+    {
+        // The control: both instruments see the ordinary spelling, so a
+        // disagreement below is about the SHAPE and not about a dead scanner.
+        $plain = '<?php error_log("x");';
+        self::assertSame(1, substr_count($plain, 'error_log('), 'the naive instrument is dead');
+        self::assertSame(1, self::scan('error_log', $plain), 'the token scan is dead');
+
+        $spaced = '<?php error_log ("x", 3, "/tmp/f");';
+        self::assertSame(
+            0,
+            substr_count($spaced, 'error_log('),
+            'a literal `error_log(` search now matches across the space, which would make this fixture '
+                . 'prove nothing — pick a shape the naive instrument still cannot see',
+        );
+        self::assertSame(
+            1,
+            self::scan('error_log', $spaced),
+            'the token scan no longer sees a call with whitespace before its paren, so the channel-3 '
+                . 'roster is under-counting by however many of those src/ has acquired',
         );
     }
 
@@ -484,6 +817,51 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'error_log with a destination' => ['other', '<?php error_log("x", 3, "/tmp/f");', 1];
         yield 'plain error_log is not an other channel' => ['other', '<?php error_log("x");', 0];
         yield 'error_log with a type but no destination' => ['other', '<?php error_log("x", 0);', 0];
+
+        // E161's three shapes, as the `other` channel sees them. Each is a
+        // REAL destination-form call that {@see argumentCount()} counted as one
+        // argument before the array-token openers were recognised, so each row
+        // read 0 — an absence census silently missing a channel that is there.
+        // All three are valid PHP 8.3.6 and not merely lexable; the assertion
+        // in {@see testEveryOtherChannelFixtureIsRealPhp()} is what says so.
+        yield 'a destination form whose message interpolates' => [
+            'other',
+            '<?php error_log("x{$y}", 3, "/tmp/f");',
+            1,
+        ];
+        yield 'a destination form using the dollar-brace interpolation' => [
+            'other',
+            '<?php error_log("x${y}", 3, "/tmp/f");',
+            1,
+        ];
+        yield 'a destination form carrying an attribute' => [
+            'other',
+            '<?php error_log((string) new #[\\AllowDynamicProperties] class {}, 3, "/tmp/f");',
+            1,
+        ];
+        yield 'an interpolating call with no destination is still not one' => [
+            'other',
+            '<?php error_log("x{$y}");',
+            0,
+        ];
+        yield 'match arms do not disturb the depth walk' => [
+            'other',
+            '<?php error_log(match ($n) { 1 => "a", default => "b" }, 3, "/tmp/f");',
+            1,
+        ];
+        // NULLSAFE DISPATCH, on the channel whose scanner reads an operator.
+        // Not reachable through the real family (all `private static`), which
+        // is exactly why the alphabet needed a fixture rather than an argument.
+        yield 'a nullsafe-dispatched prefixed warning is still a call site' => [
+            'prefixed',
+            '<?php $b?->warnPermissionConfig("x");',
+            1,
+        ];
+        yield 'a nullsafe first-class callable is still not a call' => [
+            'prefixed',
+            '<?php $b?->warnPermissionConfig(...);',
+            0,
+        ];
         yield 'a source with nothing at all' => ['direct', '<?php echo 1;', 0];
         yield 'and nothing on the other channels' => ['error_log', '<?php echo 1;', 0];
         yield 'nor on channel five' => ['prefixed', '<?php echo 1;', 0];
@@ -738,14 +1116,7 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private static function scan(string $channel, string $source): int
     {
-        $significant = [];
-        foreach (token_get_all($source) as $token) {
-            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
-                continue;
-            }
-
-            $significant[] = $token;
-        }
+        $significant = self::significantTokens($source);
 
         $warnFamily = [
             'warnPermissionConfig' => true,
@@ -849,8 +1220,22 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private static function isSelfScopedCall(array $significant, int $i): bool
     {
+        // T_NULLSAFE_OBJECT_OPERATOR is `?->`. It cannot occur on this channel
+        // today — the whole `warnPermissionConfig*` family is `private static`
+        // and reached through `self::` — so widening the list moves no count,
+        // which the pinned channel-5 roster is what confirms. It is here
+        // because "the operator the current call sites happen to use" is how an
+        // alphabet gets written too narrow, and this is the third copy of this
+        // three-token list in the lane to be caught that way.
         $previous = $significant[$i - 1] ?? null;
-        if (!\is_array($previous) || !\in_array($previous[0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR], true)) {
+        if (
+            !\is_array($previous)
+            || !\in_array(
+                $previous[0],
+                [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR],
+                true,
+            )
+        ) {
             return false;
         }
         if (($significant[$i + 1] ?? null) !== '(') {
@@ -868,6 +1253,29 @@ final class StderrEmitterCensusTest extends TestCase
      * Depth-tracked, so a comma inside a nested call or array is not an
      * argument of this one. A call with no arguments answers 0.
      *
+     * NOT EVERY BRACKET IS A ONE-BYTE TOKEN, and the walk got that wrong
+     * (E161). WHAT E161 SAID: the walk "goes negative on a PHP attribute",
+     * `#[` opening a bracket the opener list does not see while its `]` closes
+     * one, and "no attribute appears inside an `error_log()` call in `src/`
+     * today, so this is latent". WHAT IS TRUE NOW, both halves corrected.
+     * FIRST, the depth never goes negative: the loop returns the instant depth
+     * reaches 0, so the unmatched closer makes it return EARLY at a spurious
+     * zero and UNDER-count. SECOND, it is not latent. `#[` is only one of
+     * THREE openers PHP 8.3.6 lexes as an array token whose closer it lexes as
+     * a plain one-byte string — the other two are `T_CURLY_OPEN` (`{` in
+     * `"{$a}"`) and `T_DOLLAR_OPEN_CURLY_BRACES` (`${`), and interpolation is
+     * an everyday shape rather than an exotic one. MEASURED by
+     * {@see testEveryLiveErrorLogSiteSurvivesTheDepthWalk()}, which derives the
+     * figure rather than stating it: live `error_log()` sites in `src/` already
+     * carry `{$` inside their argument list today.
+     *
+     * WHY IT MATTERS, and it is rule 15's shape exactly. The only consumer of
+     * this method is the `other` channel, asking `>= 3` to find
+     * `error_log()`'s destination form — and that channel asserts an ABSENCE.
+     * An under-count can only push a real 3-argument call below the threshold,
+     * so the miss is silent and the empty census reads as proof. It is not the
+     * count being wrong that is dangerous; it is which DIRECTION it is wrong in.
+     *
      * @param list<array{0: int, 1: string}|string> $significant
      */
     private static function argumentCount(array $significant, int $open): int
@@ -878,6 +1286,20 @@ final class StderrEmitterCensusTest extends TestCase
 
         for ($i = $open; $i < \count($significant); $i++) {
             $token = $significant[$i];
+            if (
+                \is_array($token)
+                && \in_array($token[0], self::ARRAY_TOKEN_OPENERS, true)
+            ) {
+                // Counted as content BEFORE the descent, because at depth 1 an
+                // attribute or an interpolation IS the argument's first token
+                // and `$sawToken` decides 0-vs-1 for the whole call.
+                if ($depth === 1) {
+                    $sawToken = true;
+                }
+                $depth++;
+
+                continue;
+            }
             if (\in_array($token, ['(', '[', '{'], true)) {
                 $depth++;
 
@@ -886,6 +1308,22 @@ final class StderrEmitterCensusTest extends TestCase
             if (\in_array($token, [')', ']', '}'], true)) {
                 $depth--;
                 if ($depth === 0) {
+                    // RED ON WHAT IT CANNOT PARSE, never a quiet number. The
+                    // call opened on `(`, so the token that balances it must be
+                    // `)`. Reaching depth 0 on `]` or `}` means an opener went
+                    // by unrecognised — the exact defect above, in whatever
+                    // NEW token shape a later PHP grows — and the honest answer
+                    // is a failure rather than an under-count nothing notices.
+                    if ($token !== ')') {
+                        throw new \RuntimeException(
+                            "the argument list opened at token {$open} balances to zero on '{$token}' rather "
+                                . "than on ')': a bracket opener in it is lexed as an array token this walk "
+                                . 'does not know. Add its id to self::ARRAY_TOKEN_OPENERS. Do NOT relax this '
+                                . 'check — the only caller asks `>= 3` of the answer, so an under-count '
+                                . 'silently empties a census that asserts an absence.',
+                        );
+                    }
+
                     return $sawToken ? $commas + 1 : 0;
                 }
 
@@ -900,6 +1338,75 @@ final class StderrEmitterCensusTest extends TestCase
         }
 
         throw new \RuntimeException('a call opened at this token never closes; the scan cannot answer for it');
+    }
+
+    /**
+     * `$source` as a token list with whitespace, comments and doc-blocks
+     * dropped.
+     *
+     * PROMOTED OUT OF {@see scan()} RATHER THAN COPIED, which matters more here
+     * than tidiness usually does: this list IS the alphabet every channel in
+     * this file counts over, and a second copy that dropped a different token
+     * kind would give two scanners two different views of the same file while
+     * both looked right.
+     *
+     * @return list<array{0: int, 1: string, 2: int}|string>
+     */
+    private static function significantTokens(string $source): array
+    {
+        $significant = [];
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            $significant[] = $token;
+        }
+
+        return $significant;
+    }
+
+    /**
+     * Whether the call whose `(` sits at `$open` contains a bracket opener PHP
+     * lexes as an array token — see {@see ARRAY_TOKEN_OPENERS}.
+     *
+     * Its own walk rather than a flag threaded out of {@see argumentCount()},
+     * because the two answer different questions and the one that reds must not
+     * depend on the one being measured: a bug that made `argumentCount()` stop
+     * descending would otherwise also make this report zero, and the guard in
+     * {@see testEveryLiveErrorLogSiteSurvivesTheDepthWalk()} would go quiet at
+     * exactly the moment it is needed.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $significant
+     */
+    private static function carriesArrayTokenOpener(array $significant, int $open): bool
+    {
+        $depth = 0;
+
+        for ($i = $open; $i < \count($significant); $i++) {
+            $token = $significant[$i];
+
+            if (\is_array($token)) {
+                if (\in_array($token[0], self::ARRAY_TOKEN_OPENERS, true)) {
+                    return true;
+                }
+
+                continue;
+            }
+            if (\in_array($token, ['(', '[', '{'], true)) {
+                $depth++;
+
+                continue;
+            }
+            if (\in_array($token, [')', ']', '}'], true)) {
+                $depth--;
+                if ($depth === 0) {
+                    return false;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
