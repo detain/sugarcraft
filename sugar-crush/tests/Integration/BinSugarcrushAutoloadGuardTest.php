@@ -25,12 +25,16 @@ use SugarCraft\Crush\Cli\NonInteractive;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is ELEVEN:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWELVE:
  *
- *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, six —
+ *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, seven —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
  *    as JSON), `failUsage()`, `failUnusableProvider()`,
- *    `noticeOfflineDefault()` and `readStdinIfPiped()`.
+ *    `noticeOfflineDefault()`, `readStdinIfPiped()`, and — added by E219 —
+ *    `noticeRefusal()`, one line per tool call the turn refused. That last one
+ *    is the only site on this list whose routing decision is written up
+ *    elsewhere: see its own doc-block for why it is on stderr rather than on
+ *    the transcript seam, and why it could not be put in `Runtime`.
  *  - {@see \SugarCraft\Crush\Cli\Subcommands}, two — `sessionDelete()`'s "no
  *    such session" and `mcp()`'s inventory error.
  *  - {@see \SugarCraft\Crush\Cli\Bootstrap}, two —
@@ -40,7 +44,7 @@ use SugarCraft\Crush\Cli\NonInteractive;
  *  - `bin/sugarcrush`, one — this branch.
  *
  * WHY THE EXEMPTION CLAIM STILL EARNS ITS PLACE, narrowed to what was checked:
- * the eight in `NonInteractive` and `Subcommands` are all on the ONE-SHOT and
+ * the nine in `NonInteractive` and `Subcommands` are all on the ONE-SHOT and
  * SUBCOMMAND paths, and {@see \SugarCraft\Crush\Cli\Bootstrap::launchNotices()}
  * is read by `Bootstrap::chat()` and `Bootstrap::app()` and by nothing else —
  * so on those paths the seam records into a static the process discards. That

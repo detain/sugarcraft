@@ -51,7 +51,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — eleven sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — twelve sites. The channel that census describes.
  *  2. `STDERR` captured into a variable or property and written through later —
  *     ONE site, {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
@@ -200,7 +200,7 @@ final class StderrEmitterCensusTest extends TestCase
     private const DIRECT_SITES = [
         'bin/sugarcrush' => 1,
         'src/Cli/Bootstrap.php' => 2,
-        'src/Cli/NonInteractive.php' => 6,
+        'src/Cli/NonInteractive.php' => 7,
         'src/Cli/Subcommands.php' => 2,
     ];
 
@@ -264,7 +264,7 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/ArgvParser.php' => 14,
         'src/Cli/Bootstrap.php' => 4,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
-        'src/Cli/NonInteractive.php' => 6,
+        'src/Cli/NonInteractive.php' => 7,
         'src/Cli/Subcommands.php' => 11,
     ];
 
