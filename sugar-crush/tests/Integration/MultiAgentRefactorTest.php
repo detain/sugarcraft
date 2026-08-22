@@ -586,13 +586,21 @@ final class MultiAgentRefactorTest extends TestCase
                 // WHAT IS TRUE NOW: it is not a lock spin, because
                 // TaskList::acquireTaskLock() takes a BLOCKING `flock(LOCK_EX)`
                 // — a contender waits for the lock, it never fails to get one
-                // and comes back round. The only way claimTask() returns false
-                // while the task is still Pending is a dependency that is not
-                // complete or an assignment to somebody else, neither of which
-                // task-a and task-b can have. Measured accordingly: over 700
-                // runs of this test under 48 CPU-burner processes, every coder
-                // — winners and losers alike — recorded attempts=0. This
-                // backoff has never executed.
+                // and comes back round. claimTask() can return false with the
+                // task still Pending for a dependency that is not complete or
+                // an assignment to somebody else, neither of which task-a and
+                // task-b can have. Measured accordingly: over 700 runs of this
+                // test under 48 CPU-burner processes, every coder — winners and
+                // losers alike — recorded attempts=0. This backoff has never
+                // executed HERE.
+                //
+                // THE THIRD WAY ROUND THIS LOOP, which the two above do not
+                // cover and which is the one the backoff really guards: the
+                // break clause is `$current !== null && status !== Pending`, so
+                // a task that comes back NULL — never added, or a task list
+                // this child cannot read — does not break. It falls through to
+                // here and spins the entire budget. That is a hot loop with no
+                // sleep in it, on a box already running one child per coder.
                 //
                 // WHY IT STILL EARNS ITS PLACE: dormant is not the same as
                 // wrong. It is the only thing standing between a future
