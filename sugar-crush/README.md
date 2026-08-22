@@ -312,7 +312,7 @@ The same three exit codes govern every subcommand below.
 | exit | meaning |
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
-| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding` |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found` |
 | `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
@@ -391,18 +391,28 @@ outside is the only retry it gets.
 
 With `--output-format json`, stdout is always exactly one JSON object: either
 `{"result": "..."}` or `{"result": null, "error": {"type": "usage" |
-"provider_configuration" | "installation" | "backend" | "encoding", "message":
+"provider_configuration" | "installation" | "backend" | "encoding" |
+"not-found" | "mcp-config", "message":
 "...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
 a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
 and `--root` usage errors too, which `bin/sugarcrush` catches before the one-shot
 path is entered, and for a reply or an error message carrying bytes that are
 not valid UTF-8 (they are substituted, not dropped along with the whole
 document). `error.type` is not the exit code renamed — `usage`,
-`provider_configuration` and `installation` are all `2`, `backend` and
-`encoding` are both `1` — it is how a consumer that kept the code tells apart
-the kinds of each. `installation` is the newest of the five and the only one
-`NonInteractive::emitErrorDocument()` never emits; see the one exception below
-for where it comes from and why.
+`provider_configuration` and `installation` are all `2`, `backend`,
+`encoding`, `not-found` and `mcp-config` are all `1` — it is how a consumer
+that kept the code tells apart the kinds of each.
+
+Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
+that is the thing to know if you are reading the source to find where a type
+comes from. `installation` is hand-rolled by `bin/sugarcrush`'s autoload guard
+— see the one exception below for why it has to be. `not-found` and
+`mcp-config` come from the subcommands, which build their own documents
+through `Subcommands::emitDocument()`: `session delete <id>` on an id the store
+does not hold, and `mcp list` on a **trusted** `.mcp.json` that could not be
+read or decoded. Both exit `1` — the store and the file were opened, so
+something was attempted; an absent, out-of-tree or untrusted `.mcp.json` is an
+answer rather than a failure and exits `0` with a `status` field saying so.
 
 There is exactly one exception, and it is not a case of the JSON renderer
 being unavailable — it is the caller asking for a rendering nothing implements:

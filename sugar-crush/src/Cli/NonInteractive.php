@@ -388,13 +388,40 @@ final class NonInteractive
      *                              `bin/sugarcrush`'s pre-flight checks via
      *                              {@see self::failUsage()}
      *   `provider_configuration`-> {@see self::EXIT_CONFIG} (2)
-     *   `installation`          -> {@see self::EXIT_CONFIG} (2), and it is the
-     *                              one type this method never emits — see below
      *   `backend`               -> {@see self::EXIT_FAILURE} (1)
      *   `encoding`              -> {@see self::EXIT_FAILURE} (1)
      *
      * A consumer that kept the exit code and wants to know WHICH kind of 2 it
      * got is exactly who `type` is for.
+     *
+     * THREE MORE TYPES EXIST THAT THIS METHOD NEVER EMITS, and this table used
+     * to name one of them and call it the only one.
+     *
+     *   WHAT IT SAID. That `installation` was "the one type this method never
+     *   emits". WHAT IS TRUE NOW. It is one of three. WHY THE ENTRY STILL EARNS
+     *   ITS PLACE. `installation` is the only one that is a DUPLICATE of this
+     *   shape rather than another caller of it, which is why it is the one with
+     *   a justification below; the other two are ordinary callers that happen
+     *   not to route through this method. The count was the wrong thing to
+     *   lean on, not the distinction.
+     *
+     *   `installation`          -> {@see self::EXIT_CONFIG} (2), hand-rolled by
+     *                              `bin/sugarcrush`'s autoload guard — see below
+     *   `not-found`             -> {@see self::EXIT_FAILURE} (1), from
+     *                              `sugarcrush session delete <id>` on an id the
+     *                              store does not hold
+     *   `mcp-config`            -> {@see self::EXIT_FAILURE} (1), from
+     *                              `sugarcrush mcp list` on a trusted
+     *                              `.mcp.json` that could not be read or decoded
+     *
+     * The last two are {@see Subcommands}', built through its own
+     * `emitDocument()` over {@see self::encodeDocument()} — the same shape and
+     * the same flags, a different caller. They are listed here because this
+     * doc-block is the closest thing the source has to an index of the contract,
+     * and an index that lists five of seven sends a reader looking in the wrong
+     * file. {@see \SugarCraft\Crush\Tests\Config\ReadmeJsonErrorContractDriftTest}
+     * derives the full set from `src/` and `bin/` and reds if this list or
+     * README.md falls behind it again.
      *
      * `installation` IS EMITTED BY `bin/sugarcrush`'s AUTOLOAD GUARD, hand-rolled
      * there rather than routed here, and the duplication is deliberate: that
