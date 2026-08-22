@@ -5853,3 +5853,66 @@ exactly this; this is the first observation of it firing.
 **Step.** Give each lane a private scratch subdirectory (lane b used `scratchpad/laneb/` from the point
 it noticed), and fix E96 so a concurrent sibling suite cannot red a lane's run. The E96 fix is the
 load-bearing one: a lane that cannot trust `rc 0` cannot trust anything downstream of it.
+
+### E115 — `pathMatches()`'s own perf note has the generator gap that was just fixed one doc-block above it
+
+**Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, measurement-hygiene.
+**Not fixed here — deliberately scoped out**, recorded so it is not mistaken for having been checked.
+
+**What.** F5 of the round-44 lane-b review found that `$compiledPathPatterns`'s memoisation figures
+quoted a ratio to two decimals from a generator whose free parameters were unstated; that doc-block was
+re-taken with the generator written out, and the honest band turned out to be roughly 7x-10x rather than
+8.53x-8.68x. `pathMatches()`'s FASTER, INCIDENTALLY paragraph describes its generator in exactly the
+same words — *"40 paths of the form `src/` + 8 path segments + a filename"* — and therefore has exactly
+the same hole: segment content sets the per-match cost, and the per-match cost is the denominator.
+
+Two things make it less urgent than F5 was, and both are reasons to record rather than ignore. Its
+figure is an old-predicate/new-predicate ratio, and BOTH arms pay the same match cost, so segment length
+cancels to first order in a way it does not in a memo/no-memo ratio. And the paragraph already says
+*"quote the ratio and re-take the rest"*, which is the right instinct applied to the absolute times. But
+it is still a two-decimal band from an underspecified generator, and `legacyPathMatch()` is still in the
+class, so re-taking it is possible rather than archaeological.
+
+**Step.** Re-take with the segment content written down (measure at 1, 12 and 24 characters, three runs
+each, PHP version stated), and quote the band across those rather than a point. Related: E85, E99.
+
+### E116 — `not-found` and `mcp-config` are the only hyphenated `error.type` names in the contract
+
+**Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, API-consistency. **A contract
+decision, not a defect — recorded because the guard now makes either answer cheap and someone should
+pick one.**
+
+**What.** The shipped `error.type` set is `backend`, `encoding`, `installation`, `mcp-config`,
+`not-found`, `provider_configuration`, `usage`. Five are single words or `snake_case`; two are
+`kebab-case`, and they are the two `src/Cli/Subcommands.php` added. Nothing is broken — a consumer
+matches strings — but a set that spells the same idea two ways invites a consumer to guess wrong once.
+The hyphens are also what the drift guard's old `[a-z_]+` alphabet could not express, which is how both
+types stayed invisible to it for a round; the alphabet is now `[a-z][a-z0-9_-]*` and reds on anything it
+cannot read, so a rename would be caught either way.
+
+**Step.** Decide: rename to `not_found` / `mcp_config` for consistency with
+`provider_configuration`, or keep and note in README that the set is mixed-case-by-history. If renaming,
+the derivation in `ReadmeJsonErrorContractDriftTest` will red until README.md is updated to match, which
+is the intended order. Pre-1.0, so no compatibility cost.
+
+### E117 — the memoisation and cap-cost TIMING figures are documented but not pinned
+
+**Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, coverage. **Deliberate;
+recorded so the gap is not read as an oversight the next time someone audits this file.**
+
+**What.** Round 44 pinned every ROSTER-derived and CONSTANT-derived figure in
+`SkillRegistry::MAX_COMPILED_PATTERNS`'s doc-block — twelve built-ins, four distinct globs, five
+entries, two per skill, 256x, ~200 skills, peak 1,024, settles at 544. It deliberately did NOT pin the
+timing figures (7.5x-9.7x memoisation, +1.0%-4.9% cap cost, 2.16-2.19 us per translation) or the memory
+totals (3,549,976 B at 20,000 entries, 154,904 B at 1,024). Those are an allocator's and a scheduler's
+answers: they move with the PHP build, with what else is running on the box, and this box has only PHP
+8.3.6 while CI runs 8.3 AND 8.4. A test asserting them would red on the 8.4 leg for no defect, which is
+the failure mode that gets guards deleted.
+
+The residual is real, though, and this is what it is: those figures can rot in the doc-block exactly the
+way the roster figures could before round 44, and nothing will say so. They carry their generator and
+their instrument now, which makes them re-takeable by hand, and that is the whole of the mitigation.
+
+**Step.** If this ever matters enough, the shape that would work is a tolerance-banded benchmark test
+skipped unless an env var is set, so it is a tool someone runs deliberately rather than a suite member
+that reds on a busy CI runner. Do NOT add an unbanded assertion. Related: E87, E99.
