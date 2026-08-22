@@ -423,13 +423,42 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      * screen window the seam's doc-block measures applies to this line exactly
      * as it does to a provider fallback.
      *
-     * THE SPLIT IS THE POINT, and it is asserted from both sides: ONE summary
-     * row on the transcript whatever the prune deleted, and the per-session ids
-     * on stderr ONLY. A prune of fifty sessions must not put fifty rows into a
-     * list that is re-sent to the model on every turn — that is the per-ENTRY
-     * fan-out {@see Bootstrap::LAUNCH_NOTICE_LIMIT} exists to refuse. So this
-     * fixture prunes TWO sessions and asserts the transcript carries one row
-     * naming neither id, while stderr carries both.
+     * THE SPLIT IS THE POINT: ONE summary row on the transcript whatever the
+     * prune deleted, and the per-session ids on stderr ONLY. A prune of fifty
+     * sessions must not put fifty rows into a list that is re-sent to the model
+     * on every turn — that is the per-ENTRY fan-out
+     * {@see Bootstrap::LAUNCH_NOTICE_LIMIT} exists to refuse. So this fixture
+     * prunes TWO sessions and asserts the transcript carries one row naming
+     * neither id, while stderr carries both.
+     *
+     * WHAT THIS DOC-BLOCK USED TO CLAIM: that the split is "asserted from both
+     * sides".
+     * WHAT IS TRUE NOW, and round 42's review is what worked it out: only the
+     * stderr side is asserted by a clause that can fail first. The transcript
+     * side is pinned by an exact `assertSame` on the whole notice list, and an
+     * exact equality already excludes every string an
+     * `assertStringNotContainsString` below it could catch — PHPUnit stops at
+     * the first failure, so those calls are unreachable as failures.
+     * WHY THEY STILL EARN THEIR PLACE: they are the clause that survives the
+     * `assertSame` being loosened. An exact-equality assertion on a formatted
+     * message is the first thing a later change relaxes to a `assertCount` or a
+     * `assertStringContainsString` — and the moment it is, "the ids are not in
+     * the transcript" stops being implied and starts being the only thing
+     * saying so. They are documentation with a trigger, not a second
+     * measurement, and this doc-block now says which is which. The LIVE stderr
+     * clause is the `'<id> (last used …'` containment: emptying the detail loop
+     * reds it and nothing else.
+     *
+     * THE EXEMPTION IS EXERCISED, which it previously was not. `keeper` is the
+     * row {@see Bootstrap::sessionStore()} passes to `pruneSessions()` as
+     * `$exemptSessionId` (it takes `listSessions(1)[0]['id']`, and
+     * `LIST_SESSIONS_SQL` orders `updated_at DESC`). The first version of this
+     * fixture left `keeper` at a current timestamp, so it survived on AGE and
+     * deleting the exemption outright would not have moved this test. It is now
+     * aged to 2021 — a year past the 30-day cutoff, and still the newest of the
+     * three, so it is both a prune candidate and the resumable row. It survives
+     * for exactly one reason now, and the assertion that says so is placed
+     * BEFORE the summary so that reason is what a failure names.
      *
      * DRIVEN THROUGH Bootstrap::sessionStore() rather than chat(): that is the
      * production caller (chat() calls it early and reads launchNotices() last,
@@ -440,10 +469,11 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     {
         $db = $this->configDir . '/session.db';
         $store = new \SugarCraft\Crush\Session\EnhancedSessionStore($db);
-        // `keeper` is the row seedSession() would resume, and retention exempts
-        // it whatever its age — so the two aged rows below are the only
-        // candidates and the count in the summary is not an accident of
-        // ordering.
+        // All three are unnamed and all three are aged past the cutoff, so all
+        // three are prune candidates. `keeper` is aged to 2021 rather than 2020
+        // so it is the NEWEST — which is what makes it `listSessions(1)[0]` and
+        // therefore the row sessionStore() hands pruneSessions() as its
+        // exemption. It survives on the exemption alone; see the doc-block.
         foreach (['keeper', 'gone-one', 'gone-two'] as $id) {
             $store->createSession($id, 'p', 'm', null, null);
         }
@@ -454,11 +484,24 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $pdo->prepare('UPDATE sessions SET updated_at = ? WHERE id IN (?, ?)')
             ->execute(['2020-01-01 00:00:00', 'gone-one', 'gone-two']);
+        $pdo->prepare('UPDATE sessions SET updated_at = ? WHERE id = ?')
+            ->execute(['2021-01-01 00:00:00', 'keeper']);
         unset($pdo);
 
         [$stderr, $notices] = $this->launch(
             "\\SugarCraft\\Crush\\Cli\\Bootstrap::sessionStore();\n",
             ['SUGARCRUSH_SESSION_RETENTION_DAYS' => '30'],
+        );
+
+        // FIRST, so that a lost exemption is what the failure names. `keeper`
+        // is a full year past the cutoff and unnamed; the only thing standing
+        // between it and deletion is sessionStore() passing the resumable id to
+        // pruneSessions(). Drop that argument and this reds here, before the
+        // summary's arithmetic reds two lines down.
+        self::assertStringNotContainsString(
+            'keeper',
+            $stderr,
+            'the session the launch would resume must survive retention however old it is',
         );
 
         self::assertSame(
@@ -472,15 +515,15 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             'the stderr half of the seam must still say it',
         );
 
-        // The ids are the unbounded half, and they are on stderr ONLY.
+        // The ids are the unbounded half, and they are on stderr ONLY. The
+        // containment is the live clause; the exclusion is the one the
+        // assertSame above already implies — kept for the day that assertSame
+        // is loosened, and labelled as such in the doc-block rather than sold
+        // as a second measurement.
         foreach (['gone-one', 'gone-two'] as $id) {
             self::assertStringContainsString($id . ' (last used 2020-01-01 00:00:00 UTC,', $stderr);
             self::assertStringNotContainsString($id, $notices[0]);
         }
-
-        // Not vacuous in the direction that matters: the exempt row survived,
-        // so this is a real prune and not "the whole table went".
-        self::assertStringNotContainsString('keeper', $stderr);
     }
 
     /**
