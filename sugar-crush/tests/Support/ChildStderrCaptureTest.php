@@ -291,8 +291,53 @@ final class ChildStderrCaptureTest extends TestCase
         $this->assertSame(ChildStderrCaptureScanner::SHAPE_CAPTURED, $inClosure[0]['shape']);
     }
 
+    /**
+     * A known-positive run through the SAME scanner, for callers that
+     * otherwise assert only an absence or a count.
+     *
+     * MEASURED, and it is why this exists rather than being assumed from the
+     * fixture test above: with `classifyShell()`'s null-device branch mutated
+     * to `if (false)`, BOTH
+     * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()} and
+     * {@see testEveryDiscardExemptionStillDescribesRealSites()} passed. The
+     * first because everything read as `captured` again, and the second
+     * because its one exempted site is a `proc_open()` whose discard is
+     * decided on the OTHER branch - so the count still came out at 1. Two
+     * green guards over a half-dead instrument.
+     *
+     * Both branches are exercised here, because covering one of them is
+     * exactly the gap that was measured.
+     */
+    private function assertTheDiscardBranchIsAlive(): void
+    {
+        $shape = static function (string $body): string {
+            $sites = ChildStderrCaptureScanner::scan("<?php\n" . $body . "\n");
+            self::assertCount(1, $sites, 'liveness fixture did not produce one site: ' . $body);
+
+            return $sites[0]['shape'];
+        };
+
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $shape('shell_exec("ls 2>/dev/null");'),
+            'the shell null-device branch is dead, so every /dev/null below reads as a capture',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $shape('proc_open("ls", [2 => ["file", "/dev/null", "w"]], $p);'),
+            'the descriptor-spec null-device branch is dead',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $shape('proc_open("ls", [2 => ["pipe", "w"]], $p);'),
+            'the scanner now calls a real capture a discard, which is the other polarity',
+        );
+    }
+
     public function testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites(): void
     {
+        $this->assertTheDiscardBranchIsAlive();
+
         $root = \dirname(__DIR__);
         $offenders = [];
         $captured = 0;
@@ -366,6 +411,8 @@ final class ChildStderrCaptureTest extends TestCase
      */
     public function testEveryDiscardExemptionStillDescribesRealSites(): void
     {
+        $this->assertTheDiscardBranchIsAlive();
+
         $root = \dirname(__DIR__);
 
         foreach (self::ACCEPTED_DISCARDED_STDERR as $file => $exemption) {
