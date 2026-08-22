@@ -23,6 +23,7 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
@@ -375,6 +376,21 @@ final class Chat implements Model
      * waiting on the provider.
      */
     private const TOOL_EVENT_POLL_SECONDS = 0.1;
+
+    /**
+     * Reconciliation id of the `statusLine` poll subscription. Stable across
+     * rebuilds for the reason {@see BACKGROUND_POLL_SUBSCRIPTION} gives: an id
+     * that changed per update would make `Program` tear the timer down and
+     * start a new one every cycle, so the tick would never actually fire.
+     *
+     * No sibling `*_SECONDS` constant here, deliberately. The period is
+     * {@see \SugarCraft\Crush\Config\StatusLineCommand::REFRESH_SECONDS},
+     * read at the declaration site, because the runner DERIVES its own timeout
+     * from it — a second copy of the number here could drift into a timeout
+     * longer than the period, which is precisely the overlap that derivation
+     * exists to make impossible.
+     */
+    private const STATUS_LINE_SUBSCRIPTION = 'crush.status-line';
 
     /**
      * Stable head of the context-usage reminder {@see contextReminderMessage()}
@@ -1077,6 +1093,21 @@ final class Chat implements Model
         }
         if ($msg instanceof ToolEventPumpMsg) {
             return $this->pumpLiveToolEvents();
+        }
+        if ($msg instanceof StatusLineTickMsg) {
+            // The `statusLine` command's ONE side-effecting call site. Runs
+            // here rather than in view() because view() may not have side
+            // effects, and on a TICK rather than on every Msg because a
+            // proc_open() per update is one per keystroke.
+            //
+            // Returns $this unchanged and a null Cmd: the runner holds the
+            // text in process state ({@see StatusLineCommand::line()}), not on
+            // the model, so there is nothing to fold into a new Chat. The
+            // repaint comes from Program re-rendering after the update, which
+            // it does for every Msg — this arm does not have to ask for one.
+            StatusLineCommand::refresh();
+
+            return [$this, null];
         }
         if ($msg instanceof HistoryCompactedMsg) {
             // Accounted BEFORE the latch check, and for the same reason the
@@ -10522,6 +10553,26 @@ final class Chat implements Model
                 self::TOOL_EVENT_POLL_SUBSCRIPTION,
                 self::TOOL_EVENT_POLL_SECONDS,
                 static fn (): \SugarCraft\Core\Msg => new ToolEventPumpMsg(),
+            );
+        }
+
+        // The `statusLine` command's clock. Declared only while one is
+        // CONFIGURED, which is the same conditionality the two above have and
+        // for the reason this docblock gives: an unconditional tick would keep
+        // a timer waking the loop and repainting forever on every launch,
+        // including the overwhelmingly common one where nobody set the key.
+        //
+        // Unlike the two above there is no state that can end it mid-session:
+        // {@see StatusLineCommand::configure()} runs once per launch, so once a
+        // user has asked for a periodically-refreshed readout the timer is the
+        // feature rather than an artefact of one. The refresh itself is
+        // additionally TTL-gated, so a tick that arrives early costs a
+        // comparison and nothing else.
+        if (StatusLineCommand::active() !== null) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::STATUS_LINE_SUBSCRIPTION,
+                StatusLineCommand::REFRESH_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new StatusLineTickMsg(),
             );
         }
 

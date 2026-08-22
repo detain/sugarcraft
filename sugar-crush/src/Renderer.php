@@ -10,6 +10,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Core\Util\Token;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
@@ -1239,6 +1240,13 @@ final class Renderer
      * ({@see Chat::handleKeyHelpKey()}) while leaving the rest of the frame
      * saying nothing about it, and a terminal that silently eats input reads as
      * a hung app rather than as an open modal.
+     *
+     * The `statusLine` settings key's output is appended last, by
+     * {@see withStatusLineCommand()} — a FOURTH variable-length piece, below
+     * all three of the ones this method fits itself. It is absent from every
+     * bar unless the user's own settings named a command, so every width
+     * measured in the comments below still holds unqualified for a session that
+     * did not.
      */
     private static function renderStatusBar(Chat $chat): string
     {
@@ -1430,11 +1438,114 @@ final class Renderer
         $room = $chat->cols() - Width::of(self::stripZoneMarkers($bar));
         foreach ($indicators as $indicator) {
             if (Width::of($indicator) <= $room) {
-                return $indicator . $bar;
+                $bar = $indicator . $bar;
+                break;
             }
         }
 
-        return $bar;
+        // `break` + one return instead of the loop's own
+        // `return $indicator . $bar`, so the `statusLine` segment below is
+        // reached whether or not a scroll readout was prepended. Behaviour of
+        // the loop itself is unchanged: it still takes the FIRST form that fits
+        // and stops.
+        //
+        // WHAT THIS COMMENT SAID, and why it is being replaced rather than
+        // deleted: "the four `return $indicator . $bar` this loop used to
+        // have", and that the segment "is reached on every path". Both are
+        // false and both were checkable. `git show ae30fee5:src/Renderer.php |
+        // grep -c 'return $indicator . $bar'` is 1, not 4 — there was one
+        // return, inside the loop. And this method still has TWO earlier
+        // returns that bypass this line entirely, KEY_HELP_TOO_SMALL and
+        // KEY_HELP_OVER_PROMPT above; that bypass is correct (both replace the
+        // whole bar with a cue that has to fit a terminal too small for the bar
+        // itself, so appending a user's status line to them would defeat the
+        // substitution) but it is not "every path". The rewrite is what earns
+        // the `break` its place: the reason for it is the scroll-readout path,
+        // not a universal one.
+        return self::withStatusLineCommand($bar, $chat->cols());
+    }
+
+    /**
+     * The `statusLine` command's output appended to the assembled bar, or the
+     * bar unchanged.
+     *
+     * FITTED LAST, AFTER THE SCROLL READOUT HAS BEEN PLACED, which is the whole
+     * of its priority claim. {@see renderStatusBar()} documents three
+     * variable-length pieces fitted in priority order with the lowest last;
+     * this is a FOURTH, and it is below all three. Two reasons it has to be:
+     * it is the only piece whose content this process did not compute, and
+     * dropping it costs a readout the user can also get by other means, while
+     * dropping the context percentage or the scroll offset costs information
+     * only the bar carries. Measuring against `$bar` after the prepend rather
+     * than before is what makes "below the scroll readout" true rather than
+     * merely intended — measured before, a wide status line would have taken
+     * the room the scroll offset was about to claim.
+     *
+     * {@see untrusted()}, NOT a bare {@see Sanitize::untrusted()}, and the
+     * difference is the security half. The runner has already stripped
+     * ANSI/C0/C1 and collapsed the newlines
+     * ({@see \SugarCraft\Crush\Config\StatusLineCommand::oneLine()}), so the
+     * sanitiser here is idempotent — what this call ADDS is the zone-sentinel
+     * strip. `U+E000`/`U+E001` are well-formed Private-Use codepoints that
+     * `Sanitize::untrusted()` passes through untouched, so a status command
+     * emitting them would reach {@see scanRoot()}'s parser verbatim and either
+     * throw the whole frame's click zones away (duplicate ids make
+     * `Scan::parse()` throw) or register attacker-chosen boxes in the hit-test
+     * registry {@see Chat::zoneAt()} reads. The bar is the ONE row that already
+     * carries a real zone (`pane:menu`), so it is the worst row to admit a
+     * forged one on.
+     *
+     * {@see Width::truncate()} rather than {@see clipToWidth()}: it iterates
+     * grapheme CLUSTERS, so it cannot cut a base character away from its
+     * combining marks, whereas `clipToWidth()` cuts with `mb_substr()` on
+     * codepoints. The clip announces itself with an ellipsis, the same way
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook::clip()} does, so a status
+     * line that is being truncated reads as truncated rather than as a command
+     * that stopped talking mid-word.
+     *
+     * A bar that is ALREADY at or past $cols gets no segment at all — `$room`
+     * is then <= 0 and this returns early. That is the same guard the queued
+     * -prompt segment uses, and for the same reason: between 5 and 35 columns
+     * the in-flight bar over-runs the frame today, and a pre-existing over-run
+     * is not licence to deepen it.
+     *
+     * WHAT THE CACHED LINE COSTS PER FRAME, since this method is the only
+     * reader of it: `Width::of($line)` is a grapheme walk over the WHOLE cached
+     * line, run once per frame — i.e. once per keystroke — and the line is
+     * bounded only by
+     * {@see \SugarCraft\Crush\Config\StatusLineCommand::MAX_OUTPUT_BYTES}
+     * (16 KiB), not by `$cols`. A command emitting just under the cap therefore
+     * pays a 16 KiB grapheme walk on every repaint. NOT FIXED and recorded
+     * rather than guessed at: no walk-per-keystroke figure has been measured on
+     * this box, and pre-clipping in the runner would need a width bound the
+     * runner does not have (it has no `Chat` and no `$cols`). A run that
+     * EXCEEDS the cap costs nothing, because that path blanks the segment —
+     * see `MAX_OUTPUT_BYTES`.
+     *
+     * @param int $cols the terminal width from the last
+     *        {@see \SugarCraft\Core\Msg\WindowSizeMsg}, which is the size
+     *        truth this frame is being laid out against
+     */
+    private static function withStatusLineCommand(string $bar, int $cols): string
+    {
+        $line = self::untrusted(StatusLineCommand::line());
+        if ($line === '') {
+            return $bar;
+        }
+
+        $separator = ' · ';
+        $room = $cols - Width::of(self::stripZoneMarkers($bar)) - Width::of($separator);
+        if ($room < 1) {
+            return $bar;
+        }
+
+        if (Width::of($line) > $room) {
+            // $room >= 1, so the ellipsis always has its own column and
+            // truncate() is asked for a non-negative width.
+            $line = Width::truncate($line, $room - 1) . '…';
+        }
+
+        return $bar . $separator . $line;
     }
 
     /**

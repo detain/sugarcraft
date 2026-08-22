@@ -250,8 +250,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 18 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 286 files declare
-     * 305 top-level types, so this is not a census of the tree's types and never
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 288 files declare
+     * 307 top-level types, so this is not a census of the tree's types and never
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
@@ -324,9 +324,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(286, $files, 'php files under src/');
+        $this->assertSame(288, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 236, 'enum' => 26, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
+            ['concrete' => 238, 'enum' => 26, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -355,8 +355,8 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 286 `.php`
-     * files, 305 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names: 288 `.php`
+     * files, 307 top-level declarations, 19 of them secondary in 8 files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *
@@ -416,8 +416,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(286, count($files), 'php files under src/');
-        $this->assertSame(305, $declarations, 'top-level declarations in them');
+        $this->assertSame(288, count($files), 'php files under src/');
+        $this->assertSame(307, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

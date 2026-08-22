@@ -145,17 +145,57 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
+| `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these ten, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these eleven, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
 a missing one, because it looks configurable.
 
 Where a row names two methods, the first is the public entry point and the
-second is the private method that does the read — cited because that is the
-one to grep for.
+second is the method that does the read — cited because that is the one to
+grep for. It is a private method on `Bootstrap` in every row but `statusLine`,
+where the read lives in another class (`StatusLineCommand::fromSettings()`,
+public because the runner is testable without a launch). The previous revision
+of this row named `StatusLineCommand::fromSettings()` first and
+`Renderer::renderStatusBar()` second, and neither half fitted the convention:
+nothing calls `fromSettings()` on a launch except `Bootstrap::chat()`, and
+`renderStatusBar()` does not read the settings key at all — it reads the
+already-cached process line.
+
+**`statusLine` runs a command, which is why it is user-tier only.** The shape
+is Claude Code's, so a settings file written for that tool carries over:
+
+```json
+{"statusLine": {"type": "command", "command": "git branch --show-current"}}
+```
+
+The command's stdout becomes one extra segment of the status bar. A project's
+`.sugar-crush/settings.json` may **not** set it, at any trust level — that
+would be arbitrary code execution on clone-and-launch, on a timer, with no tool
+call and no permission gate in the path. It is the strongest case of the
+argument `provider` and `instructions` already rest on.
+
+What it costs, stated because the command runs on the TUI's own thread:
+`StatusLineCommand::REFRESH_SECONDS` (2.0) between runs, and a hard
+`StatusLineCommand::TIMEOUT_SECONDS` budget per run — derived as half the
+refresh period, so two runs can never overlap — after which the child is
+SIGTERMed and then SIGKILLed. A run that times out, exits non-zero, prints
+nothing, or writes more than `StatusLineCommand::MAX_OUTPUT_BYTES` (16 KiB)
+blanks the segment rather than leaving stale text up — note that the byte cap
+BLANKS, it does not paint the first 16 KiB. (This paragraph previously said
+output was "capped at `MAX_OUTPUT_BYTES`" and then clipped, which described a
+pipeline that does not exist: `exec printf "%020000d" 0` exits 0 and paints
+nothing, while the same command at 16000 bytes paints all 16000. Measured at
+db20c568 on PHP 8.3.6.)
+
+What a run that does finish gets: its stdout stripped of ANSI and control
+bytes, made valid UTF-8 (malformed bytes become U+FFFD), collapsed to one line
+(a newline would make the bar wrap, and the bar is the one row that must not),
+and clipped to the terminal width by a grapheme-aware measure. stderr is
+drained so it cannot deadlock the read, and discarded.
 
 **There is no top-level `model` key**, and it is the one name people look for.
 Nothing reads one. The two model-shaped keys that exist are `titleModel` and

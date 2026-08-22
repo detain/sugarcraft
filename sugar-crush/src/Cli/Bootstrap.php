@@ -17,6 +17,7 @@ use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
@@ -608,6 +609,24 @@ final class Bootstrap
         self::trustedConfigDirPath();
 
         $userConfig = self::readUserConfig();
+
+        // The `statusLine` command, installed for the whole process before any
+        // frame is painted. Wired HERE rather than in {@see app()} because
+        // `app()` calls this method, so this is the one funnel both interactive
+        // entry points share — and because a standalone `Chat` (the shell-less
+        // path {@see \SugarCraft\Crush\Renderer}'s docblock names as also
+        // live) has to get it too.
+        //
+        // ALWAYS CALLED, including when nothing is configured: the call CLEARS
+        // as well as sets, and a process that builds a second Chat against
+        // different settings must not keep painting the first one's text. In a
+        // test suite that runs many launches in one process this is the only
+        // thing standing between them.
+        //
+        // $root, not `getcwd()`: a `git`-shaped status command must report the
+        // repository the session was launched against. `--root <lib>` in a
+        // monorepo is exactly the case where the two differ.
+        StatusLineCommand::configure($userConfig, $root);
 
         // ONE store instance, seeded before the Chat is built: seedSession()
         // is what makes /sessions, the tab strip, /branch and the auto-title

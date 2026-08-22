@@ -136,7 +136,7 @@ needs migrating.
 
 Only these keys are layered — `provider`, `theme`, `titleModel`,
 `summaryModel`, `instructions`, `disabledSkills`, `parallelToolCalls`,
-`parallelToolDeadlineSeconds`, `allowedTools`, `disabledTools`. The
+`parallelToolDeadlineSeconds`, `allowedTools`, `disabledTools`, `statusLine`. The
 `trustedProject*` lists are read from `~/.sugar-crush/config.json` **alone**, so
 no lower layer can grant itself trust.
 
@@ -169,7 +169,10 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, three keys are **never** taken from a project file:
+Even for a trusted project, four keys are **never** taken from a project file:
+`statusLine`, because its value is a shell command this app runs on a timer —
+a project-tier one would be arbitrary code execution on clone-and-launch, with
+no tool call and no permission gate anywhere in the path;
 `provider`, because it decides which host every prompt in the session is sent
 to; `instructions`, because it decides which files become authoritative
 system-prompt text; and `allowedTools`, for a reason worth spelling out because
