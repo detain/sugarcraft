@@ -205,10 +205,22 @@ final class NonInteractive
 
         $history = self::historyFrom($args->prompt, self::readStdinIfPiped());
 
-        // E173. Every refusal this turn raises reaches the operator on stderr
-        // and reached the JSON consumer nowhere at all: the document said
-        // `{"result": "<the answer>"}` for a turn in which a tool was stopped
-        // and the model answered around it. The tool-lifecycle observer is the
+        // E173. A refusal this turn raises reached the JSON consumer nowhere
+        // at all: the document said `{"result": "<the answer>"}` for a turn in
+        // which a tool was stopped and the model answered around it.
+        //
+        // THIS COMMENT USED TO OPEN "every refusal this turn raises reaches the
+        // operator on stderr", and round 47's review measured it false. WHAT IS
+        // TRUE NOW: only {@see HeadlessPermissionPrompt} writes to stderr, and
+        // {@see \SugarCraft\Crush\Runtime::gate()} reaches it only for a hook
+        // verdict of ASK — a plain
+        // {@see \SugarCraft\Crush\Hooks\HookResult::deny()} returns from that
+        // method before `settleAsk()` is called, and `Runtime` writes to stderr
+        // nowhere. MEASURED on PHP 8.3.6 by driving the shipped gate's `rm -rf`
+        // denial through a real `EngineBackend`: zero bytes on stderr, and the
+        // tool not executed. WHY THE SENTENCE STILL MATTERS: it was the reason
+        // `--output-format text` was left alone, so the premise for that
+        // decision is weaker than it read — see {@see self::format()}. The tool-lifecycle observer is the
         // only seam this class has for it — the approver itself is built four
         // frames away inside {@see Bootstrap::backend()} — and it is enough,
         // because a blocked call terminates through
@@ -421,10 +433,12 @@ final class NonInteractive
      * asymmetry is a decision with two measurements behind it rather than a
      * shortcut.
      *
-     * FIRST, THE DOCUMENT WITH NO REFUSALS HAS TO STAY BYTE-IDENTICAL TO THE
-     * ONE THIS PACKAGE ALREADY SHIPS, because a second party is compared
-     * against it key-for-key.
-     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}
+     * FIRST — AND THIS REASON REACHES THIS METHOD'S DOCUMENT ONLY, which the
+     * paragraph did not say when it landed and which is the whole of what
+     * makes it a measurement rather than an appeal. THE ERROR DOCUMENT WITH NO
+     * REFUSALS HAS TO STAY BYTE-IDENTICAL TO THE ONE THIS PACKAGE ALREADY
+     * SHIPS, because a second party is compared against it key-for-key.
+     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest::testTheGuardsDocumentHasTheSameShapeAsNonInteractives()}
      * asserts `array_keys()` equality between this method's document and the
      * one `bin/sugarcrush`'s autoload guard hand-rolls — and that guard runs
      * BEFORE `vendor/autoload.php` has been found, in a process where no tool
@@ -432,6 +446,21 @@ final class NonInteractive
      * `refusals` would therefore have to be added to a hand-rolled literal in
      * the binary purely to satisfy a comparison, which is the drift that
      * comparison exists to prevent.
+     *
+     * WHAT THAT TEST DOES NOT CONSTRAIN, stated because {@see self::format()}
+     * used to redirect a reader here for the SUCCESS document's shape too, and
+     * this paragraph does not answer for it: that test drives
+     * {@see self::failUsage()}, so it compares this method's ERROR document and
+     * never `format()`'s. MEASURED on PHP 8.3.6 at round 47 by making the key
+     * unconditional in each place separately, full-suite scope both times —
+     * unconditional here reds that test, and unconditional in `format()` reds
+     * exactly one test, {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest::testATurnThatRefusesNothingEmitsExactlyTheKeysItAlwaysDid()},
+     * with the autoload guard staying green. The success document's shape is
+     * held by that one test and by nothing external. It is held for the SAME
+     * reason — a consumer of `{"result": …}` should not have to learn a new
+     * key to keep working — but that is this package's own promise, not a
+     * constraint imposed from outside it, and conflating the two is how a
+     * justification stops being checkable.
      *
      * SECOND, IT RIDES ON THE ERROR DOCUMENT AS WELL AS THE ANSWER, because a
      * turn can refuse a tool call and then throw. Attaching it only to
@@ -531,7 +560,14 @@ final class NonInteractive
             // that can carry bytes we do not control — are dropped. Losing the
             // refusals here rather than in the ordinary document is the right
             // trade in the one branch where the alternative is an empty pipe,
-            // and stderr still carried every one of them.
+            // and the JSON consumer is told the message could not be encoded
+            // rather than handed an empty pipe. NOT "and stderr still carried
+            // every one of them", which this comment used to say and which
+            // round 47 measured false: a hook DENY never reaches stderr (see
+            // {@see self::format()}), so the refusals dropped here are dropped
+            // from every channel. That is the cost of this branch, stated
+            // rather than excused — it fires only when the message itself is
+            // unencodable, and an empty stdout at exit 1 is worse.
             $json = \sprintf(
                 '{"result":null,"error":{"type":"%s","message":"error message could not be encoded as JSON"}}',
                 $type,
@@ -676,10 +712,28 @@ final class NonInteractive
      * `json`: `{"result": "<content>"}`, plus a `refusals` array when the turn
      * blocked at least one tool call — see {@see self::emitErrorDocument()}
      * for why that key alone is conditional, and {@see self::refusalFrom()}
-     * for what counts as one. `text` carries no refusals, and does not need
-     * to: on that format the operator is reading the terminal, where
+     * for what counts as one.
+     *
+     * `text` CARRIES NO REFUSALS, AND THE REASON GIVEN FOR THAT WAS WRONG.
+     * WHAT IT SAID: that the format does not need them, because "on that
+     * format the operator is reading the terminal, where
      * {@see HeadlessPermissionPrompt} has already written every one of them to
-     * stderr. This is a deliberately minimal
+     * stderr". WHAT IS TRUE NOW: that class is reached only for a hook verdict
+     * of ASK, so it covers the prompt-shaped refusals and not the commonest
+     * one. A plain hook DENY returns out of
+     * {@see \SugarCraft\Crush\Runtime::gate()} before `settleAsk()`, and
+     * `Runtime` contains no write to stderr at all — MEASURED on PHP 8.3.6
+     * against the shipped gate's `rm -rf` denial, zero bytes on stderr. On
+     * `text` that refusal reaches NEITHER channel. WHY THE DECISION STILL
+     * STANDS ANYWAY: stdout under `text` is the answer and nothing else, and a
+     * second list there would break the one contract this format has for the
+     * one caller — a shell pipeline — that cannot tolerate it. The gap is real
+     * and its fix belongs on the DENY path in `Runtime`, not here; it is on the
+     * hardening backlog, and
+     * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest}
+     * pins the current behaviour so the day it changes is loud.
+     *
+     * This is a deliberately minimal
      * first cut of crush_feat.md Recommendation 3 — the recommendation's own
      * sketch also includes `session_id` and `usage` (token-cost) fields,
      * which this step does not yet surface; a caller piping through `jq
@@ -728,9 +782,23 @@ final class NonInteractive
      *
      * {@see Chat} IS TOUCHED LAZILY, ON PURPOSE. The `-p` path exists partly
      * so a run can avoid building a `Chat` at all, and a class constant is
-     * still a class load. The roster is read only after an errored
-     * {@see ToolFinished} has arrived, so a turn that refuses nothing — which
-     * is nearly all of them — never loads it.
+     * still a class load.
+     *
+     * THE PREDICATE IS "NO ERRORED TOOL RESULT", NOT "NO REFUSAL", and the
+     * doc-block had the wrong one. WHAT IT SAID: "the roster is read only after
+     * an errored {@see ToolFinished} has arrived, so a turn that refuses
+     * nothing — which is nearly all of them — never loads it". The first
+     * clause is right and the second does not follow from it: the guard below
+     * is `!isError()`, so a turn whose tool RAN AND FAILED — a `Read` on a
+     * missing path, a `Bash` exiting non-zero — reaches the roster and loads
+     * `Chat` while refusing nothing at all. MEASURED on PHP 8.3.6 with
+     * `class_exists(Chat::class, false)` after a full {@see self::run()}: false
+     * for a turn with no tool events and for one whose tool succeeded, true for
+     * one errored non-refusal and true for a refusal. WHY THE LAZINESS STILL
+     * EARNS ITS PLACE: the load is still avoided on every turn that errors
+     * nothing, which is the common `-p` shape, and moving the roster to a
+     * cheaper owner would put the headless document and the TUI back on two
+     * lists — the thing this method exists not to do.
      *
      * KNOWN LIMIT, stated because the field's NAME over-promises against it: a
      * permission refusal and a plain hook DENY are indistinguishable here, and

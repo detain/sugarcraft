@@ -73,10 +73,20 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      */
     public function testARealEngineTurnPutsItsBlockedToolCallInTheJsonDocument(): void
     {
+        $tool = $this->bashSpyTool();
         $backend = EngineBackend::new($this->providerAskingToDeleteABuildTree(), 'bash')
-            ->withTools([$this->bashSpyTool()]);
+            ->withTools([$tool]);
 
         $document = $this->documentFrom($backend, NonInteractive::EXIT_OK);
+
+        // The spy exists to be READ. Without this the whole file would pass on
+        // a gate that reported a denial and ran the command anyway, which is
+        // the one outcome none of the document assertions can distinguish.
+        self::assertFalse(
+            $tool->executed,
+            'the gate reported a refusal and the tool ran regardless; the document is honest and the '
+            . 'behaviour it describes is not',
+        );
 
         self::assertArrayHasKey(
             'refusals',
@@ -105,8 +115,9 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      */
     public function testTheEngineStillRendersABlockedCallWithATextTheDeniedRosterMatches(): void
     {
+        $tool = $this->bashSpyTool();
         $backend = EngineBackend::new($this->providerAskingToDeleteABuildTree(), 'bash')
-            ->withTools([$this->bashSpyTool()]);
+            ->withTools([$tool]);
 
         $events = [];
         $backend->complete([Message::user('nuke it')], null, static function (object $e) use (&$events): void {
@@ -116,6 +127,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         $finished = array_values(array_filter($events, static fn(object $e): bool => $e instanceof ToolFinished));
         self::assertCount(1, $finished, 'the engine emitted no ToolFinished at all; this control proves nothing');
         self::assertTrue($finished[0]->result->isError());
+        self::assertFalse($tool->executed, 'the gate errored the call and the tool ran anyway');
 
         $matched = false;
         foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
@@ -223,11 +235,28 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     }
 
     /**
-     * `--output-format text` IS UNTOUCHED, and does not need touching: on that
-     * format the operator is at the terminal, where
-     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt} has already written
-     * every refusal to stderr. Printing them again on stdout would corrupt the
-     * one contract that format has — the answer, and nothing else.
+     * `--output-format text` IS UNTOUCHED, AND IS THE ONE PLACE A REFUSAL CAN
+     * STILL GO MISSING ENTIRELY.
+     *
+     * WHAT THIS DOC-BLOCK SAID: that the format "does not need touching: on
+     * that format the operator is at the terminal, where
+     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt} has already
+     * written every refusal to stderr". WHAT IS TRUE NOW: that class settles an
+     * ASK, and nothing else ever reaches it — a plain hook DENY returns out of
+     * {@see \SugarCraft\Crush\Runtime::gate()} before `settleAsk()` is
+     * called, and `Runtime` writes to stderr nowhere. So the refusal
+     * {@see testARealEngineTurnPutsItsBlockedToolCallInTheJsonDocument()}
+     * exercises — the shipped gate stopping `rm -rf ./build`, which is the
+     * commonest refusal there is — reaches NEITHER channel under `text`.
+     * MEASURED on PHP 8.3.6: that turn writes zero bytes to stderr.
+     *
+     * WHY THIS TEST STILL EARNS ITS PLACE, and why it is not marked incomplete:
+     * the assertion is not "the operator is informed". It is that stdout under
+     * `text` is the answer and NOTHING ELSE, which is the contract a shell
+     * pipeline depends on and the reason the refusal list was not simply
+     * printed here. That contract is worth pinning whichever way the gap is
+     * closed, and closing it belongs on the DENY path in `Runtime`. If a stderr
+     * line lands there, this test keeps passing — which is the point.
      */
     public function testTextFormatStillPrintsTheAnswerAndNothingElse(): void
     {
@@ -356,7 +385,13 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         };
     }
 
-    /** A tool named `Bash` that records whether it ran but never runs a shell. */
+    /**
+     * A tool named `Bash` that records whether it ran but never runs a shell.
+     *
+     * `$executed` IS ASSERTED ON, by both engine tests. It was not when this
+     * spy landed — it was set and never read, which made "records whether it
+     * ran" a description of a field nothing consulted.
+     */
     private function bashSpyTool(): Tool
     {
         return new class implements Tool {
