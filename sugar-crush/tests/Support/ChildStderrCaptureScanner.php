@@ -24,7 +24,7 @@ namespace SugarCraft\Crush\Tests\Support;
  *
  * WHAT IT CANNOT SEE, said out loud because the number above is mostly NOT
  * this: an in-process `fwrite(\STDERR, ...)`. `src/Cli/NonInteractive.php`
- * alone has six of them, and a test that calls that code directly - as
+ * writes on it directly in several places, and a test that calls that code - as
  * `tests/Cli/NonInteractiveProviderFailureTest.php` (18 lines) and
  * `tests/Cli/NonInteractiveTest.php` (8) do - is writing on the suite's own
  * stderr with no child process anywhere in the picture. No amount of
