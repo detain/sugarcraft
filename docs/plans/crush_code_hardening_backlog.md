@@ -7430,7 +7430,7 @@ a sibling's additions fall inside its PREDICATE, not merely inside its scan scop
 a lower bound, not an equality — but "walks a directory a sibling touches" is not sufficient reason to
 expect an overshoot, and predicting one and being wrong costs the prediction its credibility.
 
-### Ea47-1 — route the remaining three mid-session emitter classes onto the seam
+### E192 — route the remaining three mid-session emitter classes onto the seam
 
 `SglangProvider` (3 sites), `AgentWorkerPool` (1) and `WorktreeManager` (4) are the emitters E171 names
 that round 47 lane a did not reach — all outside its file list. The seam, its `arm()`, its ownership
@@ -7446,22 +7446,22 @@ owns.
 **Step.** One PR per emitter class, in that order, each with its routing decision written into the class
 doc-block and its census bumps in the same commit.
 
-### Ea47-2 — a notice raised while no turn is in flight waits for the next Msg
+### E193 — a notice raised while no turn is in flight waits for the next Msg
 
 `Chat::subscriptions()` declares the runtime-notice tick on `$this->inFlight || RuntimeNoticeSink::hasPending()`,
 and `hasPending()` is consulted only when `Program` reconciles, i.e. on the next Msg of any kind. For the
 two tool-call parsers this never bites — they run only inside a turn, so `inFlight` is already true. It
-will bite the moment `Ea47-1` lands: `AgentWorkerPool` and `WorktreeManager` can warn with the UI idle,
+will bite the moment `E192` lands: `AgentWorkerPool` and `WorktreeManager` can warn with the UI idle,
 and such a row sits invisible until the user presses a key.
 
 Not fixed in round 47 because the obvious alternative — an unconditional tick — is the objection
 `subscriptions()`' own doc-block raises three times, and paying a permanent timer on every launch to
 cover a case that does not yet exist is the wrong trade.
 
-**Step.** Land with `Ea47-1`, not before. The likely shape is a one-shot self-cancelling tick armed by
+**Step.** Land with `E192`, not before. The likely shape is a one-shot self-cancelling tick armed by
 whatever wakes the loop for a background worker, rather than a permanent one.
 
-### Ea47-3 — there is no PHPUnit-level reset for `RuntimeNoticeSink`
+### E194 — there is no PHPUnit-level reset for `RuntimeNoticeSink`
 
 Appointment (`Chat::drainsRuntimeNotices`) made the leak round 47 found unreachable, but the sink is
 still a process-wide static that any test can arm via `Bootstrap::chat()` and fill via a parser. A
@@ -7469,11 +7469,11 @@ still a process-wide static that any test can arm via `Bootstrap::chat()` and fi
 of who happens to be appointed. Registering one needs an `<extensions>` block in `sugar-crush/phpunit.xml`,
 which no round-47 lane was allowed to touch.
 
-**Generator for the current emitter list** (re-run before acting; the answer changes as `Ea47-1` lands):
+**Generator for the current emitter list** (re-run before acting; the answer changes as `E192` lands):
 mutate `RuntimeNoticeSink::record()` to append its calling test class to a file, run the full suite,
 `sort | uniq -c`. Round 47 measured 262 armed records across six classes.
 
-### Ea47-4 — channel 6's alphabet is blind to four call shapes, not the one its doc-block named
+### E195 — channel 6's alphabet is blind to four call shapes, not the one its doc-block named
 
 MEASURED on PHP 8.3.6 by running `StderrEmitterCensusTest::scan()` over a fixture per shape; each scans
 as **0** where the bare spelling scans as 1:
@@ -7496,13 +7496,13 @@ than mis-attributed, which is the shape rule 14 warns about.
 channels 1, 2 and 5. The variable-class-name and `call_user_func` cases need a different instrument and
 are probably not worth one until a site of that shape exists.
 
-### Ea47-5 — two copies of `flattened()`
+### E196 — two copies of `flattened()`
 
 `tests/Cli/StderrEmitterCensusTest.php` and `tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php`
 each carry a private copy. The former already records this as a deferred finding; it is still open. A
 test-support trait is the home.
 
-### Ea47-6 — E172's premise is dead; retire or restate it
+### E197 — E172's premise is dead; retire or restate it
 
 E172 says three `CommandLoader` sites duplicate a message already on the seam. VERIFIED AT SOURCE, round
 47: `src/Commands/CommandLoader.php` has **one** `error_log()`, in the private `report()` funnel, gated
@@ -7513,7 +7513,7 @@ drained by `Bootstrap::reportProjectTierRefusals()` into `warnPermissionConfigIn
 
 **Step.** Supersede E172 rather than schedule it.
 
-### Ea47-7 — the `src/` census bumps in `BuiltInToolCorpusTest` collide across lanes
+### E198 — the `src/` census bumps in `BuiltInToolCorpusTest` collide across lanes
 
 `tests/Tools/BuiltInToolCorpusTest.php` pins `290` files / `concrete 240` / `309` declarations, and
 `src/Context/RepoMapBlock.php` restates two of them. All three are cardinalities over `src/`, so any
@@ -7522,7 +7522,7 @@ sibling lane that added a `src/` file in the same round has bumped or must bump 
 **Step.** Supervisor re-derives at merge and takes neither side's number. Longer term this is E188's
 problem and wants the figures derived by the test rather than written into the constant.
 
-### Ea47-8 — the seam has no session-wide cap on the transport backend
+### E199 — the seam has no session-wide cap on the transport backend
 
 `RuntimeNoticeSink::record()` returns before it reaches `NOTICE_LIMIT` whenever the cross-fork transport
 exists — i.e. on every interactive launch. So `NOTICE_LIMIT` bounds the array backend's queue and
@@ -7540,7 +7540,7 @@ across a session rather than across a batch.
 synthesises one overflow row on crossing is the obvious shape; the open question is whether it resets per
 turn, per session, or never.
 
-### Ea47-9 — `RUNTIME_NOTICE_POLL_SECONDS` has no upper bound and cannot cheaply get one
+### E200 — `RUNTIME_NOTICE_POLL_SECONDS` has no upper bound and cannot cheaply get one
 
 Round 47 pinned the relation its doc-block argues for — the notice tick is slower than
 `TOOL_EVENT_POLL_SECONDS`, is non-zero, and is wired to the right constant (all three MEASURED by
@@ -7552,7 +7552,7 @@ operator.
 **Step.** If a ceiling is wanted, derive it from something real — e.g. the shortest turn the suite can
 produce — rather than picking a number. Otherwise leave it and keep the non-coverage stated in the
 test's doc-block, which it now is.
-### Eb47-1 — a plain `exit()` in a forked child does NOT re-run PHPUnit's after-test hooks
+### E201 — a plain `exit()` in a forked child does NOT re-run PHPUnit's after-test hooks
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process + doc accuracy. **Measured; falsifies
 sentences that were in the tree, in a lane brief, and in a salvaged commit message.**
@@ -7581,7 +7581,7 @@ fix was reverted.
 **Step.** When a brief or a review states a MECHANISM, the acceptance test is a probe, not a citation.
 This one cost four minutes and corrected four places at once.
 
-### Eb47-2 — `tests/Backend/EngineBackendReapTest.php` has four unreaped in-process forks
+### E202 — `tests/Backend/EngineBackendReapTest.php` has four unreaped in-process forks
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: harness. **Derived, not enumerated.**
 
@@ -7599,7 +7599,7 @@ directory is clean and the row is still there, and
 `testNoDirectoryWithUnreapedForksIsUnaccountedFor()` fails if the row is deleted without widening
 `SCOPE`.
 
-### Eb47-3 — a `proc_open()` fd-2 entry behind a call is still read as a capture
+### E203 — a `proc_open()` fd-2 entry behind a call is still read as a capture
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: guard hole. **Named limit, deliberately not
 closed this round.**
@@ -7619,7 +7619,7 @@ in `classifySpec()`, require fd 2's entry to be a literal array before answering
 out this round because it was not measured against the whole tree and rule 16 says a prescription is a
 hypothesis until it is.
 
-### Eb47-4 — three lanes share ONE scratchpad directory, and two of them collided in round 47
+### E204 — three lanes share ONE scratchpad directory, and two of them collided in round 47
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process. **Observed, cost one four-minute run.**
 
@@ -7644,14 +7644,14 @@ method that no longer exists under that name.
 
 - `ForkedChildExitConventionTest::testEveryAcceptedBareExitFileStillHasOne()` →
   `…::testEveryAcceptedBareExitCountStillMatches()`. It checked presence only; it now checks the count,
-  because `ACCEPTED_BARE_EXIT` gained one (see Eb47-5's sibling reasoning). Entries above referring to
+  because `ACCEPTED_BARE_EXIT` gained one (see E205's sibling reasoning). Entries above referring to
   the old name are historical and were deliberately left as written.
 - `…::testEveryInProcessForkedChildLeavesWithoutRunningPhpunitsShutdown()` →
   `…::testEveryInProcessForkedChildLeavesWithoutRerunningInheritedCleanup()`. The old name asserted the
-  mechanism Eb47-1 falsified — PHPUnit has no "shutdown sequence", and a child that plainly exits never
+  mechanism E201 falsified — PHPUnit has no "shutdown sequence", and a child that plainly exits never
   re-enters the runner at all.
 
-### Eb47-5 — the stderr predicate has two false positives, now pinned, and the obvious fix does not work
+### E205 — the stderr predicate has two false positives, now pinned, and the obvious fix does not work
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low (no live occurrence). **Measured**, on
 `ChildStderrCaptureScanner::sendsFdTwoToTheNullDevice()` at lane-b HEAD, PHP 8.3.6.
@@ -7680,7 +7680,7 @@ right today. A real fix has to model fd 1's destination as it is reassigned, and
 this round (`exec("cmd 2>$err 2>/dev/null", …)` → `discarded`) is there to keep that composition honest.
 Whoever attempts it must re-run a tree-wide census before and after and report both tallies.
 
-### Eb47-6 — `tests/Chat/` and `tests/MCP/` are free to adopt into the stderr guard's SCOPE
+### E206 — `tests/Chat/` and `tests/MCP/` are free to adopt into the stderr guard's SCOPE
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low. **Measured** with
 `ChildStderrCaptureScanner` over all of `tests/` at lane-b HEAD.
@@ -7701,7 +7701,7 @@ non-captured site, concentrated in `Context/`, `Tools/` and `Commands/`. Each ne
 real fix from its owning lane; `Commands/` is almost entirely `inherited` rather than `discarded`, which
 is the cheaper shape to close.
 
-### Eb47-7 — a team test writes into the REAL `~/.sugar-crush`, and concurrent lanes red each other
+### E207 — a team test writes into the REAL `~/.sugar-crush`, and concurrent lanes red each other
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process + test isolation. **Out of lane.**
 
@@ -7718,11 +7718,11 @@ use the real home rather than its sandbox.
 running at once.
 
 **Why it matters beyond the noise.** The guard's intent is right; the false positive is a symptom of a
-real isolation defect. The brief's `/tmp` prohibition does not cover `$HOME`, and Eb47-4 already records
+real isolation defect. The brief's `/tmp` prohibition does not cover `$HOME`, and E204 already records
 the same class of collision for the scratchpad. **Step:** find the `throwing-*` team writer and sandbox
 its `HOME`, or serialise full-suite runs across lanes.
 
-### Eb47-8 — `T_DOLLAR_OPEN_CURLY_BRACES` is now referenced from two files, and is 8.2-deprecated
+### E208 — `T_DOLLAR_OPEN_CURLY_BRACES` is now referenced from two files, and is 8.2-deprecated
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low, forward-looking.
 
@@ -7736,13 +7736,13 @@ only PHP on the box. CI also runs 8.4, which lane b could not exercise. **Step:*
 token handling onto `TokenFunctionRanges`, and confirm the scanners' behaviour on 8.4 in CI before
 relying on either.
 
-### Eb47-9 — the reaper scanner's only real-tree known-positive requires `tests/Backend/` to stay broken
+### E209 — the reaper scanner's only real-tree known-positive requires `tests/Backend/` to stay broken
 
-**Recorded 2026-08-22 by round-47 lane b.** Severity: merge hazard. Related to Eb47-2.
+**Recorded 2026-08-22 by round-47 lane b.** Severity: merge hazard. Related to E202.
 
 **What.** `ForkedChildReaperAdoptionTest::testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()` asserts
 that every directory in `OUT_OF_SCOPE` *still holds* an unreaped fork. The only such directory is
-`Backend/`. So the moment a sibling lane fixes `tests/Backend/EngineBackendReapTest.php` (Eb47-2 — which
+`Backend/`. So the moment a sibling lane fixes `tests/Backend/EngineBackendReapTest.php` (E202 — which
 is exactly the work that entry asks for), this test fails until the row is deleted and `Backend/` is added
 to `SCOPE`. That is the designed, self-deleting behaviour and it is documented; it is recorded here so
 the lane that does the fix expects the red instead of treating it as collateral.
@@ -7755,7 +7755,7 @@ about the same predicate. (2) Emptying `OUT_OF_SCOPE` does not make this test *f
 reds the run, but only because this suite's `phpunit.xml` sets `failOnRisky="true"`; the guard that
 catches an emptied map on its own terms, with a message naming the file, is
 `testNoDirectoryWithUnreapedForksIsUnaccountedFor()`. Both halves measured by mutation.
-### Ec47-1 — a permission refusal and a hook DENY are indistinguishable by the time an event exists
+### E210 — a permission refusal and a hook DENY are indistinguishable by the time an event exists
 
 **Recorded 2026-08-22 by round-47 lane c, while implementing E173.** Severity: low. **Measured.**
 
@@ -7770,7 +7770,7 @@ same string. Both belong in the array; only the sub-classification is missing.
 on `ToolResult` — and add a `kind` to each `refusals` entry. Files: `src/Runtime.php`,
 `src/Hooks/HookManager.php`, `src/Cli/NonInteractive.php`. Out of round-47 lane c's file list.
 
-### Ec47-2 — the denial prefixes have a roster and the PRODUCERS do not render from it
+### E211 — the denial prefixes have a roster and the PRODUCERS do not render from it
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: low. **Observed.**
 
@@ -7785,7 +7785,7 @@ have not agreed to.
 and pin the obligation the way `BootstrapLaunchFormatConstantsTest` pins the launch formats. Files:
 `src/Runtime.php`, `src/Chat.php`. Out of lane.
 
-### Ec47-3 — every `NonInteractive::run()` test reads the real STDIN, and a stdin that never EOFs hangs the suite
+### E212 — every `NonInteractive::run()` test reads the real STDIN, and a stdin that never EOFs hangs the suite
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: medium for CI, invisible locally. **Measured.**
 
@@ -7811,7 +7811,7 @@ closed stdin so the suite cannot depend on its runner's fd 0. The second is the 
 seam for its input stream although `readStdinIfPiped($stream = \STDIN)` already takes one, so add the
 parameter and thread it. Files: `src/Cli/NonInteractive.php`, `tests/Cli/NonInteractive*Test.php`.
 
-### Ec47-4 — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
+### E213 — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
 
 **Recorded 2026-08-22 by round-47 lane c, finishing E188.** Severity: informational.
 
@@ -7823,7 +7823,7 @@ these two were not re-measured this round because each costs a mutation run.
 **Step.** Mutate both `mcpClient()` messages outside `'could not be fully started'`, record the failing
 test names, and replace the two counts.
 
-### Ec47-5 — the class-total guard covers two files, and widening it needs a decision first
+### E214 — the class-total guard covers two files, and widening it needs a decision first
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: informational.
 
@@ -7849,7 +7849,7 @@ file's own known-positive fixture is one (`measured at \`06126017\`: … Tests: 
 guard still refuses it, which the fixture currently depends on. (b) Widen the roster past the two files
 lane c owns to all of `tests/`, and expect the prose arm to find instances.
 
-### Ec47-6 — the doc-page sweep still cannot see two page shapes
+### E215 — the doc-page sweep still cannot see two page shapes
 
 **Recorded 2026-08-22 by round-47 lane c, alongside E187.** Severity: informational. **Measured.**
 
@@ -7876,7 +7876,7 @@ No real doc-page miss, under an alphabet roughly 360x wider than the one that pr
 if so, extend the collector's root and expect the roster to grow. Separately, widen the extension test to
 be case-insensitive — cheap, and it closes (c) without any roster movement.
 
-### Ec47-7 — E187's own prescribed algorithm could not have covered the page E187 was written about
+### E216 — E187's own prescribed algorithm could not have covered the page E187 was written about
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription refuted.**
 
@@ -7893,7 +7893,7 @@ best ninth of it, and has no unsweepable set at all.
 **Step.** None; recorded so the span-plus-threshold design is not retried. It is the eighth reviewer or
 backlog prescription measured against the tree and found not to do what it was prescribed for.
 
-### Ec47-8 — the sweep emits no wildcard between two adjacent conversions
+### E217 — the sweep emits no wildcard between two adjacent conversions
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: informational. **Observed.**
 
@@ -7906,7 +7906,7 @@ this is a note rather than a fix.
 **Step.** Emit the wildcard whenever the conversion is interior, regardless of whether the neighbouring
 span is empty, and add the case to the fixture.
 
-### Ec47-9 — the three lanes share one scratchpad directory, and a generic filename is a cross-lane collision
+### E218 — the three lanes share one scratchpad directory, and a generic filename is a cross-lane collision
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Observed, first-hand.**
 
@@ -7921,7 +7921,7 @@ the scratchpad is the more likely collision because every lane reaches for the s
 **Step.** Say in the brief that each lane writes under `scratchpad/lane-<x>/`. Cheap, and it removes a
 whole class of void measurement.
 
-### Ec47-10 — a hook DENY reaches neither stderr nor `--output-format text`, and five places said otherwise
+### E219 — a hook DENY reaches neither stderr nor `--output-format text`, and five places said otherwise
 
 **Recorded 2026-08-22 by round-47 lane c, at the fix stage.** Severity: medium (a silently-dropped
 refusal). **Measured. The prose is fixed; the behaviour is not.**
@@ -7945,7 +7945,7 @@ which is not the only caller of the engine. Then update the five sites (they nam
 failure message) in the same change. Files: `src/Runtime.php`, `src/Cli/NonInteractive.php`,
 `src/Cli/HeadlessPermissionPrompt.php`, `README.md`, `tests/Cli/NonInteractiveRefusalDocumentTest.php`.
 
-### Ec47-11 — the ninth reviewer prescription measured, and it named the wrong carve-out
+### E220 — the ninth reviewer prescription measured, and it named the wrong carve-out
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription corrected.**
 
