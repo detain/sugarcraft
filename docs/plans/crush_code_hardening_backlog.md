@@ -7514,3 +7514,122 @@ a `scratchpad/lane-c/` subdirectory and was unaffected.
 `scratchpad/lane-<x>/`**. The `/tmp` prohibition in the brief already covers `sc_runtime_tool_*` and
 friends; it does not cover the scratchpad itself, and the scratchpad is the one directory every lane is
 actively told to use.
+
+### Round-47 lane b (fix pass) — two guard methods were renamed
+
+**Recorded 2026-08-22 by round-47 lane b.** Not a finding; a pointer, because two entries above name a
+method that no longer exists under that name.
+
+- `ForkedChildExitConventionTest::testEveryAcceptedBareExitFileStillHasOne()` →
+  `…::testEveryAcceptedBareExitCountStillMatches()`. It checked presence only; it now checks the count,
+  because `ACCEPTED_BARE_EXIT` gained one (see Eb47-5's sibling reasoning). Entries above referring to
+  the old name are historical and were deliberately left as written.
+- `…::testEveryInProcessForkedChildLeavesWithoutRunningPhpunitsShutdown()` →
+  `…::testEveryInProcessForkedChildLeavesWithoutRerunningInheritedCleanup()`. The old name asserted the
+  mechanism Eb47-1 falsified — PHPUnit has no "shutdown sequence", and a child that plainly exits never
+  re-enters the runner at all.
+
+### Eb47-5 — the stderr predicate has two false positives, now pinned, and the obvious fix does not work
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: low (no live occurrence). **Measured**, on
+`ChildStderrCaptureScanner::sendsFdTwoToTheNullDevice()` at lane-b HEAD, PHP 8.3.6.
+
+**What.** Two shapes are reported `discarded` when the truth is `captured` — the polarity that reds
+correct code, which is how the next real offender buys its exemption:
+
+- **Nesting is not seen.** `proc_open("sh -c 'inner 2>/dev/null'", [2 => ["pipe","w"]], $p)` → `discarded`.
+  The redirection belongs to the inner shell; the outer child's fd 2 really is the pipe.
+- **Only the `>/dev/null` + `2>&1` pair is order-checked.** A bare `2>/dev/null` matches wherever it
+  appears, so a LATER fd-2 redirection overriding it is never consulted:
+  `exec("sh -c 'inner 2>/dev/null' 2>$err", …)` → `discarded`, though the shell's last fd-2 redirection
+  wins and it is `$err`.
+
+**State.** Not fixed — no in-scope site has either shape, so a change to the predicate (which moves every
+site in the tree at once) had nothing to verify against. Both are argued at the predicate's doc-block and
+**pinned by fixtures** in `ChildStderrCaptureTest::testTheScannerDistinguishesTheShapesItClaimsTo()` at
+their current answer, so the day the predicate is taught better those lines red and get updated
+deliberately instead of the limit outliving the sentence describing it.
+
+**The obvious fix does not work, and this is the part worth inheriting.** "Make the LAST fd-2 redirection
+win" was tried and abandoned during this round: `2>&1` is itself an fd-2 redirection whose target is
+*whatever fd 1 currently points at*, not a path. Under a naive last-wins rule `cmd >/dev/null 2>&1`
+resolves fd 2 to the literal `&1` and stops reporting a discard — breaking the case the predicate gets
+right today. A real fix has to model fd 1's destination as it is reassigned, and the third fixture added
+this round (`exec("cmd 2>$err 2>/dev/null", …)` → `discarded`) is there to keep that composition honest.
+Whoever attempts it must re-run a tree-wide census before and after and report both tallies.
+
+### Eb47-6 — `tests/Chat/` and `tests/MCP/` are free to adopt into the stderr guard's SCOPE
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: low. **Measured** with
+`ChildStderrCaptureScanner` over all of `tests/` at lane-b HEAD.
+
+**What.** `ChildStderrCaptureTest::SCOPE` was widened this round from `Integration/` to the three
+directories lane b owns (`Agents/`, `Integration/`, `Support/`). Two directories outside the lane split
+held **only** captured spawn sites when measured and would therefore join SCOPE with no exemption at all:
+`tests/Chat/` and `tests/MCP/`. (Counts are deliberately not recorded — they were taken in a lane
+worktree and move at every merge; re-measure rather than trust a number here.)
+
+**Why lane b did not do it.** Adding a clean directory is not free: it makes the guard an obligation on
+every spawn a sibling later adds there, which reds at merge in a lane that never saw the file. That is a
+decision for the lane that owns those directories, and it is now stated in the `SCOPE` doc-block rather
+than left implicit.
+
+**The rest of the tree is not free.** Every other directory under `tests/` holds at least one
+non-captured site, concentrated in `Context/`, `Tools/` and `Commands/`. Each needs an argued row or a
+real fix from its owning lane; `Commands/` is almost entirely `inherited` rather than `discarded`, which
+is the cheaper shape to close.
+
+### Eb47-7 — a team test writes into the REAL `~/.sugar-crush`, and concurrent lanes red each other
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: process + test isolation. **Out of lane.**
+
+**What.** `tests/Agents/AgentManagerTest.php` carries a guard that fails a test when the real
+`$HOME/.sugar-crush` is mutated during it ("a team test wrote into the real ~/.sugar-crush instead of its
+sandbox HOME"). Round-47 lane b's reviewer hit it on a full run at `acf71649`:
+`testCreateSubAgentCannotEnterPlanModeAfterDifferentModeIsLive` failed with ~70
+`~/.sugar-crush/teams/throwing-*` entries appearing and disappearing between snapshots, and passed
+cleanly when re-run alone. The writer is some other test — a `throwing-*` team fixture — that really does
+use the real home rather than its sandbox.
+
+**Provenance.** Observed by the reviewer, **not reproduced by lane b's own two full runs** (at
+`7af5293b` and at the lane's final commit, both rc 0), which is consistent with it needing two suites
+running at once.
+
+**Why it matters beyond the noise.** The guard's intent is right; the false positive is a symptom of a
+real isolation defect. The brief's `/tmp` prohibition does not cover `$HOME`, and Eb47-4 already records
+the same class of collision for the scratchpad. **Step:** find the `throwing-*` team writer and sandbox
+its `HOME`, or serialise full-suite runs across lanes.
+
+### Eb47-8 — `T_DOLLAR_OPEN_CURLY_BRACES` is now referenced from two files, and is 8.2-deprecated
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: low, forward-looking.
+
+**What.** `tests/Support/TokenFunctionRanges.php` was lifted out of
+`tests/Support/ForkedChildExitScanner.php`, and the `T_DOLLAR_OPEN_CURLY_BRACES` case came with it while
+the original copy also remains. `${…}` string interpolation is deprecated as of PHP 8.2, so the token is
+one that a future PHP may stop producing.
+
+**Untested claim boundary.** Everything about these scanners was verified on **PHP 8.3.6 only** — the
+only PHP on the box. CI also runs 8.4, which lane b could not exercise. **Step:** collapse the duplicated
+token handling onto `TokenFunctionRanges`, and confirm the scanners' behaviour on 8.4 in CI before
+relying on either.
+
+### Eb47-9 — the reaper scanner's only real-tree known-positive requires `tests/Backend/` to stay broken
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: merge hazard. Related to Eb47-2.
+
+**What.** `ForkedChildReaperAdoptionTest::testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()` asserts
+that every directory in `OUT_OF_SCOPE` *still holds* an unreaped fork. The only such directory is
+`Backend/`. So the moment a sibling lane fixes `tests/Backend/EngineBackendReapTest.php` (Eb47-2 — which
+is exactly the work that entry asks for), this test fails until the row is deleted and `Backend/` is added
+to `SCOPE`. That is the designed, self-deleting behaviour and it is documented; it is recorded here so
+the lane that does the fix expects the red instead of treating it as collateral.
+
+**Two sub-facts, both verified in lane b at its final commit.** (1) That test calls `missingHalves()`
+without the third argument, whose default is `0`, so it ignores `UNTRACKED_FORKS_ALLOWED` — no live
+effect today, because no `OUT_OF_SCOPE` directory has a row in that map, but the two guards disagree
+about the same predicate. (2) Emptying `OUT_OF_SCOPE` does not make this test *fail* — it makes it
+*Risky* with zero assertions, because it iterates the map and an empty map is a vacuous pass. It still
+reds the run, but only because this suite's `phpunit.xml` sets `failOnRisky="true"`; the guard that
+catches an emptied map on its own terms, with a message naming the file, is
+`testNoDirectoryWithUnreapedForksIsUnaccountedFor()`. Both halves measured by mutation.
