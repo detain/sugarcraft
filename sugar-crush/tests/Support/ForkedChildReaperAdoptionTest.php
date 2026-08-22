@@ -23,11 +23,12 @@ use PHPUnit\Framework\TestCase;
  * only. Round 46's lane split gave this lane `tests/Integration/` and
  * `tests/Support/`, and a guard cannot require an adoption in a directory the
  * change is not allowed to edit. The in-process fork sites OUTSIDE that scope
- * are real and unreaped - `tests/Agents/AgentWorkerPoolTest.php`,
- * `tests/Agents/MailboxTest.php`, `tests/Backend/EngineBackendReapTest.php`,
- * `tests/Support/ForkedChildTest.php` - and each is recorded as such rather
- * than quietly left out. Widening {@see SCOPE} to `''` is the whole of the
- * work when somebody owns those files; it will fail loudly and name them.
+ * are real and unreaped, and rather than enumerate them here - a list in
+ * prose rots, and this one already did: it was written from a census taken
+ * with a scanner that could not see `\pcntl_fork()`, and so omitted
+ * `tests/Agents/TaskListTest.php` entirely - widening {@see SCOPE} to `''`
+ * derives the list instead. That is the whole of the work when somebody owns
+ * those files; the guard will fail loudly and name every one of them.
  */
 final class ForkedChildReaperAdoptionTest extends TestCase
 {
@@ -35,30 +36,69 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     private const SCOPE = 'Integration/';
 
     /**
-     * The two halves an adopting file must carry, matched as CODE rather than
-     * as text.
+     * Raw `pcntl_fork()` sites in an adopting file that are deliberately NOT
+     * tracked, with the count and the reason.
      *
-     * MATCHED AT THE START OF A LINE, and that is the whole of what makes this
-     * work. The first version looked for the bare string
-     * `ReapsForkedChildrenTrait` anywhere in the source - and every adopting
-     * file carries a doc-block above its `use` line saying
-     * `{@see ReapsForkedChildrenTrait}`. Deleting the `use` line left the
-     * mention behind and this guard stayed green over a file with no reaper at
-     * all (measured: mutation M7 SURVIVED). A doc-block wraps at 80 columns
-     * with ` * ` on every line, so anchoring on `^[ \t]*use` / `^[ \t]*$this->`
-     * excludes prose by construction - a `*` is neither.
+     * The count is part of the exemption on purpose. A bare file-keyed
+     * exemption is a blank cheque - it would license every future fork added
+     * to the file as well as the one that was argued for.
      *
+     * @var array<string,array{count:int,reason:string}>
+     */
+    private const UNTRACKED_FORKS_ALLOWED = [
+        'Integration/ParallelToolCallsTest.php' => [
+            'count' => 1,
+            'reason' =>
+                'testAGroupWhoseForksAllFail...\'s NPROC probe. It runs INSIDE a child that '
+                . 'forkTracked() already emptied the ledger in, and that child leaves through '
+                . 'ForkedChild::exitNow() without ever running tearDown() - so there is no reaper '
+                . 'on that side for a ledger entry to reach. Tracking it would record a pid that '
+                . 'nothing can ever reap, which is a lie about what the ledger is for.',
+        ],
+    ];
+
+    /**
+     * The three halves an adopting file must carry, matched as CODE.
+     *
+     * THE THIRD HALF IS THE ONE THAT CARRIES THE PIDS, and it was missing.
+     * The first version checked for a `use` line and a `reapTrackedForkedChildren()`
+     * line, neither of which implies a single pid ever enters the ledger:
+     * reverting the two `$this->forkTracked()` calls in MultiAgentRefactorTest
+     * to plain `pcntl_fork()` left the reaper reaping nothing, on the abort
+     * path and every other path, and both guards stayed green (measured:
+     * mutation R1 SURVIVED). Declaring the net is not hanging it.
+     *
+     * The other two halves are structural now rather than line-anchored, for
+     * reasons {@see ReaperAdoptionScanner} records: a namespace import
+     * satisfied the first, and a call in a method nothing calls satisfied the
+     * second.
+     *
+     * @param list<array{line:int,spelling:string,shape:string}> $sites
      * @return list<string> the halves a source is missing, empty when whole
      */
-    private static function missingHalves(string $source): array
+    private static function missingHalves(string $source, array $sites, int $untrackedAllowed = 0): array
     {
         $missing = [];
 
-        if (\preg_match('/^[ \t]*use[ \t]+\\\\?(?:[A-Za-z_]\w*\\\\)*ReapsForkedChildrenTrait[ \t]*;/m', $source) !== 1) {
-            $missing[] = 'use ReapsForkedChildrenTrait';
+        if (!ReaperAdoptionScanner::adoptsTrait($source, 'ReapsForkedChildrenTrait')) {
+            $missing[] = 'use ReapsForkedChildrenTrait in the class body';
         }
-        if (\preg_match('/^[ \t]*\$this->reapTrackedForkedChildren[ \t]*\(/m', $source) !== 1) {
-            $missing[] = 'a reapTrackedForkedChildren() call in tearDown()';
+
+        $position = ReaperAdoptionScanner::reapPositionInTearDown($source, 'reapTrackedForkedChildren');
+        if ($position !== ReaperAdoptionScanner::REAP_FIRST) {
+            $missing[] = 'reapTrackedForkedChildren() first in tearDown() (' . $position . ')';
+        }
+
+        $untracked = 0;
+        foreach ($sites as $site) {
+            if ($site['spelling'] !== 'forkTracked'
+                && $site['shape'] !== ForkedChildExitScanner::SHAPE_FORK_WRAPPER) {
+                $untracked++;
+            }
+        }
+        if ($untracked > $untrackedAllowed) {
+            $missing[] = $untracked . ' fork(s) not routed through $this->forkTracked()'
+                . ($untrackedAllowed > 0 ? ' (' . $untrackedAllowed . ' allowed)' : '');
         }
 
         return $missing;
@@ -71,38 +111,99 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      */
     public function testThePredicateReportsEachHalfItLooksFor(): void
     {
-        $both = ['use ReapsForkedChildrenTrait', 'a reapTrackedForkedChildren() call in tearDown()'];
+        $tracked = [['line' => 1, 'spelling' => 'forkTracked', 'shape' => 'exitNow']];
+        $raw = [['line' => 1, 'spelling' => 'pcntl_fork', 'shape' => 'exitNow']];
 
-        $this->assertSame($both, self::missingHalves("<?php\nclass F {}\n"));
+        $whole = "<?php\nclass F extends TestCase {\n    use ReapsForkedChildrenTrait;\n"
+            . "    protected function tearDown(): void {\n"
+            . "        \$this->reapTrackedForkedChildren();\n        \$this->wipe();\n    }\n}\n";
+
+        $this->assertSame([], self::missingHalves($whole, $tracked));
 
         $this->assertSame(
-            ['a reapTrackedForkedChildren() call in tearDown()'],
-            self::missingHalves("<?php\nclass F {\n    use ReapsForkedChildrenTrait;\n}\n"),
+            [
+                'use ReapsForkedChildrenTrait in the class body',
+                'reapTrackedForkedChildren() first in tearDown() ('
+                    . ReaperAdoptionScanner::TEARDOWN_MISSING . ')',
+                '1 fork(s) not routed through $this->forkTracked()',
+            ],
+            self::missingHalves("<?php\nclass F {}\n", $raw),
+            'all three halves absent',
         );
 
+        // HALF THREE, and the mutation that got through. Every declaration
+        // present, the forks going nowhere near the ledger.
         $this->assertSame(
-            ['use ReapsForkedChildrenTrait'],
-            self::missingHalves("<?php\nclass F {\n    function t() {\n        \$this->reapTrackedForkedChildren();\n    }\n}\n"),
+            ['1 fork(s) not routed through $this->forkTracked()'],
+            self::missingHalves($whole, $raw),
         );
 
+        // ...and the exemption, which is a count and not a blank cheque.
+        $this->assertSame([], self::missingHalves($whole, $raw, 1));
+        $this->assertSame(
+            ['2 fork(s) not routed through $this->forkTracked() (1 allowed)'],
+            self::missingHalves($whole, [...$raw, ...$raw], 1),
+        );
+
+        // A fork WRAPPER is the trait's own `pcntl_fork()`; it is not an
+        // untracked call site.
         $this->assertSame(
             [],
             self::missingHalves(
-                "<?php\nclass F {\n    use \\A\\B\\ReapsForkedChildrenTrait;\n"
-                . "    function t() {\n        \$this->reapTrackedForkedChildren();\n    }\n}\n",
+                $whole,
+                [['line' => 1, 'spelling' => 'pcntl_fork', 'shape' => ForkedChildExitScanner::SHAPE_FORK_WRAPPER]],
             ),
         );
 
-        // THE MUTATION THAT GOT THROUGH, kept as a fixture. Both halves named
-        // in PROSE and neither present as code: this is exactly the file that
-        // results from deleting a `use` line while leaving the doc-block that
-        // introduced it, and the loose version of this predicate called it
-        // whole.
+        // A NAMESPACE IMPORT is not an adoption. This is the file that
+        // results from deleting the `use` inside the class while leaving the
+        // import that made the short name resolve.
+        $this->assertContains(
+            'use ReapsForkedChildrenTrait in the class body',
+            self::missingHalves(
+                "<?php\nuse SugarCraft\\Crush\\Tests\\Support\\ReapsForkedChildrenTrait;\n"
+                . "class F {\n    protected function tearDown(): void {\n"
+                . "        \$this->reapTrackedForkedChildren();\n    }\n}\n",
+                $tracked,
+            ),
+        );
+
+        // THE MUTATION THAT GOT THROUGH, kept as a fixture. The call moved
+        // out of tearDown() into a private method nothing calls: present in
+        // the file, on no execution path at all.
+        $this->assertContains(
+            'reapTrackedForkedChildren() first in tearDown() (' . ReaperAdoptionScanner::REAP_ABSENT . ')',
+            self::missingHalves(
+                "<?php\nclass F {\n    use ReapsForkedChildrenTrait;\n"
+                . "    protected function tearDown(): void { \$this->wipe(); }\n"
+                . "    private function unused(): void { \$this->reapTrackedForkedChildren(); }\n}\n",
+                $tracked,
+            ),
+        );
+
+        // Present in tearDown() but AFTER the temp tree goes - the ordering
+        // the whole mechanism turns on.
+        $this->assertContains(
+            'reapTrackedForkedChildren() first in tearDown() (' . ReaperAdoptionScanner::REAP_NOT_FIRST . ')',
+            self::missingHalves(
+                "<?php\nclass F {\n    use ReapsForkedChildrenTrait;\n"
+                . "    protected function tearDown(): void {\n        \$this->removeTree();\n"
+                . "        \$this->reapTrackedForkedChildren();\n    }\n}\n",
+                $tracked,
+            ),
+        );
+
+        // Both halves named in PROSE and neither present as code.
         $this->assertSame(
-            $both,
+            [
+                'use ReapsForkedChildrenTrait in the class body',
+                'reapTrackedForkedChildren() first in tearDown() ('
+                    . ReaperAdoptionScanner::TEARDOWN_MISSING . ')',
+            ],
             self::missingHalves(
                 "<?php\n/**\n * Adopts {@see ReapsForkedChildrenTrait}: call\n"
                 . " * \$this->reapTrackedForkedChildren() from tearDown().\n */\nclass F {}\n",
+                $tracked,
             ),
         );
     }
@@ -126,11 +227,16 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             }
 
             $source = (string) file_get_contents($file->getPathname());
-            if (ForkedChildExitScanner::scan($source) === []) {
+            $sites = ForkedChildExitScanner::scan($source);
+            if ($sites === []) {
                 continue;
             }
 
-            $missing = self::missingHalves($source);
+            $missing = self::missingHalves(
+                $source,
+                $sites,
+                self::UNTRACKED_FORKS_ALLOWED[$relative]['count'] ?? 0,
+            );
             if ($missing === []) {
                 $covered++;
 
@@ -159,5 +265,35 @@ final class ForkedChildReaperAdoptionTest extends TestCase
                 . '`$this->forkTracked()`, and call `$this->reapTrackedForkedChildren()` as the '
                 . 'FIRST thing in tearDown() - before anything that removes a temp tree.',
         );
+    }
+
+    /**
+     * An untracked-fork exemption cannot outlive the site it was written for.
+     */
+    public function testEveryUntrackedForkExemptionStillDescribesRealSites(): void
+    {
+        $root = \dirname(__DIR__);
+
+        foreach (self::UNTRACKED_FORKS_ALLOWED as $file => $exemption) {
+            $path = $root . '/' . $file;
+            $this->assertFileExists($path, "{$file} is exempted but no longer exists");
+
+            $untracked = 0;
+            foreach (ForkedChildExitScanner::scan((string) file_get_contents($path)) as $site) {
+                if ($site['spelling'] !== 'forkTracked'
+                    && $site['shape'] !== ForkedChildExitScanner::SHAPE_FORK_WRAPPER) {
+                    $untracked++;
+                }
+            }
+
+            $this->assertSame(
+                $exemption['count'],
+                $untracked,
+                "{$file} is exempted for {$exemption['count']} untracked fork(s) but has {$untracked}. "
+                    . 'Re-argue the exemption or delete it - a count that no longer matches is a '
+                    . 'licence nobody checked.',
+            );
+            $this->assertNotSame('', trim($exemption['reason']), "{$file} is exempted without a reason");
+        }
     }
 }
