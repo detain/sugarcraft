@@ -555,8 +555,8 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
     }
 
     /**
-     * THE WHOLE LINE, rendered from the launcher's own formats and matched
-     * against a real child launch's stderr.
+     * THE WHOLE LINE'S WIRING, rendered from the launcher's own formats and
+     * matched against a real child launch's stderr.
      *
      * WHAT WAS MISSING AND WHY IT MATTERED (E153).
      * {@see testATrustedProjectsToolRemovalsAreReportedWhateverTheGlobLooksLike()}
@@ -564,19 +564,42 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
      * FRAGMENTS — the file name, the word `disabledTools`, three tool names,
      * `leaving: Bash`. Between them they never touch the BODY of
      * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT}: the clause that says
-     * how many of how many were taken. MEASURED in round 45, and re-measured
-     * here: mutate that constant `disabled` → `removed` and this whole class
-     * plus {@see BootstrapLaunchNoticeRoutingTest} stays green at
-     * `OK (67 tests, 188 assertions)`, PHP 8.3.6. The launcher could have gone
-     * on printing a sentence with the counts silently transposed and no
-     * behavioural guard anywhere would have noticed.
+     * how many of how many were taken. The launcher could have gone on printing
+     * a sentence with the counts silently transposed and no behavioural guard
+     * anywhere would have noticed.
      *
-     * RENDERED, NOT RETYPED, for the reason
-     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest} was
-     * repaired for in the same round: a checker that keeps its own copy of the
-     * string drifts with it. Every argument here is MEASURED — the census, the
-     * removals, the survivors — so a twelfth built-in tool moves the expectation
-     * and the launcher's output together instead of reding this.
+     * WHAT THIS TEST PINS, AND WHAT IT DOES NOT — stated exactly, because the
+     * first version of this doc-block did not and round 46's review was right
+     * to call it. WHAT IT SAID: that the fragments never reach the body, over a
+     * measurement of the pre-fix tree, in a paragraph a reader would finish
+     * believing this test closed that. WHAT IS TRUE NOW, MEASURED on PHP 8.3.6
+     * at round 46, scope = this class under `--filter`: with
+     * `PROJECT_TIER_TOOL_REMOVAL_FORMAT` mutated `disabled` → `removed`, this
+     * whole class stays green at `OK (57 tests, 136 assertions)`. Of course it
+     * does — the expectation below is rendered FROM the constant the child
+     * process also renders from, so with respect to the constant's TEXT it is a
+     * tautology, the general shape the backlog records for this round. What it
+     * DOES pin is the WIRING, and that is the half nothing else covered:
+     * transposing `\count($removed)` and `\count($withoutProject)` at the call
+     * site takes this class to `Tests: 57, Assertions: 136, Failures: 1`.
+     *
+     * THE TEXT'S SECOND PARTY IS README.md, VIA
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest}, and it
+     * is named here so that whoever deletes that file's `assertSame` knows what
+     * else they are removing. MEASURED, same mutation, scope = that class:
+     * `Tests: 5, Assertions: 30, Failures: 1`. That is the whole reason this
+     * test needs no independent literal copy of its own, where
+     * {@see testAProjectThatRemovesEveryToolReportsTheNoSurvivorsBranch()} does
+     * carry one — there is no README sample for the no-survivors branch. The
+     * pair is the pin and neither half is one alone: that file says the
+     * constant is THAT SENTENCE, this one says the running program wires THOSE
+     * ARGUMENTS into it in that order.
+     *
+     * RENDERED, NOT RETYPED, for the reason that sibling was repaired for in
+     * the same round: a checker that keeps its own copy of the string drifts
+     * with it. Every argument here is MEASURED — the census, the removals, the
+     * survivors — so a twelfth built-in tool moves the expectation and the
+     * launcher's output together instead of reding this.
      *
      * THE ASSERTION IS CONTAINMENT AND THAT IS DELIBERATE, not the `assertSame`
      * its README sibling uses: stderr from a real launch carries the
