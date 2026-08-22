@@ -145,18 +145,158 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
     }
 
     /**
-     * STDOUT STAYS EMPTY, and that is the documented exception rather than an
-     * oversight: this is the one exit that cannot honour the
-     * `--output-format json` contract, because the class owning that document
-     * shape ({@see \SugarCraft\Crush\Cli\NonInteractive}) is behind the
-     * autoloader that is missing. Pinned so the exception stays a decision.
+     * WHAT THIS TEST USED TO PIN: stdout stays empty, "the documented exception
+     * rather than an oversight" — this was the one exit that could not honour
+     * the `--output-format json` contract, because the class owning the
+     * document shape ({@see \SugarCraft\Crush\Cli\NonInteractive}) is behind
+     * the autoloader that is missing.
+     *
+     * WHAT IS TRUE NOW (E84): the shape's OWNER is unreachable here; the shape
+     * itself never was. `json_encode()` is core. So the guard emits the
+     * document, and the hole this test used to nail shut is closed instead —
+     * a consumer of `| jq` on a broken checkout could not previously tell
+     * "empty because the binary died before it could speak" from "empty because
+     * there was nothing to say", and those two want opposite handling.
+     *
+     * WHY THE TEST STILL EARNS ITS PLACE, with its subject inverted: the
+     * dangerous direction is now the other one. A guard that printed JSON at a
+     * human is a regression, so
+     * {@see testTheGuardStaysSilentOnStdoutWithoutOutputFormatJson()} below
+     * holds the negative case, and this one holds the positive. Exit code stays
+     * 2 in both.
      */
-    public function testTheGuardEmitsNothingOnStdoutEvenUnderOutputFormatJson(): void
+    public function testTheGuardEmitsTheContractDocumentUnderOutputFormatJson(): void
     {
-        [$status, $stdout] = $this->runCopiedBinary('--output-format json -p hi');
+        [$status, $stdout, $stderr] = $this->runCopiedBinary('--output-format json -p hi');
+
+        self::assertSame(2, $status, "stderr was:\n" . $stderr);
+
+        // EXACTLY ONE JSON OBJECT AND A NEWLINE, which is the contract's own
+        // wording — asserted on the raw bytes, because a consumer's `jq` reads
+        // bytes and not a decoded array.
+        self::assertSame(
+            '{"result":null,"error":{"type":"installation",'
+            . '"message":"sugarcrush: cannot find composer autoload.php"}}' . "\n",
+            $stdout,
+        );
+
+        // The human line is unchanged and still on stderr: the JSON document is
+        // an ADDITION, not a redirection, exactly as it is on every other
+        // exit-2 cause that routes through NonInteractive::failUsage().
+        self::assertSame("sugarcrush: cannot find composer autoload.php\n", $stderr);
+    }
+
+    /**
+     * Both spellings the parser accepts, because the guard cannot use the
+     * parser — {@see \SugarCraft\Crush\Cli\ArgvParser} is behind the missing
+     * autoloader too, so the guard rescans raw argv and the two scans have to
+     * agree. `--output-format=json` is the one a Makefile writes.
+     */
+    public function testTheGuardHonoursTheEqualsSpellingToo(): void
+    {
+        [$status, $stdout] = $this->runCopiedBinary('--output-format=json -p hi');
 
         self::assertSame(2, $status);
-        self::assertSame('', $stdout);
+        self::assertStringContainsString('"type":"installation"', $stdout);
+    }
+
+    /**
+     * THE REGRESSION THIS FIX COULD HAVE INTRODUCED. A human running a broken
+     * checkout must get the stderr line and NOTHING on stdout; a guard that
+     * printed a JSON object at them would be worse than the hole it closed.
+     *
+     * `--output-format xml` is in the table on purpose rather than as padding:
+     * the parser rejects it as unsupported and then renders the failure as
+     * TEXT, so the guard agreeing that it is not json is what keeps the broken
+     * checkout's behaviour identical to the working one's. `JSON` in capitals
+     * is there for the same reason — the parser is case-sensitive and rejects
+     * it, so a guard that lower-cased would make the broken binary MORE
+     * permissive than the working one.
+     *
+     * @dataProvider nonJsonInvocations
+     */
+    public function testTheGuardStaysSilentOnStdoutWithoutOutputFormatJson(string $arguments): void
+    {
+        [$status, $stdout, $stderr] = $this->runCopiedBinary($arguments);
+
+        self::assertSame(2, $status, "stderr was:\n" . $stderr);
+        self::assertSame('', $stdout, "`{$arguments}` printed a JSON document at a human");
+    }
+
+    /** @return iterable<string, array{0: string}> */
+    public static function nonJsonInvocations(): iterable
+    {
+        yield 'no format flag at all' => ['--version'];
+        yield 'explicit text' => ['--output-format text -p hi'];
+        yield 'equals spelling, text' => ['--output-format=text -p hi'];
+        yield 'a format nothing implements' => ['--output-format xml -p hi'];
+        yield 'wrong case' => ['--output-format JSON -p hi'];
+        yield 'the flag with no value' => ['--output-format'];
+    }
+
+    /**
+     * THE DRIFT GUARD, and the reason the duplication in the binary is
+     * acceptable at all.
+     *
+     * The guard hand-rolls a document because
+     * {@see \SugarCraft\Crush\Cli\NonInteractive} is behind the autoloader it
+     * could not find. That is a real second definition of the failure shape, so
+     * something has to hold the two together: this test takes the REAL
+     * document {@see \SugarCraft\Crush\Cli\NonInteractive::failUsage()}
+     * produces and compares its STRUCTURE — key order included, since a
+     * consumer reading the raw bytes sees that too — against the one the guard
+     * printed. Change either side's keys or flags and this reds, naming both.
+     *
+     * The VALUES differ by design: `error.type` is `installation` there and
+     * `usage` here, which is the whole point of the field. So the comparison is
+     * on the key tree, and the one value that must NOT differ — `result` being
+     * present and null — is asserted directly.
+     */
+    public function testTheGuardsDocumentHasTheSameShapeAsNonInteractives(): void
+    {
+        [, $guardStdout] = $this->runCopiedBinary('--output-format json -p hi');
+        $guard = json_decode($guardStdout, true, 512, JSON_THROW_ON_ERROR);
+
+        $owner = json_decode($this->documentFromNonInteractive(), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame(array_keys($owner), array_keys($guard));
+        self::assertSame(array_keys($owner['error']), array_keys($guard['error']));
+        self::assertArrayHasKey('result', $guard);
+        self::assertNull($guard['result']);
+        self::assertNull($owner['result']);
+
+        // The trailing newline is part of the contract on both sides — a
+        // consumer streaming NDJSON depends on it.
+        self::assertStringEndsWith("}\n", $guardStdout);
+    }
+
+    /**
+     * One real `NonInteractive::failUsage()` document, captured out of a child
+     * `php` so nothing here has to reimplement the shape it is checking. Run in
+     * a child rather than in-process because that method writes its human half
+     * to STDERR, which a PHPUnit run cannot redirect.
+     */
+    private function documentFromNonInteractive(): string
+    {
+        $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = $this->tmpDir . '/owner_document.php';
+        $outFile = $this->tmpDir . '/owner_out.txt';
+
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export($autoload, true) . ";\n"
+            . 'SugarCraft\Crush\Cli\NonInteractive::failUsage("sugarcrush: probe", "json");' . "\n");
+
+        exec(sprintf(
+            'timeout -s KILL 60 %s %s >%s 2>/dev/null',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($script),
+            escapeshellarg($outFile),
+        ));
+
+        $document = is_file($outFile) ? (string) file_get_contents($outFile) : '';
+        self::assertNotSame('', $document, 'the owner probe produced no document to compare against');
+
+        return $document;
     }
 
     /**
