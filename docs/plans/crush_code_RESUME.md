@@ -6,7 +6,7 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW-42. ROUND 41 CLOSED — five findings fixed, six recorded, and a closure that was stale in nine libs — read this first, then §0 for the standing rules
+## 0-NOW-42. ROUND 41 CLOSED (floor 8978) · ROUND 42 IN FLIGHT — read this first, then §0 for the standing rules
 
 **SUITE FLOOR: `8978 / 105031 / 1 skipped / rc 0` at `7852d79e`**, supervisor-measured in the live tree
 after merging all three round-41 lanes. Supersedes every earlier figure (8909 held mid-round-41, 8905
@@ -213,24 +213,51 @@ lane `b`'s orphaned `isEmoji()` while the lane was still running — and the lan
 diagnosed the red phpstan job the supervisor had missed, and justified not-wiring it with an ICU
 measurement. **Do not pre-empt a review stage that has not finished.**
 
-### THE QUEUE — round 42 and beyond
+### 🚧 ROUND 42 IN FLIGHT — three lanes, launched as a Workflow from master `a6cb8f4d`
 
-**Highest value first.** E74 is the only item here that is a **live user-facing security
-misstatement**, and it is a doc-only fix — take it first, bundled with E75 and E76 as one
-documentation-truth lane (all three are "the tree contradicts itself", all three are cheap, and E76
-needs `Chat.php` which nothing else in this queue wants).
+Run ID `wf_062ad75c-a27`; script at
+`~/.claude/projects/-home-sites-sugarcraft/<session>/workflows/scripts/crush-round-42-wf_062ad75c-a27.js`.
+Each lane is a full-repo `cp -a` copy at `a6cb8f4d`, verified isolated (18/18 symlinks, none escaping
+into the live tree). Each runs implement → adversarial review → fix, fix entered only on BLOCKING/MAJOR.
 
-- **E74 + E75 + E76** (S each, one lane) — the three false claims round 41 surfaced. Rewrite in place,
-  never delete; each needs the WHAT IT SAID / WHAT IS TRUE NOW / WHY IT STILL EARNS ITS PLACE form.
-- **E78** (S) — one assertion per tool, `intdiv($shippedCap, 8) >= SkillPathNudge::maxBytes()`. Needs
-  `Bootstrap.php`, so it can ride with any lane that already holds it. Cheap and genuinely protective.
-- **E59** (**L**, and its recorded Step is confirmed WRONG — there are **three** literal `"Processing:"`
-  anchors across **two** tests, one a *negative* assertion that will pass forever if a rewrite misses
-  it; keep the tests' structure and replace all three with a liveness anchor a real worker can satisfy).
-  Opens `Chat.php` — do not schedule it alongside E76.
+| lane | dir | item | files it alone holds |
+|---|---|---|---|
+| `a` | `/home/sites/crush-lane-a` | **E74 + E75** (doc truth) | `sugar-crush/README.md`, `docs/SETTINGS.md` |
+| `b` | `/home/sites/crush-lane-b` | **E78** + the four raw-`fwrite` launch warnings | `src/Cli/Bootstrap.php`, `bin/sugarcrush` |
+| `c` | `/home/sites/crush-lane-c` | **E59 + E76** | `src/Chat.php`, `src/Agents/ProcessExecutor.php`, `tests/Workflows/WorkflowLivePaneTest.php` |
+
+**Split rationale:** E59 and E76 are bundled *because* both may need `Chat.php` — that pairing is what
+frees lane `b` to hold `Bootstrap.php` outright. No two lanes open the same file.
+
+**Premises re-verified by the supervisor before briefing** (so a lane that finds otherwise has found a
+real change): E74 at `README.md`'s "naming every tool it removes" sentence; E75 at its "the deprecated
+name" sentence; E76 at `Chat.php`'s "that nothing constructs" docblock; the four raw-`fwrite` sites are
+three in `Bootstrap.php` (the `sugarcrush: {$message}.` helper plus two `sprintf` sites) and the
+`bin/sugarcrush` autoload guard — **that last one runs before the autoloader exists, so it probably
+cannot use any seam**; E59's three `Processing:` anchors are all in
+`tests/Workflows/WorkflowLivePaneTest.php` (one `str_contains` guard, one positive assertion, one
+**negative** assertion) against the stub in `ProcessExecutor.php`.
+
+⚠️ **Lane `c` is allowed to defer the real-worker half of E59** and land only the test-anchor half, if
+the worker does not fit safely in one lane. It was told explicitly not to half-land a real worker.
+
+**WHEN THE LANES RETURN:** drain per `crush_code_concurrency.md` §1.4, predict the merged total from the
+lanes' deltas and check it **to the assertion**, run the full suite in the live tree yourself, re-verify
+siblings **by content, per lib** if any lane touched `candy-core` (none should this round), then
+`rm -rf` the lane dirs. **Deleting a lane is the only irreversible step** — keep it until its patch is
+verified applied. Branches `drain-a`/`drain-b`/`drain-c` from ROUND 41 are still in the live repo; the
+round-42 fetch will overwrite them (`-f`), which is fine, round 41 is merged.
+
+### THE QUEUE — what is left AFTER round 42's three lanes
+
+E74, E75, E76, E78 and E59 are all **in flight as round 42's lanes** (see the block above). What
+remains after them:
+
+- **E59's real-worker half**, if lane `c` deferred it — check its report before assuming E59 is closed.
 - **E61's L** — a fiber or a fork for an unbounded all-PHP hook chain. E61's S landed in round 41;
   🔴 do not let "E61 is done" close this.
-- The four un-migrated raw-`fwrite` launch warnings the `sglang` lane judged stderr-only.
+- Any of the four raw-`fwrite` launch warnings lane `b` judged genuinely un-migratable — the
+  `bin/sugarcrush` autoload guard almost certainly is one, since it runs before the autoloader exists.
 - **E79** (semantics decision, not a bug) — needs the foundation-wide blast radius costed FIRST.
 - **E77** — nothing to do while `ext-intl` is hard-required; cross-reference it from any composer edit
   that relaxes that requirement.
