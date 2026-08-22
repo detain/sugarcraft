@@ -523,6 +523,17 @@ final class EnvRosterDriftTest extends TestCase
      * so a page-wide scrape would put it in the documented set and then red
      * against a code set that correctly excludes it.
      *
+     * FIRST COLUMN ONLY, and the narrowness is the safe direction rather than
+     * an oversight. `/^\|\s*`NAME`\s*\|/m` sees a name only where the table
+     * puts the variable it is a row ABOUT; a name mentioned in a description
+     * cell is invisible to both set comparisons. That cannot hide a
+     * read-but-undocumented variable — the code set is built from `src/`, so
+     * such a name still reds — it can only fail to notice a name the page
+     * mentions in passing and nothing reads. Widening the scrape would move
+     * that case from "unnoticed" to "documented", which is strictly weaker:
+     * every prose mention in a cell would start counting as a promise the code
+     * has to keep.
+     *
      * @return list<string>
      */
     private function tabulatedNames(): array

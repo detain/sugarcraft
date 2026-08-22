@@ -281,16 +281,23 @@ more: `LayeredSettings` was corrected in round 43 and
 `Bootstrap::reportProjectTierToolRemovals()` in round 44 — its clause about
 refusing negated character classes now names the glob instead of counting it —
 so both carry the retraction rather than the figure. **Across `src/` and
-`docs/` the census finds zero remaining sites.** The naming is kept rather than dropped because a list of
-known-stale copies is the only thing that makes the next one findable — and it
-is asserted rather than believed: `Tests\Config\GlobFigureDriftTest` censuses
-`src/` AND `docs/` for paragraphs that spell the old count without retracting
-it — `docs/` is in scope because round 43's shipped defect was a stale sentence
-on this very page, not in source — and reds both if a new one appears and if
-this sentence stops agreeing with what the census finds. An empty census is a weaker claim than a census of one, because
-it also passes in a tree where the scanner has quietly stopped working, so the
-same scanner is run against a known-stale fixture in the same test and must
-still find it. A THIRD
+`docs/` the census finds zero remaining sites.** The naming was DROPPED, and
+the sentence that used to defend it is corrected here rather than deleted. It
+said: "the naming is kept rather than dropped because a list of known-stale
+copies is the only thing that makes the next one findable". What is true now:
+there is nothing left to name, and a list would be the wrong instrument even
+if there were — a list is what went stale in round 43, when a copy was fixed
+and its entry was not. Findability was the right goal; a number derived from
+the census is the instrument that reaches it, because it cannot be right about
+a tree it no longer describes. And it is asserted rather than believed:
+`Tests\Config\GlobFigureDriftTest` censuses `src/` AND `docs/` for paragraphs
+that spell the old count without retracting it — `docs/` is in scope because
+round 43's shipped defect was a stale sentence on this very page, not in
+source — and reds both if a new one appears and if this sentence stops
+agreeing with what the census finds. An empty census is a weaker claim than a
+census of one, because it also passes in a tree where the scanner has quietly
+stopped working, so the same scanner is run against a known-stale fixture in
+the same test and must still find it. A THIRD
 occurrence was in this file, in the paragraph beginning "The report is the
 *effect*, not the pattern" — located by its words rather than by "sixty lines
 below", because an offset in prose is the same rot one level up — and is

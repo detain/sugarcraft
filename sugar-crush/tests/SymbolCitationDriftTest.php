@@ -9,7 +9,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * A `{@see}` THAT NAMES A TEST WHICH DOES NOT EXIST IS WORSE THAN NO CITATION.
  *
- * `src/` cites its own test suite 87 times. Those citations are what tells a
+ * `src/` cites its own test suite 88 times, and `docs/` six more. Those
+ * citations are what tells a
  * reader that a doc-block's claim is CHECKED rather than proof-read, and they
  * are the first thing a rename breaks — silently, because nothing compiles a
  * doc-comment. Round 44 shipped one and a reviewer, not a test, found it:
@@ -24,13 +25,24 @@ use PHPUnit\Framework\TestCase;
  * the first would report a clean tree while the other two rotted:
  *
  * - a fully-qualified `{@see \SugarCraft\Crush\Tests\…\FooTest::testBar()}`
- *   in `src/` — 84 of them;
+ *   in `src/`, 88 of them, of which one names a class CONSTANT rather than a
+ *   method;
  * - a BARE `{@see FooTest::testBar()}` in `src/`, which resolves through no
  *   `use` statement and is readable only because the basename is unique —
  *   three of them, in `src/Cli/ArgvParser.php` and `src/Cli/Bootstrap.php`;
- * - a backticked `` `FooTest::testBar()` `` in a `docs/*.md` page — one, in
- *   `docs/ARCHITECTURE.md`, which is the mechanism paragraph for the tool
- *   registry.
+ * - a backticked `` `FooTest::testBar()` `` or `` `FooTest` `` in a `docs/*.md`
+ *   page — six, in `docs/ARCHITECTURE.md`, `docs/HOOKS.md` and
+ *   `docs/SETTINGS.md`;
+ * - and inside those, a PARTIALLY-qualified `` `Tests\Config\FooTest` ``,
+ *   written relative to `SugarCraft\Crush\`. The first cut of the resolver
+ *   called all three of those dangling, which would have been a census
+ *   reporting its own gap as the tree's defect.
+ *
+ * THE COUNTS ABOVE MOVE WITH ORDINARY PROSE EDITS, so nothing asserts them:
+ * {@see testTheCitationCensusFindsTheCitationsThatExist()} asserts a FLOOR and
+ * the presence of one file per shape, which reds when a shape stops being
+ * scraped and not when someone adds a sentence. They are measured at round 44
+ * on PHP 8.3.6 and are provenance for the paragraph, not a contract.
  *
  * ANYTHING THAT LOOKS LIKE A TEST CITATION AND CANNOT BE PARSED IS REPORTED,
  * NOT SKIPPED. {@see unparseable()} collects them and
@@ -291,10 +303,11 @@ final class SymbolCitationDriftTest extends TestCase
      * `assertSame([], $dangling)` also passes in a tree where the citation
      * scraper has stopped matching anything at all — the same failure mode the
      * glob census guards with a positive control. Here the control is the
-     * population: 87 citations were found when this was written (84
-     * fully-qualified in `src/`, three bare in `src/`, one backticked in
-     * `docs/`), so a floor well under that reds if the scraper breaks while
-     * leaving room for the count to move with ordinary work.
+     * population: 94 citations at round 44 — 88 in `src/`, six in `docs/` — so
+     * a floor well under that reds if the scraper breaks while leaving room for
+     * the count to move with ordinary work. The three `assertContains()` calls
+     * below are the sharper half: they name one file per SHAPE, so losing the
+     * bare shape or the `docs/` half reds even while the floor is still met.
      */
     public function testTheCitationCensusFindsTheCitationsThatExist(): void
     {
