@@ -484,6 +484,27 @@ final class McpToolWiringTest extends TestCase
      * {@see Bootstrap::mcpClient()} uses it rather than this class's
      * `fwrite(STDERR, …)` seam: pointing it at a file makes the line both quiet
      * and CHECKED, which is strictly more than it was.
+     *
+     * THE "QUIET" HALF OF THAT IS NO LONGER TRUE, and the next reader should not
+     * have to rediscover it. E86 (round 43) added
+     * {@see Bootstrap::warnPermissionConfigInTranscript()} alongside that
+     * `error_log()` call, because the ini destination is the OPERATOR's and a
+     * box pointing it at a file left the USER with a silently reduced tool set.
+     * That seam's stderr half is a `fwrite(STDERR, …)` no ini can redirect, so
+     * this test now DOES print one line into the suite's own output (MEASURED:
+     * exactly one, `sugarcrush: MCP tools from …/.mcp.json are incomplete…`).
+     *
+     * LEFT PRINTING RATHER THAN SILENCED, deliberately. The only way to quiet it
+     * is to pre-seed `Bootstrap::$reportedPermissionConfigWarnings` by
+     * reflection so the de-dup returns early — which would work, since the seam
+     * records the transcript row BEFORE delegating for stderr, but it would
+     * couple this test to a private map whose purpose is unrelated and would
+     * silently stop working the day the message is reworded. One diagnostic line
+     * is what this suite already tolerates elsewhere (the workflow-tier refusal
+     * prints one too), and by this doc-block's own standard a real diagnostic is
+     * not something to silence. What the line SAYS is asserted, in
+     * {@see testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()},
+     * which drives the same config in a child process for exactly that reason.
      */
     public function testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam(): void
     {

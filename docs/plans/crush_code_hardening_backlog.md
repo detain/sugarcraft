@@ -5426,3 +5426,62 @@ but the original assertion is still weaker than it reads.
 **Step.** Strengthen it to assert on the rendered pane content, or rename it to say what it actually
 checks. A test whose name overstates its coverage is worse than no test, because it stops anyone
 looking.
+
+### E90 — `README.md`'s "exactly two exceptions" to the JSON contract is now one
+
+**Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: low, documentation-correctness.
+**Not fixed here because `sugar-crush/README.md` belonged to lane `c` this round.**
+
+**What.** `README.md` (search for `There are exactly two exceptions`) tells a machine consumer that
+`--output-format json` leaves stdout empty in two cases: an `--output-format` value that is neither
+`text` nor `json`, and *"a checkout with no `vendor/autoload.php`: that exits 2 with an empty stdout,
+because the class that owns the JSON document shape is precisely the one that could not be loaded, and
+hand-rolling a second copy of the shape in `bin/sugarcrush` to cover it would be the drift that having
+one definition prevents."* E84 (round 43) closed that second case — the guard now emits
+`{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot find composer autoload.php"}}`
+and a newline, still at exit 2 — so the paragraph is now false, and it is false in the direction that
+matters: it tells a consumer not to bother parsing stdout on the one failure where parsing now works.
+Nothing asserts that sentence, so no test went red — `grep -rn 'exactly two exceptions'` hits `README.md`
+and nothing else, which is why this is recorded rather than caught.
+
+**Step.** Rewrite the paragraph to one exception (the unimplemented `--output-format` value), state that
+the autoload guard hand-rolls the document and why the duplication is deliberate, and add the
+`installation` `error.type` to the exit-code table's row for `2` (line beginning `| \`2\` |`). Consider
+pinning the claim with a test the way `ReadmeSettingsTierClaimTest` pins its own, so the next divergence
+reds instead of waiting for a reader.
+
+### E91 — the MCP start-then-throw diagnostic now prints one unowned line into the suite's own output
+
+**Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: cosmetic, test-hygiene. **Left as
+it is, deliberately; recorded so it is not rediscovered as an accident.**
+
+**What.** E86 routed `Bootstrap::mcpClient()`'s start-then-throw notice onto
+`warnPermissionConfigInTranscript()` in addition to its existing `error_log()`. That seam's stderr half
+is a `fwrite(STDERR, …)` in `Bootstrap::warnPermissionConfig()`, which no ini setting can redirect, so
+`McpToolWiringTest::testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()` — which
+runs in-process and points `error_log` at a file precisely to stay quiet — now prints exactly one line
+(`sugarcrush: MCP tools from …/.mcp.json are incomplete…`) into the suite's output. MEASURED on the full
+run at PHP 8.3.6: one line, and the suite already tolerates a comparable one from the workflow-tier
+refusal test.
+
+**Step.** Either accept it permanently, or quiet that one test by pre-seeding
+`Bootstrap::$reportedPermissionConfigWarnings` by reflection — which works because the seam records the
+transcript row BEFORE delegating for stderr, but couples the test to a private map whose purpose is
+unrelated and stops working silently the day the message is reworded. The reasoning is written up on that
+test's doc-block; the line's CONTENT is asserted by
+`testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()`, which uses a child process.
+
+### E92 — `ParallelToolCallsTest::testACompletedGroupLeavesNoPayloadFilesBehind` globs the shared `/tmp`
+
+**Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: low, test-isolation. **Not fixed
+here — `tests/Integration/ParallelToolCallsTest.php` was outside lane `b`'s file split.**
+
+**What.** Its `runtimeIpcFiles()` helper is `glob(sys_get_temp_dir() . '/sc_runtime_tool_*')`, i.e. a
+before/after snapshot of a directory every concurrent process on the box shares. Lane `b`'s round-43
+baseline run failed on it with one extra entry (`/tmp/sc_runtime_tool_e79c09f5fbbc8d5b.bin`) created by a
+sibling lane's suite between the two snapshots; the same test passed in isolation moments later. It is a
+false red under any parallel or multi-checkout run, including two developers on one box.
+
+**Step.** Scope the sweep to files this process created — the runner already knows its own pid — or point
+`ToolIpcFiles` at a per-run subdirectory under `sys_get_temp_dir()` and glob that. Do not "fix" it by
+widening the assertion; the leak-detection is the point.
