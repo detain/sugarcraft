@@ -19,21 +19,55 @@ use PHPUnit\Framework\TestCase;
  * So the adoption is derived from the forks rather than listed: any file the
  * fork scanner finds a site in has to carry both halves.
  *
- * SCOPE, and it is deliberate rather than accidental. `tests/Integration/`
- * only. Round 46's lane split gave this lane `tests/Integration/` and
- * `tests/Support/`, and a guard cannot require an adoption in a directory the
- * change is not allowed to edit. The in-process fork sites OUTSIDE that scope
- * are real and unreaped, and rather than enumerate them here - a list in
- * prose rots, and this one already did: it was written from a census taken
- * with a scanner that could not see `\pcntl_fork()`, and so omitted
- * `tests/Agents/TaskListTest.php` entirely - widening {@see SCOPE} to `''`
- * derives the list instead. That is the whole of the work when somebody owns
- * those files; the guard will fail loudly and name every one of them.
+ * SCOPE, and it is deliberate rather than accidental. WHAT IT SAID:
+ * "`tests/Integration/` only... widening {@see SCOPE} to `''` derives the
+ * list instead. That is the whole of the work when somebody owns those
+ * files." WHAT IS TRUE NOW: round 47's lane b owned `tests/Agents/`,
+ * `tests/Integration/` and `tests/Support/`, and widened {@see SCOPE} to
+ * exactly those three - which is what turned four raw, unreaped forks in
+ * `Agents/AgentWorkerPoolTest.php` (two of whose children `sleep(120)`,
+ * i.e. twice `defaultTimeLimit`) and two in `Support/ForkedChildTest.php`
+ * into adoptions. WHY THIS STILL EARNS ITS PLACE: `''` was not reachable
+ * from one lane and still is not. `tests/Backend/` holds four more, and a
+ * guard cannot require an adoption in a directory the change is not allowed
+ * to edit. So the remainder is recorded in {@see OUT_OF_SCOPE} - derived,
+ * self-deleting, and NOT prose: {@see
+ * testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()} fails the moment a
+ * listed directory becomes clean, which is the failure mode the prose list
+ * this replaced actually had (it was written from a census taken with a
+ * scanner that could not see `\pcntl_fork()`, and so omitted
+ * `tests/Agents/TaskListTest.php` entirely).
  */
 final class ForkedChildReaperAdoptionTest extends TestCase
 {
-    /** Path prefix, relative to `tests/`, the adoption is required under. */
-    private const SCOPE = 'Integration/';
+    /**
+     * Path prefixes, relative to `tests/`, the adoption is required under.
+     *
+     * @var list<string>
+     */
+    private const SCOPE = ['Agents/', 'Integration/', 'Support/'];
+
+    /**
+     * Prefixes with in-process forks that are NOT yet under {@see SCOPE},
+     * with the reason each is still out.
+     *
+     * Not an exemption and not a to-do list in prose: every entry is checked
+     * against the tree by {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()},
+     * which fails both when a listed prefix has become clean (delete the row
+     * and widen SCOPE) and when a listed prefix has crept into SCOPE (the two
+     * lists would then disagree about the same directory).
+     *
+     * @var array<string,string>
+     */
+    private const OUT_OF_SCOPE = [
+        'Backend/' =>
+            'tests/Backend/EngineBackendReapTest.php forks four times with a raw pcntl_fork() and '
+            . 'declares no tearDown() at all. Round 47\'s lane split gave lane b tests/Agents/, '
+            . 'tests/Integration/ and tests/Support/ and gave tests/Backend/ to nobody, and a '
+            . 'guard that requires an edit its own lane may not make is a guard that gets '
+            . 'exempted rather than satisfied. Recorded here instead of silently omitted, so the '
+            . 'next lane that owns tests/Backend/ inherits the work rather than rediscovering it.',
+    ];
 
     /**
      * Raw `pcntl_fork()` sites in an adopting file that are deliberately NOT
@@ -54,6 +88,20 @@ final class ForkedChildReaperAdoptionTest extends TestCase
                 . 'ForkedChild::exitNow() without ever running tearDown() - so there is no reaper '
                 . 'on that side for a ledger entry to reach. Tracking it would record a pid that '
                 . 'nothing can ever reap, which is a lie about what the ledger is for.',
+        ],
+
+        'Support/ReapsForkedChildrenTraitTest.php' => [
+            'count' => 2,
+            'reason' =>
+                'BOTH raw forks are the point of the test they sit in, and routing either through '
+                . 'forkTracked() would delete what it measures. forkSleeper()\'s child is handed '
+                . 'to trackForkedChild() BY HAND, which is the other entry point to the ledger '
+                . 'and has to be exercised by something. '
+                . 'testAChildForkedOutsideTheTraitCannotReapTheLedgerItInherited()\'s child must '
+                . 'inherit a POPULATED ledger to reach the owner check at all - forkTracked() '
+                . 'empties the child\'s copy, so routing it there would exercise the FIRST line '
+                . 'of defence for a second time and leave the second untested, which is the state '
+                . 'that test was written to end.',
         ],
     ];
 
@@ -80,6 +128,26 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     {
         $missing = [];
 
+        // A FILE WHOSE EVERY SITE IS A FORK WRAPPER HAS PUT NO CHILD ON THE
+        // MACHINE OF ITS OWN, and owes nothing here. The wrapper's CALLER
+        // forked; the ledger and the reaper belong in the caller's file, which
+        // is where the other two halves are already required.
+        //
+        // This is not a courtesy: it is what stops the guard reddening
+        // {@see ReapsForkedChildrenTrait} itself the moment SCOPE includes
+        // `Support/`. The trait DEFINES the reaper and cannot adopt itself,
+        // and it declares no tearDown() because it is not a test - so under
+        // the unconditional check it reported both halves missing, which is
+        // the polarity that gets a guard exempted rather than fixed.
+        //
+        // Deliberately derived rather than file-keyed. A file earns the skip
+        // by having no fork of its own and loses it again the instant it
+        // calls one, because a `forkTracked()`/`pcntl_fork()` CALL is a site
+        // of a shape other than {@see ForkedChildExitScanner::SHAPE_FORK_WRAPPER}.
+        if ($sites !== [] && self::everySiteIsAForkWrapper($sites)) {
+            return [];
+        }
+
         if (!ReaperAdoptionScanner::adoptsTrait($source, 'ReapsForkedChildrenTrait')) {
             $missing[] = 'use ReapsForkedChildrenTrait in the class body';
         }
@@ -102,6 +170,30 @@ final class ForkedChildReaperAdoptionTest extends TestCase
         }
 
         return $missing;
+    }
+
+    /** @param list<array{line:int,spelling:string,shape:string}> $sites */
+    private static function everySiteIsAForkWrapper(array $sites): bool
+    {
+        foreach ($sites as $site) {
+            if ($site['shape'] !== ForkedChildExitScanner::SHAPE_FORK_WRAPPER) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** Whether a `tests/`-relative path falls under any {@see SCOPE} prefix. */
+    private static function inScope(string $relative): bool
+    {
+        foreach (self::SCOPE as $prefix) {
+            if (str_starts_with($relative, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -228,6 +320,35 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             ),
             'a trait use after an interpolated string is still a trait use',
         );
+
+        // A FILE WHOSE EVERY SITE IS A FORK WRAPPER owes nothing, even with
+        // both declarations absent - it forked nobody, its caller did. This is
+        // ReapsForkedChildrenTrait's own shape, and without it widening SCOPE
+        // to include `Support/` reddened the trait that defines the reaper for
+        // failing to adopt itself.
+        $this->assertSame(
+            [],
+            self::missingHalves(
+                "<?php\ntrait T { protected function forkTracked(): int { return 0; } }\n",
+                [['line' => 1, 'spelling' => 'pcntl_fork', 'shape' => ForkedChildExitScanner::SHAPE_FORK_WRAPPER]],
+            ),
+            'a file that only DEFINES a fork wrapper has put no child on the machine',
+        );
+
+        // ...and it loses the skip the instant it also CALLS one. The skip is
+        // derived from the sites, not granted to the file, so a wrapper cannot
+        // be used to buy an exemption for a real fork beside it.
+        $this->assertNotSame(
+            [],
+            self::missingHalves(
+                "<?php\ntrait T { protected function forkTracked(): int { return 0; } }\n",
+                [
+                    ['line' => 1, 'spelling' => 'pcntl_fork', 'shape' => ForkedChildExitScanner::SHAPE_FORK_WRAPPER],
+                    ['line' => 9, 'spelling' => 'pcntl_fork', 'shape' => ForkedChildExitScanner::SHAPE_BARE_EXIT],
+                ],
+            ),
+            'a wrapper standing beside a real fork must not exempt the file',
+        );
     }
 
     public function testEveryInProcessForkInScopeIsCoveredByTheReaper(): void
@@ -244,7 +365,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             }
 
             $relative = substr($file->getPathname(), \strlen($root) + 1);
-            if (!str_starts_with($relative, self::SCOPE)) {
+            if (!self::inScope($relative)) {
                 continue;
             }
 
@@ -274,7 +395,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
         $this->assertGreaterThan(
             0,
             $covered,
-            'the scanner found no covered in-process forks under ' . self::SCOPE
+            'the scanner found no covered in-process forks under ' . implode(', ', self::SCOPE)
                 . ' - either the scope is wrong or the scanner is dead',
         );
 
@@ -287,6 +408,63 @@ final class ForkedChildReaperAdoptionTest extends TestCase
                 . '`$this->forkTracked()`, and call `$this->reapTrackedForkedChildren()` as the '
                 . 'FIRST thing in tearDown() - before anything that removes a temp tree.',
         );
+    }
+
+    /**
+     * A DEFERRAL IS A CLAIM ABOUT THE TREE, so it is checked against the tree.
+     *
+     * {@see OUT_OF_SCOPE} says "this directory still has unreaped in-process
+     * forks and this lane could not edit it". Both halves are verified: the
+     * prefix must be genuinely outside {@see SCOPE} (otherwise the two
+     * constants disagree about the same files), and it must still contain a
+     * file the reaper predicate finds work in (otherwise the row is a note
+     * about something already done, and the next reader widens SCOPE by
+     * deleting a row rather than by measuring).
+     *
+     * The scanner used here is the SAME one the in-scope assertion uses, and
+     * this test is the known-positive fixture for it: it asserts a PRESENCE.
+     * A scanner that stopped matching would fail here loudly instead of
+     * turning the absence assertion above silently green.
+     */
+    public function testEveryOutOfScopeDirectoryStillHasAnUnreapedFork(): void
+    {
+        $root = \dirname(__DIR__);
+
+        foreach (self::OUT_OF_SCOPE as $prefix => $reason) {
+            $this->assertNotSame('', trim($reason), "{$prefix} is deferred without a reason");
+            $this->assertFalse(
+                self::inScope($prefix),
+                "{$prefix} is listed as out of scope but SCOPE covers it - the two constants "
+                    . 'disagree about the same directory.',
+            );
+
+            $offenders = [];
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/' . rtrim($prefix, '/')));
+            foreach ($files as $file) {
+                /** @var \SplFileInfo $file */
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                    continue;
+                }
+
+                $source = (string) file_get_contents($file->getPathname());
+                $sites = ForkedChildExitScanner::scan($source);
+                if ($sites === []) {
+                    continue;
+                }
+                if (self::missingHalves($source, $sites) !== []) {
+                    $offenders[] = substr($file->getPathname(), \strlen($root) + 1);
+                }
+            }
+
+            $this->assertNotSame(
+                [],
+                $offenders,
+                "{$prefix} is recorded in OUT_OF_SCOPE as still holding unreaped in-process forks, "
+                    . 'and it no longer does. Delete its row and add the prefix to SCOPE - a '
+                    . 'deferral that has been overtaken is how a directory silently stops being '
+                    . 'guarded.',
+            );
+        }
     }
 
     /**

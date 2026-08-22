@@ -47,7 +47,29 @@ use PHPUnit\Framework\TestCase;
  */
 final class ForkedChildTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private const O_RDWR = 0x0002;
+
+    /**
+     * Both children below leave the instant they are forked, and both are
+     * waited for with a bounded {@see waitWithTimeout()} - so on the PASSING
+     * path this reaper has nothing to do.
+     *
+     * It is here for the path where the assertion between the fork and the
+     * wait fails, or where the per-test `pcntl_alarm()` fires: either one
+     * unwinds past `waitWithTimeout()`, and the alarm reaches this process
+     * only ({@see ReapsForkedChildrenTrait} for why). A child left behind by
+     * one of those still holds an inherited copy of a raw-mode `Tty` over the
+     * shared kernel pty this file is measuring, which is the one resource in
+     * the suite where an orphan is not merely untidy.
+     */
+    protected function tearDown(): void
+    {
+        $this->reapTrackedForkedChildren();
+
+        parent::tearDown();
+    }
 
     private function requirePtySyscalls(): void
     {
@@ -129,7 +151,7 @@ final class ForkedChildTest extends TestCase
         try {
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before forking');
 
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             $this->assertNotSame(-1, $pid, 'fork failed - cannot exercise this path');
 
             if ($pid === 0) {
@@ -178,7 +200,7 @@ final class ForkedChildTest extends TestCase
         try {
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before forking');
 
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             $this->assertNotSame(-1, $pid, 'fork failed - cannot exercise this path');
 
             if ($pid === 0) {
