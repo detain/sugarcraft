@@ -672,6 +672,35 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         // printed, which a report that appended the clause unconditionally
         // would do while satisfying the assertion above.
         self::assertStringNotContainsString(Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING, $stderr);
+
+        // THE ONE INDEPENDENT COPY OF THIS SENTENCE IN THE TREE, and it is a
+        // deliberate second copy rather than the retyping E118 spent a round
+        // removing. THE REASON IS A SURVIVED MUTATION OF THIS VERY FIX, which
+        // is the only acceptance test a fix gets. Everything above renders its
+        // expectation FROM the constant the child process also renders from, so
+        // with respect to the constant's TEXT it is a tautology: MEASURED on
+        // PHP 8.3.6 with `PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE` mutated
+        // `'leaving no tools at all'` → `'leaving nothing at all'`, this class
+        // stayed at `OK (57 tests, 135 assertions)`. What those assertions DO
+        // pin is the wiring, and that is not nothing: deleting the branch
+        // outright — the ternary replaced by the survivors clause alone — takes
+        // the same class to `Tests: 57, Assertions: 134, Failures: 1`.
+        //
+        // So the pair is the pin, and neither half is one alone. The
+        // assertion above says the running program prints THIS CONSTANT; this
+        // one says the constant is THAT SENTENCE. The sibling constants need no
+        // such copy because README.md holds theirs — see
+        // {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest},
+        // which renders the page's sample from them and kills a text mutation
+        // outright. There is no README sample for the no-survivors branch,
+        // so until a doc page grows one this line is the second party.
+        self::assertSame(
+            'leaving no tools at all',
+            Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE,
+            'the no-survivors clause was reworded. Nothing outside src/ reads it except this line, so '
+            . 'rewording it silently is exactly what this assertion exists to prevent; if the new wording '
+            . 'is wanted, change it here in the same commit',
+        );
     }
 
     /**
