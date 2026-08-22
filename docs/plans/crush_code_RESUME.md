@@ -1285,8 +1285,8 @@ A+C, parameter not second tool, **no askpass**), then the deferred security pass
 **Written between rounds so a compact cannot lose it.** Rounds 33 through 36 are all CLOSED and
 supervisor-verified. **Nothing is in flight; all three lanes are clean at master.** Round 37 is
 unscoped — start it by running the scout pass described under "ROUND 36 SCOPE" below, not by reading
-the plan. §0-NOW-32 further down is an older round's block and remains the authority for the standing
-rules and the DeepSeek record.
+the plan. Round 32's SUPERSEDED block further down remains the authority for the standing rules and the
+DeepSeek record.
 
 ### CONCURRENCY: **2**, BY USER INSTRUCTION
 
@@ -2453,7 +2453,7 @@ deps (`candy-focus`, `sugar-veil`, `candy-sprinkles`, `candy-kit`) are ALREADY i
    except one place").
 2. **P8.4 as Option B — wire the compositor.** Lane-sized, and its prerequisites are all in place.
 3. **P6.5** — two medium halves, ship as two PRs (`statusLine`, then the `keybindings` redesign; see
-   §0-NOW-32 for why the second is a redesign and not an addition).
+   round 32's SUPERSEDED block for why the second is a redesign and not an addition).
 4. **P3.x** — candy-focus FocusRing (3.2), sugar-veil click-outside (3.3), candy-sprinkles Table
    (3.4), and 3.5's unguarded byte-length `str_pad()` at `SplitLayout.php:238` (the `strlen()` the
    plan tells you to grep for is GONE; the defect is not).
