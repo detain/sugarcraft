@@ -8096,3 +8096,31 @@ An ASK still reaches it, via the prompt's no-tty refusal branch (that daemon's f
 log rather than raw `STDERR` — its fd 2 is the session log file, so a plain `noticeRefusal()` would in fact
 land correctly, but that should be verified rather than assumed. Not done in round 48: `src/Sessions/` was
 out of lane c's file list.
+
+---
+
+## Ec48-7 — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: test-infrastructure. **Observed, not fully diagnosed.**
+
+**What.** `tests/bootstrap.php` builds the suite's throwaway directory as
+`sys_get_temp_dir() . '/sc_suite_tmp_' . posix_geteuid()` and exports it as `TMPDIR` for every child
+process the suite spawns. The key is the uid and nothing else, so **two lanes running the suite at the
+same time as the same user share one sandbox** — and the comment above it explains the directory is
+deliberately stable rather than per-run and is never torn down.
+
+OBSERVED in round 48: with lane b's suite running concurrently, this lane's identical run went from
+4m 26s wall (measured alone at `5a3fe80b`: `Time: 04:34`, and again at `8b8ece84`: `Time: 04:26`) to
+crawling at roughly 160 tests per ten minutes over the same test range — on a 48-core box at load 6, i.e.
+**not CPU-bound**. That points at wall-clock waits rather than scheduling. A shared `TMPDIR` between two
+suites, plus `ToolIpcFiles`' sweep semantics over it, is the most obvious candidate and was not proved.
+
+NOT PROVED, stated plainly: the slowdown was observed, the mechanism was not isolated, and there are other
+shared resources in play (ports, `/tmp` proper, the MCP handshake children). The figure is one
+observation, not a benchmark — no repeats, no control.
+
+**Step.** First reproduce it deliberately (two suites, one box, timed) before changing anything. If it
+holds, key the sandbox by uid **plus** the checkout's real path, which is the coordinate that actually
+distinguishes two lanes — and check what that does to the `ToolIpcFiles::sweepOnce()` reasoning in the
+same comment, which assumes one sandbox per uid. `tests/bootstrap.php` is shared infrastructure: a change
+there reds every lane at merge, so this wants its own round rather than a corner of one.
