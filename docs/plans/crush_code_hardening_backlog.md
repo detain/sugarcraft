@@ -5780,3 +5780,61 @@ constants, but too volatile to pin without building a change-detector, which is 
 
 **Step.** Take them one at a time as each acquires a machine-readable source. The roster and preset
 lists are the two most likely to become checkable, since both are already enumerated in `src/`.
+
+### E112 — `bin/sugarcrush` carries a comment saying README.md is still wrong; it is not, as of round 44
+
+**Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, comment-correctness.
+**Not fixed here — `bin/sugarcrush` was read-only for this lane** (it is item 1's SOURCE, not its target).
+
+**What.** The `$args->usageError` block in `bin/sugarcrush` ends with *"README.md's list still names both;
+correcting it is lane c's file this round and is recorded as a deferred finding."* Round 44 lane b did
+correct it: the "exactly two exceptions" paragraph now names one, and the retraction is a blockquote.
+So the sentence describes a state that no longer exists and points a reader at a defect they will not
+find. The rest of that comment — that an unimplemented `--output-format` VALUE is the one remaining
+exception, and why — is correct and should be kept.
+
+**Step.** Rewrite the last two sentences of that block in the three-part form: what it said, that
+README.md was corrected in round 44 (commit `4547d07a`), and that the "this is now the ONLY exception"
+claim still earns its place because it is the load-bearing half. `ReadmeJsonErrorContractDriftTest`
+pins the README end of it; nothing pins this comment, and nothing needs to.
+
+### E113 — `ReadmeJsonErrorContractDriftTest` derives error types from two files by two different scans
+
+**Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, test-design. **Deliberate;
+recorded so the asymmetry is not mistaken for an oversight.**
+
+**What.** The test reads `src/Cli/NonInteractive.php` for `emitErrorDocument()` call sites (arguments
+split from the token stream, exit code taken from the `return self::EXIT_*` closing the same block) and
+`bin/sugarcrush` for a literal `'type' => …` pair plus the `exit(<int>)` after it. Two scans, because the
+guard is a plain script with no class to reflect on — which is the entire point of the guard. Both go
+red rather than skipping on anything they cannot parse.
+
+The asymmetry that is worth naming: the `NonInteractive` scan finds ALL types by construction, while the
+guard scan finds THE FIRST `'type' => <literal>` and stops. A second hand-rolled document in
+`bin/sugarcrush` would be invisible to it. There is no second one today and no reason to expect one — the
+guard exists precisely because that path can load nothing — but a `--version` fast path or a second
+pre-autoload guard would reopen it.
+
+**Step.** If a second pre-autoload document is ever added, make the guard scan collect all pairs and
+assert the set, the way the `NonInteractive` side already does. Related: E94/E98.
+
+### E114 — the round-44 lane scratchpad was shared between lanes and one lane's suite output overwrote another's
+
+**Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: process, not code.
+
+**What.** All three round-44 lanes were given the same scratchpad path
+(`/tmp/claude-1000/-home-sites-sugarcraft/<session>/scratchpad`), so a baseline written to
+`scratchpad/baseline.txt` by lane b and by lane c landed in one file. Lane b's baseline was recoverable
+only because the two summaries happened to append rather than truncate; a truncating write would have
+silently handed one lane the other's figures, and the standing rules make every later figure depend on
+that baseline.
+
+Second-order, and it corroborates **E96** with a live instance: lane c's run in that shared file failed
+`ParallelToolCallsTest::testACompletedGroupLeavesNoPayloadFilesBehind` and
+`testAThrowingSessionStateMergeCostsOnlyThatCallsMark` on `/tmp/sc_runtime_tool_*.bin` files that were
+**not its own** — lane b's suite was running concurrently and owns files matching that glob. E96 predicted
+exactly this; this is the first observation of it firing.
+
+**Step.** Give each lane a private scratch subdirectory (lane b used `scratchpad/laneb/` from the point
+it noticed), and fix E96 so a concurrent sibling suite cannot red a lane's run. The E96 fix is the
+load-bearing one: a lane that cannot trust `rc 0` cannot trust anything downstream of it.
