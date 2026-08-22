@@ -254,13 +254,34 @@ final class CommandLoaderRefusalReportingTest extends TestCase
         // `[]` proves nothing unless something here proves the instrument still
         // matches. Round 44 shipped an empty census whose scanner was dead and
         // it was entirely green.
+        //
+        // ONE FIXTURE PER DISPATCH OPERATOR, and not just `->`. A fixture that
+        // exercises only the shape the scanner already handles cannot reveal
+        // that its alphabet is too narrow — which is what happened here: the
+        // scanner accepted `->` and `::` only, while `?->` appears throughout
+        // `src/` (28 files at the time this was widened, though the number is
+        // deliberately not asserted — see rule 18 in the round briefs). A drain
+        // written `$loader?->skippedFiles()` would have left this census green.
         self::assertTrue(
             self::callsSkippedFiles('<?php $loader->skippedFiles();'),
             'the scanner below no longer recognises a call to skippedFiles(); the [] is vacuous',
         );
+        self::assertTrue(
+            self::callsSkippedFiles('<?php $loader?->skippedFiles();'),
+            'the scanner no longer recognises a NULLSAFE call to skippedFiles(); the [] is vacuous for '
+                . 'every `?->` in src/',
+        );
+        self::assertTrue(
+            self::callsSkippedFiles('<?php CommandLoader::skippedFiles();'),
+            'the scanner no longer recognises a static call to skippedFiles(); the [] is vacuous',
+        );
         self::assertFalse(
             self::callsSkippedFiles("<?php /** {@see skippedFiles()} */\n\$x = 1;"),
             'the scanner counts a doc-block reference as a call',
+        );
+        self::assertFalse(
+            self::callsSkippedFiles('<?php function skippedFiles(): array {}'),
+            'the scanner counts the declaration in CommandLoader itself as a call',
         );
 
         self::assertSame(
@@ -270,6 +291,69 @@ final class CommandLoaderRefusalReportingTest extends TestCase
                 . 'not a mistake — read the property\'s doc-block for the summary-row shape the drain needs, '
                 . 'then delete this test.',
         );
+
+        // A DISPATCH THE SCANNER CANNOT READ MUST RED, NOT PASS. `$l->$m()` and
+        // `call_user_func([$l, 'skippedFiles'])` are drains no token walk can
+        // resolve — the method name is data by then. Rather than guess at the
+        // call, this reds on the only thing that makes one possible: the name
+        // appearing as a STRING LITERAL anywhere in `src/`. There are none, so
+        // the assertion is an absence, and $dynamic below is its known-positive.
+        self::assertTrue(
+            self::mentionsSkippedFilesAsAString('<?php call_user_func([$l, \'skippedFiles\']);'),
+            'the string scanner is dead, so the absence asserted below proves nothing',
+        );
+        self::assertFalse(
+            self::mentionsSkippedFilesAsAString('<?php $l->skippedFiles();'),
+            'the string scanner matches a plain call, which would make it red on every ordinary drain',
+        );
+
+        $dynamic = [];
+        /** @var \SplFileInfo $file */
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src')) as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            if (self::mentionsSkippedFilesAsAString((string) file_get_contents($file->getPathname()))) {
+                $dynamic[] = ltrim(str_replace($root, '', $file->getPathname()), '/');
+            }
+        }
+
+        self::assertSame(
+            [],
+            $dynamic,
+            'the name `skippedFiles` appears as a string literal in src/. If that is a dynamic drain — '
+                . '`$loader->$method()`, a `[$loader, \'skippedFiles\']` callable — then the census above is '
+                . 'blind to it and this dormancy pin is green for the wrong reason. If it is something else '
+                . 'entirely, widen this check rather than deleting it: a shape the scanner cannot read has '
+                . 'to be a failure, not a silent zero.',
+        );
+    }
+
+    /**
+     * Whether `$source` carries the literal name `skippedFiles` inside a string.
+     *
+     * BOTH STRING TOKEN KINDS. `T_CONSTANT_ENCAPSED_STRING` is `'skippedFiles'`
+     * and `T_ENCAPSED_AND_WHITESPACE` is the literal run inside an interpolated
+     * one — `"{$prefix}skippedFiles"` is a method name a dynamic call can be
+     * built from just as well as the quoted form. Checked on PHP 8.3.6, the
+     * only version on this box.
+     */
+    private static function mentionsSkippedFilesAsAString(string $source): bool
+    {
+        foreach (token_get_all($source) as $token) {
+            if (!\is_array($token)) {
+                continue;
+            }
+            if (!\in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+                continue;
+            }
+            if (str_contains($token[1], 'skippedFiles')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function callsSkippedFiles(string $source): bool
@@ -297,7 +381,16 @@ final class CommandLoaderRefusalReportingTest extends TestCase
             }
             // A scope operator is what separates a call from `function
             // skippedFiles(`, which is the declaration in CommandLoader itself.
-            if (\in_array($previous[0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR], true)) {
+            // T_NULLSAFE_OBJECT_OPERATOR is `?->`, and it is here because the
+            // list without it was an alphabet written to match the one call
+            // shape the fixture happened to use.
+            if (
+                \in_array(
+                    $previous[0],
+                    [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR],
+                    true,
+                )
+            ) {
                 return true;
             }
         }

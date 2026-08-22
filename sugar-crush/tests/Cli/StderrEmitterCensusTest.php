@@ -490,8 +490,20 @@ final class StderrEmitterCensusTest extends TestCase
     }
 
     /**
-     * The naive `grep -c 'error_log('` count reconciles, per file and exactly,
-     * with the token scan plus the mentions in comments and doc-blocks.
+     * The naive `substr_count('error_log(')` count reconciles, per file and
+     * exactly, with the token scan plus the mentions in comments and doc-blocks.
+     *
+     * THE INSTRUMENT IS NAMED AS THE ONE THE CODE USES. WHAT THIS SAID: "the
+     * naive `grep -c 'error_log('` count". WHAT IS TRUE NOW: the body has
+     * always run `substr_count()`, and the two are different measurements —
+     * `grep -c` counts LINES that match, `substr_count()` counts OCCURRENCES.
+     * They agreed when this was written only because no line in `src/` happens
+     * to carry two (MEASURED at `62f4e5d1`: 58 by both, over thirteen files).
+     * WHY THE COMPARISON STILL EARNS ITS PLACE: the point was never the tool,
+     * it is that the WEAK instrument — whichever one a reader reaches for
+     * first — is reconciled against the token scan rather than trusted or
+     * dismissed. Naming the tool the code actually runs is what lets the next
+     * reader reproduce the number.
      *
      * WHY THIS TEST AND NOT A SENTENCE. Two counts of the same thing were in
      * circulation — the token census\'s and a `grep | uniq -c`\'s — differing by
@@ -504,10 +516,19 @@ final class StderrEmitterCensusTest extends TestCase
      * the correct one; the grep was counting this application\'s own prose about
      * `error_log()`, which it writes more often than it calls it.
      *
-     * THE RESIDUE IS THE POINT. An occurrence that is neither a call nor a
-     * comment — one inside a string literal, say, which is how a `sprintf()`
-     * template or a heredoc could smuggle one past both counts — reds this,
-     * and neither of the two existing rosters would notice it.
+     * THE RESIDUE IS THE POINT, IN BOTH DIRECTIONS. An occurrence that is
+     * neither a call nor a comment — one inside a string literal, say, which is
+     * how a `sprintf()` template or a heredoc could smuggle one past both
+     * counts — reds this, and neither of the two existing rosters would notice
+     * it. So does the opposite: a real call the naive count cannot SEE, which
+     * `error_log ("x")` with a space before the paren already is on PHP 8.3.6
+     * (MEASURED: `substr_count` 0, token scan 1). That direction used to be
+     * unreachable, because the loop skipped any file whose naive count was
+     * zero — 275 of the 289 files `sources()` walks, at the time that guard was
+     * removed. Asserting an identity only over the files the weaker instrument
+     * already agrees about is not a reconciliation.
+     * {@see testTheTwoInstrumentsDisagreeOnAShapeOnlyOneCanSee()} pins the case
+     * with both instruments side by side.
      *
      * NO CARDINALITY IS STATED ABOVE (rule 18). The figures are derived below
      * and appear only in failure messages, because a count written into prose
@@ -522,10 +543,12 @@ final class StderrEmitterCensusTest extends TestCase
         foreach (self::sources() as $relative => $absolute) {
             $source = (string) file_get_contents($absolute);
             $naive = substr_count($source, 'error_log(');
-            if ($naive === 0) {
-                continue;
-            }
 
+            // NO `if ($naive === 0) { continue; }` HERE, deliberately. It read
+            // as a cheap skip and was a hole: it dropped every file the weak
+            // instrument cannot see, which is precisely the file this
+            // reconciliation exists to find. For a genuinely empty file the
+            // identity below is `0 === 0` and costs nothing.
             $inComments = 0;
             foreach (token_get_all($source) as $token) {
                 if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
@@ -535,14 +558,20 @@ final class StderrEmitterCensusTest extends TestCase
 
             $calls = self::scan('error_log', $source);
 
+            $accounted = $calls + $inComments;
+            $direction = $naive > $accounted
+                ? 'occurrence(s) the token scan cannot account for, most likely inside a string literal — '
+                    . 'neither the channel-3 roster nor a naive count would report that'
+                : 'call(s) or mention(s) the naive count cannot SEE, which is what `error_log (` with a '
+                    . 'space before the paren looks like — the roster is right and the naive figure is blind';
+
             self::assertSame(
                 $naive,
-                $calls + $inComments,
-                "{$relative}: a naive grep finds {$naive} occurrences of `error_log(`, but the token scan "
-                    . "counts {$calls} calls and {$inComments} mentions inside comments — {$naive} minus "
-                    . (string) ($calls + $inComments) . ' occurrence(s) are somewhere else, most likely '
-                    . 'inside a string literal. Neither the channel-3 roster nor a grep would report that; '
-                    . 'find it before trusting either count.',
+                $accounted,
+                "{$relative}: substr_count() finds {$naive} occurrences of `error_log(`, but the token scan "
+                    . "counts {$calls} calls and {$inComments} mentions inside comments — a gap of "
+                    . (string) abs($naive - $accounted) . ' ' . $direction
+                    . '. Find it before trusting either count.',
             );
 
             $naiveTotal += $naive;
@@ -561,6 +590,44 @@ final class StderrEmitterCensusTest extends TestCase
             $commentTotal,
             'no comment in src/ mentions `error_log(` any more, so the reconciliation above is trivially '
                 . 'true and proves nothing about the grep/scan gap it exists to explain',
+        );
+    }
+
+    /**
+     * THE TWO INSTRUMENTS, SIDE BY SIDE, ON A SHAPE ONLY ONE OF THEM CAN SEE.
+     *
+     * The reconciliation above asserts the two agree across `sources()`. That
+     * is worth nothing unless they are capable of disagreeing, and the shape
+     * that makes them disagree is not exotic: PHP allows whitespace between a
+     * function name and its `(`, so `error_log ("x")` is a call the token scan
+     * counts and a literal `error_log(` search cannot match. There is no such
+     * site in `src/` today — which is why it needs a fixture rather than a
+     * sentence, and why the loop above had to stop skipping the files where
+     * the naive count is zero.
+     *
+     * PHP 8.3.6, the only version on this box; CI also runs 8.4 and this is not
+     * asserted there.
+     */
+    public function testTheTwoInstrumentsDisagreeOnAShapeOnlyOneCanSee(): void
+    {
+        // The control: both instruments see the ordinary spelling, so a
+        // disagreement below is about the SHAPE and not about a dead scanner.
+        $plain = '<?php error_log("x");';
+        self::assertSame(1, substr_count($plain, 'error_log('), 'the naive instrument is dead');
+        self::assertSame(1, self::scan('error_log', $plain), 'the token scan is dead');
+
+        $spaced = '<?php error_log ("x", 3, "/tmp/f");';
+        self::assertSame(
+            0,
+            substr_count($spaced, 'error_log('),
+            'a literal `error_log(` search now matches across the space, which would make this fixture '
+                . 'prove nothing — pick a shape the naive instrument still cannot see',
+        );
+        self::assertSame(
+            1,
+            self::scan('error_log', $spaced),
+            'the token scan no longer sees a call with whitespace before its paren, so the channel-3 '
+                . 'roster is under-counting by however many of those src/ has acquired',
         );
     }
 
