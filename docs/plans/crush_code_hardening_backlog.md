@@ -7429,3 +7429,88 @@ paragraph of every file**, where every sibling addition necessarily matches.
 a sibling's additions fall inside its PREDICATE, not merely inside its scan scope.** Assertions are still
 a lower bound, not an equality — but "walks a directory a sibling touches" is not sufficient reason to
 expect an overshoot, and predicting one and being wrong costs the prediction its credibility.
+
+### Eb47-1 — a plain `exit()` in a forked child does NOT re-run PHPUnit's after-test hooks
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: process + doc accuracy. **Measured; falsifies
+sentences that were in the tree, in a lane brief, and in a salvaged commit message.**
+
+**What.** The salvaged E177/E180 commit, its two call-site comments, the E178 doc-block on
+`WorkflowEngine::installInterruptHandlers()`, and the round-47 lane-b brief itself all said that a
+forked child leaving through `exit()` makes "PHPUnit's after-test hooks run again in every child".
+It does not.
+
+**Measurement.** A two-process probe under this lane's vendored PHPUnit 10.5.64 on PHP 8.3.6: a test
+method registers a `register_shutdown_function` callback, logs `getmypid()` from `tearDown()` and from
+that callback, forks, and the child leaves through `exit(0)`. Observed, in order:
+`parent=<P>` / `shutdown-fn pid=<C>` / `child=<C> exited` / `tearDown pid=<P>` / `shutdown-fn pid=<P>`.
+The child ran the shutdown sequence; `tearDown()` fired exactly once, in the parent.
+
+**Why it is that way.** PHPUnit's after-test hooks are driven by `TestCase::runBare()` returning. A
+child that exits never returns anywhere. The shape that DOES re-run them is a child that FALLS THROUGH
+its branch — which is the `MultiAgentRefactorTest` case `ForkedChildExitConventionTest`'s doc-block
+already cited, so the doc-block was attributing one shape's consequence to the other.
+
+**Status.** Fixed in the tree: the convention doc-block now separates the two shapes with the
+measurement, and the three call sites follow it. The hazard itself is real and unchanged — inherited
+destructors and `register_shutdown_function` callbacks over a copy of the parent's object graph — so no
+fix was reverted.
+
+**Step.** When a brief or a review states a MECHANISM, the acceptance test is a probe, not a citation.
+This one cost four minutes and corrected four places at once.
+
+### Eb47-2 — `tests/Backend/EngineBackendReapTest.php` has four unreaped in-process forks
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: harness. **Derived, not enumerated.**
+
+**What.** `ForkedChildReaperAdoptionTest::SCOPE` now covers `Agents/`, `Integration/` and `Support/`.
+`tests/Backend/EngineBackendReapTest.php` forks four times with a raw `pcntl_fork()` and declares no
+`tearDown()` at all, so an abort at `defaultTimeLimit` leaves its children with no clock — the alarm is
+`pcntl_alarm()` and fires in the parent only. It was out of lane b's file split, so it is recorded in
+`ForkedChildReaperAdoptionTest::OUT_OF_SCOPE` rather than fixed.
+
+**Step.** Give `tests/Backend/` to a lane: adopt `ReapsForkedChildrenTrait`, route the four forks
+through `$this->forkTracked()`, add a `tearDown()` whose FIRST statement is
+`$this->reapTrackedForkedChildren()`, delete the `OUT_OF_SCOPE` row and add `Backend/` to `SCOPE`. The
+guard names the work; `testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()` fails the moment the
+directory is clean and the row is still there, and
+`testNoDirectoryWithUnreapedForksIsUnaccountedFor()` fails if the row is deleted without widening
+`SCOPE`.
+
+### Eb47-3 — a `proc_open()` fd-2 entry behind a call is still read as a capture
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: guard hole. **Named limit, deliberately not
+closed this round.**
+
+**What.** `ChildStderrCaptureScanner::classifySpec()` decides `captured` vs `discarded` from fd 2's
+entry in the descriptor spec, and `fdTwoSpecIsTheNullDevice()` matches the literal string `/dev/null`
+inside it. A spec whose fd-2 entry is not an inline literal array — the live example is
+`BinSugarcrushDispatchTest::armWatchdog()`'s `2 => $devNull('w')`, a closure returning
+`['file','/dev/null','w']` — is reported as `captured` on the strength of fd 2 merely being NAMED.
+
+**Why it is not a live defect today.** That one site is classified `discarded` anyway, off the earlier
+branch: its command string carries `>/dev/null 2>&1`. Every other in-scope spec has an inline literal.
+
+**Why it should still be closed.** Per the guard's own standard (rule 14), a spec entry the scanner
+cannot read should be `unclassified` — a failure — rather than assumed innocent. The change is small:
+in `classifySpec()`, require fd 2's entry to be a literal array before answering `captured`. It was left
+out this round because it was not measured against the whole tree and rule 16 says a prescription is a
+hypothesis until it is.
+
+### Eb47-4 — three lanes share ONE scratchpad directory, and two of them collided in round 47
+
+**Recorded 2026-08-22 by round-47 lane b.** Severity: process. **Observed, cost one four-minute run.**
+
+**What.** All three round-47 implementers were given the same
+`/tmp/claude-1000/-home-sites-sugarcraft/<session>/scratchpad` path. Lane a and lane b both wrote a
+baseline suite log to `scratchpad/baseline_head.txt`. Two `php vendor/bin/phpunit` processes then held
+the same file open with independent offsets, and the interleaved result was internally inconsistent —
+the SAME progress line read `6344 / 9378` on one `tail` and `6344 / 9407` on the next, and the final
+summary in the file was lane a's (`9407 tests, 6 failures`) while lane b's run was green. A lane that
+had trusted that file would have reported a red baseline it did not have. Lane c had independently used
+a `scratchpad/lane-c/` subdirectory and was unaffected.
+
+**Step.** Put the per-lane subdirectory in the brief: **write every scratch artefact under
+`scratchpad/lane-<x>/`**. The `/tmp` prohibition in the brief already covers `sc_runtime_tool_*` and
+friends; it does not cover the scratchpad itself, and the scratchpad is the one directory every lane is
+actively told to use.
