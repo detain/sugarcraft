@@ -242,10 +242,14 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         // written first and MEASURED: with {@see Bootstrap::STDERR_LINE_FORMAT}
         // mutated `"sugarcrush: %s.\n"` → `"sugarcrush: %s\n"`, the rendered
         // needle loses its trailing full stop and is then a PREFIX of the
-        // page's sample, so the containment passed —
-        // `OK (5 tests, 27 assertions)` on PHP 8.3.6. Any mutation that only
-        // SHORTENS the envelope is invisible to a containment check. So the
-        // fenced sample block is extracted and compared whole.
+        // page's sample, so the containment passed: nothing in this class
+        // redded, on PHP 8.3.6. (The class total that used to stand here is
+        // gone under E188 — a `Tests:`/`Assertions:` figure is a cardinality
+        // over the class, moved by any sibling added beside the one measured,
+        // and a survival has no failing name to quote in its place.) Any
+        // mutation that only SHORTENS the envelope is invisible to a
+        // containment check. So the fenced sample block is extracted and
+        // compared whole.
         self::assertSame(
             $this->launchReportSample($ceiling, $removed),
             $this->launchReportBlockIn('README.md'),

@@ -19,28 +19,36 @@ use SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest;
  * THE FIGURE THAT USED TO SIT HERE WAS QUOTED WITHOUT ITS TREE, and it is the
  * mistake this whole file family exists to stop. WHAT IT SAID: "measured the
  * consequence: changing the launcher's format from `disabled %d of the %d` to
- * `removed %d of the %d` left the two guards that exist for that line at
- * `OK (14 tests, 84 assertions)`", with no commit attached. WHAT IS TRUE NOW,
- * re-measured at `06126017` — the tree E118 actually replaced, PHP 8.3.6:
- * that same mutation gives `Tests: 14, Assertions: 92, Failures: 1`. It was
- * NOT blind. By then E104's finding had already been half-answered by round
- * 43, which replaced the re-typed literal with a regex scrape of
- * `Bootstrap.php`'s source text, and the scrape reads the literal — so it reds
- * on a literal change. The 84 describes the tree BEFORE that scrape existed,
- * which is a tree neither number in this doc-block was measured against.
- * WHY THE FIGURE STILL EARNS ITS PLACE: it is the only measurement of the
+ * `removed %d of the %d` left the two guards that exist for that line green",
+ * with no commit attached. WHAT IS TRUE NOW, re-measured at `06126017` — the
+ * tree E118 actually replaced, PHP 8.3.6: that same mutation REDS in that
+ * class. It was NOT blind. By then E104's finding had already been
+ * half-answered by round 43, which replaced the re-typed literal with a regex
+ * scrape of `Bootstrap.php`'s source text, and the scrape reads the literal —
+ * so it reds on a literal change. The "green" reading describes the tree
+ * BEFORE that scrape existed, which is a tree neither reading in this
+ * doc-block was measured against.
+ * WHY THE OLD READING STILL EARNS ITS PLACE: it is the only measurement of the
  * failure E104 named, and deleting it would leave the item reading as a
- * tidiness complaint. It is a historical figure for the retyped-literal shape,
- * not a description of what E118 improved on.
+ * tidiness complaint. It is a historical verdict for the retyped-literal
+ * shape, not a description of what E118 improved on.
+ *
+ * BOTH READINGS USED TO CARRY A `Tests:`/`Assertions:` TOTAL AND NO LONGER DO
+ * (E188). A PHPUnit class total looks like a measurement and is also a
+ * CARDINALITY OVER THE CLASS: any sibling test added anywhere beside the
+ * mutated one moves it, with no relationship to the thing being measured.
+ * Round 46 shipped three such figures and all three were invalidated by a
+ * later commit of the SAME ROUND. What survives a sibling landing is the NAME
+ * of the test that reds, so that is what this file quotes from here down; a
+ * verdict with nothing red needs no name and says so in words.
  *
  * WHAT E118 ACTUALLY IMPROVED ON is the scrape, and its weakness is a
  * different one: it was coupled to the syntactic SHAPE of the code rather than
  * to the string, so a pure refactor broke it. Measured at `06126017`, turning
  * `warnPermissionConfig()`'s interpolation into
  * `sprintf(self::STDERR_LINE_FORMAT, $message)` — not one byte of output
- * changed — gives `Tests: 14, Assertions: 89, Failures: 1`. E118 promoted the
- * formats with an external reader to `public const` and pointed those guards
- * at the names.
+ * changed — REDS that class. E118 promoted the formats with an external reader
+ * to `public const` and pointed those guards at the names.
  *
  * THAT SWAP IS ONLY AN IMPROVEMENT UNDER ONE CONDITION, and this file is the
  * condition. A `public const` that the emitting code does not `sprintf()` FROM
@@ -102,10 +110,20 @@ use SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest;
  * answer was not, and it was wrong three times. (1) It read the readers of
  * `reportProjectTierRefusals()`'s `'ignoring %s — %s'` off two files that
  * mention the envelope in COMMENTS, concluded "fragment only", and left it
- * inline; rewording `ignoring` → `skipping` took
- * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest} and
- * its neighbours to `Tests: 177, Assertions: 615, Failures: 1`, because a third
- * file reconstructs the whole envelope twice. (2) and (3) The two `mcpClient()`
+ * inline; rewording `ignoring` → `skipping` reds
+ * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testARefusedProjectDirectoryReachesBothChannels()},
+ * because that test reconstructs the whole envelope twice — once per channel.
+ * THIS SENTENCE IS ALSO E188'S OWN WORKED EXAMPLE, which is why it is worth the
+ * extra line: it used to end in a class total, and that total went stale in the
+ * two rounds it took to write this paragraph and read it again. RE-MEASURED at
+ * round 47 on PHP 8.3.6, scope = the eight classes in `tests/` that name the
+ * refusal envelope at all, the same reword now reds FOUR tests rather than the
+ * one the total was taken over —
+ * {@see testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints()},
+ * {@see testEveryDocPageQuotingAPromotedFormatIsOnTheReadersRoster()} and
+ * {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()} in this file
+ * joined it, none of which existed when the figure was taken. A name survives
+ * that; a total does not. (2) and (3) The two `mcpClient()`
  * messages looked like fragment readers too — the clause everything asserts is
  * `'could not be fully started'`, which both of them carry. Rewording the spans
  * that clause does NOT cover gives `Failures: 3` and `Failures: 2`:
@@ -138,9 +156,15 @@ use SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest;
  * later reader needs: that behavioural case does NOT pin the constant's TEXT.
  * Its expectation renders from the same constant the child renders from, so with
  * respect to the wording it is a tautology — measured, a rewording of the
- * constant left it at `OK (57 tests, 135 assertions)`. A separate literal copy
- * of the sentence lives beside it for exactly that reason, and the pair is the
- * pin. The sibling constants need no such copy because README.md and the two
+ * constant left the behavioural ASSERTION green. A separate literal copy of the
+ * sentence lives beside it for exactly that reason, and the pair is the pin.
+ * MEASURED AGAIN at round 47 on PHP 8.3.6, scope = that whole class: rewording
+ * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} now reds
+ * {@see \SugarCraft\Crush\Tests\Cli\BootstrapToolAndPermissionSettingsTest::testAProjectThatRemovesEveryToolReportsTheNoSurvivorsBranch()}
+ * — on the literal-copy assertion, not on the behavioural one, which is the
+ * pair working exactly as described. The class total this paragraph used to
+ * carry is gone under E188, and it had already drifted by an assertion before
+ * anyone re-read it. The sibling constants need no such copy because README.md and the two
  * docs pages hold theirs.
  *
  * @see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest for the README end
@@ -310,7 +334,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * re-inlined `'WRECKED: no tools survive'` in place of
      * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} while leaving the
      * constant's NAME mentioned in the body, ran the six classes that could
-     * plausibly cover it, and got `OK (109 tests, 339 assertions)`, rc 0. The
+     * plausibly cover it, and no test in any of them redded — rc 0. (A "nothing
+     * red" verdict is the one case E188 leaves without a name, because there is
+     * no name to give; the class totals that used to stand in for it are gone.)
+     * The
      * conversion marker cannot see a promoted literal that carries no
      * conversion, and {@see identifiersIn()} pins only that the name is
      * MENTIONED, never that it is USED. That is exactly the state this file's
@@ -1090,6 +1117,103 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             @rmdir($root . '/docs');
             @rmdir($root);
         }
+    }
+
+    /**
+     * NO DOC-BLOCK IN THIS FILE FAMILY QUOTES A PHPUNIT CLASS TOTAL (E188).
+     *
+     * A `Tests:` / `Assertions:` pair reads as a measurement and is also a
+     * CARDINALITY OVER A CLASS: any sibling test added anywhere beside the one
+     * that was mutated moves it, with no relationship at all to the thing being
+     * measured. Round 46 shipped three of them and every one was invalidated by
+     * a LATER COMMIT OF THE SAME ROUND. The rule survived as prose in the
+     * backlog and prose does not red, which is why it is a test now.
+     *
+     * WHAT IS BANNED AND WHAT IS NOT. Only the two class-scoped totals —
+     * `Tests: <n>` / `Assertions: <n>` and PHPUnit's `OK (<n> tests, …)` — are
+     * refused. A `Failures: <n>` is deliberately NOT: it counts the tests that
+     * red, which is a property of the mutation rather than of the class, and it
+     * survives a sibling landing beside it. Naming the failing tests is still
+     * better and the doc-blocks above do, but a rule that reds on the honest
+     * form as well as the rotten one gets deleted rather than obeyed.
+     *
+     * THE SCOPE IS THE TWO FILES THIS LANE OWNS, stated rather than widened: a
+     * historical figure taken at a NAMED COMMIT is a different animal from one
+     * taken at "the tree as it was", and deciding that for a file whose author
+     * is not here is not this guard's business. Widening it is a backlog item,
+     * not a silent reach.
+     *
+     * THE FIXTURE IS THE POINT (rule 15). This asserts an ABSENCE, and an
+     * absence proves nothing unless something in the same test shows the
+     * scanner can still find a presence — round 44 mutated a census's scanner
+     * to never match and watched 18,228 assertions stay green. The fixture also
+     * pins the FLATTENING: a doc-block wraps at 80 columns with ` * ` on every
+     * continuation, so a long total is routinely NOT those bytes in a row, and
+     * a scanner that matches the raw source misses exactly the sentences most
+     * likely to carry one.
+     *
+     * AND THE FIXTURE IS ASSEMBLED FROM PARTS RATHER THAN WRITTEN OUT, which is
+     * not a style choice: a guard whose known-positive needle is a literal in
+     * its own source is a guard that reds on itself. The first draft of this
+     * one did, four times over.
+     */
+    public function testNoDocBlockInThisLanesFilesQuotesAPhpunitClassTotal(): void
+    {
+        // KNOWN-POSITIVE FIRST, so a dead scanner cannot pass the real check.
+        // Assembled, never written out: see the doc-block.
+        $tests = 'Tests' . ': 14';
+        $assertions = 'Assertions' . ': 92';
+        $wrapped = "    /**\n     * measured at `06126017`: that mutation gives `{$tests},\n"
+            . "     * {$assertions}, Failures: 1`, so it was not blind.\n     */\n";
+        self::assertSame(
+            [$tests, $assertions],
+            self::classTotalsIn($wrapped),
+            'the class-total scanner can no longer see a total wrapped across a doc-block continuation, '
+            . 'which is the only shape a long one ever has; the absence asserted below is vacuous',
+        );
+        self::assertSame(
+            [],
+            self::classTotalsIn("    // the mutation reds two tests: `Failures: 2` on PHP 8.3.6\n"),
+            'the scanner refuses a Failures: count, which is a property of the mutation and not of the class',
+        );
+
+        foreach (['tests/Cli/BootstrapLaunchFormatConstantsTest.php', 'tests/Config/ReadmeSettingsTierClaimTest.php'] as $relative) {
+            $path = \dirname(__DIR__, 2) . '/' . $relative;
+            $source = @file_get_contents($path);
+            if ($source === false) {
+                // A file the guard cannot read must be loud, never "it is fine".
+                throw new \RuntimeException("{$relative} could not be read; this guard cannot answer for it");
+            }
+
+            self::assertSame(
+                [],
+                self::classTotalsIn($source),
+                "{$relative} quotes a PHPUnit class total. It reads as evidence and is a cardinality over "
+                . 'that class: the next test added anywhere beside the one measured invalidates it, which '
+                . 'is how round 46 shipped three stale ones in a single round. Name the tests that red '
+                . 'instead, or say "nothing redded" if nothing did',
+            );
+        }
+    }
+
+    /**
+     * Every class-scoped PHPUnit total `$source` quotes, in order.
+     *
+     * Continuation markers are flattened first — see the caller for why that is
+     * load-bearing rather than defensive.
+     *
+     * @return list<string>
+     */
+    private static function classTotalsIn(string $source): array
+    {
+        $flat = (string) preg_replace('/\s*\n\s*(?:\*|\/\/)?\s*/', ' ', $source);
+
+        preg_match_all('/\b(?:Tests:\s*\d+|Assertions:\s*\d+|OK \(\d+ tests?)/', $flat, $matches);
+
+        return array_map(
+            static fn(string $hit): string => (string) preg_replace('/\s+/', ' ', $hit),
+            $matches[0],
+        );
     }
 
     /**
