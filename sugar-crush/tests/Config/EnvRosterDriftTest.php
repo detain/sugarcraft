@@ -36,10 +36,20 @@ use SugarCraft\Crush\Tests\Config\Support\EnvReadScanner;
  * - A prefixed name that appears ONLY inside a doc-comment or an error message
  *   is not a read. `src/Providers/ProviderFactory.php` mentions
  *   `SUGARCRUSH_REASONING_EFFORT` and `SUGARCRUSH_TOOL_CALL_PARSER` in
- *   doc-blocks; neither is read by any `getenv()`, both reach a config file
- *   only through the `${…}` placeholder mechanism, and the page says exactly
- *   that in prose rather than tabulating them. Comparing against the page's
+ *   doc-blocks; neither is read by any `getenv()`, and both reach a config file
+ *   only through the `${…}` placeholder mechanism. Comparing against the page's
  *   TABLES rather than its prose is what keeps those two out of both sets.
+ *   THE LAST CLAUSE OF THAT SENTENCE USED TO COVER BOTH NAMES AND DOES NOT.
+ *   WHAT IT SAID: "and the page says exactly that in prose rather than
+ *   tabulating them". WHAT IS TRUE, measured on PHP 8.3.6:
+ *   `docs/ENVIRONMENT.md` says it for `SUGARCRUSH_TOOL_CALL_PARSER` only;
+ *   `SUGARCRUSH_REASONING_EFFORT` appears nowhere on that page, in a table, in
+ *   prose or in a fence. WHY THE POINT SURVIVES: it never depended on the page
+ *   saying anything. A doc-comment mention is not a read because the SCANNER
+ *   follows call shapes, and the table-only scrape is what keeps a name the
+ *   page discusses out of the documented set. This half-sentence was copied
+ *   forward into a round-45 claim about the roster page and stamped
+ *   "measured"; the correction lives on {@see tabulatedNames()}.
  * - The deprecated `SUGAR_CRUSH_*` spelling is inside the scanner's alphabet on
  *   purpose. A pattern matching only the canonical prefix would have reported a
  *   clean roster while `SUGAR_CRUSH_WORKTREES_DIR` and
@@ -543,10 +553,11 @@ final class EnvRosterDriftTest extends TestCase
      *
      * - THIS page is the ROSTER. Its prose is where a variable that is NOT read
      *   gets explained, which is a thing only the roster page does, and it does
-     *   it for `SUGARCRUSH_TOOL_CALL_PARSER` and `SUGARCRUSH_REASONING_EFFORT`
-     *   today. A page-wide scrape here would turn those two sentences into
-     *   promises and red on prose that exists to record that the code makes no
-     *   promise. So: first column only.
+     *   it for `SUGARCRUSH_TOOL_CALL_PARSER` today — that name alone. A
+     *   page-wide scrape here would turn that section, and the `${…}`
+     *   placeholder example in the fenced block above it, into promises, and
+     *   red on prose that exists to record that the code makes no promise. So:
+     *   first column only.
      * - EVERY OTHER page MENTIONS. It has no roster to keep and no not-read
      *   section; a `SUGARCRUSH_*` name printed on it is being handed to a
      *   reader to set. So: whole page — and the roster page is EXCLUDED from
@@ -554,13 +565,30 @@ final class EnvRosterDriftTest extends TestCase
      *   not-read sentences out of the widened rule without an exemption list.
      *
      * THE EXCLUSION IS LOAD-BEARING, AND THAT IS MEASURED RATHER THAN ARGUED.
-     * Deleting the `continue` that skips the roster page in
-     * {@see mentionedNames()} reds three tests on PHP 8.3.6 at round 45, and
-     * two of them red on exactly the prose this paragraph is about: with the
-     * page scraped whole, `SUGARCRUSH_TOOL_CALL_PARSER` and
-     * `SUGARCRUSH_REASONING_EFFORT` become mentions, and neither is read nor
-     * tabulated. The naive widening really does red on the two sentences that
-     * exist to record that nothing reads them.
+     * Deleting the roster `continue` in {@see mentionSurfaces()} reds three
+     * tests on PHP 8.3.6, and both of the set comparisons among them red on a
+     * ONE-ELEMENT diff: with the page scraped whole,
+     * `SUGARCRUSH_TOOL_CALL_PARSER` becomes a mention, and it is neither read
+     * nor tabulated. The naive widening really does red on the prose that
+     * exists to record that nothing reads it.
+     *
+     * THAT SENTENCE NAMED TWO VARIABLES WHEN IT WAS FIRST WRITTEN, and the
+     * correction is kept because the way it went wrong is the point.
+     * WHAT IT SAID: the widening turns `SUGARCRUSH_TOOL_CALL_PARSER` AND
+     * `SUGARCRUSH_REASONING_EFFORT` into mentions.
+     * WHAT IS TRUE: `SUGARCRUSH_REASONING_EFFORT` does not appear on
+     * `docs/ENVIRONMENT.md` at all — not in a table, not in prose, not in a
+     * fence — so it cannot become a mention when the exclusion is removed. It
+     * exists in exactly one place in this package, a doc-block in
+     * `src/Providers/ProviderFactory.php`.
+     * WHY THE CLAIM SURVIVES IN CORRECTED FORM: the exclusion really is
+     * load-bearing and the mutation really does red; only the arithmetic was
+     * borrowed. The pairing came from this class's own doc-block, which names
+     * the two variables together for a DIFFERENT reason — both are mentioned in
+     * `ProviderFactory`'s doc-blocks and neither is read — and the pairing was
+     * copied across into a claim about the ROSTER PAGE and then stamped
+     * "measured". A sentence inherited from a neighbouring paragraph is not a
+     * measurement, however true the paragraph it came from.
      *
      * @return list<string>
      */
@@ -661,13 +689,18 @@ final class EnvRosterDriftTest extends TestCase
      * NO CARDINALITY IS QUOTED HERE, which is discipline rather than vagueness:
      * a count measured over `docs/` is invalidated by the next page anyone
      * adds, and this file's whole subject is prose drifting away from what is
-     * true. What was measured at round 45 on PHP 8.3.6 is the SHAPE —
-     * `README.md` and six of the eleven non-roster `docs/*.md` pages each name
-     * variables from this roster, and before this test not one of those
-     * appearances was compared against anything at all. The live generator for
-     * "is this census reading anything" is
+     * true. What is claimed is the SHAPE — `README.md` and several of the
+     * non-roster `docs/*.md` pages each name variables from this roster, and
+     * before this test not one of those appearances was compared against
+     * anything at all. Every number behind that sentence is derived by
      * {@see testTheMentionCensusActuallyReadsTheOtherPages()}, which asserts
      * floors rather than counts.
+     *
+     * THE FIRST DRAFT OF THIS PARAGRAPH ANNOUNCED "NO CARDINALITY IS QUOTED
+     * HERE" AND THEN QUOTED TWO — "six of the eleven non-roster pages". Both
+     * were correct when written and both are counts over `docs/`, which is the
+     * thing the banner above them forbids. They are gone rather than refreshed:
+     * a fresher number is the same defect with a later date on it.
      *
      * THE RULE, AND WHY IT IS NOT SYMMETRIC. The surfaces make different
      * promises, so they get different oracles:
@@ -699,26 +732,40 @@ final class EnvRosterDriftTest extends TestCase
      */
     private function mentionedNames(): array
     {
-        $root = realpath(__DIR__ . '/../..');
-        self::assertIsString($root);
+        return $this->mentionNamesIn($this->mentionSurfaces());
+    }
 
-        $roster = realpath(self::ENVIRONMENT_DOC);
-        self::assertIsString($roster, 'docs/ENVIRONMENT.md is gone, so the exclusion below excludes nothing');
-
-        $surfaces = array_merge([$root . '/README.md'], glob($root . '/docs/*.md') ?: []);
-        self::assertGreaterThan(
-            1,
-            \count($surfaces),
-            'the mention surfaces collapsed to one file or none, so an empty result means nothing',
-        );
-
+    /**
+     * The census itself, over any set of labelled texts.
+     *
+     * SPLIT OUT SO A FIXTURE CAN DRIVE IT, and that is a repair rather than a
+     * tidy-up. WHAT THE TESTS BELOW SAID: that they run "the scraper" over a
+     * known positive, so their empty results are evidence in round 44's sense.
+     * WHAT WAS TRUE: the fixture they ran exercised {@see prefixedNamesIn()},
+     * the NAME PATTERN, while the answer they then asserted on came from this
+     * census. MEASURED on PHP 8.3.6 at round 45: with the accumulation line
+     * blinded, both empty-result tests passed — 641 assertions, entirely green,
+     * over a dead instrument. That is round 44's exact failure, reproduced
+     * inside the fix written to invoke it. WHY THE SENTENCE STILL EARNS ITS
+     * PLACE: the requirement was right and the seam was missing. The fixture
+     * now drives THIS method, so blinding it reds.
+     *
+     * WHAT A FIXTURE HERE STILL CANNOT SEE is the surface walk —
+     * {@see mentionSurfaces()}' glob, its `README.md`, and the roster exclusion
+     * — because that half reads the disk by construction. It is guarded from
+     * outside by {@see testTheMentionCensusActuallyReadsTheOtherPages()}, which
+     * is named rather than assumed so the next reader does not delete the one
+     * test holding that half up.
+     *
+     * @param array<string, string> $surfaces label => the page's text
+     *
+     * @return array<string, list<string>> variable => the pages that name it
+     */
+    private function mentionNamesIn(array $surfaces): array
+    {
         $found = [];
-        foreach ($surfaces as $path) {
-            if (realpath($path) === $roster) {
-                continue;
-            }
-            $label = substr($path, \strlen($root) + 1);
-            foreach ($this->prefixedNamesIn(self::read($path)) as $name) {
+        foreach ($surfaces as $label => $text) {
+            foreach ($this->prefixedNamesIn($text) as $name) {
                 $found[$name][] = $label;
             }
         }
@@ -726,6 +773,60 @@ final class EnvRosterDriftTest extends TestCase
 
         return $found;
     }
+
+    /**
+     * Every page that MENTIONS, keyed by its repo-relative path.
+     *
+     * The roster is EXCLUDED here rather than exempted inside the census, for
+     * the reason {@see tabulatedNames()} sets out: it is the one page whose
+     * prose deliberately discusses a variable nothing reads.
+     *
+     * @return array<string, string>
+     */
+    private function mentionSurfaces(): array
+    {
+        $root = realpath(__DIR__ . '/../..');
+        self::assertIsString($root);
+
+        $roster = realpath(self::ENVIRONMENT_DOC);
+        self::assertIsString($roster, 'docs/ENVIRONMENT.md is gone, so the exclusion below excludes nothing');
+
+        $paths = array_merge([$root . '/README.md'], glob($root . '/docs/*.md') ?: []);
+        self::assertGreaterThan(
+            1,
+            \count($paths),
+            'the mention surfaces collapsed to one file or none, so an empty result means nothing',
+        );
+
+        $surfaces = [];
+        foreach ($paths as $path) {
+            if (realpath($path) === $roster) {
+                continue;
+            }
+            $surfaces[substr($path, \strlen($root) + 1)] = self::read($path);
+        }
+
+        return $surfaces;
+    }
+
+    /**
+     * Two pages whose census answer is known, for the tests that assert `[]`.
+     *
+     * @return array<string, string>
+     */
+    private static function censusFixture(): array
+    {
+        return [
+            'fixture-a.md' => 'set `SUGARCRUSH_FIXTURE_ONE`, or the old `SUGAR_CRUSH_FIXTURE_TWO`',
+            'fixture-b.md' => 'and `SUGARCRUSH_FIXTURE_ONE` again, in a second page',
+        ];
+    }
+
+    /** The census answer {@see censusFixture()} must produce. */
+    private const CENSUS_FIXTURE_ANSWER = [
+        'SUGARCRUSH_FIXTURE_ONE' => ['fixture-a.md', 'fixture-b.md'],
+        'SUGAR_CRUSH_FIXTURE_TWO' => ['fixture-a.md'],
+    ];
 
     /**
      * Every `SUGARCRUSH_*` / `SUGAR_CRUSH_*` name in a blob of text.
@@ -751,20 +852,25 @@ final class EnvRosterDriftTest extends TestCase
     /**
      * A name printed on a mention surface is one the code reads.
      *
-     * THE SCRAPER IS RUN OVER A KNOWN POSITIVE IN THIS SAME TEST. An assertion
-     * that a diff is empty passes just as well in a tree where the scraper has
+     * THE CENSUS IS RUN OVER A KNOWN POSITIVE IN THIS SAME TEST. An assertion
+     * that a diff is empty passes just as well in a tree where the census has
      * silently stopped matching — round 44 measured that exactly: a census
      * mutated to never match reported "nothing is stale" across eighteen
      * thousand green assertions. The fixture is what makes the empty result
-     * below evidence rather than decoration.
+     * below evidence rather than decoration, and it drives
+     * {@see mentionNamesIn()} — the method whose answer this test asserts on —
+     * rather than {@see prefixedNamesIn()} alone, which is the half the round-45
+     * version of this doc-block claimed and did not do. The surface walk is the
+     * remaining half and is guarded by
+     * {@see testTheMentionCensusActuallyReadsTheOtherPages()}.
      */
     public function testEveryVariableAnotherPageNamesIsOneTheCodeReads(): void
     {
         $this->assertSame(
-            ['SUGARCRUSH_FIXTURE_ONE', 'SUGAR_CRUSH_FIXTURE_TWO'],
-            $this->prefixedNamesIn('set `SUGARCRUSH_FIXTURE_ONE`, or the old `SUGAR_CRUSH_FIXTURE_TWO`'),
-            'the mention scraper cannot find the variable names in a fixture that has two, '
-            . 'so the census below is not evidence of anything',
+            self::CENSUS_FIXTURE_ANSWER,
+            $this->mentionNamesIn(self::censusFixture()),
+            'the mention census cannot place the variable names in a two-page fixture that has '
+            . 'three occurrences of two names, so the census below is not evidence of anything',
         );
 
         $known = array_merge(array_keys($this->scanner()->reads()), array_keys($this->scanner()->exported()));
@@ -805,6 +911,16 @@ final class EnvRosterDriftTest extends TestCase
      */
     public function testEveryVariableAnotherPageNamesHasARowOnTheRoster(): void
     {
+        // THE SAME KNOWN POSITIVE AS THE TEST ABOVE, and it belongs here too:
+        // this assertion is also an empty-diff assertion, and round 45 shipped
+        // it with no fixture at all. Blinding the census left it green.
+        $this->assertSame(
+            self::CENSUS_FIXTURE_ANSWER,
+            $this->mentionNamesIn(self::censusFixture()),
+            'the mention census cannot place the variable names in a two-page fixture that has '
+            . 'three occurrences of two names, so the census below is not evidence of anything',
+        );
+
         $tabulated = $this->tabulatedNames();
 
         $missing = [];
