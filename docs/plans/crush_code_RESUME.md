@@ -6,65 +6,104 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW. ROUND 39 IS CLOSED — NOTHING IN FLIGHT, ALL LANES CLEAN — read this first, then §0 for the standing rules
+## 0-NOW. ROUND 40 IS CLOSED — NOTHING IN FLIGHT, ALL LANES REMOVED — read this first, then §0 for the standing rules
 
-**SUITE FLOOR: `8879 / 100396 / 1 skipped / rc 0` at `3737f506`**, supervisor-measured in the live tree.
-Supersedes every earlier figure (8820 held the round-38 boundary; 8831 and 8848 were round-39 midpoints).
+**SUITE FLOOR: `8905 / 101022 / 1 skipped / rc 0` at `33f97cb1`**, supervisor-measured in the live tree
+after merging all three lanes. Supersedes every earlier figure (8879 held the round-39 boundary).
+The merged total was PREDICTED from the lanes' deltas and matched **to the assertion** — do that every
+round; a mismatch is the cheapest possible detector of a bad merge.
 **Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was
 replaced by Packagist copies and every figure since is void. 18 symlinks;
 `md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
 `php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
 
-### 🔴 CONCURRENCY IS NOW **3**, BY USER INSTRUCTION (raised mid-round-39)
+**Fourteen sibling libs verified green in the merged tree** — candy-core 785/7134/25skip,
+candy-sprinkles 750/2623, candy-forms 1823/2973, candy-hermit 144/516, candy-kit 143/486,
+sugar-bits 493/1015, sugar-gallery 92/252, sugar-stickers 215/420, sugar-toast 190/365,
+sugar-veil 201/406, sugar-dash 5853/9154, sugar-table 456/1024, sugar-charts 543/1259,
+sugar-calendar 147/364. Do this whenever a lane touches `candy-core`.
 
-Supersedes the "concurrency is 2" block further down, which is kept only for its reasoning. A read-only
-scout does NOT count against the budget; a reviewer or fix agent for an active lane is part of that lane's
-cycle, not a fourth lane. ⚠️ **P8.8 and P8.13 still collide with each other** — never bundle those two.
+### 🔴 CONCURRENCY: agent spawning is CAPPED BY USER INSTRUCTION — read before planning round 41
 
-**Round 39 landed all three lanes, each supervisor-verified by my own full-suite run:**
-- **`lsp` — E63 + E64.** Identity-based stranded-payload attribution (an opt-in ledger in
-  `ToolIpcFiles`); `AgentViewPane::render()` measures its right section and degrades metrics instead of
-  letting the body outgrow the box.
-- **`cmd` — E60 + E65.** Hook ASK clipped, MODIFY **refused** (a truncated rewrite is not a smaller
-  rewrite), and the payload transport **asks the OS** instead of assuming a 4 KiB page.
-- **`sglang` — E57 + E58.** An empty `permissionMode` no longer displaces an earlier layer; a trusted
-  project's tool removals are reported **inside the alt screen** via a new `Chat::withLaunchNotices()`.
+**Standing instruction, given mid-round-40: _"no more spawning additional agents until session
+resets"_, followed by _"after these steps are all done being merged into the main dirs and lanes
+cleaned up and worklog/plan/RESUME file updated, pause"_.** Round 40 was finished by the supervisor
+by hand — one review and all three fix rounds. **Do not spawn anything on resume without checking
+with the user first.** The pre-cap setting was 3; `docs/plans/crush_code_concurrency.md` stays the
+authority for the mechanics, and ⚠️ **P8.8 and P8.13 still collide with each other**.
+
+### Round 40 landed all three lanes, each supervisor-verified by my own full-suite run
+
+- **`cmd` — E66 + E67.** The skill path nudge is bounded (8 entries, 300 B each, 2,636 B ceiling) and
+  in `Grep`/`Glob` is **spent inside** the tool's cap instead of beside it. `SkillRegistry::register()`
+  keys by the skill's own name.
+- **`lsp` — E68 + E69.** `Width` has ONE grapheme segmentation on every PHP version; `Width` and
+  `Style` share one tab width. `candy-core` now declares `ext-intl`.
+- **`sglang` — the launch-notice migration.** Thirteen more launch warnings reach the transcript as
+  well as stderr, bounded in count (24) and per message (400 chars).
 
 ### ⚠️ THINGS THAT CHANGE HOW YOU WORK — read before briefing any agent
 
-**Put the `/tmp` prohibition in EVERY brief.** The agent that *fixed* E63 ran
-`rm -f /tmp/sc_chat_tool_*.json` — the exact hazard E63 records — while two sibling lanes were live. Every
-brief must carry: never glob-delete `/tmp/sc_chat_tool_*` or `/tmp/crush-hook-payload-*`; unique probe
-names, exact-path deletes only.
+**E68 PROVES THE VERSION AXIS IS REAL. Put a PHP version on every width claim.** E68's recorded
+mechanism was **inverted**, and the fix it prescribed would have changed nothing: `truncateAnsi()`
+already stopped before an unfittable cluster; `Width::string()` was the splitter, because
+`grapheme_str_split()` is **PHP 8.4+ and absent on this box's 8.3.6**. It was a **PHP-8.3-only defect
+recorded as unconditional**, and CI runs `PHP_VERSIONS = ['8.3', '8.4']` — so a lane can measure
+green here and go red in CI, or vice versa. **This box has only PHP 8.3.6; there is no 8.4 binary.**
+An agent cannot test 8.4 and must not pretend to — use ext-intl's `grapheme_extract()`/`grapheme_strlen()`
+as an ICU oracle instead, and prefer fixes that REMOVE a version-conditional path over fixes that pick
+a branch.
 
-**Agents commit INCREMENTALLY in-lane.** Standing since round 38's network drops. A dropped connection
-with an uncommitted tree is the only thing that can truly be lost; several small commits cost nothing.
-Before resuming any killed agent, check the lane's dirty state and **snapshot by file copy + `git diff`
-patch** — never `git checkout --`/`restore`/`stash`.
+**A hypothesis in a status block reads, one round later, exactly like a measurement.** Round 39's close
+speculated that E61's premise had changed; a scout proved it FALSE, and acting on it would have closed
+the unbounded-chain finding by bookkeeping. **Mark hypotheses as hypotheses in this file.**
 
-**`Chat::withLaunchNotices()` is a NEW SEAM and nine warnings still need it.** `warnPermissionConfig()`'s
-stderr line is swallowed by the alt screen ~0.47 s after it prints. Only the E57 report was migrated; the
-other ~9 launch warnings are still invisible in interactive use. **That is open work.**
+**Rewrite a stale justification; never delete it.** Round 40 falsified four passages that argued for
+guards which still exist. Each now carries WHAT IT SAID / WHAT IS TRUE NOW / WHY THIS STILL EARNS ITS
+PLACE. Delete the reasoning and the next reader deletes the guard.
 
-**E63's supervisor protocol stays LIVE until every lane carries the fix.** A certification run that fails
-ONLY on `ChatTest::tearDownAfterClass` is not a red suite — re-run `--filter ChatTest` alone. The new
-tests deliberately write real `sc_chat_tool_*` files to the shared temp dir.
+**Keep the `/tmp` prohibition in EVERY brief** (unchanged from round 39): never glob-delete
+`/tmp/sc_chat_tool_*` or `/tmp/crush-hook-payload-*`; unique probe names, exact-path deletes only.
+**Agents commit INCREMENTALLY in-lane** (unchanged). **Cite SYMBOLS, not line numbers** — round 40
+produced a fifth instance, `Grep.php:377` → `:389` inside the lane that was told about the pattern.
 
-**Cite SYMBOLS, not line numbers, in the backlog.** E57 carried stale line numbers **four** rounds running
-— the last time because its own fix inserted ~100 lines above them. Its corrections are now marked
-*as of round 39* rather than re-corrected.
+**A green suite is not a pinned invariant.** Three separate guards this round passed while proving
+nothing: `cmd`'s `Read` nudge test (green with the nudge disabled), the `app()` delta offset (green
+with the two bases mismatched), and every tab assertion (green for any `TAB_WIDTH`). **Mutate the
+clause, or you have not pinned it.**
 
-**Remaining measured queue:** E52 (recorded only), E59 (**L, do not bundle** — its Step is wrong: the test
-asserts on the simulation stub's own literal `"Processing:"` string, so it WILL need rewriting), E61
-(**must not share a lane with hook work** — it changes E60's premise; L as a fix, S if scoped to correcting
-the denial message that names neither the spender nor that the bounded hook never ran), E66
-(`SkillPathNudge` unbounded to 10 MB; the `Grep.php` cross-reference to "E57" must be corrected to E66),
-E67 (verify against callers first — recorded at reasoned-not-verified strength), E68
-(`AgentDashboardPane`; root cause is `Width::truncateAnsi()` in **candy-core**, so it is a foundation-lib
-fix), E69 (`Width::string()` scores a tab 0, `Style::render()` expands it to four spaces), the nine
-un-migrated launch warnings, `statusLine` (greenfield M — ⚠️ `Chat::budgetStatusLine()` will bait a future
-grep into thinking it exists), `keybindings` (L, DEFER). Then **Phase 9** (interactive-prompt containment:
-layered A+C, parameter not second tool, **no askpass**), then the deferred security pass.
+### ROUND 41 — MEASURED AND READY, brief it from here
+
+A scout re-measured the queue at `8add627b`; all figures are its, not the record's.
+
+- **E52** — reproduces. ⚠️ **Bigger than its heading**: it is the whole **shift-bit-clear family**
+  (`ESC[1;3Z` drops shift identically), not just `CSI 1;5Z`, so a fix scoped to `1;5` would be wrong.
+  Still emitted by nothing. **S**, `candy-core/src/InputReader.php` + its test. No overlap.
+- **E61 (the S only)** — `HookRegistry::scan()`'s deny string names the timeout sum but neither the
+  hook that spent the clock nor that the named hook never ran. **The L (fiber/fork for an unbounded
+  all-PHP chain) stays OPEN and recorded — do not let "E61 is done" close it.** S, `HookRegistry` + test.
+- **`statusLine`** — greenfield **M confirmed**. Both grep-baits verified as baits:
+  `Chat::budgetStatusLine()` is a private `/budget` formatter and `candy-kit`'s `StatusLine` is a glyph
+  printer. `statusLine` appears **zero** times in `sugar-crush/src/` and `bin/`, and is absent from
+  `LayeredSettings::LAYERED_KEYS`, so a `statusLine:` in `settings.json` is silently dropped today.
+  Needs a user-tier-only key (it names a shell command), `Bootstrap` wiring, `Chat` state, `Renderer`
+  composition, and a bounded command runner — reuse E60's clip doctrine, don't invent a constant.
+- **E59** — **L**, and its recorded Step is confirmed WRONG. There are **three** literal `"Processing:"`
+  anchors across **two** tests, one of them a *negative* assertion that will pass forever if a rewrite
+  misses it. Keep the test's structure, replace all three anchors with a liveness anchor a real worker
+  can satisfy.
+- **New this round, unfixed: E70, E71, E72, E73.** E73 is the notable one — the E69 residue is
+  **bimodal** and the dangerous half was missed: `Width::string("\t" ZWJ U+1F44D)` returns **0** for
+  something `Style` renders as **6 cells**, i.e. an **over-run-direction** disagreement in candy-core's
+  ZWJ state machine. Pre-existing; E68/E69 stay fixed.
+
+**Lane shape: E52 + E61(S) + statusLine is clean** — only `statusLine` needs `Bootstrap.php` *and*
+`Chat.php`. Adding E59 is safe ONLY if its lane extends the stdin `startup` payload rather than the
+`ProcessExecutor` constructor; otherwise E59 and `statusLine` both open `Chat.php` and must serialise.
+
+Then the remaining queue (E73, the four un-migrated raw-`fwrite` launch warnings `sglang` judged
+stderr-only, `keybindings` L/DEFER), then **Phase 9** (interactive-prompt containment: layered A+C,
+parameter not second tool, **no askpass**), then the deferred security pass.
 
 ### SUPERSEDED — round 38's block, kept for its reasoning
 

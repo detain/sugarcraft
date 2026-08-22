@@ -1058,29 +1058,47 @@ So E62's "app chrome visually distinct from PTY content" still applies — demot
 
 ---
 
-### Status — as of round 39 (2026-08-21)
+### Status — as of round 40 (2026-08-22)
 
-**Suite floor `8879 / 100396 / 1 skipped / rc 0` at `3737f506`.** `docs/plans/crush_code_RESUME.md` §0-NOW
+**Suite floor `8905 / 101022 / 1 skipped / rc 0` at `33f97cb1`.** `docs/plans/crush_code_RESUME.md` §0-NOW
 is the live entry point; this section only records what the *plan* needs to know.
 
-**Concurrency is 3** (raised by the user mid-round-39).
+**Agent spawning is CAPPED by user instruction** (given mid-round-40, superseding the concurrency-3
+setting): *"no more spawning additional agents until session resets"*. Round 40's `sglang` review and all
+three fix rounds were done by the supervisor by hand. Do not spawn on resume without asking.
 
 **Closed since the plan was written**, all supervisor-verified in the live tree — see
 `docs/plans/crush_code_hardening_backlog.md` for each: E53, E54 (**partially** — the `+4` is single-sourced
 and the dashboard over-run is gone, but the below-44 case in its own heading stands), E57, E58, E60, E63,
-E64, E65.
+E64, E65, **E66, E67, E68, E69**.
 
-**Phase 9 has NOT started.** It is still sequenced after the remaining functional queue and before the
-deferred security pass, and its decisions stand unchanged: layered **(A) detach always + (C) PTY opt-in**,
-the opt-in an **optional parameter and not a second tool**, and **no askpass** — the interactive PTY does
-not accept secrets at all.
+⚠️ **E68 closed with its recorded mechanism INVERTED, and that matters beyond E68.** The entry blamed
+`Width::truncateAnsi()` for slicing at codepoints; it never did. `Width::string()` was the splitter,
+because `grapheme_str_split()` is **PHP 8.4+ and absent on this box's 8.3.6** — so it was a
+**PHP-8.3-only defect recorded with no version domain**, while CI runs `PHP_VERSIONS = ['8.3', '8.4']`.
+**Put a PHP version on every width claim in this plan.** The fix removes the version-conditional path
+rather than picking a branch, and `candy-core` now declares `ext-intl`.
 
-⚠️ **One round-39 outcome bears directly on Phase 9.** `Chat::withLaunchNotices()` now exists as a seam
-for getting launch-time text *inside* the alt screen — built because a stderr warning was measured living
-only **0.47 s** before `\e[?1049h` took the screen. Phase 9's step 1 has the same problem in a harder
-form: a detached child's refusal must reach the user, and stderr will not do it. **Use that seam rather
-than inventing a second one**, and note that ~9 other launch warnings are still swallowed and want the
-same home.
+**Phase 9 has NOT started.** Still sequenced after the remaining functional queue and before the deferred
+security pass, decisions unchanged: layered **(A) detach always + (C) PTY opt-in**, the opt-in an
+**optional parameter and not a second tool**, and **no askpass** — the interactive PTY does not accept
+secrets at all.
+
+⚠️ **The Phase 9 seam is now load-bearing, and the "~9 other launch warnings" figure was wrong.**
+`Chat::withLaunchNotices()` exists for getting launch-time text *inside* the alt screen — built because a
+stderr warning was measured living only **0.47 s** before `\e[?1049h` took the screen. Round 40 migrated
+**thirteen** more warnings onto it (the real census was 13 + 1 already-migrated + 4 raw `fwrite(STDERR)`
+sites, not "nine"), bounded the list at 24 rows × 400 chars, and found that `permissionRules()` had been
+printing every warning **twice** on every launch. Phase 9 step 1 has the same problem in a harder form —
+a detached child's refusal must reach a user who cannot see stderr — so **use that seam rather than
+inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
+remain open if that judgement is revisited.
+
+**Next: round 41 is measured and ready** — E52 (⚠️ the whole shift-bit-clear family, not just `CSI 1;5Z`),
+E61's **S only** (the deny message; the unbounded-all-PHP-chain **L stays open**), and `statusLine`
+(greenfield **M** confirmed — `Chat::budgetStatusLine()` and `candy-kit`'s `StatusLine` are both
+grep-baits). E59 remains an **L** whose recorded Step is confirmed wrong. See RESUME §0-NOW for the lane
+shape and the collision constraint.
 
 ## Appendix: Full Angle Reports
 

@@ -9771,6 +9771,92 @@ measurement. Mark it as a hypothesis or have it settled before it is quoted.*
   rather than the `ProcessExecutor` constructor — otherwise E59 and `statusLine` both open `Chat.php`
   and must be serialised.
 
+### What landed — all three lanes, supervisor-verified in the live tree
+
+**Floor: `8905 / 101022 / 1 skipped / rc 0` at `33f97cb1`.** The merged total was PREDICTED from the
+three lanes' own deltas before the run and matched **to the assertion**: 8879 + 16 + 0 + 10 = 8905
+tests, 100396 + 186 + 388 + 52 = 101022 assertions. Fourteen sibling libs re-run green in the merged
+tree, which matters this round because one lane changed a foundation measure eleven of them consume.
+
+- **`cmd` — E66 + E67** (`b9160bd3`, `cfca8170`, `f3d59ae5`, `40c43f65`, `d59a5e10`). The skill path
+  nudge is bounded in count and per-entry bytes and, in `Grep`/`Glob`, **spent inside** the tool's own
+  cap instead of beside it. `SkillRegistry::register()` keys by the skill's name.
+- **`lsp` — E68 + E69** (`71ce8855`, `476ceb68`, `56307edd`, `ffe37247`, `95ea7bc2`). `Width` has ONE
+  grapheme segmentation on every PHP version, and `Width`/`Style` share one tab width.
+- **`sglang` — the launch-notice migration** (`2b99bad0`, `d86afa83`, `2d5919a5`, `dfad23f9`). Thirteen
+  more launch warnings now reach the transcript as well as stderr, bounded in count and per message.
+
+### 🔴 THE ROUND'S DEFINING FINDING — the fix I prescribed would have changed nothing
+
+**E68's recorded mechanism was INVERTED, and the backlog stated it with no version domain.** The entry
+said `truncateAnsi()` "counts cells to decide where to stop but slices at codepoints". It does not, and
+never did — it already stopped before a cluster it could not fit. The splitter was `Width::string()`,
+**because `grapheme_str_split()` is PHP 8.4+ and absent on this box's 8.3.6**. The Step I briefed —
+*"fix `truncateAnsi()` to stop before a cluster it cannot fit"* — would have edited correct code and
+left the defect standing. The lane found it, and the reviewer then proved the version claim by shimming
+ICU into a simulated 8.4 path: **simulated-8.4 pre-fix code over-ran 0 times** on every case where
+8.3 over-ran by up to +10.
+
+So E68 was a **PHP-8.3-only defect recorded as unconditional**, and `scripts/affected-libs.php` runs
+`PHP_VERSIONS = ['8.3', '8.4']` — CI exercises both. *The plan's dominant defect, a claim travelling
+without its domain, at the **interpreter-version** level.* The fix removes the version-conditional path
+altogether, which eliminates the divergence rather than betting on it; ICU agreement was then verified
+over 200,000 random strings plus 1,764 exhaustive pairs with **0 disagreements**.
+
+### Rules earned this round
+
+**A hypothesis in a status block reads, one round later, exactly like a measurement.** Round 39's close
+recorded that round 39's hook work "changes E61's premise" and that E61 might collapse to an S. A scout
+proved it FALSE — `git log -S chainBudgetSeconds` returns one commit predating round 39, and two
+hand-written 1.5 s hooks still run 3.00 s with no deadline armed. Acting on it would have closed the
+unbounded-chain finding by bookkeeping. **Mark a hypothesis as one, or settle it before quoting it.**
+
+**A finding recorded at reduced strength is a debt, and the interest is a round of mis-sizing.** E67 sat
+at *reasoned-not-verified* with its sizing blocked on "does any shipped caller pass a list?" — four
+greps answered it (no; both callers are name-keyed), turning an unknown into an S.
+
+**Declaring a dependency is part of fixing the thing that needs it.** `Width` now walks ICU on every
+version, so `candy-core` hard-requires `ext-intl` — and did not declare it, while its own README already
+listed intl under Requirements. A manifest that disagrees with its README fails as a green CI and a red
+consumer.
+
+**Rewrite a stale justification; never delete it.** Four passages across `AgentViewPane` and `Renderer`
+argued for guards that still exist, on reasoning this round falsified. Deleting the reasoning invites
+the next reader to delete the guard, so each now carries WHAT IT SAID / WHAT IS TRUE NOW / WHY THIS
+STILL EARNS ITS PLACE — with the before→after measured: toned thumb 4 → 2 grouped, Hangul L+V+T 4 → 2,
+flag 2 → 2.
+
+**A shared constant makes two measures AGREE; it does not make either RIGHT.** Every tab assertion the
+lane added was written in terms of `Width::TAB_WIDTH`, so all of them held for any value it took —
+`TAB_WIDTH = 4 → 8` was caught only by a pre-existing *candy-sprinkles* test, while the lib that owns
+the constant pinned nothing. Now pinned as a literal where it is declared.
+
+**Two of the three lanes shipped a test that proved nothing, and a mutation caught each — not a review.**
+`cmd` self-caught its Grep/Glob cap test (30 matches under a 65,536-byte cap never reaches the clamp)
+and repaired it — then shipped the *same* defect in its `Read` test, which passed with `Read` emitting
+no nudge at all, and in which two of four iterations could not afford a nudge in the first place.
+**Self-catching one instance is not the same as understanding the class.**
+
+### What the supervisor did by hand, and why
+
+The user capped agent spawning mid-round, so the `sglang` review and all three fix rounds were done by
+the supervisor directly. That review found the round's subtlest defect: `app()` takes its notice offset
+before the second scan and slices at the end, while `launchNotices()` **synthesises** the overflow row
+rather than storing it — so the accessor is one longer than the raw property exactly when a launch has
+overflowed. Both sides read the accessor, which is correct, and **nothing asserted it**: swapping the
+offset to the raw property left every case in the file green while duplicating the "and N more" row in
+the transcript. A documented invariant with no assertion is §5 in its purest form.
+
+### New findings recorded, not fixed
+
+**E70** (the announce-once law in `GrepInstructionWiringTest` is now violable — its fixture's two
+regimes do not overlap, which is fixture luck, not structure), **E71** (`Read`'s eighth and `Glob`'s +1
+reservation are stated but unpinned — both mutations survive), **E72** (`hasPending()` ignores
+`isAutoInvocable()`, so a `disable-model-invocation` skill walks the registry forever), **E73** (the E69
+residue is **bimodal**, and the lane's "0 unexplained" claim covered only the safe half:
+`Width::string("\t" ZWJ U+1F44D)` returns **0** for something `Style` renders as **6 cells** — an
+over-run-direction disagreement, pre-existing, in candy-core's ZWJ state machine).
+
 ### Bookkeeping — the round numbering diverged
 
 Lane stamps inside `crush_code_hardening_backlog.md` label round 39's work *"round 40"* and *"round 41"*
