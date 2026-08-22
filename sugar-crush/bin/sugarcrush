@@ -21,9 +21,21 @@ declare(strict_types=1);
     // the shape exists to prevent, over a case a `| jq` consumer can only hit
     // by running the binary out of a broken checkout. Documented in README.md.
     //
-    // AND IT CANNOT USE THE TRANSCRIPT SEAM EITHER — re-examined in round 42
-    // (E78) alongside the other raw stderr writes in this project, and this is
-    // the one that is structurally exempt rather than merely judged.
+    // AND IT CANNOT USE THE TRANSCRIPT SEAM EITHER, and this is the one raw
+    // stderr write in the project that is structurally exempt rather than
+    // merely judged.
+    //
+    // THIS COMMENT USED TO SAY it had been "re-examined in round 42 (E78)
+    // alongside the other raw stderr writes in this project". It had not: round
+    // 42 looked at Bootstrap's writes and this one, and round 42's own review
+    // then measured the real census at eleven call sites across src/ and bin/ —
+    // six in Cli\NonInteractive, two in Cli\Subcommands, two in Cli\Bootstrap
+    // and this. The eight in NonInteractive and Subcommands were never weighed.
+    // The exemption below is unaffected, because it is about THIS site and not
+    // about the others; what the survey would have found is written up on
+    // Tests\Integration\BinSugarcrushAutoloadGuardTest, and the two writes that
+    // do look like candidates under the routing rule are recorded in
+    // docs/plans/crush_code_hardening_backlog.md.
     // Bootstrap's launch-notice seam is a static method on a class the
     // autoloader supplies, and the whole point of this branch is that the
     // autoloader was not found; there is also no transcript for a notice to
