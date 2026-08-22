@@ -343,11 +343,18 @@ final class Bootstrap
      * IT CARRIES ITS OWN ENVELOPE, and that is not a mistake to be tidied away:
      * the leading `sugarcrush:   ` and the trailing newline duplicate what
      * {@see STDERR_LINE_FORMAT} adds, because these rows are a CONTINUATION of
-     * the summary above them and are indented under it by the extra spaces. A
-     * naive "route this through warnPermissionConfig() too" would lose the
-     * indent, add a full stop to an id list and — far worse — seed one
-     * transcript row per deleted session, which is the per-entry fan-out
-     * {@see LAUNCH_NOTICE_LIMIT} exists to refuse.
+     * the summary above them and are indented under it by the two extra spaces.
+     * The two obvious tidyings each cost something, and they cost DIFFERENT
+     * things — which is why they are named separately rather than as one
+     * "route it through the helper". Sending these rows through
+     * {@see warnPermissionConfig()} would keep them on stderr and only lose the
+     * indent and gain a full stop after an id list. Sending them through
+     * {@see warnPermissionConfigInTranscript()} — the seam the SUMMARY takes —
+     * would additionally seed one transcript row per deleted session, which is
+     * the per-entry fan-out into a list the model is re-sent every turn that
+     * {@see LAUNCH_NOTICE_LIMIT} exists to refuse, and that `docs/SETTINGS.md`
+     * names as the reason this half of the report did not migrate with the
+     * other half.
      *
      * `%s` the session id, `%s` its last-used timestamp, `%d` the message
      * count, `%s` that count's noun plural.
