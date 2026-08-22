@@ -14,6 +14,26 @@ Nothing here depends on a prior conversation's context.
 **Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-45-wf_36783de1-2cf.js`
 (copied there deliberately — the scratchpad copy it was launched from does not survive a session end).
 
+### ⚠️ ROUND 45 WAS INTERRUPTED BY A SESSION LIMIT AND RESUMED — read this
+
+The first launch died at the 12:30 UTC session limit with **4 of 9 agents done**: all three `implement`
+stages completed and committed, plus `review:b-fork`. The five that errored were `review:a-seam`,
+`fix:a-seam`, `review:c-oracles`, `fix:c-oracles`, `fix:b-fork`. Resumed with
+`Workflow({scriptPath, resumeFromRunId: 'wf_36783de1-2cf'})` (task `wk3kfyfcz`) — the four completed
+agents replay from cache, only the missing five run live. **The lane commits from the first launch are
+real and must not be re-done.**
+
+🔴 **THE KILLED AGENT LEFT AN UNRESTORED MUTATION IN LANE a — E134's THIRD INSTANCE.** `Chat.php` and
+`BootstrapLaunchNoticeRoutingTest.php` were left dirty with a figure rewritten to "nineteen" in a
+paragraph that states `Bootstrap.php` holds sixteen calls — incoherent on its face, and
+`TRANSCRIPT_SEAM_CALL_SITES` is **16**, so it was a probe of the PROSE_SITES oracle, not fix work
+(`Chat.php` is not even in lane a's owned file list). No round-45 backup existed for either file. The
+supervisor copied both to `scratchpad/r45_mutated_*.evidence` and `git checkout --`'d them.
+**A MUTATION HARNESS WHOSE RESTORE IS A LATER STEP IN THE SAME AGENT DOES NOT SURVIVE THE AGENT DYING.**
+E134 must require the backup to be written BEFORE the mutation and the restore to be verified by
+`git status --porcelain` returning empty — and the supervisor must check every lane tree for a dirty
+worktree before merging, not only at the end.
+
 **Lane dirs `/home/sites/crush-lane-{a,b,c}`** are full-repo `cp -a` copies at `06126017`, each verified
 clean with 18/18 `vendor/sugarcraft/*` symlinks resolving INSIDE the lane. ⚠️ **DO NOT DELETE THEM until
 the merged floor has been measured** — round 44 needed lane a's tree alive to attribute a +48 assertion
