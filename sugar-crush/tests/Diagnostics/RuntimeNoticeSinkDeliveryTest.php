@@ -28,17 +28,21 @@ use SugarCraft\Crush\Support\ForkedChild;
  * {@see Chat}, and every assertion about DELIVERY is made on the transcript
  * rather than on the queue.
  *
- * TWO ASSERTIONS HERE DO READ THE SINK, AND THE LINE THIS SAID — "nothing
- * asserts on the sink's own state" — stopped being true when the drop-when-
- * unarmed gate landed. Both are PRECONDITIONS, not verdicts:
- * `assertFalse(RuntimeNoticeSink::isArmed())` in
- * {@see testAOneShotThatNeverBuiltAChatKeepsTheNoticeOnStderrOnly()} and
- * `assertTrue(RuntimeNoticeSink::record(...))` in
- * {@see testAChatNobodyAppointedDoesNotPollTheInbox()} exist so that an empty
- * transcript below cannot be an artefact of a sink that was never armed or a
- * row that was never accepted. The rule the original sentence was reaching for
- * survives intact: no test here PASSES on the strength of a row being in the
- * queue.
+ * SOME ASSERTIONS HERE DO READ THE SINK. WHAT THIS SAID: "nothing asserts on
+ * the sink's own state". WHAT IS TRUE NOW: that stopped being true when the
+ * drop-when-unarmed gate landed, and it became less true again when
+ * {@see testASecondBootstrapChatDoesNotInheritTheFirstsUndrainedInbox()}
+ * arrived. WHY THE PARAGRAPH STILL EARNS ITS PLACE: every one of them is a
+ * PRECONDITION, not a verdict — `assertFalse(RuntimeNoticeSink::isArmed())`,
+ * `assertTrue(RuntimeNoticeSink::record(...))` and
+ * `assertTrue(RuntimeNoticeSink::hasPending())` all exist so that an empty
+ * transcript below cannot be an artefact of a sink that was never armed, a row
+ * that was never accepted, or a row that was never pending in the first place.
+ * The rule the original sentence was reaching for survives intact and is the
+ * one to keep applying: no test here PASSES on the strength of a row being in
+ * the queue. The one `assertFalse(RuntimeNoticeSink::hasPending())` that IS a
+ * verdict is paired with a transcript assertion in the same test, and with a
+ * known-positive after it.
  *
  * THE FORK CASE IS THE ONE THAT MATTERS, because it is the interactive path.
  * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()} runs the
@@ -53,14 +57,53 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     /** The DSML markup token; fullwidth vertical lines, not ASCII pipes. */
     private const T = "\u{FF5C}DSML\u{FF5C}";
 
+    /**
+     * The provider environment this class has to neutralise, copied from
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapTest} rather than invented
+     * here.
+     *
+     * TWO TESTS BELOW CALL `Bootstrap::chat()` FOR REAL, and `chat()` reaches
+     * `backend()`, which reads all five of these. `SUGARCRUSH_BACKEND_CMD`
+     * NAMES A COMMAND — so an ambient value does not merely change which
+     * branch is exercised, it changes what this suite would run. Leaving them
+     * to whatever an earlier test class or the operator's shell happens to
+     * have set is how a green test stops describing the path it claims to.
+     *
+     * @var list<string>
+     */
+    private const VOLATILE_PROVIDER_ENV = [
+        'SUGARCRUSH_PROVIDER',
+        'SUGARCRUSH_BACKEND_CMD',
+        'SUGARCRUSH_BACKEND_CMD_STREAM',
+        'SUGARCRUSH_MODEL',
+        'SUGARCRUSH_TITLE_MODEL',
+    ];
+
+    /** @var array<string, string|false> */
+    private array $savedEnv = [];
+
     protected function setUp(): void
     {
         RuntimeNoticeSink::reset();
+
+        foreach (self::VOLATILE_PROVIDER_ENV as $name) {
+            $this->savedEnv[$name] = getenv($name);
+            putenv($name);
+        }
     }
 
     protected function tearDown(): void
     {
         RuntimeNoticeSink::reset();
+
+        foreach ($this->savedEnv as $name => $value) {
+            if ($value === false) {
+                putenv($name);
+            } else {
+                putenv("{$name}={$value}");
+            }
+        }
+        $this->savedEnv = [];
     }
 
     /**
@@ -313,21 +356,13 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * regression E171 is about, so it gets a guard of its own that goes through
      * the real launch path.
      *
-     * ISOLATED HOME for the reason `BootstrapTest` gives: `chat()` walks the
-     * skill and config trees, and a test must not read or write the operator's.
+     * The sandbox this runs in — an isolated `HOME`, a discarded `error_log`,
+     * and the neutralised provider environment — is
+     * {@see withLaunchSandbox()} and {@see VOLATILE_PROVIDER_ENV}.
      */
     public function testBootstrapChatReturnsTheAppointedDrainOwner(): void
     {
-        $home = sys_get_temp_dir() . '/sc_lane_a_seam_home_' . bin2hex(random_bytes(6));
-        self::assertTrue(mkdir($home, 0o700, true));
-        $savedHome = getenv('HOME');
-
-        $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_seam_boot_');
-        self::assertIsString($log);
-        $previousLog = ini_set('error_log', $log);
-
-        try {
-            putenv("HOME={$home}");
+        self::withLaunchSandbox(static function (string $home): void {
             $chat = \SugarCraft\Crush\Cli\Bootstrap::chat($home);
 
             // chat() is also the only caller of arm() in src/. Both halves of
@@ -346,6 +381,109 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
                     && $m->content === 'raised on the turn after launch',
             ));
             self::assertCount(1, $rows, 'the launched Chat did not drain the row into its transcript');
+        });
+    }
+
+    /**
+     * THE THIRD LEG OF `Bootstrap::chat()`'s SEAM DECISION, and until this test
+     * existed it was the only unguarded one.
+     *
+     * `chat()` runs three statements for this seam: `reset()`, `arm()`, and
+     * `drainsRuntimeNotices: true` on the Chat it returns. The arm has
+     * {@see testBootstrapChatReturnsTheAppointedDrainOwner()}, the appointment
+     * has the same test — and the reset had NOTHING. MEASURED, round 47:
+     * deleting `RuntimeNoticeSink::reset();` from `chat()` and running the
+     * WHOLE suite gave `Tests: 9425, Assertions: 131975, Skipped: 1`, rc 0.
+     * Nine thousand tests and not one of them noticed.
+     *
+     * WHAT THE LINE IS FOR, which is why its absence matters rather than being
+     * tidiness: `arm()` is idempotent — it early-returns the moment
+     * `self::$armed` is true — so on a second `chat()` in one process the arm
+     * is a no-op and the transport is the FIRST launch's, still holding
+     * whatever the first Chat never drained. The new Chat then opens its
+     * transcript with a row raised for a conversation it is not part of. That
+     * is E171's own defect (a row reaching the wrong reader, or none), turned
+     * around: here the row reaches a reader that should never have seen it.
+     *
+     * TWO CALLERS MAKE THIS REACHABLE and neither is hypothetical: `app()`'s
+     * second-scan path builds a Chat through this method after one already
+     * exists, and every test that launches twice in one PHPUnit process does
+     * the same.
+     *
+     * THE KNOWN-POSITIVE IS IN THE SAME TEST (rule 15): an empty transcript
+     * proves nothing if the second Chat is simply broken, so the same Chat is
+     * then handed a row raised AFTER its launch and must deliver that one.
+     */
+    public function testASecondBootstrapChatDoesNotInheritTheFirstsUndrainedInbox(): void
+    {
+        self::withLaunchSandbox(static function (string $home): void {
+            \SugarCraft\Crush\Cli\Bootstrap::chat($home);
+
+            // Raised during the first session and deliberately never drained:
+            // no update() is pumped on the first Chat.
+            self::assertTrue(
+                RuntimeNoticeSink::record('a row the first session never drained'),
+                'the sink refused the row; the assertions below would be vacuous',
+            );
+            self::assertTrue(
+                RuntimeNoticeSink::hasPending(),
+                'the row is not pending, so a second launch inheriting it is not even possible',
+            );
+
+            $second = \SugarCraft\Crush\Cli\Bootstrap::chat($home);
+
+            self::assertFalse(
+                RuntimeNoticeSink::hasPending(),
+                'the second launch inherited the first session\'s undrained inbox',
+            );
+            self::assertNull(
+                $second->subscriptions(),
+                'the second Chat armed the poll, so it believes it has a row to deliver',
+            );
+
+            [$afterLaunch] = $second->update(new RuntimeNoticePumpMsg());
+            self::assertSame(
+                [],
+                $afterLaunch->history,
+                'the second session opened with a row raised for the first',
+            );
+
+            // KNOWN-POSITIVE: the same Chat, a row raised after ITS launch.
+            self::assertTrue(RuntimeNoticeSink::record('a row raised in the second session'));
+            [$next] = $second->update(new RuntimeNoticePumpMsg());
+            $rows = array_values(array_filter(
+                $next->history,
+                static fn ($m): bool => $m->role === Role::System,
+            ));
+            self::assertCount(1, $rows, 'the second Chat drains nothing at all; the empty transcript above proves nothing');
+            self::assertSame('a row raised in the second session', $rows[0]->content);
+        });
+    }
+
+    /**
+     * An isolated `HOME` and a discarded `error_log` for the duration of a real
+     * `Bootstrap::chat()` launch.
+     *
+     * ISOLATED HOME for the reason `BootstrapTest` gives: `chat()` walks the
+     * skill and config trees, and a test must not read or write the operator's.
+     * The provider environment is neutralised for the whole class — see
+     * {@see VOLATILE_PROVIDER_ENV}.
+     *
+     * @param callable(string): void $body
+     */
+    private static function withLaunchSandbox(callable $body): void
+    {
+        $home = sys_get_temp_dir() . '/sc_lane_a_seam_home_' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($home, 0o700, true));
+        $savedHome = getenv('HOME');
+
+        $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_seam_boot_');
+        self::assertIsString($log);
+        $previousLog = ini_set('error_log', $log);
+
+        try {
+            putenv("HOME={$home}");
+            $body($home);
         } finally {
             if ($previousLog !== false) {
                 ini_set('error_log', $previousLog);
