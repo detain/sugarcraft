@@ -356,6 +356,57 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     }
 
     /**
+     * The delta's TWO SIDES MUST READ THE SAME LIST, and only an overflowed
+     * launch can tell whether they do.
+     *
+     * {@see Bootstrap::app()} takes its offset before the second scan and
+     * slices at the end; {@see Bootstrap::launchNotices()} SYNTHESISES the
+     * "and N more" row rather than storing it, so the accessor is one longer
+     * than the raw property exactly when a launch has overflowed. Take the
+     * offset from the raw property and slice from the accessor and the two
+     * bases disagree by that one row — the slice then carries an "and N more"
+     * the hosted chat ALREADY had, and the transcript says it twice.
+     *
+     * {@see testTheAppShellDoesNotDoubleTheNoticesChatAlreadySeeded()} cannot
+     * see this: its fixture raises one notice, so nothing overflows, the
+     * accessor and the raw property are the same length, and the two bases
+     * agree by accident. MEASURED — with the offset changed to
+     * `\count(self::$launchNotices)`, every other case in this file still
+     * passes and only this one fails.
+     */
+    public function testTheAppShellDeltaSurvivesALaunchThatOverflowedBeforeTheShellWasBuilt(): void
+    {
+        $rules = [];
+        for ($i = 0; $i < 30; $i++) {
+            $rules[] = ['pattern' => "Bogus{$i}", 'action' => 'nonsense'];
+        }
+        $this->writeUserConfig(['permissionRules' => $rules]);
+
+        $root = var_export($this->projectRoot, true);
+        $rows = static fn (string $expr): string => "\$chat = {$expr};\n"
+            . "\$out = [];\n"
+            . "foreach (\$chat->history as \$m) { \$out[] = \$m->content; }\n"
+            . "echo json_encode(\$out);\n";
+
+        [, $viaChat] = $this->launch($rows("\\SugarCraft\\Crush\\Cli\\Bootstrap::chat({$root})"));
+        [, $viaApp] = $this->launch(
+            $rows("\\SugarCraft\\Crush\\Cli\\Bootstrap::app({$root})->chat"),
+        );
+
+        // 24 notices + exactly ONE overflow row, through both entry points.
+        self::assertCount(25, $viaChat, 'the cap holds through a bare chat()');
+        self::assertSame($viaChat, $viaApp, 'the shell must not re-append the overflow row');
+
+        // Not vacuous: the row that would be duplicated is really present, and
+        // really appears once.
+        self::assertSame(
+            1,
+            substr_count(implode("\n", $viaApp), 'more launch warnings this transcript could not fit'),
+            'the overflow row must appear exactly once in the hosted transcript',
+        );
+    }
+
+    /**
      * @param array<string, string> $env
      * @return array{0: string, 1: mixed} stderr, decoded stdout
      */
