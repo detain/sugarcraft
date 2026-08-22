@@ -420,12 +420,32 @@ final class MultiAgentRefactorTest extends TestCase
      * using. Measured on this host (PHP 8.3.6) with a child that throws: the
      * child ran tearDown, removed the shared directory, and printed a second
      * "ERRORS! Tests: 1" summary of its own. The observed run then failed with
-     * an EMPTY winner list, from both halves at once: no `.won` file for
-     * task-a was ever written (the claim committed, then createWorktree()
-     * threw before the breadcrumb), and the results directory those files
-     * would have been counted in had been deleted underneath the parent. That
-     * is E80's whole failure chain, and it reproduced 2 times in 700 runs of
-     * this test under 48 CPU-burner processes.
+     * an EMPTY winner list. That is E80's whole failure chain, and it
+     * reproduced 2 times in 700 runs of this test under 48 CPU-burner
+     * processes.
+     *
+     * WHY THAT LIST WAS EMPTY -- AND A CORRECTION THAT WAS ITSELF WRONG.
+     * WHAT THIS SAID: that the list was empty "from both halves at once" --
+     * the deleted results directory AND no `.won` file for task-a ever being
+     * written, "the claim committed, then createWorktree() threw before the
+     * breadcrumb".
+     * WHAT IS TRUE NOW: that second half is false, and it was false when it
+     * was written as a correction. {@see raceForTasks()} writes
+     * `<task>.won.<coder>` on the statement immediately after a claim returns
+     * true, with no branch in between, and the throw comes from the coder's
+     * SECOND claim. Measured by putting the pre-fix `continue` back and
+     * listing the results directory at the instant of the throw (PHP 8.3.6):
+     * it holds exactly `task-a.won.coder-1`, with task-a COMPLETED and TASK-B
+     * left `in_progress` and assigned to the very coder whose worktree call
+     * threw. So the empty winner list had ONE cause -- the tearDown above --
+     * and the stranded claim is a separate consequence, on task-b rather than
+     * task-a.
+     * WHY THIS STILL EARNS ITS PLACE: the single-cause reading is the stronger
+     * one, not the weaker one. It says every bit of parent-visible damage
+     * comes from a forked child running teardown, which is exactly what the
+     * catch and `exitNow()` below prevent. An explanation that also blamed a
+     * missing breadcrumb would send the next reader hunting for a second fix
+     * that does not exist.
      *
      * `exitNow()` SIGKILLs the child instead of returning or calling `exit()`,
      * which skips PHP's shutdown sequence entirely -- no destructors, no

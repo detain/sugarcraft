@@ -6286,14 +6286,22 @@ shared scratchpad but not this.
 *outside* that lock, runs `WorktreeManager::sweepIfDue()` and `createWorktree()`. Its own doc-block
 already says "If the task claim succeeds but worktree creation fails, the task claim is NOT rolled back"
 — so a throw from `createWorktree()` leaves the task **in progress, assigned to an agent that has no
-worktree and returned `false`**, and no other agent can ever claim it because it is no longer `Pending`.
+worktree**, and no other agent can ever claim it because it is no longer `Pending`. Note that the caller
+does **not** get `false` back: there is no `catch` anywhere in `Team::claimTask()`, so the
+`RuntimeException` from `WorktreeManager::createWorktree()` propagates straight out of it (stack
+measured: `WorktreeManager.php` ← `Team.php` ← the caller). A caller checking the boolean never runs.
 
-**How it was observed.** This is the second link of E80's chain (see the round-45 report and
-`2a9b4c65`). A coder that won both tasks asked for a second worktree under the same agent id,
-`createWorktree()` threw `Worktree for agent "…" already exists.`, and the task list was left with
-`task-a` in progress and assigned — which is why the parent's winner list came back **empty** rather
-than showing a double claim. Reproduced 2 times in 700 runs of `MultiAgentRefactorTest` under 48
-CPU-burner processes on this host (PHP 8.3.6).
+**How it was observed.** This is the second link of E80's chain — see
+`MultiAgentRefactorTest::runCoderChild()`'s doc-block and the commit that landed it,
+`e51aead9`. A coder that won both tasks asked for a second worktree under the same agent id and
+`createWorktree()` threw `Worktree for agent "…" already exists.`. Re-measured deterministically by
+restoring the pre-fix `continue` in `raceForTasks()` and reading the task list at the instant of the
+throw (PHP 8.3.6): **`task-a` is `completed`, and `task-b` is the one left `in_progress` and assigned**
+to that coder. An earlier write-up of this entry named task-a and said the stranded claim is why the
+parent's winner list came back empty; both are wrong. The winner list was emptied by the forked child's
+`tearDown()` deleting the results directory (`task-a.won.coder-1` was on disk when the throw landed).
+What the stranded claim actually costs is task-b: unclaimable by anybody, forever. Reproduced 2 times in
+700 runs of `MultiAgentRefactorTest` under 48 CPU-burner processes on this host (PHP 8.3.6).
 
 **Why it was not fixed here.** Round 45 fixed the *test's* half (a coder now takes at most one task, and
 a throw in a forked child can no longer run PHPUnit's teardown). The production half is a change to what
