@@ -7429,3 +7429,133 @@ paragraph of every file**, where every sibling addition necessarily matches.
 a sibling's additions fall inside its PREDICATE, not merely inside its scan scope.** Assertions are still
 a lower bound, not an equality — but "walks a directory a sibling touches" is not sufficient reason to
 expect an overshoot, and predicting one and being wrong costs the prediction its credibility.
+
+### Ec47-1 — a permission refusal and a hook DENY are indistinguishable by the time an event exists
+
+**Recorded 2026-08-22 by round-47 lane c, while implementing E173.** Severity: low. **Measured.**
+
+**What.** `NonInteractive`'s new `refusals` array reports every tool call the run blocked, and cannot say
+WHICH KIND of block it was. That is upstream of the class rather than a shortcut in it:
+`HookManager::resolveAsk()` settles a refused ASK as `HookResult::deny($ask->message)`, and
+`Runtime::gate()` renders every non-allowed verdict as `Hook denied: <message>` — so a refusal from
+`HeadlessPermissionPrompt` (no tty, or an explicit `n`) and a hook that denied outright arrive as the
+same string. Both belong in the array; only the sub-classification is missing.
+
+**Step.** Give the settled-ASK verdict something a consumer can branch on — a distinct prefix, or a field
+on `ToolResult` — and add a `kind` to each `refusals` entry. Files: `src/Runtime.php`,
+`src/Hooks/HookManager.php`, `src/Cli/NonInteractive.php`. Out of round-47 lane c's file list.
+
+### Ec47-2 — the denial prefixes have a roster and the PRODUCERS do not render from it
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: low. **Observed.**
+
+**What.** `Chat::DENIED_ERROR_PREFIXES` is the named agreement about which error texts mean "this never
+ran" — the renderer reads it, and as of E173 so does `NonInteractive`. The three producers do not:
+`Runtime::gate()` and `Chat::finishToolCalls()` each interpolate the literal `"Hook denied: …"` by hand.
+This is exactly the shape E118 promoted the launch formats for — a `public const` that the emitting code
+does not render FROM is a decoration, and every reader of the roster believes something the producers
+have not agreed to.
+
+**Step.** Have the producers `sprintf()` from the roster (or from a constant the roster is derived from),
+and pin the obligation the way `BootstrapLaunchFormatConstantsTest` pins the launch formats. Files:
+`src/Runtime.php`, `src/Chat.php`. Out of lane.
+
+### Ec47-3 — every `NonInteractive::run()` test reads the real STDIN, and a stdin that never EOFs hangs the suite
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: medium for CI, invisible locally. **Measured.**
+
+**What.** `NonInteractive::run()` calls `self::readStdinIfPiped()` with the default `\STDIN`, which
+`stream_isatty()` reports false for anything that is not a terminal — including a socket that is open and
+will never reach EOF. MEASURED on PHP 8.3.6: `vendor/bin/phpunit --filter NonInteractive` run with the
+agent harness's socket on fd 0 sat in `do_poll` for over five minutes with zero output and had to be
+killed; the identical command with `</dev/null` finished in **0.84s**. Nothing about the tests changed.
+Any runner that hands the suite a pipe it keeps open — a CI step that pipes into `phpunit`, a supervisor
+that holds the child's stdin — hangs the whole suite, and the symptom is silence rather than a failure.
+
+**Step.** Two halves, and the first is cheap: point `tests/bootstrap.php` (or the affected tests) at a
+closed stdin so the suite cannot depend on its runner's fd 0. The second is the real fix — `run()` has no
+seam for its input stream although `readStdinIfPiped($stream = \STDIN)` already takes one, so add the
+parameter and thread it. Files: `src/Cli/NonInteractive.php`, `tests/Cli/NonInteractive*Test.php`.
+
+### Ec47-4 — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
+
+**Recorded 2026-08-22 by round-47 lane c, finishing E188.** Severity: informational.
+
+**What.** `BootstrapLaunchFormatConstantsTest`'s doc-block cites `Failures: 3` and `Failures: 2` for the
+two `mcpClient()` reword mutations. A `Failures:` count is not a class cardinality — it counts what the
+mutation did — so the new guard deliberately allows it, but E188's preferred form is still the NAMES, and
+these two were not re-measured this round because each costs a mutation run.
+
+**Step.** Mutate both `mcpClient()` messages outside `'could not be fully started'`, record the failing
+test names, and replace the two counts.
+
+### Ec47-5 — the class-total guard covers two files, and widening it needs a decision first
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: informational.
+
+**What.** `BootstrapLaunchFormatConstantsTest::testNoDocBlockInThisLanesFilesQuotesAPhpunitClassTotal()`
+scans exactly the two files round-47 lane c owns. Other files carry the same shape, and some of those
+figures are anchored to a NAMED COMMIT, which is a materially different claim from one taken at "the tree
+as it was" — a commit-anchored figure is reproducible and does not rot. Deciding that for every file in
+`tests/` is a repo-wide judgement, not a scope this guard should have taken silently.
+
+**Step.** Decide whether a commit-anchored total is acceptable; if it is, teach the scanner to allow one
+that sits within N characters of a sha, and widen the roster to all of `tests/`.
+
+### Ec47-6 — the doc-page sweep still cannot see two page shapes
+
+**Recorded 2026-08-22 by round-47 lane c, alongside E187.** Severity: informational. **Measured.**
+
+**What.** After this round's widening, `docPages()` collects every `*.md` at `sugar-crush/` plus every
+`*.md` anywhere under `sugar-crush/docs/`. It cannot see (a) a page outside the package — the monorepo
+root `README.md` and `docs/` quote sugar-crush behaviour in places, and (b) a launch line quoted inside a
+non-markdown page. Neither is a live miss today: the wider alphabet nominates the same (constant, page)
+set the narrow one did.
+
+**Step.** Decide whether a monorepo-root page quoting a sugar-crush launch line is in this guard's remit;
+if so, extend the collector's root and expect the roster to grow.
+
+### Ec47-7 — E187's own prescribed algorithm could not have covered the page E187 was written about
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription refuted.**
+
+**What.** E187's Step says: derive each format's LONGEST LITERAL SPAN, impose a minimum span length, and
+list the formats that fall below it as "unsweepable". Measured against the tree:
+`Bootstrap::PROJECT_TIER_REFUSAL_FORMAT` is `'ignoring %s — %s'`, whose longest span is `'ignoring '` —
+nine characters of ordinary English, which is precisely why the hand-run sweep nominated `README.md` over
+"reject one at exit 2 rather than ignoring it". Any threshold high enough to drop that false positive
+marks the format unsweepable, and that format's reader is `docs/TROUBLESHOOTING.md` — **the one page E187
+cites as its find**. The implemented instrument matches the WHOLE SHAPE instead (every literal span in
+order, each conversion a bounded run of page text), which uses all of the format's text rather than the
+best ninth of it, and has no unsweepable set at all.
+
+**Step.** None; recorded so the span-plus-threshold design is not retried. It is the eighth reviewer or
+backlog prescription measured against the tree and found not to do what it was prescribed for.
+
+### Ec47-8 — the sweep emits no wildcard between two adjacent conversions
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: informational. **Observed.**
+
+**What.** `shapePatternFor()` skips the bounded wildcard when either side of a conversion is an empty
+literal span, which is right at the ends of a format and wrong in the middle: a hypothetical `'%s%s ran'`
+would compile to a pattern demanding the two interpolated runs be CONTIGUOUS in the page text, so a real
+quotation of it would not be nominated. No promoted format has adjacent conversions today, which is why
+this is a note rather than a fix.
+
+**Step.** Emit the wildcard whenever the conversion is interior, regardless of whether the neighbouring
+span is empty, and add the case to the fixture.
+
+### Ec47-9 — the three lanes share one scratchpad directory, and a generic filename is a cross-lane collision
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Observed, first-hand.**
+
+**What.** All three implementers are subagents of one session, so `.../<session-uuid>/scratchpad` is the
+SAME directory for all of them. Lane c wrote its baseline suite output to `scratchpad/baseline_head.txt`;
+partway through, that file was truncated and re-headed by a run whose banner read
+`Configuration: /home/sites/crush-lane-a/sugar-crush/phpunit.xml`. Two processes held the same path open
+with `>`, so the surviving bytes were an interleave of two different suites and the figure was void. The
+brief's `/tmp` rule already says "unique probe names"; it reads as being about `/tmp/sc_*` fixtures, and
+the scratchpad is the more likely collision because every lane reaches for the same obvious filenames.
+
+**Step.** Say in the brief that each lane writes under `scratchpad/lane-<x>/`. Cheap, and it removes a
+whole class of void measurement.
