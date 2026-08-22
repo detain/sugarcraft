@@ -361,11 +361,14 @@ final class GlobFigureDriftTest extends TestCase
      * from `(string) 8`, so both move with the glob. It was the WORD ALONE for
      * one round, and that is the same class of gap the connector had: a census
      * whose alphabet admits one spelling of its subject reports zero because it
-     * cannot say the other one. MEASURED at round 44 on PHP 8.3.6:
-     * `closes the 8-character version and nothing else` injected into
-     * `docs/HOOKS.md` and again into `src/Cli/Bootstrap.php` left this file at
-     * `OK (37 tests)` both times. The tree already writes numerals for figures
-     * of exactly this kind.
+     * cannot say the other one. A reviewer observed both injections survive at
+     * `1f10b622` — `closes the 8-character version and nothing else` put into
+     * `docs/HOOKS.md` and into `src/Cli/Bootstrap.php`, green both times — and
+     * the arithmetic is re-derived here rather than taken on the report:
+     * `preg_match('/\beight[\s\-]*character/i', 'closes the 8-character
+     * version')` is 0 on PHP 8.3.6, so the old alphabet could not see either
+     * injection at all. The tree already writes numerals for figures of exactly
+     * this kind.
      *
      * THE NOUN is `char`, `chars`, `character`, `characters` — and `byte`,
      * `bytes` for the WORD form only. The asymmetry is measured, not tidy.
@@ -384,7 +387,7 @@ final class GlobFigureDriftTest extends TestCase
      *
      * THE SEPARATOR run is `[\s\-_]*` — permissive because every narrower
      * spelling has already been evaded once; see {@see staleFigureSpellings()}
-     * for the fixture table, in which the OLD `[- ]` class misses sixteen of
+     * for the fixture table, in which the OLD `[- ]` class misses fifteen of
      * eighteen true positives. `_` is in the class because `eight_character` is
      * a spelling an identifier produces.
      *
@@ -635,7 +638,8 @@ final class GlobFigureDriftTest extends TestCase
      * THE TABLE HAS TWO HALVES because the alphabet has two axes, and round 44
      * widened the second after round 43 widened the first. The CONNECTOR rows
      * came first; the NUMBER rows are the gap that widening left behind — the
-     * census could say "eight" fifteen ways and "8" none at all.
+     * census could spell "eight" every way the connector rows list, and "8" not
+     * at all.
      *
      * | fixture                        | OLD `[- ]` | current |
      * |--------------------------------|------------|---------|
@@ -797,37 +801,43 @@ final class GlobFigureDriftTest extends TestCase
     }
 
     /**
-     * Nothing in scope is stale, `docs/SETTINGS.md` says so, and the scanner
-     * still works.
+     * THE POSITIVE CONTROL, and it is a test of its own rather than the first
+     * assertion of the census test.
      *
-     * THREE ASSERTIONS AND NOT ONE, because an empty census is a strictly
-     * weaker guard than a census of one. `assertSame([], …)` passes in a tree
-     * where the retracted figure is everywhere and the scanner is broken, so
-     * the same scanner is run over a known-stale fixture and a known-retracted
-     * fixture in the same test — a positive control and a negative control for
-     * an assertion whose real result is "nothing".
+     * It used to be exactly that, and the arrangement hid something: a reviewer
+     * mutating away the retraction exemption saw ONE failure, because the
+     * control assertions ran first in the same method and PHPUnit stops at the
+     * first one. The real census — the assertion the mutation was aimed at —
+     * was never reached, so the evidence offered for the guard was evidence
+     * from a different assertion. Separate methods make every mutation's
+     * failure count mean what it looks like it means.
      *
-     * IT STILL REDS IN BOTH DIRECTIONS. A new `src/` or `docs/` paragraph
-     * spelling the old count reds the first assertion. Re-introducing the figure in a paragraph
-     * that also retracts it does NOT red — that is the retraction exemption
-     * working, and the negative control pins it. And `docs/SETTINGS.md`
-     * disagreeing with the census's cardinality reds the third.
+     * WHY A CONTROL AT ALL: `assertSame([], …)` over the real scope also passes
+     * in a tree where the retracted figure is everywhere and the scanner has
+     * quietly stopped matching. The same scanner is therefore run over a
+     * fixture whose answer is known.
      */
-    public function testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees(): void
+    public function testTheCensusScannerStillFindsAKnownStaleParagraph(): void
     {
-        // POSITIVE CONTROL, first: if this does not fire, nothing below means
-        // anything, because the emptiness would be the scanner's and not the
-        // tree's.
         $this->assertSame(
             ['known-stale.php' => 1],
             $this->census([
                 'known-stale.php' => "/**\n * closes the eight-character version and nothing else.\n */",
             ]),
             'the census scanner no longer finds a paragraph it is meant to find, '
-            . 'so its verdict on src/ is worthless',
+            . 'so its verdict on src/ and docs/ is worthless',
         );
+    }
 
-        // NEGATIVE CONTROL: the shape LayeredSettings actually has.
+    /**
+     * THE NEGATIVE CONTROL: the shape `LayeredSettings` actually has.
+     *
+     * Without it, tightening the exemption into uselessness would report every
+     * rule-7 citation of the old figure as a fresh defect, and the census test
+     * would red for a reason that has nothing to do with the tree.
+     */
+    public function testTheRetractionExemptionSparesAKnownRetractedParagraph(): void
+    {
         $this->assertSame(
             [],
             $this->census([
@@ -837,7 +847,19 @@ final class GlobFigureDriftTest extends TestCase
             'the retraction exemption stopped working, so every rule-7 citation of the old '
             . 'figure would now be reported as a fresh defect',
         );
+    }
 
+    /**
+     * Nothing in scope is stale, and `docs/SETTINGS.md` says the same number.
+     *
+     * IT REDS IN BOTH DIRECTIONS. A new `src/` or `docs/` paragraph spelling
+     * the old count reds the first assertion; the last stale copy being fixed
+     * without the page's cardinality moving reds the second. The two controls
+     * above keep both honest — this test's own result is "nothing", and an
+     * assertion of nothing is only worth what the scanner behind it is worth.
+     */
+    public function testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees(): void
+    {
         $census = $this->census($this->censusScope());
 
         $this->assertSame(
@@ -852,7 +874,7 @@ final class GlobFigureDriftTest extends TestCase
         $this->assertStringContainsString(
             'the census finds ' . $this->word(\count($census)) . ' remaining site',
             $para,
-            'docs/SETTINGS.md no longer states the number of src/ sites the census actually finds',
+            'docs/SETTINGS.md no longer states the number of sites the census actually finds',
         );
     }
 }
