@@ -510,14 +510,59 @@ final class ProcessExecutor implements ExecutorInterface
      *
      * This script runs in the spawned worker process and handles the
      * IPC protocol with the parent ProcessExecutor.
+     *
+     * ## THIS WORKER IS A SIMULATION, AND THAT IS AN INTENTIONAL SEAM
+     *
+     * It reads the startup config, answers `ready`, waits for `execute`, then
+     * echoes the task back over two `streaming` messages and one `complete`,
+     * spacing them with `usleep()` so a caller sees a worker that takes about a
+     * second. Every byte it emits is fabricated here. Nothing in it contacts a
+     * model.
+     *
+     * ### WHAT THIS COMMENT USED TO SAY
+     *
+     * "For P1.S5, this is a simplified simulation that doesn't actually call
+     * an LLM — that wiring comes in later phases", repeated inside the script
+     * as "Real LLM integration comes in later phases".
+     *
+     * ### WHAT IS TRUE NOW
+     *
+     * The phase it deferred to has come and gone and the stub is still here,
+     * so "later phases" has stopped being a schedule and become a description
+     * of nothing. What is genuinely real around it is worth stating precisely,
+     * because a reader who sees "simulation" tends to discount the whole
+     * mechanism: {@see spawnWorker()} really does `proc_open()` a second PHP
+     * process, the JSON line protocol really is spoken over real pipes,
+     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::pumpProgress()} really
+     * does mirror each `streaming` chunk onto the live `SubAgent`, and the
+     * split-pane compositor really does paint those bytes mid-run. The
+     * transport is production. The MOUTH at the far end is not.
+     *
+     * ### WHY IT STILL EARNS ITS PLACE
+     *
+     * Because it is not one edit away from being real, and a half-real worker
+     * would be worse than an honestly fake one. A worker that talked to a model
+     * needs, at minimum: the composer autoloader bootstrapped inside a `php -r`
+     * child that today has no autoloader at all; a provider IDENTITY and its
+     * credentials carried across the startup message, which currently ships
+     * only `model`/`messages`/`tools`/`systemPrompt`/`temperature`/`maxTokens`
+     * and no way to name a provider, let alone authenticate one; and an offline
+     * substitute for CI, which has no model to call — so a fake provider has to
+     * remain constructible in the child either way, i.e. this simulation does
+     * not disappear even then, it moves behind a seam.
+     *
+     * Until that lands, this is the shipped default: {@see __construct()}'s
+     * `$binaryPath` is plain `php`, {@see \SugarCraft\Crush\Agents\AgentWorkerPool}
+     * builds one of these with no arguments, and {@see \SugarCraft\Crush\Chat}
+     * builds another from `AgentPoolConfig`. Anything a user sees in the agent
+     * pane came from the script below.
+     *
+     * Recorded as E59 in `docs/plans/crush_code_hardening_backlog.md`. Do not
+     * delete the simulation to "clean it up" — deleting it removes the only
+     * exercise the fork/pipe/pump/compositor chain has.
      */
     private function createInlineWorkerScript(): string
     {
-        // The worker reads startup config, sends ready, waits for execute,
-        // then simulates agent work and sends streaming + complete messages.
-        // For P1.S5, this is a simplified simulation that doesn't actually
-        // call an LLM — that wiring comes in later phases.
-        //
         // NOTE: When using `php -r`, the code is executed directly without
         // an opening `<?php` tag, so we omit it here.
         return <<<'PHP'
@@ -581,8 +626,10 @@ $heartbeatIntervalUsec = 500_000; // 500ms
 $lastHeartbeat = time();
 
 // ---- Simulate agent work and stream results ----
-// For P1.S5: simple simulation that echoes the task after a brief delay.
-// Real LLM integration comes in later phases.
+// Fabricated output, on purpose. See createInlineWorkerScript()'s docblock in
+// the parent for what is real around it and what a real worker would need;
+// "Real LLM integration comes in later phases", which this comment used to
+// say, named a phase that has since passed without it.
 
 // Phase 1: Initial work burst
 usleep(20000); // 20ms delay to simulate work
