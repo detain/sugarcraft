@@ -219,6 +219,26 @@ final class HookRegistry
     public const MAX_REWRITE_PASSES = 4;
 
     /**
+     * How many hooks the chain-expiry deny reason may name as spenders.
+     *
+     * The reason has to be actionable, and the actionable part is WHICH hook
+     * held the clock — but a chain is as long as its author made it and a
+     * matcher can select all of it, so "name them all" is an unbounded string
+     * built from configuration, the shape {@see ScriptHook}'s own clip
+     * doctrine exists to refuse. The ledger is sorted by spend and cut here,
+     * announcing the cut, so the entries that survive are the ones worth
+     * acting on.
+     */
+    private const MAX_NAMED_SPENDERS = 4;
+
+    /**
+     * Per-name ceiling inside that reason. A hook's name comes from a YAML
+     * file ({@see HookConfig}) and is therefore user-supplied, so it is
+     * clipped for the same reason its output is.
+     */
+    private const MAX_SPENDER_NAME_CHARS = 60;
+
+    /**
      * Execute all matching hooks for an event.
      *
      * Precedence: DENY (and any action that does not permit execution) wins
@@ -309,7 +329,14 @@ final class HookRegistry
         // every re-scan would get a fresh budget and the multiplication by
         // MAX_REWRITE_PASSES this exists to remove would still be there.
         $chainBudget = $this->chainBudgetSeconds($event, $context->toolName);
-        $chainDeadline = $chainBudget === null ? null : microtime(true) + $chainBudget;
+        $armedAt = microtime(true);
+        $chainDeadline = $chainBudget === null ? null : $armedAt + $chainBudget;
+
+        // WHO SPENT THE CLOCK, accumulated ACROSS passes because the deadline
+        // is armed across passes. A per-pass ledger would name only the
+        // spenders of the pass that happened to hit the wall, and on a
+        // rewriting chain that is routinely not the pass that spent the time.
+        $spend = [];
 
         while (true) {
             [$blocking, $rewrite, $inertRewrite] = $this->scan(
@@ -318,6 +345,8 @@ final class HookRegistry
                 $modified?->modifiedInput,
                 $chainDeadline,
                 $chainBudget,
+                $spend,
+                $armedAt,
             );
 
             if ($blocking !== null && !$blocking->isAsk()) {
@@ -439,6 +468,146 @@ final class HookRegistry
     }
 
     /**
+     * The refusal a chain that ran out of clock is denied with.
+     *
+     * THE ONE THING THIS HAS TO GET RIGHT is separating the hook that was
+     * STOPPED from the hooks that SPENT the time, because they are almost never
+     * the same hook and the old wording conflated them. It names, in order:
+     *
+     * 1. elapsed against budget — two numbers, because a chain overruns by
+     *    exactly as much as its last unbounded hook overran, and that gap is
+     *    the evidence that the sum was not what ran out;
+     * 2. where the sum came from, so the figure is checkable against the YAML
+     *    rather than looking like a constant somebody chose;
+     * 3. the spenders, largest first, each marked as counted-in-the-sum or not;
+     * 4. the hook that was stopped, stated as having run for zero seconds;
+     * 5. what the user can actually do — and, when an unbounded hook is
+     *    implicated, that raising a `timeout:` is NOT it. That sentence is the
+     *    whole point of the change: the old message pointed at the one lever
+     *    that cannot move this outcome.
+     *
+     * BOUNDED, per {@see MAX_NAMED_SPENDERS}/{@see MAX_SPENDER_NAME_CHARS} and
+     * for the same reason {@see ScriptHook} clips its own reasons: every name
+     * in here is user-supplied and the list is as long as the matcher selected.
+     *
+     * @param string $stoppedHook the hook denied without being run — the one
+     *        whose timeout the OLD message named as the budget
+     * @param list<array{name: string, seconds: float, bounded: bool}> $spend
+     */
+    private function chainExpiryReason(
+        string $toolName,
+        string $stoppedHook,
+        float $chainBudget,
+        float $elapsed,
+        array $spend,
+    ): string {
+        $unbounded = array_filter($spend, static fn (array $entry): bool => !$entry['bounded']);
+        $unboundedSeconds = array_sum(array_column($unbounded, 'seconds'));
+
+        // Largest spender first: the list is cut, so it has to be cut at the
+        // end that matters. usort is stable enough here — ties are hooks that
+        // cost the same, and their order carries no information.
+        usort($spend, static fn (array $a, array $b): int => $b['seconds'] <=> $a['seconds']);
+        $named = array_slice($spend, 0, self::MAX_NAMED_SPENDERS);
+
+        $rows = [];
+        foreach ($named as $entry) {
+            $rows[] = sprintf(
+                '%s (%ss, %s)',
+                self::clipName($entry['name']),
+                self::seconds($entry['seconds']),
+                $entry['bounded']
+                    ? 'declared a timeout, counted in the budget'
+                    : 'NO declared timeout, spends the budget without adding to it',
+            );
+        }
+
+        $omitted = count($spend) - count($named);
+        if ($omitted > 0) {
+            $rows[] = sprintf('… and %d more hook(s), not listed', $omitted);
+        }
+
+        $reason = sprintf(
+            'Hooks for %s ran %ss against a %ss budget and were stopped. '
+            . 'That budget is the sum of the declared timeouts of the bounded hooks matching this call, '
+            . 'not a constant. ',
+            $toolName,
+            self::seconds($elapsed),
+            self::seconds($chainBudget),
+        );
+
+        $reason .= $rows === []
+            // REACHED, and measured rather than assumed — but NOT by the route
+            // that first suggested itself. A `timeout: 0` does not get here:
+            // {@see ScriptHook::timeoutSeconds()} reads zero as "unset" and
+            // answers its 60-second default, so the chain is given a minute.
+            // What does get here is a POSITIVE sub-microsecond timeout
+            // (`timeout: 0.000001`, verified): the budget is then smaller than
+            // the walk from arming the deadline to reaching the first hook, so
+            // the chain expires having run nothing at all.
+            ? 'No hook in the chain had run yet: the budget is smaller than the chain\'s own setup cost. '
+            : 'Clock spent by: ' . implode('; ', $rows) . '. ';
+
+        $reason .= sprintf(
+            'Stopped at %s, which ran for 0s and consumed none of the budget its own timeout contributed. ',
+            self::clipName($stoppedHook),
+        );
+
+        if ($spend === []) {
+            // Said separately from the all-bounded case below, which would
+            // otherwise state "every hook that RAN declared a timeout" about a
+            // chain in which none did — true and useless, and the exact shape
+            // of claim this plan's §5 is about.
+            $reason .= 'Raise that timeout above the chain\'s scheduling overhead; no hook\'s own runtime is implicated. ';
+        } elseif ($unbounded !== []) {
+            $reason .= sprintf(
+                'Raising a `timeout:` will NOT fix this: %ss of the elapsed time was spent by hand-written '
+                . 'hook(s) with no declared timeout, which run in-process and cannot be bounded here '
+                . '(see BoundedHookInterface) — a larger budget would be overrun the same way. '
+                . 'Remove or speed up the unbounded hook(s) instead. ',
+                self::seconds($unboundedSeconds),
+            );
+        } else {
+            $reason .= 'Every hook that ran declared a timeout, so raising those timeouts raises this budget. ';
+        }
+
+        return $reason . 'A hook chain that has not answered has not allowed anything.';
+    }
+
+    /**
+     * Seconds, trimmed of trailing zeroes so `1.000` reads as `1`.
+     *
+     * Three decimals because a hook chain's overrun is routinely sub-second
+     * and an integer-second rendering would print `Hooks ran 2s against a 2s
+     * budget` for a real 200ms overrun — a message that refutes itself.
+     *
+     * AND A NONZERO VALUE NEVER RENDERS AS `0`, which three decimals alone does
+     * not give: the sub-microsecond-timeout chain above is real, and at three
+     * decimals its refusal read `ran 0s against a 0s budget` — self-refuting in
+     * the other direction. Anything that would round away falls back to a
+     * fixed-significand form, which is ugly and honest rather than tidy and
+     * wrong.
+     */
+    private static function seconds(float $value): string
+    {
+        $rendered = rtrim(rtrim(number_format($value, 3, '.', ''), '0'), '.');
+
+        if ($rendered === '0' && $value > 0.0) {
+            return rtrim(rtrim(sprintf('%.9f', $value), '0'), '.');
+        }
+
+        return $rendered;
+    }
+
+    /** A hook name is YAML-supplied, so it is clipped like any foreign string. */
+    private static function clipName(string $name): string
+    {
+        return mb_strlen($name) <= self::MAX_SPENDER_NAME_CHARS
+            ? $name
+            : mb_substr($name, 0, self::MAX_SPENDER_NAME_CHARS) . '…[name truncated]';
+    }
+
+    /**
      * One full pass over the matching hooks, reporting what it found rather
      * than ranking it: {@see executeHooks()} owns the precedence, because a
      * rewrite and a question found in the SAME pass are not two candidates for
@@ -480,6 +649,15 @@ final class HookRegistry
      *        {@see chainBudgetSeconds()}).
      * @param ?float $chainBudget what that deadline was armed with, carried
      *        only so the refusal can name a number the user recognises
+     * @param list<array{name: string, seconds: float, bounded: bool}> $spend
+     *        BY REFERENCE, and accumulated across passes by
+     *        {@see executeHooks()}: what every hook that has already run cost,
+     *        and whether it was one the budget was derived from. The refusal
+     *        below is unreadable without it — see the note on its own arm.
+     * @param float $armedAt `microtime(true)` at the instant the chain
+     *        deadline was armed, so the refusal can state ELAPSED rather than
+     *        only BUDGETED time. The two differ by however long the last
+     *        unbounded hook overran, and that difference is the evidence.
      *
      * @return array{0: ?HookResult, 1: ?HookResult, 2: ?HookResult} [the
      *     result that blocks the call outright — a DENY, or the pass's first
@@ -492,6 +670,8 @@ final class HookRegistry
         ?string $settled = null,
         ?float $chainDeadline = null,
         ?float $chainBudget = null,
+        array &$spend = [],
+        float $armedAt = 0.0,
     ): array {
         $pendingAsk = null;
         $pendingModify = null;
@@ -508,11 +688,30 @@ final class HookRegistry
                     // out of clock has not approved anything, and letting the
                     // call through would silently skip whatever guards are
                     // still queued behind this point.
-                    return [HookResult::deny(sprintf(
-                        'Hooks for %s did not finish within the %s seconds their timeouts add up to '
-                        . 'and were stopped; a hook chain that has not answered has not allowed anything.',
+                    //
+                    // WHAT THIS MESSAGE USED TO SAY, and why it changed: it
+                    // read "did not finish within the N seconds their timeouts
+                    // add up to" and named nothing else. Every noun in it was
+                    // true and the sentence was still misleading, because the
+                    // hook holding N is $hook — the one being stopped HERE,
+                    // which has consumed exactly zero of it. The clock is
+                    // spent by whatever ran earlier, and a hand-written
+                    // HookInterface contributes NOTHING to the sum while
+                    // spending it freely (it is not a BoundedHookInterface, so
+                    // chainBudgetSeconds() never asks it and this charge never
+                    // shortens it). A user reading the old text would raise
+                    // this hook's `timeout:`, which cannot help: the budget
+                    // would grow, the unbounded spender would still overrun
+                    // it, and the same hook would be denied again. So the
+                    // reason now names the spenders, says which of them the
+                    // budget was derived from, and states elapsed next to
+                    // budgeted.
+                    return [HookResult::deny($this->chainExpiryReason(
                         $context->toolName,
-                        rtrim(rtrim(number_format((float) $chainBudget, 3, '.', ''), '0'), '.'),
+                        $hook->name(),
+                        (float) $chainBudget,
+                        microtime(true) - $armedAt,
+                        $spend,
                     )), null, null];
                 }
 
@@ -520,7 +719,16 @@ final class HookRegistry
                 $hook = $hook->withTimeoutSeconds($remaining);
             }
 
+            $startedAt = microtime(true);
             $result = $hook->execute($context);
+            // LEDGERED UNCONDITIONALLY, before any early return: a hook that
+            // denies still spent the clock, and on a rewriting chain the pass
+            // that spends the budget is often not the pass that hits the wall.
+            $spend[] = [
+                'name' => $hook->name(),
+                'seconds' => microtime(true) - $startedAt,
+                'bounded' => $hook instanceof BoundedHookInterface,
+            ];
 
             if (!$result->isAsk() && !$result->permitsExecution()) {
                 return [$result, null, null];

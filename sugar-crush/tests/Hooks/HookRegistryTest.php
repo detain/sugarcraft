@@ -1725,11 +1725,247 @@ final class HookRegistryTest extends TestCase
         $elapsed = microtime(true) - $started;
 
         $this->assertTrue($result->isDenied());
-        $this->assertStringContainsString('0.2 seconds', $result->message);
+        // THE BUDGET, and it is the STOPPED hook's own figure — 0.2s is
+        // `never-reached`'s declared timeout, and the whole chain's, because it
+        // is the only bounded hook. The old assertion stopped here, and the
+        // whole of E61's S is that stopping here was not enough: naming this
+        // number was the misleading part.
+        $this->assertStringContainsString('0.2s budget', $result->message);
         $this->assertLessThan(
             1.0,
             $elapsed,
             'the script hook was run anyway: it sleeps 30s, so reaching it at all shows here',
+        );
+    }
+
+    /**
+     * E61's S: THE REFUSAL NAMES THE HOOK THAT SPENT THE CLOCK, not only the
+     * hook whose timeout the budget was derived from.
+     *
+     * These are almost never the same hook, and the old wording implied they
+     * were: *"did not finish within the 0.2 seconds their timeouts add up to"*.
+     * Every noun in that sentence was true. It was still misleading, because
+     * the hook holding the 0.2 is the one being STOPPED — it consumed exactly
+     * none of it — and the clock was spent by `warmup`, a hand-written
+     * `HookInterface` that contributes NOTHING to the sum
+     * ({@see HookRegistry::chainBudgetSeconds()} accumulates only for
+     * {@see BoundedHookInterface}) while spending it freely.
+     *
+     * THE COST OF THE OLD WORDING WAS A WRONG REPAIR. A user reading it raises
+     * `never-reached`'s `timeout:` — the one lever that cannot move this
+     * outcome: the budget grows, `warmup` overruns the larger budget the same
+     * way, and the same hook is denied again. So the assertion that matters is
+     * not that the spender is mentioned but that the message says the timeout
+     * is the WRONG knob.
+     */
+    public function testTheChainExpiryRefusalNamesTheUnboundedSpenderAndNotOnlyTheBudget(): void
+    {
+        $this->registry->register($this->slowAllowingHook('warmup', 400_000));
+        $this->registry->register($this->hangingScriptHook('never-reached', 0.2));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isDenied());
+
+        // WHO SPENT IT.
+        $this->assertStringContainsString('warmup', $result->message, 'the spender is not named');
+        $this->assertStringContainsString(
+            'NO declared timeout',
+            $result->message,
+            'the spender is named but not marked as contributing nothing to the budget',
+        );
+
+        // WHO WAS STOPPED, and that it ran for none of the clock.
+        $this->assertStringContainsString('Stopped at never-reached', $result->message);
+        $this->assertStringContainsString('ran for 0s', $result->message);
+
+        // THE WRONG KNOB, said out loud. This is the clause the old message's
+        // reader would have reached for.
+        $this->assertStringContainsString(
+            'Raising a `timeout:` will NOT fix this',
+            $result->message,
+            'the refusal still points the user at the timeout it cannot be fixed with',
+        );
+
+        // ELAPSED IS STATED NEXT TO BUDGETED, and they differ — the gap is the
+        // evidence that the sum was not what ran out. Asserted as an ordering
+        // rather than as a literal, since the elapsed figure is wall clock.
+        $this->assertMatchesRegularExpression(
+            '/ran (\d+(?:\.\d+)?)s against a 0\.2s budget/',
+            $result->message,
+        );
+        preg_match('/ran (\d+(?:\.\d+)?)s against/', $result->message, $m);
+        $this->assertGreaterThan(
+            0.2,
+            (float) $m[1],
+            'elapsed was reported as inside the budget the chain had just exceeded',
+        );
+    }
+
+    /**
+     * THE SAME REFUSAL, WITH THE OPPOSITE ADVICE, when every hook that ran was
+     * bounded.
+     *
+     * The "raising a `timeout:` will NOT fix this" clause is true only while an
+     * unbounded hook is implicated. Where every spender declared a figure, the
+     * timeout IS the knob, and a message that gave the unbounded advice
+     * unconditionally would point at the wrong repair in the other direction —
+     * the same defect mirrored.
+     *
+     * WHY A DOUBLE AND NOT A `ScriptHook`. A `ScriptHook` cannot overrun: it
+     * kills itself at the deadline it was charged, so an all-`ScriptHook` chain
+     * can only exceed its own sum by per-hook `proc_open()`/`proc_close()`
+     * overhead — total spend ≈ N x overhead against a sum of ≈ N x overhead,
+     * which is a knife edge. MEASURED: four hooks each declaring 10ms denied on
+     * some runs and fitted on others, so a test written that way would be a
+     * coin flip dressed as an assertion. {@see BoundedHookInterface} is an
+     * INTERFACE, "shortening only" is `ScriptHook`'s own contract rather than
+     * the interface's, and this branch has to be right for any implementor —
+     * so the double declares a figure and then overruns it, which is exactly
+     * the case the branch is for.
+     */
+    public function testAnAllBoundedChainIsToldThatRaisingTheTimeoutsDoesRaiseTheBudget(): void
+    {
+        $this->registry->register($this->sloppyBoundedHook('overruns', 0.05, 400_000));
+        $this->registry->register($this->hangingScriptHook('never-reached', 0.05));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isDenied(), $result->message);
+        $this->assertStringContainsString('overruns', $result->message);
+        $this->assertStringContainsString('declared a timeout, counted in the budget', $result->message);
+        $this->assertStringNotContainsString(
+            'will NOT fix this',
+            $result->message,
+            'an all-bounded chain was told its timeouts are the wrong knob',
+        );
+        $this->assertStringNotContainsString('NO declared timeout', $result->message);
+        $this->assertStringContainsString(
+            'raising those timeouts raises this budget',
+            $result->message,
+        );
+    }
+
+    /**
+     * A `BoundedHookInterface` that declares a timeout and then ignores it.
+     *
+     * Not a straw man: the interface promises only that a figure can be read
+     * and a shorter one handed back. `ScriptHook` enforces its own by killing a
+     * child; an in-process implementor has nothing to kill, which is the whole
+     * of E61's L. This double is that shape, held to the smallest form that
+     * reaches the branch.
+     */
+    private function sloppyBoundedHook(string $name, float $declared, int $microseconds): HookInterface
+    {
+        return new class($name, $declared, $microseconds) implements HookInterface, \SugarCraft\Crush\Hooks\BoundedHookInterface {
+            public function __construct(
+                private string $name,
+                private float $declared,
+                private int $microseconds,
+            ) {}
+
+            public function name(): string
+            {
+                return $this->name;
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return '.*';
+            }
+
+            public function timeoutSeconds(): float
+            {
+                return $this->declared;
+            }
+
+            public function withTimeoutSeconds(float $seconds): self
+            {
+                return new self($this->name, min($this->declared, $seconds), $this->microseconds);
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                usleep($this->microseconds);
+
+                return HookResult::allow();
+            }
+        };
+    }
+
+    /**
+     * THE SPENDER LIST IS BOUNDED AND SORTED, because it is built from
+     * configuration: a matcher can select the whole chain and every name in it
+     * comes from a YAML file.
+     *
+     * Sorted largest-first is what makes the cut defensible — a list cut at an
+     * arbitrary end would drop the spender worth acting on. Six unbounded hooks
+     * against {@see HookRegistry::MAX_NAMED_SPENDERS} of 4: the two cheapest
+     * must be the two omitted, and the omission must announce itself.
+     */
+    public function testTheSpenderListIsCutAtItsCheapEndAndSaysSo(): void
+    {
+        // Descending cost is NOT registration order, so a list that merely
+        // preserved registration order would fail this.
+        foreach ([['cheap-a', 20_000], ['dear', 700_000], ['cheap-b', 10_000],
+                  ['mid', 300_000], ['cheapest', 5_000], ['second', 500_000]] as [$name, $us]) {
+            $this->registry->register($this->slowAllowingHook($name, $us));
+        }
+        $this->registry->register($this->hangingScriptHook('never-reached', 0.3));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isDenied());
+        foreach (['dear', 'second', 'mid', 'cheap-a'] as $kept) {
+            $this->assertStringContainsString($kept, $result->message, "the $kept spender was cut");
+        }
+        $this->assertStringNotContainsString('cheapest', $result->message);
+        $this->assertStringNotContainsString('cheap-b', $result->message);
+        $this->assertStringContainsString('and 2 more hook(s), not listed', $result->message);
+
+        // Largest first, checked by POSITION rather than by presence — a list
+        // that named the right four in the wrong order would pass the loop above.
+        $this->assertLessThan(
+            (int) strpos($result->message, 'mid ('),
+            (int) strpos($result->message, 'dear ('),
+            'the spender list is not ordered by what each hook cost',
+        );
+    }
+
+    /**
+     * A SUB-MICROSECOND BUDGET expires before any hook runs, and the refusal
+     * must not then blame a hook's runtime or print `0s` for a nonzero figure.
+     *
+     * Two things this pins that nothing else does. First, the empty-ledger
+     * branch: `timeout: 0` does NOT reach it —
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook::timeoutSeconds()} reads zero
+     * as "unset" and answers its 60-second default — so the route in is a
+     * positive value smaller than the walk from arming the deadline to the
+     * first hook. Second, the rendering: at three decimals this refusal read
+     * `ran 0s against a 0s budget`, a sentence that refutes itself.
+     */
+    public function testAChainWhoseBudgetExpiresBeforeAnyHookRunsBlamesNoHooksRuntime(): void
+    {
+        $this->registry->register($this->hangingScriptHook('micro', 0.000001));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isDenied());
+        $this->assertStringContainsString('No hook in the chain had run yet', $result->message);
+        $this->assertStringContainsString('scheduling overhead', $result->message);
+        $this->assertStringNotContainsString('Clock spent by', $result->message);
+        // The vacuous variant: "every hook that RAN declared a timeout" about a
+        // chain in which none ran.
+        $this->assertStringNotContainsString('Every hook that ran', $result->message);
+        $this->assertStringNotContainsString(
+            'against a 0s budget',
+            $result->message,
+            'a positive sub-millisecond budget was rendered as zero',
         );
     }
 

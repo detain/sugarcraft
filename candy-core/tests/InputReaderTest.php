@@ -32,6 +32,7 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\PasteMsg;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class InputReaderTest extends TestCase
@@ -280,6 +281,108 @@ final class InputReaderTest extends TestCase
         $this->assertSame(KeyType::Tab, $msgs[0]->type);
         $this->assertTrue($msgs[0]->shift);
         $this->assertFalse($msgs[0]->ctrl);
+    }
+
+    /**
+     * The whole SHIFT-BIT-CLEAR family of parameterised backtabs, one case per
+     * xterm modifier whose shift bit is 0.
+     *
+     * `Z` as a final byte IS the shift; a `;<mod>` parameter is a SECOND,
+     * independent modifier channel. The rebuild below the key table used to
+     * REPLACE the arm's KeyMsg from $mods alone, which silently discarded the
+     * final byte's meaning for every modifier that does not itself encode
+     * shift — `1;3Z` (alt), `1;5Z` (ctrl) and `1;7Z` (ctrl+alt) all decoded as
+     * an UNSHIFTED tab. It now ORs, so the two channels are additive.
+     *
+     * Three cases, not one. The backlog entry that recorded this named only
+     * `CSI 1;5Z`, and a fix scoped to that literal would have left the other
+     * two broken — which is why this is a data provider over the modifier
+     * arithmetic rather than a single assertion.
+     *
+     * @return iterable<string, array{0:string, 1:bool, 2:bool}>
+     */
+    public static function shiftBitClearBacktabProvider(): iterable
+    {
+        // xterm modifier = 1 + bitmask(shift=1, alt=2, ctrl=4). The odd values
+        // are exactly the ones with the shift bit clear.
+        yield 'mod 3 = alt'      => ['1;3Z', false, true];
+        yield 'mod 5 = ctrl'     => ['1;5Z', true,  false];
+        yield 'mod 7 = ctrl+alt' => ['1;7Z', true,  true];
+    }
+
+    #[DataProvider('shiftBitClearBacktabProvider')]
+    public function testAShiftBitClearParameterisedBacktabKeepsTheShiftItsFinalByteEncodes(
+        string $params,
+        bool $ctrl,
+        bool $alt,
+    ): void {
+        $msgs = (new InputReader())->parse("\x1b[" . $params);
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue(
+            $msgs[0]->shift,
+            "ESC[{$params} dropped the shift its Z final byte encodes",
+        );
+        $this->assertSame($ctrl, $msgs[0]->ctrl, "ESC[{$params} ctrl");
+        $this->assertSame($alt, $msgs[0]->alt, "ESC[{$params} alt");
+    }
+
+    /**
+     * The merge must not INVENT a modifier. `'Z'` is the only arm in the key
+     * table that sets a flag of its own, so for every other final byte the
+     * rebuild's OR has to come out identical to the assignment it replaced.
+     *
+     * Without this the merge could be "fixed" by ORing in a constant true and
+     * the family test above would still pass while every ctrl+arrow gained a
+     * phantom shift.
+     *
+     * @return iterable<string, array{0:string, 1:string}>
+     */
+    public static function unshiftedModifiedKeyProvider(): iterable
+    {
+        yield 'ctrl+Up'    => ['1;5A', 'ctrl+up'];
+        yield 'ctrl+Down'  => ['1;5B', 'ctrl+down'];
+        yield 'alt+Right'  => ['1;3C', 'alt+right'];
+        yield 'ctrl+Home'  => ['1;5H', 'ctrl+home'];
+        yield 'ctrl+Tab'   => ['1;5I', 'ctrl+tab'];
+        yield 'ctrl+F5'    => ['15;5~', 'ctrl+f5'];
+    }
+
+    #[DataProvider('unshiftedModifiedKeyProvider')]
+    public function testTheModifierMergeDoesNotInventShiftOnKeysThatDoNotEncodeIt(
+        string $params,
+        string $label,
+    ): void {
+        $msgs = (new InputReader())->parse("\x1b[" . $params);
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertFalse($msgs[0]->shift, "ESC[{$params} gained a phantom shift");
+        $this->assertSame($label, $msgs[0]->string());
+    }
+
+    /**
+     * `CSI 1;5I` and `CSI 1;5Z` differ in exactly one bit of meaning, and the
+     * difference lives in the final byte rather than the parameter.
+     *
+     * This is the pair that makes the merge load-bearing: the SAME modifier
+     * parameter must produce a shifted tab for one final byte and an unshifted
+     * one for the other. A rebuild that reads only the parameter cannot tell
+     * them apart, and before the fix it did not — both came back `ctrl+tab`.
+     */
+    public function testTheSameModifierParameterDivergesOnTheFinalByte(): void
+    {
+        $forward = (new InputReader())->parse("\x1b[1;5I");
+        $back    = (new InputReader())->parse("\x1b[1;5Z");
+        $this->assertCount(1, $forward);
+        $this->assertCount(1, $back);
+        $this->assertSame('ctrl+tab', $forward[0]->string());
+        $this->assertSame('ctrl+shift+tab', $back[0]->string());
+        $this->assertNotSame(
+            $forward[0]->string(),
+            $back[0]->string(),
+            'ESC[1;5I and ESC[1;5Z collapsed to one message',
+        );
     }
 
     /** Backtab split across two reads must still emit exactly one KeyMsg. */

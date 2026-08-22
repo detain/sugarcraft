@@ -383,18 +383,23 @@ final class InputReader
             // written and would simply never fire.
             //
             // A terminal that sends the parameterised `CSI 1;2Z` still works —
-            // $mods is then non-null and the rebuild below re-derives shift
+            // $mods is then non-null and the rebuild below merges shift in
             // from it, landing on the same message.
             //
-            // That rebuild is total, though, so it holds only where the
-            // parameter already encodes shift. `CSI 1;5Z` — ctrl WITHOUT the
-            // shift bit, on a terminal that still spells the key as backtab —
-            // is rebuilt from $mods alone and comes back ctrl+tab, dropping
-            // the shift this final byte is the whole meaning of. Left as-is
-            // rather than special-cased: no terminal in the xterm family is
-            // known to emit that combination, so a fix here would be guessing
-            // at a shape nothing sends. Recorded in
-            // docs/plans/crush_code_hardening_backlog.md.
+            // WHAT THIS COMMENT USED TO SAY, and why the code changed: the
+            // rebuild below was *total*, so it held only where the parameter
+            // already encoded shift. Every parameter whose xterm modifier has
+            // the shift bit CLEAR — `1;3Z` (alt), `1;5Z` (ctrl), `1;7Z`
+            // (ctrl+alt) — was rebuilt from $mods alone and came back without
+            // the shift this final byte is the whole meaning of. The comment
+            // named only `1;5Z` and declined the fix on the grounds that no
+            // xterm-family terminal emits it. That reasoning was right about
+            // the emitter and wrong about the size: it is a three-member
+            // family, not one shape, so a fix scoped to `1;5` would have been
+            // wrong. The rebuild now ORs rather than replaces, which fixes the
+            // whole family at once and is a no-op for every other arm — `'Z'`
+            // is the only entry in this table that sets a modifier flag of its
+            // own.
             'Z' => new KeyMsg(KeyType::Tab, shift: true),
             '~' => match ($keyParams) {
                 '1', '7' => new KeyMsg(KeyType::Home),
@@ -420,12 +425,20 @@ final class InputReader
         };
 
         if ($key !== null && $mods !== null) {
+            // MERGE, do not replace. A `;<mod>` parameter and a final byte are
+            // two independent modifier channels, and a key can arrive carrying
+            // both: `CSI 1;5Z` spells ctrl in the parameter and shift in the
+            // `Z`. Overwriting with $mods alone dropped whichever half the
+            // arm above had set, so ORing is what makes the two channels
+            // additive. Every arm other than `'Z'` builds its KeyMsg with all
+            // three flags false, so for them this is exactly the old
+            // assignment.
             $key = new KeyMsg(
                 $key->type,
                 $key->rune,
-                alt:   $mods->alt,
-                ctrl:  $mods->ctrl,
-                shift: $mods->shift,
+                alt:   $mods->alt   || $key->alt,
+                ctrl:  $mods->ctrl  || $key->ctrl,
+                shift: $mods->shift || $key->shift,
             );
         }
         return $key;
