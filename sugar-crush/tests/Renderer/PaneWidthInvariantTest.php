@@ -1224,28 +1224,60 @@ final class PaneWidthInvariantTest extends TestCase
      * happening to succeed, and the cost of keeping it is one function call.
      *
      * The measurement that makes it necessary, and the reason the obvious
-     * one-liner is not enough: `Width::truncateAnsi()` walks its own cluster
-     * scanner, so asking it for 10 cells of regional-indicator flags returns 20
-     * as `Width::of()` counts them. A backstop measured with the wrong
-     * instrument is not a backstop.
+     * one-liner is not enough: `Width::truncateAnsi()` and `Width::of()` do not
+     * always answer with the same number, so a budget spent through one and
+     * checked with the other can still come back over. A backstop measured with
+     * the wrong instrument is not a backstop.
+     *
+     * **The input class that shows it moved, and this test moved with it.** It
+     * used to be regional-indicator flags: `truncateAnsi($flags, 10)` returned
+     * 20 cells as `of()` counted them, because `of()` split per codepoint while
+     * `truncateAnsi()` split per cluster. E68 gave both one splitter and that
+     * particular disagreement is GONE — asserted below, so the old claim is
+     * recorded as fixed rather than quietly deleted.
+     *
+     * What survives is the disagreement the sibling test's docblock names, and
+     * it is not about clusters: `Ansi::strip()` — which `of()` measures through
+     * — eats a two-byte escape whose second byte is an ECMA-48 Fe final
+     * (0x40-0x5f: `ESC \`, `ESC P`, `ESC M`), while `truncateAnsi()`'s scanner
+     * passes through `ESC [` and `ESC ]` only and reads that byte as a visible
+     * cell. On its own that makes `truncateAnsi()` stop EARLY, which is a
+     * short row, not an over-wide one. Combined with a following grapheme
+     * Extend it goes the other way: measured over 400,000 calls on escape- and
+     * cluster-bearing strings at budgets 1-10, the bound still broke 548 times,
+     * worst +1, and every one had this shape. `ESC M` + U+1F3FD at a budget of
+     * 1 is that minimum, and it is the fixture below.
      */
     public function testTheHardFitBackstopHoldsTheBoundWhereTruncateAnsiAloneDoesNot(): void
     {
+        // E68, fixed: the cluster disagreement this test was written on is
+        // gone. Pinned so a regression of it fails HERE too, not only in
+        // candy-core.
         $flags = str_repeat("\u{1F1FA}\u{1F1F8}", 10);
-
-        self::assertGreaterThan(
+        self::assertSame(
             10,
             Width::of(Width::truncateAnsi($flags, 10)),
+            'truncateAnsi() is over its budget on clusters again -- see E68',
+        );
+
+        // Still live, and the reason hardFit() is not redundant: an ECMA-48 Fe
+        // escape followed by a grapheme Extend.
+        $escFe = "\x1bM\u{1F3FD}";
+        self::assertGreaterThan(
+            1,
+            Width::of(Width::truncateAnsi($escFe, 1)),
             'candy-core stopped disagreeing with itself, so this backstop may be reconsidered',
         );
 
         $hardFit = new \ReflectionMethod(Renderer::class, 'hardFit');
-        foreach ([1, 5, 10, 19] as $width) {
-            self::assertLessThanOrEqual(
-                $width,
-                Width::of((string) $hardFit->invoke(null, $flags, $width)),
-                "hardFit() did not hold {$width} cells",
-            );
+        foreach ([$flags, $escFe] as $subject) {
+            foreach ([1, 5, 10, 19] as $width) {
+                self::assertLessThanOrEqual(
+                    $width,
+                    Width::of((string) $hardFit->invoke(null, $subject, $width)),
+                    "hardFit() did not hold {$width} cells",
+                );
+            }
         }
     }
 
@@ -1260,8 +1292,9 @@ final class PaneWidthInvariantTest extends TestCase
      * cannot be cut, so the two must be the same thing. They are not, and the
      * reason is a THIRD disagreement between candy-core's two width
      * accountings — one the cluster measurements in
-     * {@see Renderer::wrapToPane()} do not cover, and one that outlives PHP
-     * 8.4's `grapheme_str_split()` because it is not about clusters at all.
+     * {@see Renderer::wrapToPane()} do not cover, and the ONLY one still live
+     * after round 40's E68 fix gave `Width` a single ICU segmentation on every
+     * PHP version, because it is not about clusters at all.
      *
      * `Width::of()` measures `Ansi::strip($row)`, and `strip()` consumes a
      * TWO-BYTE escape whose second byte is an ECMA-48 Fe final (0x40-0x5f —

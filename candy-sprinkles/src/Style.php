@@ -89,7 +89,7 @@ final class Style
         private readonly bool $inline = false,
         private readonly ?Color $marginBg = null,
         private readonly bool $colorWhitespace = true,
-        private readonly int $tabWidth = 4,
+        private readonly int $tabWidth = Width::TAB_WIDTH,
         private readonly ?\Closure $transform = null,
         private readonly ?string $hyperlink = null,
         private readonly string $hyperlinkId = '',
@@ -483,8 +483,15 @@ final class Style
     }
 
     /**
-     * Width of a `\t` character when expanded inside content. Defaults
-     * to 4. Pass 0 to keep tabs as literal `\t` (no expansion).
+     * Width of a `\t` character when expanded inside content. Defaults to
+     * {@see Width::TAB_WIDTH}. Pass 0 to keep tabs as literal `\t` (no
+     * expansion).
+     *
+     * E69: `Width::string()` charges a tab `Width::TAB_WIDTH` cells, which is
+     * what {@see render()} expands it to at the DEFAULT. Setting a non-default
+     * width here re-opens that gap — content laid out by this Style will not
+     * measure the same as `Width::string()` reports — so a caller that also
+     * budgets with `Width` must expand the tabs itself before measuring.
      */
     public function tabWidth(int $w): self
     {
@@ -703,10 +710,10 @@ final class Style
         return $this->with(margin: [0, 0, 0, 0])->withUnsetProp('margin');
     }
 
-    /** Reset tab width to the default of 4. */
+    /** Reset tab width to the default, {@see Width::TAB_WIDTH}. */
     public function unsetTabWidth(): self
     {
-        return $this->with(tabWidth: 4)->withUnsetProp('tabWidth');
+        return $this->with(tabWidth: Width::TAB_WIDTH)->withUnsetProp('tabWidth');
     }
 
     /** Reset horizontal alignment to {@see Align::Left}. */
@@ -965,7 +972,10 @@ final class Style
         if ($content === '' && $this->boundString !== null) {
             $content = $this->boundString;
         }
-        // Tab expansion (before any width measurements).
+        // Tab expansion (before any width measurements). The default width
+        // is Width::TAB_WIDTH so that Width::string() of the expanded result
+        // equals Width::string() of the input — see E69 and
+        // Width::TAB_WIDTH's domain note for where that stops holding.
         if ($this->tabWidth > 0 && str_contains($content, "\t")) {
             $content = str_replace("\t", str_repeat(' ', $this->tabWidth), $content);
         }

@@ -6,6 +6,7 @@ namespace SugarCraft\Sprinkles\Tests;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\AdaptiveColor;
 use SugarCraft\Sprinkles\Align;
 use SugarCraft\Sprinkles\Border;
@@ -1133,5 +1134,97 @@ final class StyleTest extends TestCase
         $patcher = Style::new()->bold();
         $merged = $base->patch($patcher);
         $this->assertSame('original', $merged->value());
+    }
+
+    /**
+     * E69. `render()` rewrites content — it expands every `\t` to
+     * `str_repeat(' ', $tabWidth)` — *before* any of its own width
+     * measurements. `Width::string()` used to score a `\t` **0**, so a caller
+     * that budgeted with `Width` and laid out with `Style` was using two
+     * measures 4 cells apart per tab, and the gap was invisible to every
+     * assertion in the repo stated in terms of `Width`.
+     *
+     * The property below is the one that was false: rendering through a
+     * default `Style` must not change how many cells `Width` says the content
+     * occupies. `Width::TAB_WIDTH` is now the single number both sides read.
+     *
+     * **Domain, and it is not "all tabbed content".** Measured over 4,797
+     * tab-bearing random strings: at `8add627b` `render()` moved the width of
+     * **4,797 of 4,797 (100%)**; it now moves **568 of 4,797 (11.84%)**, and
+     * every single one of those 568 is the shape pinned in
+     * {@see self::testExpandingATabCanStillReclusterAFollowingCombiningMark()}
+     * — 0 unexplained. That residue is not a tab-WIDTH problem and no choice
+     * of `TAB_WIDTH` closes it; see that test for why.
+     *
+     * **Domain: the DEFAULT tab width only.** A `Style` given a non-default
+     * `tabWidth()` re-opens the gap on purpose; that is asserted separately
+     * below rather than left as an unstated exception.
+     */
+    public function testRenderingThroughADefaultStyleDoesNotChangeTheWidthOfTabbedContent(): void
+    {
+        $this->assertSame(Width::TAB_WIDTH, Width::string("\t"));
+
+        foreach (["\t", "a\tb", "\ta", "a\t", "\t\t", "a\tb\tc", "日\t本", "\t\u{1F44D}", "a\t日\tb"] as $input) {
+            $rendered = Style::new()->render($input);
+            $this->assertSame(
+                Width::string($input),
+                Width::string($rendered),
+                sprintf('Style::render() moved the width of %s', bin2hex($input)),
+            );
+        }
+    }
+
+    /**
+     * The residue E69's fix cannot reach, pinned with its mechanism so nobody
+     * re-derives it as a new finding — and so the claim "Style and Width now
+     * agree on tabs" is never made without this exception attached.
+     *
+     * `render()` does not merely re-MEASURE content, it REWRITES it, and
+     * substituting spaces for a tab changes GRAPHEME CLUSTERING downstream of
+     * the substitution. A tab is a Control character, which by UAX #29 GB4/GB5
+     * never joins a following Extend; a space is not, and does. So in
+     * `"\t" . U+1F3FD` the skin-tone modifier is its own 2-cell cluster, while
+     * in the rendered `"    " . U+1F3FD` it attaches to the final space and
+     * contributes 0 — 6 cells in, 4 cells out.
+     *
+     * This is the same two-codepoint input the E69 write-up delta-debugged,
+     * and it shows the finding's proposed remedy is incomplete by construction:
+     * no per-tab cell charge can fix a reclustering. Only not rewriting the
+     * content would, and that is `Style::tabWidth(0)`.
+     */
+    public function testExpandingATabCanStillReclusterAFollowingCombiningMark(): void
+    {
+        $input = "\t\u{1F3FD}";
+
+        $this->assertSame(Width::TAB_WIDTH + 2, Width::string($input));
+        $this->assertSame(Width::TAB_WIDTH, Width::string(Style::new()->render($input)));
+
+        // The mechanism, isolated from tabs entirely: an Extend after a SPACE
+        // joins it, an Extend after a CONTROL does not.
+        $this->assertSame(1, Width::string(" \u{1F3FD}"));
+        $this->assertSame(Width::TAB_WIDTH + 2, Width::string("\t\u{1F3FD}"));
+
+        // Not rewriting the content is what actually preserves the width.
+        $this->assertSame(
+            Width::string($input),
+            Width::string(Style::new()->tabWidth(0)->render($input)),
+        );
+    }
+
+    /**
+     * The residue E69's fix deliberately leaves, pinned so it is a documented
+     * limit rather than a surprise: a non-default `tabWidth` makes `Style`'s
+     * layout and `Width::string()` disagree again, by
+     * `abs($tabWidth - Width::TAB_WIDTH)` cells per tab.
+     */
+    public function testANonDefaultTabWidthReopensTheGapWithWidthByDesign(): void
+    {
+        // 2 spaces laid out where Width::string() charges 4.
+        $this->assertSame(1 + 2 + 1, Width::string(Style::new()->tabWidth(2)->render("a\tb")));
+        $this->assertSame(1 + Width::TAB_WIDTH + 1, Width::string("a\tb"));
+        // tabWidth(0) keeps the literal tab, which Width::string() still
+        // charges TAB_WIDTH — the one case where the rendered string carries a
+        // tab the terminal, not Style, will resolve.
+        $this->assertStringContainsString("\t", Style::new()->tabWidth(0)->render("a\tb"));
     }
 }

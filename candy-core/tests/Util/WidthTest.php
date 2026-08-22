@@ -316,4 +316,122 @@ final class WidthTest extends TestCase
     {
         $this->assertSame('', Width::takeAnsi('', 5));
     }
+
+    /**
+     * E68, minimised. `truncateAnsi()` is a budget, and its result measured by
+     * `string()` — the measure every caller in the repo clamps with — must
+     * never exceed it.
+     *
+     * The specific input is the one recorded in the finding: THUMBS UP SIGN
+     * followed by EMOJI MODIFIER FITZPATRICK TYPE-4, then `xy`, at budget 3.
+     * It used to return 5 cells.
+     */
+    public function testTruncateAnsiNeverReturnsMoreCellsThanItsBudget(): void
+    {
+        $this->assertSame(3, Width::string(Width::truncateAnsi("\u{1F44D}\u{1F3FD}xy", 3)));
+
+        // Cluster shapes on which the two segmentations used to disagree:
+        // emoji + skin-tone modifier, regional-indicator pair (a flag),
+        // ZWJ sequence, variation selector, and a combining mark.
+        $fixtures = [
+            "\u{1F44D}\u{1F3FD}xy",
+            "\u{1F1E6}\u{1F1F8}xy",
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}xy",
+            "\u{2600}\u{FE0F}xy",
+            "e\u{0301}xy",
+            "\u{1F3FD}\u{1F1E6}\u{0301}",
+            "\x1b[31m\u{1F44D}\u{1F3FD}\x1b[0mxy",
+            '日本語abc',
+        ];
+        foreach ($fixtures as $s) {
+            for ($budget = 1; $budget <= 8; $budget++) {
+                $this->assertLessThanOrEqual(
+                    $budget,
+                    Width::string(Width::truncateAnsi($s, $budget)),
+                    sprintf('truncateAnsi(%s, %d) came back over budget', bin2hex($s), $budget),
+                );
+            }
+        }
+    }
+
+    /**
+     * E69, third measure. `wrapAnsi()` had its own tab rule — it charged a
+     * `\t` **1** cell in its whitespace branch, where `string()` charged 0 and
+     * `Style::render()` laid out {@see Width::TAB_WIDTH}. Three answers for one
+     * character. It now charges what `graphemeWidth()` says, so a wrapped line
+     * cannot come back wider than the column it was wrapped to.
+     *
+     * `wrapAnsi("ab\tcd", 7)` is the reproduction: at a 1-cell charge the whole
+     * string scored 5 against a budget of 7 and came back as ONE line of 8
+     * cells. At `TAB_WIDTH` it breaks, and both lines are 2 cells.
+     */
+    /**
+     * The tab charge is FOUR, asserted as a literal, in the library that owns
+     * the constant.
+     *
+     * Every other tab assertion added in round 40 — here and in
+     * candy-sprinkles' StyleTest — is written in terms of `Width::TAB_WIDTH`,
+     * so all of them agree with each other for any value the constant takes.
+     * MEASURED: `TAB_WIDTH = 4` -> `= 8` was killed ONLY by a pre-existing
+     * candy-sprinkles test (`testUnsetTabWidthRevertsToFour`), which means
+     * candy-core's own suite pinned nothing about the value and the constant
+     * could have drifted with this lib green. A shared constant makes two
+     * measures AGREE; it does not make either of them RIGHT.
+     *
+     * Four is not arbitrary: it is what `Style::render()` has always expanded a
+     * tab to, so changing it changes rendered output everywhere.
+     */
+    public function testATabIsChargedExactlyFourCells(): void
+    {
+        self::assertSame(4, Width::TAB_WIDTH);
+        self::assertSame(4, Width::string("\t"));
+        self::assertSame(8, Width::string("\t\t"));
+        self::assertSame(5, Width::string("a\t"));
+    }
+
+    public function testWrapAnsiChargesATabTheSameCellsAsEveryOtherMeasure(): void
+    {
+        $lines = explode("\n", Width::wrapAnsi("ab\tcd", 7));
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(7, Width::string($line), 'wrapAnsi returned a line over its column');
+        }
+        $this->assertCount(2, $lines);
+    }
+
+    /**
+     * The reason E68 existed: `string()` and every truncation path have to
+     * agree on where one grapheme ends and the next begins. They did not —
+     * `string()` split per codepoint on PHP 8.3 (its preferred
+     * `grapheme_str_split()` is 8.4+) while `truncateAnsi()` split per
+     * cluster. This pins the agreement itself, so a future edit that gives
+     * either side its own splitter fails here rather than in a pane.
+     */
+    public function testStringScoresAWholeClusterAsOneGlyph(): void
+    {
+        // Emoji + skin-tone modifier is ONE glyph in ONE 2-cell box; the
+        // per-codepoint sum used to score it 4.
+        $this->assertSame(2, Width::string("\u{1F44D}\u{1F3FD}"));
+        // A regional-indicator pair is one flag in 2 cells; a lone regional
+        // indicator is a 1-cell letter box.
+        $this->assertSame(2, Width::string("\u{1F1E6}\u{1F1F8}"));
+        $this->assertSame(1, Width::string("\u{1F1E6}"));
+        // Already true before the fix, via a ZWJ special case — pinned here
+        // so that special case cannot be dropped silently.
+        $this->assertSame(2, Width::of("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"));
+        // Truncation and measurement must charge the same cluster the same
+        // number of cells, which is the invariant, stated directly.
+        foreach (["\u{1F44D}\u{1F3FD}", "\u{1F1E6}\u{1F1F8}", "\u{2600}\u{FE0F}", "e\u{0301}", '日'] as $cluster) {
+            $w = Width::string($cluster);
+            $this->assertSame(
+                $cluster,
+                Width::truncateAnsi($cluster, $w),
+                sprintf('%s did not survive truncation at its own width %d', bin2hex($cluster), $w),
+            );
+            $this->assertSame(
+                '',
+                Width::truncateAnsi($cluster, $w - 1),
+                sprintf('%s was emitted whole into a budget of %d', bin2hex($cluster), $w - 1),
+            );
+        }
+    }
 }

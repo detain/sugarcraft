@@ -1987,28 +1987,36 @@ final class Renderer
      * stated in, and the reason this is not a one-line call to
      * {@see Width::wrapAnsi()}.
      *
-     * candy-core measures cell width two different ways and they disagree on
-     * grapheme clusters. `Width::of()` splits with `grapheme_str_split()` when
-     * it exists and falls back to ONE CODEPOINT PER CLUSTER when it does not
-     * (PHP < 8.4 without that intl function — this repo's baseline is 8.3);
-     * `wrapAnsi()`/`truncateAnsi()` walk the string with their own
-     * `nextCluster()` scanner instead, which does join a modifier or a
-     * regional-indicator pair into one cluster. Measured on PHP 8.3:
+     * ✅ THE CLUSTER DISAGREEMENT THIS PARAGRAPH DESCRIBED IS FIXED — in
+     * candy-core, in round 40 (2026-08-22), as backlog E68. It is rewritten
+     * rather than deleted because the branch below still exists, and a reader
+     * who finds a guard with its stated reason removed will delete the guard.
      *
-     *     🇺🇸 (flag)      Width::of=2 per glyph, wrapAnsi accounts 1
-     *     👍🏽 (skin tone) Width::of=4 per glyph, wrapAnsi accounts 2
+     * WHAT IT SAID. candy-core measured cell width two ways that disagreed on
+     * grapheme clusters: `Width::of()` split with `grapheme_str_split()` where
+     * it existed and fell back to ONE CODEPOINT PER CLUSTER where it did not
+     * (PHP < 8.4 without that intl function — this repo's baseline is 8.3),
+     * while `wrapAnsi()`/`truncateAnsi()` walked their own `nextCluster()`
+     * scanner, which DOES join a modifier or a regional-indicator pair. The
+     * measured consequence was a factor of two in both directions: 40 flags at
+     * cols=40 produced 9 rows up to 74 cells wide, and 80 skin-tone thumbs at
+     * cols=100 produced rows of 194, with the wrap reporting success.
      *
-     * Both directions of that factor-of-two put a "wrapped" row at twice the
-     * budget: measured end to end, 40 flags at cols=40 produced 9 rows up to
-     * 74 cells wide and 80 skin-tone thumbs at cols=100 produced rows of 194,
-     * with the wrap having run and reported success. `truncateAnsi()` is NOT a
-     * fix for that on its own — it uses the same scanner, so
-     * `truncateAnsi($flags, 10)` measures 20 by `Width::of()`.
+     * WHAT IS TRUE NOW. `Width` has ONE segmentation on every PHP version —
+     * `graphemes()` walks ICU through `grapheme_extract()`, and `candy-core`
+     * declares `ext-intl` to make that a guarantee rather than a hope. MEASURED
+     * on PHP 8.3.6, before -> after the fix: a skin-toned thumb scores
+     * `Width::of` 4 -> 2, and a regional-indicator flag was 2 and stays 2. The
+     * two accountings agree on clusters.
      *
-     * This is a candy-core defect (`Width::of()` vs `nextCluster()` should not
-     * be two accountings) and it is NOT fixed there in this change; it is
-     * defended against here, with the instrument the caller and the test both
-     * use. Recorded for the backlog.
+     * WHY THIS BRANCH STILL EARNS ITS PLACE. A SECOND disagreement survives and
+     * it is not about clusters at all: `Width::of()` measures `Ansi::strip()`,
+     * which eats a two-byte ECMA-48 Fe escape (ESC-backslash, `ESC P`, `ESC M`)
+     * as zero cells, while `truncateAnsi()`'s scanner passes only `ESC [` and
+     * `ESC ]` and so reads that second byte as one VISIBLE cell. Round 40
+     * measured it at 548-668 over-runs per 400,000 calls, worst +1, and zero
+     * over-runs on any input free of an `ESC` + 0x40-0x5f pair. So this stays
+     * defended here, in the instrument the caller and the test both use.
      *
      * So: wrap, then MEASURE, and re-ask for a narrower wrap while the answer
      * still does not fit. Re-asking rather than cutting is what keeps the

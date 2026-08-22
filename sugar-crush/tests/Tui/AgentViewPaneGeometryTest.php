@@ -542,32 +542,56 @@ final class AgentViewPaneGeometryTest extends TestCase
      * Only `clipWidth(clipTail(...), $cols)` — and there are two such `$frame`
      * assignments in the shell renderer, not one — kept the over-run off the
      * screen. Backstops are not budgets.
+     *
+     * E68: this guard asserted exactly this property and PASSED while the pane
+     * over-ran by up to 2 cells, because its only fixture description was
+     * `'Reviews code for bugs'` — pure ASCII, on which no width path in the
+     * repo can disagree with any other. It now sweeps four descriptions and
+     * every width 24..100. Measured on the pre-fix tree, over the 77 widths:
+     * ASCII 0 over-wide, `Reviews 👍🏽 code for bugs` 35 (widths 39-73, +1/+2),
+     * `Reviews 🇦🇸 code for bugs` 34 (38-71, +1), and
+     * `Editing 👍🏽 src/Chat.php and running the suite again` 41 (39-79, +1/+2).
+     *
+     * The non-ASCII fixtures are load-bearing, not decoration: a skin-tone
+     * modifier and a regional-indicator pair are the two cluster shapes on
+     * which `Width::string()`'s per-codepoint sum and `Width`'s per-cluster
+     * truncation measure disagreed. Do not simplify them back to ASCII.
      */
     public function testTheAgentDashboardPaneFitsTheOutsideWidthItWasHanded(): void
     {
         $provider = $this->createMock(ProviderInterface::class);
-        $manager = new AgentManager($provider, new SkillRegistry());
-        $manager->register(new Agent(
-            name: 'reviewer',
-            description: 'Reviews code for bugs',
-            prompt: 'You are a reviewer.',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: [],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-        ));
 
-        $populated = App::new($provider, 'test-model')
-            ->withPane(Pane::Agents)
-            ->withChat(new Chat(agentManager: $manager));
-        $empty = App::new($provider, 'test-model')
+        $descriptions = [
+            'ascii' => 'Reviews code for bugs',
+            'skin-tone modifier' => "Reviews \u{1F44D}\u{1F3FD} code for bugs",
+            'regional indicator pair' => "Reviews \u{1F1E6}\u{1F1F8} code for bugs",
+            'long, with modifier' => "Editing \u{1F44D}\u{1F3FD} src/Chat.php and running the suite again",
+        ];
+
+        $apps = [];
+        foreach ($descriptions as $label => $description) {
+            $manager = new AgentManager($provider, new SkillRegistry());
+            $manager->register(new Agent(
+                name: 'reviewer',
+                description: $description,
+                prompt: 'You are a reviewer.',
+                model: 'claude-sonnet-4-6',
+                provider: 'anthropic',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ));
+            $apps[$label] = App::new($provider, 'test-model')
+                ->withPane(Pane::Agents)
+                ->withChat(new Chat(agentManager: $manager));
+        }
+        $apps['empty'] = App::new($provider, 'test-model')
             ->withPane(Pane::Agents)
             ->withChat(new Chat());
 
-        foreach ([30, 60, 100] as $width) {
-            foreach (['populated' => $populated, 'empty' => $empty] as $label => $app) {
+        for ($width = 24; $width <= 100; $width++) {
+            foreach ($apps as $label => $app) {
                 $rows = explode("\n", AgentDashboardPane::render($app, $width, 12));
                 $widest = max(array_map(static fn(string $row): int => Width::string($row), $rows));
 
