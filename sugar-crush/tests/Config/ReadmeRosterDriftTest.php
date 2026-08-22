@@ -49,6 +49,24 @@ use SugarCraft\Crush\Tools\Tool;
  * of silently pointing at the wrong paragraph, which is the failure round 42's
  * mutation C and this lane's own first draft both hit.
  *
+ * THAT RULE WAS WRITTEN DOWN BEFORE IT WAS IMPLEMENTED, and the gap is the more
+ * instructive half. WHAT IT SAID, and still says above: "each is asserted to
+ * identify exactly ONE region". WHAT WAS TRUE at the end of round 43:
+ * {@see section()}, the Tools-bullet locator and the chord-sentence locator all
+ * used `preg_match()`, which returns 1 on the FIRST of any number of matches —
+ * `assertSame(1, preg_match(…))` is a presence check wearing a uniqueness
+ * check's clothes. Only `testTheReadmeNamesEveryPermissionMode()` used
+ * `preg_match_all()`. MEASURED on PHP 8.3.6, 2026-08-22: appending a second,
+ * CONTRADICTING always-chat sentence to the README — naming `Ctrl+P` and
+ * `Ctrl+Z` where the real one names five other chords — left this file at
+ * `OK (9 tests, 59 assertions)`. The page then named two different always-chat
+ * sets and the test whose whole subject is that set said nothing.
+ * WHY THE RULE STILL EARNS ITS PLACE: it is the right rule, and it is now the
+ * implemented one — every locator below counts its matches with
+ * `preg_match_all()` and asserts the count is one. The lesson kept here is that
+ * a reading rule stated in a doc-block is a claim like any other, and this one
+ * went two hours without a mutation aimed at it.
+ *
  * @internal
  */
 final class ReadmeRosterDriftTest extends TestCase
@@ -84,10 +102,18 @@ final class ReadmeRosterDriftTest extends TestCase
         $readme = $this->readme();
         $quoted = preg_quote($heading, '/');
 
-        $matched = preg_match('/^#{2,4} ' . $quoted . '\s*$(.*?)(?=^#{1,4} |\z)/ms', $readme, $m);
-        $this->assertSame(1, $matched, 'README.md has no section headed "' . $heading . '"');
+        // preg_match_ALL, and the count asserted: `preg_match()` returns 1 for
+        // "the first of two", so a duplicated heading would have this method
+        // silently hand back whichever body came first. See the class
+        // doc-block — that was this file's own defect for a round.
+        $matched = preg_match_all('/^#{2,4} ' . $quoted . '\s*$(.*?)(?=^#{1,4} |\z)/ms', $readme, $m);
+        $this->assertSame(
+            1,
+            $matched,
+            'README.md has no unique section headed "' . $heading . '" (found ' . $matched . ')',
+        );
 
-        return $m[1];
+        return $m[1][0];
     }
 
     // ── roster 1: the built-in tool set ──────────────────────────────────
@@ -129,12 +155,17 @@ final class ReadmeRosterDriftTest extends TestCase
         // in the Tools bullet up to the sentence that ends the list — located by
         // that sentence rather than by a token count, so adding a twelfth tool
         // moves the boundary with it.
-        $matched = preg_match(
+        $matched = preg_match_all(
             '/- \*\*Tools\*\* — `Tools\\\\BuiltIn\\\\\*`:(.*?)These are \*\*runtime tool names\*\*/',
             $section,
             $m,
         );
-        $this->assertSame(1, $matched, "README.md's Tools bullet no longer opens with a locatable roster");
+        $this->assertSame(
+            1,
+            $matched,
+            "README.md's Tools bullet no longer opens with exactly one locatable roster (found " . $matched . ')',
+        );
+        $m = [1 => $m[1][0]];
 
         // Drop the parenthesised asides — `$SUGARCRUSH_SEARCH_ENDPOINT` is a
         // gloss on WebSearch, not a twelfth tool.
@@ -306,8 +337,19 @@ final class ReadmeRosterDriftTest extends TestCase
         );
 
         // The ranking itself, measured rather than read off the table: layer 4
-        // beats 3 beats 1/2. `merge()` takes them lowest-first, so a swapped
-        // argument order reds here and the table above becomes a lie.
+        // beats 3 beats 1/2, so a swapped argument order reds here and the
+        // table above becomes a lie.
+        //
+        // THIS COMMENT SAID "`merge()` takes them lowest-first", and it is the
+        // inverted-mechanism shape this round went hunting for, written by the
+        // lane that had just been warned about it. WHAT IS TRUE: the SIGNATURE
+        // is `merge($userConfig, $userSettings, $projectSettings)` — HIGHEST
+        // first, which is why layer 4's value is the first argument below. It
+        // is the `array_merge()` INSIDE the method that is written lowest-first,
+        // so that later-wins gives the reading order of that one line the
+        // precedence order; the comment had read that line and described the
+        // parameter list with it. Kept rather than deleted because "which end
+        // is layer 4" is exactly what a caller gets wrong.
         $merged = LayeredSettings::merge(
             ['theme' => 'layer4'],
             ['theme' => 'layer3', 'titleModel' => 'layer3'],
@@ -384,10 +426,23 @@ final class ReadmeRosterDriftTest extends TestCase
     {
         $flat = $this->flat();
 
-        $matched = preg_match('/((?:`Ctrl\+[A-Z]`(?:, | and )?)+) always belong to the chat\s*content model/', $flat, $m);
-        $this->assertSame(1, $matched, 'the always-chat chord sentence is gone or no longer identifiable');
+        // preg_match_ALL: a SECOND always-chat sentence naming a different set
+        // is the failure this test exists to catch, and `preg_match()` would
+        // have read the first one and reported agreement. Measured — see the
+        // class doc-block.
+        $matched = preg_match_all(
+            '/((?:`Ctrl\+[A-Z]`(?:, | and )?)+) always belong to the chat\s*content model/',
+            $flat,
+            $m,
+        );
+        $this->assertSame(
+            1,
+            $matched,
+            'README.md does not contain exactly one always-chat chord sentence (found ' . $matched
+            . '); two of them name two different sets and only one can be right',
+        );
 
-        preg_match_all('/`Ctrl\+([A-Z])`/', $m[1], $listed);
+        preg_match_all('/`Ctrl\+([A-Z])`/', $m[1][0], $listed);
         $claimed = array_map('strtolower', $listed[1]);
         sort($claimed);
 
@@ -418,19 +473,39 @@ final class ReadmeRosterDriftTest extends TestCase
     // ── roster 7: the launch-report sample ───────────────────────────────
 
     /**
-     * The sample output block is a TRANSCRIPT of a real line, so it can be
-     * regenerated rather than proof-read. `Bootstrap::reportProjectTierToolRemovals()`
-     * builds it with one `sprintf()`; this rebuilds the same string from the
-     * live tool census and asserts the page still prints it.
+     * The sample output block is the STDERR FORM of a real line, byte for byte,
+     * so it can be regenerated rather than proof-read.
      *
-     * The FORMAT is duplicated here rather than reached through reflection, and
-     * that is a deliberate cost: `Bootstrap` is not this lane's file, the
-     * method is private, and a test that reached into it would pin the
-     * implementation instead of the output. The duplication is safe in the
-     * direction that matters — change the sprintf and this reds, which is the
-     * point. What it cannot catch is the two being edited together while the
-     * README is not; `ReadmeSettingsTierClaimTest` covers the counts in that
-     * line from the other side.
+     * IT IS ASSEMBLED FROM THREE LITERALS IN `src/Cli/Bootstrap.php`, ALL READ
+     * OUT OF THE FILE. `reportProjectTierToolRemovals()` builds the body with
+     * one `sprintf()` and prefixes the survivor list with `'leaving: '`;
+     * `warnPermissionConfig()` then writes `"sugarcrush: {$message}.\n"`, which
+     * is where the `sugarcrush: ` prefix and the trailing full stop in the
+     * README fence come from — the app's own `docs/SETTINGS.md` says so, and
+     * measuring it confirmed it.
+     *
+     * THE FORMAT USED TO BE RETYPED HERE, and the doc-block claimed "the
+     * duplication is safe in the direction that matters — change the sprintf
+     * and this reds, which is the point". WHAT IS TRUE: it was safe in the
+     * OPPOSITE direction. MEASURED on PHP 8.3.6, 2026-08-22 — changing the
+     * launcher's format from `disabled %d of the %d` to `removed %d of the %d`
+     * left this file and `ReadmeSettingsTierClaimTest` at
+     * `OK (14 tests, 84 assertions)`. Both copies of the format in `tests/`
+     * were retyped, so nothing read it from source and the only drift the guard
+     * could see was the README moving away from the TEST. WHY THE GUARD STILL
+     * EARNS ITS PLACE: the claim it made was the right claim, and reflection
+     * over the method's SOURCE TEXT — not over its behaviour, which would need
+     * the private method invoked — buys it honestly. The literals are located
+     * by shape, and each is asserted to occur exactly once, so a second
+     * `sprintf()` in that method reds rather than being picked from.
+     *
+     * A SECOND, WEAKER READING OF THE SAME BLOCK WAS ALSO WRONG and is worth a
+     * line: this doc-block called the fence "a TRANSCRIPT of a real line". The
+     * app has a literal transcript surface — {@see
+     * \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}
+     * seeds the same sentence into it — and that copy carries NEITHER the
+     * prefix NOR the full stop, because both are added on the stderr side. The
+     * word is now "stderr form", which is the one the fence actually shows.
      */
     public function testTheLaunchReportSampleIsStillTheLineTheLauncherWouldPrint(): void
     {
@@ -456,19 +531,84 @@ final class ReadmeRosterDriftTest extends TestCase
             static fn(string $n): bool => fnmatch('[!B]*', $n),
         ));
 
-        $expected = sprintf(
-            '(disabledTools) disabled %d of the %d tools your own settings left — %s — leaving: %s.',
+        $reporter = $this->bootstrapMethodSource('reportProjectTierToolRemovals');
+        $format = $this->soleMatch("/'([^']*\\(disabledTools\\)[^']*)'/", $reporter, 'the launch-report sprintf format');
+        $leading = $this->soleMatch("/'(leaving: )'/", $reporter, "the survivor list's 'leaving: ' prefix");
+
+        [$prefix, $suffix] = $this->stderrEnvelope();
+
+        // A sentinel for the source path, which is the one field the README
+        // sample fills with an example rather than with a measured value.
+        $body = sprintf(
+            $format,
+            "\x00",
             \count($removed),
             \count($ceiling),
             implode(', ', $emitted),
-            implode(', ', $remaining),
+            $leading . implode(', ', $remaining),
         );
+        $tail = explode("\x00", $body, 2)[1] ?? '';
+        $this->assertNotSame('', $tail, 'the sprintf format no longer starts with the source path');
 
-        $this->assertStringContainsString(
-            $expected,
+        // `(?=\s|$)` AND NOT A BARE `assertStringContainsString`: without the
+        // right-hand anchor the envelope is pinned in one direction only.
+        // MEASURED — dropping the full stop from `warnPermissionConfig()` left
+        // this green, because the shortened expectation is still a substring of
+        // the README's unchanged `leaving: Bash.`. The whole point of reading
+        // the envelope out of source is that BOTH ends have to agree, so the
+        // match has to end where the launcher's line ends.
+        $this->assertMatchesRegularExpression(
+            '/' . preg_quote($prefix, '/') . '\S+' . preg_quote($tail . rtrim($suffix, "\n"), '/') . '(?=\s|$)/',
             $this->flat(),
             "README.md's launch-report sample is no longer the line the launcher would print",
         );
+    }
+
+    /**
+     * The source TEXT of one `Bootstrap` method, brace-matched.
+     *
+     * Source text and not reflection-on-behaviour: the method is private and on
+     * another lane's file, and a test that invoked it would pin the
+     * implementation rather than the sentence the README quotes. What is needed
+     * here is only the literals it is built from.
+     */
+    private function bootstrapMethodSource(string $method): string
+    {
+        $file = (string) (new \ReflectionClass(Bootstrap::class))->getFileName();
+        $source = (string) file_get_contents($file);
+
+        $at = strpos($source, 'function ' . $method . '(');
+        $this->assertIsInt($at, 'Bootstrap::' . $method . '() is gone; the README sample has no generator');
+
+        // Methods in this file close on a `    }` at class-body indentation.
+        $close = strpos($source, "\n    }\n", $at);
+        $this->assertIsInt($close, 'Bootstrap::' . $method . '() has no locatable end');
+
+        return substr($source, $at, $close - $at);
+    }
+
+    /**
+     * The `sugarcrush: ` prefix and the `.\n` tail the stderr channel adds.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function stderrEnvelope(): array
+    {
+        $writer = $this->bootstrapMethodSource('warnPermissionConfig');
+
+        $matched = preg_match_all('/fwrite\(STDERR, "([^"{]*)\{\$message\}([^"]*)"\)/', $writer, $m);
+        $this->assertSame(1, $matched, 'Bootstrap::warnPermissionConfig() no longer wraps the message once on stderr');
+
+        return [$m[1][0], stripcslashes($m[2][0])];
+    }
+
+    /** The one capture of `$pattern` in `$haystack`; reds if there is not exactly one. */
+    private function soleMatch(string $pattern, string $haystack, string $what): string
+    {
+        $matched = preg_match_all($pattern, $haystack, $m);
+        $this->assertSame(1, $matched, $what . ' is no longer exactly one literal in that method (found ' . $matched . ')');
+
+        return $m[1][0];
     }
 
     // ── the meta-check ───────────────────────────────────────────────────
