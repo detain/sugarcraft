@@ -179,6 +179,145 @@ final class CompiledPatternCacheBoundTest extends TestCase
     }
 
     /**
+     * Every figure the `MAX_COMPILED_PATTERNS` doc-block quotes about the
+     * shipped roster and about the cap must be the figure the tree produces.
+     *
+     * WHY THIS EXISTS. Halving the cap from 1,024 to 64 left all 27 skills
+     * tests green while making "1,024 is 256x that", "~200 skills each
+     * declaring five DISTINCT globs" and "peaks at exactly 1,024 entries" false
+     * in the same comment. The only guard was `cap >= distinct * 10`, i.e. 40
+     * — so 40 through 1,023 all passed with the prose describing none of them.
+     * The pattern for this was already in this diff, on
+     * {@see TruncatesOutputNudgeMarginDocTest}; it simply was not applied here.
+     *
+     * WHAT IS DELIBERATELY NOT PINNED. The byte totals. They are an allocator's
+     * answer, they move with the PHP build, and this box has only 8.3.6 — a
+     * test asserting them would red on CI's 8.4 leg for no defect. They carry
+     * their generator and their instrument in the doc-block instead, which is
+     * what makes them re-takeable, and the doc-block says so rather than
+     * leaving the omission to be read as an oversight.
+     */
+    public function testTheDocBlockFiguresAreTheOnesTheTreeProduces(): void
+    {
+        $doc = $this->constantDocBlock();
+        $cap = $this->cap();
+
+        $roster = $this->builtInPaths();
+        $distinct = [];
+        $entries = 0;
+        $mostPerSkill = 0;
+        foreach ($roster as $paths) {
+            $entries += count($paths);
+            $mostPerSkill = max($mostPerSkill, count(array_unique($paths)));
+            foreach ($paths as $pattern) {
+                $distinct[$pattern] = true;
+            }
+        }
+        ksort($distinct);
+
+        $expected = [
+            'the built-in count' => self::WORDS[count($roster)] . ' shipped built-ins',
+            'the distinct-glob count' => self::WORDS[count($distinct)] . ' distinct',
+            'the entry count' => 'across ' . self::WORDS[$entries] . ' `paths:` entries',
+            'the per-skill maximum' => 'no skill declares more than ' . self::WORDS[$mostPerSkill],
+            'the headroom multiple' => number_format(intdiv($cap, count($distinct))) . 'x that',
+            'the roster size that would reach the cap' => '~'
+                . number_format((int) (round($cap / 5 / 100) * 100)) . ' skills each declaring five',
+            'the peak entry count' => 'peaks at exactly ' . number_format($cap),
+            'the settled entry count' => 'settles at ' . number_format(20000 % $cap),
+        ];
+
+        foreach ($expected as $what => $phrase) {
+            self::assertStringContainsString(
+                $phrase,
+                $doc,
+                "MAX_COMPILED_PATTERNS's doc-block no longer states {$what} the tree produces; it "
+                . "should read \"{$phrase}\". A figure in a comment is not a measurement — this is "
+                . 'the assertion that makes it one.',
+            );
+        }
+
+        foreach (array_keys($distinct) as $pattern) {
+            self::assertStringContainsString(
+                '`' . str_replace('*/', '*\\/', $pattern) . '`',
+                $doc,
+                "MAX_COMPILED_PATTERNS's doc-block names the shipped distinct globs one by one and "
+                . "no longer names '{$pattern}'",
+            );
+        }
+    }
+
+    /**
+     * Number words the doc-block spells out, so its counts are derived rather
+     * than restated beside it.
+     */
+    private const WORDS = [
+        1 => 'one', 2 => 'two', 3 => 'three', 4 => 'FOUR', 5 => 'five',
+        6 => 'six', 7 => 'seven', 8 => 'eight', 9 => 'nine', 10 => 'ten',
+        11 => 'eleven', 12 => 'twelve',
+    ];
+
+    /**
+     * `MAX_COMPILED_PATTERNS`'s doc-block, flattened.
+     *
+     * FLATTENED because a doc-block wraps at 80 columns with a ` * ` on every
+     * continuation line, so any claim longer than a few words is never those
+     * bytes in a row in the file. An assertion that searches the raw source for
+     * one passes the moment the paragraph is re-wrapped, which is what editing
+     * prose does.
+     */
+    private function constantDocBlock(): string
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Skills/SkillRegistry.php');
+        $end = strpos($source, 'private const MAX_COMPILED_PATTERNS');
+        self::assertNotFalse($end, 'MAX_COMPILED_PATTERNS is gone from SkillRegistry');
+        // The LAST doc-block OPENER before the constant, matched at line start
+        // — not the last `/**` anywhere, which is inside the prose: the
+        // paragraph below quotes `src/gen<i>/**\/*.php` and a naive `strrpos`
+        // anchored on that, cut the window in half, and reported the built-in
+        // count missing when it was three sentences above the cut.
+        self::assertNotSame(
+            0,
+            preg_match_all('/^[ \t]*\/\*\*$/m', substr($source, 0, $end), $openers, PREG_OFFSET_CAPTURE),
+            'MAX_COMPILED_PATTERNS no longer carries a doc-block',
+        );
+        $start = (int) end($openers[0])[1];
+
+        return (string) preg_replace(
+            '/\s+/',
+            ' ',
+            (string) preg_replace('/^\s*\* ?/m', '', substr($source, $start, $end - $start)),
+        );
+    }
+
+    /**
+     * Every shipped built-in's `paths:` list, read by the production parser.
+     *
+     * @return array<string, list<string>>
+     */
+    private function builtInPaths(): array
+    {
+        $dir = __DIR__ . '/../../src/Skills/BuiltIn';
+        $roster = [];
+
+        foreach ((array) scandir($dir) as $entry) {
+            if (!is_string($entry) || str_starts_with($entry, '.')) {
+                continue;
+            }
+            $file = $dir . '/' . $entry . '/SKILL.md';
+            if (!is_file($file)) {
+                continue;
+            }
+            $roster[$entry] = array_values(Skill::fromFile($file)->paths);
+        }
+        ksort($roster);
+
+        self::assertNotSame([], $roster, 'no built-in skills found; the roster derivation is broken');
+
+        return $roster;
+    }
+
+    /**
      * The hit path still memoises — the property the cap had to not cost.
      */
     public function testAWarmPatternIsNotRecompiled(): void
