@@ -71,6 +71,34 @@ final class PathsGlobDocumentationTest extends TestCase
     }
 
     /**
+     * The behaviour-note paragraph of one document, and nothing else.
+     *
+     * SCOPED DELIBERATELY. Every skill this note names is also named elsewhere
+     * in the same file — `phpunit-master` sits in `docs/SKILLS.md`'s built-in
+     * roster table too — so a whole-document `assertStringContainsString()` is
+     * satisfied by a mention that has nothing to do with `paths:`. MEASURED:
+     * with the wide window, deleting `phpunit-master` from this very note left
+     * this test green. Failing loudly when the delimiters move is the point;
+     * a note that has been reworded needs its assertion re-aimed, not widened.
+     */
+    private function behaviourNote(string $relative, string $from, string $to): string
+    {
+        $text = $this->doc($relative);
+        $start = strpos($text, $from);
+        self::assertNotFalse(
+            $start,
+            "{$relative} no longer opens its leading-`**` behaviour note with \"{$from}\"",
+        );
+        $end = strpos($text, $to, $start);
+        self::assertNotFalse(
+            $end,
+            "{$relative}'s leading-`**` behaviour note no longer ends with \"{$to}\"",
+        );
+
+        return substr($text, $start, $end - $start + strlen($to));
+    }
+
+    /**
      * A single `*` crosses `/` — the clause a reader is most likely to assume
      * the other way round, because most glob dialects they have met set
      * `FNM_PATHNAME`.
@@ -216,12 +244,28 @@ final class PathsGlobDocumentationTest extends TestCase
             . 'note in docs/SKILLS.md and README.md names skills that no longer exemplify it',
         );
 
-        foreach ([$this->doc('docs/SKILLS.md'), $this->doc('README.md')] as $where => $text) {
+        $notes = [
+            'docs/SKILLS.md' => $this->behaviourNote(
+                'docs/SKILLS.md',
+                'Three shipped built-in skills declare a leading',
+                'this is the note saying it is gone.',
+            ),
+            'README.md' => $this->behaviourNote(
+                'README.md',
+                'so the three shipped skills scoped',
+                'has the measured table.',
+            ),
+        ];
+
+        foreach ($notes as $file => $note) {
             foreach ($affected as $name) {
                 self::assertStringContainsString(
                     '`' . $name . '`',
-                    $text,
-                    "the leading-`**` built-in '{$name}' is not named in doc #{$where}'s behaviour note",
+                    $note,
+                    "the leading-`**` built-in '{$name}' is not named in {$file}'s behaviour note. "
+                    . 'Note that this is scoped to the NOTE, not to the whole file: an earlier version '
+                    . 'searched the document, and the mutation that dropped `phpunit-master` from the '
+                    . 'note survived on its unrelated mention in the built-in roster table.',
                 );
             }
         }
