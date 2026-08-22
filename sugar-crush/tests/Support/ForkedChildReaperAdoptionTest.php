@@ -45,7 +45,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Integration/', 'Support/'];
+    private const SCOPE = ['Agents/', 'Diagnostics/', 'Integration/', 'Support/'];
 
     /**
      * Prefixes with in-process forks that are NOT yet under {@see SCOPE},

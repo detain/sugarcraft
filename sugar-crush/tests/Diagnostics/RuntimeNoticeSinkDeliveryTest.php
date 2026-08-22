@@ -12,6 +12,7 @@ use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\RuntimeNoticePumpMsg;
 use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * THE WHOLE PATH, and the reason this file is separate from
@@ -54,6 +55,18 @@ use SugarCraft\Crush\Support\ForkedChild;
  */
 final class RuntimeNoticeSinkDeliveryTest extends TestCase
 {
+    /**
+     * ADOPTED AT MERGE, not by the lane that wrote this file. Round 47's lane
+     * b widened ForkedChildReaperAdoptionTest::SCOPE while lane a was adding
+     * this file, and neither lane could see the other; the merged tree went
+     * red on a guard that was working exactly as designed. Both fork sites
+     * below already reaped synchronously on the happy path — the reaper is
+     * what covers the path where the parent is aborted at the time limit and
+     * the explicit pcntl_waitpid() never runs, which is E142's mechanism and
+     * the reason the trait exists.
+     */
+    use ReapsForkedChildrenTrait;
+
     /** The DSML markup token; fullwidth vertical lines, not ASCII pipes. */
     private const T = "\u{FF5C}DSML\u{FF5C}";
 
@@ -94,6 +107,8 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
+
         RuntimeNoticeSink::reset();
 
         foreach ($this->savedEnv as $name => $value) {
@@ -569,7 +584,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_delivery_fork_');
         self::assertIsString($log);
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         self::assertNotSame(-1, $pid, 'fork failed');
 
         if ($pid === 0) {
@@ -640,7 +655,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
         $pids = [];
         for ($k = 0; $k < 3; $k++) {
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             if ($pid === 0) {
                 RuntimeNoticeSink::record("child {$k} says " . str_repeat('.', 200));
                 ForkedChild::exitNow(0);
