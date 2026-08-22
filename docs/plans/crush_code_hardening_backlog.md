@@ -6964,10 +6964,16 @@ are per-FILE and have **no** collector at all, so they are stderr-only.
 constructor and `mutate()` carries the loaded map across clones, so all five fire at LAUNCH, before the
 alternate screen. The cost is duplicate noise on `-p`, not a corrupted frame.
 
-**Step.** Gate the three duplicates behind a `SUGARCRUSH_DEBUG_COMMANDS` flag on
-`SkillLoader::DEBUG_SKIPS_ENV`'s contract, and give the two per-file ones a `skippedFiles()` accumulator
-before gating them — then rewrite that doc-block paragraph in the three-part form rather than deleting it.
-No test in `tests/` asserts any of the five messages, so this is a one-file change.
+**Landed**, exactly as the step below described. `SUGARCRUSH_DEBUG_COMMANDS` on
+`SkillLoader::DEBUG_SKIPS_ENV`'s contract, a `skippedFiles()` accumulator for the two per-file sites, both
+stale paragraphs rewritten in the three-part form, and `CommandLoaderRefusalReportingTest` pinning both
+branches, the `=0` reading, and the new accessor's dormancy. No test in `tests/` asserted any of the five
+messages, so it was a one-file change plus a row on `docs/ENVIRONMENT.md`.
+
+**What is left.** `skippedFiles()` is not drained. It wants a SUMMARY row — "N command files could not be
+read" — of the shape `SkillLoader` already built, because the launch report prints one line per entry and
+`LAUNCH_NOTICE_LIMIT` bounds the transcript. Draining it raw would let a directory of twenty unparseable
+`*.md` files evict the capability warnings the seam exists for.
 
 ### Ea46-5 — `--output-format json` never carries a permission refusal
 
@@ -6995,3 +7001,26 @@ E161's array-token openers so it does not repeat that defect.
 
 **Step.** One `tests/Support/` trait holding `flattened()`, `significantTokens()` and the depth walk, in a
 round where that directory is in scope. Until then, every copy must carry the array-token openers.
+
+### Ea46-7 — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
+
+**Recorded 2026-08-22 by round-46 lane a.** Severity: low, blocked. **Analysed and deliberately not done.**
+
+**What.** `Chat`'s single `error_log()` — "onToken observer threw, detaching it for this turn" — fires from
+inside the `$onToken` closure `scheduleBackendCompletion()` builds, i.e. mid-turn with the alternate screen
+up for the whole session. It is the clearest bucket-B site in E154's set: the audience is the EMBEDDER
+whose sink threw, not the person at the terminal, who cannot act on it and whose turn completes normally
+either way. The transcript seam is unreachable from there (Ea46-3).
+
+**Why it did not land.** `tests/Integration/StreamingWiringTest::
+testAThrowingObserverLosesItsOwnDeltasButNotTheTurn()` redirects `error_log` to a file and asserts the
+line arrives — correctly, for the contract as it stands. That file is another lane's. A gate was
+implemented, measured green in isolation, and reverted when the full suite caught the integration test;
+the reasoning is now written in full at the call site rather than only here, so the next reader does not
+have to rediscover it.
+
+**Step.** One lane holding both `src/Chat.php` and `tests/Integration/StreamingWiringTest.php`. Add
+`Chat::DEBUG_STREAM_ENV = 'SUGARCRUSH_DEBUG_STREAM'`, gate the report (never the detach — the env var must
+decide whether anyone is told, never whether the turn survives), amend the integration test to set the
+flag, and add the row `EnvRosterDriftTest` will demand on `docs/ENVIRONMENT.md`. That last one is not
+optional: the page claims to list every variable `src/` reads and a guard enforces it.
