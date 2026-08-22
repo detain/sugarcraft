@@ -469,7 +469,7 @@ final class ForkedChildExitConventionTest extends TestCase
             $this->markTestSkipped('pcntl + posix are required to fork a child and SIGKILL it.');
         }
 
-        $script = (string) tempnam(sys_get_temp_dir(), 'sc_r48b_obflush_');
+        $script = (string) tempnam(sys_get_temp_dir(), 'sc_forked_child_ob_probe_');
         file_put_contents($script, <<<'PHP'
             <?php
             // Stands in for TestCase::runBare()'s startOutputBuffering().
@@ -546,12 +546,48 @@ final class ForkedChildExitConventionTest extends TestCase
         );
         self::assertIsResource($process, 'could not launch the output-buffer probe');
 
-        $stdout = (string) stream_get_contents($pipes[1]);
-        $stderr = (string) stream_get_contents($pipes[2]);
+        // BOTH PIPES ARE DRAINED TOGETHER. Reading fd 1 to EOF first and fd 2
+        // afterwards deadlocks the moment the child writes more than a pipe
+        // buffer on stderr: the child blocks writing fd 2, the parent blocks
+        // reading fd 1, and neither ever returns. This probe writes a couple
+        // of dozen bytes today - the hazard is a future probe, and a hang
+        // here would be attributed to the fork convention rather than to the
+        // harness.
+        $collected = [1 => '', 2 => ''];
+        $open = [1 => $pipes[1], 2 => $pipes[2]];
+        foreach ($open as $stream) {
+            stream_set_blocking($stream, false);
+        }
+
+        $deadline = microtime(true) + 30.0;
+        while ($open !== [] && microtime(true) < $deadline) {
+            $read = array_values($open);
+            $write = null;
+            $except = null;
+            if (@stream_select($read, $write, $except, 1) === false) {
+                break;
+            }
+
+            foreach ($read as $stream) {
+                $fd = (int) array_search($stream, $open, true);
+                $chunk = fread($stream, 8192);
+                if (\is_string($chunk) && $chunk !== '') {
+                    $collected[$fd] .= $chunk;
+
+                    continue;
+                }
+                if (feof($stream)) {
+                    unset($open[$fd]);
+                }
+            }
+        }
+
+        self::assertSame([], $open, 'the output-buffer probe did not close its pipes within 30s');
+
         fclose($pipes[1]);
         fclose($pipes[2]);
         proc_close($process);
 
-        return ['stdout' => $stdout, 'stderr' => $stderr];
+        return ['stdout' => $collected[1], 'stderr' => $collected[2]];
     }
 }

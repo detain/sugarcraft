@@ -298,7 +298,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      */
     private function assertTheOffenderWalkIsAlive(): void
     {
-        $root = sys_get_temp_dir() . '/sc_r48b_reaper_fixture_' . bin2hex(random_bytes(6));
+        $root = sys_get_temp_dir() . '/sc_reaper_walk_fixture_' . bin2hex(random_bytes(6));
         $directory = $root . '/Fixture';
         if (!mkdir($directory, 0o700, true) && !is_dir($directory)) {
             self::fail('could not create the known-positive fixture tree at ' . $directory);
