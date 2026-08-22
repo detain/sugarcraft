@@ -129,11 +129,21 @@ final class RuntimeNoticeSink
      * a hostile or merely broken generation must not be able to spend the
      * session's context on one row. It is DELIBERATELY generous rather than
      * terse — the longest message routed here today is
-     * `DsmlToolCallParser::parseDsml()`'s no-positioned-envelope diagnostic at
-     * 452 characters (MEASURED by
-     * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkTest}), and it
-     * IS clipped, which is correct: its actionable half is its first sentence
-     * and the stderr copy carries the rest.
+     * `DsmlToolCallParser::parseDsml()`'s no-positioned-envelope diagnostic,
+     * and it IS clipped, which is correct: its actionable half is its first
+     * sentence and the stderr copy carries the rest.
+     *
+     * THAT LENGTH IS DERIVED, NOT WRITTEN DOWN HERE, and the previous revision
+     * of this paragraph is why. WHAT IT SAID: "at 452 characters (MEASURED)".
+     * WHAT IS TRUE NOW, re-measured on PHP 8.3.6 by running the parser and
+     * counting what it wrote: 488. Nobody had re-run it, and a figure carried
+     * in prose beside a message that anyone may reword is a figure that goes
+     * stale silently. WHY THE SENTENCE STILL EARNS ITS PLACE: the ARGUMENT — a
+     * real routed message exceeds this budget on purpose, and the clip is not a
+     * theoretical branch — is the whole justification for the number below.
+     * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkTest::testTheLongestNoticeThisParserActuallyEmitsIsMeasuredByEmittingIt()}
+     * asserts both halves against the live parser, so the claim survives a
+     * rewording and the digits do not have to.
      *
      * Also keeps a notice comfortably inside one datagram — see this class's
      * doc-block on why the transport is `SOCK_DGRAM`.

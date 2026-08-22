@@ -25,7 +25,20 @@ use SugarCraft\Crush\Support\ForkedChild;
  * did correctly for four rounds while its rows went nowhere after the drain.
  *
  * So every test here starts at a real emitter and ends at a real
- * {@see Chat::view()}. Nothing asserts on the sink's own state.
+ * {@see Chat}, and every assertion about DELIVERY is made on the transcript
+ * rather than on the queue.
+ *
+ * TWO ASSERTIONS HERE DO READ THE SINK, AND THE LINE THIS SAID — "nothing
+ * asserts on the sink's own state" — stopped being true when the drop-when-
+ * unarmed gate landed. Both are PRECONDITIONS, not verdicts:
+ * `assertFalse(RuntimeNoticeSink::isArmed())` in
+ * {@see testAOneShotThatNeverBuiltAChatKeepsTheNoticeOnStderrOnly()} and
+ * `assertTrue(RuntimeNoticeSink::record(...))` in
+ * {@see testAChatNobodyAppointedDoesNotPollTheInbox()} exist so that an empty
+ * transcript below cannot be an artefact of a sink that was never armed or a
+ * row that was never accepted. The rule the original sentence was reaching for
+ * survives intact: no test here PASSES on the strength of a row being in the
+ * queue.
  *
  * THE FORK CASE IS THE ONE THAT MATTERS, because it is the interactive path.
  * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()} runs the
