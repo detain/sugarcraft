@@ -153,6 +153,54 @@ final class Bootstrap
     private const DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
 
     /**
+     * The most launch notices one launch may seed a transcript with.
+     *
+     * A CAP ON A LIST THAT NOTHING ELSE BOUNDS. {@see $launchNotices} feeds
+     * {@see Chat::withLaunchNotices()}, which turns each entry into a
+     * {@see Role::System} row of the conversation — so the list is not merely
+     * rendered, it is SENT TO THE MODEL on the first turn and on every turn
+     * after it. That makes an unbounded list a per-token cost for the whole
+     * session, not a scrolling nuisance.
+     *
+     * Most of the sources are bounded at one per launch: the skill-skip count,
+     * the untrusted `hooks.yaml`, the empty tool set, the project tier's tool
+     * removals, the two agent-preset degradations and the two provider
+     * fallbacks — eight. {@see reportProjectTierRefusals()} adds one per refused
+     * DIRECTORY, and its doc-block names eight feeding subsystems.
+     * {@see permissionRules()} adds one whole-key complaint. So 17 is the most a
+     * launch reaches without a per-ENTRY fan-out, and 24 clears that with
+     * headroom while still refusing to let a config with fifty malformed rules
+     * become the transcript. The overflow is COUNTED and reported as one
+     * trailing row — see {@see launchNotices()} — rather than dropped, because a
+     * silently truncated warning list is the defect this seam exists to end.
+     */
+    private const LAUNCH_NOTICE_LIMIT = 24;
+
+    /**
+     * The most characters one launch notice may contribute to the transcript.
+     *
+     * The messages routed here interpolate values NOTHING bounds — a path from
+     * the user's config, a glob from a project's `disabledTools`, an exception
+     * message from a preset registry. MEASURED against the longest legitimate
+     * message this class can build today, {@see hookFiles()}'s untrusted-file
+     * notice at 283 characters with a realistic pair of absolute paths; the
+     * tool-removal report is 179 and the rest are under 190. 400 clears every
+     * one of them, so no honest warning is ever clipped, and it still bounds a
+     * hostile one.
+     *
+     * THE STDERR COPY IS NOT CLIPPED. That channel is the complete record and
+     * costs no tokens — see {@see warnPermissionConfigInTranscript()}, which is
+     * why the clipped row says where the full text is.
+     */
+    private const LAUNCH_NOTICE_MAX_CHARS = 400;
+
+    /**
+     * Appended to a clipped notice, and counted against
+     * {@see LAUNCH_NOTICE_MAX_CHARS} so the row never exceeds it.
+     */
+    private const LAUNCH_NOTICE_CLIP_SUFFIX = '… (clipped; full text on stderr)';
+
+    /**
      * Project hook files this process has already reported as skipped, keyed
      * by path — see the notice in {@see hookFiles()} for why it may only fire
      * once per launch. Static because the duplication comes from ONE launch
@@ -191,6 +239,18 @@ final class Bootstrap
      * @var list<string>
      */
     private static array $launchNotices = [];
+
+    /**
+     * How many DISTINCT notices this launch raised past
+     * {@see LAUNCH_NOTICE_LIMIT}.
+     *
+     * Counted rather than merely refused, so {@see launchNotices()} can say
+     * "and N more" instead of ending the list where the cap happened to fall.
+     * Reset in {@see chat()} beside the list it belongs to — a count of what
+     * THIS launch could not fit is a fact about the launch, exactly as the list
+     * is.
+     */
+    private static int $launchNoticesDropped = 0;
 
     /**
      * The config FILE `--config` named, or null to discover
@@ -515,6 +575,7 @@ final class Bootstrap
         // this launch. It has to happen before `backend()` below, which is what
         // reaches {@see filterToolSet()} and raises the notice.
         self::$launchNotices = [];
+        self::$launchNoticesDropped = 0;
 
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell
@@ -697,9 +758,16 @@ final class Bootstrap
         self::reportProjectTierRefusals();
 
         // LAST, so every warning the build raised is in hand — including
-        // reportProjectTierRefusals() above, whichever of these later migrates
-        // onto the transcript seam. See {@see Chat::withLaunchNotices()}.
-        return $chat->withLaunchNotices(self::$launchNotices);
+        // reportProjectTierRefusals() immediately above, which is one of the
+        // twelve sources now routed onto the transcript seam. See
+        // {@see Chat::withLaunchNotices()}.
+        //
+        // THE ACCESSOR, not the raw list: {@see launchNotices()} appends the
+        // "and N more" row when a launch overflowed {@see LAUNCH_NOTICE_LIMIT},
+        // and reading the property directly here would hand the transcript a
+        // silently truncated list — the exact failure mode the cap was added
+        // with a counter rather than as a bare array_slice().
+        return $chat->withLaunchNotices(self::launchNotices());
     }
 
     /**
@@ -3782,8 +3850,21 @@ final class Bootstrap
      * after the Bash-only session is not the warning.
      *
      * BOTH CHANNELS, never one instead of the other. See
-     * {@see Chat::withLaunchNotices()} for why the transcript is the surface and
-     * why only {@see reportProjectTierToolRemovals()} is routed here today.
+     * {@see Chat::withLaunchNotices()} for why the transcript is the surface.
+     *
+     * WHAT IS ROUTED HERE, and the rule that decided it: a warning reaches the
+     * transcript iff it names something the session can no longer DO — a
+     * provider that became {@see EchoProvider}, agent presets that did not
+     * load, a hook file that was refused, permission rules that were dropped, a
+     * tool set that was cut. Warnings about the user's config being MALFORMED
+     * rather than the session being DIMINISHED stay on stderr:
+     * {@see trustedProjectRoots()}'s per-entry complaints (whose consequence —
+     * an untrusted project — is already reported here by
+     * {@see hookFiles()}/{@see reportProjectTierRefusals()} with the actionable
+     * path), {@see withoutEmptyPermissionOverrides()}'s "an empty key was
+     * ignored" (which reports a change that was DECLINED, so nothing about the
+     * session differs), and {@see reportPrunedSessions()} (about history
+     * already deleted, not about this session's capabilities).
      *
      * The stderr half keeps {@see warnPermissionConfigOnce()}'s per-process
      * de-duplication and the transcript half keeps its own per-LAUNCH one, so a
@@ -3791,11 +3872,38 @@ final class Bootstrap
      * though stderr has already said it. Recording BEFORE the delegation rather
      * than after is what makes that true — the Once() call returns early on the
      * repeat.
+     *
+     * BOUNDED ON BOTH AXES, and only on the transcript side. See
+     * {@see LAUNCH_NOTICE_LIMIT} for why an unbounded list is a per-token cost
+     * for the whole session rather than a scrolling nuisance, and
+     * {@see LAUNCH_NOTICE_MAX_CHARS} for the per-message clip. $message reaches
+     * stderr whole and unclipped either way: that channel is the complete
+     * record, which is what makes the clip safe to advertise.
      */
     private static function warnPermissionConfigInTranscript(string $message): void
     {
-        if (!\in_array($message, self::$launchNotices, true)) {
-            self::$launchNotices[] = $message;
+        // mb_*, not substr(): these messages interpolate paths and globs, and
+        // cutting one mid-codepoint would hand Chat a row that is not valid
+        // UTF-8 — which json_encode() (the session store, the `-p` document)
+        // refuses outright rather than degrading.
+        $notice = mb_strlen($message, 'UTF-8') > self::LAUNCH_NOTICE_MAX_CHARS
+            ? mb_substr(
+                $message,
+                0,
+                self::LAUNCH_NOTICE_MAX_CHARS - mb_strlen(self::LAUNCH_NOTICE_CLIP_SUFFIX, 'UTF-8'),
+                'UTF-8',
+            ) . self::LAUNCH_NOTICE_CLIP_SUFFIX
+            : $message;
+
+        // The de-dup check comes FIRST so a message already recorded is never
+        // counted as an overflow — a repeat costs the transcript nothing, and
+        // charging it to the "and N more" tail would overstate what was lost.
+        if (!\in_array($notice, self::$launchNotices, true)) {
+            if (\count(self::$launchNotices) < self::LAUNCH_NOTICE_LIMIT) {
+                self::$launchNotices[] = $notice;
+            } else {
+                ++self::$launchNoticesDropped;
+            }
         }
 
         self::warnPermissionConfigOnce($message);
@@ -3809,11 +3917,30 @@ final class Bootstrap
      * stderr, and so an embedder building its own Chat can route them into
      * whatever surface it has.
      *
+     * THE OVERFLOW ROW IS SYNTHESISED HERE rather than pushed onto the list, and
+     * that is what keeps {@see LAUNCH_NOTICE_LIMIT} an honest cap: an overflow
+     * marker stored IN the list would occupy a slot, and a second overflow after
+     * it would have to rewrite an entry rather than append. Reading it out at
+     * the accessor means every caller of this method — {@see chat()}, a doctor
+     * report, an embedder — gets the same complete answer, and none of them can
+     * see a truncated list without being told it was truncated.
+     *
      * @return list<string>
      */
     public static function launchNotices(): array
     {
-        return self::$launchNotices;
+        if (self::$launchNoticesDropped === 0) {
+            return self::$launchNotices;
+        }
+
+        return [
+            ...self::$launchNotices,
+            sprintf(
+                '…and %d more launch warning%s this transcript could not fit; the full list is on stderr',
+                self::$launchNoticesDropped,
+                self::$launchNoticesDropped === 1 ? '' : 's',
+            ),
+        ];
     }
 
     /**
