@@ -15,8 +15,10 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  * their own tokens, so prose drops out before any matching happens, and what
  * is left is a string LITERAL whose syntactic position can be classified.
  *
- * FOUR SHAPES ARE UNDERSTOOD, and each one is verified rather than assumed —
- * the scanner never trusts a naming convention, it follows the value:
+ * FOUR CALL SHAPES ARE UNDERSTOOD, in any of the four STRING shapes PHP can
+ * spell a literal with (single- or double-quoted, heredoc, nowdoc), and each
+ * one is verified rather than assumed — the scanner never trusts a naming
+ * convention, it follows the value:
  *
  * - **S1 direct** — the literal is the argument of `getenv(` (or `\getenv(`).
  * - **S3 forwarded** — the literal is argument #k of `self::m(…)`,
@@ -35,11 +37,25 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  *   `TerminalBackground::ENV_OVERRIDE` is the case that forced this: it is
  *   never a direct `getenv()` argument, it is an element of an S4 array.
  *
- * ANYTHING ELSE IS AN ERROR, NOT A SKIP. A prefixed occurrence the scanner
- * cannot place, and whose name no other occurrence resolves, lands in
- * {@see unresolved()} — a list the caller is expected to assert is empty. A
- * scanner that silently dropped what it could not parse would have a hole
- * shaped exactly like the next variable someone reads through a fifth shape.
+ * ANYTHING ELSE IS AN ERROR, NOT A SKIP — AND THAT CLAIM WAS FALSE FOR ONE
+ * ROUND. A prefixed occurrence the scanner cannot place, and whose name no
+ * other occurrence resolves, lands in {@see unresolved()} — a list the caller
+ * is expected to assert is empty. That held for `$_ENV['…']` and for a
+ * constant that never reaches `getenv()`. It did NOT hold for three string
+ * shapes, and a reviewer found all three by injecting them into
+ * `src/Tui/TerminalBackground.php`: a heredoc literal, a nowdoc literal, and
+ * `getenv("SUGARCRUSH_X_{$n}")` each produced no read, no fragment and no
+ * unresolved entry. MEASURED at round 44 on PHP 8.3.6.
+ *
+ * THE CAUSE WAS THE TOKEN CATEGORY, not the classifier: `scan()` only ever
+ * looked at `T_CONSTANT_ENCAPSED_STRING`, and PHP hands a heredoc back as
+ * `T_START_HEREDOC` + `T_ENCAPSED_AND_WHITESPACE` + `T_END_HEREDOC` and an
+ * interpolated string as a `"` char token with parts between. Two plain
+ * literals of a whole roster name were invisible to the one class that exists
+ * to find them. {@see significant()} now collapses every string span to a
+ * single token before any rule runs: a heredoc or nowdoc without
+ * interpolation becomes an ordinary literal, and anything assembled at runtime
+ * becomes {@see T_COMPOSED}, whose prefixed pieces are collected as fragments.
  *
  * MEASURED ON PHP 8.3.6. `token_get_all()`'s categories for the constructs used
  * here (`T_CONSTANT_ENCAPSED_STRING`, `T_NAME_FULLY_QUALIFIED` for `\getenv`)
@@ -59,6 +75,15 @@ final class EnvReadScanner
      * cannot spell.
      */
     public const NAME_PATTERN = '/^SUGAR_?CRUSH_[A-Z0-9_]+$/';
+
+    /**
+     * The synthetic token id for a string whose value is assembled at runtime.
+     *
+     * A negative id cannot collide with a real `T_*` constant, which are all
+     * positive, so a downstream `$token['id'] === \T_CONSTANT_ENCAPSED_STRING`
+     * test can never see one by accident.
+     */
+    public const T_COMPOSED = -1;
 
     /** @var array<string, list<string>> name => "label:line [shape]" */
     private array $reads = [];
@@ -111,11 +136,26 @@ final class EnvReadScanner
      * Literals that look like a roster name assembled from pieces.
      *
      * THE ONE THING THIS SCANNER GENUINELY CANNOT FOLLOW is a name built at
-     * runtime — `getenv('SUGARCRUSH_' . $suffix)` would be read by the code and
-     * invisible to every pattern here, because `'SUGARCRUSH_'` on its own does
-     * not match {@see NAME_PATTERN}. Rather than leave that as a caveat in
-     * prose, the fragments are collected so the caller can assert there are
-     * none: the blind spot is measured empty rather than assumed empty.
+     * runtime — `getenv('SUGARCRUSH_' . $suffix)` is read by the code and named
+     * by no pattern here. Rather than leave that as a caveat in prose, the
+     * pieces are collected so the caller can assert there are none: the blind
+     * spot is measured empty rather than assumed empty.
+     *
+     * THREE SHAPES REACH THIS LIST, and the last two were added in round 44
+     * after they were found silently dropped:
+     *
+     * - a piece that is not a well-formed name, `'SUGARCRUSH_' . $suffix`;
+     * - a piece of an INTERPOLATED string, `"SUGARCRUSH_X_{$n}"`, even when the
+     *   piece matches {@see NAME_PATTERN} on its own — it is a piece of the
+     *   value, and recording it as the value would be a confident wrong answer
+     *   rather than a reported gap;
+     * - a whole name GLUED to a concatenation, `'SUGARCRUSH_MAX' . $suffix`,
+     *   for the same reason.
+     *
+     * A piece counts only when it BEGINS with the prefix, which is the same
+     * test the whole-literal path applies. `str_contains()` reported
+     * `Bootstrap`'s `"\$SUGARCRUSH_MAX_COST is '{$trimmed}'"` — an error
+     * message, not an assembled name — on its first run.
      *
      * @return list<string>
      */
@@ -130,10 +170,29 @@ final class EnvReadScanner
     private function scanForWritesAndFragments(string $src, string $label): void
     {
         foreach (self::significant($src) as $token) {
+            if ($token['id'] === self::T_COMPOSED) {
+                // Every prefixed piece of a runtime-assembled string is a
+                // fragment, INCLUDING one that matches NAME_PATTERN on its own:
+                // `"SUGARCRUSH_X_{$n}"` has the literal part `SUGARCRUSH_X_`,
+                // which is a well-formed name and is not the name being read.
+                foreach ($token['parts'] ?? [] as $part) {
+                    // `str_starts_with`, the same test the whole-literal rule
+                    // below applies, and it is not interchangeable with
+                    // `str_contains`: `"\$SUGARCRUSH_MAX_COST is '{$trimmed}'"`
+                    // in `Bootstrap` is an error message that MENTIONS a
+                    // variable, and reporting it as a half-assembled name would
+                    // have been the census crying wolf on its first run.
+                    if (str_starts_with($part, 'SUGAR')) {
+                        $this->fragments[] = $label . ':' . $token['line'] . ': ' . $part;
+                    }
+                }
+
+                continue;
+            }
             if ($token['id'] !== \T_CONSTANT_ENCAPSED_STRING) {
                 continue;
             }
-            $value = self::literal($token['text']);
+            $value = self::stringValue($token);
             if ($value === null || !str_starts_with($value, 'SUGAR')) {
                 continue;
             }
@@ -186,22 +245,208 @@ final class EnvReadScanner
         return $out;
     }
 
-    /** @return list<array{text: string, id: int, line: int}> */
+    /**
+     * The token stream with whitespace and comments dropped, and with every
+     * STRING collapsed to a single token.
+     *
+     * COLLAPSING IS THE POINT, and it is what the first cut of this scanner
+     * missed. `token_get_all()` hands back a plain `'FOO'` as one
+     * `T_CONSTANT_ENCAPSED_STRING`, but a heredoc as
+     * `T_START_HEREDOC` + `T_ENCAPSED_AND_WHITESPACE` + `T_END_HEREDOC`, and an
+     * interpolated `"FOO_{$x}"` as a `"` char token, parts, and another `"`.
+     * The scanner reads a literal's NEIGHBOURS to classify it — `(` before it,
+     * `getenv` before that — so a string that arrives as five tokens is
+     * invisible to every rule here. MEASURED at round 44 on PHP 8.3.6:
+     * `getenv(<<<TXT … TXT)` and `getenv(<<<'TXT' … 'TXT')` naming an
+     * undocumented variable produced no read, no fragment and no unresolved
+     * entry — a silent miss of a PLAIN LITERAL, the one shape this class
+     * claims it definitely resolves.
+     *
+     * TWO COLLAPSED SHAPES COME OUT:
+     *
+     * - a heredoc or nowdoc with NO interpolation becomes an ordinary literal
+     *   token carrying its `value`, indistinguishable downstream from `'FOO'`;
+     * - anything with interpolation — an interpolated `"…"`, an interpolated
+     *   heredoc, a backtick — becomes {@see T_COMPOSED}, which is never a read
+     *   and whose prefixed literal PARTS are collected as fragments. The value
+     *   of such a string is assembled at runtime, so the literal `SUGARCRUSH_X_`
+     *   inside `"SUGARCRUSH_X_{$n}"` is a piece of a name and not a name, even
+     *   though it matches {@see NAME_PATTERN} on its own.
+     *
+     * @return list<array{text: string, id: int, line: int, value?: string, parts?: list<string>}>
+     */
     public static function significant(string $src): array
     {
+        $raw = token_get_all($src);
+        $n = \count($raw);
         $sig = [];
-        foreach (token_get_all($src) as $token) {
+
+        for ($i = 0; $i < $n; $i++) {
+            $token = $raw[$i];
+
             if (\is_array($token)) {
                 if (\in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
                     continue;
                 }
+                if ($token[0] === \T_START_HEREDOC) {
+                    [$collapsed, $i] = self::collapseHeredoc($raw, $i, $n);
+                    $sig[] = $collapsed;
+
+                    continue;
+                }
                 $sig[] = ['text' => $token[1], 'id' => $token[0], 'line' => $token[2]];
-            } else {
-                $sig[] = ['text' => $token, 'id' => 0, 'line' => 0];
+
+                continue;
             }
+
+            if ($token === '"' || $token === '`') {
+                [$collapsed, $i] = self::collapseInterpolated($raw, $i, $n);
+                $sig[] = $collapsed;
+
+                continue;
+            }
+
+            $sig[] = ['text' => $token, 'id' => 0, 'line' => 0];
         }
 
         return $sig;
+    }
+
+    /**
+     * A heredoc or nowdoc span, from its `T_START_HEREDOC` to its
+     * `T_END_HEREDOC`.
+     *
+     * The closing marker's INDENTATION is stripped from the body, because PHP
+     * 7.3+ flexible heredocs put it in the `T_ENCAPSED_AND_WHITESPACE` token
+     * and take it out of the value. Getting that wrong would turn
+     * `SUGARCRUSH_FOO` into `    SUGARCRUSH_FOO`, which matches nothing and
+     * would be reported as a fragment — a false alarm rather than a miss, but
+     * still a wrong answer.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $raw
+     *
+     * @return array{0: array{text: string, id: int, line: int, value?: string, parts?: list<string>}, 1: int}
+     */
+    private static function collapseHeredoc(array $raw, int $start, int $n): array
+    {
+        $line = \is_array($raw[$start]) ? $raw[$start][2] : 0;
+        $parts = [];
+        $interpolated = false;
+        $end = $start;
+
+        for ($j = $start + 1; $j < $n; $j++) {
+            $token = $raw[$j];
+            if (\is_array($token) && $token[0] === \T_END_HEREDOC) {
+                $end = $j;
+
+                break;
+            }
+            if (\is_array($token) && $token[0] === \T_ENCAPSED_AND_WHITESPACE) {
+                $parts[] = $token[1];
+
+                continue;
+            }
+            $interpolated = true;
+        }
+
+        if ($end === $start) {
+            // An unterminated heredoc is not something to guess about.
+            return [['text' => '<unterminated heredoc>', 'id' => self::T_COMPOSED, 'line' => $line, 'parts' => $parts], $n];
+        }
+
+        $marker = \is_array($raw[$end]) ? $raw[$end][1] : '';
+        $indent = substr($marker, 0, \strlen($marker) - \strlen(ltrim($marker)));
+
+        if ($interpolated) {
+            return [
+                ['text' => '<interpolated heredoc>', 'id' => self::T_COMPOSED, 'line' => $line, 'parts' => $parts],
+                $end,
+            ];
+        }
+
+        $body = (string) preg_replace('/\R\z/', '', implode('', $parts));
+        if ($indent !== '') {
+            $lines = preg_split('/\R/', $body) ?: [];
+            foreach ($lines as $k => $bodyLine) {
+                $lines[$k] = str_starts_with($bodyLine, $indent) ? substr($bodyLine, \strlen($indent)) : $bodyLine;
+            }
+            $body = implode("\n", $lines);
+        }
+
+        return [
+            ['text' => "'" . $body . "'", 'id' => \T_CONSTANT_ENCAPSED_STRING, 'line' => $line, 'value' => $body],
+            $end,
+        ];
+    }
+
+    /**
+     * An interpolated `"…"` or backtick span.
+     *
+     * Brace depth is tracked because `"{$this->f("x")}"` nests a whole string
+     * inside the interpolation, and a naive "stop at the next quote" would end
+     * the span in the middle of it.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $raw
+     *
+     * @return array{0: array{text: string, id: int, line: int, parts: list<string>}, 1: int}
+     */
+    private static function collapseInterpolated(array $raw, int $start, int $n): array
+    {
+        $quote = $raw[$start];
+        $line = 0;
+        $parts = [];
+        $depth = 0;
+        $end = $n - 1;
+
+        for ($j = $start + 1; $j < $n; $j++) {
+            $token = $raw[$j];
+            if (\is_array($token)) {
+                if ($line === 0) {
+                    $line = $token[2];
+                }
+                if (\in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                    $depth++;
+
+                    continue;
+                }
+                if ($token[0] === \T_ENCAPSED_AND_WHITESPACE && $depth === 0) {
+                    $parts[] = $token[1];
+                }
+
+                continue;
+            }
+            if ($token === '{') {
+                $depth++;
+
+                continue;
+            }
+            if ($token === '}') {
+                $depth--;
+
+                continue;
+            }
+            if ($token === $quote && $depth === 0) {
+                $end = $j;
+
+                break;
+            }
+        }
+
+        return [['text' => '<interpolated string>', 'id' => self::T_COMPOSED, 'line' => $line, 'parts' => $parts], $end];
+    }
+
+    /**
+     * The value of a string token, whatever shape produced it.
+     *
+     * @param array{text: string, id: int, line: int, value?: string, parts?: list<string>} $token
+     */
+    private static function stringValue(array $token): ?string
+    {
+        if (\array_key_exists('value', $token)) {
+            return $token['value'];
+        }
+
+        return self::literal($token['text']);
     }
 
     private function collectConstants(string $src): void
@@ -211,7 +456,7 @@ final class EnvReadScanner
             if ($token['id'] !== \T_CONSTANT_ENCAPSED_STRING) {
                 continue;
             }
-            $value = self::literal($token['text']);
+            $value = self::stringValue($token);
             if ($value === null || preg_match(self::NAME_PATTERN, $value) !== 1) {
                 continue;
             }
@@ -230,12 +475,25 @@ final class EnvReadScanner
             $first = $i;
 
             if ($sig[$i]['id'] === \T_CONSTANT_ENCAPSED_STRING) {
-                $value = self::literal($sig[$i]['text']);
+                $value = self::stringValue($sig[$i]);
                 if ($value === null || preg_match(self::NAME_PATTERN, $value) !== 1) {
                     continue;
                 }
                 // The constant's DECLARATION is not a read; its uses are.
                 if (($sig[$i - 1]['text'] ?? '') === '=' && ($sig[$i - 3]['text'] ?? '') === 'const') {
+                    continue;
+                }
+                // A literal glued to a `.` is a PIECE of a value, even when the
+                // piece is a well-formed name on its own:
+                // `getenv('SUGARCRUSH_MAX' . $suffix)` reads neither
+                // `SUGARCRUSH_MAX` nor anything this scanner can name, and
+                // recording it as a read of the piece would be a confident
+                // wrong answer rather than a reported gap. MEASURED at round
+                // 44: no such literal exists in `src/` or `bin/`, so this rule
+                // costs nothing today and closes the shape.
+                if (($sig[$i - 1]['text'] ?? '') === '.' || ($sig[$i + 1]['text'] ?? '') === '.') {
+                    $this->fragments[] = $label . ':' . $sig[$i]['line'] . ': ' . $value . ' (concatenated)';
+
                     continue;
                 }
             } elseif (

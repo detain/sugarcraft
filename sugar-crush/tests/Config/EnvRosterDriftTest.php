@@ -28,7 +28,9 @@ use SugarCraft\Crush\Tests\Config\Support\EnvReadScanner;
  *
  * THE ORACLE IS A TOKEN SCAN, NOT A `grep`, and that distinction is the whole
  * reason it is trustworthy — see {@see EnvReadScanner} for the four call shapes
- * it understands and for its refusal to drop what it cannot place. Two things
+ * it understands, the four string shapes it reads them in, and for its refusal
+ * to drop what it cannot place (a refusal that was itself false for three
+ * string shapes until round 44, and is now pinned by fixtures for each). Two things
  * follow that are worth stating here rather than leaving to the reader:
  *
  * - A prefixed name that appears ONLY inside a doc-comment or an error message
@@ -157,6 +159,33 @@ final class EnvRosterDriftTest extends TestCase
             }',
             'SUGARCRUSH_S2B',
             'S4-foreach:$k',
+        ];
+
+        yield 'S1 — a NOWDOC literal argument' => [
+            "<?php class A { function f() { return getenv(<<<'TXT'\nSUGARCRUSH_NOWDOC\nTXT); } }",
+            'SUGARCRUSH_NOWDOC',
+            'S1-direct',
+        ];
+
+        yield 'S1 — a HEREDOC literal argument' => [
+            "<?php class A { function f() { return getenv(<<<TXT\nSUGARCRUSH_HEREDOC\nTXT); } }",
+            'SUGARCRUSH_HEREDOC',
+            'S1-direct',
+        ];
+
+        yield 'S1 — an INDENTED heredoc, whose closing marker sets the margin' => [
+            "<?php class A { function f() { return getenv(<<<TXT\n        SUGARCRUSH_INDENTED\n        TXT); } }",
+            'SUGARCRUSH_INDENTED',
+            'S1-direct',
+        ];
+
+        yield 'S3 — a heredoc literal forwarded through a reader' => [
+            "<?php class A {\n"
+                . "    function f() { return self::flag(<<<TXT\nSUGARCRUSH_HEREDOC_FWD\nTXT); }\n"
+                . "    private static function flag(string \$name): bool { return getenv(\$name) !== false; }\n"
+                . '}',
+            'SUGARCRUSH_HEREDOC_FWD',
+            'S3-forward:flag#0',
         ];
 
         yield 'the deprecated SUGAR_CRUSH_ spelling is inside the alphabet' => [
@@ -292,6 +321,89 @@ final class EnvRosterDriftTest extends TestCase
 
         $this->assertSame([], $scanner->reads());
         $this->assertSame(['fixture.php:1: SUGARCRUSH_'], $scanner->fragments());
+    }
+
+    /**
+     * A name INTERPOLATED into a string is a fragment, not a read of its
+     * literal half.
+     *
+     * THREE SHAPES SURVIVED THE FIRST CUT OF THIS SCANNER, all found by a
+     * reviewer injecting them into `src/Tui/TerminalBackground.php` and running
+     * this file: a heredoc literal, a nowdoc literal and an interpolated
+     * `"…{$x}"`. None produced a read, a fragment or an `unresolved()` entry.
+     * The heredoc and nowdoc were the worse pair, because they are PLAIN
+     * LITERALS of a whole roster name — exactly what {@see EnvReadScanner}'s
+     * doc-block calls the one shape it definitely resolves — and they are fixed
+     * by collapsing the token span rather than by exempting anything.
+     *
+     * THE INTERPOLATED CASE IS THE SUBTLE ONE. `"SUGARCRUSH_INTERP_{$fd}"` has
+     * a literal part, `SUGARCRUSH_INTERP_`, that matches
+     * {@see EnvReadScanner::NAME_PATTERN} on its own — unlike
+     * `'SUGARCRUSH_' . $suffix`, whose piece does not. Treating a part of an
+     * assembled string as a name would therefore have produced a CONFIDENT
+     * WRONG ANSWER (a read of a variable nobody reads) rather than a reported
+     * gap, which is why parts are routed to {@see EnvReadScanner::fragments()}
+     * whatever they look like.
+     */
+    public function testANameInterpolatedIntoAStringIsAFragmentNotARead(): void
+    {
+        $scanner = new EnvReadScanner([
+            'fixture.php' => '<?php class A { function f() { return getenv("SUGARCRUSH_INTERP_{$this->fd}"); } }',
+        ]);
+
+        $this->assertSame([], $scanner->reads(), 'half an assembled name was recorded as a read');
+        $this->assertSame(['fixture.php:1: SUGARCRUSH_INTERP_'], $scanner->fragments());
+    }
+
+    /** An interpolated HEREDOC is the same case with a different delimiter. */
+    public function testANameInterpolatedIntoAHeredocIsAlsoAFragment(): void
+    {
+        $scanner = new EnvReadScanner([
+            'fixture.php' => "<?php class A { function f() { return getenv(<<<TXT\nSUGARCRUSH_HD_{\$this->fd}\nTXT); } }",
+        ]);
+
+        $this->assertSame([], $scanner->reads(), 'half an assembled name was recorded as a read');
+        $this->assertSame(['fixture.php:1: SUGARCRUSH_HD_'], $scanner->fragments());
+    }
+
+    /**
+     * A whole name GLUED to a concatenation is a piece too.
+     *
+     * `getenv('SUGARCRUSH_MAX' . $suffix)` reads neither `SUGARCRUSH_MAX` nor
+     * anything nameable, and the literal is a perfectly well-formed roster name
+     * on its own — so the shape that catches `'SUGARCRUSH_' . $x` (a piece that
+     * fails the pattern) does not catch this one. MEASURED at round 44: no such
+     * literal exists in `src/` or `bin/`, so the rule reports nothing today.
+     */
+    public function testAWholeNameGluedToAConcatenationIsAFragmentNotARead(): void
+    {
+        $scanner = new EnvReadScanner([
+            'fixture.php' => '<?php class A { function f() { return getenv("SUGARCRUSH_MAX" . $this->suffix); } }',
+        ]);
+
+        $this->assertSame([], $scanner->reads(), 'a concatenated piece was recorded as a whole name');
+        $this->assertSame(['fixture.php:1: SUGARCRUSH_MAX (concatenated)'], $scanner->fragments());
+    }
+
+    /**
+     * And an error message that MENTIONS a variable is neither.
+     *
+     * THE CONTROL FOR THE RULE ABOVE, and it is not hypothetical: `Bootstrap`
+     * throws `"\$SUGARCRUSH_MAX_COST is '{$trimmed}', which is not a spend
+     * ceiling"`. The first cut of the interpolated-parts rule used
+     * `str_contains($part, 'SUGAR')` and reported that message as a
+     * half-assembled name on its very first run over `src/`. The rule is
+     * `str_starts_with`, the same test the whole-literal path applies.
+     */
+    public function testAnInterpolatedErrorMessageMentioningAVariableIsNotAFragment(): void
+    {
+        $scanner = new EnvReadScanner([
+            'fixture.php' => '<?php class A { function f() { throw new \\RuntimeException("\\$SUGARCRUSH_MAX_COST is \'{$this->v}\'"); } }',
+        ]);
+
+        $this->assertSame([], $scanner->reads());
+        $this->assertSame([], $scanner->fragments(), 'prose naming a variable was reported as an assembled name');
+        $this->assertSame([], $scanner->unresolved());
     }
 
     // ── the real scan ────────────────────────────────────────────────────
