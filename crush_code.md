@@ -1094,6 +1094,26 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 44 — CLOSED (`98d59bfb`). Eleven backlog items fixed, twenty-four recorded.**
+Floor `9215 / 127781 / 1 skipped / rc 0`, `sugar-crush` linked. Three new oracles shipped: a stale-figure
+census over `src/` **and** `docs/` (E103/E108), a `SUGARCRUSH_*` env-roster oracle (E111), and a JSON
+error-contract oracle that found the contract has **seven** error types where every source said five —
+`not-found` and `mcp-config` were dropped by an `[a-z_]+` extractor that cannot spell a hyphen.
+
+⚠️ **The test prediction matched exactly; the assertion prediction did not, and the rule has changed.** A
+lane that ships a census walking the tree asserts per file and per paragraph, so a **sibling** lane adding
+prose raises **that** lane's assertion count with no code change on either side (+48, attributed exactly).
+Predict assertions as a **lower bound** whenever a lane's diff contains an enumerating guard.
+
+🔴 **The round's central proof: an empty census is a weaker guard than a census of one.** With the scanner
+mutated to never match, the "nothing is stale" assertion **passed** — 18,228 assertions, all green, in a
+tree where the instrument was dead — while the known-positive fixture test **red**. Every guard asserting
+an absence now needs a known-positive fixture run through the same scanner in the same test.
+
+**Two reviewer-prescribed fixes would have shipped defects** — one would have reddened ten correct
+paragraphs containing "UTF-8 byte", the other reopened the hole it closed (mutation survived). A
+prescription in a review is a hypothesis; the acceptance test is a mutation of *the fix*.
+
 **ROUND 43 — CLOSED (`628f50f1`). Eight backlog items fixed, twenty-two recorded.**
 Floor `9078 / 105590 / 1 skipped / rc 0`, `sugar-crush` linked. The merged-total prediction matched on
 **both** tests and assertions — a first — because every lane re-measured after its fix stage and
