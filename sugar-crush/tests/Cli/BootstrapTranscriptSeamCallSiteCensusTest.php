@@ -88,9 +88,9 @@ use PHPUnit\Framework\TestCase;
  * it would sit next to the thing it counts, and the prose sites could `{@see}`
  * it instead of spelling a word. It is not there because `Bootstrap.php` was
  * another lane's file in the round that wrote this test, and reaching into it
- * would have collided. Promoting it is backlog **E112**; when that happens,
+ * would have collided. Promoting it is backlog **E118**; when that happens,
  * {@see EXPECTED_CALL_SITES} becomes a second opinion rather than the only one,
- * and this test should assert the two agree. (E112 and not E104: round 44's
+ * and this test should assert the two agree. (E118 and not E104: round 44's
  * brief cited E104 for this, and E104 is a different item — extracting
  * `Bootstrap`'s stderr `sprintf` FORMATS to constants. The two are neighbours
  * and want the same treatment, so they are worth doing together, but they are
@@ -145,12 +145,12 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      *
      * ONE SENTENCE IS DELIBERATELY NOT A ROW, and it is not an oversight:
      * `Bootstrap::reportSkillSkips()`'s comment says a transcript "also has to
-     * carry ELEVEN other sources" and should say fifteen. It is backlog E113
+     * carry ELEVEN other sources" and should say fifteen. It is backlog E119
      * and it lives in `src/Cli/Bootstrap.php`, which this round's lane does not
      * own — and unlike the two Bootstrap rows below, which only READ the file,
      * adding this row would red the suite until the sentence is corrected.
      * {@see testTheKnownStaleSentenceOutsideThisLaneIsStillStale()} pins the
-     * gap so it closes itself: the day E113 lands, that test fails and tells
+     * gap so it closes itself: the day E119 lands, that test fails and tells
      * whoever landed it to move the sentence into this list.
      *
      * @var array<string, array{file: string, anchor: string, offset: int}>
@@ -347,9 +347,9 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      * {@see PROSE_SITES} row. This is the pin that makes the gap close itself.
      *
      * `Bootstrap::reportSkillSkips()` says a transcript "also has to carry
-     * eleven other sources" where the answer is fifteen — backlog E113, in a
+     * eleven other sources" where the answer is fifteen — backlog E119, in a
      * file this lane does not own. A silent gap in a census is the shape of the
-     * next defect, so the gap is ASSERTED: when E113 lands, this test fails,
+     * next defect, so the gap is ASSERTED: when E119 lands, this test fails,
      * and its message is the instruction for closing it. Delete this test in
      * the same commit that adds the row.
      */
@@ -372,7 +372,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         self::assertSame(
             'eleven',
             strtolower($m[1]),
-            'E113 appears to have landed: Bootstrap::reportSkillSkips() no longer says "eleven". Move that '
+            'E119 appears to have landed: Bootstrap::reportSkillSkips() no longer says "eleven". Move that '
                 . "sentence into self::PROSE_SITES with 'offset' => 1 and delete this test — it exists only "
                 . 'to keep the deliberate hole in the census visible while the sentence is out of this '
                 . "lane's ownership.",
@@ -382,7 +382,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
             self::NUMBER_WORDS['eleven'],
             self::countSeamCallSites() - 1,
             'the seam has shrunk to twelve call sites, which would make the "eleven other sources" sentence '
-                . 'accidentally correct and this pin meaningless. Re-derive E113 before trusting either.',
+                . 'accidentally correct and this pin meaningless. Re-derive E119 before trusting either.',
         );
     }
 
