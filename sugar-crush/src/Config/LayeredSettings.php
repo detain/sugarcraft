@@ -168,6 +168,32 @@ final class LayeredSettings
      *                 {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}, which
      *                 filters the model-facing tool set before any of its three
      *                 `withTools()` call sites sees it.
+     *  - `statusLine` {@see \SugarCraft\Crush\Config\StatusLineCommand::fromSettings()},
+     *                 installed by `Bootstrap::chat()` and painted by
+     *                 {@see \SugarCraft\Crush\Renderer::renderStatusBar()}.
+     *
+     * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
+     * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
+     * Every other key on this list names a preference, a model, a glob or a
+     * tool name — a value some later reader interprets. This one names a shell
+     * command that {@see \SugarCraft\Crush\Config\StatusLineCommand::run()}
+     * executes on a timer, with no tool call and no permission gate anywhere
+     * in the path. The argument `provider` and `instructions` make below
+     * applies here in its strongest form: a project-tier `statusLine` would be
+     * arbitrary code execution on clone-and-launch. Those two let a checkout
+     * choose where a prompt is sent and which text is authoritative; this one
+     * would let it choose what RUNS.
+     *
+     * It is a NESTED object — `{"type": "command", "command": "…"}` — which is
+     * the shape the `allowedTools`/`disabledTools` note below says was refused
+     * for the tool keys, so the difference is worth stating rather than
+     * looking like an inconsistency. That refusal is about {@see merge()}
+     * being KEY-WISE across TIERS: `tools.allow` and `tools.deny` belong to
+     * different tiers, so one key could not carry both. `statusLine`'s two
+     * fields belong to the SAME tier and are meaningless apart — a `type` with
+     * no `command` runs nothing — so there is no merge for them to lose. The
+     * shape is also Claude Code's, which is what makes a `settings.json`
+     * written for that tool carry over unchanged.
      *
      * `allowedTools` / `disabledTools`, NOT a nested `tools: {allow, deny}`,
      * and the shape is forced rather than chosen: {@see merge()} is KEY-WISE,
@@ -219,6 +245,7 @@ final class LayeredSettings
         'parallelToolDeadlineSeconds',
         'allowedTools',
         'disabledTools',
+        'statusLine',
     ];
 
     /**
@@ -328,9 +355,14 @@ final class LayeredSettings
      *
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`,
-     * `instructions` and `allowedTools` — the third one's argument is on
-     * {@see PROJECT_TIER_KEYS}, next to the sibling key that IS allowed, since
-     * that is where the two have to be compared:
+     * `instructions`, `allowedTools` and `statusLine`. The third one's argument
+     * is on {@see PROJECT_TIER_KEYS}, next to the sibling key that IS allowed,
+     * since that is where the two have to be compared; the fourth one's is on
+     * {@see LAYERED_KEYS}, because what makes it user-tier is not a comparison
+     * with anything on this list — it is the only key whose value is a COMMAND.
+     * The set is asserted, not believed, by
+     * {@see \SugarCraft\Crush\Tests\Config\LayeredSettingsTest::testTheUserTierOnlyKeysAreExactlyTheLayeredKeysNoProjectMaySet()},
+     * so this sentence going stale reds a test rather than misleading a reader:
      *
      * `provider` is not "which of my accounts". The value is a NAME, and
      * {@see \SugarCraft\Crush\Providers\ProviderFactory::defaultConfig()}
