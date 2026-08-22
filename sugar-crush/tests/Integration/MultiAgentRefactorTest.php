@@ -419,17 +419,26 @@ final class MultiAgentRefactorTest extends TestCase
      * class's tearDown deletes `$this->tmpRoot`, the tree the PARENT is still
      * using. Measured on this host (PHP 8.3.6) with a child that throws: the
      * child ran tearDown, removed the shared directory, and printed a second
-     * "ERRORS! Tests: 1" summary of its own; the parent then failed with an
-     * empty winner list because its results directory no longer existed.
-     * That is E80's whole failure chain, and it reproduced 2 times in 700 runs
-     * of this test under 48 CPU-burner processes.
+     * "ERRORS! Tests: 1" summary of its own. The observed run then failed with
+     * an EMPTY winner list, from both halves at once: no `.won` file for
+     * task-a was ever written (the claim committed, then createWorktree()
+     * threw before the breadcrumb), and the results directory those files
+     * would have been counted in had been deleted underneath the parent. That
+     * is E80's whole failure chain, and it reproduced 2 times in 700 runs of
+     * this test under 48 CPU-burner processes.
      *
      * `exitNow()` SIGKILLs the child instead of returning or calling `exit()`,
      * which skips PHP's shutdown sequence entirely -- no destructors, no
-     * `register_shutdown_function` callbacks, and so no PHPUnit teardown. The
-     * codebase already required this of every forked child
-     * ({@see ForkedChild}'s class doc-block says so in as many words); this
-     * test was the one fork site that did not. Note that a plain `exit()` is
+     * `register_shutdown_function` callbacks, and so no PHPUnit teardown.
+     * {@see ForkedChild}'s class doc-block already required this of every
+     * forked child in the codebase. It is NOT true that this was the only test
+     * that disobeyed -- several other fork sites under `tests/` end their
+     * child in a plain `exit(0)`, some of them deliberately and documented as
+     * such ({@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest},
+     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest}). What made
+     * this one damaging is the combination the others lack: a child that can
+     * throw, and a tearDown that deletes a tree the parent is still reading.
+     * Note that a plain `exit()` is
      * hazardous here for a second, independent reason: `React\EventLoop\Loop`
      * registers a shutdown function that RUNS the loop, so a child inheriting
      * a loop with any live watcher blocks forever at exit. Measured: with a

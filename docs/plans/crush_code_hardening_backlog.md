@@ -6331,10 +6331,16 @@ justification should just say so. `src/Session.php` uses `flock()` too and belon
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low, process. **Mechanism measured.**
 
 **What.** `ForkedChild`'s class doc-block says every `pcntl_fork()`'d child in this codebase MUST end
-with `exitNow()`; `src/` obeys it and `tests/Integration/MultiAgentRefactorTest.php` did not, which is
-what let a forked child run PHPUnit's `tearDown()` and delete the parent's temp tree (measured directly:
-the child ran tearDown, removed the shared directory, and printed a second `ERRORS! Tests: 1` summary).
-There is no guard, so the next forking test reintroduces it.
+with `exitNow()`. `src/` obeys it. `tests/` does not, and not only in the one place round 45 fixed:
+several fork sites under `tests/` end their child in a plain `exit(0)`, a couple of them deliberately
+and documented as such (`McpToolWiringTest` exercises the `posix`-less fallback path on purpose,
+`ForkedChildTest` needs the unguarded shape as its control). What made
+`tests/Integration/MultiAgentRefactorTest.php` damaging was the combination the others lack — a child
+that can throw, plus a `tearDown()` that deletes a tree the parent is still reading — so the child ran
+PHPUnit's teardown and removed the parent's temp tree (measured directly: it printed a second
+`ERRORS! Tests: 1` summary of its own). There is no guard, so the next forking test with that
+combination reintroduces it, and a guard has to be able to exempt the deliberate cases by name rather
+than banning the shape outright.
 
 A second, independent reason the rule matters in `tests/`: `React\EventLoop\Loop::get()` registers a
 shutdown function that RUNS the loop, so a child inheriting a loop with any live watcher blocks forever
