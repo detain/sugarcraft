@@ -1239,9 +1239,14 @@ final class AgentWorkerPool
      * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} if and
      * only if the emitter did not produce what the caller asked for — answers
      * NO here, and it is checkable at the one call site rather than a matter of
-     * taste: {@see executeOne()}'s `pcntlForkAvailable()` arm falls straight
+     * taste: {@see startAgent()}'s `pcntlForkAvailable()` arm falls straight
      * through to `$executor->execute($agent, $request)` and `storeResult()`,
      * so every agent still runs and every result is still stored and reaped.
+     * THE CITATION WAS `executeOne()` AND THAT WAS WRONG — that method is two
+     * lines, `$this->executor ?? $this->createDefaultExecutor()` then
+     * `$executor->execute(…)`, and contains neither arm. A reader who followed
+     * it would have found no evidence for the argument above and concluded the
+     * reasoning was stale. Both fallback arms live in {@see startAgent()}.
      * What the caller loses is CONCURRENCY, not an action. A seam row is a
      * `Role::System` message re-sent to the model on every subsequent turn, and
      * "your agents ran one after another" is neither something the model can
@@ -1249,7 +1254,7 @@ final class AgentWorkerPool
      *
      * WHAT WOULD CHANGE THE ANSWER: an agent that does not run at all. That is
      * a different site — see the DEFERRED FINDING recorded against the
-     * `pcntl_fork() === -1` arm in {@see executeOne()}, which degrades to the
+     * `pcntl_fork() === -1` arm in {@see startAgent()}, which degrades to the
      * same sequential execution and warns about NOTHING, not even on stderr.
      */
     protected function warnSequentialFallback(): void

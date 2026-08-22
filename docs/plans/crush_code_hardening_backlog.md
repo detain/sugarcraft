@@ -7969,8 +7969,9 @@ prescription against the tree before implementing it.
 
 ### Ea48-1 — `AgentWorkerPool`'s `pcntl_fork() === -1` arm warns about nothing at all
 
-`src/Agents/AgentWorkerPool.php`'s `executeOne()` has TWO paths to sequential execution and only one of
-them says so. The `!pcntlForkAvailable()` arm calls `warnSequentialFallback()`; the arm immediately below
+`src/Agents/AgentWorkerPool.php`'s `startAgent()` has TWO paths to sequential execution and only one of
+them says so. (This entry said `executeOne()`; that method is two lines — resolve the executor, call
+`execute()` — and holds neither arm. Both are in `startAgent()`.) The `!pcntlForkAvailable()` arm calls `warnSequentialFallback()`; the arm immediately below
 it — `$pid = pcntl_fork(); if ($pid === -1)` — falls through to the same synchronous
 `$executor->execute()` + `storeResult()` with **no diagnostic of any kind**, not even on stderr. A real
 `fork()` failure (EAGAIN under an `RLIMIT_NPROC` ceiling, or a memory ceiling) is a far more interesting
