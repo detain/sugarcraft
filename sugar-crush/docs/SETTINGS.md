@@ -242,9 +242,15 @@ never reaches the merge at all, and all eleven tools survive):
 { "disabledTools": ["[!B]*"] }
 ```
 
-Eight characters, in a key a project **is** allowed to set, leaving exactly
-`Bash` and removing everything else — the same tool set `allowedTools: ["Bash"]`
-produces, and the same degradation to opaque shell text.
+Five characters of glob, in a key a project **is** allowed to set, leaving
+exactly `Bash` and removing everything else — the same tool set
+`allowedTools: ["Bash"]` produces, and the same degradation to opaque shell
+text. (This line said "eight characters" until the count was re-derived:
+`[!B]*` is five, `"[!B]*"` seven, `["[!B]*"]` nine, and nothing here is eight.
+The point the figure was making — that the value names none of the ten tools it
+removes — is what survives, so the sentence stays and the number is corrected.
+`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
+still carry the old figure in their doc-blocks.)
 
 **Two things narrow this, and both are measured.** An *untrusted* project's
 `disabledTools` never reaches the merge — all eleven tools survive — so this

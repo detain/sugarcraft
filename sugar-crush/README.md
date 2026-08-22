@@ -128,11 +128,22 @@ key:
 Two things about that order are deliberate and the reverse of what most editors
 do. **Your files beat the project's**, because a project file arrived with a
 `git clone` — a repository can fill in what you left unsaid and never overrule
-a choice you made. And **`config.json` beats `settings.json`** despite being
-the deprecated name, because it is the file the CLI *writes*: ranked the other
-way, a `settings.json` naming `theme` would make every Ctrl+P "Switch theme"
-appear to do nothing at all. `config.json` keeps working indefinitely; nothing
-needs migrating.
+a choice you made. And **`config.json` beats `settings.json`**, because it is
+the file the CLI *writes*: ranked the other way, a `settings.json` naming
+`theme` would outrank what Ctrl+P "Switch theme" had just written, and the
+choice would fail to stick with no error anywhere and nothing pointing at the
+file responsible.
+
+> **This paragraph used to say `config.json` was "the deprecated name".** It is
+> not, and the word was doing real damage in the file most likely to be read:
+> it told you to migrate off the only settings file this app ever writes back
+> to. What is true is that `config.json` is the *older* of the two names —
+> nothing in `src/` marks it deprecated, `Bootstrap::writeUserConfig()` writes
+> it (via `Bootstrap::userConfigPath()`), and every persisted `theme` and
+> `provider` lands there. The sentence still earns its place because the
+> ranking genuinely is surprising and still needs explaining; only its reason
+> was wrong. `config.json` keeps working indefinitely, and there is nothing to
+> migrate *to*: `settings.json` is never written.
 
 Only these keys are layered — `provider`, `theme`, `titleModel`,
 `summaryModel`, `instructions`, `disabledSkills`, `parallelToolCalls`,
@@ -178,13 +189,59 @@ to; `instructions`, because it decides which files become authoritative
 system-prompt text; and `allowedTools`, for a reason worth spelling out because
 on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
-defined by what it *omits*, so `allowedTools: ["Bash"]` deletes `Read`, `Edit`,
-`Write`, `Grep` and `Glob` in one line, and what the model does next is the same
-work through `Bash`, which reaches the permission gate as opaque shell text
+defined by what it *omits*, so `allowedTools: ["Bash"]` deletes all ten of the
+others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`,
+`doctor`, `Skill` and `Lsp` — in one line, and what the model does next is the
+same work through `Bash`, which reaches the permission gate as opaque shell text
 instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
-Its sibling `disabledTools` *is* available to a trusted project, because
-expressing the same attack there means naming every tool it removes — a value
-you can see. The two are combined as one condition rather than as two passes — a
+
+Its sibling `disabledTools` *is* available to a trusted project — but not for
+the reason this section used to give.
+
+> **This paragraph used to say that expressing the same attack through
+> `disabledTools` "means naming every tool it removes — a value you can see".
+> That is false**, and it is corrected here rather than deleted because it was
+> the stated reason for the tiering, and because it is the sentence you would
+> lean on when deciding whether a cloned repository's settings need reading at
+> all. `Bootstrap::filterToolSet()` matches names through
+> `PermissionRule::matchesToolName()`, which is bare `fnmatch()`, and
+> `fnmatch()` honours negated character classes. Measured end to end on PHP
+> 8.3.6, in a project you have listed under `trustedProjectSettings`:
+>
+> ```json
+> { "disabledTools": ["[!B]*"] }
+> ```
+>
+> leaves exactly `Bash` out of the eleven built-in tools. The glob is five
+> characters and names none of the ten it removes. The negation is not the
+> trick either: `["[C-Z]*", "[a-z]*"]` leaves exactly `Bash` too, measured the
+> same way, so no restriction on *pattern shape* could make the old sentence
+> true again. What earns the paragraph its place is the shape argument for
+> `allowedTools` above, which does hold; what it lost is the claim that
+> `disabledTools` cannot express the same thing.
+
+**Two things narrow it, and both are measured.** An *untrusted* project's
+`disabledTools` never reaches the merge at all — all eleven tools survive — so
+this needs a `trustedProjectSettings` grant you made yourself. And the layers
+merge key by key rather than as a union: if *you* name any `disabledTools`,
+yours replaces the project's outright — your `["Read"]` against a trusted
+project's `["[!B]*"]` removes exactly `Read` and leaves everything the
+project's glob named. The gap is open only for an operator who trusted a
+repository and set no `disabledTools` of their own.
+
+So **a trusted project's `disabledTools` can choose your tool set** — do not
+grant `trustedProjectSettings` to a repository you would not trust with
+`allowedTools`. What it can no longer do is choose it *unnoticed*: a trusted
+project's tool removals are reported at launch, naming the file, the tools it
+took and the tools it left.
+
+```text
+sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 10 of the
+11 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
+WebSearch, doctor, Skill, Lsp — leaving: Bash.
+```
+
+The two keys are combined as one condition rather than as two passes — a
 tool survives only if your allow-list admits it *and* no deny entry names it —
 so there is no later step in which a project's `disabledTools` could re-admit
 something your `allowedTools` left out. Put the whitelist in your own file where

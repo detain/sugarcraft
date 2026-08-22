@@ -4813,6 +4813,22 @@ this is the documentation of it that is wrong.
 tools with a pattern far shorter than the set it removes, which is why the dangerous keys are
 user-tier-only rather than why `disabledTools` is safe. Cite the eight-character counterexample.
 
+**FIXED — round 42, lane a.** `README.md`'s tool-tier paragraph now retracts the claim in place, quoting
+it and marking it false, and carries the counterexample, the mechanism
+(`Bootstrap::filterToolSet()` → `PermissionRule::matchesToolName()` → bare `fnmatch()`), the two
+measured mitigations (untrusted projects never reach the merge; a user's own `disabledTools` replaces
+rather than unions) and the launch report. Pinned by
+`tests/Config/ReadmeSettingsTierClaimTest`. Two corrections to this entry, both re-measured in-lane on
+PHP 8.3.6:
+
+- **"eight characters" counts nothing.** `[!B]*` is five characters, `"[!B]*"` seven, `["[!B]*"]` nine.
+  The README says *five characters of glob* and `docs/SETTINGS.md` was corrected to match.
+  `src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()` still say "eight"
+  — **not fixed here**, both are outside this lane's write scope.
+- **The negation is not the mechanism.** `["[C-Z]*", "[a-z]*"]` also leaves exactly `Bash`, measured
+  end-to-end, so the Step's framing of the counterexample as *the* negated-class case understates it:
+  no restriction on pattern shape could restore the retracted property.
+
 ### E75 — `README.md` calls `config.json` "the deprecated name"; the source argues at length that it is not
 
 **Recorded 2026-08-22 by the round-41 lane-a reviewer.** Severity: low, but actively misdirecting.
@@ -4823,6 +4839,14 @@ and that calling it deprecated points users away from the file their changes act
 anyone trying to find their own settings.
 
 **Step.** Reconcile in `README.md`, in favour of the source docblock. Rewrite, do not delete.
+
+**FIXED — round 42, lane a.** The ranking paragraph in `README.md` no longer calls `config.json`
+deprecated; a block quote records what it used to say, why the word was damaging (it pointed readers
+off the only file that receives a write) and what is true instead. Verified against the write path
+rather than against the other doc: `Bootstrap::writeUserConfig()` → `Bootstrap::userConfigPath()` →
+`configDirPath() . '/config.json'`, and the only two `@deprecated` tags anywhere in `sugar-crush/src/`
+are on `Agents/PathJail` and `Chat::pool`'s alias — neither mentions `config.json`. Both halves are
+pinned by `tests/Config/ReadmeSettingsTierClaimTest`.
 
 ### E76 — `Chat.php`'s pane-click docblock asserts the opposite of what `bin/sugarcrush` does
 
