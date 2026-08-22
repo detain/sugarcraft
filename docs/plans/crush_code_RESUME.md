@@ -394,7 +394,7 @@ so rather than reporting a clean success.
 **WHEN TO RUN IT:** at a round boundary, AFTER the merged floor is measured — never between a lane merge
 and its measurement. Re-measure the floor afterwards if third-party versions actually moved.
 
-### 🟢 ANSWERED, ROUND 42 — RE-RUN THE ROOT UPDATE THE USER WAS DOING. **Owed work, not a question.**
+### ✅ DONE, ROUND 42 — THE ROOT UPDATE THE USER WAS DOING HAS BEEN RE-RUN AND COMMITTED (`2d78013d`). Kept for the reasoning; nothing is owed.
 
 Round 41's supervisor **reverted the user's root `composer.lock` change** (118 insertions / 115
 deletions — aws-sdk 3.390.4 → 3.393.4 and friends) before it knew the change was theirs, to keep it out
