@@ -311,14 +311,28 @@ final class SkillPathScopingWiringTest extends TestCase
         $shipped = $this->nudgeSpendRoster()['spend'];
         self::assertNotSame([], $shipped, 'no tool spends a share of its cap on the nudge any more');
 
-        // One dial, not three. A tool that deliberately spends a different
-        // share has to say so here, which is the point of the constant.
+        // ONE DIAL, NOT THREE — asserted against what each tool's SOURCE says,
+        // not against the value this derivation already substituted for it.
+        // The earlier version of this loop compared
+        // SkillPathNudge::CALLER_BUDGET_DIVISOR with $spend['divisor'], which
+        // nudgeSpendRoster() sets TO that constant on the constant branch: a
+        // tautology for all three shipped tools, and green whether or not the
+        // thing it guards is present. What it means to say is that no tool has
+        // drifted off the shared dial onto a literal that agrees with it
+        // today, and that is a claim about the text.
         foreach ($shipped as $tool => $spend) {
             self::assertSame(
-                SkillPathNudge::CALLER_BUDGET_DIVISOR,
-                $spend['divisor'],
-                $tool . ' spends a share of its cap the other nudge-spending tools do not; if that is '
-                . 'deliberate say why here, because the margin below is derived from the tightest of them',
+                'SkillPathNudge::CALLER_BUDGET_DIVISOR',
+                $spend['divisorSource'],
+                sprintf(
+                    '%s writes its nudge share as `%s` rather than naming SkillPathNudge::'
+                    . 'CALLER_BUDGET_DIVISOR. Even where the number agrees, an off-dial literal is a tool '
+                    . 'that stops moving when the dial moves — which is the drift E87 removed. If the '
+                    . 'different share is deliberate, say why here, because the margin below is derived '
+                    . 'from the tightest of them.',
+                    $tool,
+                    $spend['divisorSource'],
+                ),
             );
         }
 
@@ -494,7 +508,7 @@ final class SkillPathScopingWiringTest extends TestCase
      * third case: a tool quietly leaving the roster is precisely how the two
      * ceiling guards above would go on passing while covering less.
      *
-     * @return array{spend: array<string, array{cap: int, divisor: int, budget: int}>, unbudgeted: list<string>}
+     * @return array{spend: array<string, array{cap: int, divisor: int, divisorSource: string, budget: int}>, unbudgeted: list<string>}
      */
     private function nudgeSpendRoster(): array
     {
@@ -556,7 +570,8 @@ final class SkillPathScopingWiringTest extends TestCase
             $cap = $capProperty->getValue($tool);
             self::assertIsInt($cap, $short . '::$' . $captured[1] . ' is not an int cap');
 
-            $divisor = ($captured[2] ?? '') !== ''
+            $wroteALiteral = ($captured[2] ?? '') !== '';
+            $divisor = $wroteALiteral
                 ? (int) $captured[2]
                 : SkillPathNudge::CALLER_BUDGET_DIVISOR;
             self::assertGreaterThan(0, $divisor);
@@ -564,6 +579,19 @@ final class SkillPathScopingWiringTest extends TestCase
             $spend[$short] = [
                 'cap' => $cap,
                 'divisor' => $divisor,
+                // WHAT THE SOURCE ACTUALLY WROTE, kept alongside the value it
+                // resolves to. Asserting on `divisor` alone cannot tell the
+                // two branches apart — this derivation substitutes the
+                // constant itself whenever the source named it, so
+                // `assertSame(CALLER_BUDGET_DIVISOR, $spend['divisor'])`
+                // compares the constant with itself and is green for every
+                // tool that shares the dial AND for every tool that does not
+                // but happens to write the same number. The source text is the
+                // only thing that distinguishes "on the dial" from "agrees
+                // with the dial today".
+                'divisorSource' => $wroteALiteral
+                    ? $captured[2]
+                    : 'SkillPathNudge::CALLER_BUDGET_DIVISOR',
                 'budget' => $cap > 0 ? intdiv($cap, $divisor) : PHP_INT_MAX,
             ];
         }
