@@ -1094,8 +1094,8 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
-**ROUND 41 — E52 and E61's S ARE DONE (`ae30fee5`); the rest is in flight.** Floor
-`8909 / 101051 / 1 skipped / rc 0`.
+**ROUND 41 — CLOSED (`7852d79e`). Five findings fixed, six recorded.** Floor
+`8978 / 105031 / 1 skipped / rc 0`.
 
 - ✅ **E52** — the `;<mod>` rebuild in `candy-core`'s `decodeCsi()` now ORs rather than replaces.
   ⚠️ It was the whole **shift-bit-clear family** (`1;3Z`, `1;5Z`, `1;7Z`), not just `CSI 1;5Z` as the
@@ -1104,20 +1104,37 @@ remain open if that judgement is revisited.
   as counted-in-the-sum or not, and says outright that raising a `timeout:` cannot fix it when an
   unbounded hook is implicated. 🔴 **E61's L (a fiber or a fork for an unbounded all-PHP chain) STAYS
   OPEN.**
-- 🚧 **In flight as lanes a/b/c** (concurrency 3, by explicit user instruction 2026-08-22): `statusLine`
-  (greenfield **M** re-confirmed at `ae30fee5` — zero hits in `src/`/`bin/`, absent from
-  `LayeredSettings::LAYERED_KEYS`, so a `statusLine:` is silently dropped today; both grep-baits are
-  still baits), **E73** (the candy-core ZWJ over-run), **E70 + E71 + E72** (three guards that do not
-  guard).
-- **Still queued:** E59 (an **L** whose recorded Step is confirmed WRONG — three literal `"Processing:"`
-  anchors across two tests, one a *negative* assertion), E61's L, the four raw-`fwrite` launch warnings,
-  `keybindings` (**L**, DEFER), then **Phase 9**, then the deferred security pass.
+- ✅ **`statusLine`** (lane a, +61 tests) — shipped **user-tier only**, which was the whole security
+  requirement: present in `LAYERED_KEYS`, deliberately absent from `PROJECT_TIER_KEYS`, so a
+  project-supplied `statusLine` is dropped before the merge and clone-and-launch RCE is closed by
+  construction. Its timeout is **derived** (`REFRESH_SECONDS / 2.0`), so overlapping runs are impossible
+  rather than merely unlikely. Sanitised through `Sanitize::untrusted()` **plus** a whitespace collapse
+  **plus** the renderer's zone-sentinel strip — the last being the one that actually matters, since
+  U+E000/U+E001 would otherwise reach `scanRoot()` on the one row that carries a real zone.
+- ✅ **E73** (lane b) — the recorded Step was too narrow. `Width::compute()`'s whole ZWJ machine had
+  **inverted semantics** after E68 moved to ICU cluster segmentation, so it was removed rather than
+  repaired; a ZWJ that genuinely joins is already inside one cluster. Verified independently:
+  `TAB ZWJ 👍` 0 → 6, real ZWJ families unchanged. The over-run family — the frame-corrupting
+  direction — is closed outright (461 → 0 over 200,000 seeded fuzz strings).
+- ✅ **E70 + E71 + E72** (lane c) — three guards that did not guard, now derived from
+  `SkillPathNudge`'s own pricing at runtime rather than from written-down thresholds.
+- 📝 **Six new findings recorded, E74–E79.** 🔴 **E74 is a live user-facing security misstatement**:
+  `sugar-crush/README.md` promises that a hostile project-tier `disabledTools` "means naming every tool
+  it removes — a value you can see", while `LayeredSettings.php` records the eight-character
+  counterexample `{"disabledTools":["[!B]*"]}` that leaves only `Bash`. Doc-only fix; take it first.
+- **Still queued:** E74+E75+E76 (documentation-truth lane), E78, E59 (an **L** whose recorded Step is
+  confirmed WRONG — three literal `"Processing:"` anchors across two tests, one a *negative*
+  assertion), E61's L, the four raw-`fwrite` launch warnings, `keybindings` (**L**, DEFER), then
+  **Phase 9**, then the deferred security pass.
 
 🔴 **A `composer install`/`composer update` anywhere in this monorepo replaces `vendor/sugarcraft/*`
 symlinks with Packagist copies and silently voids every suite figure taken afterwards.** It happened
-live this round and cost two full-suite runs plus all fourteen sibling verifications. The tell is the
-skip count going 1 → 2. See RESUME §0-NOW-41 for the detection commands (`ls` is NOT one of them — it
-lied twice) and the restore recipe.
+live this round and cost two full-suite runs plus a fourteen-lib sibling sweep. In `sugar-crush` the
+tell is the skip count going 1 → 2. **The siblings have no such alarm** — a 16-lib sweep came back all
+rc 0 while nine of them were still testing a stale vendored `candy-core`, so siblings must be verified
+**by content, per lib**. `--fix --strict-closure` walks `require` only, so a `require-dev` sibling dep
+(`candy-buffer`) is never repaired by the standard round-trip. See RESUME §0-NOW-42 for the detection
+commands (`ls` is NOT one of them — it lied twice) and both restore recipes.
 
 ## Appendix: Full Angle Reports
 

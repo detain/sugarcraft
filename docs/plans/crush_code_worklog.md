@@ -9866,7 +9866,7 @@ Corrected in place rather than renumbered, because renumbering a stamp breaks ev
 
 ---
 
-## ROUND 41 — `ae30fee5`, floor `8909 / 101051 / 1 skipped / rc 0`
+## ROUND 41 — closed at `7852d79e`, floor `8978 / 105031 / 1 skipped / rc 0` (mid-round `ae30fee5` held 8909)
 
 **Two findings closed by the supervisor by hand, then concurrency restored to 3 for the remainder.**
 The round opened under the round-40 spawning cap, so E52 and E61's S were done in the live tree without
@@ -9988,3 +9988,68 @@ review → fix, with the fix stage entered only on a BLOCKING/MAJOR verdict.
 
 **The composer prohibition is now rule 1 of every lane brief**, ahead of even the floor figure, because
 it is the only rule on the list that can make every other number in the report meaningless.
+
+
+### ROUND 41, PART 2 — the three lanes, and a closure that was stale in nine libs
+
+Workflow `wf_0ae3956d-f31`: 9 agents, 0 errors, 553 tool calls, ~93 minutes wall clock, concurrency 3
+per explicit user instruction. Three full-repo `cp -a` lanes at `ae30fee5`, each implement → adversarial
+review → fix. **All three entered the fix stage.** Merged with zero conflicts — the split was chosen so
+no two lanes open the same file, and that held exactly as designed.
+
+Merged total **predicted at 8978** from lane `a`'s +61 and lane `c`'s +8 (lane `b` touches `candy-core`
+and `candy-sprinkles`, not this suite) and **matched to the assertion**: 8978 / 105031 / 1 skipped / rc 0.
+
+**The review stage paid for itself in all three lanes, and twice it falsified the lane's own commit
+message.** Lane `b` had shipped fuzz figures — `989 over-runs / 3,862 under-runs` — that were
+reproducible from no generator the file defined and carried neither seed nor length bound; re-run with a
+committed generator they are 461 / 1,669 at `ae30fee5` and 0 / 1,670 after. Lane `c` had written a
+comment asserting Grep's `+1` was an over-reservation; dropping it makes cap 3,037 return 3,038 bytes.
+Lane `a`'s M13 mutation **survived its first pass** because the assertion sliced the status bar from the
+offset *after* the sentinels it was checking for — the mutation was fine, the assertion's window was
+wrong. That is a distinct failure mode worth naming: a surviving mutation indicts the assertion's window
+before it indicts the mutation's relevance.
+
+**E73's recorded Step was too narrow and the fix is a deletion.** The Step said to make the ZWJ
+look-ahead refuse to absorb a Control, treating the Control as the special case. It is not: the whole
+machine had **inverted semantics** after E68 moved `string()` from codepoint splitting to ICU cluster
+segmentation, under which a bare ZWJ cluster means UAX #29 broke *before* it — nothing joined. A ZWJ
+that genuinely joins is already inside one cluster. Removing the machine therefore changes nothing about
+real ZWJ sequences, which the supervisor verified independently before the merge (`TAB ZWJ 👍` 0 → 6,
+`a TAB ZWJ 👍` 1 → 7, `👨‍👩‍👧` unchanged at 2, lone `👍` unchanged at 2). The removal orphaned
+`Width::isEmoji()` and turned `candy-core`'s level-5 phpstan job red — the lane found that, kept the
+method per the standing dormant-code rule, and justified NOT wiring it with an ICU measurement showing
+its three extra ranges are majority-narrow.
+
+**The nine-lib stale closure is the round's most transferable finding.** After `sugar-crush`'s closure
+was restored and verified 18/18, a sibling sweep of 16 libs came back **all rc 0** — and nine of them
+had `vendor/sugarcraft/candy-core` as a stale Packagist copy (`Width.php` md5 `f2a3558f…` / 33,275 B
+against the worktree's `270fc3f2…` / 38,125 B). Those nine said nothing whatever about the change they
+were meant to verify. Only 4 of 16 were signal. **"The closure is intact" is a per-lib fact, and the
+skip-count alarm is a `sugar-crush` alarm that has no sibling equivalent** — the siblings must be
+checked by content, per lib.
+
+Worse, the standard round-trip does not fix all of them: **`--fix --strict-closure` walks `require`
+only**, and `candy-buffer` carries `sugarcraft/candy-core` in **`require-dev`**, so it survived the
+whole repair untouched. It needed a hand-injected scratch `repositories[]`, a `composer update`, and a
+`git checkout --` of that one manifest. The proof that any of this mattered: **`candy-buffer`'s
+assertion count moved 1,621 → 1,661** the moment it tested the real dependency — same test files, +40
+assertions, purely from no longer running against a stale vendored copy.
+
+**Six new backlog entries, E74–E79.** The one that matters most is **E74**: `sugar-crush/README.md`
+tells users that a hostile project-tier `disabledTools` "means naming every tool it removes — a value
+you can see", while `LayeredSettings.php` records the measured counterexample
+`{"disabledTools":["[!B]*"]}` — eight characters, leaves only `Bash`. The tier design is sound; the
+documentation of it advertises a safety property the code does not have, in the file most likely to be
+read and least likely to be re-derived. E75 (README calls `config.json` deprecated; the source argues
+at length that it is not) and E76 (`Chat.php`'s docblock claims the `App`/`Tui\Renderer` system is
+constructed by nothing, while `bin/sugarcrush:225` constructs it) are the same species. E78 records
+that nothing ties `Bootstrap`'s shipped tool caps to the nudge floor lane `c` just spent a round
+pinning — a future cap below ~1,400 bytes silently reopens the dead band. E77 and E79 are deliberately
+not scheduled: E77 is unreachable while `ext-intl` is hard-required, and E79 is a rendering-semantics
+decision with foundation-wide blast radius, in the safe (under-count) direction.
+
+`statusLine` shipped user-tier-only, which was the whole security requirement: it is in `LAYERED_KEYS`
+and deliberately absent from `PROJECT_TIER_KEYS`, so `projectLayer()`'s existing filter drops a
+project-supplied `statusLine` before the merge. Its timeout is **derived** (`REFRESH_SECONDS / 2.0`)
+rather than invented, so overlapping runs are impossible by construction rather than by luck.

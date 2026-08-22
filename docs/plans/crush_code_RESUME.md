@@ -6,23 +6,26 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW-41. ROUND 41 — TWO FINDINGS LANDED, THREE LANES IN FLIGHT — read this first, then §0 for the standing rules
+## 0-NOW-42. ROUND 41 CLOSED — five findings fixed, six recorded, and a closure that was stale in nine libs — read this first, then §0 for the standing rules
 
-**SUITE FLOOR: `8909 / 101051 / 1 skipped / rc 0` at `ae30fee5`**, supervisor-measured in the live tree
-AFTER restoring the path-repo closure (see the red block below — two earlier runs this round were void).
-Supersedes every earlier figure (8905 held the round-40 boundary). The figure was PREDICTED from the
-+4 tests / +29 assertions lane delta and matched **to the assertion** — keep doing that every round; a
-mismatch is the cheapest possible detector of a bad merge.
+**SUITE FLOOR: `8978 / 105031 / 1 skipped / rc 0` at `7852d79e`**, supervisor-measured in the live tree
+after merging all three round-41 lanes. Supersedes every earlier figure (8909 held mid-round-41, 8905
+the round-40 boundary). The merged total was PREDICTED from the lanes' deltas — lane `a` +61, lane `c`
++8, lane `b` zero (it touches `candy-core`/`candy-sprinkles`, not this suite) — and matched **to the
+assertion**. Keep doing that every round; a mismatch is the cheapest possible detector of a bad merge.
 **Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`). 18 symlinks in
 `sugar-crush/vendor/sugarcraft/`; `md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
 `php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
 
-**Fourteen sibling libs re-verified green against the live `candy-core` at `ae30fee5`** — candy-core
-795/7181/25skip (was 785/7134 — the +10/+47 is exactly E52's new tests), candy-sprinkles 750/2623,
-candy-forms 1823/2973, candy-hermit 144/516, candy-kit 143/486, sugar-bits 493/1015,
-sugar-gallery 92/252, sugar-stickers 215/420, sugar-toast 190/365, sugar-veil 201/406,
-sugar-dash 5853/9154 (Warnings: 1, Skipped: 1 — pre-existing, rc 0), sugar-table 456/1024,
-sugar-charts 543/1259, sugar-calendar 147/364. Do this whenever a lane touches `candy-core`.
+**Sibling libs re-verified green against the live `candy-core` at `7852d79e`** — candy-core
+799/7210/25skip (was 795/7181; the +4/+29 is E73's tests, whose fuzz assertions are deliberately
+aggregated), candy-sprinkles 751/2629, candy-buffer 274/1661, candy-async 69/141,
+candy-testing 129/230/1skip, candy-mouse 121/269, candy-input 276/40696/1skip, honey-bounce 193/5571,
+candy-zone 120/339, candy-shell 333/691, candy-shine 339/667 (Warnings: 1, pre-existing, rc 0),
+candy-forms 1823/2973, sugar-bits 493/1015, sugar-charts 543/1259, candy-kit 143/486.
+candy-ansi 302/760, candy-layout 147/847, candy-fuzzy 206/4478 have **no** `vendor/sugarcraft/` at all
+— they do not depend on `candy-core` and are unaffected either way. Do this whenever a lane touches
+`candy-core`.
 
 ### 🔴 READ THIS BEFORE YOU TRUST ANY SUITE FIGURE — the closure can be gone and the suite still says OK
 
@@ -53,6 +56,41 @@ the update.** ⚠️ `--fix --strict-closure` walks `require`, not `require-dev`
 (and `candy-vcr` under `sugar-dash`) legitimately stay Packagist copies in eight libs. That is what CI
 does too. `sugar-crush` itself must be **18 of 18**. Do not "fix" the residue.
 
+🔴 **NEW, ROUND 41 — "the closure is intact" IS A PER-LIB FACT, NOT A REPO-WIDE ONE, AND THE SIBLING
+SWEEP IS WHERE IT BITES.** After the closure was restored for `sugar-crush` (18/18, verified), **nine
+sibling libs still had `vendor/sugarcraft/candy-core` as a stale Packagist copy** — candy-buffer,
+candy-async, candy-testing, candy-mouse, candy-input, honey-bounce, candy-zone, candy-shell,
+candy-shine. All nine reported **rc 0 and said nothing at all** about the `candy-core` change they were
+supposed to be verifying: their vendored `Width.php` was md5 `f2a3558f…` / 33,275 B against the
+worktree's `270fc3f2…` / 38,125 B. Only 4 of 16 libs in that sweep were real signal, and the sweep
+would have been reported as a clean pass.
+
+**So: verify the sibling closure BY CONTENT, per lib, before believing a sibling sweep.** The skip-count
+alarm is a `sugar-crush` alarm — it does not exist in the siblings, which have no equivalent canary.
+```sh
+LIVE=$(md5sum candy-core/src/Util/Width.php | cut -d' ' -f1)
+for d in <libs>; do p=$d/vendor/sugarcraft/candy-core
+  printf "%-16s link=%s match=%s\n" "$d" "$(php -r "echo (int) is_link('$p');")" \
+    "$([ "$(md5sum $p/src/Util/Width.php | cut -d' ' -f1)" = "$LIVE" ] && echo yes || echo NO)"; done
+```
+⚠️ **`--fix --strict-closure` walks `require` ONLY, so a `require-dev` sibling dep is never injected and
+`composer update` will NOT fix it.** `candy-buffer` carries `sugarcraft/candy-core` in **`require-dev`**
+and stayed a Packagist copy through the whole round-trip. The fix is a hand-injected scratch
+`repositories[]` for that one lib, `composer update`, then `git checkout -- <lib>/composer.json` —
+same discipline, done by hand:
+```sh
+cp candy-buffer/composer.json /tmp/<unique>.bak      # scratch, exact-path
+php -r '$f="candy-buffer/composer.json"; $j=json_decode(file_get_contents($f),true);
+  $j["repositories"]=[]; foreach(["candy-core","candy-ansi","candy-input","candy-pty"] as $d)
+  $j["repositories"][]=["type"=>"path","url"=>"../$d","options"=>["symlink"=>true]];
+  file_put_contents($f, json_encode($j, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)."\n");'
+(cd candy-buffer && composer update --quiet) && git checkout -- candy-buffer/composer.json
+```
+**`candy-buffer`'s assertion count moved 1,621 → 1,661 the moment it tested the real `candy-core`.**
+That +40 is the measure of how blind the stale run was — same test files, different vendored dependency.
+🔴 **NEVER commit that `repositories[]` block** (hard fatal in a split-repo clone);
+`php tools/check-path-repos.php --no-lib-path-repos` must exit 0 before you commit.
+
 ### CONCURRENCY IS **3**, BY EXPLICIT USER INSTRUCTION — the round-40 cap is LIFTED
 
 Given 2026-08-22: *"continue with concurrency of 3 and us agents with workflows"*. The round-40
@@ -61,7 +99,7 @@ must not be re-applied**. `docs/plans/crush_code_concurrency.md` stays the autho
 its own arithmetic says sustainable N = 3, hard cap 4. A read-only scout does not count against the
 budget. ⚠️ **P8.8 and P8.13 still collide with each other** — never bundle those two.
 
-### WHAT LANDED — `ae30fee5`, supervisor-verified by my own full-suite run
+### WHAT LANDED FIRST IN ROUND 41 — `ae30fee5`, supervisor-verified by my own full-suite run (the three lanes came after; see below)
 
 - **E52 — the modifier merge.** `candy-core`'s `;<mod>` rebuild REPLACED the whole `KeyMsg` from the
   parameter, discarding any flag the key table's own arm had set. ⚠️ **The backlog named only
@@ -75,7 +113,7 @@ budget. ⚠️ **P8.8 and P8.13 still collide with each other** — never bundle
   `timeout:` will not help. 🔴 **E61's L STAYS OPEN** — a fiber or a fork for an unbounded all-PHP
   chain. Do not let "E61 is done" close it.
 
-### ⚠️ THINGS THAT CHANGE HOW YOU WORK — carried forward, plus two new ones
+### ⚠️ THINGS THAT CHANGE HOW YOU WORK — carried forward (round 41 adds three more, further down)
 
 **NEW — NEVER ADD A SKIPPED TEST TO CLOSE A TIMING-DEPENDENT BRANCH.** E61's all-bounded branch is
 reachable only via per-hook `proc_open` overhead: four hooks each declaring 10ms **denied on some runs
@@ -109,55 +147,108 @@ had just been told about the pattern.
 
 **A green suite is not a pinned invariant. Mutate the clause, or you have not pinned it.**
 
-### 🚧 IN FLIGHT RIGHT NOW — three lanes, launched as a Workflow
+### ✅ ROUND 41'S THREE LANES ALL LANDED — `8e01450e` (b), `61c073f8` (c), `7852d79e` (a)
 
-Run ID `wf_0ae3956d-f31`; script at
-`~/.claude/projects/-home-sites-sugarcraft/<session>/workflows/scripts/crush-round-41-remainder-wf_0ae3956d-f31.js`.
-Each lane is a **full-repo `cp -a` copy at `ae30fee5`**, verified isolated (every
-`vendor/sugarcraft` symlink resolves inside its own lane). Each runs implement → adversarial review →
-fix, with the fix stage entered only on a BLOCKING/MAJOR verdict.
+Run `wf_0ae3956d-f31`, 9 agents, 0 errors, ~93 min wall clock. Each lane was a full-repo `cp -a` copy at
+`ae30fee5` running implement → adversarial review → fix. **All three entered the fix stage** (3, 5 and
+several blocking/major findings respectively) — the review stage is not ceremony, it caught real defects
+in all three lanes including two the lane's own commit message had asserted as measured.
+**Merged with zero conflicts**, because the split was chosen so no two lanes open the same file.
 
-| lane | dir | item | files it alone holds |
-|---|---|---|---|
-| `a` | `/home/sites/crush-lane-a` | `statusLine` (greenfield M) | `src/Config/LayeredSettings.php`, `src/Cli/Bootstrap.php`, `src/Chat.php`, BOTH renderers, + a new `src/` file |
-| `b` | `/home/sites/crush-lane-b` | E73 (candy-core ZWJ over-run) | `candy-core/src/Util/Width.php` |
-| `c` | `/home/sites/crush-lane-c` | E70 + E71 + E72 | `src/Tools/BuiltIn/{Grep,Glob,Read}.php`, `src/Skills/SkillPathNudge.php` |
+- **Lane `a` — `statusLine`, greenfield, +61 tests.** User-tier-only (in `LAYERED_KEYS`, deliberately
+  NOT in `PROJECT_TIER_KEYS`), so a project-tier `statusLine` is dropped before the merge — the RCE-on-
+  clone-and-launch shape is closed by construction. Bounded by `TIMEOUT_SECONDS = REFRESH_SECONDS / 2.0`
+  — **derived, so overlap is impossible rather than merely unlikely**. Sanitised through
+  `Sanitize::untrusted()` **plus a whitespace collapse** (that function preserves LF/CR/TAB, and one LF
+  makes the last frame line two physical rows) **plus `Renderer::untrusted()`'s zone-sentinel strip**,
+  which is the half no brief mentioned and the one that matters: U+E000/U+E001 would otherwise reach
+  `scanRoot()` on the single row that already carries a real `pane:menu` zone. Width via
+  `Width::truncate()` (grapheme-wise), measured after the scroll readout so the segment is genuinely
+  lowest-priority. **18 mutations, 18 killed — but M13 SURVIVED the first pass**: the sentinel test
+  sliced from `strpos('hijacked')` onward, and the sentinels sit *before* that offset, so the assertion
+  was true of the unstripped bar too. Rewritten to count the bar's own sentinels. ⚠️ **The census count
+  in both briefs was wrong**: a new `src/*.php` moves **four** figures in `BuiltInToolCorpusTest` plus
+  **`src/Context/RepoMapBlock.php`'s prose restatement, which that test reads back** — a non-test file.
+- **Lane `b` — E73, `candy-core`.** The recorded Step ("make the look-ahead refuse to absorb a Control")
+  was **too narrow**: the whole ZWJ machine had **inverted semantics** post-E68, so it was removed rather
+  than repaired. Supervisor-verified independently before merge (`TAB ZWJ 👍` 0 → 6; real ZWJ family
+  unchanged at 2). ⚠️ **The first commit's fuzz figures were not reproducible** — no generator, no seed,
+  no length bound — and the review corrected them to 461 over-runs / 1,669 under-runs at `ae30fee5`,
+  0 / 1,670 after. The over-run family (the frame-corrupting direction) is closed outright.
+  It also **unbroke a red CI job**: `candy-core` ships `phpstan.neon` at level 5 and the removal
+  orphaned `Width::isEmoji()`. Kept and documented as a seam with a measured reason NOT to wire it.
+- **Lane `c` — E70 + E71 + E72.** All three premises held, but **a sub-claim inside E70 was itself
+  wrong**: `forPaths()` marks only entries it EMITS, so an unaffordable nudge is DEFERRED, not retired —
+  the old test's failure message asserted the opposite of the truth. Every threshold is now derived from
+  `SkillPathNudge`'s pricing at runtime rather than written down. ⚠️ **A comment the lane wrote in its
+  own first commit ("Grep's `+1` is an over-reservation") was falsified by its own review**: dropping the
+  `+1` makes cap 3,037 return 3,038 bytes. 8 mutations, 8 killed.
 
-**The split was chosen so no two lanes open the same file.** Lane `a` needs `Bootstrap.php` *and*
-`Chat.php`, which is why E59 was NOT scheduled with it — E59 also opens `Chat.php` unless its lane
-extends the stdin `startup` payload instead of the `ProcessExecutor` constructor.
+**Six new backlog entries, E74–E79** — E74 (a live user-facing **security misstatement** in
+`sugar-crush/README.md`: it promises that a project-tier `disabledTools` must name what it removes, and
+`LayeredSettings.php` records the eight-character counterexample `{"disabledTools":["[!B]*"]}` that
+leaves only `Bash`) · E75 (README calls `config.json` deprecated; the source argues at length it is not)
+· E76 (`Chat.php`'s pane-click docblock says the `App`/`Tui\Renderer` system is constructed by nothing;
+`bin/sugarcrush:225` constructs it) · E77 (`nextCluster()`'s no-ext-intl fallback is now wrong for real
+ZWJ — latent, `ext-intl` is hard-required) · E78 (nothing ties `Bootstrap`'s shipped tool caps to the
+nudge floor, so a future cap below ~1,400 silently reopens E70) · E79 (the tab/Extend under-run family
+is a rendering-semantics decision with foundation-wide blast radius, not a bug).
 
-⚠️ **`statusLine` is a COMMAND-EXECUTION key, not a TUI feature.** It MUST be user-tier only; a
-project-tier `settings.json` able to set it is RCE on clone-and-launch. Re-verified at `ae30fee5`:
-**zero** `statusLine` hits in `sugar-crush/src/` and `bin/`, and it is absent from
-`LayeredSettings::LAYERED_KEYS`, so a `statusLine:` in a settings file is silently dropped today. Both
-grep-baits remain baits (`Chat::budgetStatusLine()` is a private `/budget` formatter; `candy-kit`'s
-`StatusLine` is a glyph printer).
+**Lane dirs `/home/sites/crush-lane-{a,b,c}` were removed only after the merges were verified applied.**
+Branches `drain-a`/`drain-b`/`drain-c` remain in the live repo as the recoverable record.
 
-⚠️ **Lane `a` adds a `src/` file, which moves THREE censuses** — two in
-`tests/Tools/BuiltInToolCorpusTest.php` (a file count and a declaration count over `src/`) and
-`BinSugarcrushWiringTest::crushSourceFiles`. All three plus their prose copies must move in the same
-diff, and the lane's new suite total will differ from the floor by MORE than the tests it wrote.
+### ⚠️ NEW WORKING RULES FROM ROUND 41
 
-**WHEN THE LANES RETURN:** drain per `crush_code_concurrency.md` §1.4 (`git fetch <lane> master:…` for
-committed work; `add -N .` + `diff` + `git apply --3way` for uncommitted), predict the merged total from
-the lanes' deltas and check it to the assertion, run the full suite in the live tree yourself, re-verify
-the 14 siblings if lane `b` landed, then `rm -rf` the lane dirs. **Deleting a lane is the only
-irreversible step** — keep it until its patch is verified applied.
+**A FIGURE WITHOUT ITS GENERATOR IS NOT A MEASUREMENT.** Lane `b` shipped `989 / 3,862` in a commit
+message, reproducible from nothing, and its own review could not re-derive them. Every fuzz figure must
+carry its seed, its alphabet, its length bound, its trial count, and the PHP/ICU version. This is the
+same defect class as E69's "0 unexplained" over an alphabet containing no ZWJ.
 
-### THE QUEUE AFTER THESE THREE LANES
+**A MUTATION CAN SURVIVE BECAUSE THE ASSERTION LOOKS IN THE WRONG PLACE.** Lane `a`'s M13 survived
+against a slice taken from the offset *after* the thing being asserted about. When a mutation survives,
+suspect the assertion's WINDOW before you suspect the mutation's relevance.
 
-E59 (**L**, and its recorded Step is confirmed WRONG — there are **three** literal `"Processing:"`
-anchors across **two** tests, one a *negative* assertion that will pass forever if a rewrite misses it;
-keep the tests' structure and replace all three with a liveness anchor a real worker can satisfy) ·
-E61's **L** · the four un-migrated raw-`fwrite` launch warnings the `sglang` lane judged stderr-only ·
-`keybindings` (**L**, DEFER — it fights `KeyBindingRegistry`'s deliberately-static design) · then
-**Phase 9** (interactive-prompt containment: layered A+C, parameter not second tool, **no askpass**) ·
-then the deferred security pass.
+**LET THE LANE'S REVIEW STAGE FIND ITS OWN LANE'S DEFECTS.** The supervisor independently spotted
+lane `b`'s orphaned `isEmoji()` while the lane was still running — and the lane's review found it too,
+diagnosed the red phpstan job the supervisor had missed, and justified not-wiring it with an ICU
+measurement. **Do not pre-empt a review stage that has not finished.**
+
+### THE QUEUE — round 42 and beyond
+
+**Highest value first.** E74 is the only item here that is a **live user-facing security
+misstatement**, and it is a doc-only fix — take it first, bundled with E75 and E76 as one
+documentation-truth lane (all three are "the tree contradicts itself", all three are cheap, and E76
+needs `Chat.php` which nothing else in this queue wants).
+
+- **E74 + E75 + E76** (S each, one lane) — the three false claims round 41 surfaced. Rewrite in place,
+  never delete; each needs the WHAT IT SAID / WHAT IS TRUE NOW / WHY IT STILL EARNS ITS PLACE form.
+- **E78** (S) — one assertion per tool, `intdiv($shippedCap, 8) >= SkillPathNudge::maxBytes()`. Needs
+  `Bootstrap.php`, so it can ride with any lane that already holds it. Cheap and genuinely protective.
+- **E59** (**L**, and its recorded Step is confirmed WRONG — there are **three** literal `"Processing:"`
+  anchors across **two** tests, one a *negative* assertion that will pass forever if a rewrite misses
+  it; keep the tests' structure and replace all three with a liveness anchor a real worker can satisfy).
+  Opens `Chat.php` — do not schedule it alongside E76.
+- **E61's L** — a fiber or a fork for an unbounded all-PHP hook chain. E61's S landed in round 41;
+  🔴 do not let "E61 is done" close this.
+- The four un-migrated raw-`fwrite` launch warnings the `sglang` lane judged stderr-only.
+- **E79** (semantics decision, not a bug) — needs the foundation-wide blast radius costed FIRST.
+- **E77** — nothing to do while `ext-intl` is hard-required; cross-reference it from any composer edit
+  that relaxes that requirement.
+- `keybindings` (**L**, DEFER — it fights `KeyBindingRegistry`'s deliberately-static design).
+- then **Phase 9** (interactive-prompt containment: layered A+C, parameter not second tool,
+  **no askpass**) · then the deferred security pass.
+
+### 🔵 ONE OPEN QUESTION FOR THE USER — do not silently decide it
+
+The user ran `composer update` in several dirs mid-round-41 and the supervisor **reverted the resulting
+root `composer.lock` change** (118 insertions / 115 deletions — aws-sdk 3.390.4 → 3.393.4 and friends)
+before it knew the change was the user's, to keep it out of an unrelated commit. **The user was told and
+has not yet answered.** Do not re-run `composer update` at the root to restore it without asking; do not
+quietly drop the question either.
 
 ---
 
-## SUPERSEDED — round 40's block, kept for its reasoning (its floor 8905 and its spawning cap are BOTH superseded by §0-NOW-41; its lessons are not)
+## SUPERSEDED — round 40's block, kept for its reasoning (its floor 8905 and its spawning cap are BOTH superseded by §0-NOW-42; its lessons are not)
 
 **SUITE FLOOR: `8905 / 101022 / 1 skipped / rc 0` at `33f97cb1`**, supervisor-measured in the live tree
 after merging all three lanes. Supersedes every earlier figure (8879 held the round-39 boundary).
@@ -174,7 +265,7 @@ sugar-bits 493/1015, sugar-gallery 92/252, sugar-stickers 215/420, sugar-toast 1
 sugar-veil 201/406, sugar-dash 5853/9154, sugar-table 456/1024, sugar-charts 543/1259,
 sugar-calendar 147/364. Do this whenever a lane touches `candy-core`.
 
-### 🔴 SUPERSEDED — the round-40 spawning cap. Concurrency is now **3** by explicit instruction; see §0-NOW-41. Kept because the reasoning about who did what by hand is load-bearing for reading round 40's stamps.
+### 🔴 SUPERSEDED — the round-40 spawning cap. Concurrency is now **3** by explicit instruction; see §0-NOW-42. Kept because the reasoning about who did what by hand is load-bearing for reading round 40's stamps.
 
 **Standing instruction, given mid-round-40: _"no more spawning additional agents until session
 resets"_, followed by _"after these steps are all done being merged into the main dirs and lanes
@@ -223,7 +314,7 @@ nothing: `cmd`'s `Read` nudge test (green with the nudge disabled), the `app()` 
 with the two bases mismatched), and every tab assertion (green for any `TAB_WIDTH`). **Mutate the
 clause, or you have not pinned it.**
 
-### ROUND 41's ORIGINAL SCOPE MEASUREMENT — kept for its figures. ⚠️ E52 and E61(S) are now DONE (`ae30fee5`); `statusLine`, E73 and E70-E72 are IN FLIGHT as lanes a/b/c. Read §0-NOW-41 for current state.
+### SUPERSEDED — ROUND 41's ORIGINAL SCOPE MEASUREMENT, kept for its figures. ⚠️ ALL of it is now DONE: E52 and E61(S) at `ae30fee5`, then `statusLine`, E73 and E70–E72 via lanes a/b/c at `7852d79e`. Read §0-NOW-42 for current state.
 
 A scout re-measured the queue at `8add627b`; all figures are its, not the record's.
 
