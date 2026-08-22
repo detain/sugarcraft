@@ -6,6 +6,58 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 48 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-22 from master `5a3fe80b`, tree clean.** Run `wf_220f1204-bf5` (task `w2ng743dx`),
+9 agents, three lanes × implement → adversarial review → fix, concurrency 3.
+
+**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-48-wf_220f1204-bf5.js`
+🔴 **If a limit kills agents mid-round: RESUME if any completed** (`resumeFromRunId: 'wf_220f1204-bf5'`);
+**RELAUNCH if none did**, and improve the brief first — see §0-NOW-48. Either way, **check every lane for
+a dirty tree AND for commits its report does not mention** (E168, E190), and **inspect before reverting**:
+round 47's dirty lanes held ~370 lines of real work, not mutations.
+
+**Base floor `9445 / 132167 / 1 / rc 0` OBSERVED at `5a3fe80b` itself** (E167); the briefs say so.
+
+**Lane dirs** are `cp -a` copies at `5a3fe80b`, 18/18 symlinks resolving inside by `realpath()`.
+⚠️ **DO NOT DELETE until the merged floor is measured.**
+**Each lane now has its OWN scratchpad** `…/scratchpad/r48{a,b,c}/` — round 47 had two lanes independently
+file the same collision finding (E204, E218). Rule 24 in the brief.
+
+| lane | label | items |
+| --- | --- | --- |
+| `a` | seam | **E192 + E193 together** (route `SglangProvider`/`AgentWorkerPool`/`WorktreeManager` onto the seam, plus the idle-tick — either alone ships a defect) · **E195** (channel-6 alphabet) · E196 |
+| `b` | forks | 🔴 **E201 FIRST — it may falsify three rounds of bare-exit work** · **E202 + E209 as one item** (fixing Backend removes the scanner's only real-tree known-positive) · **E206** · E203/E205/E208 |
+| `c` | denial | 🔴 **E219** (a hook DENY reaches neither stderr nor `--output-format text`; five places say otherwise) · **E210** · **E211**'s NonInteractive half · **E212** (real STDIN can HANG the suite) |
+
+### SUPERVISOR DECISION MADE THIS ROUND — E194 IS DEFERRED, DELIBERATELY
+
+E194 wants a `PHPUnit\Runner\Extension` resetting `RuntimeNoticeSink` per test, which needs an
+`<extensions>` block in `sugar-crush/phpunit.xml` — supervisor-owned. **Deferred to after E192 lands**, for
+two reasons the entry itself supplies: its own generator note says *"re-run before acting; the answer
+changes as E192 lands"*, and E192 changes which classes arm the sink. Registering a global test extension
+also shifts test infrastructure and the floor with it. **Re-run the generator (mutate `record()` to append
+its calling test class, run the suite, `sort | uniq -c` — round 47 measured 262 armed records across six
+classes), THEN decide.** The supervisor does this edit, never a lane.
+
+### WHAT THE SUPERVISOR MUST DO WHEN IT LANDS
+
+Merge `a` → `b` → `c`. Backlog conflict expected; keep both sides, renumber **from E220**,
+**longest-id-first** (`Ec48-10`/`-11` would otherwise be eaten by the `Ec48-1` pattern), then grep the
+whole tree for `Ea48-`/`Eb48-`/`Ec48-`. Real overlap via `git diff --name-only <base>..HEAD` + `comm -12`,
+never lane self-reports.
+
+⚠️ **Read-side hazards.** Lane `a` owns `src/Chat.php` and lane `c` has an E211 finding in
+`Chat::finishToolCalls()` — lane c was told to report, not edit. **Lane `b` owns `tests/MCP/`, where the
+suite's single skip lives** — if the merged skip count is not exactly 1, that is the first thing to check.
+And if lane b falsifies E201, the round-46/47 bare-exit entries need re-reading, not silent deletion.
+
+**Predict tests additively; assertions as a LOWER BOUND. Lane a adds no new `src/` files this round** (it
+edits three existing ones), so per-file censuses should decompose linearly — expect the bound to be tight
+(E191).
+
+---
+
 ## 0-NOW-48. ROUND 47 CLOSED (floor 9445) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR: `9445 / 132167 / 1 skipped / rc 0` at `fb2d13d8`** (merges `e8e35fa4`, renumbering
