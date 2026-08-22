@@ -876,6 +876,93 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
     }
 
     /**
+     * A failure that carries no `error` object at all must be documented as
+     * one, or not documented at all.
+     *
+     * `doctor` exits 1 when a check came back `FAIL` and its document is
+     * `{"result":{…}}` with no `error` key — the failing checks ARE the answer.
+     * A consumer that reads `.error.type` to decide whether the run failed
+     * reads `null` on that one, which is the single most useful thing this
+     * section can tell it and the one thing it did not say. Pre-existing rather
+     * than introduced, and found by measuring the binary rather than by reading
+     * the source.
+     *
+     * DERIVED IN BOTH DIRECTIONS. If every failure document in `src/` grows an
+     * `error` key, the paragraph becomes a warning about nothing and this reds
+     * just as loudly as it does for the paragraph going missing.
+     */
+    public function testAFailureWithNoErrorObjectIsDocumentedExactlyWhenOneExists(): void
+    {
+        $bare = [];
+
+        foreach ($this->shippedSourceFiles() as $relative) {
+            $tokens = $this->significantTokens($this->repoFile($relative));
+            $ranges = $this->functionRanges($tokens);
+            $n = count($tokens);
+
+            for ($i = 0; $i < $n; $i++) {
+                if (!$tokens[$i]->is(T_STRING)
+                    || !in_array($tokens[$i]->text, ['emitDocument', 'emitErrorDocument'], true)
+                    || ($tokens[$i - 1]->text ?? '') !== '::'
+                    || ($tokens[$i + 1]->text ?? '') !== '('
+                    || ($tokens[$i + 2]->text ?? '') !== '[') {
+                    continue;
+                }
+                [$entries] = $this->argumentTokens($tokens, $i + 3);
+                $keys = [];
+                foreach ($entries as $entry) {
+                    if (($entry[0] ?? null)?->is(T_CONSTANT_ENCAPSED_STRING) === true
+                        && ($entry[1]->text ?? '') === '=>') {
+                        $keys[] = trim($entry[0]->text, "'\"");
+                    }
+                }
+                if (!in_array('result', $keys, true) || in_array('error', $keys, true)) {
+                    continue;
+                }
+
+                // Every EXIT_* the enclosing function can leave with after this
+                // document. An over-approximation on purpose: the claim is
+                // "a failure CAN arrive with no error object", so a branch that
+                // might return non-zero is exactly the evidence for it.
+                $end = $this->enclosingFunctionEnd($ranges, $i, $n);
+                $codes = $this->exitCodes();
+                for ($k = $i; $k <= $end && $k < $n; $k++) {
+                    if (!str_starts_with($tokens[$k]->text, 'EXIT_')
+                        || ($tokens[$k - 1]->text ?? '') !== '::') {
+                        continue;
+                    }
+                    self::assertArrayHasKey($tokens[$k]->text, $codes, 'unknown exit constant');
+                    if ($codes[$tokens[$k]->text] !== 0) {
+                        $bare[$relative] = true;
+                    }
+                }
+            }
+        }
+
+        $flat = (string) preg_replace('/\s+/', ' ', $this->readme());
+        $documented = str_contains($flat, 'a failure does not always carry an `error` object');
+
+        if ($bare === []) {
+            self::assertFalse(
+                $documented,
+                'README.md warns that a failure may carry no `error` object, and no branch in src/ '
+                . 'emits one any more. A warning about nothing is worse than no warning: it sends a '
+                . 'consumer to write a null check it will never need.',
+            );
+
+            return;
+        }
+
+        self::assertTrue(
+            $documented,
+            'README.md does not say that a failure can arrive with NO `error` object, and '
+            . implode(', ', array_keys($bare)) . ' emits one. `doctor` is the shipped case: it exits '
+            . '1 on a FAIL check with `{"result":{…}}` and no `error` key, so a consumer branching on '
+            . '`.error.type` to decide whether the run failed reads null exactly there.',
+        );
+    }
+
+    /**
      * The retracted claim may appear only as a quotation of itself.
      *
      * STRUCTURAL, NOT PROXIMITY-BASED, and deliberately so — the same lesson

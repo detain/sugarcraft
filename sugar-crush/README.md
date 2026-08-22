@@ -390,7 +390,7 @@ instead of calling a provider, and its `1` is a first attempt — retrying it fr
 outside is the only retry it gets.
 
 With `--output-format json`, stdout is always exactly one JSON object: either
-`{"result": "..."}` or `{"result": null, "error": {"type": "usage" |
+`{"result": <the answer>}` or `{"result": null, "error": {"type": "usage" |
 "provider_configuration" | "installation" | "backend" | "encoding" |
 "not-found" | "mcp-config", "message":
 "...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
@@ -413,6 +413,20 @@ does not hold, and `mcp list` on a **trusted** `.mcp.json` that could not be
 read or decoded. Both exit `1` — the store and the file were opened, so
 something was attempted; an absent, out-of-tree or untrusted `.mcp.json` is an
 answer rather than a failure and exits `0` with a `status` field saying so.
+
+Two shapes of that contract are easy to over-read, so both are stated
+plainly. **`result` is not always a string.** It is one on the one-shot path
+(`-p`/`run`), where the answer *is* text; every subcommand puts an object
+there — `{"result":{"checks":[…],"failed":2}}`, `{"result":{"sessions":[…]}}`.
+And **a failure does not always carry an `error` object.** `doctor` exits `1`
+when any check came back `FAIL`, and its document is still
+`{"result":{…}}` with no `error` key at all, because the failing checks *are*
+the answer and naming one of them `error.type` would say less than the report
+already does. (MEASURED: `sugarcrush doctor --output-format json` on an
+install with a failing check → rc 1, one `result` object, no `error`.) So
+branch on the **exit code** first and on `error.type` second; a consumer that
+reads `.error.type` to decide whether the run failed will read `null` on that
+one.
 
 There is exactly one exception, and it is not a case of the JSON renderer
 being unavailable — it is the caller asking for a rendering nothing implements:
