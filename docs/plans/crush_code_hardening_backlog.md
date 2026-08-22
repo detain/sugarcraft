@@ -7755,3 +7755,214 @@ about the same predicate. (2) Emptying `OUT_OF_SCOPE` does not make this test *f
 reds the run, but only because this suite's `phpunit.xml` sets `failOnRisky="true"`; the guard that
 catches an emptied map on its own terms, with a message naming the file, is
 `testNoDirectoryWithUnreapedForksIsUnaccountedFor()`. Both halves measured by mutation.
+### Ec47-1 — a permission refusal and a hook DENY are indistinguishable by the time an event exists
+
+**Recorded 2026-08-22 by round-47 lane c, while implementing E173.** Severity: low. **Measured.**
+
+**What.** `NonInteractive`'s new `refusals` array reports every tool call the run blocked, and cannot say
+WHICH KIND of block it was. That is upstream of the class rather than a shortcut in it:
+`HookManager::resolveAsk()` settles a refused ASK as `HookResult::deny($ask->message)`, and
+`Runtime::gate()` renders every non-allowed verdict as `Hook denied: <message>` — so a refusal from
+`HeadlessPermissionPrompt` (no tty, or an explicit `n`) and a hook that denied outright arrive as the
+same string. Both belong in the array; only the sub-classification is missing.
+
+**Step.** Give the settled-ASK verdict something a consumer can branch on — a distinct prefix, or a field
+on `ToolResult` — and add a `kind` to each `refusals` entry. Files: `src/Runtime.php`,
+`src/Hooks/HookManager.php`, `src/Cli/NonInteractive.php`. Out of round-47 lane c's file list.
+
+### Ec47-2 — the denial prefixes have a roster and the PRODUCERS do not render from it
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: low. **Observed.**
+
+**What.** `Chat::DENIED_ERROR_PREFIXES` is the named agreement about which error texts mean "this never
+ran" — the renderer reads it, and as of E173 so does `NonInteractive`. The three producers do not:
+`Runtime::gate()` and `Chat::finishToolCalls()` each interpolate the literal `"Hook denied: …"` by hand.
+This is exactly the shape E118 promoted the launch formats for — a `public const` that the emitting code
+does not render FROM is a decoration, and every reader of the roster believes something the producers
+have not agreed to.
+
+**Step.** Have the producers `sprintf()` from the roster (or from a constant the roster is derived from),
+and pin the obligation the way `BootstrapLaunchFormatConstantsTest` pins the launch formats. Files:
+`src/Runtime.php`, `src/Chat.php`. Out of lane.
+
+### Ec47-3 — every `NonInteractive::run()` test reads the real STDIN, and a stdin that never EOFs hangs the suite
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: medium for CI, invisible locally. **Measured.**
+
+**What.** `NonInteractive::run()` calls `self::readStdinIfPiped()` with the default `\STDIN`, which
+`stream_isatty()` reports false for anything that is not a terminal — including a socket that is open and
+will never reach EOF. MEASURED on PHP 8.3.6: `vendor/bin/phpunit --filter NonInteractive` run with the
+agent harness's socket on fd 0 sat in `do_poll` for over five minutes with zero output and had to be
+killed; the identical command with `</dev/null` finished in **0.84s**. Nothing about the tests changed.
+Any runner that hands the suite a pipe it keeps open — a CI step that pipes into `phpunit`, a supervisor
+that holds the child's stdin — hangs the whole suite, and the symptom is silence rather than a failure.
+
+**Confirmed twice more at the round-47 FIX stage, and it is worse than first recorded.** (a) The hang
+produces **zero test output** — not a partial run, not a slow run, a blank timeout — so a CI runner shows
+no failing test name and nothing to grep for. (b) It reproduced in this session against a *backgrounded*
+shell rather than a piped one: the same `--filter NonInteractiveRefusalDocumentTest` that finishes in
+0.65s with `</dev/null` hung indefinitely when launched from a background job whose fd 0 was live, and had
+to be killed by PID. Any parent that leaves fd 0 open is enough; a pipe is not required. (c) Round 47 added
+`NonInteractiveRefusalDocumentTest`, in which six of eight tests reach `NonInteractive::run()`, to the
+seven files' worth of such tests already present — so the blast radius grew this round.
+
+**Step.** Two halves, and the first is cheap: point `tests/bootstrap.php` (or the affected tests) at a
+closed stdin so the suite cannot depend on its runner's fd 0. The second is the real fix — `run()` has no
+seam for its input stream although `readStdinIfPiped($stream = \STDIN)` already takes one, so add the
+parameter and thread it. Files: `src/Cli/NonInteractive.php`, `tests/Cli/NonInteractive*Test.php`.
+
+### Ec47-4 — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
+
+**Recorded 2026-08-22 by round-47 lane c, finishing E188.** Severity: informational.
+
+**What.** `BootstrapLaunchFormatConstantsTest`'s doc-block cites `Failures: 3` and `Failures: 2` for the
+two `mcpClient()` reword mutations. A `Failures:` count is not a class cardinality — it counts what the
+mutation did — so the new guard deliberately allows it, but E188's preferred form is still the NAMES, and
+these two were not re-measured this round because each costs a mutation run.
+
+**Step.** Mutate both `mcpClient()` messages outside `'could not be fully started'`, record the failing
+test names, and replace the two counts.
+
+### Ec47-5 — the class-total guard covers two files, and widening it needs a decision first
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: informational.
+
+**What.** `BootstrapLaunchFormatConstantsTest::testNoDocBlockInThisLanesFilesQuotesAPhpunitClassTotal()`
+scans exactly the two files round-47 lane c owns. Other files carry the same shape, and some of those
+figures are anchored to a NAMED COMMIT, which is a materially different claim from one taken at "the tree
+as it was" — a commit-anchored figure is reproducible and does not rot. Deciding that for every file in
+`tests/` is a repo-wide judgement, not a scope this guard should have taken silently.
+
+**PARTLY ANSWERED at the round-47 fix stage, and the answer changes the remaining question.** The review
+found the guard's alphabet was narrower than its headline: a **prose** total (`5 tests / 27 assertions`)
+SURVIVED a mutation into a guarded file, and one was live in scope. The scanner now reads the prose form
+too, and the anchoring question had to be settled to do it — an anchored figure IS accepted, the anchor
+being `round <n>` or a backticked sha, and the window is **the sentence**, not "within N characters".
+"Within N characters" was the shape this Step proposed and it is the wrong one: three correct
+round-anchored citations in the same file sit 62–110 characters from their anchor, so any N wide enough
+to accept them also accepts a figure a paragraph away from an unrelated round number. The sentence is the
+unit of provenance. The carve-out is **prose-only**: PHPUnit's two literal forms read as a fresh
+measurement of the current tree whatever sentence they sit in.
+
+**Step, reduced to what is left.** (a) Decide whether an ANCHORED LITERAL should also be allowed — this
+file's own known-positive fixture is one (`measured at \`06126017\`: … Tests: 14, Assertions: 92`) and the
+guard still refuses it, which the fixture currently depends on. (b) Widen the roster past the two files
+lane c owns to all of `tests/`, and expect the prose arm to find instances.
+
+### Ec47-6 — the doc-page sweep still cannot see two page shapes
+
+**Recorded 2026-08-22 by round-47 lane c, alongside E187.** Severity: informational. **Measured.**
+
+**What.** After this round's widening, `docPages()` collects every `*.md` at `sugar-crush/` plus every
+`*.md` anywhere under `sugar-crush/docs/`. It cannot see (a) a page outside the package — the monorepo
+root `README.md` and `docs/` quote sugar-crush behaviour in places, and (b) a launch line quoted inside a
+non-markdown page. Neither is a live miss today: the wider alphabet nominates the same (constant, page)
+set the narrow one did.
+
+**Two more collector gaps, added at the round-47 fix stage.** (c) `markdownPagesUnder()` selects on
+`glob($root.'/*.md')` and `getExtension() === 'md'`, both case-sensitive on Linux, so `README.MD`,
+`*.markdown` and `*.mdx` are invisible, as is a dotfile page. MEASURED on PHP 8.3.6: no such file exists
+in `sugar-crush/` today (`*.md` at the root: 3; under `docs/`: 12; non-`.md` files under `docs/`: none),
+so it is not a live miss — but it is an alphabet gap and rule 11 says an alphabet is part of a claim.
+
+**And a POSITIVE result worth keeping, because it is the evidence the "same set" claim rests on.** The
+round-47 review re-ran `pagesQuoting()` over **5,427 files** across the whole monorepo
+(`*.md|html|htm|txt|rst|json|jsonc|yml|yaml|php`, excluding `vendor/`, `.git/` and `sugar-crush/tests/`).
+Every hit outside the sweep's own page set was either a `docs/plans/*` file or an instance of the known
+coincidence class for the two near-degenerate formats (`STDERR_LINE_FORMAT`, `PROJECT_TIER_REFUSAL_FORMAT`).
+No real doc-page miss, under an alphabet roughly 360x wider than the one that produced the claim.
+
+**Step.** Decide whether a monorepo-root page quoting a sugar-crush launch line is in this guard's remit;
+if so, extend the collector's root and expect the roster to grow. Separately, widen the extension test to
+be case-insensitive — cheap, and it closes (c) without any roster movement.
+
+### Ec47-7 — E187's own prescribed algorithm could not have covered the page E187 was written about
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription refuted.**
+
+**What.** E187's Step says: derive each format's LONGEST LITERAL SPAN, impose a minimum span length, and
+list the formats that fall below it as "unsweepable". Measured against the tree:
+`Bootstrap::PROJECT_TIER_REFUSAL_FORMAT` is `'ignoring %s — %s'`, whose longest span is `'ignoring '` —
+nine characters of ordinary English, which is precisely why the hand-run sweep nominated `README.md` over
+"reject one at exit 2 rather than ignoring it". Any threshold high enough to drop that false positive
+marks the format unsweepable, and that format's reader is `docs/TROUBLESHOOTING.md` — **the one page E187
+cites as its find**. The implemented instrument matches the WHOLE SHAPE instead (every literal span in
+order, each conversion a bounded run of page text), which uses all of the format's text rather than the
+best ninth of it, and has no unsweepable set at all.
+
+**Step.** None; recorded so the span-plus-threshold design is not retried. It is the eighth reviewer or
+backlog prescription measured against the tree and found not to do what it was prescribed for.
+
+### Ec47-8 — the sweep emits no wildcard between two adjacent conversions
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: informational. **Observed.**
+
+**What.** `shapePatternFor()` skips the bounded wildcard when either side of a conversion is an empty
+literal span, which is right at the ends of a format and wrong in the middle: a hypothetical `'%s%s ran'`
+would compile to a pattern demanding the two interpolated runs be CONTIGUOUS in the page text, so a real
+quotation of it would not be nominated. No promoted format has adjacent conversions today, which is why
+this is a note rather than a fix.
+
+**Step.** Emit the wildcard whenever the conversion is interior, regardless of whether the neighbouring
+span is empty, and add the case to the fixture.
+
+### Ec47-9 — the three lanes share one scratchpad directory, and a generic filename is a cross-lane collision
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Observed, first-hand.**
+
+**What.** All three implementers are subagents of one session, so `.../<session-uuid>/scratchpad` is the
+SAME directory for all of them. Lane c wrote its baseline suite output to `scratchpad/baseline_head.txt`;
+partway through, that file was truncated and re-headed by a run whose banner read
+`Configuration: /home/sites/crush-lane-a/sugar-crush/phpunit.xml`. Two processes held the same path open
+with `>`, so the surviving bytes were an interleave of two different suites and the figure was void. The
+brief's `/tmp` rule already says "unique probe names"; it reads as being about `/tmp/sc_*` fixtures, and
+the scratchpad is the more likely collision because every lane reaches for the same obvious filenames.
+
+**Step.** Say in the brief that each lane writes under `scratchpad/lane-<x>/`. Cheap, and it removes a
+whole class of void measurement.
+
+### Ec47-10 — a hook DENY reaches neither stderr nor `--output-format text`, and five places said otherwise
+
+**Recorded 2026-08-22 by round-47 lane c, at the fix stage.** Severity: medium (a silently-dropped
+refusal). **Measured. The prose is fixed; the behaviour is not.**
+
+**What.** `--output-format text` carries no refusal list, and the reason given for that in four
+doc-blocks and in shipped `README.md` was "every refusal is already on stderr". False. The sentence was
+lifted from `HeadlessPermissionPrompt`, where it is true of that class's four shapes, and generalised.
+That class settles an ASK and is reached from nowhere else; a plain `HookResult::deny()` returns out of
+`Runtime::gate()` before `settleAsk()` is called, and `Runtime` writes to stderr nowhere at all.
+MEASURED on PHP 8.3.6, driving the shipped gate's `rm -rf ./build` denial through a real `EngineBackend`:
+**zero bytes on stderr**, tool not executed. On `text` that refusal reaches NEITHER channel — the answer
+prints, the tool silently did not run, and nothing says so.
+
+All five prose sites are corrected and the mechanism is pinned
+(`NonInteractiveRefusalDocumentTest::testRuntimeWritesNothingToStderrSoATextFormatDenialIsSilent()`,
+which reds the day `Runtime` gains a stderr write). **The behaviour is unchanged and that is the deferral.**
+
+**Step.** Write the refusal to stderr on the DENY path in `Runtime`, once, at the point `gate()` returns a
+denial — not on stdout, which under `text` is the answer and nothing else, and not in `NonInteractive`,
+which is not the only caller of the engine. Then update the five sites (they name themselves in the test's
+failure message) in the same change. Files: `src/Runtime.php`, `src/Cli/NonInteractive.php`,
+`src/Cli/HeadlessPermissionPrompt.php`, `README.md`, `tests/Cli/NonInteractiveRefusalDocumentTest.php`.
+
+### Ec47-11 — the ninth reviewer prescription measured, and it named the wrong carve-out
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription corrected.**
+
+**What.** Round 47's review correctly found that the class-total guard's alphabet was narrower than its
+headline, and prescribed: widen to the prose form "with a `Failures:` carve-out". The finding is right and
+the prescription is not. A `Failures:` carve-out is **inert** against the prose form — `Failures: 2` puts
+the word before the digits, and the prose pattern requires digits first, so it can never match. The
+carve-out that is actually required is one the review did not name: **anchored history**. MEASURED on PHP
+8.3.6 — the naive prose widening reports four hits in the two guarded files, and **three of them are
+correct** round-anchored citations of a round-44 incident in a different tree. Shipping the prescription
+as written would have redded three correct paragraphs and taught the next reader that the guard is noise.
+
+This is the ninth prescription across four rounds to be measured against the tree and found not to do its
+job as written, and the second where the FINDING was sound and only the REMEDY was wrong. That distinction
+is worth keeping: "the reviewer is wrong" and "the reviewer's fix is wrong" call for different responses,
+and only the second one still needs the finding acted on.
+
+**Step.** None — recorded so the pattern is countable. The rule it supports is already standing: measure a
+prescription against the tree before implementing it.
+

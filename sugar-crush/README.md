@@ -403,6 +403,33 @@ document). `error.type` is not the exit code renamed — `usage`,
 `encoding`, `not-found` and `mcp-config` are all `1` — it is how a consumer
 that kept the code tells apart the kinds of each.
 
+One key is **conditional**, and it is the only one: `refusals`. A turn that
+blocked a tool call — a permission ASK that nothing could answer, an explicit
+`n` at the prompt, a hook that denied the call outright — adds
+`"refusals": [{"tool": "<name>", "reason": "<why it was stopped>"}, …]` to
+whichever document it emits, the answer and the error one alike. Before this,
+the document read `{"result": "<the answer>"}` for a turn in which a tool was
+quietly not run, and the model — which *did* see the refusal — had simply
+answered around it. `refusals` is **absent, not empty**, on a run that refused
+nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
+the way to read it unconditionally. It is not a list of tool calls that
+*failed*: a tool that ran and returned an error is a result the model acted
+on, whereas a refusal is a call that never happened.
+
+`--output-format text` carries no such list, and **this paragraph used to say
+it needed none, because "every refusal is already on stderr, in front of the
+person reading the terminal". That is not true, and it is least true for the
+commonest refusal there is.** Only the console permission prompt writes to
+stderr, and it is only ever reached for a hook verdict of ASK. A hook that
+denies a call outright returns straight out of the gate, and `Runtime`
+contains no write to stderr at all — so on `--output-format text` a
+denied call is reported on *neither* channel: the answer prints, the tool
+silently did not run, and nothing says so. Use `--output-format json` if you
+need to know. Printing the list on stdout under `text` would break that
+format's one contract (the answer, and nothing else), so the fix is a stderr
+line on the deny path rather than a second list here, and it is on the
+hardening backlog.
+
 Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
 that is the thing to know if you are reading the source to find where a type
 comes from. `installation` is hand-rolled by `bin/sugarcrush`'s autoload guard
