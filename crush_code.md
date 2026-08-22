@@ -1094,6 +1094,27 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 42 — CLOSED (`c204015e`). Three findings fixed (one deliberately half), nine recorded.**
+Floor `8996 / 105179 / 1 skipped / rc 0`, `sugar-crush` linked.
+
+- ✅ **E74 + E75** (lane a, +5 tests) — the false project-tier security claim is retracted in
+  `README.md` in place. ⚠️ Two corrections to what this plan had recorded: **"eight characters" is a
+  figure nothing produces** (`[!B]*` is five; the number still stands in `LayeredSettings`,
+  `Bootstrap::reportProjectTierToolRemovals()` and this file — E82), and **the negated character class
+  is not the mechanism** — `["[C-Z]*", "[a-z]*"]` leaves exactly `Bash` with no negation anywhere, so
+  refusing negated classes could never have restored the promised property.
+- ✅ **E78 + the launch warnings** (lane b, +9 tests) — shipped caps tied to `SkillPathNudge::maxBytes()`
+  (2,636; floor 529; `Grep`/`Glob` margin 3.1x, unresolved — E87). Census corrected twice in-round:
+  **fifteen** transcript-seam call sites, **eleven** raw stderr writes. The retention summary migrated;
+  the per-session ids deliberately did not.
+- 🟡 **E59 — half.** Test anchors swapped for a liveness contract; **the real worker is deferred, not
+  half-landed** (needs an autoloader in the child, a provider identity in the startup message, and an
+  offline CI substitute). Stub kept as a documented seam.
+- ✅ **E76** — `Chat::selectPane()`'s docblock no longer asserts the opposite of what `bin/sugarcrush`
+  does.
+- 🔴 **E80** — a real `pcntl_fork()`/`flock()` flake in `MultiAgentRefactorTest`, 60 s abort under load.
+  Did not fire in the merged run. One risky test + ~22 missing assertions = this, re-run first.
+
 **ROUND 41 — CLOSED (`7852d79e`). Five findings fixed, six recorded.** Floor
 `8978 / 105031 / 1 skipped / rc 0`.
 
