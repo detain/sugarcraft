@@ -1077,9 +1077,74 @@ final class Chat implements Model
         $this->currentSessionId = $currentSessionId;
     }
 
+    /**
+     * Arm the mid-session seam's edge-driven wake-up (E193).
+     *
+     * THE ONLY THING THIS MODEL WANTS AT STARTUP, and it is deliberately not a
+     * subscription. {@see subscriptions()}' runtime-notice tick is declared on
+     * `$inFlight || RuntimeNoticeSink::hasPending()`, and `Program` re-evaluates
+     * that only when it reconciles — after `init()` and after every dispatched
+     * `Msg`. A notice raised while the UI is IDLE therefore arms nothing and
+     * waits for whatever `Msg` arrives next, which on a genuinely idle session
+     * is the user's next keystroke. MEASURED end to end; the numbers and the
+     * two controls are in
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::notifyOnceWhenPending()}'s
+     * doc-block, which is also where the argument against fixing it with an
+     * unconditional tick lives.
+     *
+     * RETURNS null FOR EVERY Chat THAT IS NOT THE PROCESS'S DRAIN OWNER, which
+     * is the same gate {@see subscriptions()} applies first and for the same
+     * reason: {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
+     * is destructive, so a second listening `Chat` would take rows out from
+     * under the real transcript.
+     */
     public function init(): ?\Closure
     {
-        return null;
+        return $this->runtimeNoticeWake();
+    }
+
+    /**
+     * A Cmd that resolves with one {@see RuntimeNoticePumpMsg} the next time a
+     * notice lands on the sink's cross-fork transport — see {@see init()}.
+     *
+     * NULL WHEN THERE IS NO TRANSPORT, rather than a promise that never
+     * settles. Without one the sink is on its in-process array backend, which
+     * only this process can write to and only synchronously; every such write
+     * happens inside an `update()` or an `init()`, and `Program` reconciles
+     * after both, so `hasPending()` is consulted in time and the tick takes it
+     * from there. The gap this closes is specifically the OFF-LOOP writer, and
+     * off-loop writers reach the sink through the datagram pair or not at all.
+     *
+     * THE `!$armed` ARM INSIDE THE PROMISE RESOLVES WITH null AND NOT WITH A
+     * PUMP. `Cmd::promise()` accepts `?Msg`, and null dispatches nothing —
+     * which is what must happen if the transport disappeared between the
+     * check above and the factory running (a `reset()` from a test's
+     * `tearDown`, or a second `Bootstrap::chat()`). Resolving with a
+     * `RuntimeNoticePumpMsg` instead would drain an empty inbox, re-arm, fail
+     * to arm again, and resolve immediately once more: a hot loop, built out
+     * of the fix for a missing wake-up.
+     */
+    private function runtimeNoticeWake(): ?\Closure
+    {
+        if (!$this->drainsRuntimeNotices || !RuntimeNoticeSink::hasTransport()) {
+            return null;
+        }
+
+        return Cmd::promise(static function (): PromiseInterface {
+            $deferred = new Deferred();
+
+            $armed = RuntimeNoticeSink::notifyOnceWhenPending(
+                static function () use ($deferred): void {
+                    $deferred->resolve(new RuntimeNoticePumpMsg());
+                },
+            );
+
+            if (!$armed) {
+                $deferred->resolve(null);
+            }
+
+            return $deferred->promise();
+        });
     }
 
     public function update(Msg $msg): array
@@ -10811,15 +10876,26 @@ final class Chat implements Model
         // from the real transcript rather than duplicate them.
         //
         // ORed WITH $inFlight RATHER THAN RELYING ON hasPending() ALONE, and
-        // that is the load-bearing half. Every mid-session emitter E171 names
-        // — the two tool-call parsers, `SglangProvider`, `AgentWorkerPool`,
-        // `WorktreeManager` — raises its notice DURING a turn, and on the
-        // interactive path it does so inside
+        // that is the load-bearing half. The mid-session emitters — the two
+        // tool-call parsers, `SglangProvider`'s two argument-decode refusals
+        // and `WorktreeManager`'s four (E192) — raise their notices DURING a
+        // turn, and on the interactive path they do so inside
         // {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
         // forked child. Waiting for `hasPending()` to go true would work, but
         // only on whatever Msg happened to arrive next; arming for the whole
         // turn means the row appears while the turn is still running, which is
         // the entire point of a seam that is not launch-only.
+        //
+        // AND `hasPending()` ALONE IS NOT MERELY WEAKER, IT CAN NEVER FIRE ON
+        // ITS OWN (E193). `Program` consults this method only when it
+        // reconciles, i.e. after `init()` and after every dispatched `Msg`. On
+        // an idle session there is no next `Msg` to reconcile after, so a
+        // notice that becomes pending here arms nothing at all — MEASURED on a
+        // real `Program`, zero rows after two seconds of loop time with the row
+        // still sitting in the socket. That gap is closed OUTSIDE this method,
+        // by the edge-driven watcher {@see init()} arms; this clause is what
+        // covers the in-turn case, where the watcher and the tick are both live
+        // and either may win.
         if ($this->drainsRuntimeNotices && ($this->inFlight || RuntimeNoticeSink::hasPending())) {
             $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
                 self::RUNTIME_NOTICE_SUBSCRIPTION,
@@ -10952,12 +11028,29 @@ final class Chat implements Model
      *
      * @return array{0:Chat,1:?\Closure}
      */
+    /**
+     * Drain the sink into the transcript, and RE-ARM the edge-driven wake-up.
+     *
+     * BOTH RETURN PATHS RE-ARM, INCLUDING THE EMPTY ONE, and that is not
+     * symmetry for its own sake. {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::notifyOnceWhenPending()}
+     * is one-shot, so whatever fires it consumes it; if the empty path did not
+     * re-arm, the first pump that happened to find nothing would leave the
+     * session with no wake-up for the rest of its life. That path is REACHED,
+     * and by an ordinary interleaving rather than an exotic one: during a turn
+     * both the `$inFlight` tick and the watcher are live, and whichever
+     * dispatches second drains an inbox the other already emptied.
+     *
+     * IT STILL RETURNS `$this` UNCHANGED WHEN THERE IS NOTHING, so
+     * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest::testTheSecondPumpAddsNothingBecauseTheFirstConsumedTheInbox()}'s
+     * point survives: an empty pump must not repaint. Only the Cmd differs.
+     */
     private function pumpRuntimeNotices(): array
     {
         $notices = RuntimeNoticeSink::drain();
+        $rearm = $this->runtimeNoticeWake();
 
         if ($notices === []) {
-            return [$this, null];
+            return [$this, $rearm];
         }
 
         $messages = [];
@@ -10965,7 +11058,7 @@ final class Chat implements Model
             $messages[] = Message::system($notice);
         }
 
-        return [$this->mutate(['history' => [...$this->history, ...$messages]]), null];
+        return [$this->mutate(['history' => [...$this->history, ...$messages]]), $rearm];
     }
 
     /**

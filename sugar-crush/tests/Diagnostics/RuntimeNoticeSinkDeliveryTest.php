@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Diagnostics;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Kind;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
@@ -692,6 +694,296 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         sort($expected);
         sort($actual);
         self::assertSame($expected, $actual);
+    }
+
+    /**
+     * ONE REAL `Program`, ONE IDLE SESSION, ONE OFF-LOOP WRITER (E193).
+     *
+     * WHAT THIS FILE COULD NOT SEE BEFORE. Every other delivery test here hands
+     * a `RuntimeNoticePumpMsg` to `update()` by hand, or reads the tick off
+     * `subscriptions()`. Both start one step past the defect: they assume
+     * something asked. `Program` re-evaluates `Chat::subscriptions()` only when
+     * it reconciles, and it reconciles after `init()` and after every
+     * dispatched `Msg` — nowhere else. On an idle session there is no next
+     * `Msg`, so a notice raised after the last reconcile arms nothing and goes
+     * on arming nothing until the user presses a key. That is the exact shape
+     * this file's own doc-block warns about one layer down: a row in the queue
+     * with nothing that will ever come and read it.
+     *
+     * MEASURED BEFORE THE FIX, PHP 8.3.6 / `StreamSelectLoop` / Linux 6.8, on
+     * the byte-equivalent of the harness below: zero `Role::System` rows after
+     * two seconds of loop time, with `hasPending()` still true at the end. The
+     * two controls below are what make that a measurement rather than a broken
+     * harness — the same producer, the same loop, the same assertions, and
+     * they delivered.
+     *
+     * WHY ONE SECOND. The producer fires at 0.15s and the wake is edge-driven,
+     * so delivery is immediate; the remaining budget is slack for a loaded box.
+     * It is not a poll interval and this test does not depend on one — with
+     * `RUNTIME_NOTICE_POLL_SECONDS` at its current value the tick would not be
+     * declared here at all, because nothing is in flight.
+     */
+    public function testANoticeRaisedWhileTheUiIsIdleReachesTheTranscriptWithNoKeystroke(): void
+    {
+        $model = $this->runIdleProgram(self::ownerChat(), static function (): void {
+            DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
+        });
+
+        $rows = self::systemRows($model);
+        self::assertCount(
+            1,
+            $rows,
+            'a notice raised by an off-loop writer with the UI idle never reached the transcript. Nothing '
+                . 'reconciles Chat::subscriptions() on an idle session, so the poll it declares can only be '
+                . 'declared by a Msg that is not coming.',
+        );
+        self::assertStringContainsString('DsmlToolCallParser', $rows[0]->content);
+
+        // AND IT IS ON THE SCREEN. A row the renderer drops is the same defect
+        // one layer up, and the whole point of the seam is a surface the user
+        // has while the alternate screen is up.
+        self::assertStringContainsString('DsmlToolCallParser', $model->view());
+    }
+
+    /**
+     * CONTROL ONE FOR THE HARNESS: the SAME producer, on a turn IN FLIGHT.
+     *
+     * This is the path that already worked, through the `$inFlight` clause of
+     * {@see Chat::subscriptions()}' condition and its 0.5s tick. If this ever
+     * reds, the idle test above is measuring a broken harness rather than a
+     * missing wake-up — which is precisely how a confident false green gets
+     * written down.
+     */
+    public function testTheSameProducerOnATurnInFlightWasAlreadyDelivered(): void
+    {
+        $model = $this->runIdleProgram(self::ownerChat(inFlight: true), static function (): void {
+            DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
+        });
+
+        self::assertCount(
+            1,
+            self::systemRows($model),
+            'the in-flight path stopped delivering, so the idle test above proves nothing about idleness',
+        );
+    }
+
+    /**
+     * CONTROL TWO: the same run with NOTHING raised must produce no rows.
+     *
+     * The counting side of the instrument. Both tests above pass by finding
+     * exactly one `Role::System` row, and a harness that manufactured one —
+     * from a launch notice, from a `WindowSizeMsg`-driven repaint, from
+     * anything `Program` dispatches on startup — would make them green while
+     * proving nothing at all.
+     */
+    public function testTheIdleHarnessProducesNoRowsWhenNothingWarns(): void
+    {
+        $model = $this->runIdleProgram(self::ownerChat(), static function (): void {
+            // Deliberately empty: the child forks, waits and exits silently.
+        });
+
+        self::assertSame([], self::systemRows($model), 'the idle harness invents Role::System rows on its own');
+    }
+
+    /**
+     * THE WAKE IS RE-ARMED, SO THE SECOND NOTICE ALSO ARRIVES.
+     *
+     * {@see RuntimeNoticeSink::notifyOnceWhenPending()} is one-shot on purpose,
+     * which means a fix that installs it and never renews it delivers exactly
+     * one notice per session and then goes as dark as it was before. That is a
+     * fix whose own test would pass — the test above uses one notice — so the
+     * renewal gets its own, with the two writes separated in time by more than
+     * the round trip through `update()`.
+     *
+     * TWO CHILDREN AND NOT ONE WITH A SLEEP BETWEEN ITS WRITES, because a
+     * single child's two datagrams can sit in the socket together and be taken
+     * by ONE `drain()` — which would pass without the wake ever being renewed.
+     * Separate processes at 0.15s and 0.55s make the second write land after
+     * the first has certainly been consumed.
+     */
+    public function testTheIdleWakeIsRearmedSoASecondNoticeAlsoArrives(): void
+    {
+        $model = $this->runIdleProgram(
+            self::ownerChat(),
+            static function (): void {
+                RuntimeNoticeSink::record('the first idle notice');
+            },
+            static function (): void {
+                RuntimeNoticeSink::record('the second idle notice');
+            },
+        );
+
+        $contents = array_map(static fn ($row): string => $row->content, self::systemRows($model));
+        sort($contents);
+        self::assertSame(
+            ['the first idle notice', 'the second idle notice'],
+            $contents,
+            'only one idle notice arrived; the edge-driven wake is one-shot and something has to renew it '
+                . 'after every pump, including a pump that found the inbox already empty',
+        );
+    }
+
+    /**
+     * THE WAKE Cmd IS NULL FOR EVERY Chat THAT MUST NOT LISTEN.
+     *
+     * Two gates, and they are different questions. A Chat nobody appointed must
+     * not install a watcher, for {@see drain()}'s destructiveness — the same
+     * reason {@see testAChatNobodyAppointedDoesNotPollTheInbox()} gives for the
+     * tick. And a sink with no cross-fork transport has no fd to watch: the
+     * in-process backend can only be written by this process, synchronously,
+     * inside an `update()` that `Program` reconciles after anyway.
+     *
+     * THE KNOWN-POSITIVE IS THE LAST ASSERTION, because the three above are
+     * `assertNull()` and an `init()` hard-wired to `return null` satisfies all
+     * of them.
+     */
+    public function testOnlyAnAppointedChatWithATransportArmsTheWake(): void
+    {
+        self::assertNull((new Chat())->init(), 'an unarmed, unappointed Chat armed the wake');
+
+        RuntimeNoticeSink::arm(false);
+        self::assertFalse(RuntimeNoticeSink::hasTransport(), 'arm(false) built a transport; this test is moot');
+        self::assertNull(self::ownerChat()->init(), 'the array backend has no fd, but a watcher was armed for it');
+        self::assertNull((new Chat())->init());
+
+        RuntimeNoticeSink::reset();
+        self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host; the control below is moot');
+        self::assertNull((new Chat())->init(), 'an unappointed Chat armed the wake on a real transport');
+        self::assertNotNull(
+            self::ownerChat()->init(),
+            'the appointed Chat did not arm the wake either, so every null above is vacuous',
+        );
+    }
+
+    /**
+     * `reset()` TAKES THE WATCHER OFF THE LOOP BEFORE IT CLOSES THE STREAM.
+     *
+     * Not tidiness. `Loop::get()` is process-wide and this suite runs some nine
+     * thousand tests through it; a watcher left registered against a closed
+     * resource is one `stream_select()` will be handed on every iteration for
+     * the rest of the run, in every later test's loop. The ordering inside
+     * `reset()` is the fix and this is what pins it — a `reset()` that closed
+     * first and cancelled second would leave this assertion green while doing
+     * exactly the damage, so the assertion is on the watcher's own state and
+     * the ordering is argued at the call site.
+     */
+    public function testResetTakesTheReadWatcherBackOffTheLoop(): void
+    {
+        self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host');
+        self::assertFalse(RuntimeNoticeSink::isNotificationArmed());
+
+        self::assertTrue(RuntimeNoticeSink::notifyOnceWhenPending(static function (): void {
+        }));
+        self::assertTrue(RuntimeNoticeSink::isNotificationArmed(), 'notifyOnceWhenPending() armed nothing');
+
+        RuntimeNoticeSink::reset();
+        self::assertFalse(
+            RuntimeNoticeSink::isNotificationArmed(),
+            'reset() closed the transport and left its read watcher on the shared loop',
+        );
+
+        // A second watcher REPLACES the first rather than stacking, which is
+        // what lets update() re-arm on every pump without leaking one per turn.
+        self::assertTrue(RuntimeNoticeSink::arm());
+        self::assertTrue(RuntimeNoticeSink::notifyOnceWhenPending(static function (): void {
+        }));
+        self::assertTrue(RuntimeNoticeSink::notifyOnceWhenPending(static function (): void {
+        }));
+        RuntimeNoticeSink::cancelPendingNotification();
+        self::assertFalse(
+            RuntimeNoticeSink::isNotificationArmed(),
+            'one cancel did not clear the watcher, so notifyOnceWhenPending() stacked a second one',
+        );
+    }
+
+    /** @return list<\SugarCraft\Crush\Message> */
+    private static function systemRows(Chat $chat): array
+    {
+        return array_values(array_filter(
+            $chat->history,
+            static fn ($m): bool => $m->role === Role::System,
+        ));
+    }
+
+    /**
+     * Run a REAL `Program` over `$chat` for a fixed slice of wall clock, with
+     * each `$producer` fired from its own forked child part-way through.
+     *
+     * WHY A FORK AND NOT A LOOP TIMER. A timer callback runs on the loop and a
+     * loop that is already awake is not the case under test; the whole point is
+     * a writer that is not this process and cannot dispatch a `Msg`, which is
+     * what {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
+     * child is. The children are forked AFTER {@see RuntimeNoticeSink::arm()}
+     * so they inherit the write end, exactly as the real one does.
+     *
+     * `error_log()` IS DISCARDED IN THE CHILD, not in the parent: the parent is
+     * about to take over the terminal, and a real emitter's stderr copy would
+     * otherwise land in PHPUnit's output. The parent's `error_log` is left
+     * alone so a genuine parent-side warning is still visible to whoever is
+     * reading a failure.
+     *
+     * @param \Closure(): void ...$producers one child each, fired 0.4s apart
+     */
+    private function runIdleProgram(Chat $chat, \Closure ...$producers): Chat
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            self::markTestSkipped('ext-pcntl is required to exercise the off-loop writer');
+        }
+
+        self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host');
+
+        $childLog = tempnam(sys_get_temp_dir(), 'sc_lane_a_idle_');
+        self::assertIsString($childLog);
+
+        $pids = [];
+        foreach ($producers as $index => $producer) {
+            $pid = $this->forkTracked();
+            self::assertNotSame(-1, $pid, 'fork failed');
+
+            if ($pid === 0) {
+                ini_set('error_log', $childLog);
+                usleep(150_000 + ($index * 400_000));
+                $producer();
+                ForkedChild::exitNow(0);
+            }
+            $pids[] = $pid;
+        }
+
+        $inputPair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($inputPair);
+        $output = tmpfile();
+        self::assertIsResource($output);
+
+        $program = new \SugarCraft\Core\Program($chat, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            input: $inputPair[0],
+            output: $output,
+            windowSize: ['cols' => 80, 'rows' => 24],
+        ));
+
+        // The budget covers the last producer's 0.15s+0.4s*n offset plus slack
+        // for a loaded box. Delivery itself is edge-driven and immediate.
+        $budget = 0.85 + (0.4 * count($producers));
+        Loop::get()->addTimer($budget, static function () use ($program): void {
+            $program->quit();
+        });
+
+        $model = $program->run();
+
+        foreach ($pids as $pid) {
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+        }
+
+        fclose($inputPair[0]);
+        fclose($inputPair[1]);
+        fclose($output);
+        @unlink($childLog);
+
+        self::assertInstanceOf(Chat::class, $model);
+
+        return $model;
     }
 
     public function testTheTranscriptRowCarriesNoStderrEnvelope(): void
