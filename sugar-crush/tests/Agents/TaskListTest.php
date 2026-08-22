@@ -837,10 +837,14 @@ final class TaskListTest extends TestCase
                     \file_put_contents($resultDir . "/{$i}.won", "teammate-{$i}");
                 }
 
-                // Not a plain exit(): PHPUnit's after-test hooks would run a
-                // second time in every one of these children, over a copy of
-                // this process's object graph. See
-                // {@see \SugarCraft\Crush\Support\ForkedChild}.
+                // Not a plain exit(): that runs PHP's shutdown sequence in
+                // every one of these children, over a COPY of this process's
+                // object graph - each inherited destructor and each
+                // register_shutdown_function callback, N extra times. (NOT
+                // PHPUnit's after-test hooks: an exiting child never returns
+                // into the runner, so those fire only in the parent. See
+                // {@see \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}
+                // for the probe that separates the two shapes.)
                 ForkedChild::exitNow(0);
             }
 

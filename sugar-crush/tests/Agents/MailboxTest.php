@@ -411,9 +411,13 @@ final class MailboxTest extends TestCase
                 sentAt: new \DateTimeImmutable(),
             ));
 
-            // Not a plain exit(): that runs PHPUnit's after-test hooks a
-            // second time, in this child, over a copy of the parent's object
-            // graph. {@see \SugarCraft\Crush\Support\ForkedChild}.
+            // Not a plain exit(): that runs PHP's shutdown sequence in this
+            // child, over a COPY of the parent's object graph - every
+            // inherited destructor and every register_shutdown_function
+            // callback. (NOT PHPUnit's after-test hooks; an exiting child
+            // never returns into the runner. {@see
+            // \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}
+            // has the probe that separates the two shapes.)
             ForkedChild::exitNow(0);
         }
 

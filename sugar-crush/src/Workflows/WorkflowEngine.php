@@ -1796,9 +1796,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *    {@see AgentWorkerPool::publishProgress()}), which is already in the
      *    kernel by the time it returns, so PHP's shutdown sequence has
      *    nothing of the child's left to flush. What it would run instead is
-     *    somebody else's cleanup — and under PHPUnit it is PHPUnit's own
-     *    after-test hooks, in N extra processes
-     *    ({@see \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}).
+     *    somebody else's cleanup: every destructor and every
+     *    `register_shutdown_function` callback in the inherited graph, N extra
+     *    times — including {@see AgentWorkerPool::__destruct()}, whose
+     *    `$resultDirOwnerPid` check is the only thing standing between a
+     *    forked worker's shutdown and the deletion of the result directory
+     *    the parent is still polling. (It is NOT PHPUnit's after-test hooks:
+     *    an exiting child never returns into the runner, so those fire in the
+     *    parent only. Measured — see
+     *    {@see \SugarCraft\Crush\Tests\Support\ForkedChildExitConventionTest}.)
      *    The cost is that the child now dies by signal, so a parent reading
      *    its wait status sees `wifsignaled()`/SIGKILL rather than exit code
      *    130/143; {@see AgentWorkerPool::workerDiedResult()} already reports

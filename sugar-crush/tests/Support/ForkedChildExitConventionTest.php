@@ -10,25 +10,45 @@ use PHPUnit\Framework\TestCase;
  * THE CONVENTION: a child forked INSIDE the PHPUnit process must never leave
  * through a plain `exit()` or by falling off the end of its branch.
  *
- * Either one runs PHP's whole shutdown sequence a second time, in a second
- * process, over an object graph the child only has a COPY of. The
- * consequences are not hypothetical and each was measured in this tree
- * before it was written down:
+ * THE TWO SHAPES ARE TWO DIFFERENT DEFECTS, and this doc-block used to run
+ * them together. WHAT IT SAID: "either one runs PHP's whole shutdown sequence
+ * a second time", with PHPUnit's after-test hooks listed underneath as one of
+ * the consequences of both. WHAT IS TRUE NOW, measured rather than reasoned
+ * about - a two-process probe under this lane's own vendored PHPUnit on PHP
+ * 8.3.6, forking from inside a test method and logging `getmypid()` from
+ * `tearDown()` and from a `register_shutdown_function` callback:
  *
- *  - `React\EventLoop\Loop::get()` registers a shutdown function that RUNS
- *    the loop (`vendor/react/event-loop/src/Loop.php`), so a child inheriting
- *    a loop with any live watcher blocks at exit forever. This suite is
- *    shielded only because `tests/bootstrap.php` installs the loop with
- *    `Loop::set(new StreamSelectLoop())`, which never registers that hook -
- *    a shield that exists for an unrelated reason (ext-uv clock pinning) and
- *    could be reworked away without anybody connecting it to this.
- *  - An inherited destructor with a real OS-level side effect fires in the
- *    child: candy-core's `Tty`/`PosixBackend` putting the SHARED kernel tty
- *    back into cooked mode is the one that cost this project a four-round
- *    bug hunt ({@see \SugarCraft\Crush\Support\ForkedChild}).
- *  - PHPUnit's own after-test hooks run twice, so a `tearDown()` that removes
- *    a temp tree removes it out from under the parent that is still reading
- *    it ({@see \SugarCraft\Crush\Tests\Integration\MultiAgentRefactorTest}).
+ *  - A PLAIN `exit()` runs the shutdown sequence in the child - the probe saw
+ *    `shutdown-fn` fire under the CHILD's pid - and does NOT re-enter PHPUnit.
+ *    `tearDown()` fired exactly once, in the parent. PHPUnit's after-test
+ *    hooks are driven by `TestCase::runBare()` returning, and a child that
+ *    exits never returns anywhere.
+ *  - FALLING OFF THE END of the branch runs no shutdown sequence at that
+ *    point at all. It returns into the test runner, so PHPUnit's after-test
+ *    hooks DO run a second time, and the child then goes on to run whatever
+ *    remains of the suite as a second runner.
+ *
+ * WHY THE DISTINCTION EARNS ITS PLACE: it decides which consequence to expect,
+ * and a lane that expects the wrong one looks for the damage in the wrong
+ * place. The consequences, each measured in this tree before it was written
+ * down and each now attributed to the shape that actually causes it:
+ *
+ *  - PLAIN EXIT. `React\EventLoop\Loop::get()` registers a shutdown function
+ *    that RUNS the loop (`vendor/react/event-loop/src/Loop.php`), so a child
+ *    inheriting a loop with any live watcher blocks at exit forever. This
+ *    suite is shielded only because `tests/bootstrap.php` installs the loop
+ *    with `Loop::set(new StreamSelectLoop())`, which never registers that
+ *    hook - a shield that exists for an unrelated reason (ext-uv clock
+ *    pinning) and could be reworked away without anybody connecting it to
+ *    this.
+ *  - PLAIN EXIT. An inherited destructor with a real OS-level side effect
+ *    fires in the child: candy-core's `Tty`/`PosixBackend` putting the SHARED
+ *    kernel tty back into cooked mode is the one that cost this project a
+ *    four-round bug hunt ({@see \SugarCraft\Crush\Support\ForkedChild}).
+ *  - FALLING THROUGH. PHPUnit's own after-test hooks run twice, so a
+ *    `tearDown()` that removes a temp tree removes it out from under the
+ *    parent that is still reading it
+ *    ({@see \SugarCraft\Crush\Tests\Integration\MultiAgentRefactorTest}).
  *
  * The convention was documented on {@see \SugarCraft\Crush\Support\ForkedChild}
  * and honoured by everyone who had read that doc-block. Nothing MADE the next
