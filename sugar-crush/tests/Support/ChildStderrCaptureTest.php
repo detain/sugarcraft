@@ -68,8 +68,30 @@ use PHPUnit\Framework\TestCase;
  */
 final class ChildStderrCaptureTest extends TestCase
 {
-    /** Path prefix, relative to `tests/`, the rule is enforced under. */
-    private const SCOPE = 'Integration/';
+    /**
+     * Path prefixes, relative to `tests/`, the rule is enforced under.
+     *
+     * WHAT THIS WAS: the single prefix `Integration/`, chosen when that was
+     * the only directory anyone had censused. WHAT IS TRUE NOW: it is all
+     * three directories round 47's lane split gave this lane, and widening
+     * cost nothing - measured with this file's own scanner over the whole of
+     * `tests/`, `Agents/` was already clean, and `Support/` had exactly one
+     * non-capture, `ForkedChildTest::isRaw()`'s `stty ... 2>/dev/null`, which
+     * was FIXED rather than exempted. Widening added no row to
+     * {@see ACCEPTED_DISCARDED_STDERR}.
+     *
+     * WHY THE REMAINDER IS STILL OUT, stated rather than silently omitted:
+     * every other directory under `tests/` either holds non-captures that
+     * only its owning lane may edit, or is clean but owned by another lane -
+     * and adding a clean directory here is not free either, because it makes
+     * this guard an obligation on every spawn a sibling adds there, which
+     * reds at merge in a lane that never saw this file. That is a decision
+     * for the round that owns those directories; the scanner is pointed at a
+     * new one by adding a prefix here.
+     *
+     * @var list<string>
+     */
+    private const SCOPE = ['Agents/', 'Integration/', 'Support/'];
 
     /**
      * Spawn sites that send fd 2 to the null device ON PURPOSE, with the count
@@ -386,6 +408,17 @@ final class ChildStderrCaptureTest extends TestCase
         );
     }
 
+    private static function inScope(string $relative): bool
+    {
+        foreach (self::SCOPE as $prefix) {
+            if (str_starts_with($relative, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites(): void
     {
         $this->assertTheDiscardBranchIsAlive();
@@ -402,7 +435,7 @@ final class ChildStderrCaptureTest extends TestCase
             }
 
             $relative = substr($file->getPathname(), \strlen($root) + 1);
-            if (!str_starts_with($relative, self::SCOPE)) {
+            if (!self::inScope($relative)) {
                 continue;
             }
 
@@ -433,7 +466,8 @@ final class ChildStderrCaptureTest extends TestCase
         $this->assertGreaterThan(
             0,
             $captured,
-            'no child-process launches found under ' . self::SCOPE . ' - the scanner is dead',
+            'no child-process launches found under ' . implode(', ', self::SCOPE)
+                . ' - the scanner is dead',
         );
 
         $this->assertSame(
