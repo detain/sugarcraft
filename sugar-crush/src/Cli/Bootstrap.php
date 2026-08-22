@@ -210,12 +210,27 @@ final class Bootstrap
      *
      * A `public const` AND `sprintf()`ed FROM, not a literal with a copy in a
      * test. E104 recorded that every `sprintf()` in this class reaching stderr
-     * or the transcript was pinned only by a test re-typing it, and E118 is the
-     * repair: {@see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest}
-     * used to recover this envelope by running a regex over this file's SOURCE
-     * TEXT, which is a scrape that goes quiet the moment the line is reformatted
-     * — measured, it stops matching the moment the interpolation becomes a
-     * `sprintf()`, which is exactly what this commit did to it.
+     * or the transcript was pinned only by a test re-typing it; by the time
+     * E118 landed that had already been half-answered, and E118 is the rest of
+     * the repair.
+     *
+     * WHAT THIS PARAGRAPH SAID ABOUT THE STATE IT REPLACED:
+     * {@see \SugarCraft\Crush\Tests\Config\ReadmeRosterDriftTest} "used to
+     * recover this envelope by running a regex over this file's SOURCE TEXT,
+     * which is a scrape that GOES QUIET the moment the line is reformatted".
+     * WHAT IS TRUE NOW: it went LOUD. The scrape's recovery step was an
+     * `assertSame(1, $matched)`, so zero matches is a failure naming the method
+     * whose shape moved, not a silent pass. MEASURED at `06126017`, PHP 8.3.6:
+     * turning this line's interpolation into `sprintf()` — which is exactly
+     * what this commit did to it, and which changes not one byte of output —
+     * takes that suite to `Tests: 14, Assertions: 89, Failures: 1`.
+     * WHY THE ARGUMENT STILL EARNS ITS PLACE: the complaint against a source
+     * scrape was never that it fails silently, it is that it reds on a pure
+     * refactor, and a guard that reds on a refactor is a guard the next person
+     * weakens. A name is what lets the README end and the launcher end agree
+     * without either one caring how the other is written. That reasoning was
+     * right; the mechanism sentence under it was inverted, and inverted
+     * mechanism sentences are how three previous rounds shipped a defect.
      *
      * THE PREFIX AND THE FULL STOP ARE BOTH PART OF IT, and both are load-bearing
      * to a reader: `README.md` and `docs/SETTINGS.md` quote a launch-report line

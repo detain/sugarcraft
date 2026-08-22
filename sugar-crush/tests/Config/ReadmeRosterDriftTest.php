@@ -489,30 +489,75 @@ final class ReadmeRosterDriftTest extends TestCase
      *
      * ONE — THE FORMAT RETYPED HERE. The doc-block claimed "the duplication is
      * safe in the direction that matters — change the sprintf and this reds,
-     * which is the point". It was safe in the OPPOSITE direction. MEASURED on
-     * PHP 8.3.6, 2026-08-22 — changing the launcher's format from
-     * `disabled %d of the %d` to `removed %d of the %d` left this file and
-     * `ReadmeSettingsTierClaimTest` at `OK (14 tests, 84 assertions)`.
+     * which is the point". It was safe in the OPPOSITE direction: changing the
+     * launcher's format from `disabled %d of the %d` to `removed %d of the %d`
+     * left this file and `ReadmeSettingsTierClaimTest` green at
+     * `OK (14 tests, 84 assertions)`.
+     *
+     * THAT FIGURE IS HISTORICAL AND USED TO BE DATED AS THOUGH IT WERE FRESH,
+     * which is the mistake, not the figure. WHAT IT SAID: "MEASURED on PHP
+     * 8.3.6, 2026-08-22". WHAT IS TRUE NOW: shape one has not been in this file
+     * since round 43, so nothing measured on 2026-08-22 could have been shape
+     * one; the 84 belongs to the tree E104 was recorded against and cannot be
+     * reproduced without reverting this file past shape two. Re-measured on the
+     * tree that WAS current — `06126017`, PHP 8.3.6 — that same mutation gives
+     * `Tests: 14, Assertions: 92, Failures: 1`, because shape two reads the
+     * literal out of `Bootstrap.php` and reds on it.
+     * WHY THE FIGURE STILL EARNS ITS PLACE: it is the only measurement of the
+     * failure that motivated E104, and a shape-history paragraph with the
+     * measurement removed is a list of opinions. It is kept, with the tree it
+     * belongs to named.
      *
      * TWO — THE LITERALS SCRAPED OUT OF `Bootstrap.php`'s SOURCE TEXT by regex,
      * which is what round 43 replaced shape one with and what round 45 replaced.
      * It bought the right property, but only against the file staying written
      * the way the regex expected: the envelope was recovered by matching
-     * `fwrite(STDERR, "…{$message}…")`, and MEASURED — turning that
-     * interpolation into `sprintf(self::STDERR_LINE_FORMAT, $message)`, which
-     * changes not one byte of output, took the scrape to zero matches. A guard
-     * that reds on a pure refactor teaches the next person to weaken it.
+     * `fwrite(STDERR, "…{$message}…")`, and MEASURED at `06126017` — turning
+     * that interpolation into `sprintf(self::STDERR_LINE_FORMAT, $message)`,
+     * which changes not one byte of output, gives
+     * `Tests: 14, Assertions: 89, Failures: 1`. It reds LOUDLY, in
+     * `stderrEnvelope()`'s own `assertSame(1, $matched)` and with a message
+     * naming what moved — that is the one good property this shape had, and
+     * `Bootstrap::STDERR_LINE_FORMAT`'s doc-block used to describe the same
+     * event as a scrape "going quiet", which it never did. A guard that reds on
+     * a pure refactor still teaches the next person to weaken it; that is the
+     * complaint, and it does not need the failure to be silent.
      *
      * THREE — THE CONSTANTS, which is what is here now, AND THE CONDITION THAT
      * MAKES IT AN IMPROVEMENT RATHER THAN A REGRESSION: `Bootstrap` must
      * `sprintf()` FROM those constants. A `public const` that only a test ever
      * reads is not a shared definition, it is a second copy with a nicer name,
      * and it drifts from the code silently in exactly the way shape one did.
-     * That condition is not assumed — {@see
+     * THAT CONDITION IS ENFORCED, BUT NOT BY THE TEST THIS PARAGRAPH USED TO
+     * NAME. WHAT IT SAID: "{@see
      * \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest} drives a
      * real launch and reads the line off stderr, so changing a constant without
      * changing the code that formats moves the launcher's output and reds
-     * there. Mutating exactly that is how this shape was accepted.
+     * there." WHAT IS TRUE NOW, measured twice on PHP 8.3.6 with
+     * {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} mutated
+     * `disabled` → `removed`: `BootstrapLaunchNoticeRoutingTest` stays at
+     * `OK (12 tests, 63 assertions)` and `BootstrapToolAndPermissionSettingsTest`
+     * at `OK (55 tests, 125 assertions)`. Neither reds. That file's
+     * `disabledTools` cases are about the unrelated "left no tools at all" line.
+     *
+     * WHAT ACTUALLY ENFORCES IT, in two halves:
+     *  - STRUCTURALLY, {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchFormatConstantsTest}
+     *    token-scans the emitting method and reds if it stops naming the
+     *    constant or starts holding a string literal of its own. That is the
+     *    guard for the condition as stated, and it is the only one.
+     *  - BEHAVIOURALLY, and only for one field,
+     *    {@see \SugarCraft\Crush\Tests\Cli\BootstrapToolAndPermissionSettingsTest}
+     *    drives a real child launch and asserts its stderr contains
+     *    `leaving: Bash` — so {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_LEAVING}
+     *    has a real second party (mutating it to `left: ` gives three failures
+     *    there). The FORMAT's body has no behavioural assertion anywhere: the
+     *    only other copy of `your own settings left` in `tests/` is
+     *    `ReadmeSettingsTierClaimTest`'s retyped one, which compares itself to
+     *    the README and never to the launcher. Recorded as a deferred finding.
+     *
+     * So this file's own comparison is against a constant the emitting code is
+     * PROVEN to format from, rather than against a real line. That is a weaker
+     * claim than the sentence above used to make, and it is the true one.
      *
      * A SECOND, WEAKER READING OF THE SAME BLOCK WAS ALSO WRONG and is worth a
      * line: this doc-block called the fence "a TRANSCRIPT of a real line". The
