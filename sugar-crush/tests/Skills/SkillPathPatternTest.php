@@ -44,9 +44,10 @@ use SugarCraft\Crush\Skills\SkillRegistry;
  *    both sides of the divergence.
  *
  * All three are closed in {@see SkillRegistry}, and the grid's alphabet was
- * widened by exactly the four paths and two patterns needed to SEE them, so it
- * is now 44 x 54 = 2,376 pairs. The lesson is recorded rather than the fix
- * alone: when an assertion misses a defect, suspect its window first.
+ * widened by exactly the four paths and three patterns needed to SEE them and
+ * to make the gain classifier falsifiable, so it is now 45 x 54 = 2,430 pairs.
+ * The lesson is recorded rather than the fix alone: when an assertion misses a
+ * defect, suspect its WINDOW before you suspect the defect's relevance.
  *
  * MEASURED on PHP 8.3.6 (this box has only 8.3; CI also runs 8.4). Everything
  * the table encodes is `fnmatch()`/PCRE behaviour, both of which are stable
