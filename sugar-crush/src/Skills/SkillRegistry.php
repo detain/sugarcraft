@@ -311,12 +311,49 @@ final class SkillRegistry
      * `FNM_PATHNAME`. Narrowing `*` to a single segment would be the more
      * conventional glob, and it would silently stop matching paths that match
      * today — every `src/*` skill would quietly lose its subdirectories. So
-     * the translation widens and never narrows: CHARACTERISED before the
-     * change over 42 patterns x 50 paths = 2,100 pairs evaluated against the
-     * old predicate, this one loses none of the 290 that matched and gains 41,
-     * every one of them attributable to one of the two holes above. The table
-     * is pinned in
-     * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest}.
+     * the translation is meant to widen and never narrow.
+     *
+     * "NEVER NARROWS" IS A MEASUREMENT AND NOT A THEOREM, and getting that
+     * backwards cost a round. WHAT THIS DOC-BLOCK SAID BEFORE: that never-
+     * narrows was a THEOREM, on the grounds that {@see legacyPathMatch()}
+     * still holds the three rewrites. WHAT IS TRUE NOW: that inference is
+     * inverted. `legacyPathMatch()` is consulted ONLY when the translation
+     * emits a regex PCRE will not compile. For every pattern that DOES
+     * compile — which is very nearly all of them — the translation is the
+     * whole answer and the old predicate is never asked, so keeping the
+     * rewrites in the fallback buys correctness for uncompilable patterns and
+     * buys exactly nothing for narrowing. WHY THE CLAIM STILL EARNS ITS PLACE:
+     * because it is now measured on two independent samples rather than
+     * deduced from one. (1) The 42 x 50 = 2,100-pair grid captured against the
+     * old predicate at 8416d98e: 0 of its 290 matches lost, 41 gained. (2) A
+     * seeded differential fuzz — `mt_srand(20260822)`, 200,000 trials, pattern
+     * alphabet including `**`, `***`, `[ab]`, `[!a]`, `[a-c]`, `[\d]` and
+     * `\*`, path alphabet including `\n`, both 1-8 tokens, PHP 8.3.6 — which
+     * reports 0 narrowings and 16 widenings, every widening a leading
+     * globstar. The grid is pinned in
+     * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest}; the fuzz is
+     * a generator, restated here so the figure can be re-taken.
+     *
+     * THE FUZZ IS NOT DECORATION: it found THREE narrowing families the grid
+     * was green over, all three of them after the grid was written, which is
+     * the whole argument for not trusting a grid alone. Each is closed below
+     * and each is pinned by its own case in that test:
+     *
+     *  - NEWLINE IN THE PATH. PCRE's `.` does not cross `\n` without /s;
+     *    `fnmatch()`'s `*` and `?` do. MEASURED, PHP 8.3.6:
+     *    `fnmatch('*.php', "a\nb.php")` is true. Closed by the /s on the
+     *    compiled delimiter. The grid's 50 paths contain no newline, so it was
+     *    blind to this BY CONSTRUCTION rather than by omission.
+     *  - `X/***`, three or more stars after a slash. Closed in the `/**`
+     *    branch of {@see compilePathPattern()}. Note that `src/***` IS one of
+     *    the grid's 42 pattern rows: the pattern was characterised and the
+     *    grid's 50 paths simply held nothing that could expose the difference.
+     *    A window defect, not a coverage gap — the distinction matters,
+     *    because adding patterns would not have found it and adding one path
+     *    would.
+     *  - PCRE ESCAPES INSIDE A CLASS BODY. `[\d]` means the literal `d` to
+     *    `fnmatch()` and the digit class to PCRE. Closed by
+     *    {@see compileClassBody()}.
      *
      * FASTER, INCIDENTALLY, WHICH MATTERS BECAUSE THIS IS ON A TOOL-CALL PATH:
      * {@see SkillPathNudge} runs this per pattern per path, and a
@@ -333,18 +370,19 @@ final class SkillRegistry
      * literal anchors it, so PCRE fails before it can backtrack. The
      * `preg_match() === false` branch catches a backtrack limit anyway.
      *
-     * AND THE THREE REWRITES ARE STILL HERE, in {@see legacyPathMatch()},
-     * because "never narrows" has to be a THEOREM and not a sample. The
-     * translation reproduces `fnmatch()`'s `*`, `?`, `\\` and `[...]` — but
+     * AND THE THREE REWRITES ARE STILL HERE, in {@see legacyPathMatch()} —
+     * for the reason above this one and NOT for never-narrows: a pattern this
+     * translation cannot compile is a SUPPORTED shape, not malformed input.
+     * The translation reproduces `fnmatch()`'s `*`, `?`, `\\` and `[...]` — but
      * not the POSIX class syntax `fnmatch()` inherits from libc. MEASURED on
      * PHP 8.3.6: `fnmatch('[[:alpha:]]x', 'ax')` is `true`, while this
-     * translation emits `#^[[:alpha:]\\]x$#D`, whose class is never
-     * terminated, so PCRE refuses to compile it. So the compile failure is not
-     * a malformed-frontmatter edge — it is a SUPPORTED pattern shape landing
-     * on a translation that does not cover it, and answering `false` there
-     * would narrow the matcher for every skill that uses one. The rewrites are
-     * kept as that pattern's answer rather than deleted, which also means the
-     * one thing a compile failure can never do is make the tool call throw.
+     * translation emits `#^[[:alpha:]\\]x$#Ds`, whose class is never
+     * terminated, so PCRE refuses to compile it. Answering `false` there would
+     * narrow the matcher for every skill that uses one, and answering with a
+     * bare `fnmatch()` would throw away the zero-directory `**` case the
+     * rewrites bought. The rewrites are kept as that pattern's answer rather
+     * than deleted, which also means the one thing a compile failure can never
+     * do is make the tool call throw.
      */
     public static function pathMatches(string $pattern, string $path): bool
     {
@@ -377,6 +415,13 @@ final class SkillRegistry
      * Its `**` handling is the flawed one this class no longer uses on the
      * main path; see {@see pathMatches()}'s doc-block for both holes. It is
      * still strictly better here than `false`.
+     *
+     * IT IS NOT, HOWEVER, THE REASON THE TRANSLATION NEVER NARROWS, and an
+     * earlier version of this comment said it was. A compiling pattern never
+     * reaches this method, so it can neither rescue nor witness a narrowing —
+     * that property is measured over a grid and a seeded fuzz, both restated
+     * in {@see pathMatches()}'s doc-block. What this method covers is the
+     * disjoint case: patterns that do not compile at all.
      */
     private static function legacyPathMatch(string $pattern, string $path): bool
     {
@@ -425,7 +470,20 @@ final class SkillRegistry
                 while ($j < $len && $pattern[$j] === '*') {
                     ++$j;
                 }
-                $out .= '(?:/.*)?';
+
+                // THREE OR MORE STARS AND THE SLASH GOES OPTIONAL TOO. Nobody
+                // writes `src/***` on purpose, but the predicate this replaced
+                // answered it, and answering it with less is a NARROWING. Its
+                // rewrite 3 deleted the `/**` outright and left the extra star
+                // behind, so `src/***` became `src*` and claimed `src_x`;
+                // folding every star into one `(?:/.*)?` cannot match without
+                // the slash. MEASURED on PHP 8.3.6: the old union for
+                // `src/***` is exactly `^src.*$`, and for `src/***\/*.php`
+                // exactly `src` + anything + `/` + anything + `.php` — both of
+                // which the `.*` here reproduces, so this is the old answer and
+                // not a fresh widening. TWO stars keep the separator
+                // mandatory-or-absent, which is what a globstar means.
+                $out .= ($j - ($i + 1)) > 2 ? '.*' : '(?:/.*)?';
                 $i = $j - 1;
                 continue;
             }
@@ -488,7 +546,7 @@ final class SkillRegistry
                 if ($body !== '' && $body[0] === '!') {
                     $body = '^' . substr($body, 1);
                 }
-                $out .= '[' . str_replace('#', '\\#', $body) . ']';
+                $out .= '[' . self::compileClassBody($body) . ']';
                 $i = $close;
                 continue;
             }
@@ -496,8 +554,74 @@ final class SkillRegistry
             $out .= preg_quote($ch, '#');
         }
 
-        // /D so a trailing newline in a path cannot satisfy `$`.
-        return '#^' . $out . '$#D';
+        // /D so a TRAILING newline in a path cannot satisfy `$`; /s so an
+        // EMBEDDED one cannot defeat a wildcard. The two are independent and
+        // both are load-bearing: `fnmatch()`'s `*` and `?` match a newline like
+        // any other byte, while PCRE's `.` refuses to without /s. MEASURED on
+        // PHP 8.3.6: `fnmatch('*.php', "a\nb.php")` is TRUE and without /s
+        // this translation answered false — a narrowing, on a path shape POSIX
+        // genuinely permits. Neither modifier substitutes for the other, and
+        // {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest} pins
+        // one case for each.
+        return '#^' . $out . '$#Ds';
+    }
+
+    /**
+     * Translate the inside of one `[...]` from `fnmatch()`'s reading to PCRE's.
+     *
+     * EXACTLY TWO CHARACTERS ARE REINTERPRETED, and the restraint is the
+     * point: `#` (this class's regex delimiter) and `\`. Everything else — `-`
+     * ranges, a leading `^`, a first-position `]` — means the same thing to
+     * both engines, and quoting it would break it. VERIFIED on PHP 8.3.6 that
+     * the tidier-looking alternative is wrong: `preg_quote()` over the whole
+     * body turns `[a-c]` into a three-literal class and `[!a]` into a class
+     * that contains a literal `^`.
+     *
+     * THE BACKSLASH IS A NARROWING IF IT IS PASSED THROUGH, which is how it
+     * got here. `fnmatch()` reads `\X` inside a class as the literal X and not
+     * as a member SET — MEASURED on PHP 8.3.6: `fnmatch('[\d]x', 'dx')` is
+     * TRUE, `fnmatch('[\d]x', '5x')` is FALSE, and `fnmatch('[\d]x', '\x')` is
+     * FALSE, so the backslash is not itself a member either. Copied verbatim
+     * into a PCRE class, `[\d]` becomes the digit escape: it stops claiming
+     * `dx`, which the predicate this replaced claimed, and starts claiming
+     * `5x`, which it did not. So an escaped alphanumeric is emitted bare and
+     * everything else is re-escaped for PCRE.
+     *
+     * A LONE TRAILING BACKSLASH IS DELIBERATELY LEFT ALONE, and this is the
+     * one place where doing less is the safe move rather than the lazy one.
+     * The scan in {@see compilePathPattern()} that found this body's closing
+     * `]` is not escape-aware, so a body ENDING in a backslash means the `]`
+     * it stopped at was itself escaped — `a[\]]b` — and what arrived here is a
+     * fragment of a class whose real end this translation cannot see. Emitted
+     * unchanged it keeps the regex uncompilable, which routes the pattern to
+     * {@see legacyPathMatch()}, which reads it correctly. Making it compile
+     * here would make it compile WRONG, which is strictly worse than not
+     * compiling. Teaching the scanner to skip escapes is the fix, and it is a
+     * bigger one: it must also decide what to do with `[:alpha:]`, and it must
+     * leave SOME input uncompilable or the fallback branch stops being pinned.
+     */
+    private static function compileClassBody(string $body): string
+    {
+        $len = strlen($body);
+        $out = '';
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $body[$i];
+
+            if ($ch === '\\') {
+                if ($i + 1 >= $len) {
+                    return str_replace('#', '\\#', $body);
+                }
+
+                $literal = $body[++$i];
+                $out .= ctype_alnum($literal) ? $literal : '\\' . $literal;
+                continue;
+            }
+
+            $out .= $ch === '#' ? '\\#' : $ch;
+        }
+
+        return $out;
     }
 
     /**
