@@ -1148,6 +1148,14 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
      * today, so no verdict in the tree moves; the gap was real and unremarked
      * rather than live.
      *
+     * THE LAST ROW IS THE ONLY ONE THAT PINS THE NEXT-DOCUMENT BOUND, and it
+     * exists because removing that bound left this table entirely green. The
+     * statement bound stops the walk at a `;`, so it hides the borrowing case
+     * in every shape EXCEPT a document with no terminator of its own — which
+     * is exactly the shape the bound was added for. A mutation surviving is
+     * usually the fixture set looking in the wrong place, not the guard being
+     * redundant.
+     *
      * @return iterable<string, array{0: string,1: bool,2: bool}>
      */
     public static function terminatorShapes(): iterable
@@ -1224,6 +1232,25 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
             } }',
             false,
             false,
+        ];
+
+        // WITHOUT THE NEXT-DOCUMENT BOUND THIS ROW ANSWERS `true`, and no other
+        // row in this table does. The statement bound alone cannot catch it:
+        // the bare `result` here has no terminator of its own, so the walk runs
+        // on and reaches the NEXT document's `return`, attributing a failure
+        // exit to a document that never caused one. Found by mutation — the
+        // bound was removed and the whole table stayed green, which is the
+        // fixture set being the wrong window rather than the bound being
+        // unnecessary.
+        yield 'a bare result with no terminator before the next document' => [
+            $head . 'static function f(): int {
+                self::emitDocument(["result" => ["x" => 1]]);
+                self::emitErrorDocument(["error" => ["type" => "y"]]);
+
+                return F::EXIT_FAILURE;
+            } }',
+            false,
+            true,
         ];
 
         yield 'a match return naming both codes' => [
