@@ -427,16 +427,24 @@ final class AgentViewPane
      * Split $text into units {@see truncate()} may not cut apart: a base
      * codepoint plus everything that renders as part of the same glyph.
      *
-     * Hand-rolled rather than delegated, for a version reason rather than a
-     * taste one. {@see Width} is this class's width authority and it IS
-     * grapheme-aware, but its splitter is private, and the intl function that
-     * would replace this outright -- `grapheme_str_split()` -- is PHP 8.4+
-     * while this tree targets 8.3. `grapheme_extract()` does ship with intl
-     * on 8.3, but intl is not a declared dependency of sugar-crush or of
-     * candy-core, so reaching for it would make the truncator behave one way
-     * on a build that has it and another on a build that does not. This runs
-     * on `preg_split('//u')`, which needs no extension at all and so cannot
-     * fatal anywhere PHP itself runs.
+     * Hand-rolled rather than delegated because {@see Width}'s splitter is
+     * PRIVATE. That is the whole of the reason as of round 40 (2026-08-22),
+     * and it is worth saying plainly because the reason used to be a
+     * different one that is no longer true.
+     *
+     * WHAT CHANGED. This paragraph previously argued a VERSION case: that
+     * `grapheme_str_split()` is PHP 8.4+ while the tree targets 8.3, that
+     * `grapheme_extract()` ships with intl on 8.3 but "intl is not a declared
+     * dependency of sugar-crush or of candy-core", and that reaching for it
+     * would therefore split one way on a build that has intl and another on a
+     * build that does not. Every clause of that is now stale: `Width` no
+     * longer calls `grapheme_str_split()` on ANY version (it walks ICU via
+     * `grapheme_extract()` on both, which is what closed E68), and
+     * `candy-core` now declares `ext-intl` in its manifest, so sugar-crush
+     * requires intl transitively whether or not its own manifest names it.
+     *
+     * This still runs on `preg_split('//u')` and so still needs no extension,
+     * which is now a property rather than a justification.
      *
      * Four things join the unit before them:
      *
@@ -454,19 +462,33 @@ final class AgentViewPane
      * table that disagreed with `Width`. What the grouping does to a TOTAL
      * differs by rule, and stating it of all four at once would be wrong.
      *
-     * Neither of the two EMOJI rules -- 3 and 4 -- moves a total. On this
-     * tree's PHP 8.3 `Width::string()` scores a flag 1+1 and a skin-toned
-     * thumb 2+2, the same grouped or ungrouped, so for those two the grouping
-     * changes what may be SPLIT and nothing else; measured over a ZWJ-free
-     * alphabet, 60,000 random strings produced 0 cases where grouping moved
-     * the total. Rule 1 is the opposite and deliberately so: the family emoji
-     * is 2 cells grouped against 6 summed per codepoint, and closing exactly
-     * that gap is why this function exists.
+     * ONE of the two EMOJI rules still moves no total; the other now does.
+     * MEASURED on PHP 8.3.6 with intl, before and after round 40's E68 fix
+     * (`Width::string()` of the whole against the sum of its codepoints):
      *
-     * The 1+1 and 2+2 figures are PHP 8.3's, not universal. On an 8.4 build
-     * `Width` splits with `grapheme_str_split()` and the same flag measures 1
-     * grouped against 2 summed, the same thumb 2 against 4 -- measured against
-     * a simulated 8.4 path, not assumed.
+     *   shape        | grouped before -> after | summed (unchanged)
+     *   flag (RI)    |        2 -> 2           |        2
+     *   thumb+tone   |        4 -> 2           |        4
+     *   family (ZWJ) |        2 -> 2           |        6
+     *   Hangul L+V+T |        4 -> 2           |        4
+     *
+     * So rule 3 (flags) still changes only what may be SPLIT. Rule 4 (skin
+     * tone) now closes a 2-cell gap that did not exist when this docblock was
+     * written -- `Width` scored a toned thumb 4 before the fix and scores it 2
+     * now. Rule 1 is unchanged and is still why this function exists: the
+     * family emoji is 2 grouped against 6 summed.
+     *
+     * THE STALE CLAIM THIS REPLACES, named so nobody re-derives it from a
+     * cached memory of the file: this said "neither of the two EMOJI rules
+     * moves a total", that a flag scores "1+1" and a toned thumb "2+2" the
+     * same grouped or ungrouped, and that on an 8.4 build the flag would
+     * measure 1 against 2 and the thumb 2 against 4. There is no longer ANY
+     * 8.3/8.4 divergence to state -- that was E68, and it is fixed.
+     *
+     * NEW AND UNCLOSED, in the safe direction: Hangul L+V+T is 2 grouped and
+     * 4 summed, and rules 1-4 do not group it (see the UAX #29 note below), so
+     * this splitter now OVER-counts a Hangul syllable by 2 cells. Over-counting
+     * under-fills a row; it cannot over-run one.
      *
      * This is not full UAX #29 and does not claim to be. Hangul syllables,
      * Indic conjuncts and prepend marks are still split at codepoint
@@ -550,19 +572,26 @@ final class AgentViewPane
      * What that does and does not buy is worth keeping straight. Agreement is
      * per unit, and units are grouped by {@see clusters()}'s four rules rather
      * than by UAX #29 — so a sequence outside those rules (conjoining Hangul
-     * jamo, an Indic conjunct) is still split at a codepoint boundary. On this
-     * tree's PHP 8.3 that costs no width error at all: `Width` splits with
-     * `mb_str_split()` there, one codepoint per cluster, so the whole-string
-     * measure IS the per-codepoint sum for anything without a ZWJ in it —
-     * measured, L+V+T is 4 either way. On a PHP 8.4 build `Width` would split
-     * with `grapheme_str_split()` and score that syllable by its first
-     * codepoint, 2, where the sum here is still 4.
+     * jamo, an Indic conjunct) is still split at a codepoint boundary.
      *
-     * That residual gap runs in the safe direction: on 8.4 the per-unit sum is
-     * the LARGER -- measured, a jamo-spelled Hangul syllable is 4 summed here
-     * against 2 whole, a Devanagari conjunct 4 against 1 -- so the loop spends
-     * its budget early and cuts sooner than it had to. It can drop a character
-     * that would have fit; it does not over-run.
+     * ⚠️ THIS USED TO COST NOTHING ON 8.3 AND NOW COSTS THE SAME ON BOTH
+     * VERSIONS. The paragraph here previously said `Width` splits with
+     * `mb_str_split()` on 8.3, one codepoint per cluster, so "the whole-string
+     * measure IS the per-codepoint sum for anything without a ZWJ in it —
+     * measured, L+V+T is 4 either way", and that only a PHP 8.4 build would
+     * score the syllable 2 against a sum of 4. Round 40's E68 fix made `Width`
+     * walk ICU on EVERY version, so the 8.4 number is now the only number:
+     * MEASURED on PHP 8.3.6, L+V+T is **2 whole against 4 summed here**, where
+     * before the fix it was 4 either way.
+     *
+     * That residual gap runs in the safe direction, and that part is unchanged:
+     * the per-unit sum is the LARGER -- measured post-fix, a jamo-spelled
+     * Hangul syllable is 4 summed here against 2 whole, a Devanagari conjunct 4
+     * against 1 -- so the loop spends its budget early and cuts sooner than it
+     * had to. It can drop a character that would have fit; it does not
+     * over-run. What changed is that this is now a real gap on the build this
+     * tree actually runs, rather than a hypothetical one about a build it does
+     * not.
      *
      * Do NOT read that reassurance back onto the truncator this replaced. The
      * same "over-truncates, never over-runs" was said of the per-codepoint

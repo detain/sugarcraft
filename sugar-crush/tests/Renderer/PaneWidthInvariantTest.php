@@ -1292,8 +1292,9 @@ final class PaneWidthInvariantTest extends TestCase
      * cannot be cut, so the two must be the same thing. They are not, and the
      * reason is a THIRD disagreement between candy-core's two width
      * accountings — one the cluster measurements in
-     * {@see Renderer::wrapToPane()} do not cover, and one that outlives PHP
-     * 8.4's `grapheme_str_split()` because it is not about clusters at all.
+     * {@see Renderer::wrapToPane()} do not cover, and the ONLY one still live
+     * after round 40's E68 fix gave `Width` a single ICU segmentation on every
+     * PHP version, because it is not about clusters at all.
      *
      * `Width::of()` measures `Ansi::strip($row)`, and `strip()` consumes a
      * TWO-BYTE escape whose second byte is an ECMA-48 Fe final (0x40-0x5f —

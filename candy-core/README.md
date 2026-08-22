@@ -50,7 +50,13 @@ final class Counter implements Model
 ## Requirements
 
 - PHP 8.1+ (PHP 8.4+ recommended on Windows for FFI `SetConsoleCtrlHandler` support)
-- `mbstring`, `intl` (for grapheme width)
+- `mbstring`
+- `intl` — **required, and now declared as `ext-intl` in `composer.json`.** `Width`'s grapheme
+  segmentation is built on ICU via `grapheme_extract()`. Without it every width measure falls
+  back to per-codepoint counting, which is self-consistent but wrong for any cluster — a
+  skin-toned emoji measures 4 cells instead of 2 — and the cell-budget invariants the TUI
+  renderers rely on stop holding. It was a silent requirement before round 40 (2026-08-22):
+  the manifest omitted it while this list already named it.
 - `pcntl` (signal handling — POSIX only; not available on Windows)
 - `FFI` extension (required on Windows for raw TTY support)
 - `react/event-loop` ^1.6 (Composer)

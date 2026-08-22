@@ -365,6 +365,30 @@ final class WidthTest extends TestCase
      * string scored 5 against a budget of 7 and came back as ONE line of 8
      * cells. At `TAB_WIDTH` it breaks, and both lines are 2 cells.
      */
+    /**
+     * The tab charge is FOUR, asserted as a literal, in the library that owns
+     * the constant.
+     *
+     * Every other tab assertion added in round 40 — here and in
+     * candy-sprinkles' StyleTest — is written in terms of `Width::TAB_WIDTH`,
+     * so all of them agree with each other for any value the constant takes.
+     * MEASURED: `TAB_WIDTH = 4` -> `= 8` was killed ONLY by a pre-existing
+     * candy-sprinkles test (`testUnsetTabWidthRevertsToFour`), which means
+     * candy-core's own suite pinned nothing about the value and the constant
+     * could have drifted with this lib green. A shared constant makes two
+     * measures AGREE; it does not make either of them RIGHT.
+     *
+     * Four is not arbitrary: it is what `Style::render()` has always expanded a
+     * tab to, so changing it changes rendered output everywhere.
+     */
+    public function testATabIsChargedExactlyFourCells(): void
+    {
+        self::assertSame(4, Width::TAB_WIDTH);
+        self::assertSame(4, Width::string("\t"));
+        self::assertSame(8, Width::string("\t\t"));
+        self::assertSame(5, Width::string("a\t"));
+    }
+
     public function testWrapAnsiChargesATabTheSameCellsAsEveryOtherMeasure(): void
     {
         $lines = explode("\n", Width::wrapAnsi("ab\tcd", 7));

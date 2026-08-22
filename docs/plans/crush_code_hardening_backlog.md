@@ -4347,8 +4347,23 @@ fix (its first assertion PINNED the flags defect) and was repointed at this live
 flags case as a fixed-and-pinned equality. Worth its own finding if anyone wants the bound closed.
 
 **Also found, out of scope:** the `grapheme_str_split() -> mb_str_split()` cascade that caused this is
-duplicated in `sugar-charts` (3 sites), `sugar-table` (2), `sugar-stickers`, `sugar-calendar` and
-`candy-lister`. Each degrades to codepoint splitting on PHP 8.3 exactly as `Width` did.
+duplicated in `sugar-charts` (3 sites), `sugar-table` (2), `sugar-stickers` (1) and `sugar-calendar`
+(1) — **seven sites in four libs**. Each degrades to codepoint splitting on PHP 8.3 exactly as `Width`
+did.
+
+⚠️ `candy-lister` was listed here and **has no such cascade** — `grep -rl grapheme_str_split
+candy-lister/src` returns nothing. Caught by the round-40 reviewer and re-verified by the supervisor.
+A wrong name in a to-do list costs the next lane a wasted file-open, which is cheap; a wrong name that
+makes a five-lib job look like a four-lib job is the kind of miscount this tracker exists to stop.
+
+**And the descoping is no longer neutral.** With `Width` now walking ICU on every version and those
+four libs still splitting per-codepoint on PHP 8.3, `candy-core` and its consumers **disagree about
+what a cluster is** on the build this tree runs — which is the very shape E69 is about. Measured by
+the reviewer in the worst case found, `sugar-table/src/Column.php::wrapCharacter()`: it gates on
+`Width::of($text)` (now 2 for a toned thumb) and then sums `Width::of()` per **codepoint** (4). The
+result is under-fill plus a mid-cluster split, **not** over-wide output (`thumbTone x6` at width 4
+gives 6 lines, widest 2), so nothing is corrupted — but the disagreement is now real rather than
+latent, and closing it is a lane, not a footnote.
 `findings/README.md` already records the duplication as a shape ("repeated in 8+ libs") but not as a
 correctness defect.
 
@@ -4416,11 +4431,66 @@ after the substitution. A tab is a Control character, which by UAX #29 never joi
 a space is not, and does. So `"\t" . U+1F3FD` is `TAB_WIDTH + 2` cells while the rendered
 `"    " . U+1F3FD` is `TAB_WIDTH` — the modifier joins the final space and contributes 0. That is the
 same two-codepoint input this finding delta-debugged. Measured over 4,797 tab-bearing random strings,
-`Style::render()` moving `Width::string()`: **4,797/4,797 (100%) at `8add627b` -> 568/4,797 (11.84%)**,
-and **all 568 are that one shape, 0 unexplained**. Only not rewriting the content closes it, which is
-`Style::tabWidth(0)`. Both the property and the residue are pinned in `candy-sprinkles/tests/StyleTest.php`.
+`Style::render()` moving `Width::string()`: **4,797/4,797 (100%) at `8add627b` -> 568/4,797 (11.84%)**.
+Only not rewriting the content closes it, which is `Style::tabWidth(0)`. Both the property and the
+residue are pinned in `candy-sprinkles/tests/StyleTest.php`.
+
+🔴 **CORRECTION — "all 568 are that one shape, 0 unexplained" IS FALSE, and the half it misses is the
+dangerous half.** Found by the round-40 reviewer, independently reproduced by the supervisor. The
+residue is **BIMODAL**: the shape above renders NARROWER than `Width::string()` predicts, and a second
+shape — `\t` followed by a **ZWJ** — renders **WIDER**. The reviewer's corpus put it at 667
+disagreements of 4,797 (13.90%), **425 narrower and 242 wider**, delta histogram
+`+4:219 −1:217 −2:206 +6:20 −3:2 +3:1 +2:1 +8:1`. Supervisor-measured on PHP 8.3.6, directly:
+
+| input | `Width::string(in)` | `Width::string(render(in))` | delta |
+|---|---|---|---|
+| `"\t"` | 4 | 4 | 0 |
+| `"\t" U+1F3FD` | 6 | 4 | **−2** |
+| `"\t" ZWJ U+1F44D` | **0** | **6** | **+6** |
+| `"a\t" ZWJ U+1F44D` | 1 | 7 | **+6** |
+
+**Why the +6 direction is the one that matters.** A measure that OVER-reports makes a pane under-fill;
+a measure that UNDER-reports makes it **over-run**, and an over-wide row is frame corruption — the diff
+renderer paints one line per row. `Width::string("\t" ZWJ U+1F44D)` returning **0** for something that
+takes **6 cells** is a budget saying "this is free". Mechanism, per the reviewer: in `Width::compute()`'s
+ZWJ state machine a Control before a ZWJ makes ICU emit the ZWJ as its own cluster, the
+`$clusters[$i+1] === 0x200d` look-ahead then zeroes the tab, and `inZwjSequence` zeroes the emoji after
+it.
+
+**Pre-existing** — the same inputs behave identically on the pre-fix code, so this is not a regression
+of the E68/E69 work and E69 stays correctly fixed for what it claimed. What is corrected here is the
+**completeness claim**, which is exactly §5's defect: a figure measured over one shape, written as a
+property of the whole residue. Recorded as **E73** below rather than fixed in this round — it is a
+change to candy-core's ZWJ state machine, not to the tab rule, and it deserves its own diff.
 
 **Residue also left deliberately:** a `Style` with a non-default `tabWidth` still disagrees with
 `Width::string()` by `abs($tabWidth - TAB_WIDTH)` per tab; documented on `Width::TAB_WIDTH` and pinned.
 Note `\SugarCraft\Dash\Components\Card\Highlight` carries its OWN unrelated `$tabWidth` field, same
 name, same default of 4, settable to any value >= 1 — a fourth tab-width authority, untouched.
+
+---
+
+### E73 — `Width::compute()`'s ZWJ state machine scores a Control-before-ZWJ sequence 0
+
+**Recorded 2026-08-22 by the round-40 `lsp` reviewer; supervisor-reproduced.** Split out of E69's
+residue, whose "0 unexplained" completeness claim it refutes (see the correction in the E69 stamp).
+
+**What.** `Width::string()` returns **0** for `"\t" ZWJ U+1F44D`, which `Style::render()` lays out as
+**6 cells**; `"a\t" ZWJ U+1F44D` scores 1 against 7. A Control character before a ZWJ makes ICU emit
+the ZWJ as its own cluster; `compute()`'s `$clusters[$i+1] === 0x200d` look-ahead then zeroes the
+Control, and its `inZwjSequence` flag zeroes the emoji that follows.
+
+**Severity.** Medium, and it is in the **over-run** direction: a caller that budgets with
+`Width::string()` and lays out through `Style` is told a 6-cell run is free. Over-wide rows are frame
+corruption in this tree (the diff renderer paints one line per row), which is the class §3 says to fix
+rather than defer. It is bounded in practice only by how rare a tab-then-ZWJ is in a pane string.
+
+**Where.** `candy-core/src/Util/Width.php::compute()` (the ZWJ branch), against
+`candy-sprinkles/src/Style.php::render()`.
+
+**Not a regression.** The pre-fix code scores these inputs identically. E68 and E69 stay fixed.
+
+**Step.** Make the ZWJ look-ahead refuse to absorb a Control (or any character that cannot join under
+UAX #29) rather than zeroing whatever precedes a ZWJ. Land it with the property that is false today:
+for every input, `Width::string(Style::new()->render($x))` must equal `Width::string($x)` — currently
+false in BOTH directions, so assert the sign of the disagreement, not just its magnitude.
