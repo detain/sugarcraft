@@ -20,6 +20,7 @@ use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookManager;
@@ -873,6 +874,40 @@ final class Bootstrap
         self::$launchNotices = [];
         self::$launchNoticesDropped = [];
 
+        // THE MID-SESSION HALF OF THE SAME SEAM, armed here and for the same
+        // reason the two lines above are reset here (E171). The list above is
+        // drained into {@see Chat::withLaunchNotices()} exactly ONCE, at the
+        // end of this method, so a warning raised after that — by a tool-call
+        // parser mid-turn, by a provider that degraded on turn forty — has no
+        // reader at all. {@see RuntimeNoticeSink} is that reader's inbox, and
+        // {@see Chat::subscriptions()} is what polls it.
+        //
+        // ARMED HERE SPECIFICALLY BECAUSE OF THE FORK, not for tidiness.
+        // {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}
+        // runs the whole engine loop — provider, parser, tools — inside a
+        // `pcntl_fork()`ed child, and a child can only inherit a transport that
+        // already existed when it was forked. A turn cannot start before the
+        // `Chat` this method returns, so anywhere in here is before every fork;
+        // anywhere later would not be.
+        //
+        // AND ARMED HERE RATHER THAN AT THE SINK'S FIRST WRITE, which is the
+        // half that keeps the `-p` one-shot out of it. `RuntimeNoticeSink`
+        // DROPS until something arms it, and the only reader is
+        // `Chat::subscriptions()` — so the seam opens exactly where a `Chat`
+        // is built and nowhere else. {@see \SugarCraft\Crush\Cli\NonInteractive}
+        // never reaches this method (it goes straight to `backend()` and
+        // `complete()`), so a `-p` run keeps every one of these diagnostics on
+        // stderr, where its caller can read them, instead of queueing them in a
+        // process that is about to exit.
+        //
+        // RESET BEFORE ARM, for the reason the two `$launchNotices` lines above
+        // are reset here: this method can run twice in one process (the
+        // second-scan path, a test), and the second Chat must not inherit the
+        // first's undrained inbox. `arm()` is idempotent, so the reset is what
+        // makes the pair re-entrant rather than the arm.
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm();
+
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell
         // whose home it is in, which is what stops the launch reading policy
@@ -1039,6 +1074,13 @@ final class Bootstrap
             // {@see projectCommandShellIsTrusted()}. A null $root cannot be
             // trusted by a list of absolute paths, so it is false without asking.
             projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted($root),
+            // THE APPOINTMENT THAT MAKES THE ARM ABOVE MEAN SOMETHING (E171).
+            // `RuntimeNoticeSink::arm()` at the top of this method opens the
+            // inbox; this is what says WHICH Chat reads it. The two belong
+            // together because `drain()` is destructive — a second Chat that
+            // polled would steal rows rather than duplicate them — and this
+            // method is the only place in `src/` that does either.
+            drainsRuntimeNotices: true,
         );
 
         // Drained AFTER construction for the same reason the workflow registry's

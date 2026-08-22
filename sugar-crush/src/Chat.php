@@ -23,6 +23,7 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
@@ -391,6 +392,27 @@ final class Chat implements Model
      * exists to make impossible.
      */
     private const STATUS_LINE_SUBSCRIPTION = 'crush.status-line';
+
+    /**
+     * Reconciliation id of the runtime-notice poll subscription (E171).
+     * Stable across rebuilds for {@see BACKGROUND_POLL_SUBSCRIPTION}'s reason.
+     */
+    private const RUNTIME_NOTICE_SUBSCRIPTION = 'crush.runtime-notice-poll';
+
+    /**
+     * How often the runtime-notice inbox is polled (seconds) while the tick is
+     * declared at all.
+     *
+     * SLOWER THAN {@see TOOL_EVENT_POLL_SECONDS} ON PURPOSE, and the difference
+     * is not a guess about cost. A tool event is a two-state walk the user
+     * watches — running, then done — so a tenth of a second is the difference
+     * between a visible transition and a jump. A notice is one static row of
+     * prose about something that already went wrong; half a second later it
+     * reads identically, and the slower tick halves the wake-ups on the exact
+     * path (a turn in flight) where the loop is also servicing the tool-event
+     * pump, the provider socket and the spinner.
+     */
+    private const RUNTIME_NOTICE_POLL_SECONDS = 0.5;
 
     /**
      * Stable head of the context-usage reminder {@see contextReminderMessage()}
@@ -968,6 +990,40 @@ final class Chat implements Model
          * permission gate adds on top of it.
          */
         private readonly bool $projectCommandsTrusted = false,
+        /**
+         * Whether THIS Chat is the process's drain owner for
+         * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink} (E171).
+         *
+         * ONE INBOX, ONE READER, AND THAT IS WHY THIS IS A FIELD RATHER THAN A
+         * GLOBAL. The sink is process-wide because the subsystems that write to
+         * it are `final readonly` value objects several layers below anything
+         * holding a model, and on the interactive path they are not even in
+         * this process — see that class's doc-block. Its DRAIN is destructive:
+         * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
+         * takes the rows and clears them. So a second Chat that also polled
+         * would not duplicate the rows, it would STEAL them, and which of the
+         * two transcripts a warning landed in would be whichever one's tick
+         * fired first.
+         *
+         * DEFAULTS TO FALSE, which makes {@see subscriptions()} independent of
+         * process-wide state for every Chat nobody appointed — an embedder's, a
+         * test's, one built by a subcommand. That is not a convenience: it is
+         * MEASURED. With the poll conditioned on the sink alone,
+         * `--filter '(BootstrapTest|DsmlToolCallParserTest|MinimaxXmlFallback`
+         * `ToolCallParserTest|StatusLineSegmentTest|ChatTest|AppModelTest)'`
+         * (PHP 8.3.6) went `Tests: 381, Failures: 2` — two cases in
+         * `tests/Renderer/StatusLineSegmentTest` asserting that an idle Chat
+         * declares no subscription, reddened by a row a parser test twenty
+         * classes earlier had left in a static. The tests were right and the
+         * condition was wrong: an idle Chat that never owned the inbox has
+         * nothing to poll for.
+         *
+         * SET IN EXACTLY ONE PLACE — {@see \SugarCraft\Crush\Cli\Bootstrap::chat()},
+         * which is also the only caller of `RuntimeNoticeSink::arm()` in
+         * `src/`. Appointing the reader and opening the inbox are the same
+         * decision and are made in the same method.
+         */
+        private readonly bool $drainsRuntimeNotices = false,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -1117,6 +1173,9 @@ final class Chat implements Model
         }
         if ($msg instanceof ToolEventPumpMsg) {
             return $this->pumpLiveToolEvents();
+        }
+        if ($msg instanceof RuntimeNoticePumpMsg) {
+            return $this->pumpRuntimeNotices();
         }
         if ($msg instanceof StatusLineTickMsg) {
             // The `statusLine` command's ONE side-effecting call site. Runs
@@ -5228,6 +5287,11 @@ final class Chat implements Model
             // the trust grant evaporate on the first character typed and turn
             // every project command's !`cmd` into a refusal.
             'projectCommandsTrusted' => $this->projectCommandsTrusted,
+            // A field missing from this map silently resets on the next
+            // keystroke — for this one that would mean the drain owner stops
+            // being the drain owner the moment the user types, and every
+            // mid-session notice for the rest of the session goes nowhere.
+            'drainsRuntimeNotices' => $this->drainsRuntimeNotices,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -10681,7 +10745,12 @@ final class Chat implements Model
      * Declare the recurring work this model needs the runtime to drive
      * (crush_feat.md section 5 E4).
      *
-     * Two things:
+     * FOUR THINGS. IT SAID "TWO" AND ENUMERATED TWO, and both halves were true
+     * when written; the `statusLine` clock and then the runtime-notice poll
+     * arrived below without this sentence moving, so a reader who trusted the
+     * count stopped reading at the second bullet — which is where the two
+     * conditional ticks that are easiest to get wrong begin. The list below is
+     * the first two; the other two document themselves at their `if`.
      *
      *   - waking up often enough to run
      *     {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::tick()},
@@ -10721,6 +10790,41 @@ final class Chat implements Model
                 self::TOOL_EVENT_POLL_SUBSCRIPTION,
                 self::TOOL_EVENT_POLL_SECONDS,
                 static fn (): \SugarCraft\Core\Msg => new ToolEventPumpMsg(),
+            );
+        }
+
+        // The mid-session transcript seam's poll (E171). Declared on the same
+        // terms as the two above and for the same stated reason: an
+        // unconditional tick would keep a timer waking the loop and repainting
+        // forever on a launch where nothing ever warns, which is the
+        // overwhelmingly common one.
+        //
+        // `hasPending()` is a QUERY, never a drain — see its doc-block. It is
+        // one array check, or on the cross-fork transport one `stream_select()`
+        // with a zero timeout. It runs once per `Program` reconcile, i.e. once
+        // per Msg, not on a timer of its own.
+        //
+        // GATED ON $drainsRuntimeNotices FIRST, and that clause is not
+        // defensive tidiness — see the property's doc-block for the two
+        // StatusLineSegmentTest cases that measured what its absence costs.
+        // `drain()` is destructive, so a second polling Chat would steal rows
+        // from the real transcript rather than duplicate them.
+        //
+        // ORed WITH $inFlight RATHER THAN RELYING ON hasPending() ALONE, and
+        // that is the load-bearing half. Every mid-session emitter E171 names
+        // — the two tool-call parsers, `SglangProvider`, `AgentWorkerPool`,
+        // `WorktreeManager` — raises its notice DURING a turn, and on the
+        // interactive path it does so inside
+        // {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
+        // forked child. Waiting for `hasPending()` to go true would work, but
+        // only on whatever Msg happened to arrive next; arming for the whole
+        // turn means the row appears while the turn is still running, which is
+        // the entire point of a seam that is not launch-only.
+        if ($this->drainsRuntimeNotices && ($this->inFlight || RuntimeNoticeSink::hasPending())) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::RUNTIME_NOTICE_SUBSCRIPTION,
+                self::RUNTIME_NOTICE_POLL_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new RuntimeNoticePumpMsg(),
             );
         }
 
@@ -10816,6 +10920,52 @@ final class Chat implements Model
             'history' => [...$this->history, ...$notices],
             'backgroundStatuses' => $statuses,
         ]), null];
+    }
+
+    /**
+     * Drain {@see RuntimeNoticeSink} into the transcript (E171).
+     *
+     * THE READER THAT THE LAUNCH SEAM DOES NOT HAVE. Warnings raised while
+     * `Bootstrap` was BUILDING this Chat reach the transcript through
+     * {@see withLaunchNotices()}, which is called once at construction.
+     * Warnings raised after that — a tool-call parser refusing a malformed
+     * invoke on turn forty, a provider degrading mid-session — had only
+     * `error_log()`, i.e. fd 2, i.e. a frame the renderer believes it owns and
+     * a primary buffer the user does not see again until they quit.
+     *
+     * {@see Role::System} rows, the same shape `withLaunchNotices()` uses and
+     * for its reason: {@see Renderer} already lays out, wraps and scrolls that
+     * role at every width, so a warning routed here inherits a correct surface
+     * instead of a banner that would have to learn all of it again.
+     *
+     * ONE APPEND FOR THE WHOLE BATCH, unlike {@see pumpLiveToolEvents()}. That
+     * method renders between entries because a tool call has a running→done
+     * walk worth seeing; a notice is finished prose the moment it exists, and
+     * rendering between two of them would only cost a repaint. The batch is
+     * bounded at the sink — see {@see RuntimeNoticeSink::drain()} — so "the
+     * whole batch" cannot be unbounded.
+     *
+     * $this UNCHANGED when nothing was pending, which the tick makes the
+     * common case: `Program` re-renders after every update, and returning a
+     * new-but-identical Chat would repaint the transcript twice a second for
+     * the whole of every turn.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function pumpRuntimeNotices(): array
+    {
+        $notices = RuntimeNoticeSink::drain();
+
+        if ($notices === []) {
+            return [$this, null];
+        }
+
+        $messages = [];
+        foreach ($notices as $notice) {
+            $messages[] = Message::system($notice);
+        }
+
+        return [$this->mutate(['history' => [...$this->history, ...$messages]]), null];
     }
 
     /**

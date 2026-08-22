@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers\ToolCallParser;
 
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -103,6 +104,23 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
     }
 
     /**
+     * WHERE EACH DIAGNOSTIC GOES, AND THE RULE IS THE SIBLING'S (E170/E171).
+     * {@see DsmlToolCallParser::parseDsml()} states it in full: a notice goes
+     * on the mid-session transcript seam,
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, if and
+     * only if the parser did not produce the call the model asked for; a
+     * recovery stays on `error_log()` alone, because a seam row is a
+     * `Role::System` message re-sent to the model on every subsequent turn.
+     *
+     * FOUR OF THIS CLASS'S SEVEN ARE ON THE SEAM: every envelope fenced, an
+     * `<invoke>` with no readable name, an invoke refused whole, and an
+     * unclosed invoke with no parameter recovered. The other three describe a
+     * call that still fired, or a parameter-level refusal whose consequence the
+     * invoke-level notice already reports. Both sides are counted from the
+     * token stream by
+     * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s channels
+     * 3 and 6 rather than written down here as a pair of integers.
+     *
      * @return array<ToolCall>|null
      */
     private function parseXml(string $content): ?array
@@ -114,7 +132,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
             // See DsmlToolCallParser::parseDsml() for why a guard that can drop
             // a genuine call has to say so. This parser gets the fence guard
             // only, so the one shape that reaches here is a quoted envelope.
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'MinimaxXmlFallbackToolCallParser: content carries "%s>" but every occurrence sits '
                 . 'inside a ``` code fence, which reads as a quotation of the protocol rather than '
                 . 'a tool call. No tool call recovered.',
@@ -137,7 +155,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                 $name = $invoke['attributes']['name'] ?? null;
 
                 if ($name === null || $name === '') {
-                    error_log(sprintf(
+                    RuntimeNoticeSink::warn(sprintf(
                         'MinimaxXmlFallbackToolCallParser: an <invoke> element at byte %d carries no '
                         . 'parseable name="..." attribute and is being dropped; that tool call is lost.',
                         $invoke['offset'],
@@ -156,7 +174,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                 // the parameter failed to match, so the call fired with the
                 // argument MISSING and nothing was logged.
                 if ($arguments === null) {
-                    error_log(sprintf(
+                    RuntimeNoticeSink::warn(sprintf(
                         'MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
                         . 'the invoke of "%s" is being refused whole because one of its parameters '
                         . 'could not be read; firing it would run the tool with an argument the model '
@@ -168,7 +186,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                 }
 
                 if ($invoke['terminator'] !== 'close' && $arguments === []) {
-                    error_log(sprintf(
+                    RuntimeNoticeSink::warn(sprintf(
                         'MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
                         . 'an <invoke> of "%s" is never closed AND carries no readable parameter; '
                         . 'dropping it rather than firing a zero-argument call.',

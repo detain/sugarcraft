@@ -7429,3 +7429,126 @@ paragraph of every file**, where every sibling addition necessarily matches.
 a sibling's additions fall inside its PREDICATE, not merely inside its scan scope.** Assertions are still
 a lower bound, not an equality — but "walks a directory a sibling touches" is not sufficient reason to
 expect an overshoot, and predicting one and being wrong costs the prediction its credibility.
+
+### Ea47-1 — route the remaining three mid-session emitter classes onto the seam
+
+`SglangProvider` (3 sites), `AgentWorkerPool` (1) and `WorktreeManager` (4) are the emitters E171 names
+that round 47 lane a did not reach — all outside its file list. The seam, its `arm()`, its ownership
+model and its census channel 6 now exist, so each is a one-line change plus a routing decision under the
+rule both tool-call parsers' class doc-blocks state: *a notice goes on the seam iff the emitter did not
+produce the thing the caller asked for.* Each also needs a channel-6 roster bump and a channel-3
+decrement in `tests/Cli/StderrEmitterCensusTest.php`.
+
+`WorktreeManager`'s four are the most valuable: a worktree that could not be created is an action the
+user asked for that did not happen, and today it is a line on a terminal frame the renderer believes it
+owns.
+
+**Step.** One PR per emitter class, in that order, each with its routing decision written into the class
+doc-block and its census bumps in the same commit.
+
+### Ea47-2 — a notice raised while no turn is in flight waits for the next Msg
+
+`Chat::subscriptions()` declares the runtime-notice tick on `$this->inFlight || RuntimeNoticeSink::hasPending()`,
+and `hasPending()` is consulted only when `Program` reconciles, i.e. on the next Msg of any kind. For the
+two tool-call parsers this never bites — they run only inside a turn, so `inFlight` is already true. It
+will bite the moment `Ea47-1` lands: `AgentWorkerPool` and `WorktreeManager` can warn with the UI idle,
+and such a row sits invisible until the user presses a key.
+
+Not fixed in round 47 because the obvious alternative — an unconditional tick — is the objection
+`subscriptions()`' own doc-block raises three times, and paying a permanent timer on every launch to
+cover a case that does not yet exist is the wrong trade.
+
+**Step.** Land with `Ea47-1`, not before. The likely shape is a one-shot self-cancelling tick armed by
+whatever wakes the loop for a background worker, rather than a permanent one.
+
+### Ea47-3 — there is no PHPUnit-level reset for `RuntimeNoticeSink`
+
+Appointment (`Chat::drainsRuntimeNotices`) made the leak round 47 found unreachable, but the sink is
+still a process-wide static that any test can arm via `Bootstrap::chat()` and fill via a parser. A
+`PHPUnit\Runner\Extension` resetting it per test case would make that structural rather than a property
+of who happens to be appointed. Registering one needs an `<extensions>` block in `sugar-crush/phpunit.xml`,
+which no round-47 lane was allowed to touch.
+
+**Generator for the current emitter list** (re-run before acting; the answer changes as `Ea47-1` lands):
+mutate `RuntimeNoticeSink::record()` to append its calling test class to a file, run the full suite,
+`sort | uniq -c`. Round 47 measured 262 armed records across six classes.
+
+### Ea47-4 — channel 6's alphabet is blind to four call shapes, not the one its doc-block named
+
+MEASURED on PHP 8.3.6 by running `StderrEmitterCensusTest::scan()` over a fixture per shape; each scans
+as **0** where the bare spelling scans as 1:
+
+| shape | channel 6 |
+|---|---|
+| `RuntimeNoticeSink::warn("x")` (control) | 1 |
+| `self::warn("x")` / `static::warn("x")` | 0 |
+| `$c = RuntimeNoticeSink::class; $c::warn("x")` | 0 |
+| `call_user_func([RuntimeNoticeSink::class, "warn"], "x")` | 0 |
+| `use A\B\RuntimeNoticeSink as Sink; Sink::warn("x")` | 0 |
+
+Round 47 closed the one load-bearing consequence — the `self::`/`static::` shape inside the sink itself,
+which `testTheTwoEmitterFunnelsDoNotCountTheSameWrite`'s "the sink calls its own warn()" assertion could
+not see — by adding `methodCallSites()`, a receiver-agnostic scanner asked of that one file. The other
+three remain blind for `src/` at large. They fail **quiet**, not wrong: a site becomes invisible rather
+than mis-attributed, which is the shape rule 14 warns about.
+
+**Step.** A `use`-statement resolver in `scan()` would close the alias case and would also strengthen
+channels 1, 2 and 5. The variable-class-name and `call_user_func` cases need a different instrument and
+are probably not worth one until a site of that shape exists.
+
+### Ea47-5 — two copies of `flattened()`
+
+`tests/Cli/StderrEmitterCensusTest.php` and `tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php`
+each carry a private copy. The former already records this as a deferred finding; it is still open. A
+test-support trait is the home.
+
+### Ea47-6 — E172's premise is dead; retire or restate it
+
+E172 says three `CommandLoader` sites duplicate a message already on the seam. VERIFIED AT SOURCE, round
+47: `src/Commands/CommandLoader.php` has **one** `error_log()`, in the private `report()` funnel, gated
+off by default behind `DEBUG_REFUSALS_ENV` — round 46 funnelled 5→1 and gated it. And those refusals are
+not reachable from the mid-session sink even in principle: they are accumulated during construction and
+drained by `Bootstrap::reportProjectTierRefusals()` into `warnPermissionConfigInTranscript()`, the
+**launch** seam, which is the correct home for a launch-time refusal.
+
+**Step.** Supersede E172 rather than schedule it.
+
+### Ea47-7 — the `src/` census bumps in `BuiltInToolCorpusTest` collide across lanes
+
+`tests/Tools/BuiltInToolCorpusTest.php` pins `290` files / `concrete 240` / `309` declarations, and
+`src/Context/RepoMapBlock.php` restates two of them. All three are cardinalities over `src/`, so any
+sibling lane that added a `src/` file in the same round has bumped or must bump the same literals.
+
+**Step.** Supervisor re-derives at merge and takes neither side's number. Longer term this is E188's
+problem and wants the figures derived by the test rather than written into the constant.
+
+### Ea47-8 — the seam has no session-wide cap on the transport backend
+
+`RuntimeNoticeSink::record()` returns before it reaches `NOTICE_LIMIT` whenever the cross-fork transport
+exists — i.e. on every interactive launch. So `NOTICE_LIMIT` bounds the array backend's queue and
+`drain()`'s per-tick batch, and nothing bounds the session total but the kernel send buffer (measured at
+167 datagrams). A generation with N malformed invokes therefore puts N `Role::System` rows in the
+transcript, each resent to the model on every later turn, delivered 20 per 0.5 s tick.
+
+This is not the same guarantee `Bootstrap::LAUNCH_NOTICE_LIMIT` gives the launch list, which caps at 24
+and synthesises one overflow row. Round 47 corrected the class doc-block that claimed the two were the
+same argument, and left the behaviour alone: unlike the launch list, this inbox has no point at which it
+is known to be complete, so "cap at N and synthesise an overflow row" needs a decision about what N means
+across a session rather than across a batch.
+
+**Step.** Decide the scope first, then implement. A per-session counter that survives `drain()` and
+synthesises one overflow row on crossing is the obvious shape; the open question is whether it resets per
+turn, per session, or never.
+
+### Ea47-9 — `RUNTIME_NOTICE_POLL_SECONDS` has no upper bound and cannot cheaply get one
+
+Round 47 pinned the relation its doc-block argues for — the notice tick is slower than
+`TOOL_EVENT_POLL_SECONDS`, is non-zero, and is wired to the right constant (all three MEASURED by
+mutation). It deliberately did **not** pin a ceiling: `30.0` still passes, and a seam nobody sees for
+thirty seconds is useless, but every candidate ceiling is as much a judgement call as the interval, and
+one picked to make the sentence true is the literal pin the test exists to avoid wearing a comparison
+operator.
+
+**Step.** If a ceiling is wanted, derive it from something real — e.g. the shortest turn the suite can
+produce — rather than picking a number. Otherwise leave it and keep the non-coverage stated in the
+test's doc-block, which it now is.

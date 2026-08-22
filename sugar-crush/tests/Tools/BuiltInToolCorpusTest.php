@@ -255,7 +255,17 @@ final class BuiltInToolCorpusTest extends TestCase
      * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
      * for the blind spot that equating the two produced.
      *
-     * The most recent file is `Hooks/BoundedHookInterface` — the narrow seam
+     * The most recent files are `Diagnostics/RuntimeNoticeSink` and
+     * `RuntimeNoticePumpMsg` — the mid-session half of the transcript seam
+     * (E171) and the tick Msg that drains it. TWO files at once, both a single
+     * `final class`, so this bump is +2 on the file count and +2 on `concrete`;
+     * every other kind and the whole per-file map below are unmoved, and the 19
+     * SECONDARY declarations in 8 files are untouched by them. THE DECLARATION
+     * TOTAL MOVED BY THE SAME +2 and not by more, which is the check worth
+     * making rather than assuming: neither file declares a second top-level
+     * symbol.
+     *
+     * Before them, `Hooks/BoundedHookInterface` — the narrow seam
      * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} charges
      * against its whole-chain deadline, which only a hook that runs something
      * OUT of process can honour. One `interface` and nothing else, so this bump
@@ -324,9 +334,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(288, $files, 'php files under src/');
+        $this->assertSame(290, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 238, 'enum' => 26, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
+            ['concrete' => 240, 'enum' => 26, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -416,8 +426,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(288, count($files), 'php files under src/');
-        $this->assertSame(307, $declarations, 'top-level declarations in them');
+        $this->assertSame(290, count($files), 'php files under src/');
+        $this->assertSame(309, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

@@ -64,7 +64,7 @@ use SugarCraft\Crush\Support\ContainedPath;
  * WHAT WAS DELIBERATELY NOT BUILT
  * -------------------------------
  *   - A per-CLASS listing. The declaration-line regex the item offers as an
- *     alternative is cheap to run, but `src/` here declares 307 top-level
+ *     alternative is cheap to run, but `src/` here declares 309 top-level
  *     types; at one line each that is several times this whole block's budget,
  *     emitted on every step, to tell the model things `Glob 'src/&#42;&#42;/&#42;.php'`
  *     tells it on demand. The map stops at the directory.
@@ -236,19 +236,30 @@ final readonly class RepoMapBlock
      * entry mapping a prefix to `""` or `"."` is legal and points the walk at
      * the whole repository, so this is the bound that keeps a malformed
      * manifest from turning prompt assembly into a full-tree crawl. Generous
-     * because it is a backstop and not a policy: `src/` here is 288 files, so
+     * because it is a backstop and not a policy: `src/` here is 290 files, so
      * a normal package is about SEVENTY times under it — not the "two orders
      * of magnitude" an earlier revision of this sentence claimed, which was
      * the arithmetic being rounded in the direction that flattered the bound.
      *
-     * Both figures in this file that restate `src/`'s census — 286 files here
-     * and 305 top-level types above — are asserted against the derivation by
-     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()},
-     * because they shipped STALE: they were written as 284/303 in the same
-     * commit that moved the census to 285/304 thirty lines away in its own
-     * message. A restated number no test asserts is the recurring defect of
-     * this codebase, and this one occurred inside the file that caused the
-     * bump.
+     * BOTH FIGURES IN THIS FILE THAT RESTATE `src/`'s CENSUS — the file count
+     * in the sentence just above and the top-level-type count in the
+     * WHAT WAS DELIBERATELY NOT BUILT list — are asserted against the
+     * derivation by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()}.
+     *
+     * WHAT THIS PARAGRAPH SAID: "286 files here and 305 top-level types
+     * above". WHAT IS TRUE NOW: neither number was ever either of those at the
+     * same time as the assertion, and by the time it was read they were three
+     * bumps stale — this sentence restated the census a THIRD time, in prose no
+     * test looks at, which is the very defect the rest of it names. WHY THIS
+     * STILL EARNS ITS PLACE: the two restatements above are load-bearing (an
+     * argument about a per-class listing's size, and an argument about how far
+     * under {@see MAX_SOURCE_FILES} a normal package sits) and they shipped
+     * STALE once already — written as 284/303 in the same commit that moved the
+     * census to 285/304 thirty lines away in its own message. The pointer to
+     * the test that pins them is what stops that recurring; a third copy of the
+     * digits is what caused it, so this paragraph now names WHERE they are
+     * instead of repeating them.
      */
     public const MAX_SOURCE_FILES = 20000;
 
