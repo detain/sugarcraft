@@ -11,6 +11,19 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * Every place in `src/` and `bin/` that can put a line on the user's stderr,
  * counted by channel, so a new one cannot arrive unnoticed.
  *
+ * THAT FIRST SENTENCE IS A CLAIM AND NOT A SLOGAN, so here is what it rests
+ * on. Channels 1 and 2 are complements over the `STDERR` constant, which makes
+ * the pair exhaustive over every use of it — `fprintf(STDERR, …)` and
+ * `fputs(STDERR, …)` land in channel 2 without anyone widening anything.
+ * Channel 3 covers `error_log()`, channel 5 the funnel whose prefix is applied
+ * at the emitter, and
+ * {@see testNoStderrChannelOutsideTheScannedOnesHasAppeared()} asserts that the
+ * remaining ways to acquire a handle on fd 2 — a `php://` stream,
+ * `error_log()`'s destination form — are still unused. What is NOT covered: a
+ * child process this application spawns with fd 2 inherited, which is a
+ * property of the spawn and not of a call site here. The sentence held false
+ * once already, for channel 5's whole family; see below.
+ *
  * WHY THIS FILE EXISTS (E120). A full suite run prints 62 lines matching
  * `sugarcrush:` — reproduced independently at `06126017` by the supervisor and
  * again here — and nothing anywhere would have noticed a 63rd. That is not a
