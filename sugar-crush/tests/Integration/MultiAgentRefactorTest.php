@@ -442,6 +442,50 @@ final class MultiAgentRefactorTest extends TestCase
     }
 
     /**
+     * The child's budget must stay UNDER the runner's own time limit.
+     *
+     * This is the third leg of E80's fix and the only one that was left
+     * unpinned. The child used to get 30s PER TASK for two tasks, summing to
+     * exactly `phpunit.xml`'s `defaultTimeLimit="60"` -- so the one run that
+     * genuinely needed its whole budget was aborted as RISKY by the runner at
+     * the same instant, and the test could never report its own diagnosis.
+     * Mutating {@see CHILD_BUDGET_SECONDS} today reddens nothing at all,
+     * because no passing run comes close to spending it.
+     *
+     * Read out of `phpunit.xml` rather than hard-coded: a limit lowered there
+     * (or raised, and the budget not moved with it) is exactly the drift this
+     * exists to catch, and a copy of the number here would sail through it.
+     * `phpunit.xml` is not this lane's to edit, which is the other reason to
+     * assert against it instead of alongside it.
+     */
+    public function testTheChildBudgetLeavesRoomUnderThePhpunitTimeLimit(): void
+    {
+        $config = __DIR__ . '/../../phpunit.xml';
+        $this->assertFileExists($config);
+
+        $xml = simplexml_load_string((string) file_get_contents($config));
+        $this->assertNotFalse($xml, 'phpunit.xml did not parse, so nothing can be read out of it');
+
+        $enforced = (string) ($xml['defaultTimeLimit'] ?? '');
+        $this->assertMatchesRegularExpression(
+            '/^\d+$/',
+            $enforced,
+            'phpunit.xml has no numeric defaultTimeLimit, so this test cannot say what it is comparing against',
+        );
+
+        // Two of these run back to back in the forked case, one per coder, and
+        // the parent waits for both -- so the pair, not one of them, is what
+        // has to fit. Halved-and-then-some rather than "less than": a budget
+        // that only just fits leaves nothing for setUp, the git worktree calls
+        // or the reviewer's own claim.
+        $this->assertLessThan(
+            (float) $enforced / 2.0,
+            self::CHILD_BUDGET_SECONDS,
+            'a coder child could burn its budget and be aborted by the runner before it can report why '
+                . '-- which is exactly what E80 looked like from the outside',
+        );
+    }
+    /**
      * Runs inside a forked child process, playing one coder. NEVER RETURNS.
      *
      * WHY THIS ENDS IN {@see ForkedChild::exitNow()} AND CATCHES EVERYTHING.
