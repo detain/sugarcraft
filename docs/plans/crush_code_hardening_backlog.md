@@ -6667,3 +6667,217 @@ which direction it means.
 **Step, if it ever matters.** Do not re-split fences on blank lines — that reintroduces the unbalanced
 halves E125 removed. Scope the retraction exemption so that inside a fenced unit the retraction must be
 on the same LINE as, or adjacent to, the figure it exempts.
+
+### E152 — `ReadmeSettingsTierClaimTest` retypes the launch-report format instead of reading the constant
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, drift. **Measured
+by mutation.**
+
+**What.** The test retypes `sprintf('disabled %d of the %d tools your own settings left', …)` and compares
+it to `README.md`. With `Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT` mutated `disabled`→`removed`,
+neither `BootstrapLaunchNoticeRoutingTest` nor `BootstrapToolAndPermissionSettingsTest` reds, and
+`ReadmeSettingsTierClaimTest` holds the only other copy of the phrase in `tests/`. E118 promoted the
+format to a `public const` precisely so this retyping could stop.
+
+**Step.** Read `Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT`. Was in no lane's ownership in round 45.
+
+### E153 — no behavioural assertion exists for `PROJECT_TIER_TOOL_REMOVAL_FORMAT`'s body, and none at all for the no-survivors branch
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, coverage.
+**Measured by mutation.**
+
+**What.** `BootstrapToolAndPermissionSettingsTest` provokes the line on a real child launch and asserts
+only the survivor substring `leaving: Bash` (mutating `..._LEAVING` to `left: ` gives 3 failures there).
+`PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE` has no external reader at all — `grep -rn 'leaving no tools at
+all' src/ tests/ docs/ README.md` returns exactly one hit, its own declaration — so it is pinned only
+structurally, by `METHOD_LITERALS`.
+
+**Step.** Assert `disabled %d of the %d` against that same child stderr, and add a case where the
+project's globs remove EVERY tool, which gives the no-survivors constant the reader it lacks.
+
+### E154 — 38 `error_log()` call sites in `src/` write to the user's stderr, unprefixed and unrouted
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, TUI corruption.
+**Measured on PHP 8.3.6, `ini_get('error_log')` empty on this box.**
+
+**What.** Per file: `DsmlToolCallParser` 11, `MinimaxXmlFallbackToolCallParser` 7, `CommandLoader` 5,
+`WorktreeManager` 4, `SglangProvider` 3, `ForeignAgentPresetRegistry` 2, `SkillLoader` 2, and 1 each in
+`AgentWorkerPool`, `Chat`, `Cli/Bootstrap`, `ForeignMemoryImporter`. None carries the `sugarcrush: `
+prefix, none is routed onto the transcript seam, and **a write to fd 2 while the alternate screen is up
+lands on a frame the renderer believes it owns** — the render-invariant class of bug.
+
+**Step.** Per-site triage: debug output (remove or gate) versus diagnostic (route onto the seam). Pinned
+per file by `StderrEmitterCensusTest`, so a 39th reds.
+
+### E155 — `HeadlessPermissionPrompt`'s four stderr shapes have never been examined against the seam rule
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low. **Pinned, unanalysed.**
+
+**What.** It emits four distinct `sugarcrush: ` shapes through a captured `\STDERR` handle. Now pinned as
+channel 2 / channel 4 by `StderrEmitterCensusTest`, but never subjected to the routing analysis
+`Bootstrap`'s writes have had.
+
+**Step.** Walk the four and decide, per shape, transcript seam versus stderr.
+
+### E156 — the 62 `sugarcrush:` lines a full run prints are a HARNESS property, not a `src/` one
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, noise. **Measured;
+the supervisor reproduced the 62 independently in round 44.**
+
+**What.** They are child-process launches whose stderr the PHPUnit process inherits rather than keeping
+on the pipe the test already reads. Owning files: `BootstrapLaunchNoticeRoutingTest`,
+`BootstrapToolAndPermissionSettingsTest`, `BootstrapHookFileTest`, `BootstrapTrustGateSelfGrantTest`,
+`BootstrapShellOutTierTest`, `NonInteractiveTest`, `NonInteractiveProviderFailureTest`, `ArgvParserTest`,
+`HelpTest`, `Integration/BinSugarcrushDispatchTest`, `Integration/McpToolWiringTest`.
+
+**Step.** Per-spawn stderr redirection in the harness. 🔴 **Silencing at the source is the WRONG default —
+for most of these shapes the line IS the assertion.**
+
+### E157 — a zero from substring-grepping `tests/` is not proof that nothing asserts a shape
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: methodological.
+
+**What.** Round 45's stderr triage reported "no test asserts this" for `refusing to silently answer`,
+`permissionRules[N] has no string pattern`, `… is empty, so it was ignored`, `permissionRules is not a
+list of rules` and `MCP tools … are incomplete`. A test may assert a shorter substring or match by regex.
+Recorded so the zero is not shipped as a finding by a later round.
+
+**Step.** Confirm each by mutation before acting on it.
+
+### E158 — `BinSugarcrushAutoloadGuardTest`'s "is ELEVEN" census does not say which channel it counts
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, prose.
+
+**What.** It counts raw `fwrite(STDERR, …)` only. The sentence is true and is now anchored read-only, but
+it is the first answer a reader finds to a question it does not answer, now that five channels exist.
+
+**Step.** Name the channel and cross-reference `StderrEmitterCensusTest` for the other four.
+
+### E159 — `StderrEmitterCensusTest`'s per-file rosters are cross-lane fragile by construction
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: process note, not a defect.
+
+**What.** A sibling lane adding an `error_log()`, an `fwrite(STDERR, …)` or a `warnPermissionConfig*` call
+reds this at merge. **That is the guard working.**
+
+**Step at merge.** Bump the roster AFTER deciding where the new write belongs. 🔴 **Never loosen the map.**
+
+### E160 — `flattened()` is implemented twice under `tests/Cli/`
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, duplication.
+
+**What.** A private method on `BootstrapTranscriptSeamCallSiteCensusTest` and a second on
+`StderrEmitterCensusTest`, each with its own known-positive control. The shared home is a test-support
+trait under `tests/`, outside the file set lane a could touch, so it was documented in place.
+
+**Step.** One-file consolidation for whoever owns `tests/` support next. Keep both known-positive
+controls — see E125's four-copy history for what happens when a shared helper loses them.
+
+### E161 — `StderrEmitterCensusTest::argumentCount()` would go negative on a PHP attribute inside a call
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, latent. **Measured as
+latent — no attribute appears inside any `error_log()` call in `src/` today.**
+
+**What.** It tracks depth over `( [ {` and `) ] }`. A PHP attribute lexes as `T_ATTRIBUTE` (`#[`), which
+opens a bracket the opener list does not see while its `]` closes one, so depth goes negative and the
+count returns early. Affects the "other" channel only.
+
+**Step.** Add `T_ATTRIBUTE` to the opener set and a fixture that carries one.
+
+### E162 — `sprintfCensus()`'s known-answer control is narrower than the scanner
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low. **Latent.**
+
+**What.** `BootstrapLaunchFormatConstantsTest::sprintfCensus()` is untested against `->sprintf(`,
+`::sprintf(` and `function sprintf(` — it would over-count a method call named `sprintf`. The control
+covers a literal, a constant reference and the word inside a string, but not a method call. No such call
+exists today.
+
+**Step.** Widen the control to the shapes the scanner can meet, per round 44's rule that a guard
+asserting an absence needs a known-positive through the same scanner.
+
+### E163 — `sprintfCensus()` cannot distinguish an interpolated format from a promoted constant
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low. **Latent.**
+
+**What.** A double-quoted interpolated first argument (`"…{$x}…"`) opens with a `"` token, not
+`T_CONSTANT_ENCAPSED_STRING`, so it lands in the non-literal bucket alongside genuine constant
+references. Today both non-literal sites are constants, but **a re-inlined interpolated format would read
+as "promoted"** — the classifier says the opposite of the truth in exactly the case the guard exists for.
+
+**Step.** Classify the three cases separately: literal, constant reference, interpolated.
+
+### E164 — E104's remaining scope: ten literal `sprintf()` formats in `Bootstrap.php` unwalked
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** **Derived by
+`testTheLiteralFormatCensusHasAGenerator()`, deliberately not written into prose.**
+
+**What.** `Bootstrap.php` holds twelve `sprintf()` call sites, ten with a literal format; two formats are
+promoted (E118).
+
+**Step.** Walk the other ten and ask, per format, whether an external reader exists. 🔴 **The promotion
+rule is external readership, not tidiness.**
+
+### E165 — the "84 assertions" historical figure's original tree is unidentified
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, provenance.
+
+**What.** It predates round 43's source-scrape replacement, so it cannot be reproduced without reverting
+`ReadmeRosterDriftTest` past shape two. It is now labelled as belonging to the retyped-literal shape,
+with the `06126017` re-measurement (14 tests / 92 assertions / 1 failure) beside it, but the commit it was
+taken at is unknown. **The round-45 review assumed it was a near-miss for a fresh measurement; it is not a
+near-miss in either direction** — the tree E118 replaced was NOT blind, because round 43 had already
+replaced the retyped literal with a source scrape.
+
+**Step.** Either identify the commit or drop the figure and keep the re-measurement. Prefer dropping —
+see E131 (ship the generator and the claim, not the count).
+
+### E166 — every round-45 lane-a mutation verdict is FILTERED, not full-suite
+
+**Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: methodological.
+
+**What.** V6, V7, V8 and the anchor mutations were run against the classes that claim to cover them, not
+against 9264 tests. For V8 a grep over `tests/`, `docs/` and `README.md` finds no other reader at all, so
+a full run would not change it; the others read as "survived/killed the guards that claim to cover them",
+which is a weaker claim than "survived the suite".
+
+**Step.** State the scope of every mutation verdict in the round's report. A filtered SURVIVED is not
+evidence that nothing in the suite catches it.
+
+### E167 — the suite floor must be measured at the commit the lanes branch from, not at the merge commit
+
+**Recorded 2026-08-22 by the supervisor.** Severity: process, and it cost round 45 a disputed figure.
+**Measured; two lanes observed it independently.**
+
+**What.** Round 45's brief carried the floor `9215 / 127781`, measured at the round-44 merge commit
+`98d59bfb`. The lanes branched from `06126017`, three commits later. One of those three, `e29608d1`
+(the E131 fix), edits `src/Config/LayeredSettings.php` — and `GlobFigureDriftTest` asserts **once per
+paragraph of every `.php` under `src/`**, so a supervisor's own post-merge prose fix moved the assertion
+count by **+1**. The true base was `9215 / 127782`. Lane a reverted its diff and observed it; lane b
+reverted all four of its files and observed it; lane c flagged the discrepancy and correctly refused to
+adjudicate it without a checkout that would dirty its tree. **The brief was the outlier, and both lanes
+were right to say so.**
+
+**Step.** Measure the floor at the commit the lane copies are cut from, immediately before launching —
+not at the merge commit, and not before the round's own planning commits land. This is the same
+mechanism as E143 and E131 seen from the supervisor's side.
+
+### E168 — a mutation harness whose restore is a later step in the same agent does not survive the agent dying
+
+**Recorded 2026-08-22 by the supervisor. E134's third instance, and the one that shows the structure.**
+Severity: medium, data loss. **Observed.**
+
+**What.** Round 45's first launch died at a session limit with five agents mid-flight. Lane a's tree was
+left dirty with `src/Chat.php` and `tests/Cli/BootstrapLaunchNoticeRoutingTest.php` carrying a figure
+rewritten to "nineteen" in a paragraph that states `Bootstrap.php` holds sixteen calls — incoherent on its
+face, and `TRANSCRIPT_SEAM_CALL_SITES` is **16**, so it was a probe of the `PROSE_SITES` oracle and not
+fix work (`Chat.php` is not even in lane a's owned file list). No backup existed for either file. Had the
+resume handed that tree to a fresh fix agent, it would have either committed the nonsense or spent its
+budget chasing a red it did not cause.
+
+**Step.** Three parts, all of which round-45 lane c's harness already had and lane a's did not:
+(1) the backup is written **before** the mutation, never after; (2) the restore is verified by
+`git status --porcelain` returning empty, not assumed; (3) **the supervisor checks every lane tree for a
+dirty worktree before merging** — round 44's checklist only checked at the end. Lane c's `mut.sh` is the
+model: refuses a dirty tree before mutating, exits 94 on a no-op, prints the actual `+`/`-` lines, and
+re-verifies clean after restoring.
