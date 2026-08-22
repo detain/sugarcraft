@@ -245,6 +245,11 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
             '<?php $x->backend($r, null, null, true);',
             1,
         ];
+        yield 'a nullsafe-dispatched call is counted like the plain one' => [
+            'true',
+            '<?php $x?->backend($r, null, null, true);',
+            1,
+        ];
         yield 'nothing at all' => ['true', '<?php echo 1;', 0];
         yield 'nothing at all, forwarded' => ['forwarded', '<?php echo 1;', 0];
     }
@@ -347,8 +352,20 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
             // A scope token is what separates a CALL from a declaration:
             // `function backend(` has T_FUNCTION before the name, and
             // `self::backend(` / `$x->backend(` have the operator.
+            // T_NULLSAFE_OBJECT_OPERATOR is `?->`. Both real entry points are
+            // static, so it cannot reach THEM — but this scanner deliberately
+            // counts `$x->backend(…)` on anything (see the fixture saying so),
+            // and the nullsafe spelling of that is the same call. Narrow
+            // alphabets are how the sibling censuses in this lane went blind.
             $previous = $significant[$i - 1] ?? null;
-            if (!\is_array($previous) || !\in_array($previous[0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR], true)) {
+            if (
+                !\is_array($previous)
+                || !\in_array(
+                    $previous[0],
+                    [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR],
+                    true,
+                )
+            ) {
                 continue;
             }
 

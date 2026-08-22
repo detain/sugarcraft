@@ -825,6 +825,19 @@ final class StderrEmitterCensusTest extends TestCase
             '<?php error_log(match ($n) { 1 => "a", default => "b" }, 3, "/tmp/f");',
             1,
         ];
+        // NULLSAFE DISPATCH, on the channel whose scanner reads an operator.
+        // Not reachable through the real family (all `private static`), which
+        // is exactly why the alphabet needed a fixture rather than an argument.
+        yield 'a nullsafe-dispatched prefixed warning is still a call site' => [
+            'prefixed',
+            '<?php $b?->warnPermissionConfig("x");',
+            1,
+        ];
+        yield 'a nullsafe first-class callable is still not a call' => [
+            'prefixed',
+            '<?php $b?->warnPermissionConfig(...);',
+            0,
+        ];
         yield 'a source with nothing at all' => ['direct', '<?php echo 1;', 0];
         yield 'and nothing on the other channels' => ['error_log', '<?php echo 1;', 0];
         yield 'nor on channel five' => ['prefixed', '<?php echo 1;', 0];
@@ -1183,8 +1196,22 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private static function isSelfScopedCall(array $significant, int $i): bool
     {
+        // T_NULLSAFE_OBJECT_OPERATOR is `?->`. It cannot occur on this channel
+        // today — the whole `warnPermissionConfig*` family is `private static`
+        // and reached through `self::` — so widening the list moves no count,
+        // which the pinned channel-5 roster is what confirms. It is here
+        // because "the operator the current call sites happen to use" is how an
+        // alphabet gets written too narrow, and this is the third copy of this
+        // three-token list in the lane to be caught that way.
         $previous = $significant[$i - 1] ?? null;
-        if (!\is_array($previous) || !\in_array($previous[0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR], true)) {
+        if (
+            !\is_array($previous)
+            || !\in_array(
+                $previous[0],
+                [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR],
+                true,
+            )
+        ) {
             return false;
         }
         if (($significant[$i + 1] ?? null) !== '(') {
