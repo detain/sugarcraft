@@ -324,26 +324,31 @@ final class SkillRegistry
      * rewrites in the fallback buys correctness for uncompilable patterns and
      * buys exactly nothing for narrowing. WHY THE CLAIM STILL EARNS ITS PLACE:
      * because it is now measured on two independent samples rather than
-     * deduced from one. (1) The 45 x 54 = 2,430-pair grid captured against the
-     * old predicate at 8416d98e: 0 of its 326 matches lost, 49 gained — and
-     * its alphabet was WIDENED this round by exactly the four paths and two
-     * patterns the three families below need, so the grid can now see what it
+     * deduced from one. (1) The 46 x 54 = 2,484-pair grid captured against the
+     * old predicate at 8416d98e: 0 of its 329 matches lost, 49 gained — and
+     * its alphabet was WIDENED this round by exactly the four paths and four
+     * patterns the four families below need, so the grid can now see what it
      * was previously green over. (2) A
-     * seeded differential fuzz — `mt_srand(20260822)`, 200,000 trials, pattern
-     * alphabet including `**`, `***`, `[ab]`, `[!a]`, `[a-c]`, `[\d]` and
-     * `\*`, path alphabet including `\n`, both 1-8 tokens, PHP 8.3.6 — which
-     * reports 0 narrowings and 21 widenings, every widening a leading globstar
-     * BY CAUSE and not merely by prefix: strip the leading star run and the
-     * old predicate claims the path. Deterministic, so three runs give the
-     * same three numbers; the seed is there to make the alphabet reproducible,
-     * not to average noise. The grid is pinned in
+     * seeded differential fuzz — 200,000 trials per seed at each of
+     * `mt_srand(1)`, `(20260822)`, `(987654321)` and `(42)`; pattern alphabet
+     * `[a b / * ** *** ? . [ab] [!a] [a-c] [\d] []] [[:alpha:]] \* \] x - _ p
+     * h]`, path alphabet `[a b / x . p h \n - _ * [ ] c 5 \]`, both 1-8
+     * tokens, PHP 8.3.6 — which reports 0 narrowings on every seed and 14-17
+     * widenings, every widening a leading globstar BY CAUSE and not merely by
+     * prefix: strip the leading star run and the old predicate claims the
+     * path. Each run is deterministic; the four seeds are there because ONE
+     * seed is a sample too, and widening the alphabet to include
+     * `[[:alpha:]]` is what exposed the fourth family below. The grid is
+     * pinned in
      * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest}; the fuzz is
      * a generator, restated here so the figure can be re-taken.
      *
-     * THE FUZZ IS NOT DECORATION: it found THREE narrowing families the grid
-     * was green over, all three of them after the grid was written, which is
-     * the whole argument for not trusting a grid alone. Each is closed below
-     * and each is pinned by its own case in that test:
+     * THE FUZZ IS NOT DECORATION: it found FOUR narrowing families the grid
+     * was green over, all four of them after the grid was written, which is
+     * the whole argument for not trusting a grid alone, and the fourth arrived
+     * only after the fuzz's own alphabet was widened — a generator has a
+     * window too. Each is closed below and each is pinned by its own case in
+     * that test:
      *
      *  - NEWLINE IN THE PATH. PCRE's `.` does not cross `\n` without /s;
      *    `fnmatch()`'s `*` and `?` do. MEASURED, PHP 8.3.6:
@@ -361,6 +366,17 @@ final class SkillRegistry
      *  - PCRE ESCAPES INSIDE A CLASS BODY. `[\d]` means the literal `d` to
      *    `fnmatch()` and the digit class to PCRE. Closed by
      *    {@see compileClassBody()}.
+     *  - A POSIX CLASS FOLLOWED BY A SECOND BRACKET GROUP. The scan that finds
+     *    a class's closing `]` did not know that `[:alpha:]` carries a `]` of
+     *    its own, so it stopped early and the emitted class ran past its own
+     *    terminator. Harmless while the result failed to compile; NOT harmless
+     *    when a later `[` supplies the missing `]`. MEASURED on PHP 8.3.6:
+     *    `[[:alpha:]][!a]` emitted `#^[[:alpha:]\][^a]$#Ds`, which compiles,
+     *    folds the second group into the first class, and answers false for
+     *    `ab` where `fnmatch()` answers true — a wrong answer with no fallback
+     *    under it. Closed in the bracket scan of {@see compilePathPattern()}
+     *    and in {@see compileClassBody()}, which now pass POSIX classes
+     *    through verbatim rather than routing them anywhere.
      *
      * FASTER, INCIDENTALLY, WHICH MATTERS BECAUSE THIS IS ON A TOOL-CALL PATH:
      * {@see SkillPathNudge} runs this per pattern per path, and a
@@ -386,16 +402,27 @@ final class SkillRegistry
      * AND THE THREE REWRITES ARE STILL HERE, in {@see legacyPathMatch()} —
      * for the reason above this one and NOT for never-narrows: a pattern this
      * translation cannot compile is a SUPPORTED shape, not malformed input.
-     * The translation reproduces `fnmatch()`'s `*`, `?`, `\\` and `[...]` — but
-     * not the POSIX class syntax `fnmatch()` inherits from libc. MEASURED on
-     * PHP 8.3.6: `fnmatch('[[:alpha:]]x', 'ax')` is `true`, while this
-     * translation emits `#^[[:alpha:]\\]x$#Ds`, whose class is never
-     * terminated, so PCRE refuses to compile it. Answering `false` there would
-     * narrow the matcher for every skill that uses one, and answering with a
-     * bare `fnmatch()` would throw away the zero-directory `**` case the
-     * rewrites bought. The rewrites are kept as that pattern's answer rather
-     * than deleted, which also means the one thing a compile failure can never
-     * do is make the tool call throw.
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY: that the shape in question was the
+     * POSIX character class `fnmatch()` inherits from libc, which the
+     * translation could not express.
+     * WHAT IS TRUE NOW: POSIX classes are translated, and correctly — PCRE
+     * spells them the same way, so `[[:alpha:]]` is a passthrough. The old
+     * claim was also broader than the fact even when it was written: a POSIX
+     * class only reached the fallback when the malformed class it produced
+     * happened NOT to compile, and when a later `[` completed it the pattern
+     * got a wrong answer with no fallback at all. That is fixed above.
+     * WHY THE FALLBACK STILL EARNS ITS PLACE: because a different supported
+     * shape still cannot be compiled — a backslash-escaped `]` inside a class.
+     * MEASURED on PHP 8.3.6: `fnmatch('a[\]]b', 'a]b')` is `true`, while the
+     * bracket scan here is not escape-aware, stops on the escaped `]`, and
+     * emits `#^a[\]\]b$#Ds`, whose class never terminates. Answering `false`
+     * there would narrow the matcher, and answering with a bare `fnmatch()`
+     * would throw away the zero-directory `**` case the rewrites bought — see
+     * the discriminating pair in
+     * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest::testAnEscapedClassTerminatorIsLeftToTheFullOldPredicate()}.
+     * Keeping the rewrites as that pattern's answer also means the one thing a
+     * compile failure can never do is make the tool call throw.
      */
     public static function pathMatches(string $pattern, string $path): bool
     {
@@ -417,13 +444,22 @@ final class SkillRegistry
      * The pre-E85 predicate, kept as the answer for patterns
      * {@see compilePathPattern()} cannot compile.
      *
-     * NOT DEAD, and not kept out of sentiment: {@see pathMatches()} reaches it
-     * for any `paths:` glob carrying a POSIX character class, which
-     * `fnmatch()` supports and the translation does not. Pinned by
-     * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest::testAPosixClassPatternFallsBackToTheFullOldPredicate()},
+     * NOT DEAD, and not kept out of sentiment.
+     *
+     * WHAT THIS SAID: that {@see pathMatches()} reaches it for any `paths:`
+     * glob carrying a POSIX character class.
+     * WHAT IS TRUE NOW: it does not — POSIX classes are translated correctly
+     * as of the round that found them being translated INCORRECTLY, and the
+     * claim was never true in the form it was written: a POSIX class reached
+     * here only when the malformed class it produced also failed to compile.
+     * WHY THIS METHOD STILL EARNS ITS PLACE: a backslash-escaped `]` inside a
+     * class — `a[\]]b`, which `fnmatch()` reads and this translation's
+     * non-escape-aware bracket scan cannot — still emits an uncompilable
+     * regex, and so does a reversed range. Pinned by
+     * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest::testAnEscapedClassTerminatorIsLeftToTheFullOldPredicate()},
      * which discriminates it from a bare `fnmatch()` fallback — the rewrites
      * are part of the answer, not decoration around it, so
-     * `src/**\/[[:alpha:]]*.php` still claims `src/abc.php`.
+     * `src/**\/x[\]]y.php` still claims `src/x]y.php`.
      *
      * Its `**` handling is the flawed one this class no longer uses on the
      * main path; see {@see pathMatches()}'s doc-block for both holes. It is
@@ -544,6 +580,27 @@ final class SkillRegistry
                     ++$close;
                 }
                 while ($close < $len && $pattern[$close] !== ']') {
+                    // A POSIX CLASS CARRIES A `]` OF ITS OWN, and a scan that
+                    // does not know that stops on it. `[[:alpha:]]` then
+                    // yielded the body `[:alpha:` and the emitted class ran on
+                    // past its own terminator. That was tolerable exactly while
+                    // the result failed to COMPILE — PCRE refused
+                    // `#^[[:alpha:]\]x$#Ds` and the pattern routed to
+                    // {@see legacyPathMatch()}. It is not tolerable when a
+                    // LATER `[` in the pattern supplies the missing `]`:
+                    // MEASURED on PHP 8.3.6, `[[:alpha:]][!a]` emitted
+                    // `#^[[:alpha:]\][^a]$#Ds`, which compiles, swallows the
+                    // second group into the first class, and answers FALSE for
+                    // `ab` where `fnmatch()` answers true. A silently wrong
+                    // answer, with no fallback, from a supported shape.
+                    if ($pattern[$close] === '[' && substr($pattern, $close + 1, 1) === ':') {
+                        $classEnd = strpos($pattern, ':]', $close + 2);
+                        if ($classEnd !== false) {
+                            $close = $classEnd + 2;
+                            continue;
+                        }
+                    }
+
                     ++$close;
                 }
 
@@ -583,7 +640,15 @@ final class SkillRegistry
      * Translate the inside of one `[...]` from `fnmatch()`'s reading to PCRE's.
      *
      * EXACTLY TWO CHARACTERS ARE REINTERPRETED, and the restraint is the
-     * point: `#` (this class's regex delimiter) and `\`. Everything else — `-`
+     * point: `#` (this class's regex delimiter) and `\`. A POSIX class needs
+     * NO handling here and an explicit passthrough for one was written and
+     * then removed: PCRE spells `[:alpha:]` exactly as libc's `fnmatch()`
+     * does, and none of `[`, `:` or an alphanumeric is a character this method
+     * rewrites, so the loop below already copies it verbatim. The branch was
+     * unkillable by mutation — deleting it reddened nothing — which is the
+     * signature of code that is not doing anything. What POSIX classes DO need
+     * is for {@see compilePathPattern()}'s terminator scan to know they carry
+     * a `]`; that is where the fix lives. Everything else — `-`
      * ranges, a leading `^`, a first-position `]` — means the same thing to
      * both engines, and quoting it would break it. VERIFIED on PHP 8.3.6 that
      * the tidier-looking alternative is wrong: `preg_quote()` over the whole

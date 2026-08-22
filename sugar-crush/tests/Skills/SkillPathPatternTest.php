@@ -42,10 +42,13 @@ use SugarCraft\Crush\Skills\SkillRegistry;
  *    `src` and then continued with something other than `/`.
  *  - `[\d]`, a PCRE escape inside a class body. Needed a new row AND paths on
  *    both sides of the divergence.
+ *  - `[[:alpha:]]` followed by a second bracket group, which compiled to a
+ *    regex with the wrong meaning rather than failing to compile. The path it
+ *    needed (`ab`) was here all along; only the pattern row was missing.
  *
  * All three are closed in {@see SkillRegistry}, and the grid's alphabet was
  * widened by exactly the four paths and three patterns needed to SEE them and
- * to make the gain classifier falsifiable, so it is now 45 x 54 = 2,430 pairs.
+ * to make the gain classifier falsifiable, so it is now 46 x 54 = 2,484 pairs.
  * The lesson is recorded rather than the fix alone: when an assertion misses a
  * defect, suspect its WINDOW before you suspect the defect's relevance.
  *
@@ -93,7 +96,11 @@ final class SkillPathPatternTest extends TestCase
             // testEveryPairTheTranslationGains...() falsifiable: a widening in
             // `?` lands on a pattern the old prefix-based classifier would
             // have labelled "leading globstar" and waved through.
-            '[\\d]x', 'a/***', '**/a?c',
+            // `[[:alpha:]][!a]` is the row that would have caught a POSIX
+            // class silently compiling to the WRONG regex: before the bracket
+            // scan learned that `[:alpha:]` carries a `]` of its own, this
+            // answered false for the path `ab`, which is already in PATHS.
+            '[\\d]x', 'a/***', '**/a?c', '[[:alpha:]][!a]',
     ];
 
     /**
@@ -103,7 +110,7 @@ final class SkillPathPatternTest extends TestCase
      * `fnmatch($pattern, $path)`, then, when the pattern contained `**`, the
      * three rewrites `/**\/`->`/*\/`, `/**`->`/*` and `/**`->`''` ORed
      * together — over {@see PATTERNS} x {@see PATHS} at 8416d98e on PHP 8.3.6.
-     * 326 of the 2,430 pairs matched.
+     * 329 of the 2,484 pairs matched.
      *
      * @var array<string, string>
      */
@@ -153,6 +160,7 @@ final class SkillPathPatternTest extends TestCase
             '[\\d]x'             => '000000000000000000000000000000000000000000000000000010',
             'a/***'              => '110000011111100000111111000000111000010000111100010100',
             '**/a?c'             => '000000000000000000000000000000000000000000000000000000',
+            '[[:alpha:]][!a]'    => '000000000010000000000000000000000000001000000000000010',
     ];
 
     /**
@@ -206,6 +214,7 @@ final class SkillPathPatternTest extends TestCase
             '[\\d]x'             => '000000000000000000000000000000000000000000000000000010',
             'a/***'              => '110000011111100000111111000000111000010000111100010100',
             '**/a?c'             => '000000000000000000011000000000000000000000000000000000',
+            '[[:alpha:]][!a]'    => '000000000010000000000000000000000000001000000000000010',
     ];
 
     public function testTheShippedMatcherReturnsExactlyTheCharacterisedTable(): void
@@ -407,37 +416,56 @@ final class SkillPathPatternTest extends TestCase
     }
 
     /**
-     * A pattern the translation cannot compile is answered by the FULL old
-     * predicate — the three rewrites included — not by a bare `fnmatch()`, and
-     * not by `false`.
+     * A POSIX class is TRANSLATED, not routed anywhere — and the reason this
+     * test exists in this shape is that it used to assert the opposite.
      *
-     * The case is not hypothetical and not malformed input. `fnmatch()`
-     * inherits POSIX character classes from libc, so `[[:alpha:]]` is a
-     * supported `paths:` shape; the translation emits `#^[[:alpha:]\]x$#Ds`,
-     * whose class never terminates, and PCRE refuses it. Answering false there
-     * would narrow the matcher for every skill that uses one.
-     *
-     * MEASURED on PHP 8.3.6, and this is the discriminating pair: for
-     * `src/**\/[[:alpha:]]*.php` against `src/abc.php`, bare `fnmatch()` is
-     * FALSE and the old predicate is TRUE — the zero-directory rewrite is what
-     * carries it. A fallback that dropped the rewrites would still be green on
-     * every other assertion in this file.
+     * WHAT IT SAID: that `[[:alpha:]]` is a shape the translation cannot
+     * express, so it falls back to the pre-E85 predicate.
+     * WHAT IS TRUE NOW: PCRE spells POSIX classes exactly as libc's
+     * `fnmatch()` does, so this is a passthrough. The old claim was also
+     * broader than its own evidence: a POSIX class reached the fallback ONLY
+     * when the malformed class it produced happened not to compile. The scan
+     * for a class's closing `]` did not know `[:alpha:]` carries one, stopped
+     * early, and emitted a class that ran past its terminator —
+     * `#^[[:alpha:]\]x$#Ds`, which PCRE refuses. Put a second bracket group
+     * after it and the later `[` supplies the missing `]`: MEASURED on PHP
+     * 8.3.6, `[[:alpha:]][!a]` emitted `#^[[:alpha:]\][^a]$#Ds`, which
+     * COMPILES, folds the second group into the first class, and answers false
+     * for `ab` where `fnmatch()` answers true. A silently wrong answer with no
+     * fallback under it, found by a differential fuzz once `[[:alpha:]]` went
+     * into its alphabet.
+     * WHY THE CASE STILL EARNS A TEST: because "supported by `fnmatch()`,
+     * therefore supported here" is the property that matters, and it is now
+     * carried by the translation instead of by a fallback. The row
+     * `[[:alpha:]][!a]` is in {@see PATTERNS} so the grid holds it too.
      */
-    public function testAPosixClassPatternFallsBackToTheFullOldPredicate(): void
+    public function testAPosixClassIsTranslatedRatherThanRoutedToTheFallback(): void
     {
-        // The premise: PCRE really does refuse what the translation emits.
-        self::assertFalse(@preg_match('#^[[:alpha:]\]x$#Ds', 'ax'));
-        // ...and fnmatch really does honour the class.
+        // The premise: fnmatch really does honour the class.
         self::assertTrue(fnmatch('[[:alpha:]]x', 'ax'));
+        self::assertFalse(fnmatch('[[:alpha:]]x', '1x'));
 
         self::assertTrue(SkillRegistry::pathMatches('[[:alpha:]]x', 'ax'));
         self::assertFalse(SkillRegistry::pathMatches('[[:alpha:]]x', '1x'));
 
-        // The discriminator. Bare fnmatch says false here; the rewrites say true.
-        self::assertFalse(fnmatch('src/**/[[:alpha:]]*.php', 'src/abc.php'));
+        // THE REGRESSION THAT MOTIVATED THE REWRITE: a second bracket group
+        // after the class. This answered false before the scan learned about
+        // `[:...:]`, and it did so through a regex that compiled.
+        self::assertTrue(fnmatch('[[:alpha:]][!a]', 'ab'), 'premise');
+        self::assertTrue(SkillRegistry::pathMatches('[[:alpha:]][!a]', 'ab'));
+        self::assertFalse(SkillRegistry::pathMatches('[[:alpha:]][!a]', 'aa'));
+        self::assertTrue(SkillRegistry::pathMatches('[[:digit:]][!a]', '5b'));
+
+        // Combined with the `**` E85 fixed, which the old fallback path could
+        // not do: the fallback carries the OLD `**` handling, so a pattern
+        // routed there still missed root-level files.
         self::assertTrue(SkillRegistry::pathMatches('src/**/[[:alpha:]]*.php', 'src/abc.php'));
         self::assertTrue(SkillRegistry::pathMatches('src/**/[[:alpha:]]*.php', 'src/x/abc.php'));
         self::assertFalse(SkillRegistry::pathMatches('src/**/[[:alpha:]]*.php', 'src/123.php'));
+        self::assertTrue(SkillRegistry::pathMatches('**/[[:alpha:]]*.php', 'abc.php'));
+
+        // An unterminated `[:` is not a class and must not eat the pattern.
+        self::assertTrue(SkillRegistry::pathMatches('[[:bogus', '[[:bogus'));
     }
 
     /**
@@ -587,25 +615,43 @@ final class SkillPathPatternTest extends TestCase
     }
 
     /**
-     * A body ending in a lone backslash stays UNCOMPILABLE on purpose, and
-     * that is a decision rather than an oversight.
+     * THE FALLBACK'S ONE REMAINING REACHABLE SHAPE, and the discriminator that
+     * proves the fallback is the FULL old predicate rather than a bare
+     * `fnmatch()`.
      *
-     * The scan that finds a class's closing `]` is not escape-aware, so
-     * `a[\]]b` arrives at the body compiler as the fragment `\` — a class
-     * whose real end the translation cannot see. Left alone it keeps the regex
-     * uncompilable and the pattern routes to the old predicate, which reads it
-     * correctly. Making it compile would make it compile WRONG.
+     * A body ending in a lone backslash stays UNCOMPILABLE on purpose. The
+     * scan that finds a class's closing `]` is not escape-aware, so `a[\]]b`
+     * arrives at the body compiler as the fragment `\` — a class whose real
+     * end the translation cannot see. Left alone it keeps the regex
+     * uncompilable and the pattern routes to {@see
+     * SkillRegistry::legacyPathMatch()}, which reads it correctly. Making it
+     * compile would make it compile WRONG, which is exactly the mistake the
+     * POSIX scan was making until it was fixed.
      *
-     * Pinned because the seam is invisible from the outside: the answer below
-     * is right either way, and only this test records WHERE it came from.
+     * THIS TEST INHERITED A JOB. It used to be enough to say "an escaped
+     * terminator is left alone", because the fallback's reachability was
+     * carried by the POSIX case. POSIX classes are translated now, so this is
+     * the shape keeping `legacyPathMatch()` alive, and it has to carry the
+     * discriminating pair too — otherwise a fallback that quietly dropped the
+     * three `**` rewrites would stay green everywhere in this file.
+     *
+     * MEASURED on PHP 8.3.6, the discriminator: for `src/**\/x[\]]y.php`
+     * against `src/x]y.php`, bare `fnmatch()` is FALSE and the full old
+     * predicate is TRUE — the zero-directory rewrite is what carries it.
      */
-    public function testAnEscapedClassTerminatorIsLeftToTheFallback(): void
+    public function testAnEscapedClassTerminatorIsLeftToTheFullOldPredicate(): void
     {
         self::assertTrue(fnmatch('a[\]]b', 'a]b'), 'premise: fnmatch reads the escaped terminator');
-        self::assertFalse(@preg_match('#^a[\]b$#Ds', 'a]b'), 'premise: what the translation emits will not compile');
+        self::assertFalse(@preg_match('#^a[\]\]b$#Ds', 'a]b'), 'premise: what the translation emits will not compile');
 
         self::assertTrue(SkillRegistry::pathMatches('a[\]]b', 'a]b'));
         self::assertFalse(SkillRegistry::pathMatches('a[\]]b', 'axb'));
+
+        // THE DISCRIMINATOR. Bare fnmatch says false here; the rewrites say true.
+        self::assertFalse(fnmatch('src/**/x[\]]y.php', 'src/x]y.php'), 'premise');
+        self::assertTrue(SkillRegistry::pathMatches('src/**/x[\]]y.php', 'src/x]y.php'));
+        self::assertTrue(SkillRegistry::pathMatches('src/**/x[\]]y.php', 'src/a/x]y.php'));
+        self::assertFalse(SkillRegistry::pathMatches('src/**/x[\]]y.php', 'src/xQy.php'));
     }
 
     /**
