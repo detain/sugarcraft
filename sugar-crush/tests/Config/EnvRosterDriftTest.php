@@ -553,6 +553,15 @@ final class EnvRosterDriftTest extends TestCase
      *   that scrape rather than exempted inside it, which is what keeps the two
      *   not-read sentences out of the widened rule without an exemption list.
      *
+     * THE EXCLUSION IS LOAD-BEARING, AND THAT IS MEASURED RATHER THAN ARGUED.
+     * Deleting the `continue` that skips the roster page in
+     * {@see mentionedNames()} reds three tests on PHP 8.3.6 at round 45, and
+     * two of them red on exactly the prose this paragraph is about: with the
+     * page scraped whole, `SUGARCRUSH_TOOL_CALL_PARSER` and
+     * `SUGARCRUSH_REASONING_EFFORT` become mentions, and neither is read nor
+     * tabulated. The naive widening really does red on the two sentences that
+     * exist to record that nothing reads them.
+     *
      * @return list<string>
      */
     private function tabulatedNames(): array
