@@ -52,15 +52,51 @@ use PHPUnit\Framework\TestCase;
  * true - and gives the round that does own `tests/Cli/` a scanner it can point
  * at its own directory by widening one constant.
  *
- * NOT A SILENCER. {@see ChildStderrCaptureScanner} treats `2>/dev/null` as
- * captured because it cannot tell a sink from a file, but the standard this
- * file is defending is "the test can read it": for most of these shapes the
- * stderr line IS the assertion.
+ * NOT A SILENCER, and that is now enforced rather than asserted. WHAT THIS
+ * SAID: "{@see ChildStderrCaptureScanner} treats `2>/dev/null` as captured
+ * because it cannot tell a sink from a file, but the standard this file is
+ * defending is 'the test can read it'." WHAT IS TRUE NOW: the scanner reports
+ * the null device as {@see ChildStderrCaptureScanner::SHAPE_DISCARDED}, which
+ * this guard reds like any other non-capture, and the two sites under
+ * `tests/Integration/` that it found are dealt with - one converted to write
+ * fd 2 to a real file, one argued in {@see ACCEPTED_DISCARDED_STDERR}. WHY THE
+ * OLD SENTENCE STILL EARNS ITS PLACE: the general form of the limit has not
+ * moved. `2>$path` is a file to this scanner whatever `$path` holds, so the
+ * standard is still wider than the mechanism, and a reader who takes a green
+ * run as proof that every child's stderr is readable is taking more than the
+ * scanner offers.
  */
 final class ChildStderrCaptureTest extends TestCase
 {
     /** Path prefix, relative to `tests/`, the rule is enforced under. */
     private const SCOPE = 'Integration/';
+
+    /**
+     * Spawn sites that send fd 2 to the null device ON PURPOSE, with the count
+     * and the reason.
+     *
+     * A COUNT, not a bare file key. A file-keyed exemption is a blank cheque:
+     * it licenses every future spawn added to the file as well as the one that
+     * was argued for. Same shape, and for the same reason, as
+     * {@see ForkedChildReaperAdoptionTest::UNTRACKED_FORKS_ALLOWED}.
+     *
+     * @var array<string,array{count:int,reason:string}>
+     */
+    private const ACCEPTED_DISCARDED_STDERR = [
+        'Integration/BinSugarcrushDispatchTest.php' => [
+            'count' => 1,
+            'reason' =>
+                'armWatchdog()\'s detached SIGKILL timer. It is a backgrounded subshell that '
+                . 'DELIBERATELY outlives the test that armed it - that is its whole job, to still '
+                . 'be there when the child it guards has hung - so there is no reader left for a '
+                . 'pipe and no tearDown() left to collect a file. Its own doc-block explains at '
+                . 'length why every descriptor it holds is closed by number rather than left '
+                . 'open: under `phpunit | tail` an inherited dup of PHPUnit\'s stdout pipe kept '
+                . 'the reader from ever seeing EOF, turning a 1.6s run into 27s. A stderr file '
+                . 'this test could read would be one more descriptor with the same problem, and '
+                . 'nothing would ever read it.',
+        ],
+    ];
 
     /**
      * THE SCANNER IS ALIVE, on inputs whose answers are known, in the same
@@ -168,6 +204,91 @@ final class ChildStderrCaptureTest extends TestCase
 
         // A method named `exec` is not the launcher.
         $this->assertSame([], ChildStderrCaptureScanner::scan('<?php $this->exec("ls");'));
+
+        // THE NULL DEVICE IS NOT A FILE. Every spelling that reaches it, and
+        // the near-misses that must NOT: a guard that reds a correct capture
+        // is answered with an exemption, and the exemption is where the next
+        // real offender hides.
+        $discarded = [
+            'exec("ls 2>/dev/null", $out, $rc);',
+            'exec("ls 2> /dev/null", $out, $rc);',
+            'shell_exec("ls 2>>/dev/null");',
+            'shell_exec("ls &> /dev/null");',
+            // fd 1 to the sink FIRST, then fd 2 onto fd 1: both gone.
+            'shell_exec("ls >/dev/null 2>&1");',
+            'proc_open("ls", [1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]], $p);',
+            '$d = [2 => ["file", "/dev/null", "w"]]; proc_open("ls", $d, $p);',
+        ];
+        foreach ($discarded as $body) {
+            $this->assertSame(
+                ChildStderrCaptureScanner::SHAPE_DISCARDED,
+                $one($body)['shape'],
+                'not reported as a discard: ' . $body,
+            );
+        }
+
+        // THE REVERSED ORDER IS A CAPTURE, and the difference is not
+        // cosmetic. `2>&1 >/dev/null` points fd 2 at whatever fd 1 was at that
+        // moment - for a child of exec()/proc_open(), the pipe the caller
+        // reads - and only then moves fd 1 to the sink.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('shell_exec("ls 2>&1 >/dev/null");')['shape'],
+            'fd 2 was duplicated from stdout BEFORE stdout became the sink',
+        );
+
+        // fd 0 on the null device is an ordinary child with no stdin, and says
+        // nothing at all about fd 2.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [0 => ["file", "/dev/null", "r"], 2 => ["pipe", "w"]], $p);')['shape'],
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('proc_open("ls", [0 => ["file", "/dev/null", "r"]], $p);')['shape'],
+        );
+
+        // A real file named on fd 2 is still a capture, /dev/null-shaped path
+        // fragments notwithstanding.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('exec("ls >$out 2>$err", $ignored, $rc);')['shape'],
+        );
+
+        // THE SCOPE BOUND ON THE DESCRIPTOR-SPEC RESOLUTION. A `$d` assigned
+        // in an EARLIER METHOD is not this spawn's spec, and answering from it
+        // was the documented-but-unenforced hole. `unclassified` is a failure
+        // shape, which is the correct answer to "I cannot tell".
+        $crossMethod = ChildStderrCaptureScanner::scan(
+            "<?php\nclass F {\n"
+            . '  public function a(): void { $d = [1 => ["pipe","w"], 2 => ["pipe","w"]]; }' . "\n"
+            . '  public function b(): void { proc_open("ls", $d, $p); }' . "\n}\n",
+        );
+        $this->assertCount(1, $crossMethod);
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $crossMethod[0]['shape'],
+            'a descriptor spec from another method answered for this spawn',
+        );
+
+        // ...and the same shape WITHIN one method still resolves, so the
+        // bound did not simply blind the resolver.
+        $sameMethod = ChildStderrCaptureScanner::scan(
+            "<?php\nclass F {\n"
+            . '  public function b(): void { $d = [1 => ["pipe","w"], 2 => ["pipe","w"]];' . "\n"
+            . '    proc_open("ls", $d, $p); }' . "\n}\n",
+        );
+        $this->assertSame(ChildStderrCaptureScanner::SHAPE_CAPTURED, $sameMethod[0]['shape']);
+
+        // A CLOSURE IS NOT A SCOPE BOUNDARY, deliberately: PHP closures
+        // capture by `use`, so an assignment before one really is in effect
+        // inside it and the enclosing NAMED function is the honest floor.
+        $inClosure = ChildStderrCaptureScanner::scan(
+            "<?php\nclass F {\n"
+            . '  public function b(): void { $d = [2 => ["pipe","w"]];' . "\n"
+            . '    $go = function () use ($d, &$p) { proc_open("ls", $d, $p); }; $go(); }' . "\n}\n",
+        );
+        $this->assertSame(ChildStderrCaptureScanner::SHAPE_CAPTURED, $inClosure[0]['shape']);
     }
 
     public function testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites(): void
@@ -188,9 +309,19 @@ final class ChildStderrCaptureTest extends TestCase
                 continue;
             }
 
+            $discardAllowance = self::ACCEPTED_DISCARDED_STDERR[$relative]['count'] ?? 0;
+
             foreach (ChildStderrCaptureScanner::scan((string) file_get_contents($file->getPathname())) as $site) {
                 if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_CAPTURED) {
                     $captured++;
+
+                    continue;
+                }
+
+                // Spent one at a time, so a second discarded site in an
+                // exempted file is still reported.
+                if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_DISCARDED && $discardAllowance > 0) {
+                    $discardAllowance--;
 
                     continue;
                 }
@@ -216,7 +347,46 @@ final class ChildStderrCaptureTest extends TestCase
                 . "pipe, a file, or `2>&1` onto the stdout already being read. Do NOT send it to "
                 . '/dev/null: for most of these shapes the line is the assertion. An '
                 . '"unclassified" site is a descriptor spec this scanner could not follow, which '
-                . 'is a hole in the guard rather than a pass for the site.',
+                . 'is a hole in the guard rather than a pass for the site. A "discarded" site '
+                . 'sends fd 2 to /dev/null, which is the one destination this guard exists to '
+                . 'refuse: nobody can read it, including the test.',
         );
+    }
+
+    /**
+     * A discard exemption cannot outlive the site it was written for, and
+     * cannot quietly grow.
+     *
+     * This is also the KNOWN-POSITIVE fixture for the null-device branch of
+     * the scanner, run against the real tree rather than a string: the
+     * absence assertion above would stay green if `sendsFdTwoToTheNullDevice()`
+     * stopped matching, because everything would simply read as `captured`
+     * again. Here a scanner that stopped matching reports zero discards
+     * against an exemption claiming one, and fails.
+     */
+    public function testEveryDiscardExemptionStillDescribesRealSites(): void
+    {
+        $root = \dirname(__DIR__);
+
+        foreach (self::ACCEPTED_DISCARDED_STDERR as $file => $exemption) {
+            $path = $root . '/' . $file;
+            $this->assertFileExists($path, "{$file} is exempted but no longer exists");
+            $this->assertNotSame('', trim($exemption['reason']), "{$file} is exempted without a reason");
+
+            $discarded = 0;
+            foreach (ChildStderrCaptureScanner::scan((string) file_get_contents($path)) as $site) {
+                if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_DISCARDED) {
+                    $discarded++;
+                }
+            }
+
+            $this->assertSame(
+                $exemption['count'],
+                $discarded,
+                "{$file} is exempted for {$exemption['count']} discarded-stderr spawn(s) but has "
+                    . "{$discarded}. Re-argue the exemption or delete it - a count that no longer "
+                    . 'matches is a licence nobody checked.',
+            );
+        }
     }
 }

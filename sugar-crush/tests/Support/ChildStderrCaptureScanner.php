@@ -27,6 +27,12 @@ namespace SugarCraft\Crush\Tests\Support;
  * a `2>&1` merge - so it is available to be asserted on rather than dumped on
  * whoever is watching the suite.
  *
+ * THAT WAS A DOC-BLOCK AND IS NOW A SHAPE. It used to be stated here and
+ * contradicted by the implementation, which read any `2>` as a capture and so
+ * reported `2>/dev/null` - the exact thing the paragraph forbids - as
+ * compliant. {@see SHAPE_DISCARDED} is the enforcement, and it names what
+ * remains unenforced.
+ *
  * WHAT IT CANNOT SEE, said out loud because the number above is mostly NOT
  * this: an in-process `fwrite(\STDERR, ...)`. `src/Cli/NonInteractive.php`
  * writes on it directly in several places, and a test that calls that code - as
@@ -49,6 +55,27 @@ final class ChildStderrCaptureScanner
     /** The child's stderr lands on the PHPUnit process's own. */
     public const SHAPE_INHERITED = 'inherited';
 
+    /**
+     * fd 2 is redirected somewhere NOBODY can read it - the null device.
+     *
+     * A distinct shape rather than folded into `inherited`, because it is a
+     * different mistake with a different fix and a different argument for the
+     * odd deliberate case. `inherited` says "you forgot a pipe"; this says
+     * "you silenced the evidence". The guard reds both.
+     *
+     * WHAT THIS SCANNER USED TO SAY, in its own doc-block and in
+     * {@see ChildStderrCaptureTest}'s: "treats `2>/dev/null` as captured
+     * because it cannot tell a sink from a file". WHAT IS TRUE NOW: it can,
+     * for the null device specifically, which is the only sink anybody
+     * actually writes. WHY THE OLD SENTENCE STILL MATTERS: the general
+     * statement is unchanged - `2>$someVariable` is a file to this scanner
+     * whatever the variable holds, and a `2>` onto a path under `/proc` or a
+     * fifo nothing reads is captured as far as the tokens go. The standard
+     * being defended is "the TEST can read it", and only the commonest way of
+     * failing it is now mechanised.
+     */
+    public const SHAPE_DISCARDED = 'discarded';
+
     /** The scanner could not resolve where fd 2 goes. */
     public const SHAPE_UNCLASSIFIED = 'unclassified';
 
@@ -70,6 +97,7 @@ final class ChildStderrCaptureScanner
     public static function scan(string $source): array
     {
         $tokens = \token_get_all($source);
+        $functions = TokenFunctionRanges::scan($tokens);
         $sites = [];
 
         foreach ($tokens as $i => $token) {
@@ -127,7 +155,7 @@ final class ChildStderrCaptureScanner
                 'call' => $name,
                 'shape' => $isShell
                     ? self::classifyShell(self::codeText($tokens, $open, $close))
-                    : self::classifyProcOpen($tokens, $open, $close),
+                    : self::classifyProcOpen($tokens, $open, $close, $functions),
             ];
         }
 
@@ -137,11 +165,55 @@ final class ChildStderrCaptureScanner
     /**
      * A shell command captures stderr when it says where fd 2 goes: `2>&1`
      * onto the stdout the caller is already reading, or `2>` a file it opens
-     * afterwards. Anything else inherits.
+     * afterwards. The null device is named separately; anything else inherits.
      */
     private static function classifyShell(string $argumentList): string
     {
+        if (self::sendsFdTwoToTheNullDevice($argumentList)) {
+            return self::SHAPE_DISCARDED;
+        }
+
         return \str_contains($argumentList, '2>') ? self::SHAPE_CAPTURED : self::SHAPE_INHERITED;
+    }
+
+    /**
+     * Whether a shell command sends fd 2 to `/dev/null`.
+     *
+     * THE ORDER OF REDIRECTIONS IS HONOURED, because the two orderings mean
+     * opposite things and both appear in real commands. `>/dev/null 2>&1`
+     * points fd 1 at the sink and then fd 2 at fd 1: discarded. `2>&1
+     * >/dev/null` points fd 2 at whatever fd 1 was AT THAT MOMENT - for a
+     * child of `exec()`/`proc_open()` that is the pipe the caller reads - and
+     * only then moves fd 1 to the sink: a capture, and reporting it as a
+     * discard would be a guard reddening correct code, which is how the next
+     * real offender buys its exemption.
+     *
+     * The literal `/dev/null` is what is matched, not a general notion of a
+     * sink. A path in a variable is a file as far as these tokens go; see
+     * {@see SHAPE_DISCARDED} for what that leaves open.
+     */
+    private static function sendsFdTwoToTheNullDevice(string $text): bool
+    {
+        // `2>/dev/null`, `2>> /dev/null`, quoted or not.
+        if (\preg_match('~2>>?\s*([\'"]?)/dev/null\1~', $text) === 1) {
+            return true;
+        }
+
+        // bash's both-streams forms.
+        if (\preg_match('~(?:&>>?|>&)\s*([\'"]?)/dev/null\1~', $text) === 1) {
+            return true;
+        }
+
+        // `>/dev/null` FOLLOWED BY `2>&1`. The offset comparison is the order
+        // check described above; without it the reversed form reads the same.
+        return \preg_match(
+            '~(?<![0-9&])1?>>?\s*([\'"]?)/dev/null\1~',
+            $text,
+            $stdout,
+            \PREG_OFFSET_CAPTURE,
+        ) === 1
+            && \preg_match('~2>&1~', $text, $dup, \PREG_OFFSET_CAPTURE) === 1
+            && $dup[0][1] > $stdout[0][1];
     }
 
     /**
@@ -151,21 +223,36 @@ final class ChildStderrCaptureScanner
      * whose nearest preceding assignment holds the array. Neither, and the
      * site is `unclassified` rather than assumed innocent.
      *
-     * THE LIMIT OF "RESOLVED": {@see nearestAssignment()} walks BACKWARDS
-     * through the token stream with no notion of scope, so a `$descriptors`
-     * assigned in an earlier method can answer for a spawn in a later one. No
-     * file in the tree currently has that shape - every resolved spec is
-     * assigned in the same method that spawns - but the word "resolved" is
-     * doing more work in the sentence above than the implementation does, and
-     * the next reader should know which.
+     * WHAT "RESOLVED" USED TO MEAN, and what it means now.
+     * {@see nearestAssignment()} walked BACKWARDS through the whole token
+     * stream with no notion of scope, so a `$descriptors` assigned in an
+     * earlier METHOD could answer for a spawn in a later one - and the
+     * doc-block said so, adding that no file in the tree had that shape. It
+     * still does not; that is the point. A guard whose only defence is "no
+     * caller has this shape yet" is a guard with a hole waiting for the shape.
+     * The walk is now floored at the opening brace of the enclosing named
+     * function ({@see TokenFunctionRanges}), and an assignment it cannot find
+     * inside that function makes the site `unclassified` - a failure - rather
+     * than an answer borrowed from a different method.
+     *
+     * A CLOSURE IS NOT A FLOOR, deliberately: PHP closures capture by `use`,
+     * so an assignment before the closure genuinely IS the one in effect
+     * inside it, and the enclosing NAMED function is the honest boundary.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
+     * @param list<array{name:string,from:int,to:int}> $functions
      */
-    private static function classifyProcOpen(array $tokens, int $open, int $close): string
+    private static function classifyProcOpen(array $tokens, int $open, int $close, array $functions): string
     {
-        // A `2>` in the command string redirects before the descriptor spec
-        // is ever consulted, so it counts too.
-        if (\str_contains(self::codeText($tokens, $open, $close), '2>')) {
+        $whole = self::codeText($tokens, $open, $close);
+
+        // A redirection in the command string is applied by the shell and
+        // decides the matter for whatever fd it names, before the descriptor
+        // spec is ever consulted.
+        if (self::sendsFdTwoToTheNullDevice($whole)) {
+            return self::SHAPE_DISCARDED;
+        }
+        if (\str_contains($whole, '2>')) {
             return self::SHAPE_CAPTURED;
         }
 
@@ -181,22 +268,36 @@ final class ChildStderrCaptureScanner
         }
 
         if (self::tokenText($tokens[$first]) === '[' || (\is_array($tokens[$first]) && $tokens[$first][0] === \T_ARRAY)) {
-            return self::namesFdTwo(self::codeText($tokens, $from, $to))
-                ? self::SHAPE_CAPTURED
-                : self::SHAPE_INHERITED;
+            return self::classifySpec(self::codeText($tokens, $from, $to));
         }
 
         if (\is_array($tokens[$first]) && $tokens[$first][0] === \T_VARIABLE) {
-            $spec = self::nearestAssignment($tokens, $first, $tokens[$first][1]);
+            // The floor: this spawn's own function body. A spec assigned
+            // outside it is not this call's spec, and guessing that it is was
+            // the defect this bound closes.
+            $enclosing = TokenFunctionRanges::enclosing($functions, $first);
+            $spec = self::nearestAssignment($tokens, $first, $tokens[$first][1], $enclosing['from'] ?? 0);
 
             if ($spec === null) {
                 return self::SHAPE_UNCLASSIFIED;
             }
 
-            return self::namesFdTwo($spec) ? self::SHAPE_CAPTURED : self::SHAPE_INHERITED;
+            return self::classifySpec($spec);
         }
 
         return self::SHAPE_UNCLASSIFIED;
+    }
+
+    /**
+     * A `proc_open()` descriptor spec, read for what fd 2 is pointed at.
+     */
+    private static function classifySpec(string $spec): string
+    {
+        if (!self::namesFdTwo($spec)) {
+            return self::SHAPE_INHERITED;
+        }
+
+        return self::fdTwoSpecIsTheNullDevice($spec) ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
     }
 
     private static function namesFdTwo(string $spec): bool
@@ -205,13 +306,31 @@ final class ChildStderrCaptureScanner
     }
 
     /**
-     * The source of the nearest `$var = ...;` before $before.
+     * Whether fd 2's entry in a descriptor spec is `['file', '/dev/null', …]`.
+     *
+     * Only fd 2's own entry is inspected, so a spec that parks fd 0 on the
+     * null device - which is ordinary and correct, a child with no stdin -
+     * is not mistaken for a silenced stderr.
+     */
+    private static function fdTwoSpecIsTheNullDevice(string $spec): bool
+    {
+        if (\preg_match('~(?:^|[\[,\s])2\s*=>\s*\[([^\]]*)\]~', $spec, $entry) !== 1) {
+            return false;
+        }
+
+        return \str_contains($entry[1], '/dev/null');
+    }
+
+    /**
+     * The source of the nearest `$var = ...;` before $before, searching no
+     * further back than $floor - the opening brace of the function the spawn
+     * sits in, or 0 at file scope.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      */
-    private static function nearestAssignment(array $tokens, int $before, string $variable): ?string
+    private static function nearestAssignment(array $tokens, int $before, string $variable, int $floor = 0): ?string
     {
-        for ($i = $before - 1; $i >= 0; $i--) {
+        for ($i = $before - 1; $i >= $floor; $i--) {
             if (!\is_array($tokens[$i]) || $tokens[$i][0] !== \T_VARIABLE || $tokens[$i][1] !== $variable) {
                 continue;
             }
