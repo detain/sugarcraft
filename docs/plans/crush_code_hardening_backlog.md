@@ -6388,3 +6388,59 @@ userland cannot move it at all.
 test cannot relocate itself into a private temp directory after the fact, so attribution has to move
 instead of the directory. `tests/bootstrap.php`'s `putenv('TMPDIR=…')` is not contradicted by this — it
 is documented there as working on **children** only, which is exactly what the measurement above shows.
+### Eb45-5 — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
+
+**Recorded 2026-08-22 by round-45 lane b (fix stage), from its own reviewer's finding.** Severity: low,
+documentation accuracy. **Source-verified.**
+
+**What.** `src/Support/ToolIpcFiles.php`'s class doc-block says each dispatcher "unlinks a payload when
+it collects it, and that is the **ONLY unlink** either of them has". Round 45 added a second one:
+`Runtime::executeConcurrently()`'s `finally` discards every settled-but-uncollected payload when the
+group is abandoned or unwound. The sentence is now false for `Runtime` (it remains true for
+`Chat::forkToolCalls()`), and it is load-bearing prose — it is the premise for the paragraph explaining
+why `sweep()` exists at all.
+
+**Why it was not fixed here.** `src/Support/ToolIpcFiles.php` was outside lane b's file list and the
+lane's own reviewer explicitly declined to prescribe an edit to it. `tests/Support/ToolIpcFilesTest.php`
+carries the same sentence in the PAST tense, which is defensible as history and may not need touching.
+
+**Step.** Rewrite the class doc-block in the three-part form (what it said / what is true now / why the
+point stands): the collect-side unlink is still the normal lifecycle, the `finally` is a bounded second
+one for the abandonment path only, and neither reaches a child that is still running — which is the
+population `sweep()` is actually for, so the paragraph's conclusion is unchanged.
+
+### Eb45-6 — `rendezvousTool()` reports `max($seen, count(glob(...)))`, which overshoots whenever callers outnumber `peers`
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: low, test-harness sharp edge. **Observed twice.**
+
+**What.** The rendezvous witness in `tests/Integration/ParallelToolCallsTest.php` returns the highest
+count it ever saw in its group directory, and it stops looking as soon as it has seen `peers`. With
+`peers` BELOW the number of callers sharing one group directory, the reported `saw=` is whatever
+happened to be on disk at the first glob — a race, not a measurement. It cost round 45 a 2% flake in
+`testPostToolUseObservesEachConcurrentCallsOwnRewrittenArguments` (three calls, `peers: 2`) and a false
+KILL verdict on an unrelated mutation. The two new abandonment cases avoid it by giving each call its
+own group directory, which is a convention nothing enforces.
+
+**Step.** Make the class impossible rather than avoided: have `rendezvousCall()`/`rendezvousCalls()`
+record callers per group and assert that `peers` equals that number, so a mismatched pair fails loudly
+at construction instead of flaking one run in fifty.
+
+### Eb45-7 — the suite's per-test time limit does not reach a forked child
+
+**Recorded 2026-08-22 by round-45 lane b.** Severity: medium for diagnosis, low for correctness.
+**Measured.**
+
+**What.** `enforceTimeLimit` is implemented with php-invoker's `pcntl_alarm`, which fires in the process
+that armed it. A test that forks keeps its children running after the parent is aborted as RISKY, and
+the parent's `tearDown()` has by then deleted the temp tree those children are still writing into. E80's
+observed failure had exactly this shape: the parent aborted at 60s while a child was still inside
+PHPUnit's own shutdown.
+
+**Why it was not fixed here.** `sugar-crush/phpunit.xml` is supervisor-owned, and the choice (drop the
+limit, raise it, or make forked-child tests register their pids with a shutdown reaper) is a decision
+rather than an edit.
+
+**Step.** Decide. The cheap 90% is a shared trait for forked-child tests that records every pid it
+creates and SIGKILLs any survivor in `tearDown()`, which is inside the parent's control and needs no
+phpunit.xml change.
+
