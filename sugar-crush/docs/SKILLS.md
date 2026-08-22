@@ -114,9 +114,11 @@ wrong, because almost every other glob dialect they have met sets it.
 
 - A single `*` **crosses `/`**. `*.php` claims `src/a/b/foo.php`, not only
   `foo.php`. So does `?`, which will match a `/` like any other character.
-  If you want a single directory level, spell it out: `src/*/foo.php` does not
-  restrict anything by itself — write `src/**/foo.php` if you meant "at any
-  depth" and accept that "exactly one level down" is not expressible here.
+  Be precise about what that costs: `src/*/foo.php` is not "exactly one level
+  down". It requires **at least** one — it will not claim `src/foo.php` — but
+  puts no ceiling on how many, so it claims `src/a/b/foo.php` too. "Exactly one
+  level down" is not expressible in this dialect. Write `src/**/foo.php` when
+  you mean "at any depth including none".
 - `**` means **zero or more directory levels, at any position — including the
   first**. `src/**/*.php` claims `src/foo.php` as well as `src/a/b/foo.php`,
   and `**/*.php` claims `foo.php` at the tree root as well as `a/foo.php`.

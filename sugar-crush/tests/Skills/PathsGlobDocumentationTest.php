@@ -132,6 +132,46 @@ final class PathsGlobDocumentationTest extends TestCase
     }
 
     /**
+     * `src/*` requires at least one directory level and bounds none.
+     *
+     * WHY THIS IS ITS OWN CASE. The first draft of the `docs/SKILLS.md`
+     * paragraph said `src/*\/foo.php` "does not restrict anything by itself",
+     * which is wrong in the direction a skill author would feel: it DOES
+     * refuse `src/foo.php`. Both halves are asserted here because a reader
+     * given only "a `*` crosses `/`" reasonably concludes the pattern is
+     * equivalent to `src/**\/foo.php`, and it is not.
+     */
+    public function testASingleStarRequiresAtLeastOneLevelAndBoundsNone(): void
+    {
+        self::assertFalse(
+            SkillRegistry::pathMatches('src/*/foo.php', 'src/foo.php'),
+            '`src/*/foo.php` now claims a file with no directory between; docs/SKILLS.md states that '
+            . 'it requires at least one level',
+        );
+        self::assertTrue(
+            SkillRegistry::pathMatches('src/*/foo.php', 'src/a/foo.php'),
+            '`src/*/foo.php` no longer claims a file exactly one level down',
+        );
+        self::assertTrue(
+            SkillRegistry::pathMatches('src/*/foo.php', 'src/a/b/foo.php'),
+            '`src/*/foo.php` no longer claims a file several levels down; docs/SKILLS.md states that '
+            . 'the pattern puts no ceiling on the depth',
+        );
+        self::assertTrue(
+            SkillRegistry::pathMatches('src/**/foo.php', 'src/foo.php'),
+            '`src/**/foo.php` no longer spans zero levels, which is the contrast the paragraph draws',
+        );
+
+        self::assertStringContainsString(
+            'is not "exactly one level down"',
+            $this->doc('docs/SKILLS.md'),
+            'docs/SKILLS.md no longer warns that a single-`*` segment is not "exactly one level down". '
+            . 'An earlier draft said it "does not restrict anything by itself", which is false — it '
+            . 'refuses a file with no directory between.',
+        );
+    }
+
+    /**
      * `**` is zero-or-more levels at ANY position — the middle case and the
      * leading case, which are the two the docs promise separately.
      */
