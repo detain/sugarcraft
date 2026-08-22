@@ -404,8 +404,21 @@ final class NonInteractive
      * (E84) — the shape's OWNER is unreachable there, the shape is not. The two
      * are kept from drifting by
      * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest},
-     * which asserts them key-for-key against each other; if you change the keys
-     * or the flags here, that test reds until the guard is changed to match.
+     * which asserts them key-for-key against each other; change the keys here
+     * and that test reds until the guard is changed to match.
+     *
+     * THE KEY COMPARISON CANNOT SEE AN ENCODE FLAG, and this doc-block used to
+     * claim it could ("change the keys OR THE FLAGS here"). It cannot: that test
+     * `json_decode()`s both documents, so the flags are gone by the time it
+     * looks, and the guard's only payload is an ASCII literal with no slash and
+     * no non-ASCII byte, so its flag set has no observable effect on any output
+     * in the suite. Round 43's review dropped
+     * `JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE` from the guard, and
+     * separately from {@see self::encodeDocument()}, and the suite stayed green
+     * both times. The flags are pinned by SOURCE instead — that test compares
+     * the two `json_encode()` flag expressions token-for-token, with
+     * `JSON_THROW_ON_ERROR` expected on this side only (the guard has no
+     * exception handler and tests the `string|false` return directly).
      */
     private static function emitErrorDocument(string $outputFormat, string $type, string $message, ?string $provider): void
     {

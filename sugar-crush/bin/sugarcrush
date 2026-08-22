@@ -38,11 +38,17 @@ declare(strict_types=1);
     // working) and `error.{type,message}`, encoded with
     // JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE |
     // JSON_INVALID_UTF8_SUBSTITUTE and one trailing newline. That is
-    // NonInteractive::encodeDocument()'s flag set and
-    // NonInteractive::emitErrorDocument()'s shape; both name this site in
-    // return, and Tests\Integration\BinSugarcrushAutoloadGuardTest asserts the
-    // two documents key-for-key so a change to one reds against the other
-    // instead of drifting quietly.
+    // NonInteractive::emitErrorDocument()'s shape, and
+    // NonInteractive::encodeDocument()'s flag set MINUS `JSON_THROW_ON_ERROR`.
+    // The subtraction is not an oversight and the earlier wording that omitted
+    // it was inexact: the owner throws and catches a JsonException, while this
+    // branch has no exception handler to reach for and instead tests the
+    // documented `string|false` return directly below. Both files name this site
+    // in return, and Tests\Integration\BinSugarcrushAutoloadGuardTest asserts
+    // the two documents key-for-key AND the two flag expressions token-for-token
+    // — the second of those because a key comparison cannot see an encode flag
+    // at all (round 43's review dropped both flags from either side and the
+    // suite stayed green).
     //
     // `installation` IS A NEW `error.type`, not `usage` reused. The invocation
     // was well-formed; the checkout is not, and telling those apart is the
@@ -88,25 +94,83 @@ declare(strict_types=1);
 
     // ONLY when this invocation actually asked for JSON. A guard that printed a
     // document into a human's terminal would be a regression, and there is no
-    // option parser yet — ArgvParser is behind the autoloader too — so the two
-    // spellings are read straight out of raw argv, mirroring ArgvParser's own
-    // scan: `--output-format=<value>` and `--output-format <value>`, LAST
-    // occurrence wins, the value compared case-SENSITIVELY (the parser rejects
-    // `--output-format JSON` as unsupported, so treating it as json here would
-    // make the broken checkout MORE permissive than the working one). Any other
-    // value — `text`, or one nothing implements — leaves stdout empty, which is
-    // the behaviour the working binary has on that same input.
+    // option parser yet — ArgvParser is behind the autoloader too — so the
+    // format is read straight out of raw argv. Any value other than `json` —
+    // `text`, or one nothing implements — leaves stdout empty, which is the
+    // behaviour the working binary has on that same input.
+    //
+    // WHAT THIS COMMENT USED TO SAY: the scan reads the two spellings
+    // "mirroring ArgvParser's own scan". WHAT IS TRUE NOW: it did not mirror
+    // it, and round 43's review measured three argv vectors on which the broken
+    // checkout came out MORE permissive than the working one — the exact
+    // property the case-sensitivity choice below exists to prevent.
+    // `-- --output-format=json -p hi`, `--root --output-format json -p hi` and
+    // `session delete -- --output-format=json` each parse to `text` in
+    // ArgvParser and each emitted the document here, because the scan modelled
+    // neither the POSIX `--` end-of-options separator nor the flags that swallow
+    // the token after them. Both are modelled below now. WHY THE CLAIM STILL
+    // EARNS ITS PLACE: agreement with the parser is the whole specification of
+    // this branch — a broken checkout that answers a question the working one
+    // would have refused is a second, undocumented CLI — so the claim is kept
+    // and made true rather than dropped.
+    //
+    // WHAT IS MIRRORED, exactly: `$argv[0]` is skipped (ArgvParser documents
+    // "parsing starts at $argv[1]" — and that alignment is UNOBSERVABLE and
+    // untested on purpose, because PHP fills `$argv[0]` with the script path and
+    // no path can be spelled `--output-format=…`; it is written this way so the
+    // two loops read alike, not because a case exists); a bare `--` ends the
+    // scan, because past it
+    // ArgvParser sends every token to operands and no flag branch can claim one;
+    // both spellings `--output-format=<value>` and `--output-format <value>` are
+    // read, LAST occurrence wins; the value is compared case-SENSITIVELY (the
+    // parser rejects `--output-format JSON` as unsupported, so treating it as
+    // json here would make the broken checkout MORE permissive than the working
+    // one); and the value-taking flags consume their token, in the two flavours
+    // ArgvParser gives them — `--root` and `--output-format` take the next token
+    // unconditionally, while `-p`, `--prompt`, `--config`, `--model` and
+    // `--permission-mode` refuse a flag-shaped one and leave it for the loop.
+    //
+    // WHAT IS NOT MIRRORED, deliberately — this is a format scan and not a
+    // second parser. The `run` positional alias is not modelled, and modelling
+    // it would be a NEW divergence rather than a fix: `run` consumes its value
+    // only when that value is not flag-shaped, so a `--output-format` following
+    // `run` is left for the loop on both sides already. `--help`/`--version` are
+    // not modelled either: on a working checkout they print and exit 0 before
+    // any format is honoured, while a broken checkout has no help screen to
+    // print and reports the installation failure instead. THE AGREEMENT THAT IS
+    // CLAIMED IS ASSERTED, not restated in prose — Tests\Integration\
+    // BinSugarcrushAutoloadGuardTest runs a table of argv vectors through this
+    // scan and through ArgvParser::parse() and compares the two decisions.
     $rawArgv = $GLOBALS['argv'] ?? [];
     $format = 'text';
-    for ($i = 0, $n = count($rawArgv); $i < $n; $i++) {
+    // ArgvParser's `--root` branch is `$root = $argv[++$i]` with no test on the
+    // value, so `--root --output-format json` makes `--output-format` the ROOT.
+    // `--output-format` itself is the other lenient one and is handled above by
+    // the branch that reads it.
+    $lenientValueFlags = ['--root'];
+    // The strict set: ArgvParser refuses a flag-shaped value for each of these
+    // (its looksLikeFlag() is "longer than one character and begins with -")
+    // and leaves the token unconsumed for the next iteration to judge.
+    $strictValueFlags = ['-p', '--prompt', '--config', '--model', '--permission-mode'];
+    for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
         if (!is_string($arg)) {
             continue;
+        }
+        if ($arg === '--') {
+            break;
         }
         if (str_starts_with($arg, '--output-format=')) {
             $format = substr($arg, 16); // length of "--output-format="
         } elseif ($arg === '--output-format') {
             $format = $rawArgv[++$i] ?? $format;
+        } elseif (in_array($arg, $lenientValueFlags, true)) {
+            ++$i;
+        } elseif (in_array($arg, $strictValueFlags, true)) {
+            $next = $rawArgv[$i + 1] ?? null;
+            if (!is_string($next) || strlen($next) <= 1 || $next[0] !== '-') {
+                ++$i;
+            }
         }
     }
 
@@ -120,6 +184,14 @@ declare(strict_types=1);
         // produced, because an empty stdout is the single outcome this branch
         // was added to prevent. Same reasoning, same shape, as the JsonException
         // arm of NonInteractive::emitErrorDocument().
+        //
+        // BEING UNREACHABLE, IT IS ALSO UNEXERCISED: no test can drive this arm,
+        // so nothing here holds the literal to the shape it is a fallback for —
+        // round 43's review replaced it with `{"BROKEN":true}` and the suite
+        // stayed green. It is pinned by SOURCE instead:
+        // BinSugarcrushAutoloadGuardTest::testTheUnreachableFallbackLiteralIsTheDocumentItReplaces()
+        // reads this literal out of this file and compares it against the bytes
+        // the reachable arm actually printed.
         echo ($document === false
             ? '{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot find composer autoload.php"}}'
             : $document) . "\n";
