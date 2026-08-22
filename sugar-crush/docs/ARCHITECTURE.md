@@ -86,7 +86,10 @@ Two consequences worth knowing:
 - **`Bootstrap` is where the launch refuses.** Anything "configured but
   unusable" throws `PermissionConfigException` from construction, before the
   alt screen exists — which is also why its warnings go to stderr at
-  construction time and are latched once per process.
+  construction time and are latched once per process. The warnings that name a
+  capability the session LOST also get a system row in the transcript, because
+  the alt screen paints over stderr 0.47s later; see
+  `Bootstrap::warnPermissionConfigInTranscript()`.
 
 Refusals are collected rather than only printed:
 `Bootstrap::projectTierRefusals()` (directories a repository chose that this

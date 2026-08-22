@@ -169,7 +169,8 @@ believes it owns.
 
 Nothing is lost: every skip is readable from `SkillManager::skipped()`, every
 refused directory from `refusedDirectories()`, the launch prints one bounded
-summary line, and `SUGARCRUSH_DEBUG_SKILLS=1` puts the per-file lines back on
+summary line (to stderr **and** to the session transcript, so it survives the
+alt screen), and `SUGARCRUSH_DEBUG_SKILLS=1` puts the per-file lines back on
 stderr. See [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
 ## See also

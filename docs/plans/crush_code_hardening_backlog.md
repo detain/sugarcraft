@@ -3079,6 +3079,49 @@ from underneath. One `\e[?1049h`, one copy of the sentence, though `app()` build
 ⚠️ **A pre-alt-screen acknowledgement gate was considered and REJECTED.** It is the wrong answer for a
 launch-time warning about a grant the operator already made. Do not build one.
 
+**ROUND 40 `sglang` — the migration finished, and three things the entry above got wrong.**
+
+**The census. "nine" other warnings was wrong: there were SEVENTEEN.** Measured at `8add627b`: 13
+un-migrated `warnPermissionConfig()`/`warnPermissionConfigOnce()` call sites, plus 4 launch warnings
+that bypassed the seam entirely as raw `fwrite(STDERR, …)` — the two provider degradations to echo and
+the two agent-preset degradations, which are arguably the most user-visible of the lot. A further 2
+`fwrite`s in `reportPrunedSessions()` were not in any census.
+
+**Thirteen migrated, four deliberately not.** The rule, recorded on
+`warnPermissionConfigInTranscript()`: a warning earns a transcript row iff it names something **the
+session can no longer do**. Left on stderr — `trustedProjectRoots()`'s three per-entry complaints
+(the consequence, an untrusted project, is already on the seam with the actionable path),
+`withoutEmptyPermissionOverrides()` (reports a change that was DECLINED, so nothing about the session
+differs), and `reportPrunedSessions()` (history already deleted, not this session's capabilities).
+
+**Finding: `permissionRules()` said everything TWICE, on every launch.** `chat()` reaches it through
+`permissionGate()` AND through `agentManager()`, and those were raw `warnPermissionConfig()` calls
+with no de-duplication at all — probed at `8add627b`, a config with two bad rules printed **four**
+stderr lines. Routing through the seam picks up the per-process map, so it is one apiece now.
+
+**Finding: `app()` raised two of these AFTER `chat()` had already read the list.** `bin/sugarcrush`
+runs `app()`, not `chat()`; `app()` calls `reportSkillSkips()` and `reportProjectTierRefusals()` a
+second time after `chat()` returned, so anything they recorded landed in a static nothing read again.
+Migrating them without fixing that would have been a no-op that looked like a fix. `app()` now applies
+the **delta** — never the whole list, because `withLaunchNotices()` appends.
+
+**The list is now bounded, and it was not before.** `$launchNotices` becomes `Role::System` rows of the
+CONVERSATION, so it is sent to the model on every turn — an unbounded list is a per-token cost for the
+whole session, not a scrolling nuisance. `LAUNCH_NOTICE_LIMIT = 24` rows (measured: 17 is the most a
+launch reaches without a per-ENTRY fan-out) and `LAUNCH_NOTICE_MAX_CHARS = 400` (measured: the longest
+legitimate message this class builds is `hookFiles()`'s at 283 chars). stderr is never clipped or
+capped, and the overflow is a counted tail row pointing at it.
+
+**Sub-finding, caught by the test rather than by review.** The overflow counter was an `int` and
+double-counted: because `permissionRules()` is raised twice per launch, a 30-rule config reported
+"and 12 more" for the 6 it could not fit. It is a message-keyed set now, so the dropped half has the
+same de-duplication the kept half already had.
+
+**Still stderr-only and UNTESTED:** the two agent-preset degradations. Both registries catch per-file
+failures internally, so the outer `catch (\Throwable)` needs a registry-level throw that no filesystem
+fixture reaches — probed three ways (a `.claude/agents` that is a file, one that is unreadable, one
+holding malformed YAML) and none of them throws. They are guarded by review, not by a test.
+
 🔴 **STOP CITING LINE NUMBERS IN THIS ENTRY. Cite symbols.** This is the third consecutive round in which
 this entry's line numbers were stale when read: the original entry's four were corrected by the round-39
 scout; those corrections were stale by round 40; round 40's re-head left them uncorrected; and the
