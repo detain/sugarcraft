@@ -296,6 +296,10 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
             // directory is a silent content loss against the thing the caller
             // asked for.
             //
+            // AN EIGHTH, via {@see SkillPathNudge::CALLER_BUDGET_DIVISOR} —
+            // the same dial Grep and Glob turn, held in one place since E87
+            // rather than written out three times.
+            //
             // A budget too small for one entry surfaces nothing and SPENDS
             // nothing, so the skill is announced by the next call with room
             // rather than retired unseen. $maxBytes <= 0 is unreachable here —
@@ -303,7 +307,9 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
             // branch is stated for the contract, not for a caller.
             $nudge = $this->skillNudge?->forPath(
                 $path,
-                $this->maxBytes > 0 ? intdiv($this->maxBytes, 8) : null,
+                $this->maxBytes > 0
+                    ? intdiv($this->maxBytes, SkillPathNudge::CALLER_BUDGET_DIVISOR)
+                    : null,
             );
             if ($nudge !== null) {
                 $content .= "\n\n" . $nudge;
