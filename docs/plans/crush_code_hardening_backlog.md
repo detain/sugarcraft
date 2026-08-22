@@ -5780,3 +5780,139 @@ constants, but too volatile to pin without building a change-detector, which is 
 
 **Step.** Take them one at a time as each acquires a machine-readable source. The roster and preset
 lists are the two most likely to become checkable, since both are already enumerated in `src/`.
+
+### E112 — `bin/sugarcrush` carries a comment saying README.md is still wrong; it is not, as of round 44
+
+**Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, comment-correctness.
+**Not fixed at record time — `bin/sugarcrush` was read-only for that lane** (it is item 1's SOURCE, not
+its target). **CLOSED in the same round by the lane-b fix agent**, which was not under that restriction:
+the last two sentences were rewritten in the three-part form, keeping the load-bearing half and adding
+the pointer at `ReadmeJsonErrorContractDriftTest` as the README end's guard.
+
+**What.** The `$args->usageError` block in `bin/sugarcrush` ends with *"README.md's list still names both;
+correcting it is lane c's file this round and is recorded as a deferred finding."* Round 44 lane b did
+correct it: the "exactly two exceptions" paragraph now names one, and the retraction is a blockquote.
+So the sentence describes a state that no longer exists and points a reader at a defect they will not
+find. The rest of that comment — that an unimplemented `--output-format` VALUE is the one remaining
+exception, and why — is correct and should be kept.
+
+**Step.** Rewrite the last two sentences of that block in the three-part form: what it said, that
+README.md was corrected in round 44 (commit `4547d07a`), and that the "this is now the ONLY exception"
+claim still earns its place because it is the load-bearing half. `ReadmeJsonErrorContractDriftTest`
+pins the README end of it; nothing pins this comment, and nothing needs to.
+
+### E113 — `ReadmeJsonErrorContractDriftTest` derives error types from two files by two different scans
+
+**Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, test-design. **Deliberate;
+recorded so the asymmetry is not mistaken for an oversight.**
+
+**What.** The test reads `src/Cli/NonInteractive.php` for `emitErrorDocument()` call sites (arguments
+split from the token stream, exit code taken from the `return self::EXIT_*` closing the same block) and
+`bin/sugarcrush` for a literal `'type' => …` pair plus the `exit(<int>)` after it. Two scans, because the
+guard is a plain script with no class to reflect on — which is the entire point of the guard. Both go
+red rather than skipping on anything they cannot parse.
+
+The asymmetry that is worth naming: the `NonInteractive` scan finds ALL types by construction, while the
+guard scan finds THE FIRST `'type' => <literal>` and stops. A second hand-rolled document in
+`bin/sugarcrush` would be invisible to it. There is no second one today and no reason to expect one — the
+guard exists precisely because that path can load nothing — but a `--version` fast path or a second
+pre-autoload guard would reopen it.
+
+**Step.** If a second pre-autoload document is ever added, make the guard scan collect all pairs and
+assert the set, the way the `NonInteractive` side already does. Related: E94/E98.
+
+**CLOSED in the same round by the lane-b fix agent, and by removing the asymmetry rather than by
+documenting it.** The reviewer's F1 showed the two-file window was the defect, not the two scans: a
+third producer (`src/Cli/Subcommands.php`) emitted two error types neither scan could see. The
+derivation now reads ALL of `src/` and `bin/` in one pass, in three shapes — an `emitErrorDocument()`
+call, an `'error' => ['type' => …]` array literal, and a raw JSON envelope string — so the guard is
+found the same way every other producer is and "the first `'type' =>` and stop" is gone. The two
+unbounded scans this entry did not name (`$message = '<literal>'` and `exit(<int>)`, both first-match
+over the whole script) are bounded to the enclosing function, and a second `$message` literal inside the
+guard now reds rather than being silently ignored. VERIFIED by mutation: a decoy `$message` placed
+earlier in the file and outside the guard is read by the old whole-file scan (proved standalone) and
+correctly ignored by the bounded one.
+
+### E114 — the round-44 lane scratchpad was shared between lanes and one lane's suite output overwrote another's
+
+**Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: process, not code.
+
+**What.** All three round-44 lanes were given the same scratchpad path
+(`/tmp/claude-1000/-home-sites-sugarcraft/<session>/scratchpad`), so a baseline written to
+`scratchpad/baseline.txt` by lane b and by lane c landed in one file. Lane b's baseline was recoverable
+only because the two summaries happened to append rather than truncate; a truncating write would have
+silently handed one lane the other's figures, and the standing rules make every later figure depend on
+that baseline.
+
+Second-order, and it corroborates **E96** with a live instance: lane c's run in that shared file failed
+`ParallelToolCallsTest::testACompletedGroupLeavesNoPayloadFilesBehind` and
+`testAThrowingSessionStateMergeCostsOnlyThatCallsMark` on `/tmp/sc_runtime_tool_*.bin` files that were
+**not its own** — lane b's suite was running concurrently and owns files matching that glob. E96 predicted
+exactly this; this is the first observation of it firing.
+
+**Step.** Give each lane a private scratch subdirectory (lane b used `scratchpad/laneb/` from the point
+it noticed), and fix E96 so a concurrent sibling suite cannot red a lane's run. The E96 fix is the
+load-bearing one: a lane that cannot trust `rc 0` cannot trust anything downstream of it.
+
+### E115 — `pathMatches()`'s own perf note has the generator gap that was just fixed one doc-block above it
+
+**Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, measurement-hygiene.
+**Not fixed here — deliberately scoped out**, recorded so it is not mistaken for having been checked.
+
+**What.** F5 of the round-44 lane-b review found that `$compiledPathPatterns`'s memoisation figures
+quoted a ratio to two decimals from a generator whose free parameters were unstated; that doc-block was
+re-taken with the generator written out, and the honest band turned out to be roughly 7x-10x rather than
+8.53x-8.68x. `pathMatches()`'s FASTER, INCIDENTALLY paragraph describes its generator in exactly the
+same words — *"40 paths of the form `src/` + 8 path segments + a filename"* — and therefore has exactly
+the same hole: segment content sets the per-match cost, and the per-match cost is the denominator.
+
+Two things make it less urgent than F5 was, and both are reasons to record rather than ignore. Its
+figure is an old-predicate/new-predicate ratio, and BOTH arms pay the same match cost, so segment length
+cancels to first order in a way it does not in a memo/no-memo ratio. And the paragraph already says
+*"quote the ratio and re-take the rest"*, which is the right instinct applied to the absolute times. But
+it is still a two-decimal band from an underspecified generator, and `legacyPathMatch()` is still in the
+class, so re-taking it is possible rather than archaeological.
+
+**Step.** Re-take with the segment content written down (measure at 1, 12 and 24 characters, three runs
+each, PHP version stated), and quote the band across those rather than a point. Related: E85, E99.
+
+### E116 — `not-found` and `mcp-config` are the only hyphenated `error.type` names in the contract
+
+**Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, API-consistency. **A contract
+decision, not a defect — recorded because the guard now makes either answer cheap and someone should
+pick one.**
+
+**What.** The shipped `error.type` set is `backend`, `encoding`, `installation`, `mcp-config`,
+`not-found`, `provider_configuration`, `usage`. Five are single words or `snake_case`; two are
+`kebab-case`, and they are the two `src/Cli/Subcommands.php` added. Nothing is broken — a consumer
+matches strings — but a set that spells the same idea two ways invites a consumer to guess wrong once.
+The hyphens are also what the drift guard's old `[a-z_]+` alphabet could not express, which is how both
+types stayed invisible to it for a round; the alphabet is now `[a-z][a-z0-9_-]*` and reds on anything it
+cannot read, so a rename would be caught either way.
+
+**Step.** Decide: rename to `not_found` / `mcp_config` for consistency with
+`provider_configuration`, or keep and note in README that the set is mixed-case-by-history. If renaming,
+the derivation in `ReadmeJsonErrorContractDriftTest` will red until README.md is updated to match, which
+is the intended order. Pre-1.0, so no compatibility cost.
+
+### E117 — the memoisation and cap-cost TIMING figures are documented but not pinned
+
+**Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, coverage. **Deliberate;
+recorded so the gap is not read as an oversight the next time someone audits this file.**
+
+**What.** Round 44 pinned every ROSTER-derived and CONSTANT-derived figure in
+`SkillRegistry::MAX_COMPILED_PATTERNS`'s doc-block — twelve built-ins, four distinct globs, five
+entries, two per skill, 256x, ~200 skills, peak 1,024, settles at 544. It deliberately did NOT pin the
+timing figures (7.5x-9.7x memoisation, +1.0%-4.9% cap cost, 2.16-2.19 us per translation) or the memory
+totals (3,549,976 B at 20,000 entries, 154,904 B at 1,024). Those are an allocator's and a scheduler's
+answers: they move with the PHP build, with what else is running on the box, and this box has only PHP
+8.3.6 while CI runs 8.3 AND 8.4. A test asserting them would red on the 8.4 leg for no defect, which is
+the failure mode that gets guards deleted.
+
+The residual is real, though, and this is what it is: those figures can rot in the doc-block exactly the
+way the roster figures could before round 44, and nothing will say so. They carry their generator and
+their instrument now, which makes them re-takeable by hand, and that is the whole of the mitigation.
+
+**Step.** If this ever matters enough, the shape that would work is a tolerance-banded benchmark test
+skipped unless an env var is set, so it is a tool someone runs deliberately rather than a suite member
+that reds on a busy CI runner. Do NOT add an unbanded assertion. Related: E87, E99.

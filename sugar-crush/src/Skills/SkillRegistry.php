@@ -13,6 +13,86 @@ final class SkillRegistry
     private array $disabledSkills = [];
 
     /**
+     * The most compiled patterns {@see $compiledPathPatterns} will hold before
+     * it is emptied and refilled.
+     *
+     * WHY THERE IS A CAP AT ALL. The cache is keyed by the raw pattern and
+     * lives for the process, and the bound everyone reasoned from — "the
+     * pattern set is the skills installed on the box" — is a property of
+     * today's CALLERS, not of this class. {@see pathMatches()} is `public
+     * static`; a future `/skill` verb taking a glob, or a user-supplied
+     * `paths:` filter, would feed it distinct patterns per request and nothing
+     * here would object. E99.
+     *
+     * WHY 1,024, AND NOT A NUMBER A REAL ROSTER COULD REACH. MEASURED on this
+     * tree by {@see Skill::fromFile()} over `src/Skills/BuiltIn/*\/SKILL.md`:
+     * the twelve shipped built-ins declare FOUR distinct `paths:` globs between
+     * them (`composer.json`, `composer.lock`, `**\/*.php`, `**\/*Test.php`),
+     * across five `paths:` entries, and no skill declares more than two. 1,024
+     * is 256x that, so a roster would need ~200 skills each declaring five
+     * DISTINCT globs before it noticed the cap exists. Every one of those
+     * numbers is re-derived from the shipped frontmatter and from this constant
+     * by {@see \SugarCraft\Crush\Tests\Skills\CompiledPatternCacheBoundTest},
+     * and this paragraph reds if any of them stops being true — a figure in a
+     * comment is not a measurement. What the cap costs when it is never reached
+     * is one integer comparison on a cache MISS — a hit does not reach the
+     * branch at all.
+     *
+     * WHAT IT BOUNDS. Feeding 20,000 fabricated distinct patterns
+     * (`src/gen<i>/**\/*.php`, i = 0..19,999) through {@see pathMatches()} and
+     * sampling `count()` on every insertion: uncapped the map reaches all
+     * 20,000 entries, capped it peaks at exactly 1,024 and settles at 544
+     * (20,000 mod 1,024). The ENTRY figures are exact, version-independent and
+     * pinned by the test above.
+     *
+     * THE BYTE FIGURES ARE A GENERATOR'S, NOT THE CACHE'S, and the earlier
+     * version of this paragraph presented them as the cache's.
+     *
+     *   WHAT IT SAID. "Uncapped … 3,661,552 bytes of PHP heap (183 B/entry);
+     *   capped … 213,648 bytes (209 B/entry — the per-entry figure is larger at
+     *   the smaller size because a PHP hashtable's fixed overhead is amortised
+     *   over fewer slots)."
+     *
+     *   WHAT IS TRUE NOW. Neither byte figure reproduces, and the explanation
+     *   attached to them is inverted. MEASURED on PHP 8.3.6 with the instrument
+     *   named — a `memory_get_usage(false)` delta around building the array and
+     *   nothing else, identical to the byte across three runs — 20,000 entries
+     *   cost 3,549,976 B (177.5 B/entry) and 1,024 cost 154,904 B (151.3
+     *   B/entry). So per-entry goes UP with n here, not down, and the reason is
+     *   the generator rather than the hashtable: `src/gen19999/**\/*.php` is
+     *   four bytes longer than `src/gen0/**\/*.php`, and the key and the
+     *   compiled value both carry that. The hashtable alone (same keys and
+     *   values, pre-built outside the measured window) is 40.1 B/entry at 1,024
+     *   and 65.5 B/entry at 20,000.
+     *
+     *   WHY THE BOUND STILL EARNS ITS PLACE. The decision never rested on the
+     *   byte totals — it rests on "20,000 entries or 1,024", which is exact and
+     *   reproduces. What the byte figures were for is the reader asking whether
+     *   1,024 is a sane ceiling in memory terms, and at ~150 KB it plainly is.
+     *   They are not pinned by a test, deliberately: a byte count is an
+     *   allocator's answer and would red on PHP 8.4 or another build for no
+     *   defect. They carry their generator and their instrument instead, which
+     *   is what makes them re-takeable — and is the whole of what was missing.
+     *
+     * WHAT THE CAP COSTS WHEN IT IS NEVER REACHED, and it is not zero. The
+     * lookup went from `??=` to `?? null` plus an explicit null test, because
+     * the count check has to sit on the miss branch only. MEASURED as an
+     * interleaved A/B in one process — same generator as below, both arms
+     * sharing one compile closure, arm order alternated per run, two takes of
+     * three runs — the capped lookup is +1.0% to +4.9% (five of six takes
+     * 4.2-4.9%), i.e. about +8 ns on a call that costs ~290 ns. Paid
+     * deliberately: it buys a bound on a `public static` entry point whose
+     * previous bound was a property of its callers.
+     *
+     * AND WHAT IT COSTS WHEN IT IS REACHED. Cycling 1,025 distinct patterns
+     * five times over — every call a miss, every 1,024th a wipe — ran at
+     * 3.67/2.73/2.73 us per call across three runs, against 2.48 us for
+     * translating on every call with no cache at all. So the degenerate case
+     * is "no cache", not "worse than no cache": correct, merely unaccelerated.
+     */
+    private const MAX_COMPILED_PATTERNS = 1024;
+
+    /**
      * Compiled `paths:` globs, keyed by the raw pattern.
      *
      * Static because the translation is pure and the pattern set is bounded by
@@ -20,6 +100,60 @@ final class SkillRegistry
      * {@see pathMatches()} per pattern per path on tool calls, and a fresh
      * registry per session would otherwise recompile the same handful of
      * frontmatter globs from scratch.
+     *
+     * WHAT THIS USED TO SAY, AND ONLY THAT: the sentence above, ending at
+     * "from scratch". WHAT IS TRUE NOW: the sentence is still right about the
+     * shipped callers and was never a bound on the CLASS — see
+     * {@see MAX_COMPILED_PATTERNS}, which makes it one. WHY IT STILL EARNS ITS
+     * PLACE: it is the reason the cache exists, and the reason the cap can be
+     * set high enough to be unreachable in practice rather than tuned.
+     *
+     * THE MEMOISATION IS NOT DECORATION — this was measured before the cap was
+     * chosen, because "just drop the cache" is the other way to bound it.
+     *
+     * GENERATOR, stated completely because two of its parameters move the
+     * answer by more than the run-to-run noise and the first version of this
+     * paragraph named neither. 8 patterns x 40 paths x 200 trials = 64,000
+     * pairs per arm, no randomness, three runs per configuration, PHP 8.3.6
+     * (the only interpreter on the box these were taken on; no 8.4 claim is
+     * made). The patterns are the five in {@see pathMatches()}'s perf note plus
+     * the three shipped leading-`**` globs, which is `**\/*.php` twice and
+     * `**\/*Test.php` — SIX distinct patterns in an eight-slot list, and the
+     * duplicates matter because the memoised arm caches by pattern. The paths
+     * are `src/` + 8 segments + a filename, and THE SEGMENT LENGTH IS THE FREE
+     * PARAMETER: it sets the per-match cost, which is the ratio's denominator.
+     *
+     * MEASURED, three runs each, ratio = translate-every-call / memoised:
+     *
+     *   1-char segments  (53-byte paths) -> 8.64x / 8.65x / 8.65x
+     *   12-char segments (117-byte paths) -> 7.54x / 7.54x / 7.58x
+     *
+     * Swap the two duplicate patterns for `composer.json` and `composer.lock`
+     * — eight DISTINCT patterns, a more expensive translate arm — and the same
+     * two configurations give 9.50x-9.56x and 8.29x-8.36x. So the honest figure
+     * is "between roughly 7x and 10x on this box, depending on how long the
+     * paths are and how many patterns are distinct", not a two-decimal band.
+     *
+     *   WHAT THIS USED TO SAY. "8.53x-8.68x, stable well inside the spread …
+     *   1.46 us per translation against 0.17 us per match." WHAT IS TRUE NOW.
+     *   The 8.53x-8.68x reproduces exactly — but only for the 1-char
+     *   configuration, and "the spread" it was called stable inside was one
+     *   unstated generator's. The two microsecond figures cannot both belong to
+     *   that run: 0.1591s minus 0.0108s over 64,000 pairs is 2.32 us per
+     *   translation, not 1.46, and 1.46-1.60 us is what `compilePathPattern()`
+     *   costs for the CHEAPEST pattern in the set (`**\/*.php`) measured on its
+     *   own. Re-taken here with one generator throughout: 2.16-2.19 us per
+     *   translation, 0.13 us per match at 1-char segments and 0.17 us at
+     *   12-char. WHY THE PARAGRAPH STILL EARNS ITS PLACE. Every configuration
+     *   says the same thing by an order of magnitude, so the DECISION the
+     *   figures were taken to support — keep the memo, bound it, do not delete
+     *   it — was never in doubt. What was wrong was the precision, and a
+     *   two-decimal ratio invites the next reader to treat a re-take that lands
+     *   at 7.5x as a regression.
+     *
+     * Dropping the cache would make this matcher SLOWER than the
+     * `str_replace` predicate it replaced, which is the whole reason the cap is
+     * a cap and not a deletion.
      *
      * @var array<string, string>
      */
@@ -426,7 +560,22 @@ final class SkillRegistry
      */
     public static function pathMatches(string $pattern, string $path): bool
     {
-        $regex = self::$compiledPathPatterns[$pattern] ??= self::compilePathPattern($pattern);
+        $regex = self::$compiledPathPatterns[$pattern] ?? null;
+        if ($regex === null) {
+            // EMPTY AND REFILL, rather than evict one entry. A FIFO drop needs
+            // insertion order kept and an `array_shift()` that is O(n) in the
+            // cache; an LRU needs a touch on every HIT, which is the path that
+            // has to stay cheap. Wiping is O(1) amortised and costs nothing on
+            // any workload that stays under the cap — and a workload that does
+            // NOT stay under it is, by definition, one this cache was never
+            // going to help. The worst case is degrading to a translation per
+            // call, which is measured on the property above and is correct,
+            // merely slower.
+            if (count(self::$compiledPathPatterns) >= self::MAX_COMPILED_PATTERNS) {
+                self::$compiledPathPatterns = [];
+            }
+            $regex = self::$compiledPathPatterns[$pattern] = self::compilePathPattern($pattern);
+        }
 
         $result = @preg_match($regex, $path);
         if ($result === false) {

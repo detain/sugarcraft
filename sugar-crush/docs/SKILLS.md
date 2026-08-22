@@ -81,7 +81,7 @@ skill's default name is its parent directory's name, not a `name:` field.
 | `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. |
 | `user-invocable` | `true` | `SkillRegistry::isUserInvocable()` → `App::userInvocableSkills()` | Live on the App shell's skill picker. `false` hides the skill from the picker while leaving it model-invocable. |
 | `disable-model-invocation` | `false` | `SkillRegistry::isAutoInvocable()` | Live. `true` keeps the skill out of the prompt listing **and** makes `SkillTool` refuse it by name — the check is re-done in the tool so a skill added to a registry by some other route still cannot be reached. |
-| `paths` | `[]` | `SkillRegistry::getForPaths()`, `SkillPathNudge` | Live. Glob patterns; touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded (E66): at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. |
+| `paths` | `[]` | `SkillRegistry::getForPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded (E66): at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. |
 | `allowed-tools` | `null` | nothing | **Inert.** Parsed, carried on the `Skill` object, copied by `ForeignSkillDiscovery`, and read by no tool-scoping code in `src/`. Writing it does not restrict anything. |
 | `disallowed-tools` | `null` | nothing | **Inert**, same as above. |
 | `model` | `null` | `App::dispatchSkill()` only | Reachable only through a method with no production caller — see [`context: fork`](#the-context-field-is-not-live-on-the-cli-path). |
@@ -105,6 +105,49 @@ a `context: fork` skill behaves exactly like a `context: thread` one.
 
 This is written down rather than removed because the payload is finished and
 waiting for an executor; it is a seam, not dead code.
+
+### What a `paths:` glob matches
+
+`SkillRegistry::pathMatches()` answers `fnmatch()`-style globs, and it is
+`fnmatch()` **without `FNM_PATHNAME`** — which is the clause most people get
+wrong, because almost every other glob dialect they have met sets it.
+
+- A single `*` **crosses `/`**. `*.php` claims `src/a/b/foo.php`, not only
+  `foo.php`. So does `?`, which will match a `/` like any other character.
+  Be precise about what that costs: `src/*/foo.php` is not "exactly one level
+  down". It requires **at least** one — it will not claim `src/foo.php` — but
+  puts no ceiling on how many, so it claims `src/a/b/foo.php` too. "Exactly one
+  level down" is not expressible in this dialect. Write `src/**/foo.php` when
+  you mean "at any depth including none".
+- `**` means **zero or more directory levels, at any position — including the
+  first**. `src/**/*.php` claims `src/foo.php` as well as `src/a/b/foo.php`,
+  and `**/*.php` claims `foo.php` at the tree root as well as `a/foo.php`.
+- Paths are matched as the tool reports them, relative to the project root, so
+  anchor with a leading directory (`src/**/*.sql`) when you mean a subtree and
+  with `**/` when you do not care where the file lives.
+
+MEASURED on PHP 8.3.6, through `SkillRegistry::pathMatches()`: `*.php` vs
+`src/foo.php` → true; `**/*.php` vs `foo.php` → true; `src/**/*.php` vs
+`src/foo.php` → true; `a/**` vs `a` → true.
+
+**A leading `**` began matching tree-root files** when `pathMatches()` stopped
+rewriting `**` with `str_replace()` and started translating the whole pattern
+to an anchored PCRE. Before that, a pattern starting with `**` matched none of
+the three rewrites and fell through to a bare `fnmatch()`, which reads `**/` as
+"some characters, then a literal slash" — so `**/*.php` did **not** claim
+`a.php`. MEASURED on PHP 8.3.6, old predicate versus new: `**/*.php` vs
+`foo.php` was false and is true; `**/*Test.php` vs `FooTest.php` was false and
+is true. (The old predicate is still in the file as
+`SkillRegistry::legacyPathMatch()`, which is where those "was" figures come
+from — it is the answer for patterns the translation cannot compile, so it is
+reachable rather than historical.)
+
+Three shipped built-in skills declare a leading `**` and are affected:
+`security-audit` and `php-best-practices` (`paths: ["**/*.php"]`) and
+`phpunit-master` (`paths: ["**/*Test.php"]`). All three used to stay silent on
+a file at the tree root and now nudge on one. That is what their authors
+intended, which is why the change shipped as a fix — but if you noticed the old
+behaviour and built a workaround on it, this is the note saying it is gone.
 
 ---
 

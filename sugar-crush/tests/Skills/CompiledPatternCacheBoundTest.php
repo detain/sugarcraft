@@ -1,0 +1,454 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tests\Skills;
+
+use PHPUnit\Framework\TestCase;
+use ReflectionClassConstant;
+use ReflectionMethod;
+use ReflectionProperty;
+use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillRegistry;
+
+/**
+ * `SkillRegistry::$compiledPathPatterns` used to be an unbounded static cache
+ * (E99), and the bound everyone reasoned from was a property of its callers.
+ *
+ * THE OLD REASONING, AND WHY IT WAS NOT A BOUND. The doc-block said the pattern
+ * set is "bounded by the skills installed on the box", which is TRUE of every
+ * caller in `src/` today — the only production route into
+ * {@see SkillRegistry::pathMatches()} is `getForPaths()`, iterating each
+ * registered skill's frontmatter `paths:`. But `pathMatches()` is `public
+ * static`. A `/skill` verb taking a glob, or a user-supplied `paths:` filter,
+ * would feed it distinct patterns per request, and the cache would grow for the
+ * life of the process with nothing to stop it. A convention is not a bound.
+ *
+ * THE DECISION, AND THE ALTERNATIVE THAT WAS MEASURED AND REJECTED. "Drop the
+ * memo" is the other way to bound this, and it does not survive contact with a
+ * measurement: the translation is a character walk at ~1.46 us against ~0.17 us
+ * for the match it feeds, so removing the cache makes this matcher 8.5x slower
+ * — slower than the `str_replace` predicate it replaced. The generator and the
+ * three-run figures are on `$compiledPathPatterns`. So: a cap, set high enough
+ * that no real skill roster can reach it, with an empty-and-refill eviction.
+ *
+ * WHAT THIS FILE PINS.
+ *  - The cap is enforced, not merely declared.
+ *  - The cap is far above the shipped roster, DERIVED from that roster rather
+ *    than compared against a number typed here — so a tree that grew 300 skills
+ *    finds out from this test rather than from a memory graph.
+ *  - The hit path still caches, which is the property the cap must not have
+ *    cost. (`SkillPathPatternTest::testTheCompiledPatternIsCachedUnderItsRawPattern()`
+ *    asserts the same thing from the other end and is deliberately left alone.)
+ *  - {@see SkillRegistry::legacyPathMatch()} is STILL REACHABLE after the
+ *    rewrite. This is the one that would otherwise rot quietly: the fallback is
+ *    reached only through an uncompilable pattern, and a change to the lookup
+ *    around `compilePathPattern()` is exactly the sort of edit that could route
+ *    every pattern to a compiled regex and leave an unpinnable method behind.
+ *
+ * THE CACHE IS SHARED PROCESS STATE, so every test here saves and restores it
+ * rather than clearing it. A sibling test that had warmed a pattern must find
+ * it warm afterwards.
+ *
+ * @internal
+ */
+final class CompiledPatternCacheBoundTest extends TestCase
+{
+    /** @var array<string, string> */
+    private array $saved = [];
+
+    private ReflectionProperty $cache;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->cache = new ReflectionProperty(SkillRegistry::class, 'compiledPathPatterns');
+        $this->cache->setAccessible(true);
+        /** @var array<string, string> $current */
+        $current = $this->cache->getValue();
+        $this->saved = $current;
+    }
+
+    protected function tearDown(): void
+    {
+        $this->cache->setValue(null, $this->saved);
+
+        parent::tearDown();
+    }
+
+    private function cap(): int
+    {
+        return (int) (new ReflectionClassConstant(SkillRegistry::class, 'MAX_COMPILED_PATTERNS'))->getValue();
+    }
+
+    /** @return array<string, string> */
+    private function entries(): array
+    {
+        /** @var array<string, string> $v */
+        $v = $this->cache->getValue();
+
+        return $v;
+    }
+
+    /**
+     * The cap is enforced. Feed it well past the cap and the map never exceeds
+     * it — checked on every insertion, not only at the end, because an
+     * eviction that fired once at the finish line would pass an end-state
+     * assertion while the peak was unbounded.
+     */
+    public function testTheCacheNeverGrowsPastItsCap(): void
+    {
+        $cap = $this->cap();
+        $this->cache->setValue(null, []);
+
+        $peak = 0;
+        $overruns = 0;
+        for ($i = 0; $i < $cap * 2 + 5; $i++) {
+            SkillRegistry::pathMatches("e99-probe-{$i}/**/*.php", 'x.php');
+            $n = count($this->entries());
+            $peak = max($peak, $n);
+            if ($n > $cap) {
+                $overruns++;
+            }
+        }
+
+        self::assertSame(
+            0,
+            $overruns,
+            "the compiled-pattern cache exceeded MAX_COMPILED_PATTERNS ({$cap}) on {$overruns} of "
+            . ($cap * 2 + 5) . ' insertions. It is a `public static` entry point; an unbounded process-'
+            . 'lifetime cache behind one is E99.',
+        );
+        self::assertSame(
+            $cap,
+            $peak,
+            'the cache never actually reached its cap over ' . ($cap * 2 + 5) . ' distinct patterns, so '
+            . 'this test is not exercising the eviction it exists to pin. Either the cap moved or '
+            . 'something is clearing the map underneath it.',
+        );
+    }
+
+    /**
+     * The cap must stay unreachable by a real skill roster, and "real" is read
+     * off the shipped built-ins rather than assumed.
+     *
+     * DERIVED, NOT TYPED. If this tree ever ships enough distinct `paths:`
+     * globs to come within an order of magnitude of the cap, the cap is no
+     * longer "unreachable in practice" and the sentence saying so on
+     * `MAX_COMPILED_PATTERNS` has to be rewritten — which is what this reds
+     * for.
+     */
+    public function testTheCapIsFarAboveTheShippedPatternRoster(): void
+    {
+        $dir = __DIR__ . '/../../src/Skills/BuiltIn';
+        $distinct = [];
+        $skills = 0;
+
+        foreach ((array) scandir($dir) as $entry) {
+            if (!is_string($entry) || str_starts_with($entry, '.')) {
+                continue;
+            }
+            $file = $dir . '/' . $entry . '/SKILL.md';
+            if (!is_file($file)) {
+                continue;
+            }
+            $skills++;
+            foreach (Skill::fromFile($file)->paths as $pattern) {
+                $distinct[$pattern] = true;
+            }
+        }
+
+        self::assertGreaterThan(0, $skills, 'no built-in skills found; the roster derivation is broken');
+
+        $shipped = count($distinct);
+        $cap = $this->cap();
+
+        self::assertGreaterThanOrEqual(
+            $shipped * 10,
+            $cap,
+            sprintf(
+                'MAX_COMPILED_PATTERNS is %d against %d distinct `paths:` globs across %d shipped '
+                . 'built-ins — less than 10x headroom. The cap is documented as a number no real '
+                . 'roster can reach; either raise it or rewrite that reasoning.',
+                $cap,
+                $shipped,
+                $skills,
+            ),
+        );
+    }
+
+    /**
+     * Every figure the `MAX_COMPILED_PATTERNS` doc-block quotes about the
+     * shipped roster and about the cap must be the figure the tree produces.
+     *
+     * WHY THIS EXISTS. Halving the cap from 1,024 to 64 left all 27 skills
+     * tests green while making "1,024 is 256x that", "~200 skills each
+     * declaring five DISTINCT globs" and "peaks at exactly 1,024 entries" false
+     * in the same comment. The only guard was `cap >= distinct * 10`, i.e. 40
+     * — so 40 through 1,023 all passed with the prose describing none of them.
+     * The pattern for this was already in this diff, on
+     * {@see TruncatesOutputNudgeMarginDocTest}; it simply was not applied here.
+     *
+     * WHAT IS DELIBERATELY NOT PINNED. The byte totals. They are an allocator's
+     * answer, they move with the PHP build, and this box has only 8.3.6 — a
+     * test asserting them would red on CI's 8.4 leg for no defect. They carry
+     * their generator and their instrument in the doc-block instead, which is
+     * what makes them re-takeable, and the doc-block says so rather than
+     * leaving the omission to be read as an oversight.
+     */
+    public function testTheDocBlockFiguresAreTheOnesTheTreeProduces(): void
+    {
+        $doc = $this->constantDocBlock();
+        $cap = $this->cap();
+
+        $roster = $this->builtInPaths();
+        $distinct = [];
+        $entries = 0;
+        $mostPerSkill = 0;
+        foreach ($roster as $paths) {
+            $entries += count($paths);
+            $mostPerSkill = max($mostPerSkill, count(array_unique($paths)));
+            foreach ($paths as $pattern) {
+                $distinct[$pattern] = true;
+            }
+        }
+        ksort($distinct);
+
+        $expected = [
+            'the built-in count' => $this->word(count($roster), 'built-ins') . ' shipped built-ins',
+            'the distinct-glob count' => $this->word(count($distinct), 'distinct globs') . ' distinct',
+            'the entry count' => 'across ' . $this->word($entries, '`paths:` entries')
+                . ' `paths:` entries',
+            'the per-skill maximum' => 'no skill declares more than '
+                . $this->word($mostPerSkill, 'globs on one skill'),
+            'the headroom multiple' => number_format(intdiv($cap, count($distinct))) . 'x that',
+            'the roster size that would reach the cap' => '~'
+                . number_format((int) (round($cap / 5 / 100) * 100)) . ' skills each declaring five',
+            'the peak entry count' => 'peaks at exactly ' . number_format($cap),
+            'the settled entry count' => 'settles at ' . number_format(20000 % $cap),
+        ];
+
+        foreach ($expected as $what => $phrase) {
+            self::assertStringContainsString(
+                $phrase,
+                $doc,
+                "MAX_COMPILED_PATTERNS's doc-block no longer states {$what} the tree produces; it "
+                . "should read \"{$phrase}\". A figure in a comment is not a measurement — this is "
+                . 'the assertion that makes it one.',
+            );
+        }
+
+        foreach (array_keys($distinct) as $pattern) {
+            self::assertStringContainsString(
+                '`' . str_replace('*/', '*\\/', $pattern) . '`',
+                $doc,
+                "MAX_COMPILED_PATTERNS's doc-block names the shipped distinct globs one by one and "
+                . "no longer names '{$pattern}'",
+            );
+        }
+    }
+
+    /**
+     * Number words the doc-block spells out, so its counts are derived rather
+     * than restated beside it.
+     */
+    private const WORDS = [
+        1 => 'one', 2 => 'two', 3 => 'three', 4 => 'FOUR', 5 => 'five',
+        6 => 'six', 7 => 'seven', 8 => 'eight', 9 => 'nine', 10 => 'ten',
+        11 => 'eleven', 12 => 'twelve',
+    ];
+
+    /**
+     * The number word for $n, or a failure saying the doc-block's vocabulary
+     * has run out.
+     *
+     * EXPLICIT because the bare lookup went red with `Undefined array key 13`
+     * when a thirteenth built-in was added — the right verdict read out of a
+     * PHP warning instead of an assertion, which is a guard failing to say what
+     * it found. A count past the table is a real event (this roster grows), and
+     * the person who hits it needs to be told to extend the table and the
+     * prose, not to debug a test.
+     */
+    private function word(int $n, string $what): string
+    {
+        self::assertArrayHasKey(
+            $n,
+            self::WORDS,
+            "the shipped roster now has {$n} {$what}, which is past the number words this test can "
+            . "spell. Extend self::WORDS and MAX_COMPILED_PATTERNS's doc-block together — the "
+            . 'doc-block is what states the count, and it is now stale.',
+        );
+
+        return self::WORDS[$n];
+    }
+
+    /**
+     * `MAX_COMPILED_PATTERNS`'s doc-block, flattened.
+     *
+     * FLATTENED because a doc-block wraps at 80 columns with a ` * ` on every
+     * continuation line, so any claim longer than a few words is never those
+     * bytes in a row in the file. An assertion that searches the raw source for
+     * one passes the moment the paragraph is re-wrapped, which is what editing
+     * prose does.
+     */
+    private function constantDocBlock(): string
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Skills/SkillRegistry.php');
+        $end = strpos($source, 'private const MAX_COMPILED_PATTERNS');
+        self::assertNotFalse($end, 'MAX_COMPILED_PATTERNS is gone from SkillRegistry');
+        // The LAST doc-block OPENER before the constant, matched at line start
+        // — not the last `/**` anywhere, which is inside the prose: the
+        // paragraph below quotes `src/gen<i>/**\/*.php` and a naive `strrpos`
+        // anchored on that, cut the window in half, and reported the built-in
+        // count missing when it was three sentences above the cut.
+        self::assertNotSame(
+            0,
+            preg_match_all('/^[ \t]*\/\*\*$/m', substr($source, 0, $end), $openers, PREG_OFFSET_CAPTURE),
+            'MAX_COMPILED_PATTERNS no longer carries a doc-block',
+        );
+        $start = (int) end($openers[0])[1];
+
+        return (string) preg_replace(
+            '/\s+/',
+            ' ',
+            (string) preg_replace('/^\s*\* ?/m', '', substr($source, $start, $end - $start)),
+        );
+    }
+
+    /**
+     * Every shipped built-in's `paths:` list, read by the production parser.
+     *
+     * @return array<string, list<string>>
+     */
+    private function builtInPaths(): array
+    {
+        $dir = __DIR__ . '/../../src/Skills/BuiltIn';
+        $roster = [];
+
+        foreach ((array) scandir($dir) as $entry) {
+            if (!is_string($entry) || str_starts_with($entry, '.')) {
+                continue;
+            }
+            $file = $dir . '/' . $entry . '/SKILL.md';
+            if (!is_file($file)) {
+                continue;
+            }
+            $roster[$entry] = array_values(Skill::fromFile($file)->paths);
+        }
+        ksort($roster);
+
+        self::assertNotSame([], $roster, 'no built-in skills found; the roster derivation is broken');
+
+        return $roster;
+    }
+
+    /**
+     * The hit path still memoises — the property the cap had to not cost.
+     */
+    public function testAWarmPatternIsNotRecompiled(): void
+    {
+        $this->cache->setValue(null, []);
+        $pattern = 'e99-warm-' . __FUNCTION__ . '/**/*.php';
+
+        SkillRegistry::pathMatches($pattern, 'nope');
+        $first = $this->entries();
+        self::assertArrayHasKey($pattern, $first, 'the first call did not populate the cache at all');
+
+        // Poison the cached value. If the second call recompiles, it overwrites
+        // the poison; if it memoises, the poison is what gets used and stays.
+        $poison = '#^never-matches-anything$#D';
+        $this->cache->setValue(null, [$pattern => $poison]);
+        SkillRegistry::pathMatches($pattern, 'nope');
+
+        self::assertSame(
+            $poison,
+            $this->entries()[$pattern] ?? null,
+            'pathMatches() recompiled a pattern that was already cached, so the memo is doing nothing. '
+            . 'The translation costs ~8.5x what the match does (figures on $compiledPathPatterns); '
+            . 're-take them before deciding that is acceptable.',
+        );
+    }
+
+    /**
+     * `legacyPathMatch()` is still reachable, and reached by the shape the
+     * class documents as reaching it.
+     *
+     * THREE STEPS, because only the third is the claim. (1) The pattern really
+     * does fail to compile — otherwise the route is closed and the rest is
+     * theatre. (2) The old predicate answers it. (3) `pathMatches()` returns
+     * that answer, including for the pattern where the fallback's `**`
+     * rewrites are load-bearing rather than incidental.
+     */
+    public function testTheUncompilableShapeStillRoutesToTheOldPredicate(): void
+    {
+        $uncompilable = 'a[\]]b';
+
+        $compile = new ReflectionMethod(SkillRegistry::class, 'compilePathPattern');
+        $compile->setAccessible(true);
+        $regex = (string) $compile->invoke(null, $uncompilable);
+
+        self::assertFalse(
+            @preg_match($regex, 'a]b'),
+            "compilePathPattern('{$uncompilable}') now emits a regex PCRE accepts ({$regex}). That "
+            . 'closes the only route to legacyPathMatch(), which the never-remove rule then leaves as '
+            . 'an unpinnable method and which the M6-class mutations stop being caught by. If the '
+            . 'bracket scan was deliberately made escape-aware, find a NEW uncompilable shape and put '
+            . 'it here — see SkillRegistry::compileClassBody()\'s doc-block.',
+        );
+
+        $legacy = new ReflectionMethod(SkillRegistry::class, 'legacyPathMatch');
+        $legacy->setAccessible(true);
+        self::assertTrue(
+            (bool) $legacy->invoke(null, $uncompilable, 'a]b'),
+            'the old predicate no longer claims the shape it is kept for',
+        );
+
+        self::assertTrue(
+            SkillRegistry::pathMatches($uncompilable, 'a]b'),
+            'pathMatches() no longer answers an uncompilable pattern from legacyPathMatch()',
+        );
+        self::assertTrue(
+            SkillRegistry::pathMatches('src/**/x[\]]y.php', 'src/x]y.php'),
+            'the fallback answered without its `**` rewrites — a bare fnmatch() would return false '
+            . 'here, so the rewrites are part of the answer rather than decoration around it',
+        );
+    }
+
+    /**
+     * An eviction must not corrupt what it keeps: after a wipe the next lookup
+     * of an evicted pattern recompiles to the SAME regex it had before.
+     *
+     * Cheap to state and the reason the wipe is safe at all — the cache is a
+     * pure function of the pattern, so losing an entry costs time and never an
+     * answer.
+     */
+    public function testAnEvictedPatternRecompilesToTheSameRegex(): void
+    {
+        $cap = $this->cap();
+        $this->cache->setValue(null, []);
+
+        $victim = 'e99-victim-' . __FUNCTION__ . '/**/*.php';
+        SkillRegistry::pathMatches($victim, 'x.php');
+        $before = $this->entries()[$victim] ?? null;
+        self::assertIsString($before);
+
+        for ($i = 0; $i <= $cap; $i++) {
+            SkillRegistry::pathMatches("e99-filler-{$i}/**/*.php", 'x.php');
+        }
+        self::assertArrayNotHasKey(
+            $victim,
+            $this->entries(),
+            'filling past the cap did not evict the pattern cached before it, so this test is not '
+            . 'exercising an eviction',
+        );
+
+        SkillRegistry::pathMatches($victim, 'x.php');
+        self::assertSame(
+            $before,
+            $this->entries()[$victim] ?? null,
+            'a pattern recompiled after eviction produced a different regex than it had before. The '
+            . 'translation is supposed to be pure; if it is not, the cache was hiding it.',
+        );
+    }
+}

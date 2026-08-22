@@ -258,8 +258,19 @@ if ($args->version) {
 // answering in a format the caller did not ask for. Scope: the invalid VALUE
 // is the exception, not the flag — a valid `--output-format json` beside any
 // other usage error still emits the document, because $args->outputFormat is
-// then `json`. README.md's list still names both; correcting it is lane c's
-// file this round and is recorded as a deferred finding.
+// then `json`.
+//
+// THAT PARAGRAPH USED TO END "README.md's list still names both; correcting it
+// is lane c's file this round and is recorded as a deferred finding." WHAT IS
+// TRUE NOW: it was corrected — README.md states one exception, quotes the old
+// two-exception claim as a retraction, and
+// Tests\Config\ReadmeJsonErrorContractDriftTest holds it there, failing if the
+// retracted wording ever comes back in the document's own voice. WHY THE
+// POINTER STILL EARNS ITS PLACE: the sentence a reader needs here is not "go
+// fix the README", it is "the README is the other end of this contract and it
+// is guarded" — a comment naming a defect that has been fixed sends the next
+// reader looking for something they will not find, which is the same drift in
+// the opposite direction. E112.
 if ($args->usageError !== null) {
     exit(NonInteractive::failUsage(
         $args->usageError,
