@@ -280,16 +280,36 @@ final class StatusLineSegmentTest extends TestCase
      */
     public function testZoneSentinelsInTheCommandsOutputNeverReachTheFrame(): void
     {
-        self::install('printf "\\356\\200\\200pane:menu\\356\\200\\201hijacked"');
+        // THE BASELINE IS MEASURED, not written as a literal: the bar carries
+        // its own real `pane:menu` sentinel pair, so "contains no U+E000" is
+        // false of a correct bar and "contains one" is a figure that decays if
+        // the bar ever marks a second region. What must hold is that the
+        // SEGMENT adds none.
+        StatusLineCommand::reset();
+        $clean = $this->rawBar($this->chat(120));
+        $opens = preg_match_all('/\x{E000}/u', $clean);
+        $closes = preg_match_all('/\x{E001}/u', $clean);
+        self::assertGreaterThan(0, $opens, 'the fixture must contain the bar\'s own zone, or this proves nothing');
 
+        self::install('printf "\\356\\200\\200pane:menu\\356\\200\\201hijacked"');
         $raw = $this->rawBar($this->chat(120));
 
-        self::assertStringNotContainsString("\u{E000}", substr($raw, strpos($raw, 'hijacked') ?: 0));
+        // The command's bytes did reach the row — otherwise the strip would be
+        // indistinguishable from the segment being dropped altogether.
         self::assertStringContainsString('hijacked', $raw);
 
-        // The bar's OWN zone is untouched — the strip is applied to the
-        // segment, not to the row.
-        self::assertStringContainsString("\u{E000}", $raw);
+        self::assertSame($opens, preg_match_all('/\x{E000}/u', $raw), 'the segment contributed an OPEN sentinel');
+        self::assertSame($closes, preg_match_all('/\x{E001}/u', $raw), 'the segment contributed a CLOSE sentinel');
+
+        // And nothing anywhere in the Private-Use block, which is also where
+        // candy-core's image markers live (`ImageOverlay::MARKER_BASE` is
+        // U+E000 and a marker is MARKER_BASE + id).
+        $segment = substr($raw, (int) strrpos($raw, ' · ') + \strlen(' · '));
+        self::assertSame(
+            0,
+            preg_match('/[\x{E000}-\x{F8FF}]/u', $segment),
+            'a Private-Use codepoint survived into the painted segment: ' . bin2hex($segment),
+        );
     }
 
     // =====================================================================
