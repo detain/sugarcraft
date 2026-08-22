@@ -707,7 +707,11 @@ final class GlobFigureDriftTest extends TestCase
         // miss for a spelling the census really does catch. In the tree the
         // shape only ever arrives inside a whole `.php` file, so the wrapper is
         // what makes the fixture faithful to it.
-        yield 'hyphenated across doc lines' => ["/**\n     * closes the eight-\n     * character version\n     */", true, false];
+        yield 'hyphenated across doc lines' => [
+            "/**\n     * closes the eight-\n     * character version\n     */",
+            true,
+            false,
+        ];
         yield 'underscore separator' => ['closes the eight_character version', true, false];
         yield 'numeral, ASCII hyphen' => ['closes the 8-character version and nothing else', true, false];
         yield 'numeral, ASCII space' => ['closes the 8 characters version and nothing else', true, false];

@@ -942,8 +942,11 @@ final class EnvRosterDriftTest extends TestCase
      * THE MENTION SURFACES ARE REALLY BEING READ.
      *
      * A guard has to live outside the thing it guards. If the glob in
-     * {@see mentionedNames()} stopped matching, or the roster exclusion started
-     * excluding everything, both censuses above would report `[]` and pass. The
+     * {@see mentionSurfaces()} stopped matching, or its roster exclusion started
+     * excluding everything, both censuses above would report `[]` and pass —
+     * and their own fixtures could not tell, because a fixture drives
+     * {@see mentionNamesIn()} and cannot reach the disk walk. This test is the
+     * one that holds that half up; the two above name it for that reason. The
      * floors are floors rather than counts for
      * {@see GlobFigureDriftTest::testTheCensusReadsBothHalvesOfItsScope()}'s
      * reason: a count reds on every page anyone adds, a floor reds when a half
