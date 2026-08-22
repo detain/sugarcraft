@@ -402,12 +402,27 @@ final class Bootstrap
      * {@see MCP_PARTIAL_START_NOTICE_FORMAT} must not collapse into each other.
      * Two lines whose distinctness is the assertion are two names.
      *
-     * IT CARRIES ITS OWN `sugarcrush: ` PREFIX for the reason
-     * {@see SESSION_RETENTION_DETAIL_FORMAT} does: this one goes through
-     * `error_log()`, which prepends a timestamp and no label of ours, so the
-     * label has to be in the message. It does NOT go through
+     * IT CARRIES ITS OWN `sugarcrush: ` PREFIX because nothing else will add
+     * one: this line goes through `error_log()` rather than
      * {@see STDERR_LINE_FORMAT}, and its own full stop is here for the same
      * reason.
+     *
+     * WHAT THIS PARAGRAPH SAID, corrected under round 46's review (MAJOR 4):
+     * "`error_log()`, which prepends a timestamp and no label of ours". WHAT IS
+     * TRUE NOW — MEASURED on PHP 8.3.6, and it depends on the destination the
+     * OPERATOR configured, which is the whole difficulty with this call.
+     * `php -d error_log= -r 'error_log("probe");'` puts `probe` on stderr with
+     * NO prefix whatsoever; pointed at a file, the same call writes
+     * `[22-Aug-2026 15:00:37 UTC] probe`. So the timestamp is the file
+     * destination's, not `error_log()`'s, and the unset-ini box is exactly the
+     * one
+     * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()}
+     * runs, where the reworded claim would have been wrong about the very case
+     * three lines above it. WHY THE SENTENCE STILL EARNS ITS PLACE: its
+     * CONCLUSION survives both destinations unchanged — neither one contributes
+     * a `sugarcrush: ` label, so the label has to be in the message — and the
+     * same distinction is drawn correctly at this call's site in
+     * {@see mcpClient()}, which is where the destination question is argued out.
      *
      * `%s` the config path, `%s` the exception class, `%s` its message.
      */
