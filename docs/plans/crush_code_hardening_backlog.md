@@ -7472,6 +7472,15 @@ killed; the identical command with `</dev/null` finished in **0.84s**. Nothing a
 Any runner that hands the suite a pipe it keeps open — a CI step that pipes into `phpunit`, a supervisor
 that holds the child's stdin — hangs the whole suite, and the symptom is silence rather than a failure.
 
+**Confirmed twice more at the round-47 FIX stage, and it is worse than first recorded.** (a) The hang
+produces **zero test output** — not a partial run, not a slow run, a blank timeout — so a CI runner shows
+no failing test name and nothing to grep for. (b) It reproduced in this session against a *backgrounded*
+shell rather than a piped one: the same `--filter NonInteractiveRefusalDocumentTest` that finishes in
+0.65s with `</dev/null` hung indefinitely when launched from a background job whose fd 0 was live, and had
+to be killed by PID. Any parent that leaves fd 0 open is enough; a pipe is not required. (c) Round 47 added
+`NonInteractiveRefusalDocumentTest`, in which six of eight tests reach `NonInteractive::run()`, to the
+seven files' worth of such tests already present — so the blast radius grew this round.
+
 **Step.** Two halves, and the first is cheap: point `tests/bootstrap.php` (or the affected tests) at a
 closed stdin so the suite cannot depend on its runner's fd 0. The second is the real fix — `run()` has no
 seam for its input stream although `readStdinIfPiped($stream = \STDIN)` already takes one, so add the
@@ -7499,8 +7508,21 @@ figures are anchored to a NAMED COMMIT, which is a materially different claim fr
 as it was" — a commit-anchored figure is reproducible and does not rot. Deciding that for every file in
 `tests/` is a repo-wide judgement, not a scope this guard should have taken silently.
 
-**Step.** Decide whether a commit-anchored total is acceptable; if it is, teach the scanner to allow one
-that sits within N characters of a sha, and widen the roster to all of `tests/`.
+**PARTLY ANSWERED at the round-47 fix stage, and the answer changes the remaining question.** The review
+found the guard's alphabet was narrower than its headline: a **prose** total (`5 tests / 27 assertions`)
+SURVIVED a mutation into a guarded file, and one was live in scope. The scanner now reads the prose form
+too, and the anchoring question had to be settled to do it — an anchored figure IS accepted, the anchor
+being `round <n>` or a backticked sha, and the window is **the sentence**, not "within N characters".
+"Within N characters" was the shape this Step proposed and it is the wrong one: three correct
+round-anchored citations in the same file sit 62–110 characters from their anchor, so any N wide enough
+to accept them also accepts a figure a paragraph away from an unrelated round number. The sentence is the
+unit of provenance. The carve-out is **prose-only**: PHPUnit's two literal forms read as a fresh
+measurement of the current tree whatever sentence they sit in.
+
+**Step, reduced to what is left.** (a) Decide whether an ANCHORED LITERAL should also be allowed — this
+file's own known-positive fixture is one (`measured at \`06126017\`: … Tests: 14, Assertions: 92`) and the
+guard still refuses it, which the fixture currently depends on. (b) Widen the roster past the two files
+lane c owns to all of `tests/`, and expect the prose arm to find instances.
 
 ### Ec47-6 — the doc-page sweep still cannot see two page shapes
 
@@ -7512,8 +7534,22 @@ root `README.md` and `docs/` quote sugar-crush behaviour in places, and (b) a la
 non-markdown page. Neither is a live miss today: the wider alphabet nominates the same (constant, page)
 set the narrow one did.
 
+**Two more collector gaps, added at the round-47 fix stage.** (c) `markdownPagesUnder()` selects on
+`glob($root.'/*.md')` and `getExtension() === 'md'`, both case-sensitive on Linux, so `README.MD`,
+`*.markdown` and `*.mdx` are invisible, as is a dotfile page. MEASURED on PHP 8.3.6: no such file exists
+in `sugar-crush/` today (`*.md` at the root: 3; under `docs/`: 12; non-`.md` files under `docs/`: none),
+so it is not a live miss — but it is an alphabet gap and rule 11 says an alphabet is part of a claim.
+
+**And a POSITIVE result worth keeping, because it is the evidence the "same set" claim rests on.** The
+round-47 review re-ran `pagesQuoting()` over **5,427 files** across the whole monorepo
+(`*.md|html|htm|txt|rst|json|jsonc|yml|yaml|php`, excluding `vendor/`, `.git/` and `sugar-crush/tests/`).
+Every hit outside the sweep's own page set was either a `docs/plans/*` file or an instance of the known
+coincidence class for the two near-degenerate formats (`STDERR_LINE_FORMAT`, `PROJECT_TIER_REFUSAL_FORMAT`).
+No real doc-page miss, under an alphabet roughly 360x wider than the one that produced the claim.
+
 **Step.** Decide whether a monorepo-root page quoting a sugar-crush launch line is in this guard's remit;
-if so, extend the collector's root and expect the roster to grow.
+if so, extend the collector's root and expect the roster to grow. Separately, widen the extension test to
+be case-insensitive — cheap, and it closes (c) without any roster movement.
 
 ### Ec47-7 — E187's own prescribed algorithm could not have covered the page E187 was written about
 
@@ -7559,3 +7595,49 @@ the scratchpad is the more likely collision because every lane reaches for the s
 
 **Step.** Say in the brief that each lane writes under `scratchpad/lane-<x>/`. Cheap, and it removes a
 whole class of void measurement.
+
+### Ec47-10 — a hook DENY reaches neither stderr nor `--output-format text`, and five places said otherwise
+
+**Recorded 2026-08-22 by round-47 lane c, at the fix stage.** Severity: medium (a silently-dropped
+refusal). **Measured. The prose is fixed; the behaviour is not.**
+
+**What.** `--output-format text` carries no refusal list, and the reason given for that in four
+doc-blocks and in shipped `README.md` was "every refusal is already on stderr". False. The sentence was
+lifted from `HeadlessPermissionPrompt`, where it is true of that class's four shapes, and generalised.
+That class settles an ASK and is reached from nowhere else; a plain `HookResult::deny()` returns out of
+`Runtime::gate()` before `settleAsk()` is called, and `Runtime` writes to stderr nowhere at all.
+MEASURED on PHP 8.3.6, driving the shipped gate's `rm -rf ./build` denial through a real `EngineBackend`:
+**zero bytes on stderr**, tool not executed. On `text` that refusal reaches NEITHER channel — the answer
+prints, the tool silently did not run, and nothing says so.
+
+All five prose sites are corrected and the mechanism is pinned
+(`NonInteractiveRefusalDocumentTest::testRuntimeWritesNothingToStderrSoATextFormatDenialIsSilent()`,
+which reds the day `Runtime` gains a stderr write). **The behaviour is unchanged and that is the deferral.**
+
+**Step.** Write the refusal to stderr on the DENY path in `Runtime`, once, at the point `gate()` returns a
+denial — not on stdout, which under `text` is the answer and nothing else, and not in `NonInteractive`,
+which is not the only caller of the engine. Then update the five sites (they name themselves in the test's
+failure message) in the same change. Files: `src/Runtime.php`, `src/Cli/NonInteractive.php`,
+`src/Cli/HeadlessPermissionPrompt.php`, `README.md`, `tests/Cli/NonInteractiveRefusalDocumentTest.php`.
+
+### Ec47-11 — the ninth reviewer prescription measured, and it named the wrong carve-out
+
+**Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription corrected.**
+
+**What.** Round 47's review correctly found that the class-total guard's alphabet was narrower than its
+headline, and prescribed: widen to the prose form "with a `Failures:` carve-out". The finding is right and
+the prescription is not. A `Failures:` carve-out is **inert** against the prose form — `Failures: 2` puts
+the word before the digits, and the prose pattern requires digits first, so it can never match. The
+carve-out that is actually required is one the review did not name: **anchored history**. MEASURED on PHP
+8.3.6 — the naive prose widening reports four hits in the two guarded files, and **three of them are
+correct** round-anchored citations of a round-44 incident in a different tree. Shipping the prescription
+as written would have redded three correct paragraphs and taught the next reader that the guard is noise.
+
+This is the ninth prescription across four rounds to be measured against the tree and found not to do its
+job as written, and the second where the FINDING was sound and only the REMEDY was wrong. That distinction
+is worth keeping: "the reviewer is wrong" and "the reviewer's fix is wrong" call for different responses,
+and only the second one still needs the finding acted on.
+
+**Step.** None — recorded so the pattern is countable. The rule it supports is already standing: measure a
+prescription against the tree before implementing it.
+
