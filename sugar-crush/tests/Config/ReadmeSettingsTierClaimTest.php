@@ -40,6 +40,14 @@ use SugarCraft\Crush\Tools\Tool;
  * it. Change the mechanism and the mechanism tests red; restore either false
  * sentence and the prose tests red.
  *
+ * BOTH PROSE RULES ARE STRUCTURAL, NOT PROXIMITY-BASED, and that is load-bearing
+ * rather than stylistic. Each was first written as "the retraction must be
+ * within N characters", and each SURVIVED the mutation that restored its false
+ * sentence verbatim, because a window wide enough to reach the retraction is
+ * wide enough for a restored sentence to sit inside it and inherit it. Both now
+ * say the same thing instead: the retracted wording may appear only on a `>`
+ * line. If you find yourself widening a window here, that is the bug.
+ *
  * WHAT IS DELIBERATELY NOT HERE. The end-to-end effect of the counterexample —
  * a trusted project's `{"disabledTools": ["[!B]*"]}` handing the model exactly
  * `Bash` — is already pinned by
@@ -122,13 +130,26 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      *
      * One five-character glob removes every tool but one, and NAMES NONE OF
      * THEM — which is the precise negation of "naming every tool it removes, a
-     * value you can see". Asserted as a shape rather than as a list, so adding
-     * a twelfth built-in tool strengthens it instead of reding it.
+     * value you can see".
+     *
+     * THIS DOC-BLOCK USED TO SAY the assertion was "a shape rather than a
+     * list, so adding a twelfth built-in tool strengthens it instead of reding
+     * it". WHAT IS TRUE NOW: that was wrong for exactly the tools this project
+     * would add next. `$survivors` is the census minus everything
+     * `fnmatch('[!B]*', …)` matches, i.e. every name beginning with `B`, so
+     * `assertCount(1, …)` is really "exactly one B-named built-in exists".
+     * Adding `BashOutput` or `BashBackground` makes it two and REDS THIS TEST.
+     * WHY IT STILL EARNS ITS PLACE: that red is correct rather than incidental.
+     * README.md's retraction says the counterexample "leaves exactly `Bash` out
+     * of the eleven built-in tools", and its launch-report sample says
+     * "disabled 10 of the 11" — a twelfth B-named tool falsifies both, so the
+     * test and the prose have to move together. The census-derived assertion
+     * below pins that sample against the measured count for the same reason.
      *
      * The day someone teaches {@see PermissionRule::matchesToolName()} to
-     * refuse negated classes, this reds — and that is the intent: the README
-     * paragraph below would then be describing a hazard that no longer exists,
-     * and both have to move together.
+     * refuse negated classes, this reds too — and that is the intent: the
+     * README paragraph below would then be describing a hazard that no longer
+     * exists, and both have to move together.
      */
     public function testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem(): void
     {
@@ -146,28 +167,85 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         self::assertCount(1, $survivors, 'the counterexample no longer isolates a single tool');
         self::assertCount(count($ceiling) - 1, $removed);
 
-        // The whole of the claim: the value an operator would read in the file
-        // does not contain the name of anything it takes away.
-        foreach ($removed as $name) {
-            self::assertStringNotContainsString(
-                $name,
-                self::COUNTEREXAMPLE_GLOB,
-                'the deny value names a tool it removes, so the old README claim would be true again',
+        // THIS BLOCK USED TO BE a loop asserting that no removed tool's name is
+        // a substring of `[!B]*`, commented "the whole of the claim". WHAT IS
+        // TRUE NOW: that assertion could not fail. Both operands are fixed with
+        // respect to the code under test — the haystack is a class constant, and
+        // the only substrings of `[!B]*` that could ever be a tool name are the
+        // ones beginning with `B`, which are precisely the names
+        // `fnmatch('[!B]*', …)` does NOT match and so can never be in
+        // `$removed`. It was 10 of this file's 25 assertions and pinned nothing.
+        //
+        // WHY THE PROPERTY STILL EARNS AN ASSERTION, in a form that can fail:
+        // what the retracted README sentence promised is that reading the value
+        // tells you what it takes away. It does not, and the reason is not that
+        // the string happens to be short — it is that the value denotes an
+        // UNBOUNDED set. The same five characters match names that do not exist
+        // yet, so no reader and no reviewer can enumerate the removals from the
+        // value alone; only the census can. Teach
+        // {@see PermissionRule::matchesToolName()} to compare literally, or to
+        // refuse negated classes, and every one of these goes false.
+        foreach (['Zzz', 'a-tool-added-next-year', 'mcp__git__status'] as $neverBuilt) {
+            self::assertNotContains($neverBuilt, $ceiling, 'this probe name has become a real tool');
+            self::assertTrue(
+                PermissionRule::matchesToolName(self::COUNTEREXAMPLE_GLOB, $neverBuilt),
+                'the deny value no longer removes names outside the census, so it names a set '
+                . 'an operator could read off the file and the old README claim would be true again',
             );
         }
+
+        // The README quotes this census twice — "out of the eleven built-in
+        // tools" and a launch-report sample reading "disabled 10 of the 11".
+        // Both are figures, so both get a generator rather than a proof-read.
+        $flat = (string) preg_replace('/\s+/', ' ', $this->readme());
+        self::assertStringContainsString(
+            sprintf('disabled %d of the %d tools your own settings left', count($removed), count($ceiling)),
+            $flat,
+            "README.md's launch-report sample no longer matches the measured tool census",
+        );
     }
+
+    /**
+     * Fragments of the retracted auditability sentence, any ONE of which is
+     * enough to identify a line as asserting it. Three rather than one because
+     * the sentence is re-wrapped every time the paragraph around it is edited,
+     * and a single 28-character needle is evaded by a line break landing inside
+     * it.
+     */
+    private const RETRACTED_AUDITABILITY_FRAGMENTS = [
+        'naming every tool',
+        'every tool it removes',
+        'a value you can see',
+    ];
 
     /**
      * THE PROSE. Wherever README.md still quotes the retracted sentence — and it
      * must, {@see \SugarCraft\Crush\Config\LayeredSettings} keeps the retraction
      * rather than deleting it, because a reader who finds only the conclusion
-     * deletes the guard — the counterexample has to be within reach of it.
+     * deletes the guard — it has to be visibly A QUOTE, and the counterexample
+     * has to be within reach of it.
      *
-     * THE WINDOW IS THE ASSERTION. 2000 characters forward of the quote, not the
-     * whole file: a `[!B]*` sitting in some unrelated section three pages down
-     * would satisfy a whole-file contains() while the paragraph an operator
-     * actually reads carried the bare false claim. Measured against the current
-     * file, the gap from the quote to the glob is well under that.
+     * THE STRUCTURAL RULE IS THE REAL ASSERTION, and it is here because the
+     * proximity rule alone SURVIVED ITS MUTATION. Restoring the false sentence
+     * verbatim as body prose — "…available to a trusted project, because
+     * expressing the same attack there means naming every tool it removes — a
+     * value you can see." — immediately above the retraction left the window
+     * check GREEN: measured on the corrected file, `[!B]*` sits +600 characters
+     * from the quote and "That is false" +57, so ~1400 characters of the
+     * 2000-character window are slack in front of the retraction, and any
+     * restored occurrence inside that slack simply inherits the retraction's own
+     * counterexample. The window, not the mutation, was wrong — the same defect
+     * {@see testTheWordDeprecatedAppearsInTheReadmeOnlyInsideTheQuoteThatRetractsIt()}
+     * already had to solve, and it is solved the same way: the sentence may
+     * appear only on a `>` line. Body prose is what a reader skims and believes;
+     * a block quote is visibly an aside about a sentence that used to be there.
+     *
+     * THE WINDOW IS KEPT AS WELL, narrowed to the quoted occurrences. It answers
+     * a different question — that the retraction still carries its
+     * counterexample rather than having drifted into a bare assertion — and a
+     * `[!B]*` sitting in some unrelated section three pages down would satisfy a
+     * whole-file contains() while the paragraph an operator actually reads
+     * carried the bare false claim.
      */
     public function testWhereverTheReadmeQuotesTheRetractedClaimTheCounterexampleIsRightThere(): void
     {
@@ -178,6 +256,71 @@ final class ReadmeSettingsTierClaimTest extends TestCase
             $quote,
             $readme,
             'README.md dropped the retracted claim instead of correcting it in place',
+        );
+
+        // PER PARAGRAPH, NOT PER LINE. A per-line scan is evaded by nothing more
+        // deliberate than a re-wrap: fold the sentence so that "naming every
+        // tool it removes" straddles a line break and no single line carries a
+        // whole fragment. Markdown paragraphs are the unit a reader actually
+        // reads, so each is flattened to one whitespace-normalised string first
+        // and only then searched.
+        $offenders = [];
+        $quotedParagraphs = 0;
+        $paragraph = [];
+        $paragraphStart = 1;
+        $lines = explode("\n", $readme);
+        $lines[] = ''; // sentinel so the final paragraph is flushed by the loop
+
+        foreach ($lines as $index => $line) {
+            if (trim($line) !== '') {
+                if ($paragraph === []) {
+                    $paragraphStart = $index + 1;
+                }
+                $paragraph[] = $line;
+
+                continue;
+            }
+            if ($paragraph === []) {
+                continue;
+            }
+
+            $flat = (string) preg_replace('/\s+/', ' ', implode(' ', $paragraph));
+            $carries = false;
+            foreach (self::RETRACTED_AUDITABILITY_FRAGMENTS as $fragment) {
+                if (str_contains($flat, $fragment)) {
+                    $carries = true;
+
+                    break;
+                }
+            }
+            if ($carries) {
+                $unquoted = array_values(array_filter(
+                    $paragraph,
+                    static function (string $one): bool {
+                        return !str_starts_with(ltrim($one), '>');
+                    },
+                ));
+                if ($unquoted === []) {
+                    ++$quotedParagraphs;
+                } else {
+                    $offenders[] = $paragraphStart . ': ' . trim($unquoted[0]);
+                }
+            }
+            $paragraph = [];
+        }
+
+        self::assertSame(
+            [],
+            $offenders,
+            'README.md asserts the retracted disabledTools auditability claim as body prose. It is false: '
+            . '`Bootstrap::filterToolSet()` matches through `PermissionRule::matchesToolName()`, which is bare '
+            . '`fnmatch()`, so `[!B]*` removes an unbounded set and names none of it. If the sentence has to '
+            . 'be restated, restate it inside the `>` retraction that disproves it',
+        );
+        self::assertGreaterThan(
+            0,
+            $quotedParagraphs,
+            'the retraction quote is gone; it records what this section used to claim and why it was wrong',
         );
 
         $offset = 0;
