@@ -127,13 +127,43 @@ use SugarCraft\Crush\Tools\ToolCall;
  *  4. "refused <tool>" — an explicit non-affirmative answer, which is the one
  *     of the four the user already knows about, having just typed it.
  *
- * WHAT IS GENUINELY MISSING, and it is not a channel question: 2, 3 and 4 are
- * REFUSALS that never enter the `--output-format json` document. This class's
- * own docblock names the caller "whose entire view of the run is stdout plus an
- * exit code", and that caller sees a turn that completed with a tool quietly
- * not run. That is a gap in {@see NonInteractive::format()}, not in the routing
- * of these lines, and it is the same constraint Phase 9 step 1 has — a headless
- * user still has to receive a refusal. Recorded rather than half-done here.
+ * WHAT WAS GENUINELY MISSING, AND WHAT STILL IS. WHAT THIS PARAGRAPH SAID: that
+ * 2, 3 and 4 are "REFUSALS that never enter the `--output-format json`
+ * document", a gap in {@see NonInteractive::format()} "recorded rather than
+ * half-done here". WHAT IS TRUE NOW: E173 closed it. That document carries a
+ * `refusals` array, built from the tool-lifecycle event stream rather than from
+ * this class, and
+ * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest} pins
+ * it end-to-end.
+ *
+ * WHY THE ENTRY STILL EARNS ITS PLACE: because the half it named is closed and
+ * a WIDER one is open, and reading only the closure would leave the wider one
+ * looking handled. Two corrections to how this paragraph framed it, both
+ * measured at round 47 on PHP 8.3.6:
+ *
+ *  - THE SEAM IS NOT THIS CLASS. E173 could not route these four through
+ *    `format()`, because the approver is built four frames away. It reads
+ *    {@see \SugarCraft\Crush\Events\ToolFinished} instead, which every
+ *    refusal produces whatever settled it — so the fix covers shapes this
+ *    class never sees, and would have covered them even if this class did not
+ *    exist.
+ *  - AND THAT IS THE POINT, because the commonest refusal is one of them. A
+ *    plain {@see \SugarCraft\Crush\Hooks\HookResult::deny()} returns out of
+ *    {@see \SugarCraft\Crush\Runtime::gate()} BEFORE `settleAsk()` is
+ *    reached, so it never arrives here at all. It follows that "every refusal
+ *    is already on stderr" — a sentence lifted from this docblock's four
+ *    shapes and generalised across {@see NonInteractive} and `README.md` — is
+ *    false: a hook DENY reaches neither stderr nor `--output-format text`.
+ *    MEASURED by driving the shipped gate's `rm -rf` denial through a real
+ *    `EngineBackend`: zero bytes on stderr. `Runtime` writes to stderr
+ *    nowhere, and
+ *    {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest::testRuntimeWritesNothingToStderrSoATextFormatDenialIsSilent()}
+ *    reds the day that changes.
+ *
+ * So the remaining gap is a deny-path stderr line in `Runtime`, not a routing
+ * decision about these four. It is on the hardening backlog. Recorded rather
+ * than half-done here — for the same reason as before, and about a different
+ * thing.
  */
 final class HeadlessPermissionPrompt
 {
