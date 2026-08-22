@@ -3372,19 +3372,51 @@ break the day the worker is real; recorded so that day's implementer finds it.
 
 **What the anchors are now.** Not a string — a contract. On each painter tick the test reads
 `AgentManager::liveOutputs()` FIRST and renders SECOND, then asserts that the agent's own tile, sliced
-out of the frame by column (`WorkflowLivePaneTest::paneColumn()`), carries the first 16 cells of
-whatever that buffer's first non-blank line was (`WorkflowLivePaneTest::livenessProbe()`,
-`LIVE_TEXT_PROBE_CELLS`). A real worker satisfies it by emitting anything at all. The negative test
-asserts the TILE is gone (`╭ <name> `, `[working]`) rather than a stub word, and is guarded against
-vacuity: the finished sub-agent is checked to be terminal AND non-empty via
-`AgentManager::subAgentsOf()`, so "the pane is down" cannot pass because the worker never spoke.
+out of the frame by column (`WorkflowLivePaneTest::paneColumn()`), carries 16 cells of whatever that
+buffer's first non-blank line was (`WorkflowLivePaneTest::livenessProbe()`, `LIVE_TEXT_PROBE_CELLS`).
+A real worker satisfies it by emitting anything at all. The negative test asserts the TILE is gone
+(`╭ <name> `, `[working]`) rather than a stub word, and is guarded against vacuity: the finished
+sub-agent is checked to be terminal AND non-empty via `AgentManager::subAgentsOf()`, so "the pane is
+down" cannot pass because the worker never spoke.
+
+🔴 **ROUND-42 REVIEW CORRECTION, applied: as first written the derived probe was the AGENT'S NAME and
+pinned nothing.** `livenessProbe()` took the first 16 cells from cell 0, the stub tags every line
+`[<name>] `, and `[docs-explorer] ` is exactly 16 cells — so the probe was a datum
+`AgentSplitColumn::state()` is handed as a parameter and could paint without reading a byte from the
+worker. Measured (PHP 8.3.6, PHPUnit 10.5.64): a mutant passing
+`self::tail('[' . $name . '] MUTANT never came from the worker')` as `outputBuffer:` passed the whole
+file, `OK (11 tests, 49 assertions)`, rc 0. The probe now skips a leading `[<agent name>] ` tag and
+FAILS if what remains still contains the name; the same mutant reds, as does the tag-free
+`'MUTANT placeholder text'` variant. A new `tileTopBorder()` measures the painted tile's own budget so
+the window's upper bound is an assertion rather than a sentence.
+
+🔴 **And a figure in the same docblock did not reproduce (RULE 9).** It claimed "the tile is 40 cells,
+inner 36, and the stub's 34-cell first line survives whole". The arithmetic is right —
+`Renderer::agentSplitWidth()` at `cols = 120` gives `min(60, max(24, intdiv(120, 3))) = 40`, and
+`AgentSplitColumn::render()` clips to `$width - PANE_CHROME` = 36 — and the rest is wrong twice.
+Instrumenting a scratch copy of the test file: the live buffer holds NO newline, because
+`AgentWorkerPool::pumpProgress()` concatenates both `streaming` chunks, so the "first line" is one
+88-cell string; the stub's first *emitted* line is 44 cells, not 34; and it is clipped, the painted row
+being `│ [docs-explorer] Processing: explore  │`. Rewritten in place per RULE 7.
+
+🔴 **A third negation was narrower than the prose around it.** All three frame negations in
+`testThePaneIsGoneOnceTheWorkflowHasFinished()` name this agent or `[working]`, so a stopped tile for a
+DIFFERENT agent satisfied every one — measured by injecting `['other-agent' => 'zzz mutant filler']`
+into `Renderer::liveAgentOutputs()`. That is not a regression (the old `Processing:` negation had the
+same hole), but the docblock implied otherwise. The test now asserts `Renderer::liveAgentOutputs()`
+empty directly — the compositor's own source for the split, and a different method from the
+`AgentManager::liveOutputs()` asserted beside it — and that mutation reds.
 
 **Why the worker half is not here, stated as a size and not as a preference.** `php -r` is the whole
 worker: `ProcessExecutor::spawnWorker()` launches `[$binaryPath, '-r', $workerScript]` with **no
 autoloader in the child**. A real one needs (1) composer's autoloader bootstrapped in that child, (2) a
-provider IDENTITY plus credentials crossing the startup message, which today carries
-`model`/`messages`/`tools`/`systemPrompt`/`temperature`/`maxTokens` and no way to *name* a provider,
-and (3) an offline substitute, because CI has no model — so the simulation does not disappear even
+provider IDENTITY plus credentials crossing the startup message — which today carries `agent.id`,
+`agent.name`, `agent.model`, `agent.prompt`, `task` and a `request` sub-object of
+`model`/`messages`/`tools`/`systemPrompt`/`temperature`/`maxTokens`, eleven fields and not one of them
+a provider or a credential; `Agents\Agent` even HAS a `provider` field that `spawnWorker()` does not
+forward (an earlier revision of this stamp and of the `createInlineWorkerScript()` docblock listed only
+the six `request` fields and called that the whole message — corrected in both, and the point stands
+harder for it) — and (3) an offline substitute, because CI has no model — so the simulation does not disappear even
 then, it moves behind a seam. (1) and (2) touch `bin/` and `Cli/Bootstrap.php`, held by other lanes
 this round, and (3) is a new `src/` file, which moves four figures in `BuiltInToolCorpusTest`, a prose
 restatement in `RepoMapBlock`, and `BinSugarcrushWiringTest::crushSourceFiles`. That is not a
@@ -4914,8 +4946,19 @@ that "jumping a pane field **no live frame reads** would be a switch the user ca
 dashboard before any sidebar exists, `leftSidebar()` branches on `Pane::Files`/`Pane::Tools`, and
 `rightSidebar()` branches on `Pane::Skills`/`Pane::Settings`. A pane switch is plainly visible. A third
 sentence lower in the same docblock — "Files/Tools/Skills/Settings/Help have NO live surface on this
-path at all" — was false for the same reason, and is rewritten too (`Help` alone was right: it has no
-`Pane` case).
+path at all" — was false for the same reason, and is rewritten too.
+
+🔴 **ROUND-42 REVIEW CORRECTION, applied: the rewrite above introduced a THIRD falsehood about `Help`.**
+This stamp and the docblock both said "`Help` alone was right: it has no `Pane` case". `src/Tui/Pane.php`
+declares `case Help = 'help';`, `Pane::Help->label()` returns `'Help'`, and `tests/Tui/PaneTest.php`
+asserts `value`, `label()` and `from('help')`. Only the *arm* half held — nothing in `src/` matches on
+`Pane::Help`. And it has a live surface by the same criterion used to condemn the sentence for
+Files/Tools/Skills/Settings: `MenuBar::paneTabs()` renders `'Currently: ' . $a->pane->label()`
+unconditionally. Measured at 120x40, line 0 reads `… Currently: Help` for `Pane::Help` against
+`… Currently: Chat` for `Pane::Chat`, and the two frames differ — and it was already pinned all along:
+`ComponentTest::testMenuBarWithDifferentPaneLabels()`'s all-panes `Currently:` table has a `Pane::Help => 'Help'` row. The docblock now records the
+correction in place rather than deleting it (RULE 7); the argument it was attached to — these panes
+lack a *writer* reachable from `selectPane()`, not a surface — is unchanged and covers `Help` too.
 
 **The real reason `selectPane()` cannot take §8 E3's `$app->withPane(...)` sketch is ownership, not
 reachability.** `Chat::update()` returns `array{0:self,1:?\Closure}`;
@@ -4932,6 +4975,21 @@ are the class definition and `App::update()`'s two match arms). Only `tests/App/
 comment-only item, so it stays a seam — and
 `HostedFrameReadsThePaneTest::testNothingInSrcConstructsASelectPaneMsg()` now reds the day somebody
 wires it, which is the commit on which the docblock's ⚠️ paragraph becomes wrong.
+
+🔴 **ROUND-42 REVIEW CORRECTION, applied: as first written that census could not see the wiring it
+existed to catch.** The regex `/\bnew\s+(\\[\w\\]+\\)?SelectPaneMsg\s*\(/` requires a LEADING
+backslash on its optional namespace prefix, so it matched `new SelectPaneMsg(` and
+`new \Fully\Qualified\SelectPaneMsg(` and was blind to `new App\SelectPaneMsg(` — the relative form
+`Chat.php` would use, since it sits in `SugarCraft\Crush` and imports no `SelectPaneMsg`. Measured: with
+that arm added to `selectPane()`'s match the test stayed green, and reflection on the mutated method
+really did return a `SugarCraft\Crush\App\SelectPaneMsg`, so it was a producer and not a phantom.
+It also scanned only `src/`, while this entry claimed `src/ or bin/`. Both are fixed: any namespace
+prefix or none, `use … as` aliases resolved, `bin/sugarcrush` included, plus a second assertion pinning
+the exact set of production files that so much as name the symbol (`src/App/App.php`, `src/Chat.php`) —
+which is what catches an alias import landing in a file not already on the list. All four construction
+syntaxes were driven as mutations and all four now red. **Residual, stated rather than papered over:**
+`$c = SelectPaneMsg::class; new $c(…)` inside a file already on the allowlist is invisible to a textual
+census. That is the floor of this technique, not an oversight.
 
 **New file `tests/App/HostedFrameReadsThePaneTest.php`** pins the corrected behavioural claims: the
 hosted frame's left sidebar follows `Pane::Files`/`Pane::Tools`, its right sidebar follows
@@ -5006,9 +5064,16 @@ reproducible only in the statistical sense:
 | 1 | 8982 | 105,026 | 1 | 1 | **1** | 06:22 |
 | 2 | 8982 | **105,048** | 1 | 0 | **0** | 04:12 |
 
-The 22-assertion gap is exactly that one test's shortfall (it asserts 25 in isolation, in 0.128 s, and
-got 3 in before the abort), which is what identifies the abort as the whole of the difference rather
-than as one symptom among several.
+The 22-assertion gap is *consistent with* that one test being the whole of the difference: it asserts
+25 in isolation (re-measured by a reviewer at `OK (1 test, 25 assertions)`, 00:00.114 — the 0.128 s
+first reported was a different run of the same command), and 25 − 22 = 3 would then be what landed
+before the abort.
+
+⚠️ **That "3" is arithmetic, not a measurement, and the inference is circular if read the other way
+round.** Nobody exported the assertion count at the moment of the abort; run 1's 105,026 is by
+construction not reproducible. What is actually established is: exactly one test went risky, and the
+gap is small enough to be that one test. Treat "3 landed" as a consequence of assuming the abort
+explains the gap, never as evidence for it.
 
 **Mechanism, as far as it was chased.** The test does not touch `ProcessExecutor`. It `pcntl_fork()`s
 two real children that race for one task through `flock()` on a SQLite file, with a start barrier and

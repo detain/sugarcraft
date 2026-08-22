@@ -544,18 +544,32 @@ final class ProcessExecutor implements ExecutorInterface
      * would be worse than an honestly fake one. A worker that talked to a model
      * needs, at minimum: the composer autoloader bootstrapped inside a `php -r`
      * child that today has no autoloader at all; a provider IDENTITY and its
-     * credentials carried across the startup message, which currently ships
-     * only `model`/`messages`/`tools`/`systemPrompt`/`temperature`/`maxTokens`
-     * and no way to name a provider, let alone authenticate one; and an offline
-     * substitute for CI, which has no model to call — so a fake provider has to
-     * remain constructible in the child either way, i.e. this simulation does
-     * not disappear even then, it moves behind a seam.
+     * credentials carried across the startup message; and an offline substitute
+     * for CI, which has no model to call — so a fake provider has to remain
+     * constructible in the child either way, i.e. this simulation does not
+     * disappear even then, it moves behind a seam.
+     *
+     * ⚠️ WHAT THIS USED TO SAY about the second of those: that the startup
+     * message "currently ships only
+     * `model`/`messages`/`tools`/`systemPrompt`/`temperature`/`maxTokens`".
+     * WHAT IS TRUE NOW — read off {@see spawnWorker()}'s `$startupMessage`
+     * rather than off this sentence — is that those six are the `request`
+     * sub-object, and the line also carries `agent.id`, `agent.name`,
+     * `agent.model`, `agent.prompt` and `task`. WHY THE POINT STILL STANDS,
+     * and in fact stands harder: none of those eleven fields is a provider
+     * identity or a credential. `SugarCraft\Crush\Agents\Agent` even HAS a
+     * `provider` field — `spawnWorker()` does not forward it — so the child is
+     * told which model to pretend to be and never which service could serve
+     * it, let alone with what key. Naming a provider is an addition to the
+     * protocol, not a field somebody forgot to read.
      *
      * Until that lands, this is the shipped default: {@see __construct()}'s
-     * `$binaryPath` is plain `php`, {@see \SugarCraft\Crush\Agents\AgentWorkerPool}
-     * builds one of these with no arguments, and {@see \SugarCraft\Crush\Chat}
-     * builds another from `AgentPoolConfig`. Anything a user sees in the agent
-     * pane came from the script below.
+     * `$binaryPath` is plain `php`,
+     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::createDefaultExecutor()}
+     * builds one of these with no arguments, and
+     * {@see \SugarCraft\Crush\Chat::executeAgents()} builds another from
+     * `AgentPoolConfig`. Anything a user sees in the agent pane came from the
+     * script below.
      *
      * Recorded as E59 in `docs/plans/crush_code_hardening_backlog.md`. Do not
      * delete the simulation to "clean it up" — deleting it removes the only

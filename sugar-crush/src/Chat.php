@@ -4521,8 +4521,26 @@ final class Chat implements Model
      * for the same reason the paragraph above is being rewritten — is that
      * `FilesPane`, `ToolsPane`, `SkillsPane` and `SettingsPane` are all
      * rendered by the live `Tui\Renderer::leftSidebar()`/`rightSidebar()` off
-     * `App::$pane`. They have live surfaces. (`Help` has no `Pane` case and no
-     * arm anywhere, so for that one the old sentence held.)
+     * `App::$pane`. They have live surfaces.
+     *
+     * ⚠️ AND THE CORRECTION ITSELF WAS WRONG ABOUT `Help`, which is worth more
+     * than a silent edit because it is the second time this docblock has
+     * argued from an absence that is not there. WHAT THE CORRECTION SAID:
+     * "(`Help` has no `Pane` case and no arm anywhere, so for that one the old
+     * sentence held.)" WHAT IS TRUE NOW: {@see Pane} declares
+     * `case Help = 'help';`, `Pane::Help->label()` returns `'Help'`, and
+     * `tests/Tui/PaneTest.php` asserts all of it. Only the second half holds —
+     * no `match` arm anywhere in `src/` names `Pane::Help`. And it has a live
+     * surface for the same reason every other pane does:
+     * `Tui\Components\MenuBar::paneTabs()` renders
+     * `'Currently: ' . $a->pane->label()` unconditionally, so a frame on
+     * `Pane::Help` differs from one on `Pane::Chat` (measured at 120x40: line 0
+     * reads `… Currently: Help` against `… Currently: Chat`), and that is
+     * already pinned — `Tui\ComponentTest::testMenuBarWithDifferentPaneLabels()`'s
+     * table includes `Pane::Help => 'Help'`. WHY THIS STILL
+     * EARNS ITS PLACE: the point the paragraph is making — that these panes
+     * lack a WRITER reachable from here, not a surface — is unchanged and
+     * covers `Help` too. What it cannot claim is that `Help` is a special case.
      *
      * WHY THE ARM STILL EARNS `default => [$this, null]`: what those panes
      * lack is not a surface but a WRITER reachable from here — see the
