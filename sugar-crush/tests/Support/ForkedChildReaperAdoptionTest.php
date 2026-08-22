@@ -468,6 +468,73 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     }
 
     /**
+     * {@see SCOPE} AND {@see OUT_OF_SCOPE} MUST BE JOINTLY TOTAL over the
+     * offenders, or the deferral is a hole rather than a record.
+     *
+     * Without this, deleting a row from OUT_OF_SCOPE is a silent way to stop
+     * guarding a directory: {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()}
+     * iterates that map, so an EMPTY map passes it vacuously, and
+     * {@see testEveryInProcessForkInScopeIsCoveredByTheReaper()} never looks
+     * outside SCOPE. Between them the two tests would agree that a directory
+     * nobody covers is fine.
+     *
+     * So this one starts from the FORKS rather than from either list: every
+     * file anywhere under `tests/` that the predicate finds work in has to be
+     * accounted for by one list or the other. Adding a directory to
+     * OUT_OF_SCOPE is then a visible act with a reason attached, and deleting
+     * the row without widening SCOPE fails here.
+     */
+    public function testNoDirectoryWithUnreapedForksIsUnaccountedFor(): void
+    {
+        $root = \dirname(__DIR__);
+        $unaccounted = [];
+        $checked = 0;
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+        foreach ($files as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            $relative = substr($file->getPathname(), \strlen($root) + 1);
+            $source = (string) file_get_contents($file->getPathname());
+            $sites = ForkedChildExitScanner::scan($source);
+            if ($sites === []) {
+                continue;
+            }
+            $checked++;
+
+            $allowed = self::UNTRACKED_FORKS_ALLOWED[$relative]['count'] ?? 0;
+            if (self::missingHalves($source, $sites, $allowed) === []) {
+                continue;
+            }
+
+            $accounted = self::inScope($relative);
+            foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
+                $accounted = $accounted || str_starts_with($relative, $prefix);
+            }
+            if (!$accounted) {
+                $unaccounted[] = $relative;
+            }
+        }
+
+        // The scanner has to have found something to reason about, or "nothing
+        // is unaccounted for" is a statement about a dead instrument.
+        $this->assertGreaterThan(0, $checked, 'the fork scanner found no files at all - it is dead');
+
+        $this->assertSame(
+            [],
+            $unaccounted,
+            'this file forks inside the PHPUnit process with no reaper, and sits in a directory '
+                . 'that is in neither SCOPE nor OUT_OF_SCOPE. Either adopt the reaper and add the '
+                . 'directory to SCOPE, or add the directory to OUT_OF_SCOPE with the reason it '
+                . 'cannot be adopted yet. Leaving it in neither is the only outcome this guard '
+                . 'refuses.',
+        );
+    }
+
+    /**
      * An untracked-fork exemption cannot outlive the site it was written for.
      */
     public function testEveryUntrackedForkExemptionStillDescribesRealSites(): void
