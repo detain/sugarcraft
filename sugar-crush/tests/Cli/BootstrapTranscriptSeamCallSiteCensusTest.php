@@ -235,12 +235,26 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      * below, in prose, with nothing checking any of them. It read "four" when
      * the list held four, then "nine", and round 45 made it ten — every step a
      * hand-edit across all of them, which is the same failure mode one rung up.
-     * (No numeral in this paragraph, deliberately: a sentence saying how many
-     * sentences state the count would need a row of its own, and that recursion
-     * has to stop somewhere. It stops at `count(self::SELF_COUNT_ANCHORS)`,
-     * which is not quoted anywhere.) The
-     * generator here is `count(self::PROSE_SITES)`, which cannot drift from the
-     * list because it IS the list.
+     * WHERE THE RECURSION STOPS, and it did not stop where this paragraph
+     * claimed. WHAT IT SAID: "(No numeral in this paragraph, deliberately … it
+     * stops at `count(self::SELF_COUNT_ANCHORS)`, WHICH IS NOT QUOTED
+     * ANYWHERE.)" WHAT IS TRUE NOW: it was quoted twice, both times in
+     * {@see testTheProseSiteCountInThisFilesOwnDocBlocksMatchesTheList()} —
+     * "an assertion of the form `all seven anchors matched`" and "turning the
+     * seven assertions below into vacuous passes" — and both said SEVEN while
+     * the list held eight rows. The clause asserting the number was not quoted
+     * is precisely what made two wrong copies of it invisible, in the file
+     * whose entire subject is unanchored numbers in prose.
+     * WHY THE RULE STILL EARNS ITS PLACE: the recursion does have to stop, or a
+     * sentence counting the sentences that count the sentences needs a row of
+     * its own. It stops HERE, one level up, and the way it stops is that
+     * `count(self::SELF_COUNT_ANCHORS)` is NOT SPELLED OUT ANYWHERE — the two
+     * sentences that used to spell it now say "every anchor" and "the
+     * assertions below", which do not go stale when a row is added. If you find
+     * yourself wanting to write the number, add the row instead.
+     *
+     * The generator for the level below is `count(self::PROSE_SITES)`, which
+     * cannot drift from the list because it IS the list.
      *
      * MATCHED AGAINST A FLATTENED COPY OF THE SOURCE, never the raw bytes. A
      * doc-block wraps at 80 columns with ` * ` on every continuation, so a
@@ -254,11 +268,31 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      * anchor below fail open into a zero-match — which this test treats as a
      * failure, not a skip.
      *
-     * ONE SENTENCE IS DELIBERATELY NOT HERE: `"nine" with a flawed method beats
-     * "four" with none`, in {@see PROSE_SITES}' own doc-block. Both words are
-     * HISTORICAL — the figures those two searches produced — and correcting a
-     * quoted measurement to a later one destroys the comparison it exists to
-     * make. That is the one shape of number-in-prose that must NOT be pinned.
+     * WHAT IS DELIBERATELY NOT HERE, AND THE CRITERION — because "I did not
+     * think of it" and "it is excluded" look identical from the outside, and
+     * round 45's review found four sentences that were the first while reading
+     * as the second. THE CRITERION IS TENSE. A sentence saying what the count
+     * IS gets a row; a sentence saying what the count WAS is a quoted
+     * measurement, and correcting one to a later measurement destroys the
+     * comparison it exists to make. Two sentences are excluded under it. One is
+     * `"nine" with a flawed method beats "four" with none`, in
+     * {@see PROSE_SITES}' doc-block. The other is the sentence three paragraphs
+     * up that walks the count from four through nine to its value today: it is
+     * a HISTORY, its last clause is dated by the round that produced it, and a
+     * later round correcting that clause upward would be writing false history
+     * rather than fixing a stale number.
+     *
+     * EVERYTHING ELSE IN THE PRESENT TENSE IS A ROW. Round 45 added four, and
+     * they are quoted here with the number elided — `the list is … now`,
+     * `all … anchors match exactly once today`, `those … anchors each carry`,
+     * `re-pointing … working anchors` — because spelling one contiguously in
+     * this file makes it a SECOND match for its own anchor and reds the
+     * uniqueness assertion on the scaffolding. Measured: it did, on the first
+     * attempt at this paragraph. All four were written by the same lane that
+     * built this list, in the same commit, and none was pinned. That is not an
+     * argument against the machinery; it is the measurement of how fast a
+     * number in prose escapes it, taken on the author who was thinking about
+     * the problem hardest.
      *
      * IT IS NOT CONFINED TO THIS FILE, and that is the whole reason it is a
      * list of `{file, anchor}` and not a list of patterns. E118 moved the count
@@ -286,6 +320,14 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
             'anchor' => '/quoted in prose in ([a-z]+) sentences across/'],
         ['file' => 'src/Cli/Bootstrap.php',
             'anchor' => '/Bump this, bump the ([a-z]+) sentences, in one commit/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/and the list is ([A-Z]+) now/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/all ([a-z]+) anchors match exactly once today/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/those ([a-z]+) anchors each carry/'],
+        ['file' => 'tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php',
+            'anchor' => '/re-pointing ([a-z]+) working anchors/'],
     ];
 
     /**
@@ -457,7 +499,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      * agrees with `count(self::PROSE_SITES)`.
      *
      * THE FLATTENER IS CHECKED IN THE SAME TEST, on a fixture whose answer is
-     * known, because an assertion of the form "all seven anchors matched" is
+     * known, because an assertion of the form "every anchor matched" is
      * worthless if the thing they were matched against could be empty. Round 44
      * proved that exact point elsewhere in this tree: a census assertion of
      * "nothing is stale" passed with 18,228 assertions green while the scanner
@@ -469,7 +511,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         // KNOWN-POSITIVE CONTROL FIRST. A wrapped doc-block whose sentence is
         // split across a continuation marker must come back joined; if
         // flattened() ever returns '' or leaves the markers, this fails here
-        // rather than turning the seven assertions below into vacuous passes.
+        // rather than turning the assertions below into vacuous passes.
         // THE FIXTURE SENTENCE IS ASSEMBLED, not written whole, and that is not
         // style. This test scans its OWN file, so a fixture spelling the anchor
         // phrase contiguously in source becomes a second match for it and the
