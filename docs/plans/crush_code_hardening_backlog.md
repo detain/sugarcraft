@@ -7002,3 +7002,52 @@ derive its longest literal span, and assert that every page containing that span
 guarded readers. New page quoting a format, or a newly promoted format some page already quotes, then reds
 with "this page quotes a format nothing checks" instead of going unnoticed. Formats whose longest span is
 below the length threshold must be listed as unsweepable rather than dropped.
+
+### Ec46-5 — a class-total figure in a doc-block is a cardinality over `tests/`, and round 46 shipped three stale ones
+
+**Recorded 2026-08-22 by round-46 lane c's fix agent, during the verification pass over the same round's own
+commits.** Severity: informational, but it recurred four times in three rounds. **Measured.**
+
+**What.** Three doc-blocks landed this round quoting a PHPUnit total as evidence, and all three were wrong
+by the time the round ended — each invalidated by a LATER COMMIT OF THE SAME ROUND, not by drift:
+
+1. `BootstrapToolAndPermissionSettingsTest` said the tool-removal text mutation answers
+   `Tests: 5, Assertions: 30, Failures: 1` in its sibling class. Measured at the round's head it answers
+   `Tests: 6, Assertions: 40, Failures: 2` — a later commit added the `docs/SETTINGS.md` guard to that class.
+2. `BootstrapLaunchFormatConstantsTest`'s census control quoted the real-tree answer as `12/8/0/2`; the E164
+   promotions took it to 12 calls / 3 literal / 9 constant / 0 interpolated.
+3. The `six`/`five` doc-page counts already caught as the review's MAJOR 3, same mechanism.
+
+**Why it keeps happening.** The existing rule is stated as "do not write a cardinality into prose", which
+reads as being about counts of FILES or FORMATS. A PHPUnit `Tests:` / `Assertions:` total does not look like
+a cardinality — it looks like a measurement, and measurements are what these doc-blocks are supposed to
+carry. It is both: it is a measurement whose value is a count of the tests in a class, so **any sibling test
+added anywhere in that class invalidates it**, with no relationship to the thing being measured.
+
+**The form that survives.** Report WHICH TESTS RED, by name, and assert nothing about how many. A test name
+is stable under a sibling being added beside it, it is what the reader has to go and look at anyway, and
+when it rots it rots loudly — the `{@see}` stops resolving. Where a total genuinely is the finding (a
+mutation that reds NOTHING, say), say so qualitatively: "no test in that class reds".
+
+**Step.** No code change. When a doc-block cites a mutation verdict, cite the failing test names. Only the
+`Failures: 0` / "nothing red" case needs no name.
+
+### Ec46-6 — two guards whose failure message will misdescribe the failure
+
+**Recorded 2026-08-22 by round-46 lane c's fix agent, from the review's NOTE 8 plus one found beside it.**
+Severity: low. **Observed.**
+
+**What.** `BootstrapLaunchFormatConstantsTest::testTheLiteralFormatCensusHasAGenerator()` asserts
+`assertSame(\count(self::NAMED_FORMATS), $census['constant'])`, which holds only because each promoted
+format is `sprintf()`ed exactly once. A legitimate SECOND call site for any promoted format — the same
+constant rendered in two places, which is a normal thing to want — reds with "Bootstrap.php formats from a
+different number of constants than this file names as promoted". That is not what happened, and the message
+sends the reader to the roster rather than to the new call site.
+
+Second instance, found while mutating: `testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints()`
+uses `assertStringContainsString` against the FLATTENED page, so its failure output dumps all ~17 KB of
+`docs/TROUBLESHOOTING.md` on one line. The assertion is correct and the diagnosis is unreadable.
+
+**Step.** For the first, either assert the per-constant call count explicitly or reword the message to name
+both possibilities. For the second, narrow the haystack to the flattened paragraph containing `ignoring `
+before asserting, so a failure prints a sentence rather than a page.
