@@ -611,6 +611,24 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
     }
 
     /**
+     * A PHP source with its doc-block continuation markers stripped and its
+     * whitespace collapsed, so a sentence can be searched for as a sentence.
+     *
+     * A doc-block is wrapped at 80 columns with a ` * ` on every continuation
+     * line, so any claim longer than a few words is never those bytes in a row
+     * in the file. Searching the raw source for one is a check that passes
+     * whenever the prose is re-wrapped — which is what editing prose does.
+     */
+    private function flattenedProse(string $php): string
+    {
+        return (string) preg_replace(
+            '/\s+/',
+            ' ',
+            (string) preg_replace('/^\s*\* ?/m', '', $php),
+        );
+    }
+
+    /**
      * The `error.type` names in a backticked README list, or a failure naming
      * the element that is not one.
      *
@@ -805,7 +823,14 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
         );
 
         $flatReadme = (string) preg_replace('/\s+/', ' ', $this->readme());
-        $docBlock = $this->repoFile('src/Cli/NonInteractive.php');
+        // FLATTENED, and that was a survival. The first version of this
+        // assertion searched the raw source for `the one type this method
+        // never emits`; re-adding that exact clause to the doc-block survived,
+        // because a doc-block is wrapped at 80 columns with a ` * ` on every
+        // continuation line, so the sentence is never those bytes in a row.
+        // Same window defect as the line-scoped retraction scan below, found
+        // the same way — by mutating the clause the assertion names.
+        $docBlock = $this->flattenedProse($this->repoFile('src/Cli/NonInteractive.php'));
 
         foreach ($outsiders as $type) {
             self::assertStringContainsString(
@@ -822,11 +847,26 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
             );
         }
 
+        // The claim may live inside quotation marks and nowhere else — the same
+        // structural rule the README retraction below uses, for the same
+        // reason. The doc-block QUOTES the retracted sentence in its "WHAT IT
+        // SAID" paragraph, and deleting that quotation is how the next reader
+        // comes to restore the claim, so both directions are asserted: absent
+        // from the doc-block's own voice, and present somewhere.
+        $claim = 'one type this method never emits';
         self::assertStringNotContainsString(
-            'the one type this method never emits',
-            $docBlock,
+            $claim,
+            (string) preg_replace('/"[^"]*"/u', '', $docBlock),
             'NonInteractive::emitErrorDocument() still calls `installation` the only type it never '
-            . 'emits. There are ' . count($outsiders) . ': ' . implode(', ', $outsiders) . '.',
+            . 'emits, in its own voice. There are ' . count($outsiders) . ': '
+            . implode(', ', $outsiders) . '.',
+        );
+        self::assertStringContainsString(
+            $claim,
+            $docBlock,
+            'NonInteractive::emitErrorDocument() dropped the retracted "one type this method never '
+            . 'emits" claim instead of quoting it as retracted. Delete the reasoning and the next '
+            . 'reader restores the claim.',
         );
         self::assertDoesNotMatchRegularExpression(
             '/`installation` is the newest of the five/u',
