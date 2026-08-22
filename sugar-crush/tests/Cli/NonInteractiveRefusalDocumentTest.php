@@ -274,6 +274,88 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertSame("the answer\n", $stdout);
     }
 
+    /**
+     * THE HALF-CHANNEL, PINNED — because four doc-blocks and a README paragraph
+     * now rest on it.
+     *
+     * WHAT THOSE FIVE PLACES USED TO SAY: that `--output-format text` needs no
+     * refusal list because "every refusal is already on stderr". Round 47
+     * measured that false. The sentence was true of
+     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, which writes its
+     * four shapes to stderr, and was generalised to every refusal — but that
+     * class settles an ASK and is reached from nowhere else, while
+     * {@see \SugarCraft\Crush\Runtime::gate()} returns a plain DENY before
+     * `settleAsk()` is ever called. So the commonest refusal there is reaches
+     * NEITHER channel under `text`.
+     *
+     * THE MECHANISM HALF OF THAT CLAIM IS "`Runtime` WRITES TO STDERR NOWHERE",
+     * and a sentence in a doc-block cannot red. This can. The day someone adds
+     * the missing deny-path line — which is the right fix and is on the
+     * hardening backlog — this test reds, and it reds pointing at the five
+     * places that describe the gap, so the fix and the prose land together
+     * instead of the prose rotting into a second wrong promise. That is the
+     * only reason it is an assertion about SOURCE rather than about behaviour:
+     * the behaviour is an absence, and an absence observed in one turn does not
+     * generalise to the ones the suite does not run.
+     *
+     * @see testTextFormatStillPrintsTheAnswerAndNothingElse() for the contract
+     *      that keeps the fix off stdout.
+     */
+    public function testRuntimeWritesNothingToStderrSoATextFormatDenialIsSilent(): void
+    {
+        // KNOWN-POSITIVE FIRST (rule 15): an absence is not evidence unless the
+        // same test shows the scanner can still find a presence. Assembled from
+        // parts so this file cannot be scanned into reddening on its own
+        // fixture if the scan set is ever widened past Runtime.
+        $err = 'STD' . 'ERR';
+        self::assertSame(
+            [$err],
+            self::stderrWritesIn("<?php \fwrite(\{$err}, \$e->getMessage());
+"),
+            'the stderr scanner can no longer see a write it is looking straight at; the absence asserted '
+            . 'below proves nothing',
+        );
+        self::assertSame(
+            ['php://stderr'],
+            self::stderrWritesIn("<?php \$h = fopen('php://stderr', 'w');
+"),
+        );
+        self::assertSame([], self::stderrWritesIn("<?php echo 'on stdout';
+"));
+
+        $runtime = @file_get_contents(\dirname(__DIR__, 2) . '/src/Runtime.php');
+        if ($runtime === false) {
+            // Loud, never "it is fine": this guard cannot answer for a file it
+            // could not read.
+            throw new \RuntimeException('src/Runtime.php could not be read; this guard cannot answer for it');
+        }
+
+        self::assertSame(
+            [],
+            self::stderrWritesIn($runtime),
+            'Runtime now writes to stderr. If that write is the deny-path refusal line, this is the good '
+            . 'news — but NonInteractive::run(), NonInteractive::format(), NonInteractive::emitErrorDocument(), '
+            . 'this file\'s text-format test and README.md all state that no such line exists, and all five '
+            . 'are now wrong. Update them in the same change',
+        );
+    }
+
+    /**
+     * Every construct in `$source` that writes to the standard error stream.
+     *
+     * Deliberately syntactic and deliberately broad — the constant, the stream
+     * wrapper, and `error_log()`'s default sink all reach the same place, and a
+     * scanner that knew only the first would answer "nothing" for the other two.
+     *
+     * @return list<string>
+     */
+    private static function stderrWritesIn(string $source): array
+    {
+        preg_match_all('/STDERR|php:\/\/stderr|\berror_log\s*\(/i', $source, $matches);
+
+        return $matches[0];
+    }
+
     // ── harness ──────────────────────────────────────────────────────────
 
     /**
