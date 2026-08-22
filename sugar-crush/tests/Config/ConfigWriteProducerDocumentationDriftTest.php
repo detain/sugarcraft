@@ -10,6 +10,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
 
 /**
  * `~/.sugar-crush/config.json` receives exactly two keys, and every document
@@ -235,33 +236,31 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
     }
 
     /**
-     * Paragraphs of a doc-block or a markdown page, whitespace-normalised.
+     * The shared paragraph window.
      *
-     * NORMALISED because the claims being checked are line-wrapped: the phrase
-     * `"Switch Model"` lands with a newline in the middle of it in
-     * `docs/SETTINGS.md`, and a raw `str_contains()` would miss it and report
-     * a defect that is a line break.
+     * WHAT THIS SAID: three suites each carried a byte-identical private
+     * `paragraphs()` with its own copy of the same justification — the claims
+     * being checked are line-wrapped, so a raw `str_contains()` reports a line
+     * break as a defect.
+     *
+     * WHAT IS TRUE NOW: that justification still holds and has not been
+     * deleted; it moved, in full and with the measurements behind it, to
+     * {@see DocumentParagraphs}. What changed there is the rule itself — a
+     * fenced code block, a table row and a list item are each their own unit
+     * now, because markdown puts no blank line between them and the old rule
+     * therefore handed every guard one unit where a reader sees several.
+     *
+     * WHY THIS METHOD STILL EARNS ITS PLACE: it is the seam. Every call site
+     * reads `$this->paragraphs(...)`, so the window can be changed in one place
+     * and the change measured against
+     * {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest}'s fixture
+     * table rather than three times by hand.
      *
      * @return list<string>
      */
     private function paragraphs(string $text): array
     {
-        // Strip the doc-block leader so a `*`-prefixed line and a markdown line
-        // reach the same shape. The blank separator inside a doc-block is ` *`.
-        $lines = [];
-        foreach (preg_split('/\R/', $text) ?: [] as $line) {
-            $lines[] = preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line) ?? $line;
-        }
-
-        $out = [];
-        foreach (preg_split('/\n\s*\n/', implode("\n", $lines)) ?: [] as $para) {
-            $normalised = trim((string) preg_replace('/\s+/', ' ', $para));
-            if ($normalised !== '') {
-                $out[] = $normalised;
-            }
-        }
-
-        return $out;
+        return DocumentParagraphs::of($text);
     }
 
     private function layeredSettingsDocBlock(): string
@@ -376,9 +375,38 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
     // ── prose ────────────────────────────────────────────────────────────
 
     /**
-     * ONE paragraph, in each document that enumerates the persisted keys, must
-     * name all four doors. Scattering them across a page is how a reader ends
-     * up counting three.
+     * THE ENUMERATION OF THE PERSISTED KEYS MUST BE COMPLETE PER KEY.
+     *
+     * WHAT THIS SAID, until round 45: "ONE paragraph must name all four
+     * doors. Scattering them across a page is how a reader ends up counting
+     * three." The rule was `$this->paragraphs()` plus `stripos()` for each of
+     * the four names, satisfied by any single unit holding all four.
+     *
+     * WHAT IS TRUE NOW: the window got finer. A markdown or doc-block list has
+     * no blank line between its items, so the old window handed this guard the
+     * WHOLE list as one unit — and the `LayeredSettings` doc-block enumerates
+     * the two keys as two bullets, one per key. Under the finer window that
+     * document has no single unit naming all four, and the old assertion reds
+     * on prose nobody has touched. That is the consolidation moving a verdict
+     * on a real document, and it is a finding rather than a detail: the old
+     * rule was satisfiable by two adjacent half-claims, exactly the shape it
+     * existed to refuse.
+     *
+     * WHY THIS STILL EARNS ITS PLACE, in a stronger form: the requirement is
+     * now PER KEY — some unit inside the enumeration must name the key AND
+     * both of its doors. Two bullets each naming one key and its two doors
+     * pass; one bullet naming `provider` and only the palette row does not,
+     * which is the original defect. The old form could not tell those apart.
+     *
+     * THE ENUMERATION IS A SPAN, NOT A UNIT, and it has to be, because the
+     * finer window is what split it. It is the sole unit containing
+     * {@see ENUMERATION_LEAD_IN} plus the consecutive item units following it.
+     * SCOPING IT MATTERS AND IS MEASURED: the doc-block's rule-7 retraction
+     * paragraph, several units later, names `provider`, `Switch Model` AND
+     * `/model` all by itself. Without the span, deleting `/model <name>` from
+     * the `provider` bullet — the exact defect — passes, because the paragraph
+     * explaining that the defect was fixed satisfies the rule instead.
+     * VERIFIED by mutation on PHP 8.3.6 at round 45.
      *
      * @return iterable<string, array{0: string}>
      */
@@ -388,36 +416,104 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
         yield 'docs/SETTINGS.md' => ['settings'];
     }
 
+    /**
+     * The phrase that identifies the enumeration's lead-in sentence.
+     *
+     * Both documents open the enumeration with it, and it must pick out
+     * exactly one unit in each — asserted, not assumed.
+     */
+    private const ENUMERATION_LEAD_IN = 'two producers';
+
+    /**
+     * `provider` and `theme`, each with the palette row and the slash command
+     * that write it.
+     *
+     * @var array<string, list<string>>
+     */
+    private const DOORS = [
+        'provider' => ['Switch Model', '/model'],
+        'theme' => ['Switch Theme', '/theme'],
+    ];
+
     /** @dataProvider enumeratingDocuments */
-    public function testOneParagraphNamesAllFourDoors(string $which): void
+    public function testTheEnumerationNamesBothDoorsOfEveryPersistedKey(string $which): void
     {
-        $text = $which === 'docblock'
-            ? $this->layeredSettingsDocBlock()
-            : (string) file_get_contents(self::SETTINGS_DOC);
+        $span = $this->enumerationSpan($which);
 
-        $doors = ['Switch Model', '/model', 'Switch Theme', '/theme'];
-
-        $hit = null;
-        foreach ($this->paragraphs($text) as $para) {
-            $named = 0;
-            foreach ($doors as $door) {
-                if (stripos($para, $door) !== false) {
-                    $named++;
+        foreach (self::DOORS as $key => $doors) {
+            $complete = null;
+            foreach ($span as $unit) {
+                if (stripos($unit, $key) === false) {
+                    continue;
                 }
-            }
-            if ($named === \count($doors)) {
-                $hit = $para;
+                foreach ($doors as $door) {
+                    if (stripos($unit, $door) === false) {
+                        continue 2;
+                    }
+                }
+                $complete = $unit;
 
                 break;
             }
+
+            $this->assertNotNull(
+                $complete,
+                $which . ': the enumeration of the persisted keys has no single claim naming `' . $key
+                . '` together with both of its producers (' . implode(' + ', $doors) . '). '
+                . 'Naming one door and leaving the other to a neighbouring sentence is the omission '
+                . 'that credited the palette alone for `provider`',
+            );
+        }
+    }
+
+    /**
+     * The enumeration span of `$which`: its lead-in unit and the item units
+     * that follow it.
+     *
+     * @return list<string>
+     */
+    private function enumerationSpan(string $which): array
+    {
+        $units = $this->paragraphs($this->enumeratingText($which));
+
+        $leadIn = [];
+        foreach ($units as $i => $unit) {
+            if (stripos($unit, self::ENUMERATION_LEAD_IN) !== false) {
+                $leadIn[] = $i;
+            }
         }
 
-        $this->assertNotNull(
-            $hit,
-            $which . ': no single paragraph names all four producers of the two persisted keys '
-            . '(palette "Switch Model" + /model, palette "Switch Theme" + /theme) — '
-            . 'this is the omission that credited the palette alone for `provider`',
+        $this->assertCount(
+            1,
+            $leadIn,
+            $which . ': "' . self::ENUMERATION_LEAD_IN . '" no longer identifies exactly one unit, '
+            . 'so the span this test asserts inside is not the enumeration any more',
         );
+
+        $span = [$units[$leadIn[0]]];
+        for ($i = $leadIn[0] + 1; $i < \count($units); $i++) {
+            if (!DocumentParagraphs::startsAnItem($units[$i])) {
+                break;
+            }
+            $span[] = $units[$i];
+        }
+
+        return $span;
+    }
+
+    private function enumeratingText(string $which): string
+    {
+        return $which === 'docblock'
+            ? $this->layeredSettingsDocBlock()
+            : self::readOrFail(self::SETTINGS_DOC);
+    }
+
+    private static function readOrFail(string $path): string
+    {
+        $text = file_get_contents($path);
+        self::assertIsString($text, $path . ' could not be read');
+
+        return $text;
     }
 
     /**

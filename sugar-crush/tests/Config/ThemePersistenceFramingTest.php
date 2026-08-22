@@ -9,6 +9,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
 
 /**
  * THREE DOCUMENTS DESCRIBED THE SAME COUNTERFACTUAL AND ONLY ONE OF THEM WAS
@@ -45,29 +46,31 @@ final class ThemePersistenceFramingTest extends TestCase
     private const SETTINGS_DOC = __DIR__ . '/../../docs/SETTINGS.md';
 
     /**
-     * Paragraphs, whitespace-normalised, of a doc-block or markdown page — the
-     * same normalisation {@see ConfigWriteProducerDocumentationDriftTest} uses
-     * and for the same reason: the claims being checked are line-wrapped, so a
-     * raw `str_contains()` reports a line break as a defect.
+     * The shared paragraph window.
+     *
+     * WHAT THIS SAID: three suites each carried a byte-identical private
+     * `paragraphs()` with its own copy of the same justification — the claims
+     * being checked are line-wrapped, so a raw `str_contains()` reports a line
+     * break as a defect.
+     *
+     * WHAT IS TRUE NOW: that justification still holds and has not been
+     * deleted; it moved, in full and with the measurements behind it, to
+     * {@see DocumentParagraphs}. What changed there is the rule itself — a
+     * fenced code block, a table row and a list item are each their own unit
+     * now, because markdown puts no blank line between them and the old rule
+     * therefore handed every guard one unit where a reader sees several.
+     *
+     * WHY THIS METHOD STILL EARNS ITS PLACE: it is the seam. Every call site
+     * reads `$this->paragraphs(...)`, so the window can be changed in one place
+     * and the change measured against
+     * {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest}'s fixture
+     * table rather than three times by hand.
      *
      * @return list<string>
      */
     private function paragraphs(string $text): array
     {
-        $lines = [];
-        foreach (preg_split('/\R/', $text) ?: [] as $line) {
-            $lines[] = preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line) ?? $line;
-        }
-
-        $out = [];
-        foreach (preg_split('/\n\s*\n/', implode("\n", $lines)) ?: [] as $para) {
-            $normalised = trim((string) preg_replace('/\s+/', ' ', $para));
-            if ($normalised !== '') {
-                $out[] = $normalised;
-            }
-        }
-
-        return $out;
+        return DocumentParagraphs::of($text);
     }
 
     private function docBlock(): string

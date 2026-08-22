@@ -149,6 +149,20 @@ final class DocumentParagraphs
     }
 
     /**
+     * Is this UNIT (as returned by {@see of()}) a list item or a table row?
+     *
+     * The finer window turns an enumeration into several units, so a guard that
+     * used to read "the paragraph introducing the list" and get the list with
+     * it now needs to walk forward deliberately. This is the predicate for that
+     * walk: a run of consecutive item units following a lead-in sentence is the
+     * enumeration that sentence introduces.
+     */
+    public static function startsAnItem(string $unit): bool
+    {
+        return self::opensListItem($unit) || self::isTableRow($unit);
+    }
+
+    /**
      * The 1-based line on which a fence opened and never closed, or `null`.
      *
      * A GUARD MUST GO RED ON WHAT IT CANNOT PARSE. An unclosed fence makes
