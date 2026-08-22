@@ -57,7 +57,15 @@ final class TruncatesOutputNudgeMarginDocTest extends TestCase
             . 'pointer from a tool output cap to the nudge ceiling that cap constrains',
         );
 
-        return (string) preg_replace('/\s+/', ' ', $doc);
+        // Continuation markers stripped BEFORE the whitespace collapse: a
+        // doc-block wraps at 80 columns with a ` * ` on every line after the
+        // first, so a phrase that spans a wrap is never those bytes in a row
+        // and an assertion looking for one passes on a re-wrap.
+        return (string) preg_replace(
+            '/\s+/',
+            ' ',
+            (string) preg_replace('/^\s*\* ?/m', '', $doc),
+        );
     }
 
     private function constantOf(string $class, string $name): int
@@ -165,17 +173,152 @@ final class TruncatesOutputNudgeMarginDocTest extends TestCase
             );
         }
 
-        // The two tools that take this default and are NOT in the relationship
-        // must stay named, or the margin reads as a property of the constant
-        // rather than of the tools that spend a nudge share of it.
-        foreach (['Bash', 'LspTool'] as $bystander) {
-            self::assertStringContainsString(
-                $bystander,
-                $doc,
-                "DEFAULT_MAX_OUTPUT_BYTES's doc-block no longer names {$bystander} as a user of this "
-                . 'default that spends no nudge budget',
-            );
+    }
+
+    /**
+     * The tools that take this default and are NOT in the relationship must be
+     * named — all of them, and nothing else.
+     *
+     * WHAT THIS REPLACED. `assertStringContainsString('Bash', $doc)` and the
+     * same for `LspTool`. The census they stood for was CORRECT — constant
+     * users are exactly `{Glob, Grep, Bash, LspTool}` and nudge spenders
+     * exactly `{Glob, Grep, Read}` — but nothing derived it, so a fifth tool
+     * taking this default with no nudge budget would leave the doc-block's
+     * census incomplete with the suite green, in the one file whose stated
+     * thesis is "a figure in a comment is not a measurement".
+     *
+     * THE PREDICATE IS THE ROSTER'S OWN, not a second definition of it.
+     * "Spends a nudge share" is `hasProperty('skillNudge')`, which is the first
+     * gate
+     * {@see \SugarCraft\Crush\Tests\Integration\SkillPathScopingWiringTest}'s
+     * `nudgeSpendRoster()` applies. Re-deriving the BUDGET SHAPE here as well
+     * would give the tree two derivations that can disagree; this one asks only
+     * the question the doc-block's sentence asks.
+     */
+    public function testTheBystanderCensusIsTheOneTheTreeProduces(): void
+    {
+        $users = $this->constantUsers();
+        self::assertNotSame([], $users, 'nothing uses DEFAULT_MAX_OUTPUT_BYTES any more');
+
+        $bystanders = [];
+        foreach ($users as $short) {
+            $class = 'SugarCraft\\Crush\\Tools\\BuiltIn\\' . $short;
+            self::assertTrue(class_exists($class), $class . ' does not exist');
+            if (!(new ReflectionClass($class))->hasProperty('skillNudge')) {
+                $bystanders[] = $short;
+            }
         }
+        sort($bystanders);
+
+        self::assertNotSame(
+            [],
+            $bystanders,
+            'every user of DEFAULT_MAX_OUTPUT_BYTES now spends a nudge share, so the doc-block '
+            . 'paragraph carving out the ones that do not describes an empty set and should say so',
+        );
+
+        $clause = $this->bystanderClause();
+        $named = [];
+        foreach ($this->builtInToolNames() as $short) {
+            if (str_contains($clause, $short)) {
+                $named[] = $short;
+            }
+        }
+        sort($named);
+
+        self::assertSame(
+            $bystanders,
+            $named,
+            'DEFAULT_MAX_OUTPUT_BYTES\'s doc-block carves out a different set of tools than the tree '
+            . 'produces. BOTH directions are the defect: a tool it omits leaves a reader believing '
+            . 'the margin covers a cap it does not, and a tool it adds sends someone looking for a '
+            . 'nudge budget that is there. Derived users: ' . implode(', ', $users) . '.',
+        );
+    }
+
+    /**
+     * Every built-in tool that references `DEFAULT_MAX_OUTPUT_BYTES`.
+     *
+     * TOKEN STREAM, not a text scan: this constant is discussed by name in
+     * `TruncatesOutput`'s own prose and in this test's, and a text scan would
+     * let a doc-block register as a use.
+     *
+     * @return list<string> short class names, sorted
+     */
+    private function constantUsers(): array
+    {
+        $found = [];
+
+        foreach ($this->builtInToolFiles() as $short => $file) {
+            $tokens = array_values(array_filter(
+                \PhpToken::tokenize((string) file_get_contents($file)),
+                static fn (\PhpToken $t): bool => !$t->is([T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]),
+            ));
+            foreach ($tokens as $i => $token) {
+                if ($token->is(T_STRING)
+                    && $token->text === 'DEFAULT_MAX_OUTPUT_BYTES'
+                    && ($tokens[$i - 1]->text ?? '') === '::') {
+                    $found[] = $short;
+                    break;
+                }
+            }
+        }
+        sort($found);
+
+        return $found;
+    }
+
+    /** @return array<string, string> short class name => file */
+    private function builtInToolFiles(): array
+    {
+        $dir = __DIR__ . '/../../src/Tools/BuiltIn';
+        $files = [];
+        foreach ((array) glob($dir . '/*.php') as $file) {
+            if (is_string($file)) {
+                $files[basename($file, '.php')] = $file;
+            }
+        }
+        ksort($files);
+
+        self::assertNotSame([], $files, 'no built-in tools found; the census is broken');
+
+        return $files;
+    }
+
+    /** @return list<string> */
+    private function builtInToolNames(): array
+    {
+        return array_keys($this->builtInToolFiles());
+    }
+
+    /**
+     * The doc-block paragraph that carves out the non-spending users.
+     *
+     * Scoped to the paragraph rather than searched for in the whole doc-block,
+     * because the doc-block names `Grep` and `Glob` several times above as the
+     * tools that DO spend — so a whole-doc-block search for a tool name answers
+     * a different question than the one being asked.
+     */
+    private function bystanderClause(): string
+    {
+        $doc = $this->docBlock();
+        $from = 'NOT EVERY USER OF THIS CONSTANT IS IN THAT RELATIONSHIP';
+        $to = 'the margin says nothing about them.';
+
+        $start = strpos($doc, $from);
+        self::assertNotFalse(
+            $start,
+            "DEFAULT_MAX_OUTPUT_BYTES's doc-block no longer opens its bystander paragraph with "
+            . "\"{$from}\"",
+        );
+        $end = strpos($doc, $to, $start);
+        self::assertNotFalse(
+            $end,
+            "DEFAULT_MAX_OUTPUT_BYTES's doc-block's bystander paragraph no longer ends with "
+            . "\"{$to}\"",
+        );
+
+        return substr($doc, $start, $end - $start + strlen($to));
     }
 
     /**
