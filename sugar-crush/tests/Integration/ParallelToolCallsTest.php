@@ -634,11 +634,20 @@ final class ParallelToolCallsTest extends TestCase
      *
      * {@see CarriesSessionState} promises unknown or malformed keys are never
      * fatal, but nothing enforces that caller-side, and this call sits inside
-     * the reaping generator: an escaping \Throwable would abandon the children
-     * after it (never reaped, payloads never unlinked) and then land in
-     * EngineBackend's turn-level boundary, which discards every sibling result
-     * and all assistant content produced so far. The worst a failed merge may
-     * cost is one announce-once mark.
+     * the reaping generator: an escaping \Throwable abandons the group at this
+     * call and then lands in EngineBackend's turn-level boundary, which
+     * discards every sibling result and all assistant content produced so far.
+     * The worst a failed merge may cost is one announce-once mark.
+     *
+     * WHAT THIS SAID about the children after it: "never reaped, payloads never
+     * unlinked". WHAT IS TRUE NOW: {@see Runtime::executeConcurrently()}'s
+     * `finally` covers a throw unwinding out of the generator exactly as it
+     * covers a consumer walking away (PHP 8.3.6, verified) -- one WNOHANG pass,
+     * then a discard of every settled-but-uncollected payload -- so an
+     * already-exited sibling IS reaped and unlinked. A still-RUNNING one is
+     * not, by design; it is left to {@see ToolIpcFiles::sweep()}. WHY THE POINT
+     * STANDS: the cost of the throw was never the temp files, it is the
+     * discarded turn, and that is undiminished.
      */
     public function testAThrowingSessionStateMergeCostsOnlyThatCallsMark(): void
     {
@@ -1001,6 +1010,74 @@ final class ParallelToolCallsTest extends TestCase
         );
     }
 
+    /**
+     * ...and so does an EXCEPTION unwinding out of the group, which is a
+     * different code path from the one above and the one production actually
+     * takes.
+     *
+     * Destroying an abandoned generator is a refcount event; a throw is a
+     * resume that unwinds. Both end in the same `finally`, but only one of them
+     * was pinned, and the justification in
+     * {@see Runtime::collectChildResult()} -- which is about a merge that
+     * throws INSIDE the generator, not about a consumer that walks away --
+     * rests on this one. `Generator::throw()` injects at the suspended yield,
+     * which is exactly where a throwing `release()` would leave the frame.
+     *
+     * The positive control is the same shape as its neighbour's and for the
+     * same reason: an empty stranded list is worth nothing unless something in
+     * this test has just shown the scanner reporting a real one.
+     */
+    public function testAThrowUnwindingOutOfTheGroupAlsoDiscardsTheUncollectedPayloads(): void
+    {
+        $app = App::new($this->provider, 'gpt-4')->withTools([$this->rendezvousTool()]);
+        $runtime = $this->runtime();
+
+        $method = new \ReflectionMethod($runtime, 'executeToolCalls');
+        $generator = $method->invoke($runtime, [
+            // A group directory each, for the reason the neighbouring test
+            // spells out: with peers=1 a shared directory makes `saw=` a race.
+            $this->rendezvousCall('slow', peers: 1, wait: 0.0, sleep: 0.5, group: 'unwind0'),
+            $this->rendezvousCall('fast1', peers: 1, wait: 0.0, group: 'unwind1'),
+            $this->rendezvousCall('fast2', peers: 1, wait: 0.0, group: 'unwind2'),
+        ], $app, null, null);
+
+        $this->assertSame('saw=1', $generator->current()->content());
+        $this->assertSame(
+            3,
+            $this->reservedRuntimePayloadCount(),
+            'the detector must have had three payloads to be wrong about',
+        );
+
+        $abandoned = $this->strandedRuntimePayloads();
+        $this->assertNotSame(
+            [],
+            $abandoned,
+            'POSITIVE CONTROL: the two siblings\' payloads are uncollected right now and this scanner '
+                . 'must be able to see them -- an empty list here means the detector is dead',
+        );
+
+        $caught = null;
+        try {
+            $generator->throw(new \RuntimeException('the release step blew up'));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertInstanceOf(
+            \RuntimeException::class,
+            $caught,
+            'the finally must not swallow what unwound through it',
+        );
+        $this->assertSame('the release step blew up', $caught->getMessage());
+
+        // Still referenced, so nothing here is destruction doing the work.
+        $this->assertSame(
+            [],
+            $this->strandedRuntimePayloads(),
+            'an exception unwinding through executeConcurrently() must discard every payload past the '
+                . 'release cursor; these were stranded a moment ago: ' . implode(', ', $abandoned),
+        );
+    }
     /**
      * WHAT HAPPENS WHEN `fork()` ITSELF FAILS -- exercised, not described.
      *

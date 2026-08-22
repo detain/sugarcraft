@@ -1062,14 +1062,32 @@ final class Runtime
             // ToolFinished listener: a merge is BOOKKEEPING, not the answer.
             // CarriesSessionState's contract says an unknown or malformed key
             // must never be fatal, but nothing enforces that caller-side, and
-            // an escaping \Throwable here does far more than lose one mark —
-            // it aborts this generator mid-group, so the children after this
-            // one are never reaped and their payloads never unlinked, and it
-            // lands in EngineBackend::runCompleteInChild()'s turn-level
-            // boundary, which discards every sibling result. A failed merge
-            // costs exactly this tool's announce-once mark: the WORST case is
-            // that a nested CLAUDE.md is emitted a second time later in the
-            // session.
+            // an escaping \Throwable here does far more than lose one mark.
+            //
+            // WHAT THIS SAID: that such a throw "aborts this generator
+            // mid-group, so the children after this one are never reaped and
+            // their payloads never unlinked".
+            //
+            // WHAT IS TRUE NOW: executeConcurrently() wraps phases 2-3 in a
+            // `finally`, and a throw unwinding out of this method runs it
+            // (generator semantics verified on PHP 8.3.6, not assumed) -- one
+            // WNOHANG pass, then a discard of every settled-but-uncollected
+            // payload. So a sibling that has ALREADY EXITED is reaped here and
+            // its payload unlinked. What survives the correction is the rest of
+            // the sentence, and it is the part that matters: a sibling still
+            // RUNNING is deliberately neither killed nor waited for, so it and
+            // its payload are left to ToolIpcFiles::sweep(); the group is still
+            // abandoned mid-way, with no result for anything past the release
+            // cursor; and it still lands in
+            // EngineBackend::runCompleteInChild()'s turn-level boundary, which
+            // discards every sibling result AND the assistant content produced
+            // so far.
+            //
+            // WHY THIS STILL EARNS ITS PLACE: the `finally` bounds the mess, it
+            // does not prevent it. Bookkeeping must not be able to cost a turn.
+            // A failed merge costs exactly this tool's announce-once mark: the
+            // WORST case is that a nested CLAUDE.md is emitted a second time
+            // later in the session.
             try {
                 $job['tool']->mergeSessionState($decoded['state']);
             } catch (\Throwable $e) {
