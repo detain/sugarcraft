@@ -79,6 +79,46 @@ trait TruncatesOutput
      * \SugarCraft\Crush\Tools\BuiltIn\Read}'s 1 MiB: Read is a targeted
      * request for one named file, whereas these tools answer open-ended
      * queries whose size the caller cannot predict.
+     *
+     * LOWERING THIS ALSO LOWERS A CEILING SOMEWHERE ELSE, and that is the half
+     * a reader arriving here would otherwise have no way to see. Grep and Glob
+     * spend a {@see \SugarCraft\Crush\Skills\SkillPathNudge::CALLER_BUDGET_DIVISOR}
+     * share of this cap on the path-scoped skill nudge, INSIDE the cap rather
+     * than beside it — so this number is one of the two halves of a
+     * relationship, and the other half is
+     * {@see \SugarCraft\Crush\Skills\SkillPathNudge::maxBytes()}, the largest
+     * nudge that can ever be produced. Below a certain cap the share stops
+     * being able to hold a whole nudge and the model gets a clipped one.
+     * {@see \SugarCraft\Crush\Skills\SkillPathNudge::smallestUnclippedCallerCap()}
+     * IS that cap, priced from the parts rather than written down, and it is
+     * the number to check this one against.
+     *
+     * MEASURED on this tree, PHP 8.3.6, and every figure re-derived rather
+     * than quoted from memory: ceiling 2,636 bytes, divisor 8, so the smallest
+     * unclipped caller cap is 21,088. Against it, this constant's 65,536 is a
+     * margin of 3.11x (Grep and Glob) and Read's 1 MiB is 49.72x. The tree has
+     * DECIDED to keep at least 2.0x, which is roughly room to double
+     * `MAX_ENTRIES` or `MAX_ENTRY_BYTES` without anyone having to reopen a
+     * tool's output cap — so the actionable floor for this constant is 42,176,
+     * not 21,088.
+     *
+     * THE DECISION IS ENFORCED, NOT LEFT AS A NOTE. Both figures are re-derived
+     * by
+     * {@see \SugarCraft\Crush\Tests\Integration\SkillPathScopingWiringTest::testTheShippedCapsClearTheCeilingByTheDecidedMargin()},
+     * which reds at 2.0x while option 1 — bring the nudge back under the
+     * ceiling — is still free, and by
+     * `testEveryShippedNudgeBudgetClearsTheTrackerCeiling()`, which reds at
+     * 1.0x when the clipping actually starts. If you lower this constant and
+     * one of those goes red, nothing is broken yet; you have spent headroom
+     * that was deliberately left, and the cheap answer is to give some back.
+     *
+     * NOT EVERY USER OF THIS CONSTANT IS IN THAT RELATIONSHIP:
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Bash} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} take the same default
+     * and spend no nudge budget, so the margin says nothing about them. It is a
+     * property of the DEFAULT caps of the tools that do, which is also why it
+     * is asserted over the shipped set rather than imposed by construction —
+     * see the reasoning on `CALLER_BUDGET_DIVISOR`.
      */
     private const DEFAULT_MAX_OUTPUT_BYTES = 65536;
 
