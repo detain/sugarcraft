@@ -9690,3 +9690,90 @@ unbounded to 10 MB), **E67** (`SkillRegistry::register()` keys by array key — 
 root cause traced to `Width::truncateAnsi()` in **candy-core**, so the Step points at the foundation lib),
 **E69** (`Width::string()` scores a tab 0 while `Style::render()` expands it to four spaces — a width
 authority disagreeing with the renderer that consumes it).
+
+---
+
+## Round 40 — three lanes, and a scout that refuted the supervisor's own hypothesis
+
+**Base: `8add627b`, floor `8879 / 100396 / 1 skipped / rc 0`**, supervisor-measured in the live tree
+before anything was briefed. Lanes `cmd`, `lsp`, `sglang` were reset from their round-39 branches to
+`8add627b` and re-verified against the concurrency doc's §5.3 checks — reflection resolving *inside*
+the lane, 0 broken symlinks, the 1-skip invariant, and the symlinks-not-followed test PASSING rather
+than skipping. Supervisor scratch names were added to each lane's `.git/info/exclude` first, so §5.2d's
+near-miss (an agent committing the supervisor's own instrumentation, while following its brief exactly)
+cannot recur.
+
+### Lane assignment, and why these three do not collide
+
+- **`cmd` — E66 + E67.** Both live in `src/Skills/`.
+- **`lsp` — E68 + E69.** Both are the same question — `candy-core`'s `Width` disagreeing with the
+  renderer that consumes it — so splitting them would have put two lanes in one file.
+- **`sglang` — the launch-notice migration.** Sole holder of `src/Cli/Bootstrap.php` and `src/Chat.php`,
+  this plan's serialisation bottleneck.
+
+### Two supervisor-measured corrections, made BEFORE briefing
+
+**E67's blocking question was answerable in four greps, and it had been open a round.** The entry was
+recorded at *reasoned-not-verified* strength with its sizing explicitly blocked on *"whether any shipped
+caller passes a list"*. Measured: the only two callers are in `SkillManager::loadAll()`, both taking
+name-keyed arrays from `ForeignSkillDiscovery`, which builds them in `SkillLoader::loadFromDirectory()`
+as `$skills[$skill->name] = $skill` after `withName()`. So auto-invocation is **not** broken in
+production — it is a latent trap, which makes E67 an **S** rather than an unknown. *A finding recorded
+at reduced strength is a debt, and the interest is a round of mis-sizing.*
+
+**"Nine un-migrated launch warnings" was wrong, in the supervisor's own notes.** Measured in
+`src/Cli/Bootstrap.php`: **13** un-migrated `warnPermissionConfig()` / `warnPermissionConfigOnce()` call
+sites, **1** migrated (`reportProjectTierToolRemovals()`), and **4** more launch warnings that bypass the
+seam entirely on raw `fwrite(STDERR, …)` — including *"provider unavailable; falling back to echo"*,
+which is close to the most user-visible warning in the file. §5's defect, in the notes that warn about it.
+
+### 🔴 THE SCOUT REFUTED THE SUPERVISOR — E61's premise did NOT change
+
+The round-39 close recorded a hypothesis: that round 39's hook work *"changes E60's premise"* and that
+E61 might **collapse to an S**. A read-only scout was asked to establish it from the code rather than
+the record, and **proved it FALSE**:
+
+- `git log -S chainBudgetSeconds` on `src/Hooks/HookRegistry.php` returns **one** commit, `995eb257`,
+  which **predates round 39**.
+- Round 39/40's `ScriptHook` commits bound **sizes** (ASK clip, MODIFY ceiling, env-payload transport),
+  not **time**.
+- `ScriptHook` is still the **sole** `implements BoundedHookInterface` in `src/`, and
+  `chainBudgetSeconds()` still accumulates only behind that `instanceof`.
+- Driven through the real `HookRegistry::executeHooks()`: two hand-written 1.5 s hooks ran **3.00 s with
+  no deadline armed**; adding one `ScriptHook` with a 1 s timeout produced a deny at 2.00 s.
+
+**The right disposition is not the one the hypothesis implied.** The S is real, separable and shippable
+today — `HookRegistry::scan()`'s deny string names the timeout sum but neither the hook that spent the
+clock nor the fact that the named hook never ran. But "E61 collapses to an S" would have **lost the
+unbounded-chain finding**, which is the L and is still open. **Schedule the S, keep the L recorded.**
+
+*The rule: a supervisor's hypothesis written into a status block reads, one round later, exactly like a
+measurement. Mark it as a hypothesis or have it settled before it is quoted.*
+
+### What else the scout established for round 41
+
+- **E52 reproduces, and it is bigger than its heading.** Both the entry and the in-code docblock frame it
+  as `CSI 1;5Z` — one shape. Measured, it is the whole **shift-bit-clear family**: `ESC[1;3Z` drops shift
+  identically, as will `;7`/`;9`. Still emitted by nothing in the tree (the only `Z`-final occurrences are
+  three parse sites and one comparison), so severity is unchanged — but **a fix scoped to `1;5` would be
+  wrong**. S, in `candy-core`, no overlap with anything.
+- **E59's Step is confirmed wrong, and worse than recorded.** The round-39 stamp names **two** assertion
+  sites in one test; there are **three**, across **two** tests, including a *negative*
+  `assertStringNotContainsString('Processing:', …)` that will silently pass forever if the substitution
+  misses it. Corrected Step: keep the test's structure (real fork, un-settled frames), replace all three
+  literal anchors with a liveness anchor a real worker can satisfy. **L.**
+- **`statusLine`'s greenfield M holds, and both baits were confirmed baits.**
+  `Chat::budgetStatusLine()` is a private `/budget` formatter; `candy-kit`'s `StatusLine` is a glyph
+  printer. `statusLine` appears **zero** times in `sugar-crush/src/` and `bin/`, and is absent from
+  `LayeredSettings::LAYERED_KEYS` — so a `statusLine:` in `settings.json` is silently dropped today.
+- **Round 41's clean shape: E52 + E61(S) + statusLine.** Only `statusLine` needs `Bootstrap.php` *and*
+  `Chat.php`. Adding E59 is safe **only** if its lane is told to extend the stdin `startup` payload
+  rather than the `ProcessExecutor` constructor — otherwise E59 and `statusLine` both open `Chat.php`
+  and must be serialised.
+
+### Bookkeeping — the round numbering diverged
+
+Lane stamps inside `crush_code_hardening_backlog.md` label round 39's work *"round 40"* and *"round 41"*
+(E60/E65 and E57's F1 follow-up). The **worklog's numbering is the authority**: round 39 is the round that
+landed E63+E64, E60+E65 and E57+E58. This round — E66+E67, E68+E69, launch notices — is **round 40**.
+Corrected in place rather than renumbered, because renumbering a stamp breaks every cross-reference to it.
