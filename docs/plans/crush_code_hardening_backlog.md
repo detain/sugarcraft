@@ -5297,3 +5297,132 @@ kind of edit that should not ride along in a lane about docblocks and pane ancho
 re-running and hoping. Export `$attempts` at abort. Then decide between raising the backoff cap and
 raising the 60 s limit for this one test — and prefer the backoff, because a 60 s limit that is
 routinely brushed is a limit that has stopped meaning anything.
+
+### E81 — `LayeredSettings`' `provider` doc-block credits the palette and omits the command that actually writes it
+
+**Recorded 2026-08-22 by the round-42 lane-a implementer.** Severity: low, doc-only.
+
+**What.** `src/Config/LayeredSettings.php` says the `provider` value comes from "the Ctrl+P palette's
+'Switch Model' action". Verified by following the write, not by reading the neighbouring doc: the
+`/model <name>` slash command routes through `Chat::handleModelCommand()` directly into
+`Chat::selectPaletteProvider()`, which is the site that invokes `onConfigChange('provider', …)`. The
+README's table, which credits `/model`, is the accurate one. Two docs disagree and the less-read one is
+right — the same shape as E74.
+
+**Step.** Name both producers in the doc-block. Pin with a drift test in the family of
+`TrustKeyDocumentationDriftTest` if one can read that doc-block cheaply.
+
+### E82 — three-way drift on what a `settings.json` `theme` actually breaks
+
+**Recorded 2026-08-22 by the round-42 lane-a implementer.** Severity: low, doc-only.
+
+**What.** `LayeredSettings`' doc-block says a project `settings.json` naming `theme` makes `/theme`
+"appear to do nothing at all". `docs/SETTINGS.md` refines this: the theme *repaints immediately*, then
+silently reverts on the next launch — what breaks is **persistence**, not the visible command.
+`SETTINGS.md` is right, because `/theme` mutates the live `Chat`. Round 42 aligned `README.md`;
+**`LayeredSettings`' doc-block still carries the coarser, wrong version.**
+
+**Step.** Align the doc-block to the persistence framing. ⚠️ Related: `docs/SETTINGS.md`'s
+counterexample block still carries no PHP version on its "measured end-to-end" claim (RULE 12), and
+neither do `LayeredSettings` or `Bootstrap::reportProjectTierToolRemovals()`. Nothing there is believed
+version-sensitive — `fnmatch()`'s negated-class support is not new — but an undated figure is how E68
+happened.
+
+### E83 — `README.md` prose is almost entirely unpinned by tests
+
+**Recorded 2026-08-22 by the round-42 lane-a implementer.** Severity: medium as a CLASS, low per claim.
+
+**What.** `docs/PERMISSIONS.md` and `docs/SETTINGS.md` have `TrustKeyDocumentationDriftTest`;
+`README.md` had **nothing** until round 42 added `ReadmeSettingsTierClaimTest`. That absence is exactly
+why E74's false security claim survived two rounds after the source was corrected: the tree agreed with
+itself in three places and disagreed in the one file a user actually reads. The new test covers the
+settings-tier paragraph only. Every other README claim remains unpinned.
+
+**Step.** Inventory the README's checkable assertions (tool roster, key bindings, config precedence,
+the launch-report sample) and pin the ones with a cheap oracle. Prefer structural rules over
+±N-character windows — see round 42's mutation C, which survived because any window wide enough to
+reach the retraction also reached an unrelated "not".
+
+### E84 — the autoload guard leaves stdout empty under `--output-format json`
+
+**Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: low; pre-existing and deliberate.
+
+**What.** `bin/sugarcrush`'s missing-autoloader guard cannot emit the JSON error document, because the
+document's owner — `NonInteractive::emitErrorDocument()` — is itself behind the absent autoloader. So
+`--output-format json` gets an empty stdout and a stderr line. Round 42 *pinned* the behaviour rather
+than leaving it asserted in prose, but it remains a hole in the "exactly one JSON object on stdout"
+contract that machine consumers are told to rely on.
+
+**Step.** Decide whether the guard should hand-roll a minimal JSON document (no autoloader needed —
+`json_encode` is core) or whether the contract should document the exception. Prefer the former: a
+consumer parsing stdout cannot distinguish "empty because the binary died early" from "empty because
+there was nothing to say".
+
+### E85 — `SkillRegistry::getForPaths()` translates `**` with three hand-rolled `str_replace` calls
+
+**Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: medium; pre-existing.
+
+**What.** Globstar support is three textual rewrites (`/**/ → /*/`, `/** → /*`, `/** → ''`) rather than
+a real glob translation. A leading `**` with no slash — `**/*.php`, the form most people write first —
+is not among the three, so it does not match what the author intends. It also weakens the *fixture*
+half of every path-scoping test that uses such a pattern.
+
+**Step.** Replace with a real translation (pattern → regex) or state the supported subset in the
+doc-block and refuse the rest loudly. ⚠️ Whatever lands must be mutation-tested against a pattern
+starting with `**`, since that is the case the current code silently mishandles.
+
+### E86 — the MCP failure notice goes to `error_log()`, whose destination the operator's ini decides
+
+**Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: medium; **functionality**.
+
+**What.** `Bootstrap::tools()`'s McpClient failure path uses `error_log()`. On a box with `error_log`
+pointed at a file, the "MCP config could not be fully started" notice reaches **neither** the terminal
+nor the transcript — the user gets a silently reduced tool set. The call site's own comment argues for
+assertability; it never weighed where the message actually lands.
+
+**Step.** Route it through `Bootstrap::warnPermissionConfigInTranscript()`, which is precisely the seam
+for "the session can no longer do something" — the rule round 42 used to move fifteen other warnings.
+This one qualifies plainly: tools are missing.
+
+### E87 — the `Grep`/`Glob` margin over the nudge ceiling is thin and is not a fixed relationship
+
+**Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: low, but it is a decision nobody
+has made.
+
+**What.** E78 tied the shipped caps to `SkillPathNudge::maxBytes()` (2,636) and measured a 3.1x margin
+for `Grep`/`Glob` (65,536 cap / 8,192 budget). That margin is not structural: `maxBytes()` is
+`MAX_ENTRIES * (MAX_ENTRY_BYTES + 1) + …`, so raising `MAX_ENTRIES` from 8 to 20 takes it 2,636 → 6,248
+and **reds the new ceiling guard without anyone touching a cap**. That is the guard doing its job; the
+unmade decision is what the resolution should be.
+
+**Step.** Decide now, while the arithmetic is fresh: either raise the caps in step with `MAX_ENTRIES`,
+or express the budget as a multiple of `maxBytes()` so the relationship cannot drift. Record which, and
+why, next to the constant.
+
+### E88 — `App\SelectPaneMsg` is a dormant seam with no producer
+
+**Recorded 2026-08-22 by the round-42 lane-c implementer.** Severity: low. **Kept per the never-remove
+rule; recorded so it is not rediscovered as dead code.**
+
+**What.** `App::update()` answers `SelectPaneMsg` with `withPane($msg->pane)`, and
+`App::delegateToChat()` passes Chat's Cmd through to `Program` — so a Cmd from `Chat::selectPane()`
+**would** reach the host. But `grep -c 'new SelectPaneMsg' src/ bin/` is **0**; the five textual hits
+are the class definition and two match arms. The wiring exists on both ends with nothing in between.
+Round 42 documented it in the docblock and pinned it as *deliberately* dormant with
+`testNothingInSrcConstructsASelectPaneMsg()`, so wiring it later is a visible, deliberate act.
+
+**Step.** Decide whether pane clicks should route through it. Wiring is behavioural, not comment-only,
+so it needs its own item and its own tests — do not fold it into a doc round.
+
+### E89 — `RendererTest::testRenderWithDifferentPaneShowsCorrectLabel()` proves less than its name
+
+**Recorded 2026-08-22 by the round-42 lane-c implementer.** Severity: low, test-quality.
+
+**What.** It asserts pane-sensitivity only through the MenuBar's `Currently:` label, and only on an
+**un-hosted** `App`. It would survive mutations M7/M8b/M9 — i.e. it does not pin the thing its name
+claims. Round 42's new `HostedFrameReadsThePaneTest` covers the hosted shape, so the gap is narrowed,
+but the original assertion is still weaker than it reads.
+
+**Step.** Strengthen it to assert on the rendered pane content, or rename it to say what it actually
+checks. A test whose name overstates its coverage is worse than no test, because it stops anyone
+looking.
