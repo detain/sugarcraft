@@ -187,24 +187,44 @@ final class TruncatesOutputNudgeMarginDocTest extends TestCase
      * census incomplete with the suite green, in the one file whose stated
      * thesis is "a figure in a comment is not a measurement".
      *
-     * THE PREDICATE IS THE ROSTER'S OWN, not a second definition of it.
-     * "Spends a nudge share" is `hasProperty('skillNudge')`, which is the first
-     * gate
+     * THE PREDICATE IS THE DOC-BLOCK'S OWN SENTENCE, and getting there took a
+     * mutation. The first version asked `hasProperty('skillNudge')`, which is
+     * the FIRST gate
      * {@see \SugarCraft\Crush\Tests\Integration\SkillPathScopingWiringTest}'s
-     * `nudgeSpendRoster()` applies. Re-deriving the BUDGET SHAPE here as well
-     * would give the tree two derivations that can disagree; this one asks only
-     * the question the doc-block's sentence asks.
+     * `nudgeSpendRoster()` applies — but it is not the whole of it, and the
+     * difference is not academic: `Write` and `Edit` both HOLD a tracker and
+     * call `forPath($path)` with no budget argument at all, so they spend
+     * nothing. Under `hasProperty` they counted as spenders, so a tool in that
+     * shape taking this default would have been dropped from the census
+     * silently — which is the hole this test exists to close, reopened one
+     * layer down. Adding the constant to `Write` SURVIVED for exactly that
+     * reason.
+     *
+     * So the question asked here is the one the sentence asks: does this tool
+     * pass a BUDGET to the tracker? A tool that holds a tracker and calls it
+     * with no second argument spends none, and is a bystander. A tool that
+     * holds a tracker and never calls it at all is unreadable rather than
+     * absent, and reds — `nudgeSpendRoster()` fails loudly on the same shape
+     * for the same reason. What is deliberately NOT re-derived here is the
+     * budget's VALUE (the cap, the divisor, the resulting share): that is the
+     * roster's claim, over the whole shipped set, and a second copy of it is
+     * two guards that can disagree.
      */
     public function testTheBystanderCensusIsTheOneTheTreeProduces(): void
     {
         $users = $this->constantUsers();
         self::assertNotSame([], $users, 'nothing uses DEFAULT_MAX_OUTPUT_BYTES any more');
 
+        $files = $this->builtInToolFiles();
         $bystanders = [];
         foreach ($users as $short) {
             $class = 'SugarCraft\\Crush\\Tools\\BuiltIn\\' . $short;
             self::assertTrue(class_exists($class), $class . ' does not exist');
             if (!(new ReflectionClass($class))->hasProperty('skillNudge')) {
+                $bystanders[] = $short;
+                continue;
+            }
+            if (!$this->passesANudgeBudget($short, (string) file_get_contents($files[$short]))) {
                 $bystanders[] = $short;
             }
         }
@@ -234,6 +254,27 @@ final class TruncatesOutputNudgeMarginDocTest extends TestCase
             . 'the margin covers a cap it does not, and a tool it adds sends someone looking for a '
             . 'nudge budget that is there. Derived users: ' . implode(', ', $users) . '.',
         );
+    }
+
+    /**
+     * Whether $source hands the nudge tracker a byte budget.
+     *
+     * Reds rather than answering false when a tool holds a tracker and never
+     * calls it: that is a tool the ceiling guards have stopped covering while
+     * staying green, and it is the shape `nudgeSpendRoster()` also refuses.
+     */
+    private function passesANudgeBudget(string $short, string $source): bool
+    {
+        self::assertSame(
+            1,
+            preg_match('/skillNudge\?->forPaths?\((.*?)\);/s', $source, $call),
+            $short . ' holds a SkillPathNudge but this test cannot find exactly one '
+            . 'forPath()/forPaths() call in it. Leaving it out is not an option — a tool dropped '
+            . 'here is a tool the bystander census stops covering while staying green.',
+        );
+
+        // A budget is a SECOND argument. `forPath($path)` spends none.
+        return str_contains($call[1], ',');
     }
 
     /**
