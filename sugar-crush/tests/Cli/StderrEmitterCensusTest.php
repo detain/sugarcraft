@@ -219,16 +219,30 @@ final class StderrEmitterCensusTest extends TestCase
      * EVERY SCANNER, RUN AGAINST A SOURCE WHOSE ANSWER IS KNOWN, IN THE SAME
      * SUITE THAT TRUSTS IT ON SOURCES WHOSE ANSWER IS NOT.
      *
-     * The four assertions above are `assertSame(<map>, <scan>)`, which looks
-     * like evidence and is not: a scanner that had been blinded would return
-     * `[]` for every channel and the only thing that notices is a fixture. Round
-     * 44 shipped exactly that failure elsewhere in this tree — a census
-     * asserting "nothing is stale" passed with 18,228 assertions green while the
-     * instrument was dead.
+     * WHAT THIS PARAGRAPH FIRST CLAIMED, and it was wrong in the direction that
+     * matters: "the four assertions above are `assertSame(<map>, <scan>)`, which
+     * looks like evidence and is not — a blinded scanner returns `[]` for every
+     * channel and the only thing that notices is a fixture." MEASURED, by
+     * blinding {@see scan()} (drop every token before classification) and
+     * running `--filter
+     * StderrEmitterCensusTest::testTheDirectFwriteStderrRosterIsUnchanged`
+     * ALONE: `Tests: 1, Assertions: 1, Failures: 1`. The roster assertions are
+     * PRESENCE assertions — they compare against a non-empty map — so a dead
+     * instrument reds them on its own. That is a real difference from an
+     * `assertSame([], …)` census, which is the shape round 44's dead-instrument
+     * failure actually had, and this file does not have it.
      *
-     * The negative rows matter as much as the positive ones: `\STDERR` inside a
-     * comment, and the word inside a string, must NOT be counted, or the
-     * rosters above would be pinning doc-blocks.
+     * WHY THE FIXTURES STILL EARN THEIR PLACE, narrowed to what they buy. FIRST,
+     * they pin the CLASSIFICATION independently of the tree: `direct` and
+     * `indirect` are defined as complements over the `STDERR` constant, and
+     * `\STDERR` inside a comment, inside a doc-block and inside a string must
+     * all count as none of the above. A roster that reds tells you a number
+     * moved; only these rows tell you whether the SCAN moved or the tree did,
+     * and that is the question someone about to bump a roster is asking.
+     * SECOND, they are the only guard on a channel whose expected roster is
+     * empty — there is none today, and the moment one is added (a `php://stderr`
+     * handle, say, expected absent) the `[]` shape and its vacuity arrive with
+     * it.
      *
      * @return iterable<string, array{0: string, 1: string, 2: int}>
      */
