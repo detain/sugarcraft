@@ -29,11 +29,30 @@ namespace SugarCraft\Crush\Diagnostics;
  * has to remember. The `error_log()` copy stays because it is the COMPLETE
  * record: it is unclipped, it survives a sink that overflowed, it is what a
  * `-p` one-shot and a redirected log have, and it costs no model tokens. The
- * transcript copy is clipped and capped because those rows are part of the
+ * transcript copy is clipped and bounded because those rows are part of the
  * CONVERSATION — sent to the model on every subsequent turn — which is the
- * same argument
- * {@see \SugarCraft\Crush\Cli\Bootstrap::LAUNCH_NOTICE_LIMIT} makes for the
- * launch list.
+ * argument {@see \SugarCraft\Crush\Cli\Bootstrap::LAUNCH_NOTICE_LIMIT}
+ * makes for the launch list.
+ *
+ * "BOUNDED" AND NOT "CAPPED", AND THE DIFFERENCE FROM THE LAUNCH LIST IS REAL.
+ * WHAT THIS SAID: "clipped and capped … the same argument LAUNCH_NOTICE_LIMIT
+ * makes". WHAT IS TRUE NOW, checked at source rather than inferred from the
+ * constant's name: `LAUNCH_NOTICE_LIMIT` is a SESSION cap — the launch list
+ * stops at 24 and synthesises one overflow row — whereas here the three bounds
+ * are per-ROW ({@see MAX_CHARS}), per-BATCH ({@see NOTICE_LIMIT}, applied by
+ * {@see drain()}) and, on the array backend only, per-QUEUE (`NOTICE_LIMIT`
+ * again, applied by {@see record()}). On the TRANSPORT backend — the one an
+ * interactive launch uses — `record()` returns before it ever reaches that
+ * check, so the only limit on how many rows a session can accumulate is the
+ * kernel send buffer (measured at 167 in the transport paragraph below) and
+ * `drain()` hands the conversation up to `NOTICE_LIMIT` of them per tick. A
+ * generation with N malformed invokes therefore puts N rows in the transcript,
+ * each resent on every later turn. WHY THE COMPARISON STILL EARNS ITS PLACE:
+ * the ARGUMENT is the same one — a transcript row is a recurring token cost,
+ * not a line on a terminal — and it is why `MAX_CHARS` and the per-batch bound
+ * exist at all. It is the SCOPE of the two caps that differs, and a session
+ * cap here is an open design question rather than an oversight: unlike the
+ * launch list, this inbox has no point at which it is known to be complete.
  *
  * WHY IT IS STATIC, WHICH IS NOT LAZINESS. Two of the five emitter classes
  * E171 names are `final readonly`

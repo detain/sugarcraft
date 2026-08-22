@@ -293,6 +293,17 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * the ORDER, and that the notice tick is a real interval rather than a
      * busy loop. Read off the live `Subscriptions` the runtime builds, not off
      * the constants, so a tick wired to the wrong constant also reds.
+     *
+     * WHAT THIS DELIBERATELY DOES NOT CATCH, said here so nobody reads the
+     * green as an endorsement: there is no UPPER bound. MEASURED — 30.0 still
+     * passes this test, because 30.0 is still slower than 0.1. A seam nobody
+     * sees for thirty seconds is useless, and the doc-block's own reasoning
+     * ("half a second later it reads identically") plainly does not stretch
+     * that far — but every candidate ceiling is as much a judgement call as
+     * the interval itself, and a ceiling picked to make this sentence true
+     * would be the literal pin this test exists to avoid, wearing a
+     * comparison operator. What IS caught: an inversion, a zero, and the tick
+     * wired to the wrong constant (all three MEASURED by mutation).
      */
     public function testTheNoticePollIsSlowerThanTheToolEventPollAsItsDocBlockClaims(): void
     {
