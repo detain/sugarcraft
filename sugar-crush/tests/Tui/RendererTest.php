@@ -309,13 +309,19 @@ final class RendererTest extends TestCase
             'this needle also matches the chat frame, so it pins chrome rather than the pane',
         );
 
+        // `(tool history empty)` and not ToolsPane's ` tools ` TITLE, which is
+        // what this assertion first used: a title needle carrying its own
+        // padding is a change-detector waiting for a restyle, and it sits one
+        // space away from the `[Tools]` menu-bar caption this test is trying to
+        // distinguish itself from. The empty-state string is body content, has
+        // no whitespace contract, and mirrors `(no skills enabled)` above.
         $this->assertStringContainsString(
-            ' tools ',
+            '(tool history empty)',
             $tools,
             'Pane::Tools renders the caption but not ToolsPane itself',
         );
         $this->assertStringNotContainsString(
-            ' tools ',
+            '(tool history empty)',
             $chat,
             'this needle also matches the chat frame, so it pins chrome rather than the pane',
         );
