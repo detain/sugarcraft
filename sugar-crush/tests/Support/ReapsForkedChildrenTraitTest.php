@@ -80,10 +80,22 @@ final class ReapsForkedChildrenTraitTest extends TestCase
 
         $this->assertTrue($this->stillThere($pid), 'setup: the sleeper must be alive before the reap');
 
+        $started = microtime(true);
         $killed = $this->reapTrackedForkedChildren(graceSeconds: 0.05);
+        $elapsed = microtime(true) - $started;
 
         $this->assertSame([$pid], $killed, 'the reaper must report the pid it had to kill');
         $this->assertFalse($this->stillThere($pid), 'the tracked survivor is still running after the reap');
+
+        // THE SIGNAL, not merely the wait. Without it the reaper's final
+        // blocking pcntl_waitpid() would still leave `killed` and `stillThere`
+        // reading exactly like a kill - it would just take the sleeper's full
+        // 30 seconds to say so.
+        $this->assertLessThan(
+            5.0,
+            $elapsed,
+            'the reaper waited the survivor out instead of signalling it',
+        );
     }
 
     /**
