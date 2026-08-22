@@ -164,6 +164,45 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
             '<?php Bootstrap::backend($r, consolePermissionPrompt: false);',
             0,
         ];
+
+        // THE SHAPES THE SEARCH USED TO ABANDON. Each of these puts the flag
+        // after some OTHER named argument, which is the arrangement PHP forces
+        // as soon as one argument is named — and each returned a silent zero
+        // until the search stopped giving up at the first unfamiliar name.
+        yield 'the flag named, after two other named arguments' => [
+            'true',
+            '<?php Bootstrap::backend($r, skills: null, gate: null, consolePermissionPrompt: true);',
+            1,
+        ];
+        yield 'the flag named, with the first argument named too' => [
+            'true',
+            '<?php Bootstrap::backend(root: $r, consolePermissionPrompt: true);',
+            1,
+        ];
+        yield 'the flag named on backendFor(), after another named argument' => [
+            'true',
+            '<?php Bootstrap::backendFor($p, root: $r, consolePermissionPrompt: true);',
+            1,
+        ];
+        yield 'a forwarded flag named after another named argument' => [
+            'forwarded',
+            '<?php self::backend($r, skills: $s, consolePermissionPrompt: $flag);',
+            1,
+        ];
+        yield 'another named argument, and no flag at all' => [
+            'true',
+            '<?php Bootstrap::backend($r, gate: $g);',
+            0,
+        ];
+        // Not reachable through the two real signatures — their last parameter
+        // IS the flag — so this states positively what the positional read does
+        // when some other name occupies that slot: answers null, rather than
+        // handing classify() a `name: value` triple and throwing.
+        yield 'some other named argument occupying the flag\'s slot' => [
+            'true',
+            '<?php $x->backend($a, $b, $c, somethingElse: $d);',
+            0,
+        ];
         yield 'an omitted flag' => ['true', '<?php Bootstrap::backend($root);', 0];
         yield 'a forwarded flag' => ['forwarded', '<?php self::backendFor($n, $r, $s, $g, $flag);', 1];
         yield 'a forwarded flag is not a literal true' => [
@@ -234,6 +273,22 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
         $this->expectExceptionMessage('consolePermissionPrompt');
 
         self::scan('true', '<?php Bootstrap::backend($r, null, null, $a ? true : false);');
+    }
+
+    /**
+     * ...and named, which is the spelling the search used to walk past.
+     *
+     * Separate from the positional case above because the two reach
+     * {@see classify()} down different arms: one through the name loop, one
+     * through the positional read. Before the fail-open was closed this source
+     * did not throw at all — it answered zero.
+     */
+    public function testTheScannerRedsOnANamedFlagShapeItCannotRead(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('consolePermissionPrompt');
+
+        self::scan('true', '<?php Bootstrap::backend($r, skills: null, consolePermissionPrompt: $a ? true : false);');
     }
 
     /**
@@ -323,31 +378,57 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
     {
         $arguments = self::topLevelArguments($significant, $open);
 
-        foreach ($arguments as $index => $argument) {
-            $named = \count($argument) >= 2
-                && \is_array($argument[0])
-                && $argument[0][0] === T_STRING
-                && $argument[0][1] === 'consolePermissionPrompt'
-                && $argument[1] === ':';
-
-            if ($named) {
+        // EVERY argument is examined before the positional read, and the search
+        // does not stop at the first name it does not recognise. WHAT THIS DID:
+        // meeting any named argument at or before $position, it returned null —
+        // "the flag is not passed" — without ever looking at the slots after it.
+        // WHY THAT WAS WRONG: PHP requires every argument following a named one
+        // to be named too, so `backend($r, skills: null, gate: null,
+        // consolePermissionPrompt: true)` puts the flag in exactly the place
+        // that early return refused to read. The guard failed OPEN on the one
+        // event it exists to catch, and `src/` writes named arguments freely —
+        // `Bootstrap::chat()`'s own `new Chat(…)` is named throughout.
+        foreach ($arguments as $argument) {
+            if (self::argumentName($argument) === 'consolePermissionPrompt') {
                 return self::classify(\array_slice($argument, 2));
-            }
-
-            // A named argument anywhere means every LATER slot is named too, so
-            // the positional read below would be answering about the wrong one.
-            if (
-                \count($argument) >= 2
-                && \is_array($argument[0])
-                && $argument[0][0] === T_STRING
-                && $argument[1] === ':'
-                && $index <= $position
-            ) {
-                return null;
             }
         }
 
-        return isset($arguments[$position]) ? self::classify($arguments[$position]) : null;
+        $positional = $arguments[$position] ?? null;
+        if ($positional === null) {
+            return null;
+        }
+
+        // A NAMED argument sitting in the flag's positional slot is not the
+        // flag: the loop above has already established it is not passed by
+        // name, so it is not passed at all. Reading this slot positionally
+        // would hand classify() a `name: value` triple and throw on a call
+        // that is simply using the parameter's default.
+        if (self::argumentName($positional) !== null) {
+            return null;
+        }
+
+        return self::classify($positional);
+    }
+
+    /**
+     * The parameter name this argument is passed under, or null when it is
+     * positional.
+     *
+     * A named argument is `T_STRING ':' …`, and nothing else in an argument
+     * position lexes that way — `COND ?: $x` puts a `'?'` between the two, and
+     * `COND ? $a : $b` starts with the condition rather than with the colon's
+     * left neighbour. Checked on PHP 8.3.6, the only version on this box.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $argument
+     */
+    private static function argumentName(array $argument): ?string
+    {
+        if (\count($argument) < 3 || !\is_array($argument[0])) {
+            return null;
+        }
+
+        return $argument[0][0] === T_STRING && $argument[1] === ':' ? $argument[0][1] : null;
     }
 
     /**
