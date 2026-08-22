@@ -402,6 +402,42 @@ final class SkillPathNudgeTest extends TestCase
     }
 
     /**
+     * The `>` in `$used + $cost + $reserve > $room` and not `>=`: a budget
+     * that fits the nudge EXACTLY has to buy it, not round it away.
+     *
+     * MEASURED at f8272f8f on PHP 8.3.6, `>` -> `>=` survived this whole file
+     * (19 tests), SkillPathScopingTest and GrepInstructionWiringTest alike.
+     * {@see testTheNudgeNeverExceedsTheBudgetItIsGiven()} bounds the nudge
+     * from ABOVE and nothing bounded it from below, so shaving one byte off
+     * what the tracker is willing to spend cost nothing here — and it costs
+     * the callers something real: Grep, Glob and Read each hand over a
+     * computed share of their own cap, and a tracker that refuses a share the
+     * nudge fits inside defers a skill for one more tool call for no reason.
+     *
+     * `/src/App.php` matches php-audit and not py-lint, so $total is 1, the
+     * deferred-note reserve is 0 by construction, and the floor is the nudge's
+     * own length with nothing else mixed into it.
+     */
+    public function testTheSmallestBudgetThatBuysANudgeIsExactlyWhatThatNudgeCosts(): void
+    {
+        $floor = null;
+        for ($budget = 1; $budget <= SkillPathNudge::maxBytes(); $budget++) {
+            if (SkillPathNudge::new($this->registry())->forPath('/src/App.php', $budget) !== null) {
+                $floor = $budget;
+                break;
+            }
+        }
+
+        self::assertNotNull($floor, 'no budget up to the class ceiling produced a nudge');
+        self::assertSame(
+            $floor,
+            strlen((string) SkillPathNudge::new($this->registry())->forPath('/src/App.php', $floor)),
+            'the smallest budget that buys a nudge must be exactly what that nudge costs; one byte more '
+            . 'and forPaths() is refusing a budget the nudge fits inside',
+        );
+    }
+
+    /**
      * A budget too small for one entry surfaces nothing and SPENDS nothing, so
      * the next call with room still announces the skill. Returning a nudge no
      * one can afford, or burning the mark on one, are the two wrong answers.

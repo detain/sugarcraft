@@ -408,9 +408,22 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // behind, and it emits NOTHING when the output already ends on a
         // newline — a path list always does. The nudge's own append is
         // `$output .= "\n" . $nudge`, unconditional, so this reservation is
-        // EXACT where {@see \SugarCraft\Crush\Tools\BuiltIn\Grep}'s
-        // identically-shaped one (which really does go through separated()) is
-        // an over-reservation by a byte.
+        // EXACT here on every call.
+        //
+        // AND SAYING THE SAME OF {@see \SugarCraft\Crush\Tools\BuiltIn\Grep}
+        // WOULD BE WRONG IN THE DANGEROUS DIRECTION. Grep's identically-shaped
+        // reservation really does go through separated(), which emits its
+        // newline only when the content does NOT already end on one — and
+        // Grep's content is a hit list the cap CUTS, so the cut lands
+        // mid-line at most caps and on a newline at the rest. Grep's byte is
+        // therefore EXACT wherever the cut misses a newline and spare only
+        // where it hits one; it is not "an over-reservation" and removing it
+        // is a reachable cap over-run, not a tidy-up. MEASURED at f8272f8f on
+        // PHP 8.3.6, a 41-hit `*.zzz.php` fixture under sys_get_temp_dir()
+        // swept one cap at a time from 200 to 6,000: Grep as shipped over-ran
+        // no cap (56 saturating caps); with its `+ 1` dropped, cap 3,037
+        // returned 3,038 bytes. That cap moves with the root's length, like
+        // the one below.
         // WHY THIS STILL EARNS ITS PLACE: exact means the byte is load-bearing.
         // Drop it and the result overruns its own cap by one on the single cap
         // where truncateOutput() hands the list back saturating $bodyCap
@@ -425,6 +438,22 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // max(1, ...) below and not the raw subtraction: 0 is
         // truncateOutput()'s "no cap" sentinel, so a cap the nudge alone
         // exceeds would hand the list an UNBOUNDED budget.
+        //
+        // THAT STATE IS UNREACHABLE WHILE THE SHARE IS AN EIGHTH, and saying
+        // so is part of the guard: a clamp whose knife-edge nobody can name is
+        // one a later reader deletes. forPaths() never returns more than the
+        // budget it was handed, so strlen($nudge) <= intdiv(cap, 8) and the
+        // subtraction is at least 7/8ths of the cap less one — and for the
+        // caps 1 and 2 where an eighth is 0 no nudge is built at all, so
+        // $nudgeCost is 0. MEASURED at f8272f8f on PHP 8.3.6: replacing
+        // `max(1, $this->maxOutputBytes - $nudgeCost)` with the raw
+        // subtraction left SkillPathScopingTest and ToolOutputBudgetTest green
+        // (43 tests together). It is KEPT because a guarantee that holds by
+        // accident of one divisor is not a guarantee — and the divisor is now
+        // itself pinned, by SkillPathScopingTest::
+        // testGlobSpendsExactlyAnEighthOfMaxOutputBytesOnTheSkillNudge(),
+        // which is what turns "nobody has changed it" into "changing it fails
+        // something".
         $nudgeCost = $nudge === null ? 0 : strlen($nudge) + 1;
         $bodyCap = $this->maxOutputBytes > 0
             ? max(1, $this->maxOutputBytes - $nudgeCost)

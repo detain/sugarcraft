@@ -4330,7 +4330,9 @@ these against the E66 fix; the supervisor reproduced them and fixed the two bloc
 `Read` guard and the wrong threshold figures above) in the same round. These three are recorded instead:
 
 - **E70 — `GrepInstructionWiringTest::testASkillIsAnnouncedForEveryHitTheModelCanSeeAtEveryCap` is now
-  violable.** That test asserts the law `!$visible || $announced`. MEASURED on the round-40 branch:
+  violable.** *(That method no longer exists. It was renamed and restructured in f8272f8f to
+  `::testTheAnnounceOnceMarkIsSpentOnlyOnAHitTheModelWasToldAbout`, which is where the retitled law
+  and the derived-threshold sweep now live.)* That test asserts the law `!$visible || $announced`. MEASURED on the round-40 branch:
   with 1 hit file and a skill carrying a 400-byte description, at caps 1,000 / 1,250 / 1,500 / 2,000 /
   3,000 the hit path **is** in the 62-byte result and the skill is **never** announced — the eighth
   cannot hold the entry. It flips true at 3,500. With the shipped 30-byte description the dead band is
@@ -4348,6 +4350,43 @@ these against the E66 fix; the supervisor reproduced them and fixed the two bloc
   claim that "a long session pays nothing per tool call" once everything is announced is FALSE in that
   case. Driven: two consecutive `forPath()` calls both return null, `announced()` stays `[]`, and the
   registry is walked in full each time. Pre-existing; surfaced by the diff's prose.
+
+- **CLOSED 2026-08-22 (round 41, lane c: f8272f8f + this round's fix pass).** All three shipped.
+  - **E70.** The old law's fixture could not reach its own boundary and its failure message asserted
+    the opposite of the truth: `SkillPathNudge::forPaths()` marks only the entries it EMITS, so an
+    unaffordable nudge is DEFERRED, not retired. Replaced by
+    `::testTheAnnounceOnceMarkIsSpentOnlyOnAHitTheModelWasToldAbout` (mark/emit law + the qualified
+    old law, swept over a 0-hit and a 200-hit fixture so all three regimes are reached, then bracketed
+    at ±1 byte on the derived `8 * floor` boundary because the 250-byte sweep step steps clean over
+    the window where an eighth and a ninth disagree) and
+    `::testACapTooTightForTheNudgeDefersTheSkillRatherThanRetiringIt`. The falsified sentence in
+    `Grep::execute()`'s nudge-append comment is rewritten in place, not deleted.
+  - **E71.** Pinned: Read's eighth
+    (`SkillPathScopingTest::testReadSpendsExactlyAnEighthOfMaxBytesOnTheSkillNudge`), Glob's eighth
+    (`::testGlobSpendsExactlyAnEighthOfMaxOutputBytesOnTheSkillNudge`), Glob's `+1`
+    (`::testGlobsNudgeReservationHoldsTheResultInsideTheCapAtSaturation`) and Grep's `+1`
+    (`GrepInstructionWiringTest::testGrepsNudgeReservationHoldsTheResultInsideTheCapAtSaturation`).
+    Every threshold is derived from `SkillPathNudge`'s own pricing at runtime, never written down.
+    ⚠️ **Grep's `+ 1` is NOT an over-reservation** — a comment written in f8272f8f said it was.
+    `separated()` emits its newline whenever the cut does not land on one, which a byte-capped hit
+    list mostly does not, so the byte is exact there and spare only at the caps where it does.
+    MEASURED on PHP 8.3.6 over a 41-hit fixture, caps 200–6,000: shipped Grep over-ran nothing;
+    with the `+ 1` dropped, cap 3,037 returned 3,038 bytes.
+  - **E72.** `hasPending()` now applies `isAutoInvocable()`. Both halves of its skip are pinned —
+    the auto-invocable half by `SkillPathScopingTest::testASkillTheModelMayNotInvokeIsNotPending`,
+    the `paths === []` half by `::testTheGuardClosesOnceEveryAnnounceableSkillIsAnnounced`, whose
+    fixture now carries a path-less skill (deleting that half of the guard reproduces E72's exact
+    symptom through the ordinary case).
+  - **Also pinned this round:** `forPaths()`'s strict `>` against `>=`
+    (`SkillPathNudgeTest::testTheSmallestBudgetThatBuysANudgeIsExactlyWhatThatNudgeCosts`), and
+    Glob's `max(1, …)` guard is documented as unreachable-while-the-share-is-an-eighth rather than
+    left implying a live knife-edge. `forPaths()`'s deferred-note `$reserve` was reported as unpinned
+    by review but is NOT: `SkillPathNudgeTest::testTheNudgeNeverExceedsTheBudgetItIsGiven` kills
+    `$reserve = 0` (budget 169 returns 246 bytes).
+  - **Still open, deliberately:** the shipped `Bootstrap` caps (1 MB / 65,536 / 65,536) clear the
+    166–174-byte nudge floor by three orders of magnitude, so E70 is not live in production — and
+    nothing asserts that. A Bootstrap-owning lane should add
+    `intdiv(shippedCap, 8) >= SkillPathNudge::maxBytes()`.
 
 The `Grep::execute()` cross-reference is corrected from E57 to E66, and the two comments in `Grep` and
 `Glob` that described the nudge as living outside the cap are rewritten. `sugar-crush/docs/SKILLS.md`'s

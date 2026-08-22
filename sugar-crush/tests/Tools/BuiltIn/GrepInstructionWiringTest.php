@@ -351,8 +351,19 @@ final class GrepInstructionWiringTest extends TestCase
      * since that prefix is repeated on every hit line, so the sweep below
      * steps in 250s across a range an order of magnitude wider than the band
      * rather than naming caps inside it.
-     */
-    /**
+     *
+     * A COARSE STEP IS THE RIGHT TOOL FOR THAT BAND AND THE WRONG ONE FOR THE
+     * DIVISOR, and the bracket at the foot of this test exists because the two
+     * were confused. The caps at which "an eighth affords the entry" and "a
+     * ninth does not" disagree are 8*$floor .. 9*$floor - 1 — 1,328 to 1,493
+     * with the 166-byte $floor MEASURED at f8272f8f on PHP 8.3.6 — and a
+     * 250-byte step lands on 1,250 and then 1,500, stepping clean over the
+     * whole window. MEASURED at f8272f8f: changing Grep's
+     * `intdiv($this->maxOutputBytes, 8)` to `9` left this entire file green.
+     * So the boundary is bracketed at plus and minus one byte AFTER the sweep,
+     * the way {@see SkillPathScopingTest::testReadSpendsExactlyAnEighthOfMaxBytesOnTheSkillNudge()}
+     * already does for Read.
+     *
      * WHAT THIS TEST ASSERTED: `!$visible || $announced` at every cap — "a
      * skill is announced for every hit the model can see" — with the failure
      * message "announce-once means it will not be announced again this
@@ -361,8 +372,11 @@ final class GrepInstructionWiringTest extends TestCase
      * WHAT IS TRUE NOW: the law is VIOLABLE and the message was wrong, both
      * MEASURED at ae30fee5 (E70). The nudge is given an eighth of the cap, and
      * an eighth of a small cap cannot hold even the header, footer and one
-     * entry. Over a fixture of ONE hit — `sub/target.zzz.php`, a 63-byte
-     * result — with the shipped 19-byte description the hit is in the result
+     * entry. Over a fixture of ONE hit — `sub/target.zzz.php`, whose result is
+     * a single hit line and so moves with the root's length: 75 bytes MEASURED
+     * at f8272f8f under the 38-byte root this fixture builds on this box
+     * (`sys_get_temp_dir()` + `/crush-grep-wiring-` + 12 hex digits + `/r0`).
+     * With the shipped 19-byte description the hit is in the result
      * and `zzz-audit` is silent at caps 1,000 and 1,250, flipping at 1,500;
      * with a 400-byte description the dead band runs 1,000 to 3,250 and flips
      * at 3,500.
@@ -384,8 +398,9 @@ final class GrepInstructionWiringTest extends TestCase
      * 2. Whenever the eighth CAN afford the entry, a visible hit is announced.
      *    The threshold is derived from the tracker rather than named, so this
      *    is the qualified form of the old law: true where it is true, and
-     *    asserted from BOTH sides across the boundary rather than only above
-     *    it.
+     *    asserted from BOTH sides AT the boundary — the two caps one byte
+     *    apart that straddle it — rather than only at whichever caps the
+     *    sweep's step happens to land on.
      *
      * Both are swept over two fixtures, because no single one produces all
      * three regimes: without competing hits the target is visible at every cap
@@ -451,6 +466,27 @@ final class GrepInstructionWiringTest extends TestCase
         self::assertTrue($seenVisibleAnnounced, 'the sweep must include caps where the hit survives and is announced');
         self::assertTrue($seenVisibleDeferred, 'the sweep must include the dead band: the hit is visible and the entry does not fit');
         self::assertTrue($seenClippedAnnounced, 'the sweep must include caps where the clip dropped the hit and the skill was announced anyway');
+
+        // THE DIVISOR ITSELF, bracketed at the byte. The sweep above steps in
+        // 250s while the window where an eighth and a ninth disagree is
+        // 8*$floor .. 9*$floor - 1, so the sweep alone can never see the
+        // divisor change — see this method's doc-block for that measurement.
+        // $floor is the tracker's own price for one entry, so these two probes
+        // move with SkillPathNudge's pricing and pin only Grep's share.
+        $oneHit = $this->fixture(0);
+        $threshold = 8 * $floor;
+
+        self::assertStringContainsString(
+            'zzz-audit',
+            $this->grepIn($oneHit, new Grep($oneHit, $threshold, skillNudge: $this->zzzNudge())),
+            "cap {$threshold}: an eighth is exactly the {$floor}-byte floor, so the entry fits and must be announced",
+        );
+        self::assertStringNotContainsString(
+            'zzz-audit',
+            $this->grepIn($oneHit, new Grep($oneHit, $threshold - 1, skillNudge: $this->zzzNudge())),
+            'one byte lower an eighth is one byte short of the floor, so nothing may be emitted — without this '
+            . 'half of the bracket every divisor larger than 8 passes too',
+        );
     }
 
     /**
@@ -476,6 +512,63 @@ final class GrepInstructionWiringTest extends TestCase
         $roomy = $this->grepIn($root, new Grep($root, 12000, skillNudge: $nudge));
         self::assertStringContainsString('zzz-audit', $roomy, 'the deferred skill announces on the next call with room');
         self::assertSame(['zzz-audit'], $nudge->announced());
+    }
+
+    /**
+     * The `+ 1` in {@see Grep::execute()}'s
+     * `$nudgeCost = $nudge === null ? 0 : strlen($nudge) + 1;` reserves the
+     * newline `separated()` puts between the hit list and the nudge, and it is
+     * LOAD-BEARING rather than the spare byte it was described as one file
+     * over.
+     *
+     * `separated()` emits nothing when the content already ends on a newline,
+     * so the reservation is EXACT wherever the cap's cut lands mid-line and
+     * spare only where it lands on one — and a hit list cut by a byte cap
+     * lands mid-line at most caps. That is why {@see
+     * \SugarCraft\Crush\Tools\BuiltIn\Glob}'s comment on its own
+     * identically-shaped reservation had to stop calling this one "an
+     * over-reservation by a byte". MEASURED at f8272f8f on PHP 8.3.6 over a
+     * 41-hit `*.zzz.php` fixture, caps 200 to 6,000 one at a time: Grep as
+     * shipped over-ran no cap; with the `+ 1` dropped, cap 3,037 returned
+     * 3,038 bytes.
+     *
+     * One over-running cap out of the 5,801 swept, so the cap is DERIVED here
+     * and not sampled. It is one byte under the length of the UNCAPPED result:
+     * at that cap $bodyCap is exactly the whole hit list, and the separator is
+     * then the only byte nothing has paid for. Both sides are swept because
+     * the unmutated saturation and the mutated over-run are one byte apart and
+     * a probe at either one misses the other. The figure moves with
+     * `sys_get_temp_dir()`, which is why it is measured rather than written
+     * down.
+     */
+    public function testGrepsNudgeReservationHoldsTheResultInsideTheCapAtSaturation(): void
+    {
+        $root = $this->fixture(200);
+
+        $uncapped = $this->grepIn($root, new Grep($root, 0, skillNudge: $this->zzzNudge()));
+        self::assertStringContainsString(
+            '<system-reminder>',
+            $uncapped,
+            'the fixture must produce a nudge, or there is no reservation under test',
+        );
+        $exact = strlen($uncapped);
+
+        $sawSaturation = false;
+        for ($cap = $exact - 8; $cap <= $exact + 8; $cap++) {
+            $length = strlen($this->grepIn($root, new Grep($root, $cap, skillNudge: $this->zzzNudge())));
+            self::assertLessThanOrEqual(
+                $cap,
+                $length,
+                "cap {$cap}: the result overran its own cap by " . ($length - $cap) . ' byte(s)',
+            );
+            $sawSaturation = $sawSaturation || $length === $cap;
+        }
+
+        self::assertTrue(
+            $sawSaturation,
+            'the window must contain the cap the hit list saturates exactly, or the sweep never reached the '
+            . 'boundary the reserved byte exists for',
+        );
     }
 
     /**
