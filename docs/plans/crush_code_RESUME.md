@@ -8,13 +8,28 @@ Nothing here depends on a prior conversation's context.
 
 ## ⏳ ROUND 47 IS IN FLIGHT RIGHT NOW — read this before starting anything
 
-**Launched 2026-08-22 from master `7af5293b`, tree clean.** Run `wf_59d605f0-d50` (task `wt49qnf18`),
-9 agents, three lanes × implement → adversarial review → fix, concurrency 3.
+**Launched 2026-08-22 from master `7af5293b`, tree clean. RELAUNCHED after a session limit.** Current run
+`wf_0cb30fc8-924` (task `wy3wyrw8w`), 9 agents, three lanes × implement → adversarial review → fix.
 
-**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-47-wf_59d605f0-d50.js`
+🔴 **THE FIRST LAUNCH (`wf_59d605f0-d50`) DIED WITH 0 OF 9 AGENTS DONE — BUT ALL THREE IMPLEMENTERS HAD
+COMMITTED BEFORE DYING** (E190, now observed on three lanes at once). Lanes `a` and `b` also had
+uncommitted work on disk; the supervisor inspected it, confirmed it was **real in-progress work and NOT a
+mutation** (a 269-line end-to-end delivery test; +101 lines of E178 work on `WorkflowEngine.php`), and
+committed it under messages beginning `SALVAGE (unverified)`. ⚠️ **Round 45's answer to a dirty lane was
+to revert; that does not make revert the answer. Inspect first — reverting here would have destroyed
+~370 lines of deliberate work.**
+
+Lane HEADs when the relaunch started: `a` `cfbe81e8` · `b` `70b560c5` · `c` `48bce8ec` — all ahead of the
+base, all clean. Because 0 agents had completed, **nothing was cached**, so the script was RELAUNCHED
+rather than resumed, and improved first: the implement prompt now opens with a section telling each agent
+its lane already contains a killed predecessor's work, to read and mutate it rather than redo or trust it,
+and to separate inherited from authored work in its report.
+
+**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-47-wf_0cb30fc8-924.js`
 (copied there deliberately — the scratchpad copy does not survive a session end).
 🔴 **If a limit kills agents mid-round, RESUME, do not relaunch:**
-`Workflow({scriptPath, resumeFromRunId: 'wf_59d605f0-d50'})`. This has now worked twice.
+`Workflow({scriptPath, resumeFromRunId: 'wf_0cb30fc8-924'})`. This has worked twice. ⚠️ **But if ZERO
+agents completed, there is no cache to preserve — relaunch instead, and improve the brief first.**
 
 **Base floor `9378 / 131610 / 1 / rc 0` was measured AT `7af5293b` itself** (E167), and the briefs say so.
 
