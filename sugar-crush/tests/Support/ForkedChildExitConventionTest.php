@@ -64,13 +64,20 @@ final class ForkedChildExitConventionTest extends TestCase
             . 'termios case specifically. Rewriting it to exitNow() would delete the test.',
 
         'Integration/WorkflowResumptionTest.php' =>
-            'RECORDED OPEN, and NOT closable from inside tests/. Both children here are driving '
-            . 'WorkflowEngine\'s real SIGTERM handler, which itself ends in a plain '
-            . '`exit($signo === SIGINT ? 130 : 143)` (src/Workflows/WorkflowEngine.php) - that is '
-            . 'the shape the PASSING path takes. The bare `exit(99)`/`exit(98)` the scanner sees '
-            . 'are only the unreachable "the handler did not fire" sentinels beside it. Converting '
-            . 'the sentinels alone would turn this row green while leaving the path it stands for '
-            . 'entirely untouched, which is worse than the row.',
+            'DELIBERATE, and REWRITTEN once (E178). WHAT IT SAID: "recorded open, and not '
+            . 'closable from inside tests/ - both children drive WorkflowEngine\'s real SIGTERM '
+            . 'handler, which itself ends in a plain exit(), so converting the sentinels alone '
+            . 'would green the row while leaving the path it stands for untouched." WHAT IS TRUE '
+            . 'NOW: the handler\'s FORKED-CHILD branch is ForkedChild::exitNow(); its other '
+            . 'branch is a plain exit() on purpose, because it only runs in the process that '
+            . 'installed the handler - the live TUI - whose shutdown sequence is what restores '
+            . 'the terminal and stops the MCP servers. WHY THIS STILL EARNS ITS PLACE: the two '
+            . 'sites the scanner sees here are the `exit(99)`/`exit(98)` SENTINELS, and they are '
+            . 'now load-bearing rather than incidental. exitNow() is a SIGKILL, so an exited '
+            . 'status is exactly how each test tells "the handler never fired" from "the handler '
+            . 'fired"; routing a sentinel through exitNow() would collapse the two into one wait '
+            . 'status and delete the discrimination. Both are unreachable whenever the test '
+            . 'passes.',
     ];
 
     /**

@@ -559,9 +559,27 @@ final class WorkflowResumptionTest extends TestCase
      * install the real signal handler in this test process, forks a real
      * child exactly the way AgentWorkerPool::startAgent() does, and
      * delivers a real SIGTERM to ONLY the forked child — never to this
-     * process. Asserts the child still exits under the signal convention
-     * (143), but critically never creates the pause file, proving the
+     * process. Asserts the child leaves through the handler's forked-child
+     * branch, but critically never creates the pause file, proving the
      * getmypid() guard stops a forked child from calling pause() at all.
+     *
+     * WHAT THE ASSERTIONS USED TO SAY, and why they changed (E178). They read
+     * `pcntl_wifexited()` plus `wexitstatus() === 143`, because the handler's
+     * forked-child branch was a plain `exit(143)`. That plain exit ran PHP's
+     * whole shutdown sequence — under PHPUnit, PHPUnit's own after-test hooks
+     * — a second time in this child, over a copy of this process's object
+     * graph. The branch is now `ForkedChild::exitNow()`, which SIGKILLs
+     * itself, so the child is signalled rather than exited and the shape a
+     * waiter sees is `wifsignaled()`/`wtermsig() === SIGKILL`.
+     *
+     * That is why the `exit(98)` sentinel below STAYS a plain exit and is not
+     * "fixed" to match. It is the discriminator: an exited-98 status means the
+     * handler never fired at all, and a SIGKILL status means it did. Convert
+     * the sentinel and the two outcomes become the same wait status, which
+     * would delete the thing this test measures. It is also unreachable on the
+     * passing path — the signal always lands first — so the shutdown-in-a-
+     * child hazard it carries can only materialise on a run that is failing
+     * anyway.
      */
     public function testForkedChildDoesNotRacePauseFileOnRealSignal(): void
     {
@@ -626,8 +644,23 @@ final class WorkflowResumptionTest extends TestCase
             $status = null;
             pcntl_waitpid($pid, $status);
 
-            $this->assertTrue(pcntl_wifexited($status), 'Forked child should have exited normally after the real SIGTERM.');
-            $this->assertSame(143, pcntl_wexitstatus($status), 'Forked child should still exit under the SIGTERM convention.');
+            $this->assertFalse(
+                pcntl_wifexited($status) && pcntl_wexitstatus($status) === 98,
+                'The forked child ran its sleep(5) to completion and hit the sentinel — the '
+                    . 'inherited SIGTERM handler never fired, so nothing below proves anything.',
+            );
+            $this->assertTrue(
+                pcntl_wifsignaled($status),
+                'The handler\'s forked-child branch leaves through ForkedChild::exitNow(), which '
+                    . 'SIGKILLs itself rather than running PHP\'s shutdown sequence over a copy '
+                    . 'of this process\'s object graph — so the child must be SIGNALLED, not exited.',
+            );
+            $this->assertSame(
+                SIGKILL,
+                pcntl_wtermsig($status),
+                'ForkedChild::exitNow() signals SIGKILL specifically; any other terminating '
+                    . 'signal means the child died of something else on the way.',
+            );
             $this->assertFileDoesNotExist(
                 $pauseFile,
                 'A forked child must never call pause() itself — only the process that installed the handler may.'
