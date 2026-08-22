@@ -218,6 +218,14 @@ final class ChildStderrCaptureTest extends TestCase
             'shell_exec("ls >/dev/null 2>&1");',
             'proc_open("ls", [1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]], $p);',
             '$d = [2 => ["file", "/dev/null", "w"]]; proc_open("ls", $d, $p);',
+            // A REDIRECTION IN proc_open()'s COMMAND STRING, which is a third
+            // path to `discarded` and not the same code as either shape
+            // above: the shell applies it before the descriptor spec is ever
+            // consulted, so a spec that says `pipe` does not make this a
+            // capture. This catalogue listed every OTHER spelling and left
+            // this one out, and blinding the branch behind it reddened
+            // nothing in this test.
+            'proc_open("ls >/dev/null 2>&1", [2 => ["pipe", "w"]], $p);',
         ];
         foreach ($discarded as $body) {
             $this->assertSame(
@@ -235,6 +243,11 @@ final class ChildStderrCaptureTest extends TestCase
             ChildStderrCaptureScanner::SHAPE_CAPTURED,
             $one('shell_exec("ls 2>&1 >/dev/null");')['shape'],
             'fd 2 was duplicated from stdout BEFORE stdout became the sink',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls 2>&1 >/dev/null", [2 => ["pipe", "w"]], $p);')['shape'],
+            'the order check must hold on the proc_open command-string path too, not just the shell one',
         );
 
         // fd 0 on the null device is an ordinary child with no stdin, and says
