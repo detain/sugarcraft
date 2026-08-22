@@ -241,16 +241,34 @@ final class Bootstrap
     private static array $launchNotices = [];
 
     /**
-     * How many DISTINCT notices this launch raised past
-     * {@see LAUNCH_NOTICE_LIMIT}.
+     * The notices this launch raised past {@see LAUNCH_NOTICE_LIMIT}, keyed by
+     * message.
      *
-     * Counted rather than merely refused, so {@see launchNotices()} can say
-     * "and N more" instead of ending the list where the cap happened to fall.
-     * Reset in {@see chat()} beside the list it belongs to — a count of what
-     * THIS launch could not fit is a fact about the launch, exactly as the list
-     * is.
+     * Kept rather than merely refused, so {@see launchNotices()} can say "and N
+     * more" instead of ending the list where the cap happened to fall. Reset in
+     * {@see chat()} beside the list it belongs to — what THIS launch could not
+     * fit is a fact about the launch, exactly as the list is.
+     *
+     * A SET, NOT A COUNTER, and that is not tidiness. MEASURED: {@see chat()}
+     * reaches {@see permissionRules()} twice (through {@see permissionGate()}
+     * and through {@see agentManager()}), so every message it raises is raised
+     * twice. {@see $launchNotices} de-duplicates the ones that FIT, by value;
+     * an integer counter had no such memory and charged the overflow twice —
+     * a 30-rule config reported "and 12 more" for 6 it could not fit. Keying on
+     * the message gives the dropped half the same de-duplication the kept half
+     * already had.
+     *
+     * ITS OWN BOUND IS THE ONE {@see $reportedPermissionConfigWarnings} ALREADY
+     * HAS — one entry per DISTINCT message — and it is worth naming because
+     * {@see chat()} is the only thing that resets it. A `-p` run never calls
+     * chat(), so a host that loops {@see \SugarCraft\Crush\Cli\NonInteractive::run()}
+     * in one process accumulates keys here exactly as it already accumulates
+     * them in that map. Bounded by the number of distinct malformed config
+     * entries, not by the number of runs.
+     *
+     * @var array<string, true>
      */
-    private static int $launchNoticesDropped = 0;
+    private static array $launchNoticesDropped = [];
 
     /**
      * The config FILE `--config` named, or null to discover
@@ -575,7 +593,7 @@ final class Bootstrap
         // this launch. It has to happen before `backend()` below, which is what
         // reaches {@see filterToolSet()} and raises the notice.
         self::$launchNotices = [];
-        self::$launchNoticesDropped = 0;
+        self::$launchNoticesDropped = [];
 
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell
@@ -1584,7 +1602,8 @@ final class Bootstrap
      * Built from the same selection {@see selectedProviderLabel()} reports, and
      * falls back to the offline {@see EchoProvider} whenever this run has no
      * provider or the provider cannot be constructed: {@see backend()} has
-     * already warned on stderr in that case, and refusing to launch the TUI
+     * already warned on stderr AND seeded the transcript in that case (see
+     * {@see warnPermissionConfigInTranscript()}), and refusing to launch the TUI
      * over an unusable label would be a worse outcome than showing "echo".
      *
      * @return array{0: ProviderInterface, 1: string}
@@ -3998,7 +4017,7 @@ final class Bootstrap
             if (\count(self::$launchNotices) < self::LAUNCH_NOTICE_LIMIT) {
                 self::$launchNotices[] = $notice;
             } else {
-                ++self::$launchNoticesDropped;
+                self::$launchNoticesDropped[$notice] = true;
             }
         }
 
@@ -4025,16 +4044,18 @@ final class Bootstrap
      */
     public static function launchNotices(): array
     {
-        if (self::$launchNoticesDropped === 0) {
+        if (self::$launchNoticesDropped === []) {
             return self::$launchNotices;
         }
+
+        $dropped = \count(self::$launchNoticesDropped);
 
         return [
             ...self::$launchNotices,
             sprintf(
                 '…and %d more launch warning%s this transcript could not fit; the full list is on stderr',
-                self::$launchNoticesDropped,
-                self::$launchNoticesDropped === 1 ? '' : 's',
+                $dropped,
+                $dropped === 1 ? '' : 's',
             ),
         ];
     }
