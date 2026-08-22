@@ -2954,7 +2954,26 @@ surviving tools: Bash
 
 Eight characters, project-tier-legal, no trust grant required, and it produces
 exactly the Bash-only tool set the doc says only a whitelist could produce "in
-one line". Tier membership confirmed directly rather than from the doc:
+one line".
+
+> **RULE 7 REWRITE, round 42 fix pass — two of those clauses are now false.**
+> WHAT IT USED TO SAY: "eight characters … no trust grant required".
+> WHAT IS TRUE NOW: (a) the count was never right — `[!B]*` is **five**
+> characters, `"[!B]*"` seven, `["[!B]*"]` nine, `{"disabledTools":["[!B]*"]}`
+> twenty-seven, re-derived on PHP 8.3.6; nothing in this counterexample is
+> eight. (b) A trust grant **is** required, and this was probably true when
+> recorded and overtaken by the gate since. MEASURED, fresh process per row,
+> PHP 8.3.6, sandboxed `HOME`, project `.sugar-crush/settings.json` =
+> `{"disabledTools":["[!B]*"]}`: with **no** `trustedProjectSettings` entry all
+> **11** tools survive and nothing is printed; with the entry, **1** (`Bash`)
+> survives and the removal is reported on stderr and in the transcript.
+> `Bootstrap::projectSettingsTrusted()` is the gate.
+> WHY THIS STILL EARNS ITS PLACE: the finding itself is intact and is the
+> reason `E74` exists. The tier argument really does not survive contact with
+> `fnmatch()`, and the trust gate narrows the blast radius without closing it —
+> an operator who trusted a repository and set no `disabledTools` of their own
+> is still exposed. Do not act on the "no trust grant required" clause; act on
+> the **Step** below, which is unaffected. Tier membership confirmed directly rather than from the doc:
 `PROJECT_TIER_KEYS` contains `disabledTools`; `userTierOnlyKeys()` contains
 `allowedTools`.
 
@@ -4813,6 +4832,98 @@ this is the documentation of it that is wrong.
 tools with a pattern far shorter than the set it removes, which is why the dangerous keys are
 user-tier-only rather than why `disabledTools` is safe. Cite the eight-character counterexample.
 
+**FIXED — round 42, lane a.** `README.md`'s tool-tier paragraph now retracts the claim in place, quoting
+it and marking it false, and carries the counterexample, the mechanism
+(`Bootstrap::filterToolSet()` → `PermissionRule::matchesToolName()` → bare `fnmatch()`), the two
+measured mitigations (untrusted projects never reach the merge; a user's own `disabledTools` replaces
+rather than unions) and the launch report. Pinned by
+`tests/Config/ReadmeSettingsTierClaimTest`.
+
+**PIN REPAIRED, round 42 fix pass.** The first cut of that pin did NOT hold. Its prose test
+(`::testWhereverTheReadmeQuotesTheRetractedClaimTheCounterexampleIsRightThere`) asked only that the
+counterexample and the words "That is false" appear within 2000 characters FORWARD of the retracted
+quote — and the retraction itself supplies both, so the false sentence could be restored verbatim as
+body prose immediately above the retraction and the file stayed green (measured: the counterexample
+sits +600 characters from the quote, "That is false" +57, leaving ~1400 characters of slack in front of
+the retraction for a restored occurrence to hide in). It now uses the same STRUCTURAL rule the E75 test
+already used — the retracted wording may appear only on a `>` line — scanned per PARAGRAPH rather than
+per line so a re-wrap cannot straddle a fragment across a break, and against three fragments rather
+than one needle. Two mutations confirm it: the sentence restored as body prose, and the same re-wrapped
+so no single line carries a whole fragment — both rc=1.
+
+Two corrections to this entry, both re-measured in-lane on
+PHP 8.3.6:
+
+- **"eight characters" counts nothing.** `[!B]*` is five characters, `"[!B]*"` seven, `["[!B]*"]` nine,
+  and `{"disabledTools":["[!B]*"]}` twenty-seven. Nothing here is eight. The README says *five
+  characters of glob* and `docs/SETTINGS.md` was corrected to match.
+  `src/Config/LayeredSettings.php` (`PROJECT_TIER_KEYS`) and
+  `Bootstrap::reportProjectTierToolRemovals()` still say "eight" — **not fixed here**, both are outside
+  this lane's write scope. So does `crush_code.md`'s round-41 status line (historical log, left alone).
+  **CORRECTION, round 42 fix pass:** the first stamp said *two* doc-blocks still carried the figure.
+  There were three: `docs/SETTINGS.md` itself contradicted its own re-derivation sixty lines further
+  down ("refusing negated classes would close the eight-character version"), inside the file the same
+  commit had just corrected. Fixed now.
+- **CORRECTION, round 42 fix pass — `Bootstrap::tools()` does NOT memoise.** The round-42 report
+  justified its one-process-per-row probe design with "`Bootstrap::tools()` memoises within a process",
+  offered as the lesson from a first probe that false-negatived on the trusted row. That mechanism claim
+  is false and was written down without being verified (RULE 11). `Bootstrap::tools()` constructs
+  `new Bash($root)`, `new Read(...)` and the rest unconditionally on every call; it holds no cache.
+  The per-process staleness is `Bootstrap::$trustedSettingsRoots`, filled by
+  `Bootstrap::projectSettingsTrusted()` and keyed by `trustedConfigDirPath() . '/config.json'` — a
+  deliberate freeze, documented on the property as "one answer per process, so a mid-session edit to
+  the user's OWN config.json cannot widen the grant a launch already decided". Granting trust after a
+  first untrusted `tools()` call in the same process therefore changes nothing *while the sandboxed
+  HOME stays the same*, and changes everything the moment the sandbox path (and so the cache key)
+  moves. One process per row is still the right probe design; the reason it is right is the trust-list
+  freeze, not a tool cache. **The measured results are unaffected.** All four rows of the round-42 table
+  were re-run in this lane, one fresh PHP 8.3.6 process each
+  (`scratchpad/probe/row.php`, `scratchpad/probe/row_nonneg.php`; sandboxed `HOME`, `chmod 0600` on
+  `config.json`, trust via `LayeredSettings::PROJECT_SETTINGS_TRUST_KEY` + `realpath()`): no project
+  file / trusted → 11; `{"disabledTools":["[!B]*"]}` untrusted → 11 and nothing printed;
+  the same trusted → 1 (`Bash`) plus the launch report; `["[C-Z]*","[a-z]*"]` trusted → 1 (`Bash`).
+
+  RE-DERIVED IN-LANE, not taken from the reviewer (RULE 9). Generator:
+  `scratchpad/probe/memo2.php`, ONE PHP 8.3.6 process, three `Bootstrap::tools($root)` calls, sandboxed
+  `HOME` via `putenv()` + `$_SERVER['HOME']`, `chmod 0600` on each `config.json`, project
+  `.sugar-crush/settings.json` = `{"disabledTools":["[!B]*"]}` throughout, trust granted via
+  `LayeredSettings::PROJECT_SETTINGS_TRUST_KEY` with `realpath()`. No fuzzing, no seed, no ICU.
+  `Bootstrap::$trustedSettingsRoots` read back by reflection after each call:
+
+  | call | HOME | `config.json` | tools | `$trustedSettingsRoots` after |
+  |---|---|---|---|---|
+  | A | `home_one` | `{}` (no grant) | 11 | `{home_one/...: []}` |
+  | B | `home_one` | grant written | **11** — the false negative | unchanged (key already present) |
+  | C | `home_two` | grant written | **1** (`Bash`) | second key added, `[repo]` |
+
+  Call C is the THIRD `tools()` call in the same process and it returns the filtered set. A tool cache
+  would have made C 11. The only thing that changed between B and C is the cache KEY.
+
+  ONE TRAP WORTH RECORDING, because it cost a probe: write the sandbox config as `{}` and not as
+  `json_encode([])`. PHP emits `[]` for an empty array, `Bootstrap::permissionConfig()` refuses a
+  top-level JSON array (`PermissionConfigException`, "the top level is not a JSON object"), and
+  `projectSettingsTrusted()` swallows that through its `catch (\Throwable)` and returns false
+  **without caching**. Row B then reads 1 instead of 11 and the freeze appears not to exist. Use
+  `JSON_FORCE_OBJECT`. See the new sub-finding below.
+
+- **NEW, found while re-deriving the above — the `trustedProjectSettings` freeze does not engage until
+  `permissionConfig()` has succeeded once.** `Bootstrap::projectSettingsTrusted()` populates
+  `self::$trustedSettingsRoots[$path]` INSIDE the `try`, so any throw from `permissionConfig()` returns
+  false and leaves the key absent; the next call re-reads `config.json` from disk. MEASURED, PHP 8.3.6,
+  one process, same generator with the empty config written as `[]`: call A (untrusted) → 11 tools and
+  `trustedSettingsRoots == []`; the config is then rewritten with a grant; call B → **1 tool**, i.e. a
+  mid-process edit to the user's own `config.json` widened a grant the process had already decided —
+  exactly what the property's doc-block says the freeze buys ("one answer per process"). REACHABILITY
+  IS NARROW and this is why it is recorded rather than fixed: the only way to reach the un-cached state
+  is a `config.json` that `permissionConfig()` rejects, and a real launch calls `permissionConfig()` on
+  its own path and refuses to start on that same file. It is a hazard for in-process embedders and for
+  tests, not for the CLI. **Functionality before hardening — FINDING recorded, FIX deferred.** Step:
+  cache the negative outcome too (an explicit sentinel), or state on the property that the freeze is
+  conditional on a parseable config and that an unparseable one fails open across calls.
+- **The negation is not the mechanism.** `["[C-Z]*", "[a-z]*"]` also leaves exactly `Bash`, measured
+  end-to-end, so the Step's framing of the counterexample as *the* negated-class case understates it:
+  no restriction on pattern shape could restore the retracted property.
+
 ### E75 — `README.md` calls `config.json` "the deprecated name"; the source argues at length that it is not
 
 **Recorded 2026-08-22 by the round-41 lane-a reviewer.** Severity: low, but actively misdirecting.
@@ -4823,6 +4934,14 @@ and that calling it deprecated points users away from the file their changes act
 anyone trying to find their own settings.
 
 **Step.** Reconcile in `README.md`, in favour of the source docblock. Rewrite, do not delete.
+
+**FIXED — round 42, lane a.** The ranking paragraph in `README.md` no longer calls `config.json`
+deprecated; a block quote records what it used to say, why the word was damaging (it pointed readers
+off the only file that receives a write) and what is true instead. Verified against the write path
+rather than against the other doc: `Bootstrap::writeUserConfig()` → `Bootstrap::userConfigPath()` →
+`configDirPath() . '/config.json'`, and the only two `@deprecated` tags anywhere in `sugar-crush/src/`
+are on `Agents/PathJail` and `Chat::pool`'s alias — neither mentions `config.json`. Both halves are
+pinned by `tests/Config/ReadmeSettingsTierClaimTest`.
 
 ### E76 — `Chat.php`'s pane-click docblock asserts the opposite of what `bin/sugarcrush` does
 
