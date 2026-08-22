@@ -58,10 +58,12 @@ use PHPUnit\Framework\TestCase;
  * pattern alphabet; this is the same lesson in a different instrument.
  *
  * TRIAGE — WHY NOTHING IS SILENCED HERE, and silencing was the tempting
- * default. Of the 36 distinct runtime shapes in the baseline capture (36 under
- * the normalisation in this class's report — collapse `/tmp` paths and digits;
- * a coarser normalisation gives 32, and the shape count is an artefact of the
- * normalisation, which is why only the raw 62 is quoted as a figure), the large
+ * default. The baseline capture yields 36 distinct shapes under the
+ * normalisation this round's report states — collapse `/tmp` paths and runs of
+ * digits — and the round's brief reports 32 under a normalisation it does not
+ * state. The two are NOT reconciled, and neither is quoted as a finding: a
+ * shape count is an artefact of its normalisation, which is why the only figure
+ * treated as a measurement here is the raw 62. Of those shapes, the large
  * majority are launch warnings a test PROVOKED and then ASSERTED on:
  * {@see BootstrapLaunchNoticeRoutingTest} reads the provider-fallback and
  * retention lines off stderr by design, {@see BootstrapToolAndPermissionSettingsTest}
