@@ -246,10 +246,40 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * EXACTLY ONE IS ASSERTED. A second block carrying `(disabledTools)` would
      * make "the sample" ambiguous, and picking the first would silently stop
      * checking the other — the shape of hole rule 14 is about.
+     *
+     * EVERY FENCE, NOT ONLY A `text`-TAGGED ONE, AND THE OLD ALPHABET IS WHY.
+     * WHAT IT SAID: scan for `text`-tagged fences only and assert one hit, on
+     * the reasoning that a second sample would make "the sample" ambiguous.
+     * WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 46: that assertion could
+     * not SEE a second sample unless it happened to carry that one tag.
+     * Appending to README.md a BARE-fenced block reading `sugarcrush: …
+     * (disabledTools) disabled 99 of the 3 tools your own settings left — Nope
+     * — leaving: Nope.` left the full suite green and its totals unchanged to
+     * the assertion. README.md already carries bare-fenced blocks, so the shape
+     * was live rather than hypothetical. WHY THIS STILL EARNS ITS PLACE: the
+     * reasoning above was right and only its alphabet was wrong — rule 11, an
+     * instrument reporting zero because of what it cannot express.
+     *
+     * THE FENCES ARE COUNTED BEFORE THEY ARE PAIRED, because a widened opener
+     * can also mis-pair: if some block's body held a line opening with three
+     * backticks, that inner line would close its parent early and every later
+     * block would be offset by one, quietly. The regex yields one match per
+     * PAIR, so `2 × matches === fence lines` is the parse check. It fails loudly
+     * on a README this extractor cannot read, rather than comparing against
+     * whatever a shifted pairing happened to select.
      */
     private function readmeLaunchReportBlock(): string
     {
-        preg_match_all('/^```text\n(.*?)^```/ms', $this->readme(), $blocks);
+        $readme = $this->readme();
+
+        preg_match_all('/^```[^\n]*\n(.*?)^```/ms', $readme, $blocks);
+
+        self::assertSame(
+            preg_match_all('/^```/m', $readme),
+            2 * count($blocks[1]),
+            'README.md has an odd or nested run of ``` fences, so this extractor cannot say which lines '
+            . 'belong to which block; the launch-report sample it would compare is not trustworthy',
+        );
 
         $samples = array_values(array_filter(
             $blocks[1],
@@ -261,7 +291,7 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         self::assertCount(
             1,
             $samples,
-            'README.md no longer holds exactly one ```text block showing the (disabledTools) launch report; '
+            'README.md no longer holds exactly one fenced block showing the (disabledTools) launch report; '
             . 'this guard cannot say which one it is comparing',
         );
 
