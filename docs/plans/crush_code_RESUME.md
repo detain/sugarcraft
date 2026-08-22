@@ -282,6 +282,48 @@ remains after them:
 - then **Phase 9** (interactive-prompt containment: layered A+C, parameter not second tool,
   **no askpass**) · then the deferred security pass.
 
+### 🟢 STANDING REQUEST, ROUND 42 — "KEEP EVERY LIB ON THE LATEST" · `scripts/refresh-deps.php` (`ff295130`)
+
+The user asked, 2026-08-22: *"in general id like them kept updated like when we push a change to master
+soon after should do a composer update in the sugarcraft root and all subdir repos that use whatever
+packages were updated .. or just all of them so we're always working w/ the latest versions of changes
+we put in."*
+
+🔴 **TAKEN LITERALLY, THIS MAKES THINGS STALER, AND THE PROOF IS THIS ROUND.** For a `sugarcraft/*`
+sibling, `composer update` resolves from **Packagist**, which lags the working tree by: local commit →
+push → `sync-sugarcraft.yml` splitsh → `sugarcraft/<lib>` → Packagist index. **There were 22 unpushed
+commits on master when the user ran it**, so Packagist could not have had round 41 at all — and indeed
+it handed back a `candy-core` whose `Width.php` was the pre-E73 file. The update did not fetch the
+latest of our own changes; it **replaced** the latest with a two-round-old snapshot. Siblings need no
+updating whatsoever: with the path repo injected, `vendor/sugarcraft/candy-core` **is** `../candy-core`,
+current the instant a file is saved. Only THIRD-PARTY packages (phpunit, guzzle, react, aws-sdk) go
+stale. **Say this plainly to the user again if the request recurs — it is a correction, not a quibble.**
+
+**But the underlying worry was justified, and bigger than the trigger.** Measured across the monorepo:
+of **54** libs with a vendored closure, only **12** were fully symlinked; **12** were partially
+Packagist and **30** were **entirely** Packagist (`0/N`). CI is unaffected (it injects per job), but any
+LOCAL suite run in those 30 was testing two-rounds-stale siblings and saying nothing about it.
+
+**`php scripts/refresh-deps.php`** is the safe form of the request: inject the closure → `composer
+update -o -W` per lib (third-party moves, siblings resolve to symlinks) → discard the scratch manifests
+in a `finally` → prove `is_link()` per lib → assert `--no-lib-path-repos` rc 0 and zero tracked per-lib
+locks. `--root` also updates the root, whose `repositories[]` is legitimate and whose `composer.lock` is
+tracked and **kept**. `--verify-only` proves the closure and changes nothing; `--dry-run` prints the
+plan. It exits non-zero unless every targeted lib ends fully symlinked.
+
+⚠️ **It computes its OWN closure rather than trusting `--fix`.** Verified this round: `check-path-repos
+--fix --strict-closure` injects **zero** entries for `candy-buffer`, whose only sibling dep
+(`sugarcraft/candy-core`) sits in `require-dev` — the checker reads require-dev in its validation and
+`--unused` paths but NOT in `--fix`'s injection path. Same gap explains the residual `candy-testing`
+Packagist copies in `candy-forms`/`candy-kit`/`candy-shine`. The checker is deliberately left alone: CI
+depends on `--fix` behaving exactly as it does. ⚠️ A lib can reach **itself** through a dependency's
+requires (`candy-core` → `candy-pty` → `candy-core`); the self-entry is dropped or the injection is
+circular. Cross-check that the algorithm is right: `sugar-crush`'s computed closure is **18**, matching
+its known-good 18/18.
+
+**WHEN TO RUN IT:** at a round boundary, AFTER the merged floor is measured — never between a lane merge
+and its measurement. Re-measure the floor afterwards if third-party versions actually moved.
+
 ### 🟢 ANSWERED, ROUND 42 — RE-RUN THE ROOT UPDATE THE USER WAS DOING. **Owed work, not a question.**
 
 Round 41's supervisor **reverted the user's root `composer.lock` change** (118 insertions / 115
