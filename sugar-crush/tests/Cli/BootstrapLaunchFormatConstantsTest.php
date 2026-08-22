@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest;
 
 /**
  * The launch-report formats that other files name are named, and the methods
@@ -150,6 +151,19 @@ use SugarCraft\Crush\Cli\Bootstrap;
 final class BootstrapLaunchFormatConstantsTest extends TestCase
 {
     /**
+     * One `sprintf()` conversion, as a pattern body without delimiters.
+     *
+     * EXTRACTED SO THERE IS ONE DEFINITION. {@see conversionSpecsIn()} counts
+     * conversions with it and {@see shapePatternFor()} splits a format on it;
+     * two copies of a pattern whose ALPHABET IS THE COVERAGE is the shape of
+     * defect this whole file is about — the sweep would go on nominating pages
+     * under an alphabet the counter had already outgrown, and neither end would
+     * red. The alphabet itself, and the two forms an earlier version could not
+     * express, are argued at {@see conversionSpecsIn()}.
+     */
+    private const CONVERSION_PATTERN = "%(?:%|(?:[0-9]+\\\$)?(?:[-+ 0#]|'.)*[0-9]*(?:\\.[0-9]+)?[bcdeEfFgGosuxX])";
+
+    /**
      * Each promoted FORMAT, the method obliged to `sprintf()` from it, and how
      * many conversions its callers pass.
      *
@@ -186,6 +200,105 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'PROJECT_TIER_TOOL_REMOVAL_LEAVING' => 'reportProjectTierToolRemovals',
         'PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE' => 'reportProjectTierToolRemovals',
     ];
+
+    /**
+     * THE SWEEP (E187): every page under `README.md` and `docs/` that quotes a
+     * promoted format, and what checks that page.
+     *
+     * WHY A ROSTER AND NOT A THRESHOLD. Round 46 closed the same hole twice —
+     * `README.md` had a guard on the tool-removal launch report,
+     * `docs/SETTINGS.md` carried a byte-for-byte copy of the identical sample
+     * and had none — and then found a third by sweeping the rest of the
+     * promoted formats the same way. The sweep was run BY HAND, ONCE, at one
+     * commit. The next format promoted, or the next page that decides to quote
+     * a launch line, restores the same silence, and the failure mode is the
+     * quiet one: a page that PROMISES agreement and is checked by nothing is
+     * worse than one that paraphrases, because the promise is what stops the
+     * next reader from checking it by hand.
+     *
+     * A VERDICT IS EITHER A GUARD OR A STATED REASON THERE IS NONE. A row whose
+     * value contains `::` names the test that pins that page against that
+     * constant, and {@see testEveryGuardTheReadersRosterNamesStillExists()}
+     * checks the name resolves. Anything else is a sentinel saying, in as many
+     * words, why the page needs no guard — today the only one is
+     * {@see PAGE_QUOTE_IS_PROSE}.
+     *
+     * THE PAGE LIST IS DERIVED, NEVER LISTED, which is the half of E187 that a
+     * hand-run sweep cannot have: {@see docPages()} globs `docs/*.md` beside
+     * `README.md`, so a page ADDED next round is swept without anyone
+     * remembering to add it here.
+     *
+     * @var array<string, array<string, string>> constant => page => verdict
+     */
+    private const PAGE_QUOTES = [
+        'STDERR_LINE_FORMAT' => [
+            'README.md' => ReadmeSettingsTierClaimTest::class
+                . '::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem',
+            'docs/ENVIRONMENT.md' => self::PAGE_QUOTE_IS_PROSE,
+            'docs/SETTINGS.md' => ReadmeSettingsTierClaimTest::class
+                . '::testTheSettingsPageQuotesTheSameLaunchReportByteForByte',
+        ],
+        'PROJECT_TIER_TOOL_REMOVAL_FORMAT' => [
+            'README.md' => ReadmeSettingsTierClaimTest::class
+                . '::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem',
+            'docs/SETTINGS.md' => ReadmeSettingsTierClaimTest::class
+                . '::testTheSettingsPageQuotesTheSameLaunchReportByteForByte',
+        ],
+        'PROJECT_TIER_TOOL_REMOVAL_LEAVING' => [
+            'README.md' => ReadmeSettingsTierClaimTest::class
+                . '::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem',
+            'docs/SETTINGS.md' => ReadmeSettingsTierClaimTest::class
+                . '::testTheSettingsPageQuotesTheSameLaunchReportByteForByte',
+        ],
+        'SESSION_RETENTION_SUMMARY_FORMAT' => [
+            'docs/ENVIRONMENT.md' => self::class . '::testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints',
+            'docs/SETTINGS.md' => self::class . '::testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints',
+        ],
+        'PROJECT_TIER_REFUSAL_FORMAT' => [
+            'docs/TROUBLESHOOTING.md' => self::class
+                . '::testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints',
+        ],
+    ];
+
+    /**
+     * The verdict for a page that DESCRIBES a format's shape in a sentence
+     * rather than quoting a line the launcher would print.
+     *
+     * `docs/ENVIRONMENT.md` is the only holder today: its
+     * `SUGARCRUSH_DEBUG_COMMANDS` row says the transcript seam "already writes
+     * a `sugarcrush: `-prefixed line to stderr", which matches
+     * {@see Bootstrap::STDERR_LINE_FORMAT}'s shape because that shape is barely
+     * more than the label. There is no sample to compare, so there is nothing a
+     * guard could assert beyond what
+     * {@see testTheRetentionDetailRowIndentsUnderTheEnvelopeItDuplicates()}
+     * already derives from the same constant.
+     */
+    private const PAGE_QUOTE_IS_PROSE = '<prose about the shape, not a quotation of a rendered line>';
+
+    /**
+     * How many bytes of page text one `%s` is allowed to stand for.
+     *
+     * IT IS THE INSTRUMENT'S ALPHABET AND IT IS MEASURED, not a round number.
+     * With the bound removed — `.*?` in place of `.{1,160}?` — the sweep
+     * nominates `README.md` as a reader of
+     * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT} (`ignoring %s — %s`),
+     * because README.md contains the unrelated sentence "reject one at exit
+     * `2` rather than ignoring it" and, some hundreds of bytes later, an em
+     * dash. That is round 46's own false positive, the one a human had to
+     * remove from the hand-run sweep by reading the page. MEASURED on PHP
+     * 8.3.6 at round 47: with the bound in place the sweep nominates
+     * `docs/TROUBLESHOOTING.md` and nothing else for that constant.
+     *
+     * THE COST IS STATED RATHER THAN HIDDEN, because it is the direction that
+     * loses a finding: a page that quotes a launch line whose interpolated
+     * field is longer than this is NOT nominated, and the sweep reports its
+     * absence as silence. Nothing here can detect that, which is why the bound
+     * is generous — every field the four quoting pages actually interpolate is
+     * under sixty bytes — and why the fixture in
+     * {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()} pins
+     * both directions rather than only the one this file wants.
+     */
+    private const PAGE_QUOTE_FIELD_BYTES = 160;
 
     /**
      * Every string literal each obliged method is allowed to hold, exactly.
@@ -781,7 +894,366 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         );
     }
 
+    /**
+     * THE SWEEP ITSELF: no page quotes a promoted format without this file
+     * knowing about it (E187).
+     *
+     * WHAT REDS, AND WHAT THE RIGHT RESPONSE IS. A page appears under a
+     * constant it is not listed against — someone quoted a launch line in the
+     * docs and nothing checks it, so either give it a guard and name the guard
+     * here, or record why it needs none. A page DISAPPEARS from a constant it
+     * is listed against — the page stopped quoting the line, which usually
+     * means the launcher was reworded and the page was edited to follow, and
+     * the guard named in the roster is now pinning nothing. Both are the drift
+     * a name exists to make loud, and neither is visible from either end alone.
+     *
+     * SET-VALUED ON PURPOSE, NOT COUNT-VALUED. The assertion is over
+     * (constant, page) PAIRS. A page that gains a second sentence matching a
+     * format it is already listed against does not move it, which is what
+     * makes this survivable for the neighbouring lanes that own the doc pages:
+     * only a genuinely new relationship reds.
+     */
+    public function testEveryDocPageQuotingAPromotedFormatIsOnTheReadersRoster(): void
+    {
+        $pages = self::docPages();
+
+        // The glob is the sweep's reach. An empty or truncated page map would
+        // make every assertion below pass by finding nothing at all, which is
+        // the exact shape of the round-44 census that stayed green with its
+        // scanner dead.
+        self::assertGreaterThan(4, \count($pages), 'docPages() found almost nothing; the sweep has no reach');
+        foreach (['README.md', 'docs/SETTINGS.md', 'docs/ENVIRONMENT.md', 'docs/TROUBLESHOOTING.md'] as $required) {
+            self::assertArrayHasKey($required, $pages, "the sweep no longer reaches {$required}");
+        }
+
+        $found = [];
+        foreach (self::sweepableFormats() as $constant => $value) {
+            $quoting = self::pagesQuoting($value, $pages);
+            if ($quoting !== []) {
+                $found[$constant] = $quoting;
+            }
+        }
+
+        $expected = [];
+        foreach (self::PAGE_QUOTES as $constant => $verdicts) {
+            $expected[$constant] = array_keys($verdicts);
+            sort($expected[$constant]);
+        }
+        ksort($expected);
+        ksort($found);
+
+        self::assertSame(
+            $expected,
+            $found,
+            'the set of doc pages quoting a promoted launch format is not the set this file has classified. '
+            . 'A page that appeared quotes a line the launcher prints and is checked by nothing — give it a '
+            . 'guard and name the guard in self::PAGE_QUOTES, or record there why it needs none. A page that '
+            . 'vanished stopped quoting the line, so whatever guard the roster names for it is pinning a '
+            . 'sentence that is no longer on the page',
+        );
+    }
+
+    /**
+     * KNOWN-POSITIVE AND KNOWN-NEGATIVE FIXTURES FOR THE SWEEP, in the same
+     * test rather than beside it.
+     *
+     * The test above asserts a SET, and four of the nine promoted formats
+     * contribute nothing to it. An assertion that "these five and no others are
+     * quoted" is not evidence unless something in the same test proves the
+     * scanner can still find a quotation: round 44 emptied a census, mutated
+     * its scanner to never match, and watched the absence assertion pass with
+     * 18,228 assertions green.
+     *
+     * THE NEGATIVE CASES ARE THE POINT AS MUCH AS THE POSITIVE ONE. A scanner
+     * that matches everything nominates every page and the roster degenerates
+     * into a list of the docs directory.
+     */
+    public function testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown(): void
+    {
+        // The sample as a page would really carry it: wrapped across a line
+        // break inside a fence, and preceded by a blockquote marker on the
+        // continuation. Flattening is what makes this findable at all — the
+        // same trap a doc-block's ` * ` continuation markers set for prose
+        // matching in source.
+        $pages = self::flattenPages([
+            'quotes.md' => "The launcher reports it at startup:\n\n```text\n"
+                . "sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 10 of the\n"
+                . "> 12 tools your own settings left — removed: Bash, Edit — leaving: Read\n"
+                . "```\n",
+            'paraphrases.md' => "A project's disabledTools list can take away tools your own settings left.\n",
+        ]);
+
+        self::assertSame(
+            ['quotes.md'],
+            self::pagesQuoting(Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT, $pages),
+            'the sweep can no longer find a rendered launch report on a page that carries one; every set '
+            . 'the test above asserts is vacuous',
+        );
+        self::assertSame(
+            [],
+            self::pagesQuoting(Bootstrap::SKILL_SKIP_NOTICE_FORMAT, $pages),
+            'the sweep nominates a page for a format that page does not contain',
+        );
+
+        // THE BOUND, IN BOTH DIRECTIONS. `ignoring %s — %s` is nine characters
+        // of ordinary English plus a spaced em dash, and round 46's hand-run
+        // sweep nominated README.md on it. The bound is what removes that,
+        // and the second page here is the honest statement of its limit: a
+        // coincidence whose em dash lands CLOSE enough is still nominated, and
+        // only a human reading the page can settle it. That is what the
+        // roster's verdict column is for.
+        $coincidence = self::flattenPages([
+            'far.md' => 'reject one at exit `2` rather than ignoring it.' . str_repeat(' filler', 40) . ' — and on.',
+            'near.md' => 'reject one at exit `2` rather than ignoring it, which — as noted — is deliberate.',
+        ]);
+        self::assertSame(
+            ['near.md'],
+            self::pagesQuoting(Bootstrap::PROJECT_TIER_REFUSAL_FORMAT, $coincidence),
+            'the field bound no longer bounds anything: with an unbounded wildcard every page containing '
+            . 'the word "ignoring" and an em dash anywhere after it is nominated as a reader',
+        );
+
+        // An escaped `%%` is literal text, not a field. A shape builder that
+        // split on it would ask for a wildcard where a per-cent sign belongs
+        // and match pages that carry neither.
+        $percent = self::flattenPages([
+            'literal.md' => 'the cache was 100% warm',
+            'wild.md' => 'the cache was 100 somethings warm',
+        ]);
+        self::assertSame(['literal.md'], self::pagesQuoting('the cache was 100%% warm', $percent));
+
+        // A format that is pure literal text has no fields at all, and must
+        // still be matchable.
+        self::assertSame(
+            ['literal.md'],
+            self::pagesQuoting('was 100% warm', $percent),
+        );
+    }
+
+    /**
+     * Every guard {@see PAGE_QUOTES} names still exists.
+     *
+     * A roster row is a claim that some test pins that page against that
+     * constant. Deleting or renaming the guard leaves the row asserting
+     * nothing while still reading, to the next person who opens this file, as
+     * though the page were covered — which is the same failure as a promoted
+     * constant the emitting code does not use.
+     */
+    public function testEveryGuardTheReadersRosterNamesStillExists(): void
+    {
+        $checked = 0;
+        foreach (self::PAGE_QUOTES as $constant => $verdicts) {
+            foreach ($verdicts as $page => $verdict) {
+                if (!str_contains($verdict, '::')) {
+                    self::assertSame(
+                        self::PAGE_QUOTE_IS_PROSE,
+                        $verdict,
+                        "self::PAGE_QUOTES[{$constant}][{$page}] is neither a Class::method guard reference "
+                        . 'nor one of this file\'s stated reasons for there being no guard',
+                    );
+
+                    continue;
+                }
+
+                [$class, $method] = explode('::', $verdict, 2);
+                self::assertTrue(
+                    method_exists($class, $method),
+                    "self::PAGE_QUOTES[{$constant}][{$page}] names {$verdict}, which does not exist. The "
+                    . 'page is listed as guarded and is not',
+                );
+                $checked++;
+            }
+        }
+
+        self::assertGreaterThan(
+            0,
+            $checked,
+            'no roster row names a guard at all, so this test proves nothing about any of them',
+        );
+        self::assertFalse(
+            method_exists(self::class, 'testNoSuchGuardWasEverWritten'),
+            'method_exists() answers true for a method that does not exist; the check above is vacuous',
+        );
+    }
+
+    /**
+     * Every promoted constant is either swept or excused, and being excused is
+     * a decision recorded here rather than a silence.
+     *
+     * A GUARD MUST GO RED ON WHAT IT CANNOT PARSE. {@see sweepableFormats()}
+     * is the sweep's domain, and the way this file loses coverage is by a
+     * newly promoted constant not being in it — a page could then quote it
+     * freely. The domain is derived from {@see NAMED_FORMATS} and
+     * {@see NAMED_LITERALS} rather than typed out, so a promotion widens the
+     * sweep in the same commit that makes it.
+     */
+    public function testTheSweepsDomainIsEveryPromotedConstant(): void
+    {
+        self::assertSame(
+            array_keys(self::obligations()),
+            array_keys(self::sweepableFormats()),
+            'the sweep no longer covers exactly the promoted constants; one of them can now be quoted by a '
+            . 'doc page without this file noticing',
+        );
+
+        foreach (self::PAGE_QUOTES as $constant => $_) {
+            self::assertArrayHasKey(
+                $constant,
+                self::sweepableFormats(),
+                "self::PAGE_QUOTES lists readers for {$constant}, which the sweep does not cover",
+            );
+        }
+    }
+
     // ── the scanners ─────────────────────────────────────────────────────
+
+    /**
+     * Every promoted constant's VALUE, keyed by name — the sweep's domain.
+     *
+     * @return array<string, string>
+     */
+    private static function sweepableFormats(): array
+    {
+        $out = [];
+        foreach (self::obligations() as $constant => $_) {
+            $out[$constant] = (string) \constant(Bootstrap::class . '::' . $constant);
+        }
+
+        return $out;
+    }
+
+    /**
+     * `README.md` and every page under `docs/`, flattened.
+     *
+     * DERIVED, NOT LISTED — that is the half of the sweep a hand-run pass
+     * cannot have. A page added next round is swept without anyone remembering
+     * to extend a roster.
+     *
+     * @return array<string, string> repo-relative page path => flattened text
+     */
+    private static function docPages(): array
+    {
+        $root = \dirname(__DIR__, 2);
+
+        $paths = ['README.md'];
+        $docs = glob($root . '/docs/*.md');
+        if ($docs === false) {
+            throw new \RuntimeException('the docs/ glob failed; the sweep cannot answer for any page');
+        }
+        foreach ($docs as $doc) {
+            $paths[] = 'docs/' . basename($doc);
+        }
+        sort($paths);
+
+        $out = [];
+        foreach ($paths as $path) {
+            $text = @file_get_contents($root . '/' . $path);
+            if ($text === false) {
+                // A page the sweep cannot read must be loud. Answering "it
+                // quotes nothing" for it is a hole shaped exactly like the
+                // next unguarded quotation.
+                throw new \RuntimeException("{$path} could not be read; the sweep cannot answer for it");
+            }
+            $out[$path] = $text;
+        }
+
+        return self::flattenPages($out);
+    }
+
+    /**
+     * Collapse each page's runs of whitespace to one space.
+     *
+     * LOAD-BEARING RATHER THAN DEFENSIVE, and measured: `docs/SETTINGS.md`
+     * wraps the retention summary across a line break between `30+ days` and
+     * `(ids on stderr)`, so a raw `str_contains()` against that file finds
+     * nothing at all. Markdown wraps prose wherever the column runs out, which
+     * means every multi-word needle in this file has to be matched flat.
+     *
+     * @param array<string, string> $pages
+     *
+     * @return array<string, string>
+     */
+    private static function flattenPages(array $pages): array
+    {
+        return array_map(
+            static fn(string $text): string => (string) preg_replace('/\s+/', ' ', $text),
+            $pages,
+        );
+    }
+
+    /**
+     * Which of `$pages` quote `$format`.
+     *
+     * THE SHAPE, NOT THE LONGEST SPAN, and the difference is what makes this a
+     * test rather than a nomination list. Round 46's hand-run sweep took each
+     * format's longest run of literal text between conversions and searched for
+     * that one string; for `ignoring %s — %s` the longest run is `'ignoring '`,
+     * nine characters of ordinary English, and the sweep duly nominated
+     * README.md over an unrelated sentence. Matching the WHOLE format — every
+     * literal span in order, with each conversion standing for a bounded run of
+     * page text — uses all of the format's text instead of the best ninth of
+     * it, and MEASURED on PHP 8.3.6 it drops that false positive while keeping
+     * `docs/TROUBLESHOOTING.md`, which quotes the shape with `<path>` and
+     * `<reason>` substituted for the two conversions. A `%s` replaced by a
+     * placeholder NAME is still a quotation of the format, and it is how that
+     * page hid.
+     *
+     * @param array<string, string> $pages already flattened
+     *
+     * @return list<string>
+     */
+    private static function pagesQuoting(string $format, array $pages): array
+    {
+        $pattern = self::shapePatternFor($format);
+
+        $out = [];
+        foreach ($pages as $page => $text) {
+            if (preg_match($pattern, $text) === 1) {
+                $out[] = $page;
+            }
+        }
+        sort($out);
+
+        return $out;
+    }
+
+    /**
+     * `$format` as a pattern matching any rendering of it: literal spans
+     * quoted, each conversion a bounded wildcard.
+     *
+     * `%%` IS LITERAL TEXT AND MUST NOT BECOME A WILDCARD — it is on
+     * {@see conversionSpecsIn()}'s alphabet because `sprintf()` consumes it,
+     * but it emits a per-cent sign rather than an argument, so splitting on it
+     * would ask a page for a field where a `%` belongs.
+     *
+     * A LEADING OR TRAILING CONVERSION CONTRIBUTES NO WILDCARD. `%s (…)` needs
+     * no run of page text before the space to be a quotation of itself, and
+     * demanding one only makes the match harder to read in a failure message.
+     */
+    private static function shapePatternFor(string $format): string
+    {
+        $flat = trim((string) preg_replace('/\s+/', ' ', $format));
+
+        // A sentinel no format can contain: token_get_all()-safe, and NUL is
+        // rejected by every literal in this file's domain.
+        $escaped = str_replace('%%', "\0", $flat);
+        $parts = preg_split('/' . self::CONVERSION_PATTERN . '/', $escaped);
+        if ($parts === false) {
+            throw new \RuntimeException("the conversion split failed for format: {$format}");
+        }
+        $parts = array_map(static fn(string $p): string => str_replace("\0", '%', $p), $parts);
+
+        $pattern = '';
+        foreach ($parts as $i => $part) {
+            if ($i > 0 && $part !== '' && $parts[$i - 1] !== '') {
+                $pattern .= '.{1,' . self::PAGE_QUOTE_FIELD_BYTES . '}?';
+            }
+            $pattern .= preg_quote($part, '/');
+        }
+
+        return '/' . $pattern . '/u';
+    }
+
 
     /** @return array<string, string> constant name => the method obliged to use it */
     private static function obligations(): array
@@ -928,11 +1400,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      */
     private static function conversionSpecsIn(string $format): array
     {
-        preg_match_all(
-            "/%(?:%|(?:[0-9]+\\\$)?(?:[-+ 0#]|'.)*[0-9]*(?:\\.[0-9]+)?[bcdeEfFgGosuxX])/",
-            $format,
-            $m,
-        );
+        preg_match_all('/' . self::CONVERSION_PATTERN . '/', $format, $m);
 
         /** @var list<string> $out */
         $out = $m[0];
