@@ -109,17 +109,76 @@ final class ReapsForkedChildrenTraitTest extends TestCase
         $tracked = $this->trackForkedChild($this->forkSleeper());
         $untracked = $this->forkSleeper();
 
-        $killed = $this->reapTrackedForkedChildren(graceSeconds: 0.05);
+        // try/finally, because this is the one test in the file its own
+        // subject matter can bite: the sleeper is deliberately INVISIBLE to
+        // the reaper - that is the property under test - so tearDown() cannot
+        // clean it up. A failed assertion below would leave a 30s orphan.
+        try {
+            $killed = $this->reapTrackedForkedChildren(graceSeconds: 0.05);
 
-        $this->assertSame([$tracked], $killed);
-        $this->assertTrue(
-            $this->stillThere($untracked),
-            'the reaper killed a live process that was never recorded in its ledger',
-        );
+            $this->assertSame([$tracked], $killed);
+            $this->assertTrue(
+                $this->stillThere($untracked),
+                'the reaper killed a live process that was never recorded in its ledger',
+            );
+        } finally {
+            posix_kill($untracked, SIGKILL);
+            $status = 0;
+            pcntl_waitpid($untracked, $status);
+        }
+    }
 
-        posix_kill($untracked, SIGKILL);
+    /**
+     * THE SECOND LINE OF DEFENCE, which nothing exercised.
+     *
+     * {@see ReapsForkedChildrenTrait::forkTracked()} empties the ledger in the
+     * child, so for every child forked through the trait the reaper returns
+     * early on an empty ledger and the owner-pid re-check is never reached.
+     * Every existing test took that route, and deleting
+     * `|| $this->trackedForkedChildrenOwner !== $self` from the reaper's guard
+     * clause therefore left the whole suite green (measured: mutation R5
+     * SURVIVED).
+     *
+     * A second line of defence exists precisely for when the first does not
+     * hold. This is that case: a RAW `pcntl_fork()` inside a class using the
+     * trait, whose child inherits a POPULATED ledger of its own SIBLINGS. With
+     * the owner check gone and `graceSeconds: 0.0` - so the bounded polling
+     * pass, which would otherwise filter the siblings out on ECHILD, does not
+     * run a single iteration - the child SIGKILLs a process it never created.
+     */
+    public function testAChildForkedOutsideTheTraitCannotReapTheLedgerItInherited(): void
+    {
+        $sibling = $this->trackForkedChild($this->forkSleeper());
+        $report = $this->dir . '/owner.json';
+
+        // RAW, deliberately: forkTracked() would empty the inherited ledger
+        // and this test would exercise the first line of defence again.
+        $pid = pcntl_fork();
+        $this->assertNotSame(-1, $pid, 'fork failed - cannot exercise this path');
+
+        if ($pid === 0) {
+            @file_put_contents($report, (string) json_encode([
+                'ledger' => array_keys($this->trackedForkedChildren),
+                'killed' => $this->reapTrackedForkedChildren(graceSeconds: 0.0),
+            ]));
+            ForkedChild::exitNow(0);
+        }
+
         $status = 0;
-        pcntl_waitpid($untracked, $status);
+        pcntl_waitpid($pid, $status);
+
+        $observed = json_decode((string) @file_get_contents($report), true);
+        $this->assertIsArray($observed, 'the child reported nothing at all');
+        $this->assertSame(
+            [$sibling],
+            $observed['ledger'],
+            'setup is void unless the child really did inherit a POPULATED ledger',
+        );
+        $this->assertSame([], $observed['killed'], 'the child reaped a ledger that was not its own');
+        $this->assertTrue(
+            $this->stillThere($sibling),
+            'a child running tearDown() SIGKILLed its own sibling',
+        );
     }
 
     /**

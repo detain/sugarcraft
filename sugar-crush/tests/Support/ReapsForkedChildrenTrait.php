@@ -39,7 +39,15 @@ namespace SugarCraft\Crush\Tests\Support;
  * from a `pcntl_fork()` return value - is an attack on somebody else's run.
  * The owner pid is captured with the first record and re-checked before every
  * signal, so an inherited copy of the ledger in a forked child (whose entries
- * are that child's SIBLINGS, not its children) can never fire.
+ * are that child's SIBLINGS, not its children) can never fire. That is the
+ * SECOND line of defence, and it is the one that matters: `forkTracked()`
+ * empties the child's copy, so the first line holds for every child forked
+ * through the trait and the owner check is never reached. It exists for the
+ * child forked with a RAW `pcntl_fork()` from a class that uses this trait,
+ * which inherits a POPULATED ledger - and until
+ * {@see ReapsForkedChildrenTraitTest::testAChildForkedOutsideTheTraitCannotReapTheLedgerItInherited()}
+ * that sentence was a claim no test made: deleting the owner check left the
+ * whole suite green.
  */
 trait ReapsForkedChildrenTrait
 {
@@ -168,10 +176,26 @@ trait ReapsForkedChildrenTrait
             if (\function_exists('posix_kill') && \defined('SIGKILL')) {
                 @\posix_kill($pid, \SIGKILL);
                 $killed[] = $pid;
+
+                // Blocking, and only ever reached once the child has been
+                // SIGKILLed: it collects the corpse rather than waiting for
+                // the child to finish what it was doing.
+                $status = 0;
+                \pcntl_waitpid($pid, $status);
+
+                continue;
             }
 
+            // NO WAY TO SIGNAL, so no way to bound the wait. ext-pcntl
+            // without ext-posix is an unusual build but not an impossible
+            // one, and the blocking waitpid above was originally outside the
+            // guard: on that build the reaper would sit in tearDown() for as
+            // long as a live child chose to run, with the per-test alarm
+            // already spent. WNOHANG still collects an already-exited child
+            // so the ordinary case leaves no zombie; a live one is reported
+            // by its absence from $killed rather than waited out.
             $status = 0;
-            \pcntl_waitpid($pid, $status);
+            \pcntl_waitpid($pid, $status, \WNOHANG);
         }
 
         return $killed;
