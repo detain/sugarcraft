@@ -658,11 +658,16 @@ final class EnvRosterDriftTest extends TestCase
      * THE ROSTER PAGE IS NOT THE ONLY PAGE THAT NAMES THESE VARIABLES, AND
      * UNTIL ROUND 45 IT WAS THE ONLY ONE UNDER ANY ORACLE.
      *
-     * Provenance, re-derived rather than quoted, because a count written into
-     * prose is invalidated by the next page anyone adds: at round 45 on PHP
-     * 8.3.6, `README.md` named ten of these variables and the eleven non-roster
-     * `docs/*.md` pages named fourteen between them, and not one of those
-     * appearances was compared against anything. Nothing asserts those figures.
+     * NO CARDINALITY IS QUOTED HERE, which is discipline rather than vagueness:
+     * a count measured over `docs/` is invalidated by the next page anyone
+     * adds, and this file's whole subject is prose drifting away from what is
+     * true. What was measured at round 45 on PHP 8.3.6 is the SHAPE —
+     * `README.md` and six of the eleven non-roster `docs/*.md` pages each name
+     * variables from this roster, and before this test not one of those
+     * appearances was compared against anything at all. The live generator for
+     * "is this census reading anything" is
+     * {@see testTheMentionCensusActuallyReadsTheOtherPages()}, which asserts
+     * floors rather than counts.
      *
      * THE RULE, AND WHY IT IS NOT SYMMETRIC. The surfaces make different
      * promises, so they get different oracles:

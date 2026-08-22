@@ -13,15 +13,29 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  * all three asked the same question of the same window, so a claim the window
  * cannot isolate was invisible to EVERY doc-drift guard at once.
  *
+ * THERE IS A FOURTH COPY, and it is NOT routed here yet:
+ * `tests/Chat/ChatConfigChangeDoorsDocumentationDriftTest`'s `private static
+ * function paragraphs()` is the same rule again, spelled `static`, which is why
+ * a grep for the instance form finds three. It is left alone this round on
+ * file-ownership grounds, not because it is different. MEASURED before saying
+ * so, on PHP 8.3.6 at round 45: both doc-blocks it reads are plain prose with
+ * no list, table or fence, so the old and new windows give it identical
+ * verdicts and nothing is hiding in it today. It is a latent carrier of the
+ * blind spot, and routing it here is a one-line change.
+ *
  * THE OLD WINDOW WAS `preg_split('/\n\s*\n/')` — a blank line, and nothing
  * else. Markdown does not put blank lines between table rows, between list
  * items, or inside a fenced code block, so each of those collapsed into ONE
- * unit. Measured on this tree at round 45 (PHP 8.3.6): `README.md` split into
- * 164 units under that rule, of which one was 14,244 bytes — a lead paragraph
- * plus five subsystem bullets — and `docs/ENVIRONMENT.md`'s whole variable
- * table was a single 10,828-byte unit. Those figures are a snapshot and are
- * not asserted anywhere; what IS asserted is the behaviour they illustrate,
- * in {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest}.
+ * unit. NO CARDINALITY IS QUOTED HERE ON PURPOSE — a count measured over
+ * `docs/` is wrong the next time anyone edits a page, and a stale figure
+ * inside the helper the doc-drift guards read through is not a joke worth
+ * shipping twice. The SHAPES are what matter, and both were live on this tree
+ * at round 45 (PHP 8.3.6): `README.md`'s largest unit was a lead paragraph
+ * welded to five subsystem bullets, and the whole variable table on
+ * `docs/ENVIRONMENT.md` was one unit. What is ASSERTED is the behaviour those
+ * shapes illustrate — see
+ * {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest}'s fixture
+ * table, which derives BOTH rules' answers on every run.
  *
  * WHY A COARSE WINDOW IS A DEFECT AND NOT MERELY UNTIDY. Two of the guards
  * decide their verdict by asking whether the SAME unit also contains an
@@ -30,9 +44,13 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  * - `GlobFigureDriftTest::carriesTheStaleFigure()` spares a unit that spells
  *   the current count and quotes the glob — a retraction. In a 14 KB unit that
  *   retraction may be six bullets away from the stale sentence it exempts.
- * - `ConfigWriteProducerDocumentationDriftTest::testOneParagraphNamesAllFourDoors()`
- *   requires ONE unit to name all four producers. A table whose four rows each
- *   name one satisfies it without any single row making the claim.
+ * - `ConfigWriteProducerDocumentationDriftTest`'s four-doors rule required ONE
+ *   unit to name all four producers. A table whose four rows each name one
+ *   satisfies that without any single row making the claim — and the finer
+ *   window turned out to move its verdict on a real document, so the rule is
+ *   now per key. That test is
+ *   `testTheEnumerationNamesBothDoorsOfEveryPersistedKey()`; its doc-block
+ *   carries the reasoning.
  *
  * and one decides by asking whether a locator picks out exactly one unit
  * (`soleParagraphContaining()`), which a 14 KB unit answers uselessly.
@@ -67,12 +85,14 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  * thing this helper's own scan got wrong, which is why {@see unclosedFenceAt()}
  * exists and is asserted over the whole census scope rather than trusted.
  *
- * THE DOC-BLOCK LEADER STRIP is inherited unchanged: the opening `/**`, the closing marker, and a leading
- * `*` are removed so a `*`-prefixed doc-block line and a markdown line reach
- * the same shape. IT WOULD EAT A MARKDOWN `*` BULLET MARKER. Measured at round
- * 45: `grep -rE '^\s*\*\s' docs/*.md README.md` matches nothing, so no page in
- * scope uses `*` bullets today and the hazard is latent rather than live. It is
- * pinned by a fixture rather than left to be rediscovered.
+ * THE DOC-BLOCK LEADER STRIP is inherited unchanged: the opening `/**`, its
+ * closing marker and a leading `*` are removed, so a `*`-prefixed doc-block
+ * line and a markdown line reach the same shape. IT WOULD EAT A MARKDOWN `*`
+ * BULLET MARKER, and the item would silently re-merge into whatever precedes
+ * it — the exact blind spot this helper closes for `-` bullets. No page in
+ * scope uses `*` bullets at round 45 (PHP 8.3.6), so the hazard is latent
+ * rather than live. It is pinned by a test that runs its probe over a known
+ * positive first, rather than left to be rediscovered.
  *
  * @internal
  */
