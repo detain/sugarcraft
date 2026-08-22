@@ -1552,9 +1552,14 @@ final class ScriptHookTest extends TestCase
      * printing 200,000 bytes and exiting 3 produced a 200,000-byte
      * `HookResult::message`, and it reaches two places from there — the TUI's
      * permission modal, and {@see \SugarCraft\Crush\Runtime::settleAsk()},
-     * which on a run with NO approver attached interpolates it whole into
-     * `"Permission required and no approver is attached to this run: …"` and
-     * hands that to the model as the tool result.
+     * which on a run with NO approver attached interpolates it whole into that
+     * arm's denial and hands it to the model as the tool result. (E210 changed
+     * the wording of that denial — it now reads
+     * `"Permission required: no approver is attached to this run: …"`, so the
+     * prefix is one {@see \SugarCraft\Crush\Chat::DENIED_ERROR_PREFIXES}
+     * recognises as a permission refusal rather than a hook one. The clipping
+     * this test is about is unaffected: the question is interpolated whole
+     * either way.)
      *
      * The objection the old docblock raised — "clipping it changes what the
      * human is answering" — is real, and the answer is narrower than an earlier

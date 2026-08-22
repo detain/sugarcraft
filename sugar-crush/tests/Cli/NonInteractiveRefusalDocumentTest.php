@@ -235,28 +235,26 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     }
 
     /**
-     * `--output-format text` IS UNTOUCHED, AND IS THE ONE PLACE A REFUSAL CAN
-     * STILL GO MISSING ENTIRELY.
+     * `--output-format text` PUTS THE ANSWER ON STDOUT AND NOTHING ELSE, and
+     * that survived the refusal line landing (E219).
      *
-     * WHAT THIS DOC-BLOCK SAID: that the format "does not need touching: on
-     * that format the operator is at the terminal, where
+     * WHAT THIS DOC-BLOCK SAID FIRST: that the format "does not need touching:
+     * on that format the operator is at the terminal, where
      * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt} has already
-     * written every refusal to stderr". WHAT IS TRUE NOW: that class settles an
-     * ASK, and nothing else ever reaches it — a plain hook DENY returns out of
-     * {@see \SugarCraft\Crush\Runtime::gate()} before `settleAsk()` is
-     * called, and `Runtime` writes to stderr nowhere. So the refusal
-     * {@see testARealEngineTurnPutsItsBlockedToolCallInTheJsonDocument()}
-     * exercises — the shipped gate stopping `rm -rf ./build`, which is the
-     * commonest refusal there is — reaches NEITHER channel under `text`.
-     * MEASURED on PHP 8.3.6: that turn writes zero bytes to stderr.
+     * written every refusal to stderr". Round 47 measured that false — that
+     * class settles an ASK and nothing else reaches it, so a plain hook DENY
+     * reached NEITHER channel under `text`. WHAT IT SAID SECOND: that closing
+     * the gap "belongs on the DENY path in `Runtime`". WHAT IS TRUE NOW: the
+     * gap is closed and that second sentence was wrong too — see
+     * {@see testAHookDenialNowReachesStderrOnTheTextFormat()} for where the
+     * line actually went and why `Runtime` was the wrong owner.
      *
-     * WHY THIS TEST STILL EARNS ITS PLACE, and why it is not marked incomplete:
-     * the assertion is not "the operator is informed". It is that stdout under
-     * `text` is the answer and NOTHING ELSE, which is the contract a shell
-     * pipeline depends on and the reason the refusal list was not simply
-     * printed here. That contract is worth pinning whichever way the gap is
-     * closed, and closing it belongs on the DENY path in `Runtime`. If a stderr
-     * line lands there, this test keeps passing — which is the point.
+     * WHY THIS TEST STILL EARNS ITS PLACE, unchanged in substance across both
+     * rewrites: the assertion is not "the operator is informed". It is that
+     * STDOUT under `text` is the answer and nothing else, which is the contract
+     * a shell pipeline depends on and the reason the refusal list was not
+     * simply printed here. The E219 line went to stderr precisely so this stays
+     * true, and this test is what says so.
      */
     public function testTextFormatStillPrintsTheAnswerAndNothingElse(): void
     {
@@ -275,33 +273,45 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     }
 
     /**
-     * THE HALF-CHANNEL, PINNED — because four doc-blocks and a README paragraph
-     * now rest on it.
+     * `Runtime` WRITING TO STDERR NOWHERE IS A PROPERTY THIS BUILD DEPENDS ON,
+     * AND THE FIVE PLACES THAT USED TO CALL IT A GAP HAD THE OWNER WRONG.
      *
-     * WHAT THOSE FIVE PLACES USED TO SAY: that `--output-format text` needs no
-     * refusal list because "every refusal is already on stderr". Round 47
-     * measured that false. The sentence was true of
-     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, which writes its
-     * four shapes to stderr, and was generalised to every refusal — but that
-     * class settles an ASK and is reached from nowhere else, while
-     * {@see \SugarCraft\Crush\Runtime::gate()} returns a plain DENY before
-     * `settleAsk()` is ever called. So the commonest refusal there is reaches
-     * NEITHER channel under `text`.
+     * WHAT THOSE FIVE PLACES SAID — {@see \SugarCraft\Crush\Cli\NonInteractive::run()},
+     * {@see \SugarCraft\Crush\Cli\NonInteractive::format()},
+     * {@see \SugarCraft\Crush\Cli\NonInteractive::emitErrorDocument()},
+     * {@see testTextFormatStillPrintsTheAnswerAndNothingElse()} and
+     * `README.md`: that a hook DENY reaches neither channel under
+     * `--output-format text`, that this was a real gap, and that "the fix is a
+     * stderr line on the deny path in `Runtime`". The first two clauses were
+     * measured and true. THE THIRD WAS A PRESCRIPTION, AND IT DOES NOT SURVIVE
+     * THE OTHER CALLER.
      *
-     * THE MECHANISM HALF OF THAT CLAIM IS "`Runtime` WRITES TO STDERR NOWHERE",
-     * and a sentence in a doc-block cannot red. This can. The day someone adds
-     * the missing deny-path line — which is the right fix and is on the
-     * hardening backlog — this test reds, and it reds pointing at the five
-     * places that describe the gap, so the fix and the prose land together
-     * instead of the prose rotting into a second wrong promise. That is the
-     * only reason it is an assertion about SOURCE rather than about behaviour:
-     * the behaviour is an absence, and an absence observed in one turn does not
-     * generalise to the ones the suite does not run.
+     * WHAT IS TRUE NOW. `Runtime` is the ENGINE, not the headless CLI.
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}
+     * `pcntl_fork()`s and runs the same `Runtime` in the child; the fork site
+     * closes and re-blocks its socket pair and touches no standard stream, so
+     * the child inherits descriptor 2 from the parent — and on the interactive
+     * path that parent is a `Program` holding the ALTERNATE SCREEN open. A
+     * refusal line written from `Runtime::gate()` would paint onto a live TUI
+     * frame on every denied call. The TUI is not the surface that was missing
+     * one anyway: it already draws a refusal struck through
+     * ({@see \SugarCraft\Crush\Chat::isDeniedResult()}), which is why the gap
+     * was headless-only. So the line went to
+     * {@see \SugarCraft\Crush\Cli\NonInteractive}, which owns its console,
+     * and `Runtime`'s silence became a thing to KEEP rather than a thing to
+     * fix.
      *
-     * @see testTextFormatStillPrintsTheAnswerAndNothingElse() for the contract
-     *      that keeps the fix off stdout.
+     * WHY THE SCANNER SURVIVED THE INVERSION. Its assertion is byte-identical
+     * to round 47's and its meaning is the opposite: then it said "the gap is
+     * still open, and the day it closes, come update the prose"; now it says
+     * "this file must not acquire the write, because the alternate screen is
+     * underneath it". A guard whose failure message rots is worse than no
+     * guard, so the message is rewritten with it.
+     *
+     * @see testAHookDenialNowReachesStderrOnTheTextFormat() for the positive
+     *      half — that the line does exist, on the surface that owns it.
      */
-    public function testRuntimeWritesNothingToStderrSoATextFormatDenialIsSilent(): void
+    public function testRuntimeStillWritesNothingToStderrBecauseTheTuiForksIntoIt(): void
     {
         // KNOWN-POSITIVE FIRST (rule 15): an absence is not evidence unless the
         // same test shows the scanner can still find a presence. Assembled from
@@ -333,12 +343,209 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertSame(
             [],
             self::stderrWritesIn($runtime),
-            'Runtime now writes to stderr. If that write is the deny-path refusal line, this is the good '
-            . 'news — but NonInteractive::run(), NonInteractive::format(), NonInteractive::emitErrorDocument(), '
-            . 'this file\'s text-format test and README.md all state that no such line exists, and all five '
-            . 'are now wrong. Update them in the same change',
+            'Runtime now writes to stderr. EngineBackend::completeAsync() forks and runs Runtime in a child '
+            . 'that inherits descriptor 2 from the interactive Program, so on the TUI path this write lands '
+            . 'on top of the alternate screen. If it is the headless refusal notice, that already exists on '
+            . 'the surface that owns its console - NonInteractive::noticeRefusal(). Move it there',
         );
     }
+
+    /**
+     * THE POSITIVE HALF OF E219: a hook DENY REACHES THE OPERATOR, on the
+     * default `text` format, where it used to reach nobody at all.
+     *
+     * IN A CHILD PROCESS, BECAUSE STDERR CANNOT BE CAPTURED IN THIS ONE.
+     * `\STDERR` is a constant bound to descriptor 2 at startup and PHP has no
+     * `dup2`, so `ob_start()` cannot see it and there is no seam to swap
+     * without giving this class a second global. Asserting the bytes actually
+     * arrive on descriptor 2 is the whole claim, so the test pays for a
+     * subprocess rather than weakening it into "some method was called".
+     *
+     * The fixture is the same shape as {@see backendEmitting()}'s: a backend
+     * that emits one errored {@see \SugarCraft\Crush\Events\ToolFinished}
+     * whose text {@see \SugarCraft\Crush\Chat::DENIED_ERROR_PREFIXES}
+     * recognises, then answers. Both halves are asserted in one run — the
+     * answer alone on stdout, the refusal alone on stderr — because the split
+     * between the two channels IS the contract, and checking either on its own
+     * would pass with them merged.
+     */
+    public function testAHookDenialNowReachesStderrOnTheTextFormat(): void
+    {
+        [$stdout, $stderr, $code] = self::runOneShotInAChildProcess(
+            'Hook denied: rm -rf is not allowed',
+            'text',
+        );
+
+        self::assertSame(0, $code, "child failed:\n{$stderr}");
+        self::assertSame("the answer\n", $stdout, 'the text format put something other than the answer on stdout');
+        self::assertStringContainsString('Bash was not run', $stderr);
+        self::assertStringContainsString('Hook denied: rm -rf is not allowed', $stderr);
+    }
+
+    /**
+     * AND THE THREE DENIAL KINDS ARRIVE DISTINGUISHABLE ON THAT LINE (E210),
+     * which is the whole reason the reason string is quoted into it rather than
+     * summarised.
+     *
+     * Driven with the three prefixes {@see \SugarCraft\Crush\Runtime}
+     * produces, read off that class rather than spelled here so a fourth is
+     * covered the day it is added.
+     */
+    public function testTheStderrLineCarriesWhichKindOfRefusalItWas(): void
+    {
+        $prefixes = array_filter(
+            (new \ReflectionClass(\SugarCraft\Crush\Runtime::class))->getConstants(),
+            static fn (string $name): bool => str_starts_with($name, 'DENIAL_'),
+            \ARRAY_FILTER_USE_KEY,
+        );
+
+        self::assertNotSame([], $prefixes, 'no DENIAL_* constants found; this test is driving nothing');
+
+        foreach ($prefixes as $name => $prefix) {
+            [, $stderr, $code] = self::runOneShotInAChildProcess((string) $prefix . ' because reasons', 'json');
+
+            self::assertSame(0, $code);
+            self::assertStringContainsString(
+                (string) $prefix . ' because reasons',
+                $stderr,
+                "a refusal carrying Runtime::{$name} did not name its kind on stderr",
+            );
+        }
+    }
+
+    /**
+     * `--output-format json` KEEPS ITS ONE OBJECT ON STDOUT while the same
+     * refusal is announced on stderr.
+     *
+     * The line is written on BOTH formats deliberately (a human running
+     * `… --output-format json | jq .` still gets told), so this is the test
+     * that says the json contract survived it. `json_decode` on the whole of
+     * stdout is the assertion: a stray line anywhere in it fails to parse.
+     */
+    public function testTheJsonDocumentIsStillAloneOnStdoutWithTheNoticeOnStderr(): void
+    {
+        [$stdout, $stderr, $code] = self::runOneShotInAChildProcess(
+            'Hook denied: rm -rf is not allowed',
+            'json',
+        );
+
+        self::assertSame(0, $code, "child failed:\n{$stderr}");
+
+        $document = json_decode(trim($stdout), true, 512, \JSON_THROW_ON_ERROR);
+        self::assertIsArray($document);
+        self::assertSame('the answer', $document['result']);
+        self::assertSame(
+            [['tool' => 'Bash', 'reason' => 'Hook denied: rm -rf is not allowed']],
+            $document['refusals'],
+        );
+
+        self::assertStringContainsString('Bash was not run', $stderr);
+    }
+
+    /**
+     * A TURN THAT REFUSES NOTHING SAYS NOTHING — the negative that keeps the
+     * three tests above from being satisfied by a notice on every turn.
+     */
+    public function testATurnThatRefusesNothingWritesNoRefusalLine(): void
+    {
+        [$stdout, $stderr, $code] = self::runOneShotInAChildProcess(null, 'text');
+
+        self::assertSame(0, $code, "child failed:\n{$stderr}");
+        self::assertSame("the answer\n", $stdout);
+        self::assertStringNotContainsString('was not run', $stderr);
+    }
+
+    /**
+     * Run one `NonInteractive::run()` turn in a child PHP process and return
+     * `[stdout, stderr, exit code]`.
+     *
+     * $refusalText is the errored tool-result text the backend emits, or null
+     * for a turn that emits no tool events at all.
+     *
+     * The script is written to the suite's own sandbox under a name unique to
+     * this process, and deleted by exact path — never a glob, because sibling
+     * suites own files in the same directory.
+     *
+     * @return array{0: string, 1: string, 2: int}
+     */
+    private static function runOneShotInAChildProcess(?string $refusalText, string $format): array
+    {
+        $autoloadLiteral = var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true);
+        $formatLiteral = var_export($format, true);
+        $emit = $refusalText === null
+            ? ''
+            : <<<'CHILD'
+                    $call = new ToolCall('c0', 'Bash', []);
+                    if ($onEvent !== null) {
+                        $onEvent(ToolStarted::fromCall($call));
+                        $onEvent(ToolFinished::fromResult(
+                            $call,
+                            new ToolResult(toolCallId: 'c0', content: REFUSAL_TEXT, isError: true),
+                        ));
+                    }
+                CHILD;
+        $emit = str_replace('REFUSAL_TEXT', var_export($refusalText, true), $emit);
+
+        $script = <<<CHILD
+            <?php
+            declare(strict_types=1);
+            require {$autoloadLiteral};
+            use SugarCraft\Crush\Backend;
+            use SugarCraft\Crush\Backend\CancellationToken;
+            use SugarCraft\Crush\Cli\ArgvParser;
+            use SugarCraft\Crush\Cli\NonInteractive;
+            use SugarCraft\Crush\Events\ToolFinished;
+            use SugarCraft\Crush\Events\ToolStarted;
+            use SugarCraft\Crush\Message;
+            use SugarCraft\Crush\Tools\ToolCall;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            \$backend = new class implements Backend {
+                public function complete(array \$history, callable \$onToken = null, ?callable \$onEvent = null): Message
+                {
+            {$emit}
+
+                    return Message::assistant('the answer');
+                }
+
+                public function completeAsync(array \$history, callable \$onToken = null, ?CancellationToken \$cancellation = null, ?callable \$onEvent = null): \\React\\Promise\\PromiseInterface
+                {
+                    // Every backslash in this heredoc is doubled: the heredoc
+                    // INTERPOLATES, so a single `\\r` in `Promise\\resolve` is a
+                    // carriage return in the emitted file and the child dies on
+                    // `unexpected identifier "esolve"`.
+                    return \\React\\Promise\\resolve(\$this->complete(\$history, \$onToken, \$onEvent));
+                }
+            };
+
+            exit(NonInteractive::run(ArgvParser::parse(['sugarcrush', '-p', 'go']), \$backend, {$formatLiteral}));
+            CHILD;
+
+        $path = sys_get_temp_dir() . '/sc_r48c_deny_notice_' . getmypid() . '_' . self::$childSeq++ . '.php';
+        file_put_contents($path, $script);
+
+        try {
+            $process = proc_open(
+                [\PHP_BINARY, $path],
+                [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+            );
+            self::assertIsResource($process, 'could not spawn the child process');
+
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $code = proc_close($process);
+        } finally {
+            @unlink($path);
+        }
+
+        return [$stdout, $stderr, $code];
+    }
+
+    /** Distinguishes this process's child scripts from each other. */
+    private static int $childSeq = 0;
 
     /**
      * Every construct in `$source` that writes to the standard error stream.
