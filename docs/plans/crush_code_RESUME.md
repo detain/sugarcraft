@@ -282,13 +282,29 @@ remains after them:
 - then **Phase 9** (interactive-prompt containment: layered A+C, parameter not second tool,
   **no askpass**) · then the deferred security pass.
 
-### 🔵 ONE OPEN QUESTION FOR THE USER — do not silently decide it
+### 🟢 ANSWERED, ROUND 42 — RE-RUN THE ROOT UPDATE THE USER WAS DOING. **Owed work, not a question.**
 
-The user ran `composer update` in several dirs mid-round-41 and the supervisor **reverted the resulting
-root `composer.lock` change** (118 insertions / 115 deletions — aws-sdk 3.390.4 → 3.393.4 and friends)
-before it knew the change was the user's, to keep it out of an unrelated commit. **The user was told and
-has not yet answered.** Do not re-run `composer update` at the root to restore it without asking; do not
-quietly drop the question either.
+Round 41's supervisor **reverted the user's root `composer.lock` change** (118 insertions / 115
+deletions — aws-sdk 3.390.4 → 3.393.4 and friends) before it knew the change was theirs, to keep it out
+of an unrelated commit. **The user answered on 2026-08-22: re-run it.** Their exact command:
+
+```sh
+composer update -v -o -W        # at the REPO ROOT, /home/sites/sugarcraft
+```
+
+`-o` authoritative classmap, `-W` `--with-all-dependencies` (bumps transitive deps too, which is why the
+diff was large). **Run it at the round boundary, after the merged floor is measured** — a changed root
+lock during a measurement is one more thing to rule out. It is otherwise independent of the lanes: the
+root `vendor/` is not what any per-lib suite loads.
+
+⚠️ **The root manifest is the ONE manifest that legitimately carries `repositories[]`** — the monorepo
+root is the directory those `../<lib>` urls resolve against. So unlike a per-lib update this one is
+expected to touch the root lock, and the root lock **is tracked and SHOULD be committed**. Do NOT
+`git checkout --` it. Afterwards still confirm the usual invariants, because `-W` reaches far:
+`php tools/check-path-repos.php --no-lib-path-repos` rc 0 · `sugar-crush` still **18/18 symlinks** by
+`is_link()` · zero tracked per-lib `composer.lock` · `.sugar-crush/config.json` md5 unchanged.
+**If the root update de-symlinks any per-lib closure, repair it with the round-trip above before
+trusting a single further figure.**
 
 ---
 
