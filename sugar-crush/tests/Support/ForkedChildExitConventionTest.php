@@ -72,6 +72,15 @@ final class ForkedChildExitConventionTest extends TestCase
             . 'the sentinels alone would turn this row green while leaving the path it stands for '
             . 'entirely untouched, which is worse than the row.',
 
+        'Agents/TaskListTest.php' =>
+            'RECORDED OPEN, and found only because the scanner learned to read '
+            . '`\\pcntl_fork()`. testForkedClaimRace() forks $childCount claimants and one '
+            . 'completer, all spelled with a leading backslash, and every child branch ends in a '
+            . 'plain exit(0) inside PHPUnit. They were invisible to the census until '
+            . 'T_NAME_FULLY_QUALIFIED was added to the fork token types - the guard reported this '
+            . 'file as having no forks at all. Out of this lane\'s file split to fix; they should '
+            . 'be ForkedChild::exitNow(0).',
+
         'Agents/MailboxTest.php' =>
             'RECORDED OPEN. testCrossProcessWake()\'s child sends a real Mailbox message and then '
             . 'falls into a plain exit(0) inside PHPUnit. It has no inherited tty and no armed '
@@ -87,6 +96,7 @@ final class ForkedChildExitConventionTest extends TestCase
     private const SAFE_SHAPES = [
         ForkedChildExitScanner::SHAPE_EXIT_NOW,
         ForkedChildExitScanner::SHAPE_NEVER_HELPER,
+        ForkedChildExitScanner::SHAPE_FORK_WRAPPER,
     ];
 
     /**
@@ -204,6 +214,84 @@ final class ForkedChildExitConventionTest extends TestCase
         $this->assertCount(1, $tracked);
         $this->assertSame('forkTracked', $tracked[0]['spelling']);
         $this->assertSame(ForkedChildExitScanner::SHAPE_BARE_EXIT, $tracked[0]['shape']);
+
+        // THE SECOND MUTATION THAT GOT THROUGH, kept as a fixture. One
+        // leading backslash made a site VANISH: `\pcntl_fork` is a single
+        // T_NAME_FULLY_QUALIFIED token, not a T_STRING, and the scanner
+        // tested T_STRING alone. Two real offenders in
+        // tests/Agents/TaskListTest.php were reported as not existing.
+        $qualified = $shape('    $pid = \\pcntl_fork();' . "\n" . '    if ($pid === 0) { exit(0); }' . "\n");
+        $this->assertCount(1, $qualified, 'a fully-qualified \\pcntl_fork() is still a fork site');
+        $this->assertSame(ForkedChildExitScanner::SHAPE_BARE_EXIT, $qualified[0]['shape']);
+        $this->assertSame(
+            'pcntl_fork',
+            $qualified[0]['spelling'],
+            'the spelling is normalised without its leading backslash',
+        );
+
+        // THE THIRD, and it is rule 17 in one line: a doc-block wraps, so
+        // prose about a terminator sits in the same source text the
+        // terminator would. Classifying on rendered text meant a COMMENT
+        // naming the safe helper made a plain exit read as safe.
+        $commented = $shape(
+            '    $pid = pcntl_fork();' . "\n"
+            . '    if ($pid === 0) {' . "\n"
+            . '        // ForkedChild::exitNow(0) is not usable on this path.' . "\n"
+            . '        exit(0);' . "\n"
+            . '    }' . "\n",
+        );
+        $this->assertSame(
+            ForkedChildExitScanner::SHAPE_BARE_EXIT,
+            $commented[0]['shape'],
+            'a comment naming the safe helper is not the safe helper',
+        );
+
+        // Same window, via a string literal rather than a comment.
+        $quoted = $shape(
+            '    $pid = pcntl_fork();' . "\n"
+            . '    if ($pid === 0) { $log("call ForkedChild::exitNow next"); }' . "\n",
+        );
+        $this->assertSame(ForkedChildExitScanner::SHAPE_FALLS_THROUGH, $quoted[0]['shape']);
+
+        // And the same window for a `never` helper named only in prose.
+        $neverProse = ForkedChildExitScanner::scan(
+            "<?php\nclass F {\n"
+            . '  public function t(): void { $pid = pcntl_fork(); if ($pid === 0) {' . "\n"
+            . '    // $this->go() would be correct here.' . "\n"
+            . '    exit(0); } }' . "\n"
+            . '  private function go(): never { exit(0); }' . "\n}\n",
+        );
+        $this->assertSame(ForkedChildExitScanner::SHAPE_BARE_EXIT, $neverProse[0]['shape']);
+
+        // A fork WRAPPER returns to its caller in both processes; that is its
+        // contract, not a fall-through. The shape is granted only inside a
+        // function this scanner already treats as a fork spelling.
+        $wrapper = ForkedChildExitScanner::scan(
+            "<?php\ntrait T {\n"
+            . '  protected function forkTracked(): int {' . "\n"
+            . '    $pid = \\pcntl_fork();' . "\n"
+            . '    if ($pid === 0) { $this->ledger = []; return 0; }' . "\n"
+            . '    return $pid;' . "\n"
+            . "  }\n}\n",
+        );
+        $this->assertCount(1, $wrapper);
+        $this->assertSame(ForkedChildExitScanner::SHAPE_FORK_WRAPPER, $wrapper[0]['shape']);
+
+        // The SAME branch in a function that is not a fork spelling is a
+        // child returning into the test runner - the defect, not the wrapper.
+        $notWrapper = ForkedChildExitScanner::scan(
+            "<?php\nclass F {\n"
+            . '  public function t(): int {' . "\n"
+            . '    $pid = \\pcntl_fork();' . "\n"
+            . '    if ($pid === 0) { return 0; }' . "\n"
+            . '    return $pid;' . "\n"
+            . "  }\n}\n",
+        );
+        $this->assertSame(
+            ForkedChildExitScanner::SHAPE_FALLS_THROUGH,
+            $notWrapper[0]['shape'],
+            'only a function named as a fork spelling may return from a child branch',
+        );
 
         // A fork in a heredoc runs in a DIFFERENT process. No site at all.
         $embedded = ForkedChildExitScanner::scan(

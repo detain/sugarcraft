@@ -37,6 +37,25 @@ final class ForkedChildExitScanner
      */
     private const FORK_SPELLINGS = ['pcntl_fork', 'forkTracked'];
 
+    /**
+     * A fork site is matched on TWO token types, and the second one is not
+     * optional.
+     *
+     * PHP 8's lexer hands back `\pcntl_fork` as a single
+     * `T_NAME_FULLY_QUALIFIED`, NOT as a `T_STRING` preceded by a backslash.
+     * The first version of this scanner tested `T_STRING` alone, so one
+     * leading `\` made a fork site vanish from the census entirely - and
+     * `tests/Agents/TaskListTest.php` writes it exactly that way, twice, with
+     * a plain `exit(0)` in each child branch. Two live offenders of precisely
+     * the shape this scanner exists to find, reported as not existing.
+     *
+     * This is the same defect {@see ChildStderrCaptureScanner} records in its
+     * own doc-block, found there first and not carried across until it had
+     * been made twice. A guard that silently sees nothing is worse than no
+     * guard: it is a green light with no bulb in it.
+     */
+    private const FORK_TOKEN_TYPES = [\T_STRING, \T_NAME_FULLY_QUALIFIED];
+
     /** Leaving shapes that never run PHP's shutdown sequence. */
     public const SHAPE_EXIT_NOW = 'exitNow';
 
@@ -53,18 +72,37 @@ final class ForkedChildExitScanner
     public const SHAPE_UNCLASSIFIED = 'unclassified';
 
     /**
+     * The child branch RETURNS, inside a function that is itself one of
+     * {@see FORK_SPELLINGS} - i.e. the site is a fork WRAPPER, not a fork.
+     *
+     * `forkTracked()` has to hand 0 back to its caller in the child and the
+     * pid in the parent, because that is the whole of its contract; deciding
+     * how the child leaves is the CALLER's job. Classifying that as
+     * `falls-through` would be false, and exempting the file by name would
+     * hand every future fork in it a free pass.
+     *
+     * The condition is deliberately self-limiting: only a function whose name
+     * this scanner ALREADY treats as a fork call spelling can be a wrapper, so
+     * a wrapper cannot buy its exemption without also making every one of its
+     * call sites a scanned fork site.
+     */
+    public const SHAPE_FORK_WRAPPER = 'fork-wrapper';
+
+    /**
      * @return list<array{line:int,spelling:string,shape:string}>
      */
     public static function scan(string $source): array
     {
         $tokens = \token_get_all($source);
         $never = self::neverReturningMethods($tokens);
+        $functions = self::functionRanges($tokens);
 
         /** @var list<array{line:int,spelling:string,shape:string}> $sites */
         $sites = [];
 
         foreach ($tokens as $i => $token) {
-            if (!\is_array($token) || $token[0] !== \T_STRING || !\in_array($token[1], self::FORK_SPELLINGS, true)) {
+            $spelling = self::forkSpellingAt($tokens, $i);
+            if ($spelling === null) {
                 continue;
             }
             if (self::next($tokens, $i) === null || self::tokenText($tokens[self::next($tokens, $i)]) !== '(') {
@@ -76,10 +114,11 @@ final class ForkedChildExitScanner
                 continue;
             }
 
+            /** @var array{0:int,1:string,2:int} $token */
             $sites[] = [
                 'line' => $token[2],
-                'spelling' => $token[1],
-                'shape' => self::classify($tokens, $i, $never),
+                'spelling' => $spelling,
+                'shape' => self::classify($tokens, $i, $never, self::enclosingFunction($functions, $i)),
             ];
         }
 
@@ -90,7 +129,7 @@ final class ForkedChildExitScanner
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      * @param list<string> $never
      */
-    private static function classify(array $tokens, int $forkAt, array $never): string
+    private static function classify(array $tokens, int $forkAt, array $never, ?string $enclosing): string
     {
         $openBrace = null;
         $closeBrace = null;
@@ -101,8 +140,7 @@ final class ForkedChildExitScanner
         // the `if`s that follow rather than assuming the first one is the
         // child's, and stops at whichever boundary comes first.
         for ($i = $forkAt + 1, $n = \count($tokens); $i < $n; $i++) {
-            if (\is_array($tokens[$i]) && $tokens[$i][0] === \T_STRING
-                && \in_array($tokens[$i][1], self::FORK_SPELLINGS, true)) {
+            if (self::forkSpellingAt($tokens, $i) !== null) {
                 // The next fork begins; this one never got a child branch.
                 return self::SHAPE_UNCLASSIFIED;
             }
@@ -182,40 +220,126 @@ final class ForkedChildExitScanner
             return self::SHAPE_UNCLASSIFIED;
         }
 
-        if (\str_contains($tail, 'ForkedChild::exitNow')) {
-            return self::SHAPE_EXIT_NOW;
+        return self::classifyTail($tokens, $tail[0], $tail[1], $never, $enclosing);
+    }
+
+    /**
+     * How the branch's last statement leaves, decided on TOKEN IDENTITY rather
+     * than on substrings of source text.
+     *
+     * WHY NOT TEXT. The first version rendered the statement back to source
+     * with {@see text()} - which concatenates EVERY token, comments included -
+     * and then asked `str_contains($tail, 'ForkedChild::exitNow')`. So a plain
+     * `exit(0)` with the line
+     * `// ForkedChild::exitNow(0) is not usable on this path.` above it came
+     * back as the SAFE shape (measured: it survived a mutation that the same
+     * defect without the comment killed). A string literal mentioning the
+     * helper did it too, and so did a comment naming a `never` method. Prose
+     * about a terminator is not a terminator.
+     *
+     * Token identity has no such window: `exit`/`die` are `T_EXIT` whatever
+     * they are spelled next to, `ForkedChild::exitNow` is a resolvable token
+     * triple, and neither a `T_COMMENT` nor a `T_CONSTANT_ENCAPSED_STRING` can
+     * impersonate either of them.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     * @param list<string> $never
+     */
+    private static function classifyTail(
+        array $tokens,
+        int $from,
+        int $to,
+        array $never,
+        ?string $enclosing,
+    ): string {
+        /** @var list<int> $sig indices of the statement's significant tokens */
+        $sig = [];
+        for ($i = $from; $i <= $to; $i++) {
+            if (\is_array($tokens[$i])
+                && \in_array($tokens[$i][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $sig[] = $i;
         }
 
-        foreach ($never as $method) {
-            if (\str_contains($tail, '$this->' . $method . '(') || \str_contains($tail, 'self::' . $method . '(')) {
+        if ($sig === []) {
+            return self::SHAPE_FALLS_THROUGH;
+        }
+
+        $type = static function (int $at) use ($tokens): int {
+            return \is_array($tokens[$at]) ? $tokens[$at][0] : -1;
+        };
+        $text = static function (int $at) use ($tokens): string {
+            return self::tokenText($tokens[$at]);
+        };
+
+        foreach ($sig as $k => $at) {
+            // `ForkedChild::exitNow(` - as three tokens, in that order.
+            if (\in_array($type($at), [\T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED], true)) {
+                $name = \ltrim($text($at), '\\');
+                $isForkedChild = $name === 'ForkedChild' || \str_ends_with($name, '\\ForkedChild');
+                if ($isForkedChild
+                    && ($sig[$k + 1] ?? null) !== null && $type($sig[$k + 1]) === \T_DOUBLE_COLON
+                    && ($sig[$k + 2] ?? null) !== null && $text($sig[$k + 2]) === 'exitNow') {
+                    return self::SHAPE_EXIT_NOW;
+                }
+            }
+        }
+
+        foreach ($sig as $k => $at) {
+            // `$this->helper(` / `self::helper(` / `static::helper(`, where
+            // `helper` is declared `: never` in this same file.
+            $next = $sig[$k + 1] ?? null;
+            $after = $sig[$k + 2] ?? null;
+            if ($next === null || $after === null) {
+                continue;
+            }
+            $isThis = $type($at) === \T_VARIABLE && $text($at) === '$this'
+                && $type($next) === \T_OBJECT_OPERATOR;
+            $isSelf = \in_array($text($at), ['self', 'static'], true) && $type($next) === \T_DOUBLE_COLON;
+            if (($isThis || $isSelf) && \in_array($text($after), $never, true)) {
                 return self::SHAPE_NEVER_HELPER;
             }
         }
 
-        if (\preg_match('/\b(exit|die)\s*[(;]/i', $tail) === 1) {
-            return self::SHAPE_BARE_EXIT;
+        foreach ($sig as $at) {
+            if ($type($at) === \T_EXIT) {
+                return self::SHAPE_BARE_EXIT;
+            }
+        }
+
+        // A branch that RETURNS is only ever safe inside a fork wrapper; see
+        // {@see SHAPE_FORK_WRAPPER} for why that condition is narrow.
+        if ($type($sig[0]) === \T_RETURN) {
+            return $enclosing !== null && \in_array($enclosing, self::FORK_SPELLINGS, true)
+                ? self::SHAPE_FORK_WRAPPER
+                : self::SHAPE_FALLS_THROUGH;
         }
 
         return self::SHAPE_FALLS_THROUGH;
     }
 
     /**
-     * The final statement of a `{ ... }` block, as source text, plus the
-     * character that ended it (`;`, or `}` when the block's last thing was
+     * The final statement of a `{ ... }` block, as a TOKEN INDEX RANGE, plus
+     * the character that ended it (`;`, or `}` when the block's last thing was
      * itself a block).
      *
      * Statement boundaries are counted at the block's OWN nesting depth only,
      * so nothing inside a nested block can be mistaken for the branch's last
      * word.
      *
+     * A range rather than source text, because the caller classifies on token
+     * identity - see {@see classifyTail()} for the comment-in-the-window
+     * defect that rendering back to text caused.
+     *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @return array{0:?string,1:string}
+     * @return array{0:?array{0:int,1:int},1:string}
      */
     private static function lastStatement(array $tokens, int $openBrace, int $closeBrace): array
     {
         $depth = 0;
         $start = $openBrace + 1;
-        /** @var array{0:string,1:string}|null $last */
+        /** @var array{0:array{0:int,1:int},1:string}|null $last */
         $last = null;
 
         for ($i = $openBrace + 1; $i < $closeBrace; $i++) {
@@ -236,9 +360,8 @@ final class ForkedChildExitScanner
             if ($isPunct && $text === '}') {
                 $depth--;
                 if ($depth === 0) {
-                    $slice = \trim(self::text($tokens, $start, $i));
-                    if ($slice !== '') {
-                        $last = [$slice, '}'];
+                    if (self::hasCode($tokens, $start, $i)) {
+                        $last = [[$start, $i], '}'];
                     }
                     $start = $i + 1;
                 }
@@ -246,9 +369,8 @@ final class ForkedChildExitScanner
                 continue;
             }
             if ($isPunct && $text === ';' && $depth === 0) {
-                $slice = \trim(self::text($tokens, $start, $i));
-                if ($slice !== '') {
-                    $last = [$slice, ';'];
+                if (self::hasCode($tokens, $start, $i)) {
+                    $last = [[$start, $i], ';'];
                 }
                 $start = $i + 1;
             }
@@ -359,6 +481,133 @@ final class ForkedChildExitScanner
         }
 
         return null;
+    }
+
+    /**
+     * Whether a token range holds anything but whitespace and comments.
+     *
+     * A comment-only gap between two statements is not a statement; before
+     * this was checked on token types it was checked on `trim()`ed text, and
+     * a trailing `// ...` line therefore registered as the branch's last
+     * statement.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function hasCode(array $tokens, int $from, int $to): bool
+    {
+        for ($i = $from; $i <= $to; $i++) {
+            if (\is_string($tokens[$i])) {
+                if (\trim($tokens[$i]) !== '') {
+                    return true;
+                }
+
+                continue;
+            }
+            if (\in_array($tokens[$i][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * The fork spelling at $at, normalised without its leading `\`, or null.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function forkSpellingAt(array $tokens, int $at): ?string
+    {
+        if (!\is_array($tokens[$at]) || !\in_array($tokens[$at][0], self::FORK_TOKEN_TYPES, true)) {
+            return null;
+        }
+
+        $name = \ltrim($tokens[$at][1], '\\');
+
+        return \in_array($name, self::FORK_SPELLINGS, true) ? $name : null;
+    }
+
+    /**
+     * Every named function/method in the file, with the token range of its
+     * body, so a fork site can be attributed to the function it sits in.
+     *
+     * Anonymous functions and arrow functions are deliberately absent: they
+     * have no name to match against {@see FORK_SPELLINGS}, so a fork inside
+     * one is attributed to the named function enclosing it, which is the
+     * honest answer.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     * @return list<array{name:string,from:int,to:int}>
+     */
+    private static function functionRanges(array $tokens): array
+    {
+        $ranges = [];
+
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_FUNCTION) {
+                continue;
+            }
+            $nameAt = self::next($tokens, $i);
+            if ($nameAt === null || !\is_array($tokens[$nameAt]) || $tokens[$nameAt][0] !== \T_STRING) {
+                continue;
+            }
+            $openParen = self::next($tokens, $nameAt);
+            if ($openParen === null || self::tokenText($tokens[$openParen]) !== '(') {
+                continue;
+            }
+            $closeParen = self::matching($tokens, $openParen, '(', ')');
+            if ($closeParen === null) {
+                continue;
+            }
+
+            // Walk to the body, stepping over a return type; an abstract or
+            // interface method ends at `;` and has no body to record.
+            $brace = null;
+            for ($j = $closeParen + 1, $n = \count($tokens); $j < $n; $j++) {
+                $text = self::tokenText($tokens[$j]);
+                if (\is_string($tokens[$j]) && $text === ';') {
+                    break;
+                }
+                if (\is_string($tokens[$j]) && $text === '{') {
+                    $brace = $j;
+
+                    break;
+                }
+            }
+            if ($brace === null) {
+                continue;
+            }
+            $end = self::matching($tokens, $brace, '{', '}');
+            if ($end === null) {
+                continue;
+            }
+
+            $ranges[] = ['name' => $tokens[$nameAt][1], 'from' => $brace, 'to' => $end];
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * The name of the INNERMOST named function whose body contains $at.
+     *
+     * @param list<array{name:string,from:int,to:int}> $ranges
+     */
+    private static function enclosingFunction(array $ranges, int $at): ?string
+    {
+        $best = null;
+        $bestFrom = -1;
+
+        foreach ($ranges as $range) {
+            if ($at > $range['from'] && $at < $range['to'] && $range['from'] > $bestFrom) {
+                $best = $range['name'];
+                $bestFrom = $range['from'];
+            }
+        }
+
+        return $best;
     }
 
     /** @param list<array{0:int,1:string,2:int}|string> $tokens */
