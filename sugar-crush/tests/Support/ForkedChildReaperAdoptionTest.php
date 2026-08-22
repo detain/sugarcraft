@@ -35,16 +35,29 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     private const SCOPE = 'Integration/';
 
     /**
+     * The two halves an adopting file must carry, matched as CODE rather than
+     * as text.
+     *
+     * MATCHED AT THE START OF A LINE, and that is the whole of what makes this
+     * work. The first version looked for the bare string
+     * `ReapsForkedChildrenTrait` anywhere in the source - and every adopting
+     * file carries a doc-block above its `use` line saying
+     * `{@see ReapsForkedChildrenTrait}`. Deleting the `use` line left the
+     * mention behind and this guard stayed green over a file with no reaper at
+     * all (measured: mutation M7 SURVIVED). A doc-block wraps at 80 columns
+     * with ` * ` on every line, so anchoring on `^[ \t]*use` / `^[ \t]*$this->`
+     * excludes prose by construction - a `*` is neither.
+     *
      * @return list<string> the halves a source is missing, empty when whole
      */
     private static function missingHalves(string $source): array
     {
         $missing = [];
 
-        if (!str_contains($source, 'ReapsForkedChildrenTrait')) {
+        if (\preg_match('/^[ \t]*use[ \t]+\\\\?(?:[A-Za-z_]\w*\\\\)*ReapsForkedChildrenTrait[ \t]*;/m', $source) !== 1) {
             $missing[] = 'use ReapsForkedChildrenTrait';
         }
-        if (!str_contains($source, 'reapTrackedForkedChildren(')) {
+        if (\preg_match('/^[ \t]*\$this->reapTrackedForkedChildren[ \t]*\(/m', $source) !== 1) {
             $missing[] = 'a reapTrackedForkedChildren() call in tearDown()';
         }
 
@@ -58,25 +71,38 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      */
     public function testThePredicateReportsEachHalfItLooksFor(): void
     {
-        $this->assertSame(
-            ['use ReapsForkedChildrenTrait', 'a reapTrackedForkedChildren() call in tearDown()'],
-            self::missingHalves('<?php class F {}'),
-        );
+        $both = ['use ReapsForkedChildrenTrait', 'a reapTrackedForkedChildren() call in tearDown()'];
+
+        $this->assertSame($both, self::missingHalves("<?php\nclass F {}\n"));
 
         $this->assertSame(
             ['a reapTrackedForkedChildren() call in tearDown()'],
-            self::missingHalves('<?php class F { use ReapsForkedChildrenTrait; }'),
+            self::missingHalves("<?php\nclass F {\n    use ReapsForkedChildrenTrait;\n}\n"),
         );
 
         $this->assertSame(
             ['use ReapsForkedChildrenTrait'],
-            self::missingHalves('<?php class F { function t() { $this->reapTrackedForkedChildren(); } }'),
+            self::missingHalves("<?php\nclass F {\n    function t() {\n        \$this->reapTrackedForkedChildren();\n    }\n}\n"),
         );
 
         $this->assertSame(
             [],
             self::missingHalves(
-                '<?php class F { use ReapsForkedChildrenTrait; function t() { $this->reapTrackedForkedChildren(); } }',
+                "<?php\nclass F {\n    use \\A\\B\\ReapsForkedChildrenTrait;\n"
+                . "    function t() {\n        \$this->reapTrackedForkedChildren();\n    }\n}\n",
+            ),
+        );
+
+        // THE MUTATION THAT GOT THROUGH, kept as a fixture. Both halves named
+        // in PROSE and neither present as code: this is exactly the file that
+        // results from deleting a `use` line while leaving the doc-block that
+        // introduced it, and the loose version of this predicate called it
+        // whole.
+        $this->assertSame(
+            $both,
+            self::missingHalves(
+                "<?php\n/**\n * Adopts {@see ReapsForkedChildrenTrait}: call\n"
+                . " * \$this->reapTrackedForkedChildren() from tearDown().\n */\nclass F {}\n",
             ),
         );
     }
