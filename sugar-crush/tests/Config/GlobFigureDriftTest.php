@@ -328,7 +328,7 @@ final class GlobFigureDriftTest extends TestCase
      * it moves with the glob — but its CONNECTOR was hand-written as `[- ]`,
      * one ASCII hyphen or one ASCII space, and a class that narrow is a list of
      * the spellings whoever wrote it happened to think of. Everything in
-     * {@see connectorSpellings()} slipped past it. A census cannot find what
+     * {@see staleFigureSpellings()} slipped past it. A census cannot find what
      * its alphabet cannot spell, and this is that alphabet.
      *
      * The dashes fold to `-`, the spaces fold to ` `, and the two INVISIBLE
@@ -355,33 +355,92 @@ final class GlobFigureDriftTest extends TestCase
     /**
      * Does this ONE paragraph spell the retracted count without retracting it?
      *
-     * TWO RULES, and both are load-bearing.
+     * THREE RULES, and all three are load-bearing.
      *
-     * THE MATCH is `\beight`, any run of spaces and hyphens (including none),
-     * then `character`. The word is derived from `word(8)`; the separator run
-     * is permissive because every narrower spelling of it has already been
-     * evaded once — see {@see connectorSpellings()} for the fixture table, in
-     * which the OLD `[- ]` class misses ten of twelve true positives. The `\b`
-     * is not cosmetic either: without it the old pattern matched
-     * `weight-character`, so the census over-reported as well as under-reported.
+     * THE NUMBER is `(?:eight|8)` — the word from `word(8)` and the numeral
+     * from `(string) 8`, so both move with the glob. It was the WORD ALONE for
+     * one round, and that is the same class of gap the connector had: a census
+     * whose alphabet admits one spelling of its subject reports zero because it
+     * cannot say the other one. MEASURED at round 44 on PHP 8.3.6:
+     * `closes the 8-character version and nothing else` injected into
+     * `docs/HOOKS.md` and again into `src/Cli/Bootstrap.php` left this file at
+     * `OK (37 tests)` both times. The tree already writes numerals for figures
+     * of exactly this kind.
      *
-     * THE RETRACTION EXEMPTION is a paragraph that also spells the CURRENT
-     * count. It is semantic rather than keyed to a filename on purpose: both
-     * surviving mentions of "eight" in `src/` live inside sentences retracting
-     * it, and an exemption list naming those files would have to be edited
-     * every time one of them was fixed — which is precisely the maintenance
-     * step round 43 skipped and shipped stale.
+     * THE NOUN is `char`, `chars`, `character`, `characters` — and `byte`,
+     * `bytes` for the WORD form only. The asymmetry is measured, not tidy.
+     * Admitting `bytes?` after the numeral reports
+     * `src/Tools/Concerns/TruncatesOutput.php`, whose "an 8-byte `# BIG-RU`" is
+     * a correct statement about a truncation head and has nothing to do with
+     * any glob; admitting it without the lookbehind below reports ten more
+     * paragraphs, every one of them the phrase "UTF-8 byte". A census that
+     * reports true sentences as defects gets an exemption list bolted onto it,
+     * and an exemption list is what went stale in round 43.
+     *
+     * THE LOOKBEHIND `(?<![\w.\-])` in front of the numeral is what keeps
+     * "UTF-8" and "PHP 8.4" from being the number eight. `\b` does not do it:
+     * the `8` of `UTF-8` is preceded by a hyphen, which is a non-word
+     * character, so `\b8` matches there.
+     *
+     * THE SEPARATOR run is `[\s\-_]*` — permissive because every narrower
+     * spelling has already been evaded once; see {@see staleFigureSpellings()}
+     * for the fixture table, in which the OLD `[- ]` class misses sixteen of
+     * eighteen true positives. `_` is in the class because `eight_character` is
+     * a spelling an identifier produces.
+     *
+     * THE RETRACTION EXEMPTION is a paragraph that spells the CURRENT count AND
+     * quotes the glob. It is semantic rather than keyed to a filename on
+     * purpose: all three surviving mentions of "eight" in scope live inside
+     * sentences retracting it, and an exemption list naming those files would
+     * have to be edited every time one was fixed — precisely the maintenance
+     * step round 43 skipped and shipped stale. QUOTING THE GLOB WAS ADDED IN
+     * ROUND 44, because "five" on its own is an ordinary English word:
+     * `closes the eight-character version; there are five reasons this matters`
+     * was silently exempt, and "no such paragraph exists" was a statement about
+     * that day's tree rather than a property of the rule. All three real
+     * retractions quote `[!B]*`; a paragraph that retracts the count without
+     * naming what was counted is not a retraction a reader can check.
      */
     private function carriesTheStaleFigure(string $paragraph): bool
     {
         $normalised = (string) preg_replace('/\s+/', ' ', $this->normaliseSeparators($paragraph));
 
-        $stale = $this->matchOrFail('/\b' . $this->word(8) . '[\s\-]*character/i', $normalised, 'stale-figure probe');
-        if (!$stale) {
+        if (!$this->matchOrFail($this->stalePattern(), $normalised, 'stale-figure probe')) {
             return false;
         }
 
-        return !$this->matchOrFail('/\b' . $this->word(\strlen(self::GLOB)) . '\b/i', $normalised, 'retraction probe');
+        return !$this->retracts($normalised);
+    }
+
+    /**
+     * The stale-figure pattern, derived from the glob rather than written out.
+     *
+     * Every part that could rot is generated: the number word from
+     * {@see word()}, the numeral from the same integer, and the exemption's
+     * word from `strlen(self::GLOB)`. Change the glob and the whole alphabet
+     * moves with it.
+     */
+    private function stalePattern(): string
+    {
+        $separator = '[\s\-_]*';
+        $characters = 'char(?:acter)?s?';
+
+        return '/(?:'
+            . '\b' . $this->word(8) . $separator . '(?:' . $characters . '|bytes?)'
+            . '|(?<![\w.\-])' . 8 . $separator . '(?:' . $characters . ')'
+            . ')\b/i';
+    }
+
+    /** Does this paragraph retract the figure rather than assert it? */
+    private function retracts(string $normalised): bool
+    {
+        $spellsTheCurrentCount = $this->matchOrFail(
+            '/\b' . $this->word(\strlen(self::GLOB)) . '\b/i',
+            $normalised,
+            'retraction probe',
+        );
+
+        return $spellsTheCurrentCount && str_contains($normalised, self::GLOB);
     }
 
     /**
@@ -447,26 +506,37 @@ final class GlobFigureDriftTest extends TestCase
      * a census aimed at the wrong wall.
      *
      * WHAT THE SCOPE AND THE EXEMPTION EACH EXCLUDE — written down because this
-     * was the load-bearing half and it was implicit. Measured on PHP 8.3.6,
-     * 2026-08-22: `grep -rn 'eight[- ]character'` over `src/`, `docs/`,
-     * `README.md` and `tests/` hits five files. Twelve of the hits are in THIS
-     * file, which is the census's own fixture alphabet; of the other four:
+     * was the load-bearing half and it was implicit. RE-MEASURED at round 44
+     * with the widened alphabet, on PHP 8.3.6, by
+     * `grep -rlP '(?i)(?:\beight[\s\-_]*(?:char(?:acter)?s?|bytes?)|(?<![\w.\-])8[\s\-_]*char(?:acter)?s?)\b'`
+     * over `src/`, `docs/`, `tests/` and `README.md` — seven files, up from the
+     * five the old `eight[- ]character` grep found:
      *
      * - `src/Cli/Bootstrap.php` and `src/Config/LayeredSettings.php` — both IN
      *   scope, both excluded SEMANTICALLY by {@see carriesTheStaleFigure()}'s
-     *   retraction rule, because each paragraph spells the current count too.
-     *   These are rule-7 citations, not stale figures, and they must survive.
-     * - `docs/SETTINGS.md` — also in scope now, also exempt for the same
-     *   semantic reason. It used to be excluded by scope, which is exactly why
-     *   a stale sentence could live there unremarked.
-     * - `tests/App/AppModelTest.php` — excluded BY SCOPE, and the only thing
-     *   scope still excludes. Its "eight characters of tail" is about a cursor
-     *   fixture and has nothing to do with the glob. It is also the shape that
-     *   shows scope doing real work: the same sentence inside `src/` WOULD be a
-     *   false positive, because the match is on the phrase, not the subject.
+     *   retraction rule, because each paragraph spells the current count AND
+     *   quotes the glob. These are rule-7 citations, not stale figures, and
+     *   they must survive.
+     * - `docs/SETTINGS.md` — also in scope, also exempt for the same semantic
+     *   reason. It used to be excluded by scope, which is exactly why a stale
+     *   sentence could live there unremarked.
+     * - `tests/App/AppModelTest.php` and
+     *   `tests/Cli/BootstrapToolAndPermissionSettingsTest.php` — excluded BY
+     *   SCOPE. The first's "eight characters of tail" is about a cursor
+     *   fixture; both are the shape that shows scope doing real work, because
+     *   the match is on the phrase, not on the subject, so the same sentence
+     *   inside `src/` WOULD be reported.
+     * - `src/Skills/BuiltIn/api-design/SKILL.md` — a NEW exclusion, and the
+     *   only one the widened alphabet added. It lives under `src/` but is not a
+     *   `.php` file, so the extension filter drops it. Its "at least 8
+     *   characters" is an example password-policy message. Admitting `src/**.md`
+     *   would report it, which is the measured reason the `src/` half is
+     *   `.php`-only rather than everything-under-`src/`.
+     * - THIS file — the census's own fixture alphabet, in scope and reported by
+     *   nothing, because `tests/` is out of scope.
      *
-     * `README.md` carries no spelling of the figure at all (measured: the word
-     * "eight" does not occur in it), so admitting it would neither add nor
+     * `README.md` carries no spelling of the figure at all (measured with the
+     * widened pattern above: no hit), so admitting it would neither add nor
      * remove a hit today; it is left out because it belongs to a different
      * lane's file set this round, and its absence is a gap rather than a rule.
      *
@@ -550,42 +620,65 @@ final class GlobFigureDriftTest extends TestCase
     }
 
     /**
-     * Every connector spelling between "eight" and "character", with what the
-     * OLD hand-written `[- ]` class did and what the current one does.
+     * Every spelling of the retracted figure this census must see, with what
+     * the OLD hand-written matcher did and what the current alphabet does.
      *
      * MEASURED ON PHP 8.3.6, 2026-08-22, by running both patterns over these
      * exact fixtures; the table is generated by
-     * {@see testTheConnectorClassCatchesTheSpellingsTheHandWrittenOneMissed()}
-     * rather than transcribed, so it cannot drift into decoration. `strtr()`
-     * and a non-`/u` `preg_match()` over these byte sequences behave the same
-     * on 8.3 and 8.4 — the stamp is provenance, and CI runs both.
+     * {@see testTheCensusAlphabetCatchesTheSpellingsTheHandWrittenOneMissed()}
+     * and its tallies by
+     * {@see testTheTableMeasuresHowMuchWiderTheAlphabetGot()}, rather than
+     * transcribed, so it cannot drift into decoration. `strtr()` and a non-`/u`
+     * `preg_match()` over these byte sequences behave the same on 8.3 and 8.4 —
+     * the stamp is provenance, and CI runs both.
      *
-     * | fixture                       | OLD `[- ]` | current |
-     * |-------------------------------|------------|---------|
-     * | ASCII hyphen                  | HIT        | HIT     |
-     * | ASCII space                   | HIT        | HIT     |
-     * | U+2010 hyphen                 | miss       | HIT     |
-     * | U+2011 non-breaking hyphen    | miss       | HIT     |
-     * | U+2013 en dash                | miss       | HIT     |
-     * | U+2014 em dash                | miss       | HIT     |
-     * | U+2212 minus sign             | miss       | HIT     |
-     * | U+00A0 no-break space         | miss       | HIT     |
-     * | U+202F narrow no-break space  | miss       | HIT     |
-     * | U+200B zero-width space       | miss       | HIT     |
-     * | U+00AD soft hyphen            | miss       | HIT     |
-     * | hyphenated across doc lines   | miss       | HIT     |
-     * | "eighteen-character" (control)| miss       | miss    |
-     * | "weight-character" (control)  | HIT        | miss    |
-     * | "eight words … a character"   | miss       | miss    |
+     * THE TABLE HAS TWO HALVES because the alphabet has two axes, and round 44
+     * widened the second after round 43 widened the first. The CONNECTOR rows
+     * came first; the NUMBER rows are the gap that widening left behind — the
+     * census could say "eight" fifteen ways and "8" none at all.
      *
-     * The last three are controls, and the `weight-character` row is the one
-     * worth pausing on: the old class had no word boundary, so it did not only
-     * under-report, it also matched a word that merely ENDS in "eight".
+     * | fixture                        | OLD `[- ]` | current |
+     * |--------------------------------|------------|---------|
+     * | ASCII hyphen                   | HIT        | HIT     |
+     * | ASCII space                    | HIT        | HIT     |
+     * | U+2010 hyphen                  | miss       | HIT     |
+     * | U+2011 non-breaking hyphen     | miss       | HIT     |
+     * | U+2013 en dash                 | miss       | HIT     |
+     * | U+2014 em dash                 | miss       | HIT     |
+     * | U+2212 minus sign              | miss       | HIT     |
+     * | U+00A0 no-break space          | miss       | HIT     |
+     * | U+202F narrow no-break space   | miss       | HIT     |
+     * | U+200B zero-width space        | miss       | HIT     |
+     * | U+00AD soft hyphen             | miss       | HIT     |
+     * | hyphenated across doc lines    | miss       | HIT     |
+     * | underscore separator           | miss       | HIT     |
+     * | numeral, ASCII hyphen          | miss       | HIT     |
+     * | numeral, ASCII space           | miss       | HIT     |
+     * | short noun "eight-char"        | miss       | HIT     |
+     * | noun "eight bytes"             | miss       | HIT     |
+     * | retraction without the glob    | HIT        | HIT     |
+     * | retraction quoting the glob    | HIT        | miss    |
+     * | "eighteen-character" (control) | miss       | miss    |
+     * | "weight-character" (control)   | HIT        | miss    |
+     * | "eight words … a character"    | miss       | miss    |
+     * | "UTF-8 bytes" (control)        | miss       | miss    |
+     * | "an 8-byte head" (control)     | miss       | miss    |
+     * | "PHP 8.4 characters" (control) | miss       | miss    |
+     *
+     * THE CONTROLS ARE THE HALF WORTH PAUSING ON. `weight-character` is what a
+     * missing word boundary did: the old class under-reported AND matched a
+     * word that merely ends in "eight". `UTF-8 bytes` and `PHP 8.4 characters`
+     * are what a missing lookbehind would do to the numeral form — ten
+     * paragraphs of the first phrase exist in `src/` today. `an 8-byte head` is
+     * the measured reason `bytes?` is admitted after the word and not after the
+     * numeral. And the two retraction rows are the exemption: identical
+     * sentences apart from whether they quote the glob they are retracting a
+     * count of.
      *
      * @return iterable<string, array{0: string, 1: bool, 2: bool}>
      *                                                fixture => [paragraph, current census sees it, old `[- ]` class saw it]
      */
-    public static function connectorSpellings(): iterable
+    public static function staleFigureSpellings(): iterable
     {
         yield 'ASCII hyphen' => ['closes the eight-character version', true, true];
         yield 'ASCII space' => ['closes the eight characters version', true, true];
@@ -599,15 +692,33 @@ final class GlobFigureDriftTest extends TestCase
         yield 'U+200B zero-width space' => ["closes the eight\u{200B}character version", true, false];
         yield 'U+00AD soft hyphen' => ["closes the eight\u{00AD}character version", true, false];
         yield 'hyphenated across doc lines' => ["     * closes the eight-\n     * character version", true, false];
+        yield 'underscore separator' => ['closes the eight_character version', true, false];
+        yield 'numeral, ASCII hyphen' => ['closes the 8-character version and nothing else', true, false];
+        yield 'numeral, ASCII space' => ['closes the 8 characters version and nothing else', true, false];
+        yield 'short noun: eight-char' => ['the eight-char spelling is the one it closes', true, false];
+        yield 'noun: eight bytes' => ['a fixed eight bytes of glob is all it takes', true, false];
+        yield 'retraction without the glob' => [
+            'closes the eight-character version; there are five reasons this matters',
+            true,
+            true,
+        ];
+        yield 'retraction quoting the glob' => [
+            'THE COUNT SAID "eight characters" until it was re-derived: `[!B]*` is five.',
+            false,
+            true,
+        ];
         yield 'control: eighteen-character' => ['closes the eighteen-character version', false, false];
         yield 'control: weight-character' => ['a weight-character encoding', false, true];
         yield 'control: eight words about a character' => ['eight words about a character set', false, false];
+        yield 'control: UTF-8 bytes' => ['matched on UTF-8 bytes rather than on a decoded codepoint', false, false];
+        yield 'control: an 8-byte head' => ['an 8-byte `# BIG-RU` where the head path gives `# BIG-RULE`', false, false];
+        yield 'control: PHP 8.4 characters' => ['PHP 8.4 characters are handled the same way', false, false];
     }
 
     /**
-     * @dataProvider connectorSpellings
+     * @dataProvider staleFigureSpellings
      */
-    public function testTheConnectorClassCatchesTheSpellingsTheHandWrittenOneMissed(
+    public function testTheCensusAlphabetCatchesTheSpellingsTheHandWrittenOneMissed(
         string $fixture,
         bool $mustBeSeen,
         bool $oldSawIt,
@@ -615,21 +726,27 @@ final class GlobFigureDriftTest extends TestCase
         $this->assertSame(
             $mustBeSeen ? ['fixture' => 1] : [],
             $this->census(['fixture' => $fixture]),
-            'the census disagrees with the table in connectorSpellings()',
+            'the census disagrees with the table in staleFigureSpellings()',
         );
     }
 
     /**
-     * The old `[- ]` class really did miss these — asserted, not remembered.
+     * The old `[- ]` matcher really did miss these — asserted, not remembered.
      *
      * WITHOUT THIS, the table above is a claim about a pattern that no longer
      * exists anywhere in the tree, which is the kind of sentence that gets
-     * copied forward until someone re-narrows the class believing nothing was
-     * ever wrong with it. Here the old pattern is reconstructed and run.
+     * copied forward until someone re-narrows the alphabet believing nothing
+     * was ever wrong with it. Here the old pattern is reconstructed and run.
      *
-     * @dataProvider connectorSpellings
+     * The two RETRACTION rows are in this table too, and their third column
+     * still means what it says: the old raw matcher had no exemption at all, so
+     * it matched both of them. That is a fact about the matcher, not about the
+     * exemption, which is why the rows belong here rather than in a table of
+     * their own.
+     *
+     * @dataProvider staleFigureSpellings
      */
-    public function testTheHandWrittenConnectorClassIsMeasurablyWeakerThanTheCurrentOne(
+    public function testTheHandWrittenMatcherIsMeasurablyWeakerThanTheCurrentAlphabet(
         string $fixture,
         bool $ignoredCurrent,
         bool $oldSawIt,
@@ -644,9 +761,39 @@ final class GlobFigureDriftTest extends TestCase
         $this->assertSame(
             $oldSawIt,
             $seenByOld,
-            'the third column of the table in connectorSpellings() no longer describes what the '
-            . 'hand-written class did, so the case for widening it is being made from a stale figure',
+            'the third column of the table in staleFigureSpellings() no longer describes what the '
+            . 'hand-written matcher did, so the case for widening it is being made from a stale figure',
         );
+    }
+
+    /**
+     * How much wider the alphabet actually got, as a number with a generator.
+     *
+     * The doc-block above says the old matcher misses most of what the current
+     * one catches. That is a FIGURE, and a figure in prose beside a table it
+     * summarises is the exact failure this whole file exists to stop, so it is
+     * counted from the table rather than asserted by eye. Adding a row makes
+     * this red until the sentence is updated with it, which is the point.
+     */
+    public function testTheTableMeasuresHowMuchWiderTheAlphabetGot(): void
+    {
+        $truePositives = 0;
+        $oldSawThem = 0;
+        $oldFalsePositives = 0;
+
+        foreach (self::staleFigureSpellings() as [$fixture, $mustBeSeen, $oldSawIt]) {
+            if ($mustBeSeen) {
+                $truePositives++;
+                $oldSawThem += $oldSawIt ? 1 : 0;
+            } elseif ($oldSawIt) {
+                $oldFalsePositives++;
+            }
+        }
+
+        $this->assertSame(18, $truePositives, 'the table grew or shrank; update the sentence that counts it');
+        $this->assertSame(3, $oldSawThem, 'the old matcher now sees a different number of the true positives');
+        $this->assertSame(15, $truePositives - $oldSawThem, 'the "misses fifteen of eighteen" sentence is stale');
+        $this->assertSame(2, $oldFalsePositives, 'the old matcher over-reported on a different number of controls');
     }
 
     /**
