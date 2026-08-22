@@ -4992,6 +4992,52 @@ just spent a round pinning at the unit level.
 `intdiv($shippedCap, 8) >= SkillPathNudge::maxBytes()` (or the derived floor). It is the cheap guard
 that makes the unit-level work above actually protective.
 
+**CLOSED round 42, lane b** — `SkillPathScopingWiringTest::testEveryShippedNudgeBudgetClearsTheTrackerCeiling()`
+and `::testEveryShippedNudgeBudgetClearsTheWorstCaseDeadBandFloor()`, both deriving their threshold
+from `SkillPathNudge` at runtime and their roster from the `intdiv($this-><cap>, <n>)` in each tool's
+own source. **Two figures in the "What" above did not survive re-measurement, and the mechanism
+sentence has a third error:**
+
+- *Wrong.* `Bootstrap.php` does not construct `Read`/`Glob`/`Grep` with those caps. `Bootstrap::tools()`
+  passes `$root`, `instructionLoader:` and `skillNudge:` and **no cap at all**; 1,048,576 / 65,536 /
+  65,536 are the tools' own `DEFAULT_MAX_BYTES` / `DEFAULT_MAX_OUTPUT_BYTES` defaults. A guard written
+  against a literal in `Bootstrap.php` would have had nothing to read. The shipped caps are therefore
+  read off the constructed instances.
+- *Wrong.* The nudge floor is not 166–174 bytes and the eighths do not clear it "by three orders of
+  magnitude". Round 41's own edits to `SkillPathNudge` moved the pricing. **Measured on this tree, PHP
+  8.3.6:** `SkillPathNudge::maxBytes()` = **2,636**; the worst-case price of ONE entry (a description
+  past `MAX_ENTRY_BYTES` so the entry clips, plus a second pending skill so the deferred-note reserve
+  applies) = **529**. Against the ceiling, Glob's and Grep's 8,192 clear it by **3.1x** — half an order
+  of magnitude.
+- *Wrong.* The reopening threshold is not "roughly 1,400 bytes". The ceiling guard reds below a cap of
+  8 x 2,636 = **21,088**; the dead band itself opens below 8 x 529 = **4,232**. Fifteen times and three
+  times the recorded figure respectively.
+- *Right.* Nothing asserted any of it, and the eighth relationship still holds: all three tools spend
+  `intdiv($cap, 8)`, and `Edit`/`Write` still pass `null` (no cap of their own to spend inside).
+
+**Mutation.** `new Grep($root, instructionLoader: ..., skillNudge: ...)` -> `new Grep($root, 1024,
+instructionLoader: ..., skillNudge: ...)` reds both tests (budget 128, under both 2,636 and 529);
+Read's budget argument -> `null` reds the roster assertion.
+
+### E78/round-42 follow-up — a repeat prune in one process prints its session ids under no header
+
+**Recorded 2026-08-22 by the round-42 lane-b agent.** Severity: cosmetic; stderr only.
+
+**What.** Round 42 split `Bootstrap::reportPrunedSessions()`: the one-line summary now goes through
+`warnPermissionConfigInTranscript()` (both channels) and the per-session id rows stay raw on stderr.
+The summary inherits `warnPermissionConfigOnce()`'s **per-process** de-duplication; the id rows are
+unconditional. So a second `chat()` in one process whose prune produces a byte-identical summary
+prints its id rows with no header above them.
+
+**Why it is not fixed.** The alternative is a second de-dup map keyed on the detail, which would drop
+rows from the channel that exists to be the complete unclipped record — the property
+`LAUNCH_NOTICE_MAX_CHARS`'s doc-block relies on when it advertises "full text on stderr". The rows are
+self-describing (`sugarcrush:   <id> (last used ... UTC, N messages)`), and a launch only reaches this
+by building two Chats in one process, which no shipped entry point does.
+
+**Step.** Leave it. If a second de-dup is ever wanted, key it on the report rows and not on the
+summary, and keep the rule that stderr never loses a row the transcript never carried.
+
 ### E79 — the tab/Extend under-run family in `Width` is a rendering-semantics decision, not a bug
 
 **Recorded 2026-08-22 by the round-41 lane-b reviewer.** Severity: low; **in the safe direction.**
@@ -5008,3 +5054,44 @@ radius well beyond this class. Under-counting also cannot corrupt a frame here �
 **Step.** Decide the semantics deliberately, in a round of its own, with the foundation-wide blast
 radius costed first. Its shape is already pinned by
 `StyleTest::testExpandingATabCanStillReclusterAFollowingCombiningMark`, so it cannot drift unnoticed.
+
+### E78/round-42 follow-up — two `NonInteractive` stderr writes are transcript-seam candidates the seam cannot reach
+
+**Recorded 2026-08-22 by the round-42 lane-b fix agent, after the round-42 review.** Severity: low;
+**functionality, not security** (RULE 14 records it rather than fixing it).
+
+**What.** Round 42 claimed on `bin/sugarcrush` and on
+`Tests\Integration\BinSugarcrushAutoloadGuardTest` that "every other stderr write in this codebase was
+re-examined" against `Bootstrap::warnPermissionConfigInTranscript()`. It had not been. Measured
+myself, `grep -rn 'STDERR' src/ bin/` on this tree, PHP 8.3.6 — **eleven** raw `fwrite(STDERR, …)`
+call sites: `Cli\NonInteractive` **six** (`run()` twice, `failUsage()`, `failUnusableProvider()`,
+`noticeOfflineDefault()`, `readStdinIfPiped()`), `Cli\Subcommands` **two** (`sessionDelete()`,
+`mcp()`), `Cli\Bootstrap` **two** (`warnPermissionConfig()`, which *is* the stderr channel, and
+`reportPrunedSessions()`'s id rows), `bin/sugarcrush` **one**. Both doc-blocks are corrected in place
+per RULE 7. Note the review's own distribution was slightly off in the same total: it recorded
+NonInteractive at five (missing `noticeOfflineDefault()`, whose `fwrite(` and `\STDERR,` are on
+separate lines) and Bootstrap at three (counting the summary that is no longer a raw write).
+
+Two of the eight unexamined writes satisfy the routing rule the round applied — *a warning reaches the
+transcript iff it names something the session can no longer **do***:
+
+- `NonInteractive::readStdinIfPiped()` — `sugarcrush: piped stdin exceeds 10MB cap; truncating.` The
+  model is handed a truncated prompt and is never told it is answering half a question. This is the
+  stronger of the two.
+- `NonInteractive::noticeOfflineDefault()` — the session is answering from the offline echo provider
+  because no provider is configured.
+
+**Why it is not fixed here.** Out of E78's scope, and the seam does not reach these paths as it
+stands: `Bootstrap::launchNotices()` is read by `Bootstrap::chat()` and `Bootstrap::app()` and by
+**nothing else** (verified, `grep -rn 'launchNotices' src/ bin/`), so a notice recorded from the
+one-shot `-p` path or from a subcommand goes into a static the process discards. Telling the model
+about a truncated stdin is therefore not a seam call — it is a decision about appending a note to the
+one-shot *prompt*, which is a different mechanism with a different blast radius.
+
+**Step.** Decide it as a one-shot-path question, not as a launch-notice question. Either
+`NonInteractive` grows its own way of prefixing a system note onto the outgoing message, or
+`launchNotices()` gains a reader on that path. Do not "migrate" these onto
+`warnPermissionConfigInTranscript()` on the strength of the rule alone — measure first that anything
+reads the list back, because today nothing on those paths does. The six writes that accompany a
+non-zero exit (`run()` x2, `failUsage()`, `failUnusableProvider()`, and both in `Subcommands`) need no
+decision: the process ends, and there is no transcript for a row to survive into.

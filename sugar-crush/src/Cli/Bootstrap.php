@@ -165,10 +165,14 @@ final class Bootstrap
      *
      * Most of the sources are bounded at one per launch: the skill-skip count,
      * the untrusted `hooks.yaml`, the empty tool set, the project tier's tool
-     * removals, the two agent-preset degradations and the two provider
-     * fallbacks — eight. {@see reportProjectTierRefusals()} adds one per refused
+     * removals, the two agent-preset degradations, the two provider fallbacks
+     * and — since E78 round 42 — {@see reportPrunedSessions()}'s retention
+     * SUMMARY: nine. (This paragraph said EIGHT and stopped at the provider
+     * fallbacks; the retention summary is a ninth bounded source, and it is
+     * bounded precisely because its per-session rows were deliberately left off
+     * this seam.) {@see reportProjectTierRefusals()} adds one per refused
      * DIRECTORY, and its doc-block names eight feeding subsystems.
-     * {@see permissionRules()} adds one whole-key complaint. So 17 is the most a
+     * {@see permissionRules()} adds one whole-key complaint. So 18 is the most a
      * launch reaches without a per-ENTRY fan-out, and 24 clears that with
      * headroom while still refusing to let a config with fifty malformed rules
      * become the transcript. The overflow is COUNTED and reported as one
@@ -796,7 +800,10 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // fourteen call sites now routed onto the transcript seam. See
+        // fifteen call sites now routed onto the transcript seam — the
+        // fifteenth being reportPrunedSessions()'s retention summary, migrated
+        // in E78 round 42 and raised from sessionStore() far EARLIER in this
+        // method, which is what makes it reachable from here. See
         // {@see Chat::withLaunchNotices()}.
         //
         // THE ACCESSOR, not the raw list: {@see launchNotices()} appends the
@@ -3943,6 +3950,18 @@ final class Bootstrap
      * configured-but-unusable provider: stdout belongs to the TUI, and a
      * dropped rule has to be visible somewhere or it is the silent widening
      * this whole path exists to avoid.
+     *
+     * NOT AN UN-MIGRATED CALL SITE, and it was re-examined in round 42 (E78)
+     * on the theory that it was one. This `fwrite(STDERR, …)` is the STDERR
+     * CHANNEL ITSELF, not a warning that never made it onto the transcript
+     * seam: {@see warnPermissionConfigInTranscript()} records the transcript
+     * row and then delegates HERE for the stderr half, so migrating this line
+     * onto that seam would be a cycle — the seam calling the seam — and would
+     * remove the only unclipped copy the design leans on when it advertises
+     * "the full text is on stderr". The question worth asking of a warning is
+     * which of the three entry points it uses (this one, {@see
+     * warnPermissionConfigOnce()}, or the transcript seam); the question is
+     * never whether this line should stop writing to stderr.
      */
     private static function warnPermissionConfig(string $message): void
     {
@@ -3995,10 +4014,23 @@ final class Bootstrap
      * {@see trustedProjectRoots()}'s per-entry complaints (whose consequence —
      * an untrusted project — is already reported here by
      * {@see hookFiles()}/{@see reportProjectTierRefusals()} with the actionable
-     * path), {@see withoutEmptyPermissionOverrides()}'s "an empty key was
+     * path) and {@see withoutEmptyPermissionOverrides()}'s "an empty key was
      * ignored" (which reports a change that was DECLINED, so nothing about the
-     * session differs), and {@see reportPrunedSessions()} (about history
-     * already deleted, not about this session's capabilities).
+     * session differs).
+     *
+     * THIS LIST USED TO HAVE A THIRD ENTRY: {@see reportPrunedSessions()},
+     * "about history already deleted, not about this session's capabilities".
+     * WHAT IS TRUE NOW: its SUMMARY is routed here (E78 round 42) and only its
+     * per-session detail rows stayed behind. A prune takes away resuming,
+     * branching and rewinding the rows it names, which is a capability this
+     * launch removed and therefore the rule's own "iff" case; the reason it
+     * reads as an exception is the fan-out, and the fan-out is a property of
+     * the DETAIL, not of the fact. See that method for the split.
+     * WHY THE REST OF THE LIST STILL EARNS ITS PLACE: the two entries above
+     * report a change the launch DECLINED to make, and re-examining them in
+     * round 42 did not move either — nothing about the running session differs
+     * because of them, so a transcript row would spend tokens every turn to say
+     * that nothing happened.
      *
      * The stderr half keeps {@see warnPermissionConfigOnce()}'s per-process
      * de-duplication and the transcript half keeps its own per-LAUNCH one, so a
@@ -5115,8 +5147,14 @@ final class Bootstrap
      * Two further guards, since this deletes conversations: the row
      * `seedSession()` would resume is passed in as exempt (so retention can
      * never eat the session the user is about to be handed, whatever its age),
-     * and everything actually deleted is reported on stderr rather than going
-     * unmentioned. A failure is swallowed: an unprunable database is not a
+     * and everything actually deleted is reported rather than going
+     * unmentioned — one summary row on BOTH the transcript and stderr and the
+     * per-session ids on stderr, see {@see reportPrunedSessions()} for the
+     * split. (This sentence said "reported on stderr"; that was the whole truth
+     * until E78 round 42 routed the summary onto the transcript seam, on the
+     * ground that a launch which deleted conversations has taken a capability
+     * away and the stderr copy is painted over by the alternate screen 0.47s
+     * later.) A failure is swallowed: an unprunable database is not a
      * reason to refuse to start.
      *
      * `prune: false` is for the READ-ONLY callers. Retention is a property of
@@ -5163,13 +5201,75 @@ final class Bootstrap
      * nothing, and the caller threw the count away. stderr before the TUI
      * takes the screen is where this class already reports provider fallbacks.
      *
+     * WHAT THIS DOC-BLOCK USED TO SAY, and what the routing rule in
+     * {@see warnPermissionConfigInTranscript()} used to say about it: stderr is
+     * the whole answer here, because this notice is "about history already
+     * deleted, not about this session's capabilities".
+     * WHAT IS TRUE NOW: the SUMMARY is on both channels (E78 round 42), because
+     * the second half of that sentence does not survive being read next to the
+     * rule it was decided under. The rule is "a warning reaches the transcript
+     * iff it names something the session can no longer DO", and after a prune
+     * the session can no longer resume, branch, rename or rewind the rows this
+     * line names — the `/resume` picker and `session list` are simply shorter
+     * than the user left them. That is a capability the launch removed, not a
+     * complaint about a malformed config, and it is the ONLY entry on this
+     * class's stderr-only list that destroys data. The 0.47s window
+     * {@see warnPermissionConfigInTranscript()} measures applies to it exactly
+     * as it applies to a provider fallback: an interactive launch paints the
+     * alternate screen over this line before it can be read, and the primary
+     * buffer does not come back until the session is over.
+     * WHY THE PER-SESSION ROWS STILL EARN THEIR PLACE ON STDERR ALONE: the
+     * summary is ONE row per launch whatever the prune deleted, where the
+     * detail is one row per session — an unbounded per-ENTRY fan-out into a
+     * list that is sent to the model on every turn, which is the exact shape
+     * {@see LAUNCH_NOTICE_LIMIT} exists to refuse. stderr is the complete,
+     * unclipped record; the transcript carries the fact and the count.
+     *
+     * ORDERING is what makes the summary reachable at all: {@see chat()} calls
+     * {@see sessionStore()} early and reads {@see launchNotices()} last, so a
+     * notice recorded here is in hand by the time the transcript is seeded.
+     *
+     * THE NON-CHAT CALLERS, surveyed in full — an earlier version of this
+     * paragraph named only the doctor probe, which made the survey look
+     * complete when it was one of three. {@see sessionStore()} is NOT memoized;
+     * it builds a fresh store and prunes on every call, so every caller is a
+     * caller of this method. There are four:
+     *
+     *  - {@see chat()} — the production path, and the only one that reads
+     *    {@see launchNotices()} back.
+     *  - {@see \SugarCraft\Crush\Cli\Subcommands::doctorProbes()} — passes
+     *    `prune: false`, so it never reaches this method at all.
+     *  - {@see \SugarCraft\Crush\Cli\Subcommands::sessionList()} and
+     *    {@see \SugarCraft\Crush\Cli\Subcommands::sessionDelete()} — both take
+     *    the default `prune: true`, so on a retention-enabled box
+     *    `sugarcrush session list` DOES record a transcript row here, into a
+     *    static list that subcommand never reads and the process then discards.
+     *    Inert rather than wrong — the stderr half of the seam still prints,
+     *    which is the half a subcommand's user is reading, and the orphaned row
+     *    costs one bounded string — but it is the shape to watch: if a
+     *    subcommand ever grows a transcript of its own, this is where a launch
+     *    notice about a prune would arrive in it uninvited. Not fixed here
+     *    because suppressing it means either memoizing the store or threading a
+     *    "who is asking" flag through the accessor, and both are larger changes
+     *    than the thing they would prevent.
+     *
+     * The summary's trailing `:` is gone with the migration — the seam formats
+     * every message as `sugarcrush: <message>.` — and the detail rows below
+     * still read as its list because they follow it immediately and name
+     * themselves. A repeat launch in one process is the one case where they can
+     * be orphaned: {@see warnPermissionConfigOnce()} de-duplicates the summary
+     * per PROCESS while these rows are unconditional, so an identical second
+     * prune prints its rows under no header. Self-describing rows rather than
+     * a second de-dup map, because the alternative is dropping the complete
+     * record on the channel that exists to hold it.
+     *
      * @param array<int, array{id: string, name: ?string, updated_at: string, messages: int}> $report
      */
     private static function reportPrunedSessions(array $report, int $retentionDays): void
     {
         $count = count($report);
-        fwrite(STDERR, sprintf(
-            "sugarcrush: retention removed %d unnamed %s untouched for %d+ days:\n",
+        self::warnPermissionConfigInTranscript(sprintf(
+            'retention removed %d unnamed %s untouched for %d+ days (ids on stderr)',
             $count,
             $count === 1 ? 'session' : 'sessions',
             $retentionDays,
