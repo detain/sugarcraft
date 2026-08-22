@@ -7966,3 +7966,133 @@ and only the second one still needs the finding acted on.
 **Step.** None — recorded so the pattern is countable. The rule it supports is already standing: measure a
 prescription against the tree before implementing it.
 
+
+---
+
+## Ec48-1 — `Chat` has three hand-rolled denial-prefix producers, and E211's `NonInteractive` half is only half the roster problem
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: correctness (silent misclassification). **Measured.**
+
+**What.** E210/E211 gave `Runtime` three named prefixes (`Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` /
+`DENIAL_UNANSWERED`), all three of them entries in `Chat::DENIED_ERROR_PREFIXES`, and
+`DenialPrefixRosterTest` pins the coupling. `src/Chat.php` was left alone because it is another lane's
+file, and it still spells three denial prefixes by hand.
+
+MEASURED on PHP 8.3.6 with a `token_get_all()` scan accepting both `T_CONSTANT_ENCAPSED_STRING` and
+`T_ENCAPSED_AND_WHITESPACE`, matching `/^(Hook|Permission) [a-z]+:/`:
+
+| file | symbol | literal |
+|---|---|---|
+| `src/Chat.php` | `answerPermission()` | `"Permission denied: {$request->toolCall->name} was not run."` |
+| `src/Chat.php` | `forkToolCalls()` | `"Permission required: {$toolCall->name} was not approved."` |
+| `src/Chat.php` | `gateToolCall()` | `"Hook denied: {$hookResult->message}"` |
+| `src/Chat.php` | `DENIED_ERROR_PREFIXES` | the roster's own three entries |
+| `src/Runtime.php` | `DENIAL_*` | the three constants, and nothing else |
+
+The failure mode is silent and one-directional: a producer whose spelling drifts off the roster renders a
+BLOCKED call as an ordinary tool ERROR — struck-through state lost in the TUI, entry missing from the
+`--output-format json` `refusals` array, and the model told the call failed rather than that it was
+refused.
+
+**Step.** Route `Chat`'s three producers through the roster (or through `Runtime`'s constants), and extend
+`DenialPrefixRosterTest::testRuntimeSpellsNoDenialPrefixOutsideItsConstants()` to scan `src/Chat.php` with
+the roster's own declaration lines carved out. Owner: whoever holds `src/Chat.php`. Note the scanner must
+keep reading `T_ENCAPSED_AND_WHITESPACE` — see Ec48-2.
+
+---
+
+## Ec48-2 — a scanner that reads only `T_CONSTANT_ENCAPSED_STRING` cannot see this tree's denial strings at all
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: process. **Measured; caught in my own new guard.**
+
+**What.** The first cut of `DenialPrefixRosterTest`'s "no second spelling" scanner read
+`T_CONSTANT_ENCAPSED_STRING` only. Every denial producer in this tree is an INTERPOLATED string, whose
+literal run is `T_ENCAPSED_AND_WHITESPACE`. MEASURED on PHP 8.3.6: the constant-only scanner reported
+**3** hits in `src/Chat.php` — all three the roster's own constant entries — and **zero** for any of the
+three producers in the table above, including the exact line E210 replaced. The guard was green over a
+tree where all three producers were hand-rolled.
+
+This is the rule-2 shape (the mutation survives because the assertion's WINDOW is wrong) occurring inside
+a guard written the same hour the lane was warned about it.
+
+**Step.** None — fixed in `DenialPrefixRosterTest`, which now asserts both token kinds through
+known-positive fixtures in the same test. Recorded so the next author of a source scanner over this tree
+starts from both token kinds.
+
+---
+
+## Ec48-3 — `RuntimeTest::testExecuteToolCallsYieldsErrorWhenHookDenies` passes with the prefix deleted
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: test-coverage. **Measured.**
+
+**What.** That test registers a hook whose own message is `'Hook denied this tool'` and then asserts
+`assertStringContainsString('Hook denied', $results[0]->content())`. The hook's message already contains
+the asserted substring, so the assertion says nothing about the prefix `Runtime::gate()` adds. MEASURED on
+PHP 8.3.6 through the round-48 mutation harness: substituting `"Hook denied: {$hookResult->message}"` with
+`"Hook refused: {$hookResult->message}"` left that test GREEN (`OK (1 test, 4 assertions)`).
+
+The same run showed `testAskWithNoApproverFailsClosedAndSaysPermissionWasRequired` surviving for the
+mirror reason — it asserts `'Permission required'`, which was present in `settleAsk()`'s own message
+regardless of what `gate()` prefixed.
+
+**Step.** Change the hook's message to something that does not contain the prefix (`'this tool is not
+allowed'`) and assert `assertStringStartsWith(Runtime::DENIAL_HOOK . ' ', …)`. `tests/RuntimeTest.php` was
+out of round-48 lane c's file list; `DenialPrefixRosterTest` now covers the behaviour from outside, so
+this is a strengthening rather than a hole.
+
+---
+
+## Ec48-4 — the denial roster lives on `Chat`, which is why the engine cannot read it
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: design. **Measured.**
+
+**What.** `Chat::DENIED_ERROR_PREFIXES` is the single roster two surfaces classify against, and it lives on
+the TUI model. `Runtime::gate()` therefore cannot read it: doing so would autoload `Chat` on the first
+gated tool call of EVERY run, including the `-p` one-shot path that exists partly so a run never builds
+one — `NonInteractive::refusalFrom()` goes to documented lengths to keep that load lazy and would be
+undone by it. So `Runtime` carries a pinned copy (`DENIAL_*`) and a test enforces the coupling, which
+works but is a copy.
+
+**Step.** Move the roster to a neutral leaf (`src/Permissions/DenialKind.php`, or an enum whose cases carry
+their prefix — which would also give the three kinds a TYPE rather than a string prefix, closing E210
+properly at the event rather than in the text). `Chat` and `Runtime` both re-export from it; the
+`DenialPrefixRosterTest` coupling test becomes unnecessary rather than merely satisfied. Touches
+`src/Chat.php`, so it needs the lane that owns it.
+
+---
+
+## Ec48-5 — an ASK refused at a terminal now writes two stderr lines
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: cosmetic. **Known and deliberate.**
+
+**What.** E219 added `NonInteractive::noticeRefusal()`, which writes one line per refusal from the
+tool-lifecycle observer. `HeadlessPermissionPrompt::__invoke()` already writes `sugarcrush: refused
+<tool>.` when a person answers anything non-affirmative at a real terminal. That one case therefore
+produces two lines: the approver's (the ANSWER) and the observer's (the OUTCOME, carrying the reason the
+model was handed).
+
+Not suppressed, because suppression would require the observer closure to know which refusals some
+approver had already announced, and the approver is constructed four frames away inside
+`Bootstrap::backend()`. Inventing that coupling for a cosmetic duplicate is worse than the duplicate.
+
+**Step.** If it is ever worth removing, the cheap version is for `HeadlessPermissionPrompt` to drop its own
+terse line now that the observer carries a fuller one — the prompt's other three shapes (the question, the
+no-tty refusal, the EOF line) all say things the observer cannot.
+
+---
+
+## Ec48-6 — the background-session daemon gets no refusal notice
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: observability. **Measured.**
+
+**What.** E219's line is written by `NonInteractive::run()`'s refusal observer. The OTHER headless caller,
+`Sessions\BackgroundSessionRunner`, attaches `HeadlessPermissionPrompt` for its refusal text but calls
+`$backend->complete([Message::user($this->task)], $onToken)` with **no `$onEvent` argument** — MEASURED at
+`src/Sessions/BackgroundSessionRunner.php`, the single `complete(` call in the file. So a hook DENY inside
+a background session reaches the session log on no channel at all, exactly the gap E219 closed for `-p`.
+An ASK still reaches it, via the prompt's no-tty refusal branch (that daemon's fd 0 is `/dev/null`).
+
+**Step.** Pass an observer there too. The line belongs in whatever `BackgroundSessionRunner` uses for its
+log rather than raw `STDERR` — its fd 2 is the session log file, so a plain `noticeRefusal()` would in fact
+land correctly, but that should be verified rather than assumed. Not done in round 48: `src/Sessions/` was
+out of lane c's file list.

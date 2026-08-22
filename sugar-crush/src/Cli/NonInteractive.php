@@ -880,12 +880,16 @@ final class NonInteractive
      * ENGINE, and the TUI reaches it too:
      * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}
      * `pcntl_fork()`s and runs the same `Runtime` in the child, and that child
-     * inherits the parent's descriptor 2 — VERIFIED at the fork site, which
-     * closes and re-blocks the socket pair and touches no standard stream. The
-     * parent is the interactive `Program`, which is holding the ALTERNATE
-     * SCREEN open. An `fwrite(STDERR, …)` in `Runtime::gate()` would therefore
-     * paint a refusal line straight onto a live TUI frame on every denied call,
-     * which is the hazard
+     * inherits the parent's descriptor 2 — VERIFIED at the fork site and in
+     * `runCompleteInChild()`, which between them close and re-block the socket
+     * pair and touch no standard stream. VERIFIED at the other end too, rather
+     * than assumed from "it is a TUI": `bin/sugarcrush` constructs its
+     * `Program` with {@see \SugarCraft\Crush\Chat::programOptions()}, which
+     * passes `useAltScreen: true` — the parameter's own default is FALSE — and
+     * `candy-core`'s `Program::setupTerminal()` writes `Ansi::altScreenEnter()`
+     * on exactly that flag. An `fwrite(STDERR, …)` in `Runtime::gate()` would
+     * therefore paint a refusal line straight onto a live TUI frame on every
+     * denied call — the hazard
      * {@see Bootstrap::warnPermissionConfigInTranscript()} exists to avoid for
      * launch-time writes. `Runtime` writing to stderr nowhere is a PROPERTY,
      * not an omission, and
