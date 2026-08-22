@@ -1094,6 +1094,34 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 46 — CLOSED (`dbb8e834`, backlog `c4a810a1`). Floor `9378 / 131610 / 1 skipped / rc 0`, `sugar-crush` linked.**
+Three file-disjoint lanes, **zero code overlap for the second round running**. The brief opened with a
+contradiction and the lane settled it: round 45's census said 38 `error_log()` sites in `src/`, a naive
+grep said 58 — **38 real calls, 20 comment mentions, 0 residue** (E169). `CommandLoader`'s five refusal
+lines are now gated behind `SUGARCRUSH_DEBUG_COMMANDS` rather than deleted, and the biggest structural
+finding fell out of trying to route the rest: **the transcript seam is LAUNCH-ONLY, and five classes need
+a mid-session one** (E171) — the same constraint Phase 9 step 1 has, and now the highest-leverage item in
+the backlog. Lane b shipped a forked-child reaper trait with adoption and exit-convention scanners, which
+immediately found **live bare-exit offenders inside PHPUnit** (E177/E178/E180) that were invisible until
+the scanner learned to read `\pcntl_fork()`. Lane c pinned the no-survivors launch branch and used
+mutation to separate the `sprintf()` formats that are inline **on purpose** from those that only looked
+that way (E186).
+
+Four process results. **Tests were predicted exactly for the fourth round running** (9378) — but the
+supervisor predicted a strict assertion overshoot and got the additive lower bound instead, which sharpened
+the rule rather than overturning it: **a census inflates a merged total only when a sibling's additions
+fall inside its PREDICATE, not merely its scan scope** (E191). A weekly limit killed two fix agents, and
+resuming exposed a hazard nobody had anticipated: **the replayed review was cached and described a HEAD six
+commits stale, because the killed agent had committed before dying** (E190) — the replacement re-derived
+HEAD, verified those commits by mutation and did not redo them, unprompted. **A guard compelled a lane out
+of its file split** — gating a new env var forced an edit to the roster page `EnvRosterDriftTest` requires,
+which was not in that lane's list; the ownership map is static and a guard's obligations are dynamic. And
+**two more reviewer prescriptions were wrong** (eight across four rounds), one of which would have closed
+its four target shapes while making the guard claim a call passes a flag it does not — **with the suite
+staying green**.
+
+Backlog 168 → 185.
+
 **ROUND 45 — CLOSED (`ee77252c`, backlog `5daa7420`). Floor `9308 / 130874 / 1 skipped / rc 0`, `sugar-crush` linked.**
 Three file-disjoint lanes with **zero code overlap**; the only collision across all three was the backlog.
 E119 closed with the tripwire test deleted in the same commit — the round-44 pattern (a lane that cannot

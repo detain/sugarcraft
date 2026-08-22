@@ -10676,3 +10676,124 @@ Two caveats the lanes raised and nobody should lose: **`php-cs-fixer` is genuine
 (`command -v` empty, both vendor paths empty), so round 45's new files are PSR-12 by inspection and by
 matching neighbours, not by tool. And **PHP 8.4 was not exercised** — every width, regex and stdlib claim
 this round is PHP 8.3.6 only.
+
+
+## ROUND 46 — a weekly limit mid-round, a killed agent that had already committed, and a prediction the supervisor got wrong
+
+**Merged `dbb8e834`, renumbering `15fb34ff`, backlog `c4a810a1`. Floor `9378 / 131610 / 1 skipped / rc 0`**
+(04:25.272, 278.40 MB), supervisor-measured in the live tree with `sugar-crush` LINKED. Base `62f4e5d1`,
+whose floor `9308 / 130874` was measured **at that exact commit** per E167 — and lane c observed it
+directly and confirmed it, which is the one figure round 45's lanes could not close.
+
+### The prediction: tests exact for the fourth round, assertions wrong in an instructive way
+
+**Tests 9378, predicted exactly** (9308 + 48 + 15 + 7). Assertions **131610 — exactly the additive lower
+bound**, and the supervisor had predicted a **strict overshoot**. That prediction was wrong, and the
+reason sharpens round 44's rule rather than overturning it (E191):
+
+**A new census inflates a merged total only when a sibling's additions fall inside its PREDICATE, not
+merely inside its scan scope.** Lane b's new scanners walk all of `tests/` but assert per fork site and
+per fixture; lane a's two new test files contain **zero** `pcntl_fork` calls, so nothing a sibling added
+matched. Round 44's stale-figure census asserted once per PARAGRAPH of every file, where every sibling
+addition necessarily matches. Assertions stay a lower bound; "walks a directory a sibling touches" is not
+sufficient reason to expect an overshoot.
+
+### A killed agent that had already committed (E190)
+
+The weekly limit killed `fix:a-stderr` and `fix:c-formats`. Resuming by run id replayed the seven
+completed agents and ran the two missing ones.
+
+🔴 **But the replayed review was stale in a way nobody had anticipated.** Lane c's replacement fix agent
+received a cached review describing HEAD as `0df3fe89` with all findings outstanding. **The lane's actual
+HEAD was `4e45e555` — six further commits by the killed fix agent**, whose subjects map one-to-one onto
+the review's MAJOR 1–4 and MINOR 5–6. The earlier agent had committed and then died before reporting.
+E168 covers the agent that dies mid-MUTATION leaving dirt; this is the agent that dies mid-REPORT leaving
+committed work nobody has been told about.
+
+**The replacement handled it correctly without being told to** — re-derived HEAD, verified the six commits
+by mutation rather than trusting them, did not redo the work, and said so plainly. That goes into the
+fix-agent brief as a rule.
+
+The E168 check itself paid off in the negative direction: all three lane trees were clean on arrival this
+time, checked before merging rather than at the end.
+
+### The brief's own premise was a question, and the lane answered it (E169)
+
+The supervisor's brief put a contradiction at the top of lane a's work: round 45's census reported **38**
+`error_log()` sites across 11 files with `Bootstrap.php` at 1, while a naive grep gave **58 across 13**
+with `Bootstrap.php` at 10. **Settled: 38 real calls, 20 comment mentions, 0 residue.** The census was
+right and the grep was counting prose. Reconciled with a generator and written into the test's doc-block,
+with the loop's COVERAGE now pinned by an `$examined` counter — because the reviewer had found a
+cheap-looking `continue` that skipped files, and dropping it was pinned by nothing until a mutation showed
+the fix itself survived.
+
+### A guard compelled a lane out of its file split
+
+Lane a gated `CommandLoader`'s five refusal lines behind a new `SUGARCRUSH_DEBUG_COMMANDS` flag — E154's
+"gate, never delete" bucket, rule 6. Round 45's `EnvRosterDriftTest` then **required** a row in
+`sugar-crush/docs/ENVIRONMENT.md`, which was not in lane a's file list. The lane could not complete its
+assigned work without touching a file its brief did not grant it. It cost nothing because no sibling owned
+`docs/` this round.
+
+**The ownership map is static; a guard's obligations are dynamic.** When a lane's work adds an env var, a
+stderr write or a seam call, its file list must include the roster page the corresponding guard requires.
+
+### Eight wrong reviewer prescriptions across four rounds — two more this round
+
+- **Lane a's BLOCKING 1 prescription was wrong and would have shipped a latent hole.** It argued a named
+  argument occupies no positional slot, so the positional fallback still answers null. False of this
+  implementation: `topLevelArguments()` splits on top-level commas and indexes named arguments
+  positionally. Measured by extracting the pre-fix method, applying the prescription literally and driving
+  the real private `scan()` through reflection: it closes the four target shapes but makes
+  `$x->backend($a, $b, $c, somethingElse: $d)` **throw a claim that the call passes a flag it does not
+  pass**. Over the real `src/` the census still produced the pinned roster, **so the suite would have
+  stayed green with the new hole in it** — the same latency as the original fail-open.
+- **Lane a's MAJOR 5 prescription was correct but incomplete**, and the gap is what the standing rules
+  exist for. "Drop the `continue`" was right; dropping it was pinned by nothing. Re-adding it SURVIVED at
+  53 tests / 120 assertions, because `src/` contains no file today where the two instruments disagree —
+  which is exactly why the skip looked free when it was written.
+- **Lane b's BLOCKING 1 prescription was weaker than the tree needed** (it granted an exemption keyed on
+  return type, i.e. to any int-returning method containing a fork), and **BLOCKING 3's would have left a
+  blank cheque** (a file-keyed exemption map silently adopts a second untracked fork added later). Both
+  reimplemented self-limiting, both pinned by mutations the reviewer's versions would have passed.
+
+Two reviewer FIGURES also failed to reproduce: a seam byte measurement (402/629 measured three times, not
+404/627) and a `?->` cardinality (95 by token scan across 28 files, not 97 across 29). Both findings stood;
+only their numbers were off.
+
+### A lane falsified a previous round's finding (E176)
+
+Round 45 recorded the 62 `sugarcrush:` stderr lines as inherited child-process stderr. **Lane b measured
+`tests/Integration/` and found them in-process, not inherited** — the attribution was wrong for that
+directory. Rule 9 working: a lane disproving its own brief's inherited premise is the round's most
+valuable output, for the fourth round running.
+
+### Findings worth carrying
+
+- **E171 — the transcript seam is LAUNCH-ONLY**, and five classes need a mid-session one. This is the
+  structural reason the tool-call-parser sites cannot simply be routed.
+- **E170** — the 18 tool-call-parser `error_log()` sites need a mid-session notice sink, not a gate; both
+  classes are `final readonly` so there is no accumulator to gate against.
+- **E173** — `--output-format json` never carries a permission refusal.
+- **E177/E178/E180** — live bare-exit offenders inside PHPUnit, found only because the scanner learned to
+  read `\pcntl_fork()`. Recorded as *open* rather than exempted, with a guard that forces the row's
+  deletion once fixed.
+- **E186** — some `sprintf()` formats in `Bootstrap.php` are inline on purpose and others only looked that
+  way; **a mutation is what told them apart**.
+- **E188** — three stale class-total figures shipped this round, each a cardinality over `tests/`. Rule 18
+  again.
+
+### Backlog 168 → 185
+
+E169–E175 (lane a) · E176–E183 (lane b) · E184–E189 (lane c) · E190 (resume-stale HEAD) · E191 (the
+additivity refinement). All three lanes filed this round — the first time lane a has.
+
+### Housekeeping
+
+Zero code overlap for the second round running; the only collision across all three lanes was the backlog.
+All three used lane-prefixed provisional ids and **none appeared in a source file**, so the renumber to
+E169–E189 needed no in-code repointing. Invariants at merge: 18/18 symlinks by `is_link()` · config md5
+`05480c743aff302fd6c06c5a4a4c2210` · `check-path-repos --no-lib-path-repos` rc 0 · the only tracked
+`composer.lock` is the root one · **skips exactly 1**, confirmed by name. Every lane file byte-identical
+in master except the deliberately renumbered backlog. Branches merged and deleted, lane dirs removed after
+the floor was measured.

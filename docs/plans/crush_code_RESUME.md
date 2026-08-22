@@ -6,54 +6,118 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## ⏳ ROUND 46 IS IN FLIGHT RIGHT NOW — read this before starting anything
+## 0-NOW-47. ROUND 46 CLOSED (floor 9378) — read this first, then §0 for the standing rules
 
-**Launched 2026-08-22 from master `62f4e5d1`, tree clean.** Run `wf_5e9bcf7f-cf2` (task `wgbvw18cj`),
-9 agents, three lanes × implement → adversarial review → fix, concurrency 3.
+**SUITE FLOOR: `9378 / 131610 / 1 skipped / rc 0` at `dbb8e834`** (renumbering `15fb34ff`, backlog
+`c4a810a1`), supervisor-measured in the live tree after merging all three round-46 lanes (04:25.272,
+278.40 MB). Supersedes every earlier figure (9308 held the round-45 boundary, 9215 round 44, 9078 round
+43). `sugar-crush` was **linked** — a published-mode tree reports a different skip count and is NOT
+comparable. **Skips MUST stay exactly 1**, confirmed by name (`--filter McpClientTest` → 60 tests, 1
+skipped). 18/18 symlinks by `is_link()`; `md5sum .sugar-crush/config.json` =
+`05480c743aff302fd6c06c5a4a4c2210`; `check-path-repos --no-lib-path-repos` rc 0; the only tracked
+`composer.lock` is the root one.
 
-**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-46-wf_5e9bcf7f-cf2.js`
-(copied there deliberately — the scratchpad copy it was launched from does not survive a session end).
-🔴 **If a session limit kills agents mid-round, RESUME rather than relaunch:**
-`Workflow({scriptPath, resumeFromRunId: 'wf_5e9bcf7f-cf2'})` replays completed agents from cache. This
-worked in round 45 and cost nothing.
+🔴 **MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM** (E167). Round 46's brief did
+this and lane c OBSERVED the declared floor directly, closing the one figure round 45's lanes could not.
+Cut the lane copies, then measure at that exact commit.
 
-**Base floor `9308 / 130874 / 1 / rc 0` was measured AT `62f4e5d1` itself**, per E167 — not carried
-forward from the merge commit. The briefs say so.
+### 🔴 ON RESUME, THE REVIEW'S STATED HEAD MAY BE THREE OR MORE COMMITS STALE (E190)
 
-**Lane dirs `/home/sites/crush-lane-{a,b,c}`** are full-repo `cp -a` copies at `62f4e5d1`, each verified
-clean with 18/18 `vendor/sugarcraft/*` symlinks resolving INSIDE the lane by `realpath()`.
-⚠️ **DO NOT DELETE THEM until the merged floor has been measured.**
+Round 46's weekly limit killed two fix agents. Resuming by run id replayed the seven completed agents and
+ran the two missing ones — **but the replayed review was cached, and it described lane c's HEAD as
+`0df3fe89` with every finding outstanding. The lane's actual HEAD was `4e45e555`: six further commits by
+the killed fix agent**, mapping one-to-one onto the review's MAJOR 1–4 and MINOR 5–6. It had committed and
+then died before reporting.
 
-| lane | label | items |
-| --- | --- | --- |
-| `a` | stderr | **E154** (triage the unprefixed `error_log()` sites — 🔴 **reconcile 38 vs 58 FIRST**) · **E155** (`HeadlessPermissionPrompt`'s four shapes) · **E161** (`T_ATTRIBUTE` depth bug) |
-| `b` | harness | **E142/E80** (a forked-child pid reaper trait — `phpunit.xml` is FORBIDDEN) · **E138** · **E141** (the rendezvous overshoot that produced a false KILL) · **E156** (`tests/Integration/` half only) |
-| `c` | formats | **E152** (read the promoted constant) · **E153** (a behavioural assertion + the no-survivors branch) · **E164** (walk the ten literal formats) · **E162/E163** (the classifier that lies in one direction) |
+E168 covers the agent that dies mid-MUTATION leaving dirt. **This is the agent that dies mid-REPORT
+leaving committed work nobody has been told about.** The replacement handled it correctly without being
+told to. **Put it in the fix-agent brief:** re-derive HEAD with `git log --oneline <base>..HEAD` before
+believing any sha in the review or the brief; if commits exist the review does not mention, verify them by
+mutation, do not redo them, and say so.
 
-### WHAT THE SUPERVISOR MUST DO WHEN IT LANDS
+E168's own check paid off in the negative: all three lane trees were clean on arrival, checked **before**
+merging rather than at the end.
 
-Follow §0-NOW-46's rules plus round 45's merge sequence, which worked: merge `a` → `b` → `c`; expect a
-conflict in `docs/plans/crush_code_hardening_backlog.md` ONLY; resolve by keeping both sides and
-renumbering **from E168**; then grep the whole tree — not just the backlog — for the provisional ids
-(`Ea46-`, `Eb46-`, `Ec46-`). Check real overlap with `git diff --name-only <base>..HEAD` per lane plus
-`comm -12`, never the lanes' self-reports.
+### THE PREDICTION RULE, CORRECTED — PREDICATE, NOT SCOPE (E191)
 
-🔴 **CHECK EVERY LANE TREE FOR A DIRTY WORKTREE BEFORE MERGING** (E168). Round 45's session limit left an
-unrestored oracle probe in a lane; `git status --porcelain` per lane catches it, and reverting to
-committed HEAD is the right move once you have confirmed the dirt is a mutation and not fix work.
+**Tests 9378, predicted exactly — fourth round running.** Assertions landed on **131610, exactly the
+additive lower bound, and the supervisor had predicted a strict overshoot. That was wrong.**
 
-⚠️ **Two read-side hazards this round, both flagged in the briefs.** Lane `a`'s `StderrEmitterCensusTest`
-holds a per-file roster of stderr writes in `src/Cli/Bootstrap.php`, which is lane `c`'s file — E159
-predicted this and **a red there at merge is the guard working, not a defect**. Bump the roster after
-deciding where the write belongs; never loosen the map. And `BootstrapTranscriptSeamCallSiteCensusTest`
-pins that same file's seam call-site count at 16 plus ten `PROSE_SITES` offsets.
+**A new census inflates a merged total only when a sibling's additions fall inside its PREDICATE, not
+merely inside its scan scope.** Lane b's new scanners walk all of `tests/` but assert per fork site and
+per fixture; lane a's two new test files contain zero `pcntl_fork` calls, so nothing matched. Round 44's
+stale-figure census asserted once per PARAGRAPH of every file, where every sibling addition necessarily
+matches — that is why THAT one overshot by 48.
 
-**Predict tests additively; predict assertions as a LOWER BOUND.** Lane a is editing a dozen `src/` files,
-which moves the per-paragraph censuses in files no lane touches (E143).
+**Keep predicting tests additively and assertions as a lower bound. Do not promise an overshoot just
+because a guard walks a directory a sibling touched.**
+
+### 🔴 A GUARD CAN COMPEL A LANE OUT OF ITS FILE SPLIT — CHECK THIS WHEN ASSIGNING LANES
+
+Lane a gated `CommandLoader`'s refusals behind a new `SUGARCRUSH_DEBUG_COMMANDS` flag (rule 6: gate, never
+delete). Round 45's `EnvRosterDriftTest` then **required** a row in `sugar-crush/docs/ENVIRONMENT.md`,
+which was not in lane a's file list — **the lane could not complete its assigned work without breaching
+its split.** It cost nothing only because no sibling owned `docs/` this round.
+
+**The ownership map is static; a guard's obligations are dynamic.** When a lane's work adds an env var, a
+stderr write or a seam call, its file list MUST include the roster page the corresponding guard requires.
+
+### 🔴 EIGHT WRONG REVIEWER PRESCRIPTIONS ACROSS FOUR ROUNDS
+
+Round 46 added two, and one of them is the most dangerous shape yet: lane a's BLOCKING 1 prescription
+**closed the four target shapes and simultaneously made the guard claim a call passes a flag it does not
+pass** — and over the real `src/` the census still produced the pinned roster, **so the suite would have
+stayed green with the new hole in it.** The other was correct but unpinned: "drop the `continue`" was
+right, and re-adding it SURVIVED, because no file in `src/` today makes the two instruments disagree.
+
+Two reviewer FIGURES also failed to reproduce (402/629 measured three times, not 404/627; 95 `?->` across
+28 files, not 97 across 29). Both findings stood; only their numbers were wrong. **Re-derive from the
+tree, never from the review.**
+
+### THE BACKLOG IS NOW 185 ENTRIES — E169–E191 ARE NEW
+
+E169–E175 (lane a) · E176–E183 (lane b) · E184–E189 (lane c) · E190 · E191. **All three lanes filed this
+round — the first time lane a has.** All used lane-prefixed provisional ids and none appeared in a source
+file, so the renumber needed no in-code repointing. E135's fix has now worked two rounds running; keep it.
+
+**Start the next round with these:**
+- 🔴 **E171 — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one.** This is the
+  structural blocker under E170, and it is the same constraint Phase 9 step 1 has. Doing this unlocks
+  several other entries; it is the highest-leverage item in the backlog right now.
+- **E170** — the 18 tool-call-parser `error_log()` sites. Both classes are `final readonly`, so there is
+  no accumulator to gate against; they need E171's sink. Their tests live under
+  `tests/Providers/ToolCallParser/` and assert the `error_log()` text, so the lane that does this needs
+  those files too.
+- **E173** — `--output-format json` never carries a permission refusal.
+- **E177 / E178 / E180** — live bare-exit offenders inside PHPUnit (`MailboxTest`, `WorkflowEngine`'s
+  interrupt handler, `TaskListTest` twice), found only because the scanner learned to read
+  `\pcntl_fork()`. Recorded as *open*, not exempted, with a guard that forces the row's deletion once
+  fixed. **E179** — widen the reaper's adoption scope beyond `tests/Integration/`.
+- **E186 / E187** — the `sprintf()` formats that are inline on purpose versus those that only looked that
+  way (a mutation is what told them apart), and the doc pages nothing sweeps for unguarded quotes.
+- **E188** — three stale class-total cardinalities over `tests/` shipped this round. Rule 18 again.
+- **E124** — monorepo-root scope, still needs a supervisor decision before a lane can own it.
+
+Then the carried queue: **E154's remaining sites**, **E59's real-worker half**, **E61's L**, **E79**,
+**E77**, **E88** (`SelectPaneMsg` wiring), `keybindings` (L, DEFER — see E110), then **Phase 9**
+(interactive-prompt containment), then the deferred security pass.
+
+### ⚠️ CAVEATS THAT CARRY FORWARD
+
+**`php-cs-fixer` is genuinely absent on this box.** New files are PSR-12 by inspection and by matching
+neighbours, not by tool. **PHP 8.4 was not exercised** — every token-lexing, width, regex and stdlib claim
+in rounds 45 and 46 is PHP 8.3.6 only. Round 46's token-constant claims (`\pcntl_fork` ⇒
+`T_NAME_FULLY_QUALIFIED`, `exit`/`die` ⇒ `T_EXIT`, `"{$x}"` ⇒ `T_CURLY_OPEN`) are documented as stable
+across 8.3/8.4 but were executed on 8.3.6 only.
+
+**E80 is diagnosed (round 45) and its mechanism is now partly mitigated (round 46's reaper trait), but
+nothing inside a test can bound a child that outlives the whole PHPUnit process.** `tearDown()` closes the
+abort case only. A process-group kill or a `phpunit.xml` change would be needed, and `phpunit.xml` is
+supervisor-owned — that is a DECISION, not an edit.
 
 ---
 
-## 0-NOW-46. ROUND 45 CLOSED (floor 9308) — read this first, then §0 for the standing rules
+## SUPERSEDED — round 45's block, kept for its reasoning (its floor 9308 is superseded by §0-NOW-47; its rules are NOT)
 
 **SUITE FLOOR: `9308 / 130874 / 1 skipped / rc 0` at `ee77252c`** (backlog additions at `5daa7420`),
 supervisor-measured in the live tree after merging all three round-45 lanes (04:19.629, 276.40 MB).
@@ -199,7 +263,7 @@ E141) that had already produced one false KILL verdict on an unrelated mutation.
 
 ---
 
-## SUPERSEDED — round 44's block, kept for its reasoning (its floor 9215 is superseded by §0-NOW-46; its rules are NOT)
+## SUPERSEDED — round 44's block, kept for its reasoning (its floor 9215 is superseded by §0-NOW-47; its rules are NOT)
 
 **SUITE FLOOR: `9215 / 127781 / 1 skipped / rc 0` at `98d59bfb`**, supervisor-measured in the live tree
 after merging all three round-44 lanes (04:17.446, 276 MB). Supersedes every earlier figure (9078 held
@@ -366,7 +430,7 @@ attribute the +48 assertion gap, and it would have been unrecoverable an hour la
 
 ---
 
-## SUPERSEDED — round 43's block, kept for its reasoning (its floor 9078 is superseded by §0-NOW-46; its rules are NOT)
+## SUPERSEDED — round 43's block, kept for its reasoning (its floor 9078 is superseded by §0-NOW-47; its rules are NOT)
 
 **SUITE FLOOR: `9078 / 105590 / 1 skipped / rc 0` at `628f50f1`**, supervisor-measured in the live tree
 after merging all three round-43 lanes (04:12.390, 270 MB). Supersedes every earlier figure (8996 held
@@ -549,7 +613,7 @@ for the same reason. Do it in that order; a lane dir removed before the check is
 
 ---
 
-## SUPERSEDED — round 42's block, kept for its reasoning (its floor 8996 is superseded by §0-NOW-46; its rules are NOT)
+## SUPERSEDED — round 42's block, kept for its reasoning (its floor 8996 is superseded by §0-NOW-47; its rules are NOT)
 
 **SUITE FLOOR: `8996 / 105179 / 1 skipped / rc 0` at `c204015e`**, supervisor-measured in the live tree
 after merging all three round-42 lanes (04:12.080). Supersedes every earlier figure (8978 held the
@@ -963,7 +1027,7 @@ trusting a single further figure.**
 
 ---
 
-## SUPERSEDED — round 40's block, kept for its reasoning (its floor 8905 and its spawning cap are BOTH superseded by §0-NOW-46; its lessons are not)
+## SUPERSEDED — round 40's block, kept for its reasoning (its floor 8905 and its spawning cap are BOTH superseded by §0-NOW-47; its lessons are not)
 
 **SUITE FLOOR: `8905 / 101022 / 1 skipped / rc 0` at `33f97cb1`**, supervisor-measured in the live tree
 after merging all three lanes. Supersedes every earlier figure (8879 held the round-39 boundary).
@@ -980,7 +1044,7 @@ sugar-bits 493/1015, sugar-gallery 92/252, sugar-stickers 215/420, sugar-toast 1
 sugar-veil 201/406, sugar-dash 5853/9154, sugar-table 456/1024, sugar-charts 543/1259,
 sugar-calendar 147/364. Do this whenever a lane touches `candy-core`.
 
-### 🔴 SUPERSEDED — the round-40 spawning cap. Concurrency is now **3** by explicit instruction; see §0-NOW-46. Kept because the reasoning about who did what by hand is load-bearing for reading round 40's stamps.
+### 🔴 SUPERSEDED — the round-40 spawning cap. Concurrency is now **3** by explicit instruction; see §0-NOW-47. Kept because the reasoning about who did what by hand is load-bearing for reading round 40's stamps.
 
 **Standing instruction, given mid-round-40: _"no more spawning additional agents until session
 resets"_, followed by _"after these steps are all done being merged into the main dirs and lanes
@@ -1029,7 +1093,7 @@ nothing: `cmd`'s `Read` nudge test (green with the nudge disabled), the `app()` 
 with the two bases mismatched), and every tab assertion (green for any `TAB_WIDTH`). **Mutate the
 clause, or you have not pinned it.**
 
-### SUPERSEDED — ROUND 41's ORIGINAL SCOPE MEASUREMENT, kept for its figures. ⚠️ ALL of it is now DONE: E52 and E61(S) at `ae30fee5`, then `statusLine`, E73 and E70–E72 via lanes a/b/c at `7852d79e`. Read §0-NOW-46 for current state.
+### SUPERSEDED — ROUND 41's ORIGINAL SCOPE MEASUREMENT, kept for its figures. ⚠️ ALL of it is now DONE: E52 and E61(S) at `ae30fee5`, then `statusLine`, E73 and E70–E72 via lanes a/b/c at `7852d79e`. Read §0-NOW-47 for current state.
 
 A scout re-measured the queue at `8add627b`; all figures are its, not the record's.
 
@@ -2281,7 +2345,7 @@ deps (`candy-focus`, `sugar-veil`, `candy-sprinkles`, `candy-kit`) are ALREADY i
 
 ---
 
-## SUPERSEDED — round 32's block. It is NOT "read this first" any more; §0-NOW-46 is. Kept for the standing rules and the DeepSeek record.
+## SUPERSEDED — round 32's block. It is NOT "read this first" any more; §0-NOW-47 is. Kept for the standing rules and the DeepSeek record.
 
 **`master` = `d97580ab`. Live tree clean, 0 ahead / 0 behind. NOTHING IS IN FLIGHT.**
 The three lane dirs (`crush-lane-cmd`, `crush-lane-lsp`, `crush-lane-sglang`) were all clean, idle and
@@ -2670,7 +2734,7 @@ now set it to max as default for this model"**.
 authorised.
 
 
-## SUPERSEDED — the 2026-08-20 compact block. NOT "read this first"; §0-NOW-46 is. Kept for its reasoning.
+## SUPERSEDED — the 2026-08-20 compact block. NOT "read this first"; §0-NOW-47 is. Kept for its reasoning.
 
 **HEAD is `a2221578`, tree CLEAN, in sync with `origin/master` (0 ahead / 0 behind).**
 **Suite baseline: `7782 tests / 90237 assertions / 1 skipped / rc 0`, ~3m12s** — supervisor-measured
