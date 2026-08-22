@@ -409,37 +409,114 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
      * neighbour's return — see the class doc-block for the mutation that proved
      * an unbounded walk silently did exactly that.
      *
+     * SINGLE-VALUED, AND IT GOES RED RATHER THAN NULL WHEN IT CANNOT BE. A
+     * `return` whose expression names two different exit constants — a ternary
+     * — has no one answer, and this method's callers map one producer to one
+     * code. Returning `null` there would look identical to "this branch has no
+     * terminator", which is the shape a guard silently under-reports through.
+     * {@see exitCodesAfter()} is the multi-valued form for the callers that
+     * want the set.
+     *
      * @param list<PhpToken> $tokens
      * @param list<int>      $otherSites
      */
     private function exitCodeAfter(array $tokens, int $from, int $until, array $otherSites): ?int
     {
-        $codes = $this->exitCodes();
+        $codes = $this->exitCodesAfter($tokens, $from, $until, $otherSites);
 
-        for ($k = $from + 1; $k <= $until && $k < count($tokens); $k++) {
+        if ($codes === []) {
+            return null;
+        }
+
+        self::assertCount(
+            1,
+            array_unique($codes),
+            'the terminator after a producer names more than one exit code (' . implode(', ', $codes)
+            . '), so "the exit code this branch leaves with" has no single answer. A caller mapping '
+            . 'one producer to one code needs a decision here, not a silent null',
+        );
+
+        return $codes[0];
+    }
+
+    /**
+     * EVERY exit code the FIRST terminator after $from can produce.
+     *
+     * ONE STATEMENT, NOT ONE FUNCTION, and that is the whole point of it.
+     * `testAFailureWithNoErrorObjectIsDocumentedExactlyWhenOneExists()` used to
+     * collect every `EXIT_*` between a `result`-only document and the end of
+     * the enclosing function, because `Subcommands::doctor()` ends in
+     * `return $failed === [] ? EXIT_OK : EXIT_FAILURE` and the exact walk above
+     * could not read a ternary — it checked `$tokens[$k + 2]` for `::` and a
+     * ternary puts the condition there. The over-approximation was in the safe
+     * direction for the claim being pinned and the test said so, but it left a
+     * residual: a function emitting a bare `result` on a SUCCESS path and
+     * returning non-zero from an unrelated later branch satisfied it wrongly.
+     * That shape is now a fixture — see
+     * {@see terminatorShapes()} — and the walk below reds on it.
+     *
+     * SHAPE-AGNOSTIC BY CONSTRUCTION. Rather than parse a ternary, this reads
+     * every `…::EXIT_*` inside the return STATEMENT, to its `;` at depth zero.
+     * A ternary, a nested ternary and a `match` all fall out of the same rule,
+     * and a shape nobody has written yet does not need a fourth branch. The
+     * bound is the statement, so it can never reach a later branch's return.
+     *
+     * @param list<PhpToken> $tokens
+     * @param list<int>      $otherSites
+     *
+     * @return list<int>
+     */
+    private function exitCodesAfter(array $tokens, int $from, int $until, array $otherSites): array
+    {
+        $codes = $this->exitCodes();
+        $n = count($tokens);
+
+        for ($k = $from + 1; $k <= $until && $k < $n; $k++) {
             if (in_array($k, $otherSites, true)) {
-                return null;
+                return [];
             }
             $t = $tokens[$k];
             if ($t->is(T_EXIT)
                 && ($tokens[$k + 1]->text ?? '') === '('
                 && ($tokens[$k + 2] ?? null)?->is(T_LNUMBER)
                 && ($tokens[$k + 3]->text ?? '') === ')') {
-                return (int) $tokens[$k + 2]->text;
+                return [(int) $tokens[$k + 2]->text];
             }
             if (!$t->is(T_RETURN)) {
                 continue;
             }
-            if (($tokens[$k + 2]->text ?? '') !== '::' || !str_starts_with($tokens[$k + 3]->text ?? '', 'EXIT_')) {
+
+            $found = [];
+            $depth = 0;
+            for ($j = $k + 1; $j < $n; $j++) {
+                $text = $tokens[$j]->text;
+                if ($text === '(' || $text === '[' || $text === '{') {
+                    $depth++;
+
+                    continue;
+                }
+                if ($text === ')' || $text === ']' || $text === '}') {
+                    $depth--;
+
+                    continue;
+                }
+                if ($depth === 0 && $text === ';') {
+                    break;
+                }
+                if (($tokens[$j - 1]->text ?? '') === '::' && str_starts_with($text, 'EXIT_')) {
+                    self::assertArrayHasKey($text, $codes, "unknown exit constant {$text}");
+                    $found[] = $codes[$text];
+                }
+            }
+
+            if ($found === []) {
                 continue;
             }
-            $constant = $tokens[$k + 3]->text;
-            self::assertArrayHasKey($constant, $codes, "unknown exit constant {$constant}");
 
-            return $codes[$constant];
+            return $found;
         }
 
-        return null;
+        return [];
     }
 
     /**
@@ -894,48 +971,9 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
     public function testAFailureWithNoErrorObjectIsDocumentedExactlyWhenOneExists(): void
     {
         $bare = [];
-
         foreach ($this->shippedSourceFiles() as $relative) {
-            $tokens = $this->significantTokens($this->repoFile($relative));
-            $ranges = $this->functionRanges($tokens);
-            $n = count($tokens);
-
-            for ($i = 0; $i < $n; $i++) {
-                if (!$tokens[$i]->is(T_STRING)
-                    || !in_array($tokens[$i]->text, ['emitDocument', 'emitErrorDocument'], true)
-                    || ($tokens[$i - 1]->text ?? '') !== '::'
-                    || ($tokens[$i + 1]->text ?? '') !== '('
-                    || ($tokens[$i + 2]->text ?? '') !== '[') {
-                    continue;
-                }
-                [$entries] = $this->argumentTokens($tokens, $i + 3);
-                $keys = [];
-                foreach ($entries as $entry) {
-                    if (($entry[0] ?? null)?->is(T_CONSTANT_ENCAPSED_STRING) === true
-                        && ($entry[1]->text ?? '') === '=>') {
-                        $keys[] = trim($entry[0]->text, "'\"");
-                    }
-                }
-                if (!in_array('result', $keys, true) || in_array('error', $keys, true)) {
-                    continue;
-                }
-
-                // Every EXIT_* the enclosing function can leave with after this
-                // document. An over-approximation on purpose: the claim is
-                // "a failure CAN arrive with no error object", so a branch that
-                // might return non-zero is exactly the evidence for it.
-                $end = $this->enclosingFunctionEnd($ranges, $i, $n);
-                $codes = $this->exitCodes();
-                for ($k = $i; $k <= $end && $k < $n; $k++) {
-                    if (!str_starts_with($tokens[$k]->text, 'EXIT_')
-                        || ($tokens[$k - 1]->text ?? '') !== '::') {
-                        continue;
-                    }
-                    self::assertArrayHasKey($tokens[$k]->text, $codes, 'unknown exit constant');
-                    if ($codes[$tokens[$k]->text] !== 0) {
-                        $bare[$relative] = true;
-                    }
-                }
+            if ($this->bareResultCanExitNonZero($this->repoFile($relative))) {
+                $bare[$relative] = true;
             }
         }
 
@@ -959,6 +997,324 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
             . implode(', ', array_keys($bare)) . ' emits one. `doctor` is the shipped case: it exits '
             . '1 on a FAIL check with `{"result":{…}}` and no `error` key, so a consumer branching on '
             . '`.error.type` to decide whether the run failed reads null exactly there.',
+        );
+    }
+
+    /**
+     * Can a `result`-only document in this source be followed by a non-zero
+     * exit?
+     *
+     * ONE METHOD, TWO CALLERS, and that is what makes the answer checkable: the
+     * real scan above and the fixture table below run the SAME code, so a
+     * fixture with a known answer is evidence about the real scan rather than
+     * about a second implementation of it.
+     *
+     * THE BOUND IS THE NEXT DOCUMENT, not the end of the function. A branch's
+     * terminator is the one before the next document is emitted; walking past
+     * it lets a later branch's `return` answer for this one.
+     */
+    private function bareResultCanExitNonZero(string $source): bool
+    {
+        $tokens = $this->significantTokens($source);
+        $ranges = $this->functionRanges($tokens);
+        $n = count($tokens);
+
+        $documentSites = [];
+        for ($i = 0; $i < $n; $i++) {
+            if ($this->isDocumentCallAt($tokens, $i)) {
+                $documentSites[] = $i;
+            }
+        }
+
+        foreach ($documentSites as $i) {
+            [$entries] = $this->argumentTokens($tokens, $i + 3);
+            $keys = [];
+            foreach ($entries as $entry) {
+                if (($entry[0] ?? null)?->is(T_CONSTANT_ENCAPSED_STRING) === true
+                    && ($entry[1]->text ?? '') === '=>') {
+                    $keys[] = trim($entry[0]->text, "'\"");
+                }
+            }
+            if (!in_array('result', $keys, true) || in_array('error', $keys, true)) {
+                continue;
+            }
+
+            $end = $this->enclosingFunctionEnd($ranges, $i, $n);
+            $codes = $this->exitCodesAfter($tokens, $i, $end, array_values(array_filter(
+                $documentSites,
+                static fn (int $site): bool => $site > $i,
+            )));
+
+            foreach ($codes as $code) {
+                if ($code !== 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The rule this one replaced, kept so the fixture table can measure the
+     * difference instead of describing it.
+     *
+     * WHAT IT SAID: "Every `EXIT_*` the enclosing function can leave with after
+     * this document. An over-approximation on purpose: the claim is 'a failure
+     * CAN arrive with no error object', so a branch that might return non-zero
+     * is exactly the evidence for it."
+     *
+     * WHAT IS TRUE NOW: the over-approximation existed because
+     * {@see exitCodeAfter()} could not read `doctor`'s ternary return, not
+     * because the claim wanted it. It can now, so the walk is one statement
+     * wide and the residual the old comment did not mention is closed.
+     *
+     * WHY IT STILL EARNS ITS PLACE: as a control. A fixture table asserting
+     * "the new rule answers false here" says nothing about whether the change
+     * mattered unless the old rule's answer is derived alongside it, on the
+     * same fixture, on the same run.
+     */
+    private function enclosingFunctionRule(string $source): bool
+    {
+        $tokens = $this->significantTokens($source);
+        $ranges = $this->functionRanges($tokens);
+        $exitCodes = $this->exitCodes();
+        $n = count($tokens);
+
+        for ($i = 0; $i < $n; $i++) {
+            if (!$this->isDocumentCallAt($tokens, $i)) {
+                continue;
+            }
+            [$entries] = $this->argumentTokens($tokens, $i + 3);
+            $keys = [];
+            foreach ($entries as $entry) {
+                if (($entry[0] ?? null)?->is(T_CONSTANT_ENCAPSED_STRING) === true
+                    && ($entry[1]->text ?? '') === '=>') {
+                    $keys[] = trim($entry[0]->text, "'\"");
+                }
+            }
+            if (!in_array('result', $keys, true) || in_array('error', $keys, true)) {
+                continue;
+            }
+
+            $end = $this->enclosingFunctionEnd($ranges, $i, $n);
+            for ($k = $i; $k <= $end && $k < $n; $k++) {
+                if (!str_starts_with($tokens[$k]->text, 'EXIT_') || ($tokens[$k - 1]->text ?? '') !== '::') {
+                    continue;
+                }
+                self::assertArrayHasKey($tokens[$k]->text, $exitCodes, 'unknown exit constant');
+                if ($exitCodes[$tokens[$k]->text] !== 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** @param list<PhpToken> $tokens */
+    private function isDocumentCallAt(array $tokens, int $i): bool
+    {
+        return $tokens[$i]->is(T_STRING)
+            && in_array($tokens[$i]->text, ['emitDocument', 'emitErrorDocument'], true)
+            && ($tokens[$i - 1]->text ?? '') === '::'
+            && ($tokens[$i + 1]->text ?? '') === '('
+            && ($tokens[$i + 2]->text ?? '') === '[';
+    }
+
+    /**
+     * The terminator shapes, with each rule's answer.
+     *
+     * ROW 2 IS THE POINT. It is the residual the old comment named and did not
+     * close: a bare `result` on a SUCCESS path, and an unrelated later branch
+     * that returns non-zero. The old rule collected every `EXIT_*` to the end
+     * of the function and said "a failure can arrive with no error object";
+     * there is no such failure in that function. Fixing the parser without
+     * exhibiting the case it now catches would be a fix nobody can check.
+     *
+     * ROW 1 is the shipped shape, `Subcommands::doctor()` reduced to its
+     * skeleton, and it must keep answering `true` under BOTH rules — the fix
+     * must not quietly retract the finding the guard exists for.
+     *
+     * THE OLD RULE WAS NOT ONLY AN OVER-APPROXIMATION, and this table is where
+     * that turned up. The comment it carried described a walk that was too WIDE
+     * — every `EXIT_*` to the end of the function — and the residual recorded
+     * against it was the false-positive direction. Measured here on PHP 8.3.6:
+     * it was also too NARROW. It matched `::EXIT_*` constants and nothing else,
+     * so the `exit(<int>)` shape — which {@see exitCodeAfter()} has understood
+     * all along — was invisible to it, and the `exit(1)` row answers `false`
+     * under the old rule and `true` under the new one. A bare `result` followed
+     * by `exit(1)` would have gone unreported. Nothing in `src/` has that shape
+     * today, so no verdict in the tree moves; the gap was real and unremarked
+     * rather than live.
+     *
+     * @return iterable<string, array{0: string,1: bool,2: bool}>
+     */
+    public static function terminatorShapes(): iterable
+    {
+        $head = '<?php class F { const EXIT_OK = 0; const EXIT_FAILURE = 1; ';
+
+        yield 'a ternary return, doctor\'s shape' => [
+            $head . 'static function f(array $failed): int {
+                self::emitDocument(["result" => ["checks" => 1]]);
+
+                return $failed === [] ? F::EXIT_OK : F::EXIT_FAILURE;
+            } }',
+            true,
+            true,
+        ];
+
+        yield 'success document, unrelated later failure branch' => [
+            $head . 'static function f(bool $ok, bool $other): int {
+                if ($ok) {
+                    self::emitDocument(["result" => ["listed" => 1]]);
+
+                    return F::EXIT_OK;
+                }
+                if ($other) {
+                    self::emitErrorDocument(["error" => ["type" => "x"]]);
+
+                    return F::EXIT_FAILURE;
+                }
+
+                return F::EXIT_FAILURE;
+            } }',
+            false,
+            true,
+        ];
+
+        yield 'a plain non-zero return' => [
+            $head . 'static function f(): int {
+                self::emitDocument(["result" => ["x" => 1]]);
+
+                return F::EXIT_FAILURE;
+            } }',
+            true,
+            true,
+        ];
+
+        // The old rule answers FALSE here, and that is not a typo in this
+        // table. It scanned for `::EXIT_*` constants only, so the `exit(<int>)`
+        // shape — which `exitCodeAfter()` has always understood — was invisible
+        // to it. See the doc-block above testTheWalkReadsEveryTerminatorShape…
+        yield 'exit(1) rather than a return' => [
+            $head . 'static function f(): void {
+                self::emitDocument(["result" => ["x" => 1]]);
+                exit(1);
+            } }',
+            true,
+            false,
+        ];
+
+        yield 'success only' => [
+            $head . 'static function f(): int {
+                self::emitDocument(["result" => ["x" => 1]]);
+
+                return F::EXIT_OK;
+            } }',
+            false,
+            false,
+        ];
+
+        yield 'the document carries an error key, so it is not bare' => [
+            $head . 'static function f(): int {
+                self::emitErrorDocument(["result" => null, "error" => ["type" => "x"]]);
+
+                return F::EXIT_FAILURE;
+            } }',
+            false,
+            false,
+        ];
+
+        yield 'a match return naming both codes' => [
+            $head . 'static function f(int $n): int {
+                self::emitDocument(["result" => ["x" => 1]]);
+
+                return match ($n) { 0 => F::EXIT_OK, default => F::EXIT_FAILURE };
+            } }',
+            true,
+            true,
+        ];
+    }
+
+    /**
+     * @dataProvider terminatorShapes
+     */
+    public function testTheWalkReadsEveryTerminatorShapeAndTheOldRuleDidNot(
+        string $source,
+        bool $statementRule,
+        bool $functionRule,
+    ): void {
+        self::assertSame(
+            $statementRule,
+            $this->bareResultCanExitNonZero($source),
+            'the statement-wide walk no longer answers this shape the way the table records',
+        );
+        self::assertSame(
+            $functionRule,
+            $this->enclosingFunctionRule($source),
+            'the enclosing-function rule no longer answers this shape the way the table records',
+        );
+    }
+
+    /**
+     * The table really does contain the residual, and really does contain the
+     * shipped shape.
+     *
+     * Without this, every row could quietly become `true => true` and the
+     * fixture table would ship as evidence that the parser change did nothing.
+     */
+    public function testTheTerminatorTableExhibitsTheResidualAndTheShippedShape(): void
+    {
+        $narrowed = 0;
+        $widened = 0;
+        $agreed = 0;
+        foreach (self::terminatorShapes() as [, $statementRule, $functionRule]) {
+            if (!$statementRule && $functionRule) {
+                $narrowed++;
+            }
+            if ($statementRule && !$functionRule) {
+                $widened++;
+            }
+            if ($statementRule === $functionRule) {
+                $agreed++;
+            }
+        }
+
+        self::assertGreaterThanOrEqual(
+            1,
+            $narrowed,
+            'no fixture exhibits the residual any more, so the table says nothing about what the '
+            . 'ternary-reading walk bought in the false-positive direction',
+        );
+        self::assertGreaterThanOrEqual(
+            1,
+            $widened,
+            'no fixture exhibits the exit(<int>) shape the old rule could not see, so the table says '
+            . 'nothing about the false-NEGATIVE direction, which is the one nobody had written down',
+        );
+        self::assertGreaterThanOrEqual(
+            4,
+            $agreed,
+            'almost every fixture moves, so the table says nothing about the new walk still '
+            . 'reporting the shipped doctor shape the same way',
+        );
+    }
+
+    /**
+     * `Subcommands::doctor()` really is the shipped case, read from the tree.
+     *
+     * The fixture above is `doctor()` reduced to a skeleton, and a skeleton is
+     * a claim about a real function. If `doctor()` stops emitting a bare
+     * `result`, or stops being able to exit non-zero, this reds and the
+     * fixture's name becomes a lie that a reader can find.
+     */
+    public function testDoctorIsStillTheShippedBareResultCase(): void
+    {
+        self::assertTrue(
+            $this->bareResultCanExitNonZero($this->repoFile('src/Cli/Subcommands.php')),
+            'src/Cli/Subcommands.php no longer has a result-only document on a branch that can exit '
+            . 'non-zero — doctor was that case, and the fixture table names it',
         );
     }
 
