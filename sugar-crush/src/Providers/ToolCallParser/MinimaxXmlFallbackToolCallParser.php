@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers\ToolCallParser;
 
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -114,7 +115,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
             // See DsmlToolCallParser::parseDsml() for why a guard that can drop
             // a genuine call has to say so. This parser gets the fence guard
             // only, so the one shape that reaches here is a quoted envelope.
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'MinimaxXmlFallbackToolCallParser: content carries "%s>" but every occurrence sits '
                 . 'inside a ``` code fence, which reads as a quotation of the protocol rather than '
                 . 'a tool call. No tool call recovered.',
@@ -137,7 +138,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                 $name = $invoke['attributes']['name'] ?? null;
 
                 if ($name === null || $name === '') {
-                    error_log(sprintf(
+                    RuntimeNoticeSink::warn(sprintf(
                         'MinimaxXmlFallbackToolCallParser: an <invoke> element at byte %d carries no '
                         . 'parseable name="..." attribute and is being dropped; that tool call is lost.',
                         $invoke['offset'],
@@ -156,7 +157,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                 // the parameter failed to match, so the call fired with the
                 // argument MISSING and nothing was logged.
                 if ($arguments === null) {
-                    error_log(sprintf(
+                    RuntimeNoticeSink::warn(sprintf(
                         'MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
                         . 'the invoke of "%s" is being refused whole because one of its parameters '
                         . 'could not be read; firing it would run the tool with an argument the model '
@@ -168,7 +169,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                 }
 
                 if ($invoke['terminator'] !== 'close' && $arguments === []) {
-                    error_log(sprintf(
+                    RuntimeNoticeSink::warn(sprintf(
                         'MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
                         . 'an <invoke> of "%s" is never closed AND carries no readable parameter; '
                         . 'dropping it rather than firing a zero-argument call.',

@@ -889,8 +889,24 @@ final class Bootstrap
         // already existed when it was forked. A turn cannot start before the
         // `Chat` this method returns, so anywhere in here is before every fork;
         // anywhere later would not be.
+        //
+        // AND ARMED HERE RATHER THAN AT THE SINK'S FIRST WRITE, which is the
+        // half that keeps the `-p` one-shot out of it. `RuntimeNoticeSink`
+        // DROPS until something arms it, and the only reader is
+        // `Chat::subscriptions()` — so the seam opens exactly where a `Chat`
+        // is built and nowhere else. {@see \SugarCraft\Crush\Cli\NonInteractive}
+        // never reaches this method (it goes straight to `backend()` and
+        // `complete()`), so a `-p` run keeps every one of these diagnostics on
+        // stderr, where its caller can read them, instead of queueing them in a
+        // process that is about to exit.
+        //
+        // RESET BEFORE ARM, for the reason the two `$launchNotices` lines above
+        // are reset here: this method can run twice in one process (the
+        // second-scan path, a test), and the second Chat must not inherit the
+        // first's undrained inbox. `arm()` is idempotent, so the reset is what
+        // makes the pair re-entrant rather than the arm.
         RuntimeNoticeSink::reset();
-        RuntimeNoticeSink::installProcessTransport();
+        RuntimeNoticeSink::arm();
 
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell

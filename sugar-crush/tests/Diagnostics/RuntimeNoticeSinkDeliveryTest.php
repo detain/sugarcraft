@@ -85,6 +85,11 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
     public function testAParserNoticeRaisedInThisProcessReachesTheTranscript(): void
     {
+        // arm(false) is the in-process backend on purpose: this is the path an
+        // embedder driving a Chat in one process takes, and it is the one where
+        // the notice and its reader are the same process.
+        RuntimeNoticeSink::arm(false);
+
         $chat = new Chat();
         self::assertNull($chat->subscriptions(), 'an idle Chat with an empty sink must arm no timer');
 
@@ -130,6 +135,8 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
     public function testTheSecondPumpAddsNothingBecauseTheFirstConsumedTheInbox(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         self::withErrorLogDiscarded(static function (): void {
             DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
         });
@@ -140,6 +147,38 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         self::assertNull($cmd);
         self::assertSame($once, $twice, 'an empty pump must return $this rather than repaint');
         self::assertCount(1, $once->history);
+    }
+
+    /**
+     * THE `-p` ONE-SHOT'S SHAPE, END TO END: a real parser raises a real notice
+     * in a process that never built a `Chat`, and the transcript stays empty
+     * while stderr gets the whole thing.
+     *
+     * This is the gate {@see RuntimeNoticeSink::record()} applies, asserted
+     * where it matters rather than on the sink's own state.
+     * {@see \SugarCraft\Crush\Cli\NonInteractive} never reaches
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}, which is the only
+     * caller of `arm()` in `src/`, so nothing in that process would ever drain
+     * a queued row — and a sink nothing drains is E171's own defect one level
+     * down.
+     */
+    public function testAOneShotThatNeverBuiltAChatKeepsTheNoticeOnStderrOnly(): void
+    {
+        self::assertFalse(RuntimeNoticeSink::isArmed(), 'the fixture armed the sink; this test proves nothing');
+
+        $log = self::withErrorLogDiscarded(static function (): void {
+            DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
+        });
+
+        // The emitter really did fire — otherwise the empty transcript below
+        // would be an artefact of a fixture that stopped triggering it.
+        self::assertStringContainsString('DsmlToolCallParser', $log);
+
+        $chat = new Chat();
+        self::assertNull($chat->subscriptions(), 'an unarmed sink armed the poll anyway');
+
+        [$next] = $chat->update(new RuntimeNoticePumpMsg());
+        self::assertSame([], $next->history);
     }
 
     public function testAnIdleChatWithNothingPendingArmsNoTimerAtAll(): void
@@ -168,7 +207,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             self::markTestSkipped('ext-pcntl is required to exercise the fork boundary');
         }
 
-        self::assertTrue(RuntimeNoticeSink::installProcessTransport());
+        self::assertTrue(RuntimeNoticeSink::arm());
 
         $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_delivery_fork_');
         self::assertIsString($log);
@@ -219,7 +258,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // datagram framing is what makes each write one indivisible message.
         // This is the assertion that would catch someone "simplifying" the pair
         // to SOCK_STREAM.
-        RuntimeNoticeSink::installProcessTransport();
+        RuntimeNoticeSink::arm();
 
         $pids = [];
         for ($k = 0; $k < 3; $k++) {
@@ -253,6 +292,8 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // prefix nor the trailing full stop that STDERR_LINE_FORMAT adds, and
         // these rows are the same surface. A prefix leaking into the
         // conversation is a token cost and a lie about where the row came from.
+        RuntimeNoticeSink::arm(false);
+
         self::withErrorLogDiscarded(static function (): void {
             RuntimeNoticeSink::warn('a bare sentence with no envelope');
         });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers\ToolCallParser;
 
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -198,7 +199,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
             // difference between "the fallback is armed and chose not to fire"
             // and the symptom this class exists to eliminate, which is
             // indistinguishable from it without a log.
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'DsmlToolCallParser: content carries "%s" but no occurrence of it is positioned like '
                 . 'an action - each is inside a ``` code fence, or run on from prose with no blank '
                 . 'line before it (DeepSeek-V4 documents "\n\n" as part of the start token, '
@@ -246,7 +247,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
         // and nothing happened" is exactly the symptom this class exists to
         // eliminate, so it must not vanish without a trace.
         if ($name === null || $name === '') {
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'DsmlToolCallParser: an "%s" element at byte %d carries no parseable name="..." '
                 . 'attribute and is being dropped; that tool call is lost.',
                 self::INVOKE_OPEN,
@@ -260,7 +261,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
         $arguments = $this->parseParameters($invoke['body'], $name);
 
         if ($arguments === null) {
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'DsmlToolCallParser: the invoke of "%s" is being refused whole because one of its '
                 . 'parameters could not be read; firing it would run the tool with an argument the '
                 . 'model supplied and this parser dropped.',
@@ -278,7 +279,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
             // would be fabricating it. A CLOSED invoke with no parameters is a
             // different thing entirely - the model asserted it - and is kept.
             if ($arguments === []) {
-                error_log(sprintf(
+                RuntimeNoticeSink::warn(sprintf(
                     'DsmlToolCallParser: an invoke of "%s" is never closed with "</%s>" AND carries '
                     . 'no readable parameter - it is either nested inside another invoke or was cut '
                     . 'off mid-tag; dropping it rather than firing a zero-argument call.',

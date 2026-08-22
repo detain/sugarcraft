@@ -54,16 +54,44 @@ namespace SugarCraft\Crush\Diagnostics;
  * that is about to `exit()`, and the parent would poll an empty queue forever:
  * a sink nothing drains, which is E171's own defect reproduced one level down.
  *
- * So the sink has two backends and picks between them by whether a TRANSPORT
- * was installed before the fork:
+ * So the sink has two backends and picks between them by whether
+ * {@see arm()} could create a TRANSPORT before the fork:
  *
- *  - NO TRANSPORT — an in-process `list<string>`. This is the `-p` one-shot,
- *    an embedder, a test, and {@see \SugarCraft\Crush\Backend\EngineBackend}'s
- *    own `completeAsyncBlocking()` fallback on a build with no ext-pcntl.
- *  - TRANSPORT INSTALLED — an `AF_UNIX`/`SOCK_DGRAM` `stream_socket_pair()`
- *    created by {@see installProcessTransport()} BEFORE any fork, so every
- *    child inherits the write end as an open fd and a `record()` in the child
- *    lands in the parent's read end.
+ *  - TRANSPORT — an `AF_UNIX`/`SOCK_DGRAM` `stream_socket_pair()` created
+ *    BEFORE any fork, so every child inherits the write end as an open fd and
+ *    a `record()` in the child lands in the parent's read end. This is what
+ *    every real interactive launch gets.
+ *  - NO TRANSPORT — an in-process `list<string>`. Reached when
+ *    `stream_socket_pair()` refuses (an fd-exhausted or `AF_UNIX`-less host)
+ *    and, deliberately, when a caller asks for it with `arm(false)`: an
+ *    embedder that drives {@see \SugarCraft\Crush\Chat} in one process has no
+ *    fork to cross and no reason to hold two fds open for the session.
+ *    KEPT RATHER THAN COLLAPSED INTO THE TRANSPORT (rule 6): it is the only
+ *    backend on a host where the pair cannot be made, and
+ *    {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkTest} drives
+ *    it directly rather than leaving it dormant and unexercised.
+ *
+ * IT MUST BE ARMED, AND AN UNARMED {@see record()} DROPS — WHICH IS THE WHOLE
+ * FINDING APPLIED TO THIS CLASS ITSELF. A sink is only a seam if something
+ * drains it, and the only thing that does is {@see \SugarCraft\Crush\Chat}'s
+ * subscription tick. Processes that never build one are not exotic: the `-p`
+ * one-shot does not — {@see \SugarCraft\Crush\Cli\NonInteractive} builds a
+ * backend and calls `complete()` without ever reaching
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} — and neither do the
+ * `sugarcrush mcp …` subcommands. Queueing there would accumulate rows in a
+ * process about to exit, i.e. E171's own defect reproduced one level down, and
+ * the `error_log()` copy is what those runs actually have.
+ *
+ * THAT IS MEASURED AND NOT AN ARGUMENT FROM TASTE. With `record()` ungated and
+ * the two tool-call parsers routed here,
+ * `vendor/bin/phpunit --filter '(BootstrapTest|DsmlToolCallParserTest|`
+ * `MinimaxXmlFallbackToolCallParserTest|StatusLineSegmentTest|ChatTest|`
+ * `AppModelTest)'` on PHP 8.3.6 went `Tests: 381, Failures: 2` — both in
+ * `tests/Renderer/StatusLineSegmentTest`, a file that has never heard of this
+ * class, because a parser test twenty classes earlier had left a row in a
+ * process-wide static and `Chat::subscriptions()` correctly reported that
+ * something was pending. A process-wide inbox with no reader is a bug whether
+ * the process is a test runner or a `-p` run.
  *
  * WHY DATAGRAM AND NOT STREAM. A `SOCK_STREAM` pair would need a length prefix
  * and would interleave partial writes from concurrent children; `SOCK_DGRAM`
@@ -155,6 +183,16 @@ final class RuntimeNoticeSink
      */
     private const DATAGRAM_BYTES = 8192;
 
+    /**
+     * Whether {@see arm()} has opened the inbox in this process.
+     *
+     * FALSE IS THE DEFAULT AND IT MEANS "DROP", not "queue for later". See this
+     * class's doc-block: a notice recorded in a process that will never build a
+     * {@see \SugarCraft\Crush\Chat} has no reader, and the `error_log()` half
+     * of {@see warn()} is what that run gets.
+     */
+    private static bool $armed = false;
+
     /** @var list<string> The in-process backend. See this class's doc-block. */
     private static array $queue = [];
 
@@ -164,7 +202,7 @@ final class RuntimeNoticeSink
     /** @var resource|null The read end of the transport, owned by this process. */
     private static $transportRead = null;
 
-    /** @var resource|null The write end, inherited by every child forked after {@see installProcessTransport()}. */
+    /** @var resource|null The write end, inherited by every child forked after {@see arm()}. */
     private static $transportWrite = null;
 
     /**
@@ -199,6 +237,14 @@ final class RuntimeNoticeSink
      */
     public static function record(string $message): bool
     {
+        if (!self::$armed) {
+            // NOT AN OPTIMISATION AND NOT A GUARD AGAINST MISUSE. Nothing in
+            // this process will ever drain the inbox, so a row put in it is a
+            // row lost with more steps — see this class's doc-block, which
+            // measures what happens when this returns true anyway.
+            return false;
+        }
+
         $notice = self::clip(trim($message));
 
         if ($notice === '') {
@@ -320,14 +366,32 @@ final class RuntimeNoticeSink
      * IDEMPOTENT. A second `chat()` in one process (the second-scan path, a
      * test) keeps the first transport rather than orphaning a pair of fds.
      *
-     * @return bool false when the pair could not be created — every caller then
-     *              gets the in-process backend, which is correct for the
-     *              no-pcntl builds where there is no fork to cross anyway
+     * ARMING AND CREATING THE TRANSPORT ARE ONE CALL ON PURPOSE. Two entry
+     * points would let a caller open the inbox without a way across the fork,
+     * or a transport with the inbox still dropping — two states with no
+     * meaning, both silent.
+     *
+     * @param bool $crossFork Whether to create the cross-fork transport. False
+     *                        selects the in-process backend deliberately, for
+     *                        an embedder that drives a `Chat` in one process
+     *                        and has no fork for a notice to cross.
+     *
+     * @return bool whether the transport exists. False means the sink is armed
+     *              on the in-process backend — because the caller asked for it,
+     *              or because the pair could not be created — and a notice
+     *              raised inside a forked child will then reach stderr only,
+     *              which is where every one of them was before this class
      */
-    public static function installProcessTransport(): bool
+    public static function arm(bool $crossFork = true): bool
     {
-        if (self::$transportWrite !== null) {
-            return true;
+        if (self::$armed) {
+            return self::$transportWrite !== null;
+        }
+
+        self::$armed = true;
+
+        if (!$crossFork) {
+            return false;
         }
 
         $pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_DGRAM, 0);
@@ -347,7 +411,13 @@ final class RuntimeNoticeSink
         return true;
     }
 
-    /** Whether {@see installProcessTransport()} has run in this process. */
+    /** Whether {@see arm()} has run in this process, on either backend. */
+    public static function isArmed(): bool
+    {
+        return self::$armed;
+    }
+
+    /** Whether {@see arm()} got the cross-fork transport rather than the array. */
     public static function hasTransport(): bool
     {
         return self::$transportWrite !== null;
@@ -356,14 +426,27 @@ final class RuntimeNoticeSink
     /**
      * Drop everything, including the transport.
      *
-     * For tests, and for
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::resetForTests()} — a static that
-     * leaks between test cases makes one test's warning another test's
-     * assertion, and a socket pair that leaks per test case exhausts the fd
-     * table of a 9000-test run.
+     * DISARMS TOO, so a reset sink is a dropping sink until something arms it
+     * again. That is the same statement {@see $armed} makes and not a second
+     * policy: a process that has torn the inbox down has no reader either.
+     *
+     * TWO CALLERS, AND THE CLAIM THAT THERE IS A THIRD WAS WRONG. This
+     * paragraph said "for tests, and for
+     * `\SugarCraft\Crush\Cli\Bootstrap::resetForTests()`". WHAT IS TRUE NOW,
+     * checked rather than assumed: `Bootstrap` has no `resetForTests()` and
+     * never had one — `grep -rn resetForTests src/` finds only that sentence.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the reason it gave is the real
+     * one. A static that leaks between test cases makes one test's warning
+     * another test's assertion (MEASURED — see this class's doc-block, which
+     * names the two `StatusLineSegmentTest` cases that fell to exactly that),
+     * and a socket pair that leaks per case exhausts the fd table of a
+     * 9000-test run. The live callers are this suite's `setUp`/`tearDown` and
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}, which resets before it
+     * arms so a second `chat()` in one process starts from an empty inbox.
      */
     public static function reset(): void
     {
+        self::$armed = false;
         self::$queue = [];
         self::$dropped = 0;
 

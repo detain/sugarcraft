@@ -33,12 +33,16 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testAnEmptySinkHasNothingPendingAndDrainsToNothing(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         self::assertFalse(RuntimeNoticeSink::hasPending());
         self::assertSame([], RuntimeNoticeSink::drain());
     }
 
     public function testTheInProcessBackendRoundTripsANotice(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         self::assertTrue(RuntimeNoticeSink::record('a parser refused a call'));
         self::assertTrue(RuntimeNoticeSink::hasPending());
         self::assertSame(['a parser refused a call'], RuntimeNoticeSink::drain());
@@ -47,6 +51,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testAnEmptyOrWhitespaceNoticeIsRefusedRatherThanQueuedBlank(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         self::assertFalse(RuntimeNoticeSink::record(''));
         self::assertFalse(RuntimeNoticeSink::record("  \n\t "));
         self::assertSame([], RuntimeNoticeSink::drain());
@@ -54,6 +60,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testDrainDeDuplicatesWithinTheBatchAndKeepsTheFirst(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         RuntimeNoticeSink::record('duplicate parameter "path"');
         RuntimeNoticeSink::record('an invoke was refused');
         RuntimeNoticeSink::record('duplicate parameter "path"');
@@ -66,6 +74,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testDrainDoesNotDeDuplicateAcrossBatches(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         // The same warning on turn 1 and on turn 50 is two events; collapsing
         // them would tell the user the second turn was clean.
         RuntimeNoticeSink::record('the same complaint');
@@ -76,6 +86,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testTheInProcessBackendCapsAtTheLimitAndReportsTheOverflowAsARow(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         for ($i = 0; $i < RuntimeNoticeSink::NOTICE_LIMIT + 3; $i++) {
             $accepted = RuntimeNoticeSink::record("notice {$i}");
             self::assertSame($i < RuntimeNoticeSink::NOTICE_LIMIT, $accepted, "notice {$i}");
@@ -92,6 +104,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testASingleOverflowUsesTheSingularForm(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         for ($i = 0; $i < RuntimeNoticeSink::NOTICE_LIMIT + 1; $i++) {
             RuntimeNoticeSink::record("notice {$i}");
         }
@@ -104,21 +118,53 @@ final class RuntimeNoticeSinkTest extends TestCase
         );
     }
 
-    public function testAnOverflowAloneIsEnoughToMakeTheSinkPending(): void
+    /**
+     * THE NAME THIS CARRIED WAS THE OPPOSITE OF WHAT IT ASSERTS, and the body
+     * was the half that was right. WHAT IT SAID: "an overflow alone is enough
+     * to make the sink pending". WHAT IS TRUE NOW, derived rather than argued:
+     * that state is UNREACHABLE through the public API. `record()` increments
+     * the dropped counter only once the queue has reached
+     * {@see RuntimeNoticeSink::NOTICE_LIMIT}, and the only thing that empties
+     * the queue is `drain()`, which zeroes the counter in the same breath — so
+     * `dropped > 0 && queue === []` cannot occur, and `hasPending()`'s
+     * `|| self::$dropped > 0` clause is defensive rather than live. MEASURED by
+     * deleting that clause: this whole file stays green. It is kept under rule
+     * 6 and documented here rather than removed, because it is the clause that
+     * starts mattering the moment anything other than `drain()` clears the
+     * queue.
+     *
+     * WHAT THIS TEST ACTUALLY PINS, which is worth pinning: the overflow row is
+     * SYNTHESISED at drain and stored nowhere, so a second drain must not
+     * repeat it. A counter left standing would put "… and N more" into the
+     * transcript on every tick for the rest of the session, and every one of
+     * those rows is sent to the model again on the next turn.
+     */
+    public function testDrainClearsTheOverflowCounterSoTheRowIsNotRepeated(): void
     {
-        // The overflow row is synthesised at drain() and stored nowhere, so a
-        // sink whose queue is empty but whose counter is not still has
-        // something to say. Reading only the queue would lose it.
+        RuntimeNoticeSink::arm(false);
+
         for ($i = 0; $i < RuntimeNoticeSink::NOTICE_LIMIT + 1; $i++) {
             RuntimeNoticeSink::record("notice {$i}");
         }
-        RuntimeNoticeSink::drain();
+
+        $first = RuntimeNoticeSink::drain();
+        self::assertSame(
+            sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 1, ''),
+            $first[RuntimeNoticeSink::NOTICE_LIMIT],
+        );
 
         self::assertFalse(RuntimeNoticeSink::hasPending());
+        self::assertSame([], RuntimeNoticeSink::drain());
+
+        // And a later, honest notice arrives with no tail glued to it.
+        RuntimeNoticeSink::record('a later, unrelated warning');
+        self::assertSame(['a later, unrelated warning'], RuntimeNoticeSink::drain());
     }
 
     public function testALongNoticeIsClippedToTheBudgetWithTheSuffixCountedIn(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         RuntimeNoticeSink::record(str_repeat('x', RuntimeNoticeSink::MAX_CHARS * 2));
 
         $drained = RuntimeNoticeSink::drain();
@@ -130,6 +176,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testTheClipNeverCutsACodepointInHalf(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         // json_encode() — the session store, the `-p` document — refuses
         // invalid UTF-8 outright rather than degrading, so a byte-wise cut
         // would take the transcript down rather than shorten a row.
@@ -143,6 +191,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testAMessageExactlyAtTheBudgetIsNotClipped(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         $exact = str_repeat('y', RuntimeNoticeSink::MAX_CHARS);
         RuntimeNoticeSink::record($exact);
 
@@ -151,6 +201,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testWarnPutsTheMessageOnBothChannels(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_notice_sink_');
         self::assertIsString($log);
         $previous = ini_set('error_log', $log);
@@ -173,6 +225,8 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testTheStderrCopyIsUnclippedEvenWhenTheTranscriptRowIsNot(): void
     {
+        RuntimeNoticeSink::arm(false);
+
         // The whole argument for keeping both channels: stderr is the COMPLETE
         // record and costs no model tokens, which is what makes the clip safe
         // to advertise in CLIP_SUFFIX.
@@ -195,20 +249,94 @@ final class RuntimeNoticeSinkTest extends TestCase
         }
     }
 
-    public function testInstallingTheTransportIsIdempotent(): void
+    public function testArmingIsIdempotentAndKeepsTheFirstTransport(): void
     {
+        self::assertFalse(RuntimeNoticeSink::isArmed());
         self::assertFalse(RuntimeNoticeSink::hasTransport());
-        self::assertTrue(RuntimeNoticeSink::installProcessTransport());
+        self::assertTrue(RuntimeNoticeSink::arm());
+        self::assertTrue(RuntimeNoticeSink::isArmed());
         self::assertTrue(RuntimeNoticeSink::hasTransport());
         // A second chat() in one process must keep the first pair rather than
         // orphan two fds.
-        self::assertTrue(RuntimeNoticeSink::installProcessTransport());
+        self::assertTrue(RuntimeNoticeSink::arm());
         self::assertTrue(RuntimeNoticeSink::hasTransport());
+    }
+
+    /**
+     * ARMING FOR THE IN-PROCESS BACKEND IS A DECISION, NOT A FAILURE: the
+     * return value says WHICH BACKEND you got, not whether the call worked.
+     *
+     * This row is what keeps the array backend from being dormant code (rule
+     * 6). Every real interactive launch takes the transport, so without a
+     * caller that asks for the other one nothing would ever walk it.
+     */
+    public function testArmingWithoutTheCrossForkTransportStillOpensTheInbox(): void
+    {
+        self::assertFalse(RuntimeNoticeSink::arm(false), 'arm(false) claimed to have made a transport');
+        self::assertTrue(RuntimeNoticeSink::isArmed());
+        self::assertFalse(RuntimeNoticeSink::hasTransport());
+
+        self::assertTrue(RuntimeNoticeSink::record('through the array backend'));
+        self::assertSame(['through the array backend'], RuntimeNoticeSink::drain());
+
+        // And it is sticky: a later arm() must not upgrade an armed sink to a
+        // transport behind the caller's back, because the fork that transport
+        // would have to precede may already have happened.
+        self::assertFalse(RuntimeNoticeSink::arm());
+        self::assertFalse(RuntimeNoticeSink::hasTransport());
+    }
+
+    /**
+     * AN UNARMED SINK DROPS, AND {@see RuntimeNoticeSink::warn()} STILL WRITES
+     * ITS STDERR HALF.
+     *
+     * The `-p` one-shot's shape, and the reason the gate exists: nothing in
+     * that process will ever build a {@see \SugarCraft\Crush\Chat}, so a
+     * queued row is a row lost with extra steps. See the class doc-block for
+     * the measurement of what the ungated version did to this very suite.
+     */
+    public function testAnUnarmedSinkDropsTheNoticeButKeepsTheStderrCopy(): void
+    {
+        $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_notice_unarmed_');
+        self::assertIsString($log);
+        $previous = ini_set('error_log', $log);
+
+        try {
+            self::assertFalse(RuntimeNoticeSink::isArmed());
+            self::assertFalse(RuntimeNoticeSink::record('nobody armed the inbox'));
+            RuntimeNoticeSink::warn('and this one went out through warn()');
+
+            self::assertFalse(RuntimeNoticeSink::hasPending());
+            self::assertSame([], RuntimeNoticeSink::drain());
+
+            self::assertStringContainsString(
+                'and this one went out through warn()',
+                (string) file_get_contents($log),
+                'the forensic half of warn() stopped working when the transcript half was gated',
+            );
+        } finally {
+            if ($previous !== false) {
+                ini_set('error_log', $previous);
+            }
+            @unlink($log);
+        }
+    }
+
+    /** Reset disarms, so a torn-down sink drops until something arms it again. */
+    public function testResetDisarms(): void
+    {
+        RuntimeNoticeSink::arm(false);
+        self::assertTrue(RuntimeNoticeSink::isArmed());
+
+        RuntimeNoticeSink::reset();
+
+        self::assertFalse(RuntimeNoticeSink::isArmed());
+        self::assertFalse(RuntimeNoticeSink::record('after the teardown'));
     }
 
     public function testTheTransportBackendRoundTripsWithinOneProcess(): void
     {
-        RuntimeNoticeSink::installProcessTransport();
+        RuntimeNoticeSink::arm();
 
         self::assertFalse(RuntimeNoticeSink::hasPending());
         self::assertTrue(RuntimeNoticeSink::record('recorded through the socket'));
@@ -219,7 +347,7 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testTheTransportBackendPreservesOrderAndDeDuplicatesTheBatch(): void
     {
-        RuntimeNoticeSink::installProcessTransport();
+        RuntimeNoticeSink::arm();
 
         RuntimeNoticeSink::record('first');
         RuntimeNoticeSink::record('second');
@@ -230,7 +358,7 @@ final class RuntimeNoticeSinkTest extends TestCase
 
     public function testResetDropsTheTransportSoTheNextInstallIsFresh(): void
     {
-        RuntimeNoticeSink::installProcessTransport();
+        RuntimeNoticeSink::arm();
         RuntimeNoticeSink::record('will not survive');
         RuntimeNoticeSink::reset();
 
@@ -246,7 +374,7 @@ final class RuntimeNoticeSinkTest extends TestCase
         // block. The exact number is a kernel tunable and is NOT asserted; what
         // is asserted is the only property the design depends on — that the
         // refusal is a return value and the call returns.
-        RuntimeNoticeSink::installProcessTransport();
+        RuntimeNoticeSink::arm();
 
         $accepted = 0;
         $started = microtime(true);
@@ -283,7 +411,7 @@ final class RuntimeNoticeSinkTest extends TestCase
         // THE CONTROL IS IN THE SAME TEST, on purpose: an unsuppressed write is
         // driven through the identical handler and must come back UNsuppressed.
         // Without it, a handler that never fired would read as a pass.
-        RuntimeNoticeSink::installProcessTransport();
+        RuntimeNoticeSink::arm();
 
         $seen = [];
         // PINNED TO E_ALL FOR THE DURATION, and the control below is what
