@@ -276,6 +276,19 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
                     . 'throws ArgumentCountError when a format asks for more than it is given, so this is a '
                     . 'launch-time fatal and not a cosmetic drift.',
             );
+
+            // A % sequence this file cannot parse must not be read as "no
+            // conversion" — that is how a positional format got past the
+            // conversion marker in the first place, and on PHP 8 an
+            // unrecognised sequence is a ValueError at the first launch that
+            // formats it.
+            self::assertSame(
+                [],
+                self::unparsedPercentsIn($value),
+                "Bootstrap::{$constant} carries a % sequence this guard cannot account for. Either it is a "
+                    . 'conversion form conversionSpecsIn() has not met — widen it — or sprintf() will throw '
+                    . 'on it at launch.',
+            );
         }
     }
 
