@@ -800,11 +800,19 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // fifteen call sites now routed onto the transcript seam — the
-        // fifteenth being reportPrunedSessions()'s retention summary, migrated
-        // in E78 round 42 and raised from sessionStore() far EARLIER in this
-        // method, which is what makes it reachable from here. See
-        // {@see Chat::withLaunchNotices()}.
+        // SIXTEEN call sites now routed onto the transcript seam. This said
+        // FIFTEEN, counting reportPrunedSessions()'s retention summary (E78,
+        // round 42) as the last one; E86 (round 43) added the sixteenth, in
+        // mcpClient()'s start-then-throw catch. Both of those are the reason
+        // this line is LAST rather than merely tidy: the retention summary is
+        // raised from sessionStore() far EARLIER in this method, and the MCP
+        // one is raised far LATER, transitively through backend() -> tools() ->
+        // mcpTools(), so only a read at the END has both in hand. The count is
+        // a grep of this file for `self::` immediately followed by the seam's
+        // name — deliberately not spelled out here, because a comment quoting
+        // that literal makes itself the seventeenth hit. No line numbers
+        // either, for the same reason one insertion above decays them.
+        // See {@see Chat::withLaunchNotices()}.
         //
         // THE ACCESSOR, not the raw list: {@see launchNotices()} appends the
         // "and N more" row when a launch overflowed {@see LAUNCH_NOTICE_LIMIT},
@@ -4469,23 +4477,118 @@ final class Bootstrap
             // never reached. Ordering-dependent, and a defect in the client
             // rather than here — recorded in this bundle's report for the backlog.
             //
-            // error_log() RATHER THAN warnPermissionConfig(), which is this class's
-            // other stderr seam, and the reason is that it is the only one a test
-            // can OBSERVE: `error_log()` honours the `error_log` ini setting, so
+            // BOTH CHANNELS, AND AN ini-DIRECTED THIRD DESTINATION. This is the
+            // one site in this class that writes `error_log()` AS WELL AS the
+            // transcript seam, so the reason is spelled out rather than assumed.
+            //
+            // WHAT THIS COMMENT SAID: `error_log()` RATHER THAN
+            // {@see warnPermissionConfig()}, this class's other stderr seam,
+            // because it is the only one a test can OBSERVE — `error_log()`
+            // honours the `error_log` ini setting, so
             // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()}
             // points it at a file and asserts this text, where a
             // `fwrite(STDERR, …)` would be unassertable and would additionally
-            // print into the suite's own output. Same destination in production —
-            // an unset `error_log` ini means stderr — and same construction-time
-            // window every other launch notice here uses. It is NOT routed into
-            // {@see $projectTierRefusals}: that collector's subject is a path this
-            // launch declined to READ, and this file was read, granted and partly
-            // started. Its key is the path, which the two refusals above already
-            // own, so an entry here would collide with them.
+            // print into the suite's own output.
+            //
+            // WHAT IS TRUE NOW: assertability was never the whole question.
+            // WHERE THE MESSAGE LANDS FOR THE USER was, and `error_log()` answers
+            // that one badly, because the ini setting it honours is the
+            // OPERATOR's. On a box that points `error_log` at a file — an
+            // entirely ordinary production PHP config — this notice reaches
+            // NEITHER the terminal NOR the transcript, and the user gets a
+            // silently reduced tool set with nothing anywhere saying tools are
+            // missing (E86). The transcript seam is the surface that answers
+            // "where does the user see it", and it is not unassertable either:
+            // {@see launchNotices()} is public precisely so a test can read what
+            // a launch decided to say without capturing stderr.
+            //
+            // WHY `error_log()` STILL EARNS ITS PLACE: the ini-file destination
+            // is the assertable one, and the shutdown-seam test named above
+            // depends on it. That test's subject is that a client which threw
+            // part-way through is still reachable by {@see stopMcpServers()},
+            // and the diagnostic it reads out of the log file is how it proves
+            // the throw path was the one taken; dropping this call would falsify
+            // a test that is pinning something real. An operator who HAS pointed
+            // `error_log` at a file also wants the full diagnostic to land there.
+            //
+            // THE TWO MESSAGES ARE DELIBERATELY NOT THE SAME TEXT SENT TWICE.
+            // `error_log()` carries the OPERATOR diagnostic — the exception class
+            // and its message. The transcript row carries the CONSEQUENCE, which
+            // is what {@see warnPermissionConfigInTranscript()}'s routing rule
+            // asks for: a warning reaches the transcript iff it names something
+            // the session can no longer DO, and a partly started MCP config is a
+            // cut tool set.
+            //
+            // WHAT WAS CLAIMED ABOUT THE PAIR: "on a box whose `error_log` ini is
+            // unset BOTH land on stderr, and phrasing them as diagnostic +
+            // consequence is what keeps that pair from reading as a stutter."
+            // Round 43's review noted that no test had ever run this on such a
+            // box. WHAT THE MEASUREMENT FOUND when one did: the two lines share
+            // the clause "could not be fully started", the path, and the
+            // exception MESSAGE — considerably more overlap than "diagnostic +
+            // consequence" implies. They are still two different lines: only the
+            // first names the exception CLASS and "continuing without it", and
+            // only the second names "MCP tools from …" and what the session is
+            // left with. WHY THE DUPLICATION EARNS ITS PLACE: the transcript row
+            // has to stand ALONE. On the surface it exists for there is no
+            // `error_log()` line beside it, so a row that omitted the cause would
+            // tell the user tools are missing and nothing about why. The pairing
+            // on an unset-ini box is the price of that, and it is now asserted
+            // rather than asserted-in-prose —
+            // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()}.
+            //
+            // STILL NOT ROUTED INTO {@see $projectTierRefusals}: that collector's
+            // subject is a path this launch declined to READ, and this file was
+            // read, granted and partly started. Its key is the path, which the
+            // two refusals above already own, so an entry here would collide with
+            // them.
+            //
+            // BOUNDED AT ONE ROW PER PATH PER PROCESS — and the bound has TWO
+            // parts, where an earlier revision of this comment claimed one.
+            //
+            // WHAT IT SAID: "by construction rather than by the seam's cap: the
+            // memo AT THE TOP OF THIS METHOD stores the client BEFORE
+            // startServers()".
+            //
+            // WHAT IS TRUE NOW: the memo is CHECKED at the top of this method;
+            // it is STORED immediately above this `try`, which is the placement
+            // that actually matters and carries its own note there. And the memo
+            // is not the whole bound: {@see stopMcpServers()} clears this pid's
+            // bucket outright (`unset(self::$mcpClients[$pid])`), so an
+            // `mcpClient()` for the same path AFTER a stop builds a new client
+            // and re-enters this `catch`.
+            //
+            // WHY THE BOUND STILL HOLDS: in production nothing calls
+            // {@see stopMcpServers()} except the `register_shutdown_function`
+            // closure {@see registerMcpShutdown()} installs, so there is no
+            // "after" in which to re-enter; and in the only shape where there is
+            // — an in-process test that stops and then asks again — the seam's
+            // own `in_array($notice, …, true)` de-dup drops the repeat before it
+            // can reach the transcript. Memoized on the production path, de-duped
+            // on the other: that is what makes a transcript row safe on
+            // {@see tools()}, which every launch AND every provider switch runs.
+            // The seam's {@see LAUNCH_NOTICE_MAX_CHARS} clip then bounds the
+            // LENGTH, which matters here because `$e->getMessage()` interpolates
+            // a `type` string the project's `.mcp.json` chose.
             error_log(sprintf(
                 'sugarcrush: MCP config %s could not be fully started (%s: %s); continuing without it.',
                 $path,
                 $e::class,
+                $e->getMessage(),
+            ));
+
+            // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
+            // fifteen call sites: {@see chat()} holds no `self::tools(` call of
+            // its own and gets here transitively through `backend()` ->
+            // `tools()` -> {@see mcpTools()} -> this method, then reads
+            // {@see launchNotices()} on its last line — so a row recorded now is
+            // in hand by the time the transcript is seeded. Measured end-to-end
+            // by
+            // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()}.
+            self::warnPermissionConfigInTranscript(sprintf(
+                'MCP tools from %s are incomplete: the server list could not be fully started (%s); '
+                    . 'this session has only the tools that did load',
+                $path,
                 $e->getMessage(),
             ));
         }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Cli\ArgvParser;
+use SugarCraft\Crush\Cli\NonInteractive;
 
 /**
  * The ONE launch warning in this project that provably cannot be migrated onto
@@ -145,18 +147,406 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
     }
 
     /**
-     * STDOUT STAYS EMPTY, and that is the documented exception rather than an
-     * oversight: this is the one exit that cannot honour the
-     * `--output-format json` contract, because the class owning that document
-     * shape ({@see \SugarCraft\Crush\Cli\NonInteractive}) is behind the
-     * autoloader that is missing. Pinned so the exception stays a decision.
+     * WHAT THIS TEST USED TO PIN: stdout stays empty, "the documented exception
+     * rather than an oversight" — this was the one exit that could not honour
+     * the `--output-format json` contract, because the class owning the
+     * document shape ({@see \SugarCraft\Crush\Cli\NonInteractive}) is behind
+     * the autoloader that is missing.
+     *
+     * WHAT IS TRUE NOW (E84): the shape's OWNER is unreachable here; the shape
+     * itself never was. `json_encode()` is core. So the guard emits the
+     * document, and the hole this test used to nail shut is closed instead —
+     * a consumer of `| jq` on a broken checkout could not previously tell
+     * "empty because the binary died before it could speak" from "empty because
+     * there was nothing to say", and those two want opposite handling.
+     *
+     * WHY THE TEST STILL EARNS ITS PLACE, with its subject inverted: the
+     * dangerous direction is now the other one. A guard that printed JSON at a
+     * human is a regression, so
+     * {@see testTheGuardStaysSilentOnStdoutWithoutOutputFormatJson()} below
+     * holds the negative case, and this one holds the positive. Exit code stays
+     * 2 in both.
      */
-    public function testTheGuardEmitsNothingOnStdoutEvenUnderOutputFormatJson(): void
+    public function testTheGuardEmitsTheContractDocumentUnderOutputFormatJson(): void
     {
-        [$status, $stdout] = $this->runCopiedBinary('--output-format json -p hi');
+        [$status, $stdout, $stderr] = $this->runCopiedBinary('--output-format json -p hi');
+
+        self::assertSame(2, $status, "stderr was:\n" . $stderr);
+
+        // EXACTLY ONE JSON OBJECT AND A NEWLINE, which is the contract's own
+        // wording — asserted on the raw bytes, because a consumer's `jq` reads
+        // bytes and not a decoded array.
+        self::assertSame(
+            '{"result":null,"error":{"type":"installation",'
+            . '"message":"sugarcrush: cannot find composer autoload.php"}}' . "\n",
+            $stdout,
+        );
+
+        // The human line is unchanged and still on stderr: the JSON document is
+        // an ADDITION, not a redirection, exactly as it is on every other
+        // exit-2 cause that routes through NonInteractive::failUsage().
+        self::assertSame("sugarcrush: cannot find composer autoload.php\n", $stderr);
+    }
+
+    /**
+     * Both spellings the parser accepts, because the guard cannot use the
+     * parser — {@see \SugarCraft\Crush\Cli\ArgvParser} is behind the missing
+     * autoloader too, so the guard rescans raw argv and the two scans have to
+     * agree. `--output-format=json` is the one a Makefile writes.
+     */
+    public function testTheGuardHonoursTheEqualsSpellingToo(): void
+    {
+        [$status, $stdout] = $this->runCopiedBinary('--output-format=json -p hi');
 
         self::assertSame(2, $status);
-        self::assertSame('', $stdout);
+        self::assertStringContainsString('"type":"installation"', $stdout);
+    }
+
+    /**
+     * THE REGRESSION THIS FIX COULD HAVE INTRODUCED. A human running a broken
+     * checkout must get the stderr line and NOTHING on stdout; a guard that
+     * printed a JSON object at them would be worse than the hole it closed.
+     *
+     * `--output-format xml` is in the table on purpose rather than as padding:
+     * the parser rejects it as unsupported and then renders the failure as
+     * TEXT, so the guard agreeing that it is not json is what keeps the broken
+     * checkout's behaviour identical to the working one's. `JSON` in capitals
+     * is there for the same reason — the parser is case-sensitive and rejects
+     * it, so a guard that lower-cased would make the broken binary MORE
+     * permissive than the working one.
+     *
+     * THE `--` ROW IS THE ONE THAT WAS MISSING, and it is why this file no
+     * longer states the agreement and leaves it there: round 43's review
+     * measured `-- --output-format=json -p hi` emitting the document while
+     * {@see ArgvParser::parse()} on the same argv reported `text`. The rows
+     * below are the human-readable half; the machine half — this scan against
+     * the real parser, decision for decision — is
+     * {@see testTheGuardsFormatScanAgreesWithArgvParser()}.
+     *
+     * @dataProvider nonJsonInvocations
+     */
+    public function testTheGuardStaysSilentOnStdoutWithoutOutputFormatJson(string $arguments): void
+    {
+        [$status, $stdout, $stderr] = $this->runCopiedBinary($arguments);
+
+        self::assertSame(2, $status, "stderr was:\n" . $stderr);
+        self::assertSame('', $stdout, "`{$arguments}` printed a JSON document at a human");
+    }
+
+    /** @return iterable<string, array{0: string}> */
+    public static function nonJsonInvocations(): iterable
+    {
+        yield 'no format flag at all' => ['--version'];
+        yield 'explicit text' => ['--output-format text -p hi'];
+        yield 'equals spelling, text' => ['--output-format=text -p hi'];
+        yield 'a format nothing implements' => ['--output-format xml -p hi'];
+        yield 'wrong case' => ['--output-format JSON -p hi'];
+        yield 'the flag with no value' => ['--output-format'];
+        yield 'after the POSIX end-of-options separator' => ['-- --output-format=json -p hi'];
+        yield 'swallowed by --root' => ['--root --output-format json -p hi'];
+        yield 'after -- with a subcommand open' => ['session delete -- --output-format=json'];
+    }
+
+    /**
+     * THE DRIFT GUARD, and the reason the duplication in the binary is
+     * acceptable at all.
+     *
+     * The guard hand-rolls a document because
+     * {@see \SugarCraft\Crush\Cli\NonInteractive} is behind the autoloader it
+     * could not find. That is a real second definition of the failure shape, so
+     * something has to hold the two together: this test takes the REAL
+     * document {@see \SugarCraft\Crush\Cli\NonInteractive::failUsage()}
+     * produces and compares its STRUCTURE — key order included, since a
+     * consumer reading the raw bytes sees that too — against the one the guard
+     * printed. Change either side's keys or flags and this reds, naming both.
+     *
+     * The VALUES differ by design: `error.type` is `installation` there and
+     * `usage` here, which is the whole point of the field. So the comparison is
+     * on the key tree, and the one value that must NOT differ — `result` being
+     * present and null — is asserted directly.
+     */
+    public function testTheGuardsDocumentHasTheSameShapeAsNonInteractives(): void
+    {
+        [, $guardStdout] = $this->runCopiedBinary('--output-format json -p hi');
+        $guard = json_decode($guardStdout, true, 512, JSON_THROW_ON_ERROR);
+
+        $owner = json_decode($this->documentFromNonInteractive(), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame(array_keys($owner), array_keys($guard));
+        self::assertSame(array_keys($owner['error']), array_keys($guard['error']));
+        self::assertArrayHasKey('result', $guard);
+        self::assertNull($guard['result']);
+        self::assertNull($owner['result']);
+
+        // The trailing newline is part of the contract on both sides — a
+        // consumer streaming NDJSON depends on it.
+        self::assertStringEndsWith("}\n", $guardStdout);
+    }
+
+    /**
+     * THE MACHINE HALF OF "MIRRORS ArgvParser'S OWN SCAN", and the reason that
+     * sentence is allowed to stay in `bin/sugarcrush` at all.
+     *
+     * The guard cannot call {@see ArgvParser} — it is behind the autoloader that
+     * is missing — so it rescans raw argv, and the whole specification of that
+     * rescan is "decide `json` exactly when the parser would have". Round 43's
+     * review measured three argv vectors where it did not: after a POSIX `--`,
+     * and after a flag that swallows the token following it, the guard read a
+     * `--output-format` the parser had already spent on something else, and the
+     * BROKEN checkout answered a question the WORKING one refuses. That is the
+     * precise failure the case-sensitivity choice in that comment exists to
+     * prevent, arriving through a door nobody had checked.
+     *
+     * So this compares the two DECISIONS rather than restating either: the
+     * parser runs in-process on the argv, the guard runs in the bare fixture on
+     * the same argv, and "parser said json" must equal "guard printed
+     * something". A prose claim about agreement cannot red; this can, from
+     * either side — a new value-taking flag in {@see ArgvParser::parse()} that
+     * the guard does not know about reds here the moment a row exercises it.
+     *
+     * @dataProvider formatDecisionVectors
+     *
+     * @param list<string> $tokens
+     */
+    public function testTheGuardsFormatScanAgreesWithArgvParser(array $tokens): void
+    {
+        // $argv[0] is the script name on both sides: the parser documents that
+        // it skips it, and the guard now starts at 1 for the same reason.
+        $parsed = ArgvParser::parse(array_merge(['sugarcrush'], $tokens));
+        $parserSaysJson = $parsed->outputFormat === NonInteractive::FORMAT_JSON;
+
+        [$status, $stdout, $stderr] = $this->runCopiedBinary(
+            implode(' ', array_map('escapeshellarg', $tokens)),
+        );
+
+        self::assertSame(2, $status, "stderr was:\n" . $stderr);
+        self::assertSame(
+            $parserSaysJson,
+            $stdout !== '',
+            sprintf(
+                'ArgvParser read `%s` as outputFormat "%s", but the guard %s. The broken checkout '
+                . 'must decide the format exactly as the working one does.',
+                implode(' ', $tokens),
+                $parsed->outputFormat,
+                $stdout === '' ? 'printed nothing on stdout' : 'printed a document',
+            ),
+        );
+    }
+
+    /**
+     * Every row is an argv the two scans have to agree on. The three the review
+     * measured as DIVERGING are named as such, so a future reader can tell the
+     * regression rows from the coverage rows.
+     *
+     * @return iterable<string, array{0: list<string>}>
+     */
+    public static function formatDecisionVectors(): iterable
+    {
+        yield 'space spelling' => [['--output-format', 'json', '-p', 'hi']];
+        yield 'equals spelling' => [['--output-format=json', '-p', 'hi']];
+        yield 'wrong case' => [['--output-format', 'JSON', '-p', 'hi']];
+        yield 'unsupported value' => [['--output-format', 'xml', '-p', 'hi']];
+        yield 'no value at all' => [['--output-format']];
+        yield 'last occurrence wins, json then text' => [
+            ['--output-format', 'json', '--output-format', 'text', '-p', 'hi'],
+        ];
+        yield 'last occurrence wins, text then json' => [
+            ['--output-format', 'text', '--output-format', 'json', '-p', 'hi'],
+        ];
+
+        // REGRESSION ROW 1 (measured diverging): `--` is the POSIX
+        // end-of-options separator, and past it the parser routes every token to
+        // operands.
+        yield 'after the end-of-options separator' => [['--', '--output-format=json', '-p', 'hi']];
+        // REGRESSION ROW 2 (measured diverging): `--root` takes `$argv[++$i]`
+        // with no test on the value, so it eats the flag itself.
+        yield 'swallowed by --root' => [['--root', '--output-format', 'json', '-p', 'hi']];
+        // REGRESSION ROW 3 (measured diverging): the same separator with a
+        // subcommand open, where the tokens go to the subcommand's operands.
+        yield 'after the separator with a subcommand open' => [
+            ['session', 'delete', '--', '--output-format=json'],
+        ];
+
+        // The other side of the value-swallowing rule: these flags REFUSE a
+        // flag-shaped value and leave it for the loop, so the format IS read.
+        yield 'a flag-shaped value -p refuses' => [['-p', '--output-format=json']];
+        yield 'a flag-shaped value --config refuses' => [['--config', '--output-format=json']];
+        yield '--root with a real value' => [['--root', '/tmp', '--output-format', 'json', '-p', 'hi']];
+        yield '--model with a real value' => [['--model', 'x', '--output-format', 'json', '-p', 'hi']];
+        yield '--permission-mode with a real value' => [
+            ['--permission-mode', 'plan', '--output-format', 'json', '-p', 'hi'],
+        ];
+        yield 'a subcommand with a format' => [['mcp', 'list', '--output-format', 'json']];
+        // `run` is deliberately NOT modelled by the guard, because it consumes
+        // its value only when that value is not flag-shaped — which means both
+        // sides leave this `--output-format` for the loop.
+        yield 'run handed a flag-shaped prompt' => [['run', '--output-format=json']];
+    }
+
+    /**
+     * THE ENCODE FLAGS, pinned by source because they cannot be pinned by
+     * output.
+     *
+     * {@see testTheGuardsDocumentHasTheSameShapeAsNonInteractives()} decodes
+     * both documents, so every encode flag is gone before it looks; and the
+     * guard's only payload is an ASCII literal with no slash and no non-ASCII
+     * byte, so its flag set changes no byte anywhere in this suite. Round 43's
+     * review dropped `JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE` from the
+     * guard, and separately from {@see NonInteractive::encodeDocument()}, and
+     * the suite stayed green both times — a guard that passes whether or not the
+     * thing it guards is present. This compares the two flag EXPRESSIONS
+     * instead, token for token, which is the only comparison that reds.
+     *
+     * `JSON_THROW_ON_ERROR` is expected on the owner's side ONLY, and the
+     * asymmetry is asserted rather than tolerated: the owner throws and catches
+     * a `JsonException`, while the guard has no handler to reach for and tests
+     * the documented `string|false` return directly. Add it to the guard, or
+     * drop it from the owner, and this reds.
+     */
+    public function testTheGuardsEncodeFlagsAreEncodeDocumentsMinusThrowOnError(): void
+    {
+        $guardFlags = self::jsonFlagTokensIn((string) file_get_contents($this->realBinary()));
+        $ownerFlags = self::jsonFlagTokensIn("<?php\n" . self::sourceOfEncodeDocument());
+
+        self::assertNotSame([], $guardFlags, 'no JSON_* flag survives in bin/sugarcrush at all');
+        self::assertSame(
+            ['JSON_THROW_ON_ERROR'],
+            array_values(array_diff($ownerFlags, $guardFlags)),
+            'encodeDocument() carries a flag the guard does not, beyond the documented JSON_THROW_ON_ERROR',
+        );
+        self::assertSame(
+            [],
+            array_values(array_diff($guardFlags, $ownerFlags)),
+            'the guard carries a flag encodeDocument() does not',
+        );
+    }
+
+    /**
+     * THE UNREACHABLE ARM, pinned anyway.
+     *
+     * The guard's `json_encode() === false` branch echoes a hand-written copy of
+     * the whole document — a THIRD copy of the shape, after the owner's and the
+     * guard's own array literal. It is genuinely unreachable (every field is an
+     * ASCII literal the file owns), which is exactly why nothing exercised it:
+     * round 43's review replaced it with `{"BROKEN":true}` and the suite stayed
+     * green. Reading it out of the source and comparing it against the bytes the
+     * REACHABLE arm printed is the pin that does not need the arm to run.
+     */
+    public function testTheUnreachableFallbackLiteralIsTheDocumentItReplaces(): void
+    {
+        $literal = null;
+
+        foreach (token_get_all((string) file_get_contents($this->realBinary())) as $token) {
+            if (!is_array($token) || $token[0] !== T_CONSTANT_ENCAPSED_STRING) {
+                continue;
+            }
+            if (str_starts_with(substr($token[1], 1), '{"result"')) {
+                $literal = $token[1];
+            }
+        }
+
+        self::assertNotNull($literal, 'the guard no longer carries a hand-written fallback document');
+        self::assertStringNotContainsString(
+            '\\',
+            $literal,
+            'the fallback literal grew an escape sequence; unquoting it by trimming is no longer safe',
+        );
+
+        [, $stdout] = $this->runCopiedBinary('--output-format json -p hi');
+
+        self::assertSame(
+            rtrim($stdout, "\n"),
+            substr($literal, 1, -1),
+            'the unreachable fallback no longer matches the document the reachable arm emits',
+        );
+    }
+
+    /** The real script, not the fixture copy. */
+    private function realBinary(): string
+    {
+        return dirname(__DIR__, 2) . '/bin/sugarcrush';
+    }
+
+    /**
+     * {@see NonInteractive::encodeDocument()}'s body, by reflection — the
+     * declaration line onward, so the doc-block above it (which NAMES two of
+     * these flags in prose) cannot be mistaken for the code.
+     */
+    private static function sourceOfEncodeDocument(): string
+    {
+        $method = new \ReflectionMethod(NonInteractive::class, 'encodeDocument');
+        $file = (string) $method->getFileName();
+        $lines = file($file) ?: [];
+
+        return implode('', array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+    }
+
+    /**
+     * Every `JSON_*` constant this PHP source references AS CODE, sorted, unique
+     * and with any leading root-namespace backslash stripped. `token_get_all()` rather than a regex,
+     * because both files discuss these flags at length in comments and a regex
+     * would read the prose.
+     *
+     * BOTH TOKEN KINDS, and it took a red to notice: `bin/sugarcrush` writes the
+     * bare `JSON_UNESCAPED_SLASHES` (T_STRING) while
+     * {@see NonInteractive::encodeDocument()} writes the root-qualified
+     * `\JSON_UNESCAPED_SLASHES`, which PHP 8 lexes as T_NAME_FULLY_QUALIFIED —
+     * so a T_STRING-only scan read the owner as having NO flags at all and the
+     * comparison passed for the wrong reason.
+     *
+     * @return list<string>
+     */
+    private static function jsonFlagTokensIn(string $source): array
+    {
+        $found = [];
+
+        foreach (token_get_all($source) as $token) {
+            if (!is_array($token) || ($token[0] !== T_STRING && $token[0] !== T_NAME_FULLY_QUALIFIED)) {
+                continue;
+            }
+            $name = ltrim($token[1], '\\');
+            if (preg_match('/^JSON_[A-Z_]+$/', $name) === 1) {
+                $found[$name] = true;
+            }
+        }
+
+        $names = array_keys($found);
+        sort($names);
+
+        return $names;
+    }
+
+    /**
+     * One real `NonInteractive::failUsage()` document, captured out of a child
+     * `php` so nothing here has to reimplement the shape it is checking. Run in
+     * a child rather than in-process because that method writes its human half
+     * to STDERR, which a PHPUnit run cannot redirect.
+     */
+    private function documentFromNonInteractive(): string
+    {
+        $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = $this->tmpDir . '/owner_document.php';
+        $outFile = $this->tmpDir . '/owner_out.txt';
+
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export($autoload, true) . ";\n"
+            . 'SugarCraft\Crush\Cli\NonInteractive::failUsage("sugarcrush: probe", "json");' . "\n");
+
+        exec(sprintf(
+            'timeout -s KILL 60 %s %s >%s 2>/dev/null',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($script),
+            escapeshellarg($outFile),
+        ));
+
+        $document = is_file($outFile) ? (string) file_get_contents($outFile) : '';
+        self::assertNotSame('', $document, 'the owner probe produced no document to compare against');
+
+        return $document;
     }
 
     /**

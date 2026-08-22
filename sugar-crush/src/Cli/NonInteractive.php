@@ -243,6 +243,17 @@ final class NonInteractive
      * the binary is what keeps the two from drifting: there is one definition
      * of the failure shape, in {@see self::emitErrorDocument()}.
      *
+     * THAT ARGUMENT USED TO BE STATED WITHOUT AN EXCEPTION, and there is one.
+     * WHAT IS TRUE NOW: `bin/sugarcrush`'s autoload guard DOES hand-roll a
+     * second document (E84), because it runs before `vendor/autoload.php` has
+     * been found and cannot call this method at all. WHY THE RULE STILL EARNS
+     * ITS PLACE: that is the only site in the project where this class is
+     * unreachable, so it is the only site where the choice is between a
+     * duplicate and an empty pipe. Every OTHER pre-flight check in the binary
+     * can reach here and therefore must — a second hand-rolled document
+     * anywhere the autoloader is available would be drift with no reason
+     * behind it.
+     *
      * @param string $message One line, and also the JSON document's
      *   `error.message`.
      * @param string|null $hint An extra stderr-only line (e.g. "Try
@@ -377,11 +388,37 @@ final class NonInteractive
      *                              `bin/sugarcrush`'s pre-flight checks via
      *                              {@see self::failUsage()}
      *   `provider_configuration`-> {@see self::EXIT_CONFIG} (2)
+     *   `installation`          -> {@see self::EXIT_CONFIG} (2), and it is the
+     *                              one type this method never emits — see below
      *   `backend`               -> {@see self::EXIT_FAILURE} (1)
      *   `encoding`              -> {@see self::EXIT_FAILURE} (1)
      *
      * A consumer that kept the exit code and wants to know WHICH kind of 2 it
      * got is exactly who `type` is for.
+     *
+     * `installation` IS EMITTED BY `bin/sugarcrush`'s AUTOLOAD GUARD, hand-rolled
+     * there rather than routed here, and the duplication is deliberate: that
+     * branch fires when `vendor/autoload.php` was not found, so THIS CLASS
+     * CANNOT BE LOADED at that point in the boot. `json_encode()` is core and
+     * needs no autoloader, which is why the guard can still honour the contract
+     * (E84) — the shape's OWNER is unreachable there, the shape is not. The two
+     * are kept from drifting by
+     * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest},
+     * which asserts them key-for-key against each other; change the keys here
+     * and that test reds until the guard is changed to match.
+     *
+     * THE KEY COMPARISON CANNOT SEE AN ENCODE FLAG, and this doc-block used to
+     * claim it could ("change the keys OR THE FLAGS here"). It cannot: that test
+     * `json_decode()`s both documents, so the flags are gone by the time it
+     * looks, and the guard's only payload is an ASCII literal with no slash and
+     * no non-ASCII byte, so its flag set has no observable effect on any output
+     * in the suite. Round 43's review dropped
+     * `JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE` from the guard, and
+     * separately from {@see self::encodeDocument()}, and the suite stayed green
+     * both times. The flags are pinned by SOURCE instead — that test compares
+     * the two `json_encode()` flag expressions token-for-token, with
+     * `JSON_THROW_ON_ERROR` expected on this side only (the guard has no
+     * exception handler and tests the `string|false` return directly).
      */
     private static function emitErrorDocument(string $outputFormat, string $type, string $message, ?string $provider): void
     {

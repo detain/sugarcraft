@@ -5512,3 +5512,102 @@ because the leading literal anchors the match before PCRE can backtrack.
 and `PREG_INTERNAL_ERROR` for the other — and count or log the backtrack case if `SkillRegistry`
 ever gains a logging seam. Adding a logger dependency to a pure static matcher is a bigger design
 call than the finding warrants on its own.
+
+### E94 — `README.md`'s "exactly two exceptions" to the JSON contract is now one
+
+**Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: low, documentation-correctness.
+**Not fixed here because `sugar-crush/README.md` belonged to lane `c` this round.**
+
+**What.** `README.md` (search for `There are exactly two exceptions`) tells a machine consumer that
+`--output-format json` leaves stdout empty in two cases: an `--output-format` value that is neither
+`text` nor `json`, and *"a checkout with no `vendor/autoload.php`: that exits 2 with an empty stdout,
+because the class that owns the JSON document shape is precisely the one that could not be loaded, and
+hand-rolling a second copy of the shape in `bin/sugarcrush` to cover it would be the drift that having
+one definition prevents."* E84 (round 43) closed that second case — the guard now emits
+`{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot find composer autoload.php"}}`
+and a newline, still at exit 2 — so the paragraph is now false, and it is false in the direction that
+matters: it tells a consumer not to bother parsing stdout on the one failure where parsing now works.
+Nothing asserts that sentence, so no test went red — `grep -rn 'exactly two exceptions'` hits `README.md`
+and nothing else, which is why this is recorded rather than caught.
+
+**Step.** Rewrite the paragraph to one exception (the unimplemented `--output-format` value), state that
+the autoload guard hand-rolls the document and why the duplication is deliberate, and add the
+`installation` `error.type` to the exit-code table's row for `2` (line beginning `| \`2\` |`). Consider
+pinning the claim with a test the way `ReadmeSettingsTierClaimTest` pins its own, so the next divergence
+reds instead of waiting for a reader.
+
+### E95 — the MCP start-then-throw diagnostic now prints one unowned line into the suite's own output
+
+**Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: cosmetic, test-hygiene. **Left as
+it is, deliberately; recorded so it is not rediscovered as an accident.**
+
+**What.** E86 routed `Bootstrap::mcpClient()`'s start-then-throw notice onto
+`warnPermissionConfigInTranscript()` in addition to its existing `error_log()`. That seam's stderr half
+is a `fwrite(STDERR, …)` in `Bootstrap::warnPermissionConfig()`, which no ini setting can redirect, so
+`McpToolWiringTest::testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()` — which
+runs in-process and points `error_log` at a file precisely to stay quiet — now prints exactly one line
+(`sugarcrush: MCP tools from …/.mcp.json are incomplete…`) into the suite's output. MEASURED on the full
+run at PHP 8.3.6: one line, and the suite already tolerates a comparable one from the workflow-tier
+refusal test.
+
+**Step.** Either accept it permanently, or quiet that one test by pre-seeding
+`Bootstrap::$reportedPermissionConfigWarnings` by reflection — which works because the seam records the
+transcript row BEFORE delegating for stderr, but couples the test to a private map whose purpose is
+unrelated and stops working silently the day the message is reworded. The reasoning is written up on that
+test's doc-block; the line's CONTENT is asserted by
+`testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()`, which uses a child process.
+
+### E96 — `ParallelToolCallsTest::testACompletedGroupLeavesNoPayloadFilesBehind` globs the shared `/tmp`
+
+**Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: low, test-isolation. **Not fixed
+here — `tests/Integration/ParallelToolCallsTest.php` was outside lane `b`'s file split.**
+
+**What.** Its `runtimeIpcFiles()` helper is `glob(sys_get_temp_dir() . '/sc_runtime_tool_*')`, i.e. a
+before/after snapshot of a directory every concurrent process on the box shares. Lane `b`'s round-43
+baseline run failed on it with one extra entry (`/tmp/sc_runtime_tool_e79c09f5fbbc8d5b.bin`) created by a
+sibling lane's suite between the two snapshots; the same test passed in isolation moments later. It is a
+false red under any parallel or multi-checkout run, including two developers on one box.
+
+**Step.** Scope the sweep to files this process created — the runner already knows its own pid — or point
+`ToolIpcFiles` at a per-run subdirectory under `sys_get_temp_dir()` and glob that. Do not "fix" it by
+widening the assertion; the leak-detection is the point.
+
+### E97 — the "fourteen call sites" seam count is stale in three places outside `Bootstrap.php`
+
+**Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
+documentation-correctness. **Not fixed here — `sugar-crush/src/Chat.php` and
+`sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php` were outside lane `b`'s file split.**
+
+**What.** The verified number of `self::warnPermissionConfigInTranscript(` CALL sites in
+`sugar-crush/src/Cli/Bootstrap.php` is **16** — counted with `token_get_all()` and a `::`/`(` adjacency
+test, not `grep`, so doc-comment mentions of the name are excluded. E86 (round 43) corrected the count
+inside `Bootstrap.php` itself and deliberately left the other three, which still say fourteen/fifteen:
+
+- `sugar-crush/src/Chat.php`, `Chat::withLaunchNotices()`'s doc-block — the paragraph opening
+  `FOURTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL`.
+- `sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php`, class doc-block — "the guard for the
+  other fourteen" and "the retention summary onto the seam as the fifteenth call site".
+- The same file, on the method whose doc-block says "a transcript that also carries fourteen".
+
+**Step.** Set all three to 16 in one edit with the other two, and say in each how the number is obtained
+(the token scan above), so the next reader re-derives it in one command instead of grepping a name that
+also appears 15 times in prose. Better still, assert it: a small test that token-scans `Bootstrap.php`
+and compares the count against a constant these doc-blocks cite would make the next drift red rather
+than merely wrong.
+
+### E98 — `README.md` has a THIRD spot E84 falsified, beyond the two E94 names
+
+**Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
+documentation-correctness. **Not fixed here — `sugar-crush/README.md` belonged to lane `c`.** Fold this
+into E94 before touching that file, or E94 will be closed with the file still wrong.
+
+**What.** E94 names two spots: the `There are exactly two exceptions` paragraph (README.md, and confirmed
+the only file under `sugar-crush/` carrying that phrase) and the exit-code table's row for `2`. There is
+a third: the sentence enumerating the `error.type` values, which reads *"`usage` and
+`provider_configuration` are both `2`, `backend` and `encoding` are both `1`"* and omits `installation`
+entirely. The JSON schema block a few lines above it lists the same four types in its `"type":` union and
+omits `installation` too.
+
+**Step.** Add `installation` to both the union in the schema block and the exit-code sentence, mapping it
+to `2`, alongside E94's two edits. `NonInteractive::emitErrorDocument()`'s doc-block already carries the
+full five-type table and is the source to copy from.

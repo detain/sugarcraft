@@ -13,13 +13,49 @@ declare(strict_types=1);
     }
     // 2, not 1, for the same reason every other pre-flight failure below is a
     // 2: nothing was attempted and a retry cannot help — the install is
-    // incomplete. This is the ONE exit that cannot honour the
-    // `--output-format json` contract, and deliberately so: the document shape
-    // is owned by NonInteractive::emitErrorDocument(), and the autoloader that
-    // would load that class is exactly what is missing. Hand-rolling a second
-    // JSON document here to cover it would create the drift that centralising
-    // the shape exists to prevent, over a case a `| jq` consumer can only hit
-    // by running the binary out of a broken checkout. Documented in README.md.
+    // incomplete.
+    //
+    // WHAT THIS COMMENT USED TO SAY: this is the ONE exit that cannot honour
+    // the `--output-format json` contract, and deliberately so — the document
+    // shape is owned by NonInteractive::emitErrorDocument(), the autoloader
+    // that would load that class is exactly what is missing, and hand-rolling
+    // a second JSON document here would create the drift that centralising the
+    // shape exists to prevent, over a case a `| jq` consumer can only hit by
+    // running the binary out of a broken checkout.
+    //
+    // WHAT IS TRUE NOW (E84): the shape's OWNER is unreachable here; the shape
+    // itself never was. `json_encode()` is a core function and needs no
+    // autoloader, so the choice was never "document or no document" — it was
+    // "one duplicated document, or an empty stdout". An empty stdout is the
+    // worse of the two by the contract's own argument, because a consumer
+    // parsing it cannot tell "empty because the binary died before it could
+    // speak" from "empty because there was nothing to say", and those want
+    // opposite handling. The drift risk is real and is paid for below with a
+    // pointer in each direction rather than with silence.
+    //
+    // THE DUPLICATION IS DELIBERATE, and here is the whole of it: the keys are
+    // `result` (present and null, so a consumer reading only `.result` keeps
+    // working) and `error.{type,message}`, encoded with
+    // JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE |
+    // JSON_INVALID_UTF8_SUBSTITUTE and one trailing newline. That is
+    // NonInteractive::emitErrorDocument()'s shape, and
+    // NonInteractive::encodeDocument()'s flag set MINUS `JSON_THROW_ON_ERROR`.
+    // The subtraction is not an oversight and the earlier wording that omitted
+    // it was inexact: the owner throws and catches a JsonException, while this
+    // branch has no exception handler to reach for and instead tests the
+    // documented `string|false` return directly below. Both files name this site
+    // in return, and Tests\Integration\BinSugarcrushAutoloadGuardTest asserts
+    // the two documents key-for-key AND the two flag expressions token-for-token
+    // — the second of those because a key comparison cannot see an encode flag
+    // at all (round 43's review dropped both flags from either side and the
+    // suite stayed green).
+    //
+    // `installation` IS A NEW `error.type`, not `usage` reused. The invocation
+    // was well-formed; the checkout is not, and telling those apart is the
+    // entire job of a field the doc-block on emitErrorDocument() introduces as
+    // "a consumer that kept the exit code and wants to know WHICH kind of 2 it
+    // got is exactly who `type` is for". It maps to exit 2 like every other
+    // pre-flight cause.
     //
     // AND IT CANNOT USE THE TRANSCRIPT SEAM EITHER, and this is the one raw
     // stderr write in the project that is structurally exempt rather than
@@ -53,7 +89,114 @@ declare(strict_types=1);
     // `<tmp>/bin/sugarcrush` is enough to produce one, and
     // Tests\Integration\BinSugarcrushAutoloadGuardTest now does exactly that
     // and reads the real stderr and exit code back.
-    fwrite(STDERR, "sugarcrush: cannot find composer autoload.php\n");
+    $message = 'sugarcrush: cannot find composer autoload.php';
+    fwrite(STDERR, $message . "\n");
+
+    // ONLY when this invocation actually asked for JSON. A guard that printed a
+    // document into a human's terminal would be a regression, and there is no
+    // option parser yet — ArgvParser is behind the autoloader too — so the
+    // format is read straight out of raw argv. Any value other than `json` —
+    // `text`, or one nothing implements — leaves stdout empty, which is the
+    // behaviour the working binary has on that same input.
+    //
+    // WHAT THIS COMMENT USED TO SAY: the scan reads the two spellings
+    // "mirroring ArgvParser's own scan". WHAT IS TRUE NOW: it did not mirror
+    // it, and round 43's review measured three argv vectors on which the broken
+    // checkout came out MORE permissive than the working one — the exact
+    // property the case-sensitivity choice below exists to prevent.
+    // `-- --output-format=json -p hi`, `--root --output-format json -p hi` and
+    // `session delete -- --output-format=json` each parse to `text` in
+    // ArgvParser and each emitted the document here, because the scan modelled
+    // neither the POSIX `--` end-of-options separator nor the flags that swallow
+    // the token after them. Both are modelled below now. WHY THE CLAIM STILL
+    // EARNS ITS PLACE: agreement with the parser is the whole specification of
+    // this branch — a broken checkout that answers a question the working one
+    // would have refused is a second, undocumented CLI — so the claim is kept
+    // and made true rather than dropped.
+    //
+    // WHAT IS MIRRORED, exactly: `$argv[0]` is skipped (ArgvParser documents
+    // "parsing starts at $argv[1]" — and that alignment is UNOBSERVABLE and
+    // untested on purpose, because PHP fills `$argv[0]` with the script path and
+    // no path can be spelled `--output-format=…`; it is written this way so the
+    // two loops read alike, not because a case exists); a bare `--` ends the
+    // scan, because past it
+    // ArgvParser sends every token to operands and no flag branch can claim one;
+    // both spellings `--output-format=<value>` and `--output-format <value>` are
+    // read, LAST occurrence wins; the value is compared case-SENSITIVELY (the
+    // parser rejects `--output-format JSON` as unsupported, so treating it as
+    // json here would make the broken checkout MORE permissive than the working
+    // one); and the value-taking flags consume their token, in the two flavours
+    // ArgvParser gives them — `--root` and `--output-format` take the next token
+    // unconditionally, while `-p`, `--prompt`, `--config`, `--model` and
+    // `--permission-mode` refuse a flag-shaped one and leave it for the loop.
+    //
+    // WHAT IS NOT MIRRORED, deliberately — this is a format scan and not a
+    // second parser. The `run` positional alias is not modelled, and modelling
+    // it would be a NEW divergence rather than a fix: `run` consumes its value
+    // only when that value is not flag-shaped, so a `--output-format` following
+    // `run` is left for the loop on both sides already. `--help`/`--version` are
+    // not modelled either: on a working checkout they print and exit 0 before
+    // any format is honoured, while a broken checkout has no help screen to
+    // print and reports the installation failure instead. THE AGREEMENT THAT IS
+    // CLAIMED IS ASSERTED, not restated in prose — Tests\Integration\
+    // BinSugarcrushAutoloadGuardTest runs a table of argv vectors through this
+    // scan and through ArgvParser::parse() and compares the two decisions.
+    $rawArgv = $GLOBALS['argv'] ?? [];
+    $format = 'text';
+    // ArgvParser's `--root` branch is `$root = $argv[++$i]` with no test on the
+    // value, so `--root --output-format json` makes `--output-format` the ROOT.
+    // `--output-format` itself is the other lenient one and is handled above by
+    // the branch that reads it.
+    $lenientValueFlags = ['--root'];
+    // The strict set: ArgvParser refuses a flag-shaped value for each of these
+    // (its looksLikeFlag() is "longer than one character and begins with -")
+    // and leaves the token unconsumed for the next iteration to judge.
+    $strictValueFlags = ['-p', '--prompt', '--config', '--model', '--permission-mode'];
+    for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
+        $arg = $rawArgv[$i];
+        if (!is_string($arg)) {
+            continue;
+        }
+        if ($arg === '--') {
+            break;
+        }
+        if (str_starts_with($arg, '--output-format=')) {
+            $format = substr($arg, 16); // length of "--output-format="
+        } elseif ($arg === '--output-format') {
+            $format = $rawArgv[++$i] ?? $format;
+        } elseif (in_array($arg, $lenientValueFlags, true)) {
+            ++$i;
+        } elseif (in_array($arg, $strictValueFlags, true)) {
+            $next = $rawArgv[$i + 1] ?? null;
+            if (!is_string($next) || strlen($next) <= 1 || $next[0] !== '-') {
+                ++$i;
+            }
+        }
+    }
+
+    if ($format === 'json') {
+        $document = json_encode(
+            ['result' => null, 'error' => ['type' => 'installation', 'message' => $message]],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+        // Every field above is an ASCII literal this file owns, so `false` is
+        // unreachable — and it is handled anyway, with the literal it would have
+        // produced, because an empty stdout is the single outcome this branch
+        // was added to prevent. Same reasoning, same shape, as the JsonException
+        // arm of NonInteractive::emitErrorDocument().
+        //
+        // BEING UNREACHABLE, IT IS ALSO UNEXERCISED: no test can drive this arm,
+        // so nothing here holds the literal to the shape it is a fallback for —
+        // round 43's review replaced it with `{"BROKEN":true}` and the suite
+        // stayed green. It is pinned by SOURCE instead:
+        // BinSugarcrushAutoloadGuardTest::testTheUnreachableFallbackLiteralIsTheDocumentItReplaces()
+        // reads this literal out of this file and compares it against the bytes
+        // the reachable arm actually printed.
+        echo ($document === false
+            ? '{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot find composer autoload.php"}}'
+            : $document) . "\n";
+    }
+
     exit(2);
 })();
 
@@ -101,13 +244,22 @@ if ($args->version) {
 // both. Note that $args->outputFormat is the REJECTED value in that case, so
 // the failure below renders as text — which is the only honest answer when the
 // requested rendering is one nothing implements, and means STDOUT IS EMPTY on
-// that one path. That is the second of the two exceptions README.md's
-// "exactly one JSON object on stdout" contract names (the other being a
-// checkout with no vendor/autoload.php); the contract's own README sentence
-// used to list `--output-format` among the causes it COVERS, which was false
-// for exactly this reason. Scope: the invalid VALUE is the exception, not the
-// flag — a valid `--output-format json` beside any other usage error still
-// emits the document, because $args->outputFormat is then `json`.
+// that one path.
+//
+// THIS USED TO BE "the second of the two exceptions" README.md's "exactly one
+// JSON object on stdout" contract names, the other being a checkout with no
+// vendor/autoload.php. WHAT IS TRUE NOW: E84 closed that other one — the
+// autoload guard at the top of this file hand-rolls the document, because
+// json_encode() is core and needs no autoloader. So this is the ONLY remaining
+// exception, and it is a different KIND of exception: there the shape's owner
+// was unreachable, here the caller asked for a rendering nothing implements,
+// so there is no format to honour. WHY IT STILL EARNS ITS PLACE: emitting a
+// JSON document to report that JSON was not the requested format would be
+// answering in a format the caller did not ask for. Scope: the invalid VALUE
+// is the exception, not the flag — a valid `--output-format json` beside any
+// other usage error still emits the document, because $args->outputFormat is
+// then `json`. README.md's list still names both; correcting it is lane c's
+// file this round and is recorded as a deferred finding.
 if ($args->usageError !== null) {
     exit(NonInteractive::failUsage(
         $args->usageError,
@@ -131,7 +283,9 @@ if ($args->usageError !== null) {
 // unusable permission policy, an unusable explicitly-selected provider, and a
 // missing vendor/autoload.php), and it used to leave stdout completely empty under
 // `--output-format json`, which is the empty pipe that contract promises never
-// happens.
+// happens. The last of those causes was the straggler until E84: it is the one
+// that cannot route through NonInteractive at all, and now hand-rolls the same
+// document at the top of this file rather than staying an empty pipe.
 if ($args->unknownFlags !== []) {
     exit(NonInteractive::failUsage(
         'sugarcrush: unrecognized option' . (count($args->unknownFlags) === 1 ? '' : 's') . ': '
