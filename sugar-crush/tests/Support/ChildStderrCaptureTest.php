@@ -295,18 +295,37 @@ final class ChildStderrCaptureTest extends TestCase
      * A known-positive run through the SAME scanner, for callers that
      * otherwise assert only an absence or a count.
      *
-     * MEASURED, and it is why this exists rather than being assumed from the
-     * fixture test above: with `classifyShell()`'s null-device branch mutated
-     * to `if (false)`, BOTH
+     * MEASURED TWICE, and each measurement bought a fixture below rather than
+     * a reassurance.
+     *
+     * ONE. With `classifyShell()`'s null-device branch mutated to
+     * `if (false)`, BOTH
      * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()} and
      * {@see testEveryDiscardExemptionStillDescribesRealSites()} passed. The
      * first because everything read as `captured` again, and the second
      * because its one exempted site is a `proc_open()` whose discard is
-     * decided on the OTHER branch - so the count still came out at 1. Two
+     * decided on a different branch - so the count still came out at 1. Two
      * green guards over a half-dead instrument.
      *
-     * Both branches are exercised here, because covering one of them is
-     * exactly the gap that was measured.
+     * TWO, and this is why the sentence here no longer says "both branches".
+     * There are THREE paths that can return `SHAPE_DISCARDED`, this helper
+     * covered two, and the uncovered one was the path the tree's only live
+     * exemption actually rests on. With `classifyProcOpen()`'s command-string
+     * branch blinded, this fixture test passed - 60 assertions, entirely
+     * green - and so did the absence guard. The only thing that reddened was
+     * the exemption row for a real site in
+     * `Integration/BinSugarcrushDispatchTest.php`, and that row is
+     * deliberately SELF-DELETING: the day `armWatchdog()` stops discarding,
+     * the row goes, and the branch would have been left with no liveness
+     * coverage at all.
+     *
+     * WHY THIS EARNS ITS PLACE: an assertion of "no occurrences" is not
+     * evidence unless something in the same test proves the instrument can
+     * still produce one. All three discard paths are exercised below - a
+     * shell command string, a `proc_open()` COMMAND STRING, and a
+     * `proc_open()` DESCRIPTOR SPEC - each with the opposite polarity beside
+     * it, because a scanner stuck at `discarded` reds correct code and that
+     * is how the next real offender buys its exemption.
      */
     private function assertTheDiscardBranchIsAlive(): void
     {
@@ -331,6 +350,26 @@ final class ChildStderrCaptureTest extends TestCase
             ChildStderrCaptureScanner::SHAPE_CAPTURED,
             $shape('proc_open("ls", [2 => ["pipe", "w"]], $p);'),
             'the scanner now calls a real capture a discard, which is the other polarity',
+        );
+
+        // THE THIRD PATH, and not reachable through either assertion above: a
+        // redirection in `proc_open()`'s COMMAND STRING is applied by the
+        // shell before the descriptor spec is ever consulted, so the spec
+        // here says `pipe` and the honest answer is still `discarded`.
+        // Blinding this branch alone left every other assertion in this file
+        // green.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $shape('proc_open("ls >/dev/null 2>&1", [2 => ["pipe", "w"]], $p);'),
+            'the proc_open command-string null-device branch is dead, so a shell redirection that '
+                . 'really does discard fd 2 now reads as the capture its descriptor spec claims',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $shape('proc_open("ls 2>&1 >/dev/null", [2 => ["pipe", "w"]], $p);'),
+            'the reversed order points fd 2 at whatever fd 1 held AT THAT MOMENT - the pipe the '
+                . 'caller reads - so reporting it as a discard is the polarity that reds correct '
+                . 'code',
         );
     }
 
