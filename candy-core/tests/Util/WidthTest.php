@@ -415,8 +415,16 @@ final class WidthTest extends TestCase
         // indicator is a 1-cell letter box.
         $this->assertSame(2, Width::string("\u{1F1E6}\u{1F1F8}"));
         $this->assertSame(1, Width::string("\u{1F1E6}"));
-        // Already true before the fix, via a ZWJ special case — pinned here
-        // so that special case cannot be dropped silently.
+        // WHAT THIS SAID: "already true before the fix, via a ZWJ special
+        // case — pinned here so that special case cannot be dropped
+        // silently." WHAT IS TRUE NOW: the special case is gone (E73) and
+        // this assertion holds without it, because ICU returns the whole
+        // family as ONE cluster whose base is U+1F468. WHY THE ASSERTION
+        // STILL EARNS ITS PLACE: it is the check that a ZWJ sequence is
+        // scored once rather than per-emoji — which is what would break if
+        // segmentation ever fell back to a per-codepoint splitter. Measured
+        // on PHP 8.3.6, ext-intl ICU 74.2 / Unicode 15.1: 1 cluster, 2 cells.
+        $this->assertSame(1, \count(self::icuClusters("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")));
         $this->assertSame(2, Width::of("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"));
         // Truncation and measurement must charge the same cluster the same
         // number of cells, which is the invariant, stated directly.
@@ -433,5 +441,349 @@ final class WidthTest extends TestCase
                 sprintf('%s was emitted whole into a budget of %d', bin2hex($cluster), $w - 1),
             );
         }
+    }
+
+    /**
+     * E73. A Control character immediately before a ZWJ made
+     * `Width::string()` score the whole run 0.
+     *
+     * Mechanism, measured on PHP 8.3.6 with ext-intl ICU 74.2 / Unicode 15.1:
+     * UAX #29 GB4 breaks after a Control, so `"\t" ZWJ U+1F44D` comes back as
+     * THREE clusters — the tab, a bare ZWJ, and the emoji — where a joining
+     * ZWJ would have been inside one. `compute()`'s old look-ahead saw the
+     * next cluster was a ZWJ and charged the tab 0; the `$inZwjSequence` flag
+     * it then set charged the emoji 0 as well. Total 0 cells for a run
+     * `Style::new()->render()` lays out as 6.
+     *
+     * This is the OVER-RUN direction — the caller is told a 6-cell run is
+     * free — and an over-wide row is frame corruption here, because the diff
+     * renderer paints one line per terminal row.
+     *
+     * Exact expected values, not bounds, so the sign of any future
+     * disagreement is visible: {@see WidthTest::testATabIsChargedExactlyFourCells}
+     * pins TAB_WIDTH = 4 as a literal in this same file.
+     */
+    public function testAControlBeforeAZwjNoLongerZeroesTheRunAroundIt(): void
+    {
+        // The two inputs recorded in the finding.
+        $this->assertSame(Width::TAB_WIDTH + 2, Width::string("\t\u{200d}\u{1F44D}"));
+        $this->assertSame(1 + Width::TAB_WIDTH + 2, Width::string("a\t\u{200d}\u{1F44D}"));
+
+        // Same defect with no tab in sight: a ZWJ at the START of the string
+        // is also a bare cluster, so the flag zeroed the emoji after it.
+        $this->assertSame(2, Width::string("\u{200d}\u{1F44D}"));
+
+        // Every C0/C1 control breaks the cluster the same way, so none of them
+        // may zero their neighbours either. The loop drives C0 (0x01, 0x07,
+        // 0x0b, 0x0a), DEL (0x7f) and C1 (U+0080, U+0085 NEL, U+009F) — the
+        // C1 half of that sentence was asserted by nothing until E73's review
+        // pointed it out, and ICU returns 3 clusters for every one of these.
+        foreach (["\x01", "\x07", "\x0b", "\x7f", "\n", "\u{0080}", "\u{0085}", "\u{009F}"] as $control) {
+            $this->assertSame(
+                3,
+                \count(self::icuClusters($control . "\u{200d}\u{1F44D}")),
+                sprintf('control %s did not break into 3 clusters', bin2hex($control)),
+            );
+            $this->assertSame(
+                2,
+                Width::string($control . "\u{200d}\u{1F44D}"),
+                sprintf('control %s zeroed the emoji after a ZWJ', bin2hex($control)),
+            );
+        }
+
+        // A ZWJ that actually joins is unaffected: one cluster, 2 cells.
+        $this->assertSame(2, Width::string("\u{1F469}\u{200D}\u{1F4BB}"));
+    }
+
+    /**
+     * The invariant E73's fix installs, stated as a property rather than as a
+     * list of inputs: `string()` carries NO state across cluster boundaries,
+     * so measuring a string equals the sum of measuring its clusters one at a
+     * time.
+     *
+     * The old ZWJ look-ahead violated this by construction — it read
+     * `$clusters[$i + 1]` — which is why a Control could change the score of
+     * a cluster two positions away. Any future cross-cluster rule fails here.
+     *
+     * Corpus: 20,000 deterministic strings (seed 20260822, `mt_srand`) of 1-6
+     * symbols over an alphabet of controls, ZWJ/ZWNJ, skin-tone modifiers,
+     * regional indicators, Hangul jamo, Indic conjunct parts, combining
+     * marks, variation selectors, CJK and ASCII. Segmentation oracle is
+     * ext-intl's `grapheme_extract()`, i.e. the same ICU the class uses.
+     */
+    public function testMeasuringCarriesNoStateAcrossClusterBoundaries(): void
+    {
+        $mismatches = [];
+        $checked = 0;
+        foreach (self::widthFuzzCorpus(20000, 20260822) as $s) {
+            $checked++;
+            $sum = 0;
+            foreach (self::icuClusters($s) as $cluster) {
+                $sum += Width::string($cluster);
+            }
+            $whole = Width::string($s);
+            if ($sum !== $whole && \count($mismatches) < 5) {
+                $mismatches[] = sprintf('%s: clusters sum to %d, whole measures %d', bin2hex($s), $sum, $whole);
+            }
+        }
+        // Aggregated rather than asserted per trial: 20,000 per-trial
+        // assertions would swamp this lib's assertion count without adding
+        // information, and the first five failures name their own input.
+        $this->assertSame([], $mismatches, 'cross-cluster state moved a width');
+        $this->assertSame(20000, $checked);
+    }
+
+    /**
+     * No input may be measured NEGATIVE or measured 0 while containing a
+     * cluster that is not zero-width — the shape E73 presented as.
+     *
+     * Same corpus as {@see self::testMeasuringCarriesNoStateAcrossClusterBoundaries()}.
+     */
+    public function testAnInputContainingANonZeroWidthClusterNeverMeasuresZero(): void
+    {
+        $swallowed = [];
+        $checked = 0;
+        foreach (self::widthFuzzCorpus(20000, 776611) as $s) {
+            $checked++;
+            $w = Width::string($s);
+            $widest = 0;
+            foreach (self::icuClusters($s) as $cluster) {
+                $widest = \max($widest, Width::string($cluster));
+            }
+            if (($w < 0 || $w < $widest) && \count($swallowed) < 5) {
+                $swallowed[] = sprintf('%s measured %d, widest cluster alone is %d', bin2hex($s), $w, $widest);
+            }
+        }
+        $this->assertSame([], $swallowed, 'a string measured narrower than one of its own clusters');
+        $this->assertSame(20000, $checked);
+    }
+
+    /**
+     * A width oracle INDEPENDENT of `Width` — ICU's own character properties,
+     * not ICU's segmenter.
+     *
+     * WHY THIS EXISTS. The two property tests above call `Width::string()` on
+     * BOTH sides of their invariant, so by construction they can only detect
+     * cross-cluster STATE; a wrong per-cluster width is invisible to them.
+     * E73's review demonstrated that with three mutations that survived the
+     * entire candy-core suite: dropping U+200C from `isZeroWidth()`, dropping
+     * U+FEFF from it, and moving `isWide()`'s emoji upper bound from U+1F64F
+     * to U+1F64E. All three are per-codepoint width errors. This test is what
+     * kills them.
+     *
+     * THE ORACLE, derived at runtime from ext-intl rather than written down:
+     * `IntlChar::charType()` Cf/Mn/Cc paint nothing, so 0 cells;
+     * `IntlChar::PROPERTY_EAST_ASIAN_WIDTH` of Wide or Fullwidth means 2
+     * cells; everything else 1. The one deliberate departure is the tab,
+     * which ICU classes Cc but which E69 charges `Width::TAB_WIDTH`.
+     *
+     * DOMAIN, and it is NOT "Width agrees with ICU". `Width`'s tables are
+     * block-shaped approximations of Unicode, and over a sweep of
+     * U+0000..U+2FFF, U+A000..U+A4FF, U+AC00..U+D7AF, U+F900..U+FAFF,
+     * U+FE00..U+FE4F, U+FF00..U+FFEF and U+1F000..U+1FBFF they disagree with
+     * this oracle on 1,256 of 26,937 ASSIGNED codepoints (4.7%) — measured on
+     * PHP 8.3.6, ext-intl ICU 74.2 / Unicode 15.1, at the commit that added
+     * this test. The bulk is 694 non-spacing marks outside the class's
+     * combining ranges and ~500 emoji-block codepoints whose real
+     * East_Asian_Width is Neutral. Closing that is a foundation-wide
+     * rendering-semantics change, not a test fix. So this test drives the set
+     * the class's own corpus and range table actually claim — every
+     * single-codepoint member of {@see self::widthFuzzAlphabet()}, both
+     * endpoints of every `isWide()` range, and the C1 controls — and pins the
+     * five residual disagreements EXPLICITLY, each with its mechanism.
+     */
+    public function testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties(): void
+    {
+        // The five known departures, asserted BOTH ways below so the list
+        // cannot rot into a rubber stamp: an entry that stops disagreeing
+        // fails this test and must be deleted.
+        //   U+094D  DEVANAGARI SIGN VIRAMA — a real gap: Mn, but outside every
+        //           combining range isZeroWidth() knows, so it scores 1 not 0.
+        //   U+A4CF / U+FF00 / U+1F6FF — UNASSIGNED codepoints that sit at the
+        //           end of a block-shaped isWide() range, so they score 2
+        //           where the oracle's fallback says 1. Benign: nothing paints
+        //           an unassigned codepoint.
+        //   U+1F900 CIRCLED CROSS FORMEE WITH FOUR DOTS — assigned, and ICU
+        //           calls it Neutral, but it is the first codepoint of the
+        //           block-shaped 0x1F900..0x1F9FF range, so it scores 2.
+        $knownDepartures = [0x094D, 0xA4CF, 0xFF00, 0x1F6FF, 0x1F900];
+
+        $mismatches = [];
+        $departuresStillReal = [];
+        $codepoints = self::oracleCodepoints();
+        foreach ($codepoints as $cp) {
+            $expected = self::icuExpectedWidth($cp);
+            $actual = Width::string(\IntlChar::chr($cp));
+            $agrees = $actual === $expected;
+            if (\in_array($cp, $knownDepartures, true)) {
+                if ($agrees) {
+                    $departuresStillReal[] = sprintf('U+%05X now agrees with ICU (%d) — delete it from $knownDepartures', $cp, $actual);
+                }
+                continue;
+            }
+            if (!$agrees) {
+                $mismatches[] = sprintf(
+                    'U+%05X: ICU properties say %d cells, Width::string() says %d',
+                    $cp,
+                    $expected,
+                    $actual,
+                );
+            }
+        }
+
+        $this->assertSame([], $mismatches, 'a per-codepoint width disagrees with ICU character properties');
+        $this->assertSame([], $departuresStillReal, 'a documented departure is stale');
+        // The corpus must not silently shrink to nothing — 34 alphabet
+        // symbols, 32 isWide() range endpoints and 3 C1 controls, deduplicated.
+        $this->assertGreaterThanOrEqual(60, \count($codepoints));
+    }
+
+    /**
+     * ICU's verdict on how many cells one codepoint occupies, computed from
+     * `ext-intl` character properties alone — no call into `Width`.
+     */
+    private static function icuExpectedWidth(int $cp): int
+    {
+        // E69: a tab is Cc to ICU but is laid out as TAB_WIDTH cells by every
+        // renderer that consumes this measure. Deliberate, and the only one.
+        if ($cp === 0x09) {
+            return Width::TAB_WIDTH;
+        }
+        $type = \IntlChar::charType($cp);
+        if (
+            $type === \IntlChar::CHAR_CATEGORY_FORMAT_CHAR
+            || $type === \IntlChar::CHAR_CATEGORY_NON_SPACING_MARK
+            || $type === \IntlChar::CHAR_CATEGORY_CONTROL_CHAR
+        ) {
+            return 0;
+        }
+        $eaw = \IntlChar::getIntPropertyValue($cp, \IntlChar::PROPERTY_EAST_ASIAN_WIDTH);
+        // U_EA_FULLWIDTH = 3, U_EA_WIDE = 5.
+        return ($eaw === 3 || $eaw === 5) ? 2 : 1;
+    }
+
+    /**
+     * The codepoints {@see self::testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties()}
+     * drives: every single-codepoint symbol of the fuzz alphabet, both
+     * endpoints of each range `Width::isWide()` declares, and the C1 controls
+     * the E73 test loop exercises.
+     *
+     * The endpoint list is a deliberate mirror of the private range table. It
+     * is the boundary that mutation-kills an off-by-one in it — a scan wide
+     * enough to discover the boundary on its own would also surface the 1,256
+     * documented block-shape disagreements and prove nothing.
+     *
+     * @return list<int>
+     */
+    private static function oracleCodepoints(): array
+    {
+        $cps = [];
+        foreach (self::widthFuzzAlphabet() as $symbol) {
+            if (\mb_strlen($symbol, 'UTF-8') === 1) {
+                $cps[] = \mb_ord($symbol, 'UTF-8');
+            }
+        }
+        foreach ([0x0080, 0x0085, 0x009F] as $c1) {
+            $cps[] = $c1;
+        }
+        foreach (
+            [
+                [0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf],
+                [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff],
+                [0xfe30, 0xfe4f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f300, 0x1f64f],
+                [0x1f680, 0x1f6ff], [0x1f900, 0x1f9ff], [0x20000, 0x2fffd], [0x30000, 0x3fffd],
+            ] as [$lo, $hi]
+        ) {
+            $cps[] = $lo;
+            $cps[] = $hi;
+        }
+        return \array_values(\array_unique($cps));
+    }
+
+    /**
+     * `$count` deterministic random strings of 1-6 symbols drawn from
+     * {@see self::widthFuzzAlphabet()}, seeded so a failure is reproducible.
+     *
+     * @return \Generator<int, string>
+     */
+    private static function widthFuzzCorpus(int $count, int $seed): \Generator
+    {
+        $alphabet = self::widthFuzzAlphabet();
+        $n = \count($alphabet);
+        \mt_srand($seed);
+        for ($t = 0; $t < $count; $t++) {
+            $len = 1 + \mt_rand(0, 5);
+            $s = '';
+            for ($k = 0; $k < $len; $k++) {
+                $s .= $alphabet[\mt_rand(0, $n - 1)];
+            }
+            yield $s;
+        }
+    }
+
+    /**
+     * Emoji-heavy alphabet shared by the property tests above. Deliberately
+     * includes the shapes each of E68, E69 and E73 turned on: controls
+     * (cluster breakers), ZWJ/ZWNJ, skin-tone modifiers (Extend), regional
+     * indicator pairs, Hangul jamo L/V/T, an Indic conjunct, a combining
+     * mark, and both variation selectors.
+     *
+     * @return list<string>
+     */
+    private static function widthFuzzAlphabet(): array
+    {
+        return [
+            'a', 'Z', ' ', "\t", "\x01", "\x07", "\x0b", "\x7f",
+            "\u{200d}", "\u{200c}", "\u{200b}", "\u{feff}",
+            "\u{1F44D}", "\u{1F469}", "\u{1F4BB}", "\u{1F3C3}", "\u{2600}",
+            "\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}",
+            "\u{1F1FA}", "\u{1F1F8}", "\u{1F1EF}", "\u{1F1F5}",
+            "\u{1100}", "\u{1161}", "\u{11A8}",
+            "\u{0915}", "\u{094D}", "\u{0937}",
+            "\u{0301}", "\u{FE0F}", "\u{FE0E}", "\u{4E00}",
+        ];
+    }
+
+    /**
+     * ICU grapheme clusters of `$s`, via ext-intl.
+     *
+     * **This is NOT an independent oracle and must not be described as one.**
+     * It is a line-for-line re-implementation of the ext-intl branch of
+     * `Width::nextCluster()` driven by the same loop as `Width::graphemes()`:
+     * same `grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next)`, same
+     * one-byte fallback on an empty return, same `$i += strlen($cluster)`
+     * advance. Duplicating the code under test means it cannot falsify
+     * SEGMENTATION — if `Width` starts splitting wrongly, this splits wrongly
+     * the same way and every property built on it still passes.
+     *
+     * WHAT IT IS GOOD FOR, which is why it is here rather than deleted: the
+     * property tests above are about ARITHMETIC ACROSS cluster boundaries, and
+     * for that a splitter that provably agrees with the class's own is exactly
+     * the right instrument — it isolates the cross-cluster question from the
+     * segmentation question. The segmentation question is answered separately,
+     * by the exact-value assertions in
+     * {@see self::testStringScoresAWholeClusterAsOneGlyph()}, and the
+     * per-codepoint WIDTH question by
+     * {@see self::testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties()},
+     * which uses ICU character PROPERTIES — genuinely independent of anything
+     * `Width` does.
+     *
+     * @return list<string>
+     */
+    private static function icuClusters(string $s): array
+    {
+        $out = [];
+        $i = 0;
+        $len = \strlen($s);
+        while ($i < $len) {
+            $next = 0;
+            $cluster = \grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
+            if (!\is_string($cluster) || $cluster === '') {
+                $cluster = $s[$i];
+            }
+            $out[] = $cluster;
+            $i += \strlen($cluster);
+        }
+        return $out;
     }
 }

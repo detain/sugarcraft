@@ -94,6 +94,37 @@ final class Width
 
     /**
      * Uncached width computation backing {@see string()}.
+     *
+     * A plain sum of {@see graphemeWidth()} over {@see graphemes()}, with NO
+     * cross-cluster state. That is the whole of it, and the reason it can be
+     * is E68: both sides now walk ICU's UAX#29 segmenter, so a ZWJ that
+     * actually joins two emoji is already INSIDE one cluster and is scored
+     * once, by that cluster's base.
+     *
+     * WHAT THIS USED TO SAY, in code rather than prose: a ZWJ look-ahead plus
+     * an `$inZwjSequence` flag charged the codepoint before a ZWJ 2 cells and
+     * then suppressed every emoji after it. WHAT IS TRUE NOW: that machine
+     * was written when `string()` split per CODEPOINT (pre-E68), where a ZWJ
+     * really did arrive as a sibling of the emoji it joined. Under cluster
+     * segmentation a bare ZWJ cluster means the opposite — UAX#29 broke
+     * BEFORE it, so nothing joined, and each neighbour renders on its own.
+     * WHY THE REMOVAL EARNS ITS PLACE: **under ICU segmentation** — the only
+     * segmentation this package supports, see the domain note below — the
+     * machine's two clauses had become pure loss.
+     * `Width::string("\t" . ZWJ . U+1F44D)` scored 0 for a run
+     * `Style::render()` lays out as 6 cells (E73, measured on PHP 8.3.6 with ext-intl
+     * ICU 74.2 / Unicode 15.1): the look-ahead zeroed the tab and the
+     * flag zeroed the emoji.
+     * Under-counting is the frame-corrupting direction here — the diff
+     * renderer paints one line per terminal row — so this is not a tidy-up.
+     *
+     * **Domain of "pure loss": the ICU path only.** With ext-intl absent
+     * {@see nextCluster()} degrades to a per-CODEPOINT splitter, and there
+     * the removed machine was load-bearing — it is what kept a real ZWJ
+     * sequence from being scored once per joined emoji. That branch is a
+     * documented seam, not a supported path; `candy-core/composer.json`
+     * hard-requires `ext-intl`. The measurement and the reasoning are at
+     * {@see nextCluster()}.
      */
     private static function compute(string $s): int
     {
@@ -102,29 +133,7 @@ final class Width
             return 0;
         }
         $width = 0;
-        $clusters = self::graphemes($clean);
-        $count = count($clusters);
-        $inZwjSequence = false;
-        for ($i = 0; $i < $count; $i++) {
-            $g = $clusters[$i];
-            $cp = self::firstCodepoint($g);
-            if ($cp === 0x200d) {
-                if ($i > 0 && !$inZwjSequence) {
-                    $prevCp = self::firstCodepoint($clusters[$i - 1]);
-                    if (self::isEmoji($prevCp)) {
-                        $width += 2;
-                    }
-                }
-                $inZwjSequence = true;
-                continue;
-            }
-            if ($inZwjSequence && self::isEmoji($cp)) {
-                continue;
-            }
-            $inZwjSequence = false;
-            if ($i + 1 < $count && self::firstCodepoint($clusters[$i + 1]) === 0x200d) {
-                continue;
-            }
+        foreach (self::graphemes($clean) as $g) {
             $width += self::graphemeWidth($g);
         }
         return $width;
@@ -760,6 +769,36 @@ final class Width
         return $out;
     }
 
+    /**
+     * The cluster starting at byte offset `$i`, via ICU's UAX #29 segmenter.
+     *
+     * **The `function_exists()` fallback below is a SEAM, not a supported
+     * path, and it is measurably wrong.** WHAT THE ABSENCE OF A NOTE HERE
+     * IMPLIED: that the two branches are interchangeable. WHAT IS TRUE NOW:
+     * they are not, and E73 widened the gap. The fallback splits per
+     * CODEPOINT (a UTF-8 lead-byte length decode), so every codepoint of a
+     * ZWJ sequence becomes its own "cluster" and is scored on its own. Before
+     * E73, `compute()`'s ZWJ state machine happened to compensate for exactly
+     * that; removing the machine — correct on the ICU path, where it only
+     * ever fired on clusters UAX #29 had already decided did NOT join — left
+     * this branch over-counting a joined sequence by 2 cells per extra emoji.
+     *
+     * Measured on PHP 8.3.6 under `-d disable_functions=grapheme_extract`
+     * (`function_exists('grapheme_extract') === false` confirmed in the same
+     * run), old class body vs new: U+1F469 ZWJ U+1F4BB scored 2 before and
+     * scores 4 now; the four-person family U+1F468 ZWJ U+1F469 ZWJ U+1F467
+     * ZWJ U+1F466 scored 2 before and scores 8 now — worst observed
+     * regression 6 cells, in the OVER-count direction. The branch was already
+     * wrong for Extend independently of E73: U+1F44D + U+1F3FD scores 4 here
+     * on both bodies against ICU's 2.
+     *
+     * WHY IT STILL EARNS ITS PLACE: `candy-core/composer.json` hard-requires
+     * `ext-intl`, so nothing reachable executes it — it is latent, not live,
+     * and it guarantees this class degrades to a defined answer rather than a
+     * fatal if that requirement is ever relaxed. Anyone who does relax it
+     * must fix this branch first; it is not merely approximate, it is wrong
+     * by a bounded amount recorded above.
+     */
     private static function nextCluster(string $s, int $i): string
     {
         if (function_exists('grapheme_extract')) {
@@ -788,8 +827,11 @@ final class Width
      * back to `mb_str_split()` on 8.3. That made `string()` measure per
      * CODEPOINT while `truncateAnsi()`/`takeAnsi()`/`dropAnsi()` measured per
      * CLUSTER, and the two disagreed on any multi-codepoint cluster that the
-     * ZWJ special-case in {@see compute()} did not happen to compensate — an
-     * emoji + skin-tone modifier being the common one. The consequence was
+     * ZWJ special-case then living in `compute()` did not happen to
+     * compensate — an emoji + skin-tone modifier being the common one. (That
+     * special case is GONE as of E73; do not go looking for it in
+     * {@see compute()}. This paragraph is history, kept because it is why
+     * both sides walk one splitter.) The consequence was
      * E68: `truncateAnsi()` correctly stopped BEFORE a cluster it could not
      * fit, then the caller scored the result with `string()` and got a number
      * over the budget it had just asked for. Both sides now walk one function,
@@ -943,6 +985,34 @@ final class Width
             || ($cp >= 0x30000 && $cp <= 0x3fffd);
     }
 
+    /**
+     * Emoji-block membership. **Dormant seam — no caller since E73.**
+     *
+     * WHAT IT WAS FOR: `compute()`'s removed ZWJ state machine called this
+     * twice — once on the codepoint BEFORE a ZWJ and once on the codepoint
+     * after — to decide which neighbours of a bare ZWJ cluster were emoji it
+     * should re-score. E73 deleted that machine (see {@see compute()}), which
+     * left this with zero callers repo-wide.
+     *
+     * WHY IT IS KEPT rather than deleted: it is the only "is this codepoint an
+     * emoji" predicate in the class, and a future emoji-presentation rule
+     * (VS16 promotion, say) wants exactly this shape.
+     *
+     * WHY IT IS NOT WIRED INTO {@see graphemeWidth()}: it is NOT a width
+     * predicate and must not be mistaken for one. The three ranges it covers
+     * that {@see isWide()} does not are mostly NARROW. Measured against ICU
+     * 74.2 / Unicode 15.1 via `IntlChar::PROPERTY_EAST_ASIAN_WIDTH`, counting
+     * assigned codepoints only: U+1FA00..U+1FAFF is 107 Wide/Fullwidth vs 98
+     * other, U+2600..U+26FF is 31 vs 225, U+2700..U+27BF is 15 vs 177.
+     * Charging 2 cells for every codepoint this returns true for would
+     * over-count 500 assigned codepoints and put the renderer in the
+     * frame-corrupting direction.
+     *
+     * PHPStan reports this as `method.unused` at level 5; that is accurate and
+     * is silenced by an `ignoreErrors` entry in `candy-core/phpstan.neon`
+     * naming this file, alongside the same treatment already given to
+     * `src/Concerns/Mutable.php`.
+     */
     private static function isEmoji(int $cp): bool
     {
         if ($cp < 0x1100) {
