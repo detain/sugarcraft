@@ -212,10 +212,14 @@ final class ChildStderrCaptureTest extends TestCase
         // reported as a capture.
         //
         // NOTHING IN THE TREE EXERCISES THIS, and that is stated rather than
-        // discovered later: a census of all of `tests/` before and after the
-        // change moved ZERO real sites, because that one site is settled as
-        // `discarded` on the command-string branch before its spec is ever
-        // read. These fixtures are the only thing keeping the branch honest.
+        // discovered later: a per-site census of all of `tests/` was run
+        // before and after each of the two widenings - the bracket check and
+        // the member check below it - and ZERO real sites moved either time,
+        // because that one site is settled as `discarded` on the
+        // command-string branch before its spec is ever read. The census
+        // harness was itself checked against the fixture cases below, which
+        // DO move, before its zero was believed. These fixtures are the only
+        // thing keeping the branch honest.
         $this->assertSame(
             ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
             $one('proc_open("ls", [1 => ["pipe","w"], 2 => $devNull("w")], $p);')['shape'],
@@ -231,6 +235,46 @@ final class ChildStderrCaptureTest extends TestCase
         $this->assertSame(
             ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
             $one('proc_open("ls", [2 => array("pipe","w")], $p);')['shape'],
+        );
+
+        // AND AN ENTRY THAT IS A LITERAL ARRAY OF NON-LITERALS, which the
+        // first version of the rule above claimed to cover and did not. Its
+        // doc-block said "an entry that is not an inline literal array is
+        // unclassified" while the code only checked the BRACKETS: the
+        // decision underneath is `str_contains($entry, '/dev/null')` over the
+        // entry's SOURCE TEXT, so a member that is not its own value makes
+        // that search meaningless in the direction that waves an offender
+        // through. `['file', $devNull, 'w']` is the nearest sibling of
+        // `armWatchdog()`'s live site and read `captured` for a full round.
+        //
+        // All four spellings of "the text is not the value" are pinned,
+        // because each fails the substring search for a different reason and
+        // any one of them could be re-admitted by a narrower fix.
+        foreach ([
+            'a variable member' => '$devNull',
+            'a class constant member' => 'self::DEV_NULL',
+            'a global constant member' => 'DEV_NULL',
+            'a concatenated member' => "'/dev' . '/null'",
+            'an interpolated member' => '"/dev/{$name}"',
+        ] as $why => $member) {
+            $this->assertSame(
+                ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+                $one('proc_open("ls", [2 => ["file", ' . $member . ', "w"]], $p);')['shape'],
+                $why . ' is not a capture - the scanner is deciding on source text, and this '
+                    . "member's text is not its value",
+            );
+        }
+
+        // THE LIMIT OF THAT RULE, named here rather than left to be
+        // discovered: both of these are all-literal, so they are judged by
+        // the `/dev/null` text alone and come back `captured`. `redirect`
+        // merges fd 2 into fd 1 and this scanner does not model where fd 1
+        // went; a real path is a file the test may or may not read back.
+        // Closing either needs fd-1 destination modelling, and nothing in the
+        // tree exercises it.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [1 => ["pipe","w"], 2 => ["redirect", 1]], $p);')['shape'],
         );
 
         // THE OTHER POLARITY, because a rule that answers `unclassified` for

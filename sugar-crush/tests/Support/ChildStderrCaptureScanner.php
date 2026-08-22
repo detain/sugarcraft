@@ -340,18 +340,42 @@ final class ChildStderrCaptureScanner
      * "I cannot tell". A guard that quietly ignores what it cannot parse has
      * a hole shaped exactly like the next defect.
      *
+     * AND THE SAME IS TRUE OF THE MEMBERS, which the first version of this
+     * paragraph asserted and the first version of the code did not do. It
+     * closed `2 => $devNull('w')` and left `2 => ['file', $devNull, 'w']`
+     * reading `captured` - the nearest sibling of the very site it was
+     * written for, and the same wave-a-real-offender-through polarity the
+     * paragraph above condemns. Measured on PHP 8.3.6 against the code as it
+     * then stood: `['file', $devNull, 'w']`, `['file', self::DEV_NULL, 'w']`,
+     * `['file', DEV_NULL, 'w']` and `['file', '/dev' . '/null', 'w']` all
+     * came back `captured`, because the decision was `str_contains($entry,
+     * '/dev/null')` over the entry's SOURCE TEXT and none of those four spell
+     * it. {@see fdTwoEntryIsAllLiteral()} is the fix: every member must be a
+     * quoted string or a number, or the answer is again "I cannot tell".
+     *
+     * WHAT STILL READS `captured` AND IS MEANT TO, so the limit is named
+     * rather than discovered: `2 => ['redirect', 1]` merges fd 2 into fd 1
+     * and this scanner does not model where fd 1 went, and
+     * `2 => ['file', '/tmp/whatever.log', 'w']` is a real file the test may
+     * or may not read back. Both are all-literal, both are judged by the
+     * `/dev/null` text alone, and closing either needs fd-1 destination
+     * modelling that nothing in the tree currently exercises.
+     *
      * MEASURED BEFORE IT WAS WRITTEN, per the rule that a prescription is a
      * hypothesis - and the measurement corrected the sentence that stood here
-     * first. A per-site census of all 95 spawn sites under `tests/` was taken
-     * with the old decision and with this one: ZERO of them moved. Not one,
-     * as the first draft of this paragraph claimed. `armWatchdog()`'s site -
-     * the only non-literal fd-2 entry anywhere in `tests/` - reads
-     * `discarded` on BOTH sides, because its command string carries
-     * `>/dev/null 2>&1` and {@see classifyProcOpen()} settles that on an
-     * earlier branch before any descriptor spec is consulted. So the one
+     * first. A per-site census of EVERY spawn site under `tests/` was taken
+     * with the old decision and with each of the two widenings: ZERO sites
+     * moved either time. Not one, as the first draft of this paragraph
+     * claimed. No total is written down here on purpose - a cardinality
+     * measured over `tests/` in one lane's worktree is wrong by the next
+     * merge, and the load-bearing half of that measurement is the zero.
+     * `armWatchdog()`'s site - the only non-literal fd-2 entry anywhere in
+     * `tests/` - reads `discarded` on every side, because its command string
+     * carries `>/dev/null 2>&1` and {@see classifyProcOpen()} settles that on
+     * an earlier branch before any descriptor spec is consulted. So the one
      * occurrence this change was written for never reaches this method at
      * all. It closes the SHAPE and adds no exemption row anywhere, which is
-     * also why it needed a synthetic fixture to be provable: there is nothing
+     * also why it needed synthetic fixtures to be provable: there is nothing
      * in the tree that exercises it.
      */
     private static function classifySpec(string $spec): string
@@ -361,11 +385,51 @@ final class ChildStderrCaptureScanner
         }
 
         $entry = self::fdTwoEntry($spec);
-        if ($entry === null) {
+        if ($entry === null || !self::fdTwoEntryIsAllLiteral($entry)) {
             return self::SHAPE_UNCLASSIFIED;
         }
 
         return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /**
+     * Whether every member of fd 2's entry is a quoted string or a number.
+     *
+     * THE DECISION BELOW IS MADE ON SOURCE TEXT, which is only sound when the
+     * text IS the value. `['file', $devNull, 'w']` is an inline literal array
+     * whose second member is a variable; searching its source for
+     * `/dev/null` answers "no" and the entry is then reported as a capture,
+     * which is the polarity that hides a discard. A concatenation, a class
+     * constant and a global constant fail the same way. So a member that is
+     * not its own value makes the whole entry unreadable.
+     *
+     * Lexed rather than pattern-matched: a `2 => ['file', "/dev/{$name}", 'w']`
+     * is a T_ENCAPSED_AND_WHITESPACE run and not a T_CONSTANT_ENCAPSED_STRING,
+     * so interpolation is rejected without needing a rule of its own.
+     */
+    private static function fdTwoEntryIsAllLiteral(string $entry): bool
+    {
+        $allowed = [\T_CONSTANT_ENCAPSED_STRING, \T_LNUMBER, \T_DNUMBER];
+
+        foreach (\token_get_all('<?php ' . $entry . ';') as $token) {
+            if (\is_string($token)) {
+                if ($token === ',' || $token === ';') {
+                    continue;
+                }
+
+                return false;
+            }
+
+            if (\in_array($token[0], [\T_OPEN_TAG, \T_WHITESPACE, \T_COMMENT], true)) {
+                continue;
+            }
+
+            if (!\in_array($token[0], $allowed, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -377,6 +441,12 @@ final class ChildStderrCaptureScanner
      * this deliberately does not accept) fail rather than pass. Widening it
      * to a shape is a decision somebody should make with a census in hand,
      * not something a scanner should assume.
+     *
+     * IT IS NOT THE WHOLE READABILITY TEST, and reading it as one is how
+     * `['file', $devNull, 'w']` passed for a round. This method answers "is
+     * fd 2's entry an inline literal array"; whether its MEMBERS are literal
+     * is {@see fdTwoEntryIsAllLiteral()}'s question, and both have to be yes
+     * before the `/dev/null` text search below means anything.
      */
     private static function fdTwoEntry(string $spec): ?string
     {
