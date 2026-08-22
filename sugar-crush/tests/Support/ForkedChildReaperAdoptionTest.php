@@ -438,8 +438,19 @@ final class ForkedChildReaperAdoptionTest extends TestCase
                     . 'disagree about the same directory.',
             );
 
+            // Asserted rather than left to the iterator: a prefix naming a
+            // directory that no longer exists is a rotted row, and a guard
+            // that ERRORS on it (UnexpectedValueException out of
+            // RecursiveDirectoryIterator) reports a broken test rather than a
+            // stale claim, which is the wrong message to leave for the reader.
+            $directory = $root . '/' . rtrim($prefix, '/');
+            $this->assertDirectoryExists(
+                $directory,
+                "{$prefix} is recorded in OUT_OF_SCOPE but no such directory exists under tests/.",
+            );
+
             $offenders = [];
-            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/' . rtrim($prefix, '/')));
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
             foreach ($files as $file) {
                 /** @var \SplFileInfo $file */
                 if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
