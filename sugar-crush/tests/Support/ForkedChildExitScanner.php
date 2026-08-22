@@ -157,25 +157,110 @@ final class ForkedChildExitScanner
             return self::SHAPE_UNCLASSIFIED;
         }
 
-        $body = self::text($tokens, $openBrace, $closeBrace);
+        // THE LAST STATEMENT OF THE BRANCH, not the branch's whole text.
+        // Measured, and it cost a mutation: with the terminator merely
+        // SEARCHED FOR anywhere in the body, replacing the real
+        // `ForkedChild::exitNow(0)` at the end of
+        // `ParallelToolCallsTest::testAGroupWhoseForksAllFail...`'s child with
+        // a plain `exit(0)` left that site still reading `exitNow`, because
+        // the same branch contains a NESTED
+        // `if ($probe === 0) { ForkedChild::exitNow(0); }` a dozen lines
+        // earlier. The guard was green over the exact defect it exists for.
+        [$tail, $terminator] = self::lastStatement($tokens, $openBrace, $closeBrace);
 
-        if (\str_contains($body, 'ForkedChild::exitNow')) {
+        if ($tail === null) {
+            // An empty child branch leaves by falling out of the `if`.
+            return self::SHAPE_FALLS_THROUGH;
+        }
+
+        // A branch ending in a BLOCK (`try {}`/`foreach {}`/a bare `{}`)
+        // rather than in a statement: control reaches the closing brace by
+        // some path this scanner is not going to model. Named rather than
+        // waved through - a shape the guard cannot read is a hole in the
+        // guard, not a licence for the site.
+        if ($terminator !== ';') {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        if (\str_contains($tail, 'ForkedChild::exitNow')) {
             return self::SHAPE_EXIT_NOW;
         }
 
         foreach ($never as $method) {
-            if (\str_contains($body, '$this->' . $method . '(') || \str_contains($body, 'self::' . $method . '(')) {
+            if (\str_contains($tail, '$this->' . $method . '(') || \str_contains($tail, 'self::' . $method . '(')) {
                 return self::SHAPE_NEVER_HELPER;
             }
         }
 
-        for ($i = $openBrace + 1; $i < $closeBrace; $i++) {
-            if (\is_array($tokens[$i]) && $tokens[$i][0] === \T_EXIT) {
-                return self::SHAPE_BARE_EXIT;
-            }
+        if (\preg_match('/\b(exit|die)\s*[(;]/i', $tail) === 1) {
+            return self::SHAPE_BARE_EXIT;
         }
 
         return self::SHAPE_FALLS_THROUGH;
+    }
+
+    /**
+     * The final statement of a `{ ... }` block, as source text, plus the
+     * character that ended it (`;`, or `}` when the block's last thing was
+     * itself a block).
+     *
+     * Statement boundaries are counted at the block's OWN nesting depth only,
+     * so nothing inside a nested block can be mistaken for the branch's last
+     * word.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     * @return array{0:?string,1:string}
+     */
+    private static function lastStatement(array $tokens, int $openBrace, int $closeBrace): array
+    {
+        $depth = 0;
+        $start = $openBrace + 1;
+        /** @var array{0:string,1:string}|null $last */
+        $last = null;
+
+        for ($i = $openBrace + 1; $i < $closeBrace; $i++) {
+            $text = self::tokenText($tokens[$i]);
+            $isPunct = \is_string($tokens[$i]);
+
+            if ($isPunct && $text === '{') {
+                $depth++;
+
+                continue;
+            }
+            if (\is_array($tokens[$i])
+                && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                $depth++;
+
+                continue;
+            }
+            if ($isPunct && $text === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    $slice = \trim(self::text($tokens, $start, $i));
+                    if ($slice !== '') {
+                        $last = [$slice, '}'];
+                    }
+                    $start = $i + 1;
+                }
+
+                continue;
+            }
+            if ($isPunct && $text === ';' && $depth === 0) {
+                $slice = \trim(self::text($tokens, $start, $i));
+                if ($slice !== '') {
+                    $last = [$slice, ';'];
+                }
+                $start = $i + 1;
+            }
+        }
+
+        // Anything after the final boundary is an unterminated fragment; the
+        // last COMPLETE statement is what decides how the branch leaves.
+        if ($last === null) {
+            return [null, ''];
+        }
+
+        return [$last[0], $last[1]];
     }
 
     /**

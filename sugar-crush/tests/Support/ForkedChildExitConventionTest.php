@@ -161,6 +161,35 @@ final class ForkedChildExitConventionTest extends TestCase
         $mystery = $shape('    $pid = pcntl_fork();' . "\n" . '    if ($pid > 0) { usleep(1); }' . "\n");
         $this->assertSame(ForkedChildExitScanner::SHAPE_UNCLASSIFIED, $mystery[0]['shape']);
 
+        // THE MUTATION THAT GOT THROUGH, kept as a fixture. A branch whose
+        // LAST statement is a plain exit is unsafe even though a nested
+        // branch inside it leaves correctly. Searching the branch's whole
+        // text for the terminator - which is what the first version of the
+        // scanner did - reported this as `exitNow`, and the census stayed
+        // green with the defect reintroduced into
+        // ParallelToolCallsTest by hand.
+        $masked = $shape(
+            '    $pid = pcntl_fork();' . "\n"
+            . '    if ($pid === 0) {' . "\n"
+            . '        $probe = pcntl_fork();' . "\n"
+            . '        if ($probe === 0) { ForkedChild::exitNow(0); }' . "\n"
+            . '        exit(0);' . "\n"
+            . '    }' . "\n",
+        );
+        $this->assertSame(
+            ForkedChildExitScanner::SHAPE_BARE_EXIT,
+            $masked[0]['shape'],
+            'a nested safe exit masked the branch\'s own plain exit',
+        );
+
+        // A branch that ends in a BLOCK rather than a statement is named, not
+        // waved through.
+        $block = $shape(
+            '    $pid = pcntl_fork();' . "\n"
+            . '    if ($pid === 0) { try { ForkedChild::exitNow(0); } catch (\\Throwable $e) {} }' . "\n",
+        );
+        $this->assertSame(ForkedChildExitScanner::SHAPE_UNCLASSIFIED, $block[0]['shape']);
+
         $never = ForkedChildExitScanner::scan(
             "<?php\nclass F {\n"
             . '  public function t(): void { $pid = pcntl_fork(); if ($pid === 0) { $this->go(); } }' . "\n"
