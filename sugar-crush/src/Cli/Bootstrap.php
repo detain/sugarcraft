@@ -5228,8 +5228,30 @@ final class Bootstrap
      * ORDERING is what makes the summary reachable at all: {@see chat()} calls
      * {@see sessionStore()} early and reads {@see launchNotices()} last, so a
      * notice recorded here is in hand by the time the transcript is seeded.
-     * {@see \SugarCraft\Crush\Cli\Subcommands::doctorProbes()} passes
-     * `prune: false` and so never reaches this method.
+     *
+     * THE NON-CHAT CALLERS, surveyed in full — an earlier version of this
+     * paragraph named only the doctor probe, which made the survey look
+     * complete when it was one of three. {@see sessionStore()} is NOT memoized;
+     * it builds a fresh store and prunes on every call, so every caller is a
+     * caller of this method. There are four:
+     *
+     *  - {@see chat()} — the production path, and the only one that reads
+     *    {@see launchNotices()} back.
+     *  - {@see \SugarCraft\Crush\Cli\Subcommands::doctorProbes()} — passes
+     *    `prune: false`, so it never reaches this method at all.
+     *  - {@see \SugarCraft\Crush\Cli\Subcommands::sessionList()} and
+     *    {@see \SugarCraft\Crush\Cli\Subcommands::sessionDelete()} — both take
+     *    the default `prune: true`, so on a retention-enabled box
+     *    `sugarcrush session list` DOES record a transcript row here, into a
+     *    static list that subcommand never reads and the process then discards.
+     *    Inert rather than wrong — the stderr half of the seam still prints,
+     *    which is the half a subcommand's user is reading, and the orphaned row
+     *    costs one bounded string — but it is the shape to watch: if a
+     *    subcommand ever grows a transcript of its own, this is where a launch
+     *    notice about a prune would arrive in it uninvited. Not fixed here
+     *    because suppressing it means either memoizing the store or threading a
+     *    "who is asking" flag through the accessor, and both are larger changes
+     *    than the thing they would prevent.
      *
      * The summary's trailing `:` is gone with the migration — the seam formats
      * every message as `sugarcrush: <message>.` — and the detail rows below

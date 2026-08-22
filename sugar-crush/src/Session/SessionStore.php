@@ -541,8 +541,21 @@ final class SessionStore
      *
      * Retention deletes conversations. Returning only a count made the one
      * caller discard it and print nothing, so a user who enabled retention
-     * had no way to learn WHICH sessions went — this is what
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::sessionStore()} reports on stderr.
+     * had no way to learn WHICH sessions went.
+     *
+     * WHAT THIS USED TO SAY about the destination: "this is what
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::sessionStore()} reports on
+     * stderr".
+     * WHAT IS TRUE NOW: since round 42 the caller splits this report across two
+     * channels. The COUNT goes to the launch-notice seam and reaches both the
+     * transcript and stderr; the per-session rows THIS method returns are the
+     * half that still goes to stderr alone.
+     * WHY THAT STILL EARNS THE SHAPE BELOW: the split is the reason a full row
+     * per session is worth returning at all. One transcript row per deleted
+     * session would be a per-entry fan-out into a list the model is re-sent
+     * every turn, so the transcript carries the aggregate and stderr carries
+     * this — the complete, unclipped record, with the id, the last-used stamp
+     * and the message count the user needs to recognise what went.
      *
      * @return array<int, array{id: string, name: ?string, updated_at: string, messages: int}>
      */

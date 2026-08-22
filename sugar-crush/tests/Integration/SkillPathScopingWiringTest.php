@@ -163,10 +163,32 @@ final class SkillPathScopingWiringTest extends TestCase
      * `Edit` also declares a `maxBytes`, but both hand the tracker a NULL
      * budget — their result is a one-line success message with no cap to spend
      * inside — so a roster keyed off "declares a cap" would make a claim about
-     * them their code does not make. {@see shippedNudgeBudgets()} reads the
-     * divisor out of the `intdiv($this-><cap>, <n>)` in each tool's own source,
-     * so a sixth capped tool joining the seam is covered without being named,
-     * and a tool that stops spending a share drops out.
+     * them their code does not make. {@see nudgeSpendRoster()} reads the
+     * divisor out of the `intdiv($this-><cap>, <n>)` in each tool's own source.
+     *
+     * WHAT THIS PARAGRAPH USED TO CLAIM FOR THAT DERIVATION: "a sixth capped
+     * tool joining the seam is covered without being named".
+     * WHAT IS TRUE NOW, and what was already true when the sentence was
+     * written: it is false in both directions, and round 42's review is what
+     * caught it. The derivation was a single regex with `continue` on
+     * non-match, so a new tool that spelled its budget any other way was
+     * dropped SILENTLY and the hard-coded `assertSame` roster below stayed
+     * green with that tool unguarded; MEASURED on PHP 8.3.6 against six
+     * plausible spellings, only two matched (the canonical ternary and the same
+     * expression inside a `match`) — a hoisted local, a named-argument helper,
+     * an `intdiv(self::CAP, …)` on a class constant and a plain `/` division
+     * all missed. And a tool that DID match made the roster four entries and
+     * red the `assertSame`, so it had to be named after all.
+     * WHY THE DERIVATION STILL EARNS ITS PLACE: only the SILENT half was the
+     * defect. {@see nudgeSpendRoster()} now fails loudly on any nudge-spending
+     * call it cannot read — an unparsable budget is an assertion failure naming
+     * the expression, not a `continue` — so the one outcome that cannot happen
+     * any more is the green suite with an uncovered tool. Being named in the
+     * roster below is then a deliberate, one-line acknowledgement rather than
+     * the thing that decides whether the tool is checked at all; the two
+     * buckets ({@see testTheToolsThatPassNoNudgeBudgetSpendNothingByDesign()}
+     * for the null-budget half) together account for every tool that holds the
+     * tracker, so nothing can leave the roster unnoticed either.
      *
      * THE THRESHOLD IS ASKED OF THE TRACKER at runtime rather than written
      * down, which is the discipline round 41 established for exactly these
@@ -187,7 +209,7 @@ final class SkillPathScopingWiringTest extends TestCase
      */
     public function testEveryShippedNudgeBudgetClearsTheTrackerCeiling(): void
     {
-        $shipped = $this->shippedNudgeBudgets();
+        $shipped = $this->nudgeSpendRoster()['spend'];
 
         self::assertSame(
             ['Glob', 'Grep', 'Read'],
@@ -249,7 +271,7 @@ final class SkillPathScopingWiringTest extends TestCase
             . 'derivations no longer describes the tracker',
         );
 
-        foreach ($this->shippedNudgeBudgets() as $tool => $spend) {
+        foreach ($this->nudgeSpendRoster()['spend'] as $tool => $spend) {
             self::assertGreaterThanOrEqual(
                 $floor,
                 $spend['budget'],
@@ -268,8 +290,46 @@ final class SkillPathScopingWiringTest extends TestCase
     }
 
     /**
+     * The tools that hold the tracker and deliberately spend NOTHING on it.
+     *
+     * The complement of the two ceiling guards above, and the reason their
+     * three-name roster is a statement rather than an accident. Every tool
+     * {@see Bootstrap::tools()} hands a `SkillPathNudge` lands in exactly one
+     * of the two buckets {@see nudgeSpendRoster()} returns — a budget it can
+     * read, or a call that passes no budget at all — and anything that is
+     * neither is an assertion failure inside the derivation itself. So a new
+     * nudge-carrying tool cannot join the seam and be counted by no guard: it
+     * either reds this list, reds the roster above, or reds the parse.
+     *
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Edit} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Write} are here because their
+     * result is a one-line success message — there is no output cap to spend a
+     * fraction of, so `forPath($path)` is called with the budget argument
+     * omitted and the tracker's own ceiling stands. `Edit` declares a
+     * `maxBytes` all the same, which is exactly why the roster cannot be keyed
+     * off "declares a cap".
+     */
+    public function testTheToolsThatPassNoNudgeBudgetSpendNothingByDesign(): void
+    {
+        $roster = $this->nudgeSpendRoster();
+
+        self::assertSame(
+            ['Edit', 'Write'],
+            $roster['unbudgeted'],
+            'the set of nudge-carrying tools that pass no budget has changed; a tool that gained an '
+            . 'output cap belongs in the ceiling guards above, and one that lost its budget has left them',
+        );
+
+        self::assertSame(
+            [],
+            array_intersect($roster['unbudgeted'], array_keys($roster['spend'])),
+            'a tool cannot be in both buckets',
+        );
+    }
+
+    /**
      * What each Bootstrap-built tool will really spend on a nudge, keyed by
-     * class short name.
+     * class short name, plus the ones that spend nothing.
      *
      * The cap comes off the CONSTRUCTED INSTANCE — a Bootstrap that started
      * passing an explicit cap and a tool whose default constant dropped are the
@@ -278,11 +338,21 @@ final class SkillPathScopingWiringTest extends TestCase
      * for the budget, which means "no caller cap, the class ceiling stands", and
      * is modelled as an unbounded budget rather than as zero.
      *
-     * @return array<string, array{cap: int, divisor: int, budget: int}>
+     * NOTHING IS DROPPED SILENTLY, which is the whole difference between this
+     * and the version round 42's review took apart. A tool that holds a
+     * non-null tracker gets exactly three outcomes: it calls the tracker with a
+     * budget this can read (the `spend` bucket), it calls the tracker with no
+     * budget argument at all (`unbudgeted`), or the derivation FAILS naming the
+     * expression it could not read. There is deliberately no `continue` for the
+     * third case: a tool quietly leaving the roster is precisely how the two
+     * ceiling guards above would go on passing while covering less.
+     *
+     * @return array{spend: array<string, array{cap: int, divisor: int, budget: int}>, unbudgeted: list<string>}
      */
-    private function shippedNudgeBudgets(): array
+    private function nudgeSpendRoster(): array
     {
         $spend = [];
+        $unbudgeted = [];
 
         foreach (Bootstrap::tools($this->tempDir . '/repo') as $tool) {
             $class = new \ReflectionClass($tool);
@@ -290,32 +360,47 @@ final class SkillPathScopingWiringTest extends TestCase
                 continue;
             }
 
+            $short = $class->getShortName();
             $file = $class->getFileName();
-            if ($file === false) {
+            self::assertIsString($file, $short . ' has no source file to read its nudge budget out of');
+
+            $arguments = self::nudgeCallArguments((string) file_get_contents($file));
+            self::assertNotNull(
+                $arguments,
+                $short . ' holds a SkillPathNudge but never calls forPath()/forPaths(): either the '
+                . 'tracker is wired to a tool that cannot use it, or the call moved somewhere this '
+                . 'derivation cannot see, and either way the guards here have stopped covering it',
+            );
+
+            if (count((array) $arguments) < 2) {
+                $unbudgeted[] = $short;
                 continue;
             }
 
-            // The budget argument of the tool's own forPath()/forPaths() call.
-            // `[^;]*?` keeps the match inside one statement, so a later,
-            // unrelated intdiv() cannot be read as this call's divisor.
-            $matched = preg_match(
-                '/skillNudge\?->forPaths?\([^;]*?intdiv\(\$this->(\w+),\s*(\d+)\)/s',
-                (string) file_get_contents($file),
-                $captured,
+            $budgetSource = ((array) $arguments)[1];
+            self::assertSame(
+                1,
+                preg_match('/intdiv\(\$this->(\w+),\s*(\d+)\)/', $budgetSource, $captured),
+                sprintf(
+                    '%s spends a nudge budget written in a shape this derivation cannot read: `%s`. '
+                    . 'Leaving it out is not an option — a tool dropped here is a tool the ceiling '
+                    . 'guards stop covering while staying green, which is the defect round 42 found. '
+                    . 'Teach nudgeSpendRoster() the new shape, or pass no budget argument if the tool '
+                    . 'means to spend nothing.',
+                    $short,
+                    trim(preg_replace('/\s+/', ' ', $budgetSource) ?? $budgetSource),
+                ),
             );
-            if ($matched !== 1) {
-                continue;
-            }
 
             $capProperty = new \ReflectionProperty($tool, $captured[1]);
             $capProperty->setAccessible(true);
             $cap = $capProperty->getValue($tool);
-            self::assertIsInt($cap, $class->getShortName() . '::$' . $captured[1] . ' is not an int cap');
+            self::assertIsInt($cap, $short . '::$' . $captured[1] . ' is not an int cap');
 
             $divisor = (int) $captured[2];
             self::assertGreaterThan(0, $divisor);
 
-            $spend[$class->getShortName()] = [
+            $spend[$short] = [
                 'cap' => $cap,
                 'divisor' => $divisor,
                 'budget' => $cap > 0 ? intdiv($cap, $divisor) : PHP_INT_MAX,
@@ -323,8 +408,83 @@ final class SkillPathScopingWiringTest extends TestCase
         }
 
         ksort($spend);
+        sort($unbudgeted);
 
-        return $spend;
+        return ['spend' => $spend, 'unbudgeted' => $unbudgeted];
+    }
+
+    /**
+     * The argument list of the FIRST `skillNudge?->forPath(…)` /
+     * `forPaths(…)` call in $source, as top-level source fragments.
+     *
+     * A balanced scan rather than a regex over the whole statement, because the
+     * regex is what failed: `[^;]*?intdiv\(\$this->(\w+),\s*(\d+)\)` recognised
+     * one spelling of the budget and answered "not a spender" to every other,
+     * with no way for the caller to tell that apart from "no such call". This
+     * answers the narrower question the caller can act on — WHAT the arguments
+     * are — and leaves judging them to {@see nudgeSpendRoster()}, which can
+     * then fail instead of shrugging.
+     *
+     * Quoted spans are skipped so a comma inside a string literal does not
+     * split an argument. A tool with two nudge calls is read at its first;
+     * there is no such tool today and a second one would need this widened.
+     *
+     * @return list<string>|null null when the tool never calls the tracker at all
+     */
+    private static function nudgeCallArguments(string $source): ?array
+    {
+        if (preg_match('/skillNudge\?->forPaths?\(/', $source, $found, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        $depth = 1;
+        $arguments = [];
+        $current = '';
+        $quote = '';
+        $length = strlen($source);
+
+        for ($i = (int) $found[0][1] + strlen((string) $found[0][0]); $i < $length; $i++) {
+            $character = $source[$i];
+
+            if ($quote !== '') {
+                $current .= $character;
+                if ($character === '\\' && $i + 1 < $length) {
+                    $current .= $source[++$i];
+                } elseif ($character === $quote) {
+                    $quote = '';
+                }
+                continue;
+            }
+
+            if ($character === "'" || $character === '"') {
+                $quote = $character;
+                $current .= $character;
+                continue;
+            }
+
+            if ($character === '(' || $character === '[') {
+                $depth++;
+            } elseif ($character === ')' || $character === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    break;
+                }
+            }
+
+            if ($depth === 1 && $character === ',') {
+                $arguments[] = trim($current);
+                $current = '';
+                continue;
+            }
+
+            $current .= $character;
+        }
+
+        if (trim($current) !== '') {
+            $arguments[] = trim($current);
+        }
+
+        return $arguments;
     }
 
     /**

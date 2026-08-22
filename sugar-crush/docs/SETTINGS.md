@@ -291,14 +291,30 @@ The three warnings this paragraph used to name as still-stderr-only — an
 unusable provider, a skipped hook file, a rejected permission pattern — have
 since migrated through the same seam, along with the agent-preset degradations,
 the refused project directories, the skipped skill files and the empty tool set:
-fourteen call sites in total. The rule that decided the split is on
+**fifteen** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
+src/Cli/Bootstrap.php`). The rule that decided the split is on
 `Bootstrap::warnPermissionConfigInTranscript()` — a warning earns a transcript
 row iff it names something **the session can no longer do**. Warnings that
 report a malformed config entry without the session being diminished
 (`trustedProjectHooks[2] is not a project path`, `permissionMode in config.json
-is empty so it was ignored`, `retention removed 3 sessions`) stay on stderr,
-because a transcript row per bad config entry is how a useful notice becomes a
-wall you scroll past.
+is empty so it was ignored`) stay on stderr, because a transcript row per bad
+config entry is how a useful notice becomes a wall you scroll past.
+
+**What this paragraph used to say, and what changed.** The count above read
+*fourteen*, and the stderr-only list above named a third example: `retention
+removed 3 sessions`. Both are now wrong, and the second one was the more
+interesting mistake — it was the one entry on that list whose subject was data
+the launch had **destroyed** rather than a setting it had declined to honour.
+Read against the rule the list is decided by, a prune does name something the
+session can no longer do: those conversations cannot be resumed, branched,
+renamed or rewound, and `/resume` and `sugarcrush session list` come back
+shorter than the user left them. So the **summary** migrated in round 42 and is
+now the fifteenth call site. The reason the example still earns a mention is the
+*half* of it that did not move: the **per-session ids** stay on stderr alone,
+because one row per deleted session is exactly the per-entry fan-out into a list
+re-sent to the model every turn that the cap below exists to refuse. The
+transcript gets `retention removed 3 unnamed sessions untouched for 30+ days
+(ids on stderr)`; stderr gets that line and the ids.
 
 The transcript copy is capped — 24 rows and 400 characters per row, see
 `Bootstrap::LAUNCH_NOTICE_LIMIT`. The stderr copy is never clipped and never
