@@ -16,3 +16,12 @@ parameters:
         -
             identifier: trait.unused
             path: src/Concerns/Mutable.php
+        # Width::isEmoji() lost its only two callers when E73 removed
+        # compute()'s ZWJ state machine. It is kept as a documented seam
+        # (rule: dormant code is wired or documented, never deleted) and
+        # deliberately NOT wired into graphemeWidth(), because its ranges are
+        # majority-NARROW by East_Asian_Width. The reasoning lives on the
+        # method's docblock; this entry is what keeps CI's phpstan job green.
+        -
+            identifier: method.unused
+            path: src/Util/Width.php

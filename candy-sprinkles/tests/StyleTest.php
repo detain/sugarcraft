@@ -1158,18 +1158,43 @@ final class StyleTest extends TestCase
      *
      * **WHAT THAT PARAGRAPH SAID vs WHAT IS TRUE.** "0 unexplained" held over
      * the alphabet that census was drawn from, and that alphabet had no ZWJ in
-     * it. Re-run at `ae30fee5` over 200,000 strings from an alphabet that DOES
-     * include U+200D, the residue split two ways: 3,862 under-runs of the
-     * documented reclustering shape, and **989 OVER-runs the census could not
-     * have seen**, worst case `Z \t ZWJ U+1F469 U+1F44D` measured 1 cell and
-     * laid out 9. Those were E73 — a Control before a ZWJ — fixed in
-     * `Width::compute()` and pinned by
+     * it. Over an alphabet that DOES include U+200D the residue splits two
+     * ways, and one of the two is a direction the original census never looked
+     * for.
+     *
+     * **The re-census, stated so it can be re-run.** Generator: the alphabet
+     * declared inside
      * {@see self::testRenderingThroughADefaultStyleNeverLaysOutMoreCellsThanWidthPromised()}
-     * below, which now measures 0 over-runs on the same corpus. WHY THE
-     * PARAGRAPH STAYS: its tab-WIDTH conclusion is still correct and still the
-     * reason `TAB_WIDTH` is shared. What decayed was the word "unexplained",
-     * which was a property of one sample's alphabet reported as a property of
-     * the residue.
+     * below, verbatim; `mt_srand(20260822)`; length `1 + mt_rand(0, 5)`
+     * symbols; 200,000 trials; `Width::string($s)` compared against
+     * `Width::string(Style::new()->render($s))`. Measured on PHP 8.3.6,
+     * ext-intl ICU 74.2 / Unicode 15.1. That is the SAME generator the test
+     * below runs, differing only in trial count (200,000 here, 20,000 there).
+     *
+     * | at commit | over-runs | under-runs |
+     * |---|---|---|
+     * | `ae30fee5` (pre-E73) | **461**, worst 8 cells | 1,669, worst 4 cells |
+     * | E73 fixed | **0** | 1,670, worst 4 cells |
+     *
+     * Every string in both buckets, in both directions, at both commits,
+     * contains a `\t` — the no-tab count is 0 in all four cells of that table.
+     * The worst over-run the census drew is `\t ZWJ U+1F4BB U+1F4BB`, measured
+     * 0 cells and laid out 8; the `Z \t ZWJ U+1F469 U+1F44D` case pinned as an
+     * exact value in the test below is the same magnitude (1 measured, 9 laid
+     * out).
+     *
+     * **WHAT THIS PARAGRAPH ITSELF USED TO SAY:** "3,862 under-runs" and "989
+     * OVER-runs". Neither is reproducible from any generator this file
+     * defines — re-running the committed generator yields 1,669 and 461 — and
+     * the paragraph recorded no seed and no length bound, so a reader could
+     * only guess at the corpus. That is the same defect the paragraph above it
+     * is warning about, committed in the act of warning about it. The figures
+     * are replaced with measured ones and the generator is now named.
+     *
+     * WHY THE PARAGRAPH STAYS: the tab-WIDTH conclusion is still correct and
+     * still the reason `TAB_WIDTH` is shared. What decayed was the word
+     * "unexplained", which was a property of one sample's alphabet reported as
+     * a property of the residue.
      *
      * **Domain: the DEFAULT tab width only.** A `Style` given a non-default
      * `tabWidth()` re-opens the gap on purpose; that is asserted separately
@@ -1320,9 +1345,22 @@ final class StyleTest extends TestCase
         }
         $this->assertSame([], $overRuns, 'render() laid out more cells than Width::string() promised');
         $this->assertSame([], $unexplained, 'an under-run that is not the tab-reclustering shape');
-        // Not zero, and that is the documented residue — asserted so a future
-        // change that silently makes it zero (or makes it everything) is
-        // visible here rather than inferred.
-        $this->assertGreaterThan(0, $underRuns);
+        // NOT an over-run assertion, despite this test's name. It is a canary
+        // on the UNDER-run residue documented in
+        // testExpandingATabCanStillReclusterAFollowingCombiningMark(): the
+        // residue is real and non-zero, so a change that drives it to zero has
+        // changed tab reclustering and must say so deliberately.
+        //
+        // If you are reading this because it went red: nothing is corrupting
+        // the frame. Over-runs are asserted above and they are still []. You
+        // have most likely CLOSED the reclustering under-run family — which is
+        // a welcome change — and the fix is to delete this canary and the
+        // paragraph in this test's docblock that calls the residue permanent,
+        // not to re-open the gap.
+        $this->assertGreaterThan(
+            0,
+            $underRuns,
+            'the documented tab-reclustering UNDER-run residue is now zero (this is not an over-run; see the comment at this assertion)',
+        );
     }
 }
