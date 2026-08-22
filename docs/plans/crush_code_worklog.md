@@ -10539,33 +10539,140 @@ still exactly 1 · every lane file byte-identical in master except the two knowi
 the supervisor** from the three reports — nine of them lane a's, which deliberately filed nothing to avoid
 the three-way append conflict that lanes b and c then hit.
 
-## ROUND 45 — IN FLIGHT (launched from `06126017`, run `wf_36783de1-2cf`)
+## ROUND 45 — a session limit mid-round, an unrestored mutation it exposed, and a floor that was measured at the wrong commit
 
-**Not yet closed.** Three lanes at `06126017`, concurrency 3, nine agents, implement → adversarial review
-→ fix. Lane dirs `/home/sites/crush-lane-{a,b,c}` are live and **must not be deleted before the merged
-floor is measured**. `docs/plans/crush_code_RESUME.md`'s in-flight block carries the lane table and the
-merge checklist; this entry exists so the worklog is not silent about a round that was running when the
-session compacted.
+**Merged `ee77252c`, backlog `5daa7420`. Floor `9308 / 130874 / 1 skipped / rc 0`** (04:19.629, 276.40 MB),
+supervisor-measured in the live tree with `sugar-crush` LINKED. Base `06126017`. Three file-disjoint
+lanes, implement → adversarial review → fix, concurrency 3, run `wf_36783de1-2cf`.
 
-- **Lane `a` (seam)** — E119, E118 + E104, E120.
-- **Lane `b` (fork)** — E133, E80. Deliberately scheduled while two sibling suites load the box, which is
-  the reproduction condition E80's Step has asked for since round 42 and never had.
-- **Lane `c` (oracles)** — E125, E123, E132.
+### The prediction
 
-**Two briefing changes shipped with this round**, both from round 44's post-mortem:
+Stated in writing before measuring: **tests 9308 exactly** (9215 + 49 + 7 + 37), **assertions ≥ 130874**
+as a lower bound. Both landed on the number. Tests have now been exact three rounds running.
 
-1. **The review prompt now BINDS the reviewer to the file split.** Round 44's lane c edited a sibling's
-   file on its reviewer's explicit instruction; the prompt had told reviewers to *check* the boundary and
-   never that they were bound by it when prescribing. A finding in another lane's file is now reported,
-   never prescribed as a BLOCKING or MAJOR the fix agent cannot satisfy without breaching the split.
-2. **Both prompts now name the READ side.** The doc-drift guards read across `src/`, `docs/`, `README.md`
-   and `bin/`, so a guard in one lane can be reading prose a sibling is rewriting — invisible until merge.
-   Lane a's `ReadmeRosterDriftTest` reading lane c's `README.md` is this round's live instance, and both
-   lanes were told.
+The assertion lower bound being *tight* is not evidence that round 44's non-additivity rule was wrong.
+The rule says a lane shipping a tree-walking census gains assertions when a SIBLING adds prose. Lane b
+measured that mechanism to the unit this round and it was inside its own delta: its `Runtime.php` edits
+net exactly +2 paragraphs, which showed up as +2 in `GlobFigureDriftTest` — **a third file nobody
+touched** — and lane b diffed per-testcase counts out of `--log-junit` at both ends to attribute it
+rather than arguing it. Because each lane caused its own census drift inside its own tree, the terms
+composed. Keep stating assertions as a lower bound.
 
-**Rules 15–18 were added to the standing preamble:** a guard asserting an absence needs a known-positive
-fixture in the same test; a reviewer's prescription is a hypothesis whose acceptance test is a mutation of
-*the fix*; doc-blocks wrap at 80 columns so a sentence is never those bytes in a row; and never ship a
-cardinality measured over a tree in a lane worktree — ship the generator. The mutation-harness contract
-(refuse a dirty tree, `git clean -fdq`, scratchpad backup before mutating, known-answer control,
-`git diff --numstat` after applying) is now its own section rather than scattered advice.
+### The floor in the brief was wrong, and two lanes proved it (E167)
+
+The brief carried `9215 / 127781`, measured at round 44's merge commit `98d59bfb`. The lanes branched
+from `06126017`, **three commits later** — and one of those three, `e29608d1`, is the supervisor's own
+E131 fix to `src/Config/LayeredSettings.php`. `GlobFigureDriftTest` asserts once per paragraph of every
+`.php` under `src/`, so that prose fix moved the assertion count by +1. True base: `9215 / 127782`.
+
+Lane a reverted its diff and observed it. Lane b reverted all four of its files with
+`git show <sha>:<path> > <path>` — explicitly **not** `git checkout <sha> --`, which stages — and observed
+it. Lane c flagged the discrepancy and **correctly refused to adjudicate** it, because settling it
+required a checkout that would dirty its tree. The brief was the outlier. Measure the floor at the commit
+the lane copies are cut from, immediately before launching.
+
+### The session limit, and what it exposed (E168)
+
+The first launch died at the 12:30 UTC limit with **4 of 9 agents done** — all three implements plus
+`review:b-fork`. Resumed with `resumeFromRunId`, which replayed the four from cache and ran the missing
+five live. Total 9/9, ~67 min of wall clock across both launches.
+
+🔴 **The killed agent left an unrestored mutation in lane a.** `src/Chat.php` and
+`tests/Cli/BootstrapLaunchNoticeRoutingTest.php` were dirty, with a figure rewritten to "nineteen" inside
+a paragraph stating `Bootstrap.php` holds sixteen calls — incoherent on its face, and
+`TRANSCRIPT_SEAM_CALL_SITES` is 16, so it was a probe of the `PROSE_SITES` oracle, not fix work
+(`Chat.php` is not even in lane a's owned file list). No backup existed for either file. Evidence copied
+to `scratchpad/r45_mutated_*.evidence`, then reverted.
+
+This is E134's third instance and the first that shows the structure: **a mutation harness whose restore
+is a later step in the same agent does not survive the agent dying.** Lane c's `mut.sh` is the model —
+refuses a dirty tree BEFORE mutating, copies to the scratchpad, exits 94 on a no-op, prints the actual
+`+`/`-` lines, restores, then `git checkout -- . && git clean -fdq` and refuses if still dirty. It caught
+two bad readings of its own: a no-op MF7c that would have read as a survival, and an rc-255 PHP fatal
+that is neither a kill nor a survival.
+
+### Ownership held completely — and E135's fix worked twice
+
+Zero code overlap. `git diff --name-only <base>..HEAD` per lane, `comm -12` between the sorted lists:
+the ONLY collision across all three lanes was `docs/plans/crush_code_hardening_backlog.md`. Both lanes
+that filed used **lane-prefixed provisional ids** (`Eb45-N`, `Ec-N`) per E135, and — the part that matters
+— **not one of those ids appeared in any code file**, so the round-44 bug where a renumber orphaned an
+in-code citation could not recur. Renumbered at merge: lane b `E136–E143`, lane c `E144–E151`.
+
+Lane c also declined an out-of-lane edit its reviewer had prescribed, which is the round-44 review-prompt
+fix working. It did make one deliberate in-lane edit beyond its prescription, to a class doc-block whose
+last clause was false, and said so plainly: *"leaving a known-false sentence next to its correction is how
+the pairing propagated in the first place."*
+
+### What landed
+
+**Lane a (seam).** E119 closed — `Bootstrap`'s "eleven other sources" corrected to fifteen, re-derived
+from the census (16 sites, sentence speaks from inside one, offset 1) rather than taken from the brief,
+**and the tripwire test deleted in the same commit**. The number is now a `PROSE_SITES` row, so a
+seventeenth site reds the sentence rather than dating it. E118/E104 promoted the launch formats to
+`public const`. E120 shipped `StderrEmitterCensusTest`, a per-file five-channel census of every stderr
+emitter in `src/` and `bin/`.
+
+**Lane b (fork).** E133 — `Runtime::executeConcurrently()` now reserves every payload name in phase 1,
+before the first `pcntl_fork()`, so the probe no longer touches shared `/tmp`. **E80 was diagnosed, not
+just observed:** it is a forked child running PHPUnit's own teardown after the parent aborted at the 60s
+limit, not lock starvation. `pcntl_alarm` fires in the process that armed it, so the per-test time limit
+does not reach a child (E142). Lane b also killed a real 2% rendezvous flake and then **retracted two
+overclaims in its own write-up**.
+
+**Lane c (oracles).** E125 — one shared `DocumentParagraphs` window for all three doc-drift guards, with
+the fenced-block question **answered** rather than deferred (a fence is one unit; blank lines inside do
+not split it). E123 — a mention oracle for the env surfaces. E132 — a statement-wide exit walk that reads
+a ternary.
+
+### Findings that were reproduced before being fixed
+
+Lane c reproduced every BLOCKING/MAJOR finding before touching it and mutated every fix after landing it.
+Two are worth carrying:
+
+- **F2 — a vacuous conjunct.** `stripos($unit, 'theme')` was subsumed by `Switch Theme` and by `/theme`,
+  so the key-identity half of the four-doors rule was dead for one of its two keys. Deleting the key name
+  from the bullet left **149 tests entirely green**. Repaired by looking for the key with the door spans
+  cut out.
+- **F3 — round 44's failure reproduced inside the fix written to invoke it.** Blinding the census
+  (`$found[$name][] = $label;` → `;`) left both empty-result tests green at 641 assertions. This is
+  exactly the "an empty census is a weaker guard than a census of one" rule, hit again, in a new file.
+
+### Reviewer prescriptions that were wrong again — three this round
+
+The count is now seven across three rounds. **A prescription in a review is a hypothesis.**
+
+- Lane c's **F7 prescription was incomplete**: "make the strip conditional on the text being PHP" reads as
+  a leading-`/**` test, but `censusScope()` feeds whole `.php` files through the window, so that
+  discriminator switches the strip off for the larger half of the census (dropping the `<?php` arm reds 5
+  tests). Its stated **alternative** would have reddened all 93 legitimate `**bold**` lines.
+- Lane c's **R5 does not reproduce** at all — the file it named has a flat door list with no key conjunct,
+  so there is nothing to subsume. Written into the backlog as a transplant warning rather than left as a
+  hypothesis.
+- Lane a's **F5 prescription would not have closed F5**: it asked for a check that the promoted constant's
+  value does not appear as a literal in the obliged method body, but the review's own mutation re-inlines
+  a DIFFERENT string, so a value-equality check passes on precisely the case that motivated it. Replaced
+  with an exact literal allowlist per obliged method, verified to kill.
+
+Lane a also found an inverted claim **the review never raised**: `STDERR_LINE_FORMAT`'s doc-block said the
+old source scrape "goes quiet the moment the line is reformatted". It goes **loud** — both recovery steps
+were `assertSame(1, $matched)`.
+
+### Backlog 129 → 168
+
+E136–E143 (lane b) · E144–E151 (lane c) · **E152–E166 filed by the supervisor from lane a's report, which
+again filed nothing itself** · E167 (floor provenance) · E168 (the mutation-harness structure).
+
+### Housekeeping
+
+Invariants at merge: 18/18 `vendor/sugarcraft/*` symlinks by `is_link()` · config md5
+`05480c743aff302fd6c06c5a4a4c2210` · `check-path-repos --no-lib-path-repos` rc 0 · the only tracked
+`composer.lock` is the root one · **skips exactly 1**, confirmed by name
+(`--filter McpClientTest` → 60 tests, 1 skipped). Every lane file byte-identical in master except the
+backlog, which was deliberately renumbered. All three drain branches merged and deleted; all three lane
+dirs removed **after** the floor was measured.
+
+Two caveats the lanes raised and nobody should lose: **`php-cs-fixer` is genuinely absent on this box**
+(`command -v` empty, both vendor paths empty), so round 45's new files are PSR-12 by inspection and by
+matching neighbours, not by tool. And **PHP 8.4 was not exercised** — every width, regex and stdlib claim
+this round is PHP 8.3.6 only.

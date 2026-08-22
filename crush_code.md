@@ -1094,6 +1094,30 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 45 — CLOSED (`ee77252c`, backlog `5daa7420`). Floor `9308 / 130874 / 1 skipped / rc 0`, `sugar-crush` linked.**
+Three file-disjoint lanes with **zero code overlap**; the only collision across all three was the backlog.
+E119 closed with the tripwire test deleted in the same commit — the round-44 pattern (a lane that cannot
+own a file pins the gap with a failure message that IS the instruction) completing exactly as designed.
+E133 moved `Runtime::executeConcurrently()` to reserving every payload name **before** the first fork, so
+the probe no longer touches shared `/tmp`. **E80 was diagnosed rather than merely observed:** it is a
+forked child running PHPUnit's own teardown after the parent aborted at the 60s limit, because
+`pcntl_alarm` fires in the process that armed it and never reaches a child (E142). E120 shipped a
+five-channel per-file stderr census that found **38 `error_log()` sites in `src/` writing unprefixed and
+unrouted to the user's stderr** — a write to fd 2 while the alternate screen is up lands on a frame the
+renderer believes it owns (E154). E125 consolidated the doc-drift guards onto one paragraph window and
+**answered** the fenced-block question instead of deferring it.
+
+Three process results worth carrying. **Tests were predicted exactly for the third round running** (9308),
+with assertions correctly stated as a lower bound and landing on it. **The brief's floor was wrong and two
+lanes proved it independently** — it had been measured at the round-44 merge commit rather than at the
+commit the lanes branched from, and a supervisor prose fix in between had moved a per-paragraph census by
++1 (E167). And a mid-round session limit killed five agents, exposing that **a mutation harness whose
+restore is a later step in the same agent does not survive the agent dying** (E168) — one lane's tree was
+left carrying an incoherent oracle probe with no backup. Resuming the workflow by run id replayed the four
+completed agents from cache and ran only the missing five.
+
+Backlog 129 → 168.
+
 **ROUND 44 — CLOSED (`98d59bfb`). Eleven backlog items fixed, twenty-four recorded.**
 Floor `9215 / 127781 / 1 skipped / rc 0`, `sugar-crush` linked. Three new oracles shipped: a stale-figure
 census over `src/` **and** `docs/` (E103/E108), a `SUGARCRUSH_*` env-roster oracle (E111), and a JSON
