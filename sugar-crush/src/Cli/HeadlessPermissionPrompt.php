@@ -73,6 +73,62 @@ use SugarCraft\Crush\Tools\ToolCall;
  * question, STDIN carries the answer, stdout stays the answer channel — so a
  * human running `sugarcrush -p ... --output-format json | jq .` in a terminal
  * still gets prompted, and still gets parseable output.
+ *
+ * ## Why none of the four go on the transcript seam (E155)
+ *
+ * THE QUESTION NOBODY HAD ASKED OF THIS CLASS. Rounds 42–45 walked
+ * {@see Bootstrap}'s writes one at a time and moved sixteen of them onto
+ * {@see Bootstrap::warnPermissionConfigInTranscript()}, on the rule "a warning
+ * reaches the transcript iff it names something the session can no longer DO".
+ * By that rule alone all four shapes below QUALIFY: three of them are refusals,
+ * and a refused tool call is the plainest possible example of a thing the
+ * session can no longer do. The four stay on stderr anyway, for two reasons
+ * that are about MECHANISM rather than about the rule, and both were checked
+ * against the tree rather than reasoned from the rule's wording.
+ *
+ * FIRST — THE HAZARD THE SEAM EXISTS FOR CANNOT ARISE HERE. What makes a
+ * launch-time `fwrite(STDERR, …)` worth moving is that the interactive launch
+ * opens the alternate screen about half a second later (MEASURED at 0.47s on a
+ * real pty, recorded on that method) and paints over it. This class is never
+ * attached on a path that opens it. VERIFIED at the call sites rather than
+ * assumed: {@see Bootstrap::backend()} and {@see Bootstrap::backendFor()} take
+ * `$consolePermissionPrompt` defaulting to FALSE, exactly four callers in
+ * `src/` pass `true`, and all four are in {@see NonInteractive} and
+ * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner} — neither of
+ * which takes the terminal. {@see Bootstrap::chat()}, the interactive path,
+ * takes the default. {@see \SugarCraft\Crush\Tests\Cli\HeadlessPermissionPromptAttachmentTest}
+ * pins that roster, because it is the fact this whole paragraph rests on and
+ * the day it changes is the day the decision has to be made again.
+ *
+ * SECOND — THE SEAM IS NOT MERELY WRONG FOR THESE, IT IS UNREACHABLE.
+ * `warnPermissionConfigInTranscript()` appends to a static list that
+ * {@see Bootstrap::chat()} drains into `Chat::withLaunchNotices()` once, at
+ * construction. These four fire from inside
+ * {@see \SugarCraft\Crush\Runtime::settleAsk()}, mid-turn — after any drain
+ * that was going to happen has happened, and on the `-p` path in a process that
+ * never builds a `Chat` at all. A row recorded there would go into a static
+ * array nobody reads. So "route it onto the seam" is not a deferred improvement
+ * for this class; it is a different feature (a MID-SESSION notice sink), and it
+ * is recorded as one.
+ *
+ * THE FOUR, and what each is:
+ *
+ *  1. {@see question()} — the prompt. Interactive branch only, and it is not a
+ *     diagnostic at all: it is the interaction. It must be on the same console
+ *     the answer is typed at, and stdout is spoken for.
+ *  2. {@see refusal()} — the no-tty refusal. Carries the two remedies, and its
+ *     reader is by construction someone reading a log rather than a screen.
+ *  3. "stdin ended before the question was answered" — EOF mid-prompt.
+ *  4. "refused <tool>" — an explicit non-affirmative answer, which is the one
+ *     of the four the user already knows about, having just typed it.
+ *
+ * WHAT IS GENUINELY MISSING, and it is not a channel question: 2, 3 and 4 are
+ * REFUSALS that never enter the `--output-format json` document. This class's
+ * own docblock names the caller "whose entire view of the run is stdout plus an
+ * exit code", and that caller sees a turn that completed with a tool quietly
+ * not run. That is a gap in {@see NonInteractive::format()}, not in the routing
+ * of these lines, and it is the same constraint Phase 9 step 1 has — a headless
+ * user still has to receive a refusal. Recorded rather than half-done here.
  */
 final class HeadlessPermissionPrompt
 {

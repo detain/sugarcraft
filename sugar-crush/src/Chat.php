@@ -4967,6 +4967,24 @@ final class Chat implements Model
     public const INTERRUPTED_TOOL_CALL = 'Tool call interrupted by restart';
 
     /**
+     * The env var that puts the streaming-observer diagnostic back on stderr.
+     *
+     * OFF BY DEFAULT, and the argument is written out in full where the one
+     * gated line is raised — {@see scheduleBackendCompletion()}, in the
+     * `$onToken` observer it builds. In short: the write happens mid-turn under
+     * the alternate screen, and its audience is an embedder rather than the
+     * person at the terminal. Named on the class so
+     * a test and an embedder can both reach the spelling without repeating the
+     * string — the same shape
+     * {@see \SugarCraft\Crush\Skills\SkillLoader::DEBUG_SKIPS_ENV} uses, which
+     * is the only other `SUGARCRUSH_DEBUG_*` this application has.
+     *
+     * `unset`, empty and `0` all read as off, via {@see envFlag()} — the
+     * convention every other `SUGARCRUSH_*` switch in this class follows.
+     */
+    public const DEBUG_STREAM_ENV = 'SUGARCRUSH_DEBUG_STREAM';
+
+    /**
      * True when $result is a refusal - a call the user or a hook stopped -
      * rather than a call that ran and failed.
      *
@@ -7175,6 +7193,27 @@ final class Chat implements Model
         // (per-turn because $userSink is a local of this call, so one bad
         // delta does not disable the embedder's sink forever) and reported
         // once through error_log rather than once per token.
+        //
+        // WHAT THAT LAST CLAUSE SAID, and it settled the FREQUENCY without ever
+        // asking about the CHANNEL: "reported once through error_log rather
+        // than once per token".
+        // WHAT IS TRUE NOW: once is still right, and `error_log()` is fd 2. This
+        // closure runs inside the streaming loop of a turn already in flight, so
+        // by the time it can fire the alternate screen has been up for the whole
+        // session — the write lands on a frame the renderer believes it owns and
+        // the user gets a corrupted row, not a message. Every other stderr write
+        // this application makes at launch has been routed for exactly this
+        // reason ({@see \SugarCraft\Crush\Cli\Bootstrap} 's transcript seam);
+        // this one cannot use that seam, because the seam feeds the notices
+        // `chat()` builds a transcript FROM and this fires long after that.
+        // WHY IT STILL EARNS ITS PLACE, gated rather than dropped: the audience
+        // is the EMBEDDER whose `onToken` threw, not the person at the terminal.
+        // "Your logger raised" is not advice a user of this CLI can act on, and
+        // the UI consequence they CAN see — the turn completing normally — is
+        // already the designed behaviour. So the line goes behind
+        // {@see DEBUG_STREAM_ENV} for whoever is debugging their own sink, on
+        // the same quiet-by-default contract and for the same measured reason as
+        // {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()}.
         $userSink = $next->onToken;
         $onToken = !$next->streaming ? null : static function (string $delta) use ($inbox, $generation, &$userSink): void {
             if ($delta === '') {
@@ -7189,7 +7228,13 @@ final class Chat implements Model
                 $userSink($delta);
             } catch (\Throwable $e) {
                 $userSink = null;
-                error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
+
+                // The DETACH is unconditional and only the report is gated: the
+                // env var decides whether anyone is told, never whether the
+                // turn survives.
+                if (self::envFlag(self::DEBUG_STREAM_ENV)) {
+                    error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
+                }
             }
         };
 
