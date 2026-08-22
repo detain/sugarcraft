@@ -355,9 +355,14 @@ final class LayeredSettings
      * run by `ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()`,
      * so it reds instead of rotting". WHAT IS TRUE NOW: that test derives the
      * TOOL SET this glob leaves. It never measures the glob's LENGTH — the glob
-     * is a class constant there and no `strlen()` appears anywhere in `tests/` —
-     * so the citation was a number written down beside the name of something
-     * that does not produce it. MEASURED on PHP 8.3.6, 2026-08-22: restoring
+     * is a class constant there, and at the time of writing no `strlen()`
+     * anywhere in `tests/` was applied to it (VERIFIED at `8416d98e`: `tests/`
+     * uses `strlen()` in 66 files, none of them on `COUNTEREXAMPLE_GLOB`; an
+     * earlier draft of THIS sentence said "no `strlen()` appears anywhere in
+     * `tests/`", which is plainly false and is corrected here rather than
+     * dropped, since a doc-block that catches a false claim by writing a second
+     * one has learnt nothing) — so the citation was a number written down beside
+     * the name of something that does not produce it. MEASURED on PHP 8.3.6, 2026-08-22: restoring
      * "eight" to this very paragraph left that test and its five sibling
      * doc-drift suites at `OK (80 tests, 297 assertions)`. WHY THE SENTENCE
      * STILL EARNS ITS PLACE: its instinct was right and only its address was

@@ -22,8 +22,10 @@ use SugarCraft\Crush\Config\LayeredSettings;
  * IT DID NOT. The test both pages named,
  * {@see ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()},
  * derives the TOOL SET the glob leaves. It holds the glob as a class constant
- * and calls `strlen()` on nothing; no `strlen()` appears anywhere under
- * `tests/`. MEASURED on PHP 8.3.6, 2026-08-22: putting "eight" back into the
+ * and never measures its length. VERIFIED at `8416d98e`, and stated precisely
+ * because the loose version of it is wrong: `strlen()` appears in 66 files
+ * under `tests/`, and in none of them is it applied to `COUNTEREXAMPLE_GLOB`
+ * or to any spelling of `[!B]*`. MEASURED on PHP 8.3.6, 2026-08-22: putting "eight" back into the
  * `LayeredSettings` paragraph left that test and its five sibling doc-drift
  * suites at `OK (80 tests, 297 assertions)`. The exact stale figure the round
  * had just retracted could be restored with zero test movement, inside the
