@@ -10797,3 +10797,137 @@ E169–E189 needed no in-code repointing. Invariants at merge: 18/18 symlinks by
 `composer.lock` is the root one · **skips exactly 1**, confirmed by name. Every lane file byte-identical
 in master except the deliberately renumbered backlog. Branches merged and deleted, lane dirs removed after
 the floor was measured.
+
+
+## ROUND 47 — the mid-session seam lands, a session limit kills all three implementers post-commit, and a merge red that was the guard working
+
+**Merged `e8e35fa4`, renumbering `8a4421c9`, merge fix `fb2d13d8`. Floor `9445 / 132167 / 1 skipped / rc 0`**
+(04:24.679, 278.40 MB), supervisor-measured with `sugar-crush` LINKED. Base `7af5293b`, floor measured at
+that exact commit per E167 — and **lane c observed it directly and confirmed it to the unit**.
+
+### Both predictions exact, including the assertion bound
+
+**Tests 9445, predicted exactly — fifth round running.** **Assertions 132167, predicted as "≥ 132167 and
+expected to land ON the bound"** — and it did. That is E191 applied correctly one round after the
+supervisor got it wrong: only lane a added new `src/` files, so the per-file censuses saw nothing from
+siblings, and the per-paragraph census decomposes linearly across lanes that only edit.
+
+### E190 fired on ALL THREE LANES AT ONCE — and the answer was NOT to revert
+
+The first launch (`wf_59d605f0-d50`) died at a session limit with **0 of 9 agents done — and all three
+implementers had committed before dying.** Lanes a and b also had uncommitted work on disk.
+
+🔴 **Round 45's answer to a dirty lane was to revert. That does not make revert the answer.** Inspection
+showed real in-progress work, not mutations: a 269-line end-to-end delivery test whose doc-block argues
+why asserting on the queue would REPRODUCE E171 rather than catch it, and +101 lines of E178 work on
+`WorkflowEngine.php`, the lane's actual target. Both parsed. Reverting would have destroyed ~370 lines.
+
+**The distinguishing test:** a mutation is incoherent on its face and sits in a file the lane does not own;
+in-progress work is coherent and on-target. Round 45's revert and round 47's preserve are the same rule
+producing opposite actions.
+
+The supervisor committed both under messages beginning `SALVAGE (unverified)`, stating explicitly that it
+was committed by the supervisor and not the author and that nothing about it had been checked.
+
+**Because 0 agents completed there was NO CACHE, so the script was relaunched rather than resumed — and
+improved first.** The implement prompt gained a section telling each agent its lane already contains a
+killed predecessor's commits: read them, find out whether the tree is even green, mutate what they claim
+to pin, and **separate inherited from authored work in the report**, because the reviewer will otherwise
+attribute all of it to the wrong agent. Lane a's rule-22 check came back clean on the relaunch and it said
+so.
+
+### THE MERGE WENT RED, AND THAT WAS THE GUARD WORKING
+
+`ForkedChildReaperAdoptionTest::testNoDirectoryWithUnreapedForksIsUnaccountedFor` failed at merge:
+lane b widened the reaper's adoption `SCOPE` while lane a was adding
+`tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php`, which forks twice inside the PHPUnit process.
+**Neither lane could see the other, and the guard's failure message was the instruction** — adopt the
+reaper and widen SCOPE, or record the directory in `OUT_OF_SCOPE` with a reason.
+
+**Adopted, not exempted.** Both fork sites already reaped synchronously on the happy path; the reaper
+covers the path where the parent is aborted at the time limit and the explicit `pcntl_waitpid()` never
+runs — E142's mechanism, and the whole reason the trait exists. `forkTracked()` is a drop-in for
+`pcntl_fork()` (same contract: 0 in the child, pid in the parent), so the fix was the trait, the reap as
+`tearDown()`'s first statement, two call sites, and `Diagnostics/` in SCOPE.
+
+**Mutation-verified, rule 1 applied to the supervisor:** reverting ONE of the two sites to a raw
+`pcntl_fork()` is **KILLED**, with the guard naming the file and counting *"1 fork(s) not routed through
+`$this->forkTracked()`"*. That is lane b's third half — the one its own reviewer found missing — doing
+exactly its job. `git diff --numstat` confirmed the mutation was a real one-line change before the run
+(rule 13), and the file was restored from a scratchpad copy taken before it (rule 19).
+
+The alternative was available and defensible — lane b had itself created the `OUT_OF_SCOPE` precedent for
+`tests/Backend/`, with the reasoning *"a guard that requires an edit its own lane may not make is a guard
+that gets exempted rather than satisfied."* It was the wrong choice here only because adoption turned out
+to be cheap.
+
+### What landed
+
+**Lane a — E171, the backlog's highest-leverage item, is DONE.** A `RuntimeNoticeSink` with an explicit
+`arm()`, a `RuntimeNoticePumpMsg`, `Chat::subscriptions()` declaring a poll tick on
+`$this->inFlight || RuntimeNoticeSink::hasPending()`, and **both tool-call parsers routed onto it (E170)** —
+which had been blocked for a round because both classes are `final readonly` and have no accumulator to
+gate against. The delivery test crosses a real `pcntl_fork()` boundary, because E171's defect was never
+"the queue has no rows", it was **"the queue has rows and nothing reads them"** — the shape
+`Bootstrap::warnPermissionConfigInTranscript()` had correctly for four rounds while its rows went nowhere.
+
+**Lane b — E177/E178/E180** routed the in-PHPUnit bare-exit forks through `ForkedChild::exitNow()`,
+including `WorkflowEngine`'s interrupt handler, which is a production path and not merely quiet-under-test.
+**E179** widened the reaper's adoption, with **E181**'s known consequence handled as filed.
+
+**Lane c — E187** made the promoted-format doc sweep a test rather than a one-off, **E188** replaced three
+stale `tests/` cardinalities with generators, and **E173** carried permission refusals into
+`--output-format json`.
+
+### Reviewer prescriptions: one finally held, two more wrong (nine across four rounds)
+
+🔴 **For the first time, a lane recorded a prescription that HELD UP.** Lane a's F1 — arm, record, call
+`Bootstrap::chat()` a second time under isolated-HOME scaffolding, assert the pump yields nothing — was
+essentially what shipped, and it kills the mutation. Lane a put it on the record deliberately, against
+rule 16's running tally.
+
+The two that were wrong:
+- **Lane b's F3 measured its evidence in one window and prescribed a fix in another.** Its supporting
+  sentence was correct about the fixture catalogue but was not evidence about the helper, "and the two got
+  conflated into one prescription. Both windows needed closing; only one was named."
+- **Lane c's MAJOR 4 prescribed an inert carve-out.** A `Failures:` carve-out cannot match the prose form
+  at all — `Failures: 2` puts the word before the digits and the prose pattern requires digits first — so
+  it could never fire. Measured: the naive widening reports 4 hits and **3 are correct round anchors**.
+
+Lane a also refined two of its reviewer's claims rather than accepting or rejecting them wholesale: F9 was
+"half wrong, and the half that matters is already pinned" (the conditional-stderr mutation is KILLED; only
+the bare statement swap survives, and it cannot be pinned because `record()` has no throwing path), and
+F3's prescription "is not the right shape for the load-bearing case, though it would be harmless at HEAD."
+
+### A lane overrode its reviewer's scope on rule-7 grounds, and was right
+
+Lane c's reviewer classed a stale `HeadlessPermissionPrompt` paragraph as "report only; do not prescribe
+an edit". Lane c edited it and declared it: **its own commit is what made that paragraph false**, and its
+new test's doc-block quotes the paragraph as the statement of the gap — so leaving it would ship a reader
+pointed at a hole that no longer exists. Rule 7 is standing and outranks a reviewer's scope call.
+
+### A guard forced two out-of-lane edits, and the lane flagged them correctly (rule 23 working)
+
+Lane a's two new `src/` files forced census bumps in `tests/Tools/BuiltInToolCorpusTest.php` and
+`src/Context/RepoMapBlock.php` (288→290 / 238→240 / 307→309). Lane a listed both as **INHERITED, not
+touched by me**, naming the commit and the reason so the supervisor would see them in the merged diff.
+That is rule 23 landing one round after it was written.
+
+### Backlog 185 → 214
+
+E192–E200 (lane a) · E201–E209 (lane b) · E210–E220 (lane c). Twenty-nine entries, renumbered
+**longest-id-first** so `Ec47-10` and `Ec47-11` were not eaten by the `Ec47-1` pattern. No provisional id
+appeared in a source file for the third round running.
+
+Two carried forward that matter most: **E192** — route the remaining three mid-session emitters
+(`SglangProvider` 3, `AgentWorkerPool` 1, `WorktreeManager` 4) now that the seam exists; **E193** — a
+notice raised while no turn is in flight waits for the next `Msg`, which never bites the two parsers but
+**will** bite the moment E192 lands.
+
+### Housekeeping
+
+Zero code overlap for the third round running; the only collision was the backlog. Invariants at merge:
+18/18 symlinks by `is_link()` · config md5 `05480c743aff302fd6c06c5a4a4c2210` ·
+`check-path-repos --no-lib-path-repos` rc 0 · only the root `composer.lock` tracked · **skips exactly 1**,
+confirmed by name. Every lane file byte-identical in master except the renumbered backlog and the two
+files the merge fix touched. Branches merged and deleted, lane dirs removed after the floor was measured.

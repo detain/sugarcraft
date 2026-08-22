@@ -1094,6 +1094,31 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 47 — CLOSED (`fb2d13d8`). Floor `9445 / 132167 / 1 skipped / rc 0`, `sugar-crush` linked.**
+🔴 **E171 IS DONE — the mid-session transcript seam exists.** A `RuntimeNoticeSink` with an explicit
+`arm()`, a `RuntimeNoticePumpMsg`, `Chat::subscriptions()` polling on `inFlight || hasPending()`, and both
+tool-call parsers routed onto it (E170) — blocked for a round because both classes are `final readonly`
+with no accumulator to gate against. The delivery test crosses a real `pcntl_fork()` boundary, because
+E171's defect was never "the queue has no rows", it was **"the queue has rows and nothing reads them"** —
+the shape `Bootstrap::warnPermissionConfigInTranscript()` had correctly for four rounds while its rows went
+nowhere after the launch drain. Lane b routed the in-PHPUnit bare exits through `ForkedChild::exitNow()`
+including `WorkflowEngine`'s interrupt handler (a production path), and lane c made the promoted-format
+doc sweep a test and carried permission refusals into `--output-format json`.
+
+Three process results. **Both figures were predicted exactly** — tests for the fifth round running, and
+assertions predicted as "≥ the bound and expected to land ON it", which they did; that is E191 applied
+correctly one round after getting it wrong. **A session limit killed all three implementers AFTER they had
+committed** (E190 on three lanes at once), and two had uncommitted work — **which was real in-progress
+work, not mutations, so reverting it (round 45's answer) would have destroyed ~370 lines.** A mutation is
+incoherent on its face and sits in a file the lane does not own; in-progress work is coherent and
+on-target. With zero agents cached the script was relaunched rather than resumed, and improved first. And
+**the merge went red, correctly**: lane b widened the fork-reaper's scope while lane a added a file that
+forks inside PHPUnit, neither could see the other, and the guard's failure message was the instruction. It
+was resolved by ADOPTING the reaper rather than exempting the directory, and the supervisor mutation-verified
+its own fix — reverting one of two call sites is KILLED.
+
+Backlog 185 → 214.
+
 **ROUND 46 — CLOSED (`dbb8e834`, backlog `c4a810a1`). Floor `9378 / 131610 / 1 skipped / rc 0`, `sugar-crush` linked.**
 Three file-disjoint lanes, **zero code overlap for the second round running**. The brief opened with a
 contradiction and the lane settled it: round 45's census said 38 `error_log()` sites in `src/`, a naive
