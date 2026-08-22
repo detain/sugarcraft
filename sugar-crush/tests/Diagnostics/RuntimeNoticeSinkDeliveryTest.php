@@ -302,6 +302,64 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         self::assertSame('raised after the keystroke', $rows[0]->content);
     }
 
+    /**
+     * `Bootstrap::chat()` REALLY DOES APPOINT THE CHAT IT RETURNS.
+     *
+     * Every other test here appoints its own Chat, which pins what an appointed
+     * Chat DOES and says nothing about whether anything appoints one. Flip
+     * `drainsRuntimeNotices: true` to `false` in `Bootstrap::chat()` and the
+     * entire mid-session seam goes dark with the whole of this file still
+     * green — MEASURED, before this test existed. That is the one-line
+     * regression E171 is about, so it gets a guard of its own that goes through
+     * the real launch path.
+     *
+     * ISOLATED HOME for the reason `BootstrapTest` gives: `chat()` walks the
+     * skill and config trees, and a test must not read or write the operator's.
+     */
+    public function testBootstrapChatReturnsTheAppointedDrainOwner(): void
+    {
+        $home = sys_get_temp_dir() . '/sc_lane_a_seam_home_' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($home, 0o700, true));
+        $savedHome = getenv('HOME');
+
+        $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_seam_boot_');
+        self::assertIsString($log);
+        $previousLog = ini_set('error_log', $log);
+
+        try {
+            putenv("HOME={$home}");
+            $chat = \SugarCraft\Crush\Cli\Bootstrap::chat($home);
+
+            // chat() is also the only caller of arm() in src/. Both halves of
+            // the same decision, asserted together.
+            self::assertTrue(RuntimeNoticeSink::isArmed(), 'Bootstrap::chat() did not open the inbox');
+            self::assertTrue(RuntimeNoticeSink::record('raised on the turn after launch'));
+
+            $subscriptions = $chat->subscriptions();
+            self::assertNotNull($subscriptions, 'the Chat Bootstrap built does not poll the inbox it opened');
+            self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+
+            [$next] = $chat->update(new RuntimeNoticePumpMsg());
+            $rows = array_values(array_filter(
+                $next->history,
+                static fn ($m): bool => $m->role === Role::System
+                    && $m->content === 'raised on the turn after launch',
+            ));
+            self::assertCount(1, $rows, 'the launched Chat did not drain the row into its transcript');
+        } finally {
+            if ($previousLog !== false) {
+                ini_set('error_log', $previousLog);
+            }
+            @unlink($log);
+            if ($savedHome === false) {
+                putenv('HOME');
+            } else {
+                putenv("HOME={$savedHome}");
+            }
+            exec('rm -rf ' . escapeshellarg($home));
+        }
+    }
+
     public function testANoticeRaisedInAForkedChildReachesTheParentsTranscript(): void
     {
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
