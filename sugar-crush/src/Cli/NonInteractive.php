@@ -638,19 +638,90 @@ final class NonInteractive
     }
 
     /**
+     * The stream {@see readStdinIfPiped()} reads when no caller names one, and
+     * the seam a test process uses to keep the suite off its own descriptor 0.
+     *
+     * Null means "the real STDIN", which is what every production entry point
+     * gets: nothing in `src/` or `bin/` ever assigns this.
+     *
+     * @var resource|null
+     */
+    private static $stdinDefault = null;
+
+    /**
+     * Point {@see readStdinIfPiped()}'s DEFAULT at $stream instead of the
+     * process's real STDIN (E212).
+     *
+     * THIS IS A HAZARD FIX, NOT TIDINESS. Every direct
+     * {@see run()} call in the suite reached
+     * `readStdinIfPiped(\STDIN)`, so what a `-p` test did depended on the
+     * descriptor 0 the runner happened to inherit. Three outcomes, all real on
+     * PHP 8.3.6: a terminal (`stream_isatty()` true) returns null and the test
+     * passes; `/dev/null` or a closed pipe returns `''` and the test passes;
+     * and a pipe that is OPEN AND NEVER WRITTEN blocks in
+     * `stream_get_contents()` forever — the whole suite, not one test, with no
+     * verdict and no output. A CI runner, a supervising agent, or a plain
+     * `cat | vendor/bin/phpunit` all produce the third. The other two are not
+     * safety either: an ambient pipe carrying bytes prepends them to the prompt
+     * of every `-p` test as stdin context.
+     *
+     * PRODUCTION IS DELIBERATELY UNTOUCHED. The parameter of
+     * {@see readStdinIfPiped()} still wins over this, and this still defers to
+     * `\STDIN` when it was never set, so a real `sugarcrush -p "…" < file`
+     * reads exactly the stream it always did. `tests/bootstrap.php` is the only
+     * caller, which is why the pin covers test files that do not exist yet
+     * rather than each `run()` call site one at a time.
+     *
+     * @param resource|null $stream a stream to read instead of `\STDIN`, or
+     *   null to go back to `\STDIN`
+     */
+    public static function pinStdinDefault($stream): void
+    {
+        self::$stdinDefault = $stream;
+    }
+
+    /**
+     * The stream {@see readStdinIfPiped()} reads when its caller names none —
+     * the pin from {@see pinStdinDefault()}, or the real `\STDIN`.
+     *
+     * Public because the pin is worth ASSERTING rather than trusting: a
+     * `tests/bootstrap.php` that quietly stopped installing it would put the
+     * suite back on the runner's descriptor 0 with every test still green, and
+     * the failure that shape produces is a hang rather than a red.
+     *
+     * @return resource
+     */
+    public static function stdinDefault()
+    {
+        return self::$stdinDefault ?? \STDIN;
+    }
+
+    /**
      * Read piped stdin, capped at {@see self::MAX_STDIN_BYTES}. Returns
      * null when $stream is a TTY (nothing was piped, mirrors
      * `sugar-post/bin/pop`'s `!stream_isatty(STDIN)` guard) or when the
      * pipe was empty.
      *
-     * $stream defaults to the real STDIN; tests pass a `php://memory`
-     * stream instead so the suite never blocks on, or depends on, the
-     * PHPUnit process's actual stdin.
+     * THE DEFAULT USED TO BE THE `\STDIN` CONSTANT ITSELF, spelled in this
+     * signature. WHAT THAT SAID: "$stream defaults to the real STDIN; tests
+     * pass a `php://memory` stream instead so the suite never blocks on, or
+     * depends on, the PHPUnit process's actual stdin." WHAT IS TRUE NOW: the
+     * second half described only the three tests that call this method
+     * DIRECTLY. Every test that goes through {@see run()} — which is where the
+     * production call lives — passed nothing and got `\STDIN`, so the suite
+     * both depended on and could block on the runner's descriptor 0. The
+     * default is now {@see stdinDefault()}, which `tests/bootstrap.php` pins
+     * once for the whole process. WHY THE SENTENCE STILL EARNS ITS PLACE: it
+     * states the property the suite is supposed to have, and that property is
+     * now enforced in one place instead of asserted per call site.
      *
-     * @param resource $stream
+     * @param resource|null $stream the stream to read, or null for
+     *   {@see stdinDefault()}
      */
-    public static function readStdinIfPiped($stream = \STDIN): ?string
+    public static function readStdinIfPiped($stream = null): ?string
     {
+        $stream ??= self::stdinDefault();
+
         if (\stream_isatty($stream)) {
             return null;
         }
