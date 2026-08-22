@@ -23,14 +23,30 @@ use SugarCraft\Crush\Config\LayeredSettings;
  * IT DID NOT. The test both pages named,
  * {@see ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()},
  * derives the TOOL SET the glob leaves. It holds the glob as a class constant
- * and never measures its length. VERIFIED at `8416d98e`, and stated precisely
- * because the loose version of it is wrong: `strlen()` appears in 66 files
- * under `tests/`, and in none of them is it applied to `COUNTEREXAMPLE_GLOB`
- * or to any spelling of `[!B]*`. MEASURED on PHP 8.3.6, 2026-08-22: putting "eight" back into the
- * `LayeredSettings` paragraph left that test and its five sibling doc-drift
- * suites at `OK (80 tests, 297 assertions)`. The exact stale figure the round
- * had just retracted could be restored with zero test movement, inside the
- * sentence claiming it could not.
+ * derives the TOOL SET the glob leaves. It holds the glob as a class constant
+ * and never measures its length. VERIFIED at `8416d98e`, and stated with the
+ * command that produces it, because the loose version of it is wrong and the
+ * precise version was itself a figure without a generator: `grep -rl 'strlen('
+ * tests --include='*.php'` counts 66 files at round 44 and `grep -rl 'strlen'`
+ * counts 68, and in none of them is `strlen()` applied to
+ * `COUNTEREXAMPLE_GLOB` or to any spelling of `[!B]*`. (This sentence said "66
+ * files" with no command beside it; neither reading was 66 on the day it was
+ * written, and one of them only became 66 because this lane added a file. A
+ * count of files in a paragraph about counts without generators is the joke
+ * writing itself, so the generator is now written down and the number is
+ * allowed to move.)
+ *
+ * MEASURED on PHP 8.3.6, 2026-08-22: putting "eight" back into the
+ * `LayeredSettings` paragraph left that test and its sibling doc-drift suites
+ * entirely green. The FIGURE that observation used to carry — `OK (80 tests,
+ * 297 assertions)` — is retracted rather than deleted: no command in the tree
+ * produces that pair, and the nearest reproducible selection,
+ * `vendor/bin/phpunit --filter 'Drift|ReadmeSettingsTierClaim|ThemePersistenceFraming'`,
+ * reports 231 tests at round 44. Its assertion count is deliberately not
+ * quoted, because this file's own scope change moved it by tens of thousands
+ * inside one commit. What survives is the observation, which reproduces: the
+ * exact stale figure the round had just retracted could be restored with zero
+ * test movement, inside the sentence claiming it could not.
  *
  * THIS FILE IS THAT GENERATOR, and it is deliberately narrow: it does not
  * re-check the behaviour (that is the other test's job and duplicating it would
@@ -39,13 +55,21 @@ use SugarCraft\Crush\Config\LayeredSettings;
  * changing the glob and changing the words have to happen together.
  *
  * AND THE SECOND HALF: a retracted figure is only retracted where someone
- * rewrote it. `docs/SETTINGS.md` keeps a list of the `src/` sites still
- * carrying the old count, which is the only thing that makes the next one
- * findable — and that list had itself gone stale within the same commit that
- * fixed one of the two sites it named.
- * {@see testTheSettingsPageNamesExactlyTheSourceFilesStillCarryingTheStaleFigure()}
- * censuses `src/` for it, so the list reds in BOTH directions: when a new stale
- * copy appears, and when a named one is finally fixed and the list is not.
+ * rewrote it. WHAT THIS PARAGRAPH SAID: that `docs/SETTINGS.md` "keeps a list
+ * of the `src/` sites still carrying the old count", which is the only thing
+ * that makes the next one findable — and that the list had itself gone stale
+ * within the same commit that fixed one of the two sites it named. WHAT IS
+ * TRUE NOW: the page keeps no list. Round 44 replaced it with a CARDINALITY —
+ * "the census finds zero remaining sites" — precisely because a list of
+ * filenames is the thing that went stale, and a number derived from the census
+ * cannot. WHY THE PARAGRAPH STILL EARNS ITS PLACE: the property it was
+ * defending is the one that matters, and it is now defended by a stronger
+ * statement rather than a weaker one.
+ * {@see testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()}
+ * censuses `src/` AND `docs/` — `docs/` because that is where round 43's
+ * defect actually shipped — so the page reds in BOTH directions: when a new
+ * stale copy appears anywhere in scope, and when the last one is fixed and the
+ * page's number is not.
  *
  * MEASURED ON PHP 8.3.6 ONLY. This box has no 8.4 while CI runs 8.3 and 8.4;
  * nothing here is version-sensitive — it is `strlen()` over ASCII and a

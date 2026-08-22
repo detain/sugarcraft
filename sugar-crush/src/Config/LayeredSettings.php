@@ -355,30 +355,72 @@ final class LayeredSettings
      * run by `ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()`,
      * so it reds instead of rotting". WHAT IS TRUE NOW: that test derives the
      * TOOL SET this glob leaves. It never measures the glob's LENGTH — the glob
-     * is a class constant there, and at the time of writing no `strlen()`
-     * anywhere in `tests/` was applied to it (VERIFIED at `8416d98e`: `tests/`
-     * uses `strlen()` in 66 files, none of them on `COUNTEREXAMPLE_GLOB`; an
-     * earlier draft of THIS sentence said "no `strlen()` appears anywhere in
-     * `tests/`", which is plainly false and is corrected here rather than
-     * dropped, since a doc-block that catches a false claim by writing a second
-     * one has learnt nothing) — so the citation was a number written down beside
-     * the name of something that does not produce it. MEASURED on PHP 8.3.6, 2026-08-22: restoring
+     * is a class constant there, and no `strlen()` in `tests/` is applied to it
+     * (VERIFIED at `8416d98e`; RE-DERIVED at round 44 with the command the
+     * sentence used to omit — `grep -rl 'strlen(' tests --include='*.php'`
+     * counts 66 files and `grep -rl 'strlen'` counts 68, none of them applying
+     * it to `COUNTEREXAMPLE_GLOB` or to any spelling of `[!B]*`. The sentence
+     * carried "66 files" with no command beside it, and neither reading was 66
+     * on the day it was written: a figure without a generator, inside the
+     * paragraph complaining about figures without generators. An earlier draft
+     * said "no `strlen()` appears anywhere in `tests/`", which is plainly false
+     * and is corrected here rather than dropped, since a doc-block that catches
+     * a false claim by writing a second one has learnt nothing) — so the
+     * citation was a number written down beside the name of something that does
+     * not produce it.
+     *
+     * THE MEASUREMENT OFFERED IN ITS PLACE HAD NO GENERATOR EITHER, and it is
+     * rewritten for the same reason. WHAT IT SAID: on PHP 8.3.6, restoring
      * "eight" to this very paragraph left that test and its five sibling
-     * doc-drift suites at `OK (80 tests, 297 assertions)`. WHY THE SENTENCE
-     * STILL EARNS ITS PLACE: its instinct was right and only its address was
-     * wrong. A figure in a doc-block either has a generator or it rots, and
-     * "eight" is what rotting looked like. The count has one now —
-     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest} derives
-     * every number in this paragraph from `strlen()` of the glob the paragraph
-     * quotes, on both pages that carry it. The BEHAVIOUR — that this value
-     * leaves exactly `Bash` — is the half
+     * doc-drift suites at `OK (80 tests, 297 assertions)`. WHAT IS TRUE NOW: no
+     * command in the tree produces that pair. The nearest reproducible
+     * selection,
+     * `vendor/bin/phpunit --filter 'Drift|ReadmeSettingsTierClaim|ThemePersistenceFraming'`,
+     * reports 231 tests at round 44 on PHP 8.3.6, and its ASSERTION count is
+     * deliberately not quoted, because widening the census scope moved it by
+     * tens of thousands inside a single commit. WHY THE SENTENCE STILL EARNS
+     * ITS PLACE: the OBSERVATION reproduces even though the figure does not,
+     * and it is the entire reason the generator below exists — the stale figure
+     * could be put back inside the sentence claiming it could not, and nothing
+     * went red. It goes red now.
+     *
+     * THE COUNT HAS A GENERATOR AT LAST.
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest} derives every
+     * number in this paragraph from `strlen()` of the glob the paragraph
+     * quotes, at all THREE sites that carry the retraction — this doc-block,
+     * `docs/SETTINGS.md` and
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportProjectTierToolRemovals()} —
+     * and the spelled length in the paragraph above at the two sites that spell
+     * one. (This said "on both pages that carry it" while its own generator
+     * already listed three: `Bootstrap` joined in round 44, the sentence did
+     * not, and the phrase naming the spelled count is deliberately not repeated
+     * here — the generator locates that paragraph by those very words, and a
+     * second copy of them makes its window ambiguous. It reds on that, which is
+     * how this sentence was caught.)
+     * The BEHAVIOUR — that this value leaves exactly `Bash` — is the half
      * {@see \SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()}
      * generates, and the two are not interchangeable.
      *
-     * `Bootstrap::reportProjectTierToolRemovals()` is the other site
-     * `SETTINGS.md` named and is not this lane's file; that it is the ONLY
-     * remaining one is itself asserted, by
-     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::testTheSettingsPageNamesExactlyTheSourceFilesStillCarryingTheStaleFigure()}.
+     * `Bootstrap::reportProjectTierToolRemovals()` WAS THE OTHER SITE, AND THIS
+     * PARAGRAPH WAS WRONG ABOUT IT IN THREE WAYS AT ONCE. WHAT IT SAID: that
+     * Bootstrap "is the other site `SETTINGS.md` named"; that its being the
+     * ONLY remaining one was itself asserted; and that the assertion was
+     * `GlobFigureDriftTest::testTheSettingsPageNamesExactlyTheSourceFilesStillCarryingTheStaleFigure()`.
+     * WHAT IS TRUE NOW: `SETTINGS.md` names no sites at all — it states a
+     * CARDINALITY instead, because a list of filenames is exactly what went
+     * stale in round 43; the number of sites still carrying the figure is ZERO,
+     * `Bootstrap` having been rewritten in round 44; and no test method of that
+     * name exists — it is
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()},
+     * renamed by the same commit that emptied the census. All three sentences
+     * were falsified by the commit that wrote them. WHY THIS STILL EARNS ITS
+     * PLACE: the cross-reference is the only thing telling a reader that the
+     * claim above is checked rather than proof-read, and a DANGLING one is
+     * worse than none, because it reads as a citation and resolves to nothing.
+     * That failure has its own guard now:
+     * {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest} reds when `src/`
+     * or `docs/` cites a test symbol that does not exist, and this paragraph is
+     * the defect it was built from.
      *
      * So the shape argument DOES NOT survive on its own, and the honest
      * statement of where this key stands is: a project-tier `disabledTools`

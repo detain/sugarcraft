@@ -5086,7 +5086,8 @@ final class Bootstrap
      * {@see LayeredSettings::PROJECT_TIER_KEYS} (E81, `7dab9c4b`) — an earlier
      * draft of THIS paragraph put both in round 42, which is the kind of
      * confident mechanism claim rule 8 exists for and is corrected rather than
-     * dropped. This was the last copy left. The clause now names the glob. WHY THE SENTENCE STILL EARNS ITS PLACE: the length was never the
+     * dropped. This was the last copy left, and the clause now names the glob.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE: the length was never the
      * argument, and it was load-bearing only by accident. The argument is that
      * the proposed rule is keyed to a SPELLING while the hazard is an EFFECT —
      * `["[C-Z]*", "[a-z]*"]` is a different spelling of the same effect, one
@@ -5095,10 +5096,15 @@ final class Bootstrap
      * which is exactly why quoting the value reads better than counting it.
      * The three counts above now have a generator rather than a proof-read, in
      * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest}, which also
-     * censuses `src/` for paragraphs still spelling the retracted figure
-     * without retracting it — the census is EMPTY as of this rewrite, and it is
-     * asserted empty alongside a known-stale fixture, so an assertion of
-     * nothing cannot pass by scanning nothing.
+     * censuses `src/` AND `docs/` for paragraphs still spelling the retracted
+     * figure without retracting it. (It scanned `src/` alone when this sentence
+     * was first written, one commit earlier; `docs/` was added because round
+     * 43's shipped instance of this defect was a stale sentence on
+     * `docs/SETTINGS.md` rather than in source, and a census aimed away from
+     * where the last defect landed is aimed at the wrong wall.) The census is
+     * EMPTY as of this rewrite, and it is asserted empty alongside a
+     * known-stale fixture, so an assertion of nothing cannot pass by scanning
+     * nothing.
      *
      * So what is repaired is the PROPERTY, not the grammar: the effect is
      * visible, whatever spelling produced it. The capability is unchanged and
