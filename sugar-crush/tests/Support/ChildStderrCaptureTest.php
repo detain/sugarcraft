@@ -10,19 +10,27 @@ use PHPUnit\Framework\TestCase;
  * No child process launched from `tests/Integration/` may leave its stderr on
  * the suite's.
  *
- * WHAT THIS WAS COMMISSIONED TO FIX, AND WHAT WAS ACTUALLY THERE. A full
- * `vendor/bin/phpunit` prints 62 `sugarcrush: ` lines, and round 45 recorded
- * them as a HARNESS property - "child-process launches whose stderr the
- * PHPUnit process inherits rather than keeping on the pipe the test already
- * reads", with `tests/Integration/BinSugarcrushDispatchTest.php` and
- * `tests/Integration/McpToolWiringTest.php` named among the owning
- * files. Measured at 62f4e5d1 on PHP 8.3.6, run one file at a time and counted
- * with `grep -ac 'sugarcrush: '`:
+ * WHAT THIS WAS COMMISSIONED TO FIX, AND WHAT WAS ACTUALLY THERE. Round 45
+ * recorded the suite's `sugarcrush: ` stderr lines as a HARNESS property -
+ * "child-process launches whose stderr the PHPUnit process inherits rather
+ * than keeping on the pipe the test already reads" - and named
+ * `tests/Integration/BinSugarcrushDispatchTest.php` and
+ * `tests/Integration/McpToolWiringTest.php` among the owning files.
  *
- *   BinSugarcrushDispatchTest    0 lines
- *   McpToolWiringTest            1 line
+ * Neither owns what it was said to. Measured at 62f4e5d1 on PHP 8.3.6, one
+ * file per run, `vendor/bin/phpunit <file> 2>&1 | grep -ac 'sugarcrush: '`
+ * (the `-a` is not optional - plain `grep` calls that log binary and prints
+ * NOTHING, which reads exactly like a real zero): BinSugarcrushDispatchTest
+ * emits NONE AT ALL, its `runBin()` having piped fd 2 all along, and
+ * McpToolWiringTest emits EXACTLY ONE.
  *
- * and that one line is not a child's. It is an in-process
+ * The counts are stated as none and exactly one rather than as integers on
+ * purpose. A number measured over `tests/` is invalidated by the next lane
+ * that merges, and the load-bearing claim here is not the size of the figure
+ * but its shape: the prescribed mechanism had nothing to remove. The command
+ * above regenerates both at any commit.
+ *
+ * And that one line is not a child's. It is an in-process
  * `fwrite(\STDERR, ...)` reached from
  * `testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()`,
  * which already argues at length for accepting exactly one such line and pins
@@ -30,13 +38,13 @@ use PHPUnit\Framework\TestCase;
  * redirection cannot touch it, and silencing it was rejected there on its
  * merits.
  *
- * The mechanism behind the bulk of the 62 is the same one: in-process
- * `fwrite(\STDERR, ...)`. `src/Cli/NonInteractive.php` writes on it directly
- * in several places, and the two test files that drive it hardest -
+ * The mechanism behind the bulk of the suite's stderr lines is that same one:
+ * in-process `fwrite(\STDERR, ...)`. `src/Cli/NonInteractive.php` writes on it
+ * directly in several places, and the two test files that drive it hardest -
  * `tests/Cli/NonInteractiveProviderFailureTest.php` and
- * `tests/Cli/NonInteractiveTest.php` - account for 18 and 8 lines with no
- * child process anywhere in either. Closing those needs a stderr sink seam in
- * `src/`, not a descriptor spec in a test.
+ * `tests/Cli/NonInteractiveTest.php` - account between them for most of what
+ * remains, with no child process anywhere in either. Closing those needs a
+ * stderr sink seam in `src/`, not a descriptor spec in a test.
  *
  * SO WHAT THIS FILE IS. The spawn sites under `tests/Integration/` were
  * already clean, every one of them, and nothing was keeping them that way.
@@ -119,6 +127,44 @@ final class ChildStderrCaptureTest extends TestCase
         $qualified = $one('$d = [2 => ["pipe", "w"]]; \\proc_open($cmd, $d, $pipes);');
         $this->assertSame('proc_open', $qualified['call']);
         $this->assertSame(ChildStderrCaptureScanner::SHAPE_CAPTURED, $qualified['shape']);
+
+        // AN INTERPOLATED COMMAND STRING. `"{$x}"` opens with an ARRAY token
+        // (T_CURLY_OPEN) and closes with a plain '}', so counting only the
+        // closer drove the argument-splitter's depth negative and top-level
+        // commas after the string stopped being seen: this correctly-capturing
+        // call came back `unclassified`, and a guard that reds correct code
+        // invites the exemption the next real offender hides behind.
+        $interpolated = $one('proc_open("php {$script}", [1 => ["pipe", "w"], 2 => ["pipe", "w"]], $p);');
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $interpolated['shape'],
+            'string interpolation in the command broke the argument split',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('proc_open("php {$script}", [1 => ["pipe", "w"]], $p);')['shape'],
+            'the same call without fd 2 must still be reported as inherited',
+        );
+
+        // BACKTICKS ARE SHELL EXECUTION, and were outside the alphabet
+        // entirely - not `unclassified` but SILENT, which is the one answer a
+        // guard may never give to something it cannot parse.
+        $backtick = $one('$out = `php foo.php`;');
+        $this->assertSame(ChildStderrCaptureScanner::CALL_BACKTICK, $backtick['call']);
+        $this->assertSame(ChildStderrCaptureScanner::SHAPE_INHERITED, $backtick['shape']);
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('$out = `php foo.php 2>&1`;')['shape'],
+        );
+
+        // A `2>` IN A COMMENT IS NOT A REDIRECTION. Same window defect as the
+        // fork scanner's: comments are source text, and the `2>` search ran
+        // over rendered source.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('shell_exec("php x" /* 2> somewhere */);')['shape'],
+            'a comment mentioning a redirection is not a redirection',
+        );
 
         // A method named `exec` is not the launcher.
         $this->assertSame([], ChildStderrCaptureScanner::scan('<?php $this->exec("ls");'));
