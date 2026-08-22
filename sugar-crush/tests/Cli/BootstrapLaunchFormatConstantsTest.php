@@ -615,6 +615,53 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     }
 
     /**
+     * THE OTHER DOC PAGE THAT QUOTES A PROMOTED FORMAT, and it quotes a SHAPE
+     * rather than a sample, which is why it needed its own instrument.
+     *
+     * HOW IT WAS FOUND, and the method is the part worth keeping. Round 46
+     * closed the same hole twice on the tool-removal line — README.md had a
+     * guard, `docs/SETTINGS.md` carried a byte-for-byte copy of the identical
+     * sample and had none. So every promoted format was then swept the same
+     * way: take its longest span of literal text between conversions, flatten
+     * every page, and ask which pages contain it. MEASURED on PHP 8.3.6, that
+     * sweep leaves exactly this one unguarded reader.
+     *
+     * A WEAK NEEDLE IS PART OF THE SWEEP'S ALPHABET AND IT LIED ONCE, which is
+     * why this is recorded rather than trusted. This format's longest literal
+     * span is `'ignoring '` — nine characters of ordinary English. The sweep
+     * reported README.md as a reader too, and README.md's hit is the unrelated
+     * sentence "reject one at exit `2` rather than ignoring it". A span short
+     * enough to occur by accident cannot answer "who reads this"; it can only
+     * nominate candidates for a human to check, and that check is what removed
+     * README.md from this test's page list.
+     *
+     * PLACEHOLDERS, NOT ARGUMENTS. `docs/TROUBLESHOOTING.md` shows operators
+     * the shape of the line rather than a rendered instance, so the expectation
+     * substitutes the page's own `<path>` and `<reason>` for the two `%s`. That
+     * pins strictly less than a rendered sample would — the fields are the
+     * page's invention, not the launcher's — but it pins the ENVELOPE, which is
+     * the part that carries meaning: the word `ignoring`, the field order, and
+     * the spaced em-dash between them.
+     */
+    public function testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints(): void
+    {
+        $page = 'docs/TROUBLESHOOTING.md';
+        $path = \dirname(__DIR__, 2) . '/' . $page;
+
+        self::assertFileExists($path, "{$page} is quoted as a reader of the project-tier refusal but is gone");
+
+        $flat = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($path));
+
+        self::assertStringContainsString(
+            sprintf(Bootstrap::PROJECT_TIER_REFUSAL_FORMAT, '<path>', '<reason>'),
+            $flat,
+            "{$page} no longer quotes the shape Bootstrap::PROJECT_TIER_REFUSAL_FORMAT renders. Either the "
+            . 'launcher was reworded and the page was not, or the page renamed its placeholders; the first '
+            . 'is drift and the second means this expectation has to learn the new names',
+        );
+    }
+
+    /**
      * The retention DETAIL row carries its own copy of the stderr envelope, and
      * that relationship is asserted rather than only explained.
      *

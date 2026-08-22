@@ -6922,13 +6922,15 @@ The independent copy is best held by a second party that is not a test — READM
 test. The general form: **whenever a guard's expected and actual values are both derived from the code
 under test, name what the tautology costs before shipping it.**
 
-### Ec46-3 — three `sprintf()` formats in `Bootstrap.php` are inline on purpose; three others were not, and only a mutation found them
+### Ec46-3 — some `sprintf()` formats in `Bootstrap.php` are inline on purpose; others only looked that way, and a mutation is what told them apart
 
 **Recorded 2026-08-22 by round-46 lane c.** Severity: informational. **Measured.**
 
-**What.** E164's walk asked, per literal format, whether an external reader exists. Five had one and were
-promoted — the fifth only after a mutation falsified the walk's own first answer, which is the part of this
-entry worth keeping. `reportProjectTierRefusals()`'s `'ignoring %s — %s'` envelope was classified
+**What.** E164's walk asked, per literal format, whether an external reader exists. The ones that had one
+were promoted into `BootstrapLaunchFormatConstantsTest::NAMED_FORMATS`, which is the list to read; several
+of them only after a mutation falsified the walk's own first answer, which is the part of this entry worth
+keeping. (This sentence gave a count when it was written and the count was stale within the same round —
+see the amendment at the end of this entry.) `reportProjectTierRefusals()`'s `'ignoring %s — %s'` envelope was classified
 "fragment only" on the strength of two files that mention it in COMMENTS; rewording it `ignoring` →
 `skipping` reds `BootstrapLaunchNoticeRoutingTest::testARefusedProjectDirectoryReachesBothChannels()`
 (`Tests: 177, Assertions: 615, Failures: 1`), which reconstructs the whole envelope twice. **`grep` for a
@@ -6946,12 +6948,57 @@ two of those four survived.
 The remaining three were left inline because every reader they have really does assert a FRAGMENT — a
 loose coupling to an idea, not two parties agreeing on a sentence, and that is now measured rather than
 grepped: `mcpConfigDecision()`'s out-of-tree and untrusted refusals (`'outside the project tree'`,
-`'running programs this repository chose'`, `assertStringStartsWith('resolves to ')`, and a `docs/MCP.md`
-paragraph that narrates the policy rather than quoting the message); and
+`'running programs this repository chose'`, `assertStringStartsWith('resolves to ')`); and
 `trustedConfigDirPath()`'s home-ownership refusal (two `expectExceptionMessageMatches()` regexes on a
-clause). Not writing the count into prose is deliberate — the census is derived by
-`BootstrapLaunchFormatConstantsTest::testTheLiteralFormatCensusHasAGenerator()`.
+clause). No count is written here — the census is derived by
+`BootstrapLaunchFormatConstantsTest::testTheLiteralFormatCensusHasAGenerator()` and the promoted set is
+`NAMED_FORMATS`, which counts itself.
+
+**AMENDED 2026-08-22 by round-46 lane c's fix agent, after review.** Two claims above were wrong and both
+are corrected in place rather than deleted, because the reasoning around them still holds.
+
+1. **`docs/MCP.md` does not paraphrase.** It was cited as narrating `mcpConfigDecision()`'s untrusted
+   refusal "rather than quoting the message". MEASURED: `docs/MCP.md` and `src/Cli/Bootstrap.php` share
+   the verbatim nine-word span `before any tool call and in every permission mode`. That is a quoted
+   clause, so the mutation that survived did so despite an existing shared span, not because the page
+   paraphrases — the mutation simply landed elsewhere in the sentence. The conclusion (leave the format
+   inline) is unchanged, since a shared clause is still a fragment coupling; the stated reason was not.
+2. **The counts were stale on arrival**, the same defect this round found twice in `tests/`. They are
+   replaced by names and by the derived census above.
 
 **Step.** No action now. The trigger for revisiting any one of them is a second party reproducing a whole
 rendered SENTENCE rather than a clause — a README sample, a `docs/*.md` code block, or an `assertSame()`
 on the line. That is the same test E164 applied.
+
+### Ec46-4 — nothing sweeps the doc pages for unguarded quotes of a promoted format
+
+**Recorded 2026-08-22 by round-46 lane c's fix agent. The two instances the sweep found this round were
+both closed; the SWEEP itself is what is deferred.** Severity: low. **Observed, measured.**
+
+**What.** Round 46 closed the same hole twice. `README.md` had a guard on the tool-removal launch report;
+`docs/SETTINGS.md` carried a byte-for-byte copy of the identical sample, said so in prose ("That is the
+stderr form, byte for byte"), and had none. Sweeping the rest of the promoted formats the same way — take
+each one's longest span of literal text between conversions, flatten every page under `README.md` and
+`docs/`, ask which pages contain it — turned up one more: `docs/TROUBLESHOOTING.md` quotes
+`ignoring <path> — <reason>`, which is `Bootstrap::PROJECT_TIER_REFUSAL_FORMAT` with its two `%s` replaced
+by placeholder names. Both now have guards
+(`ReadmeSettingsTierClaimTest::testTheSettingsPageQuotesTheSameLaunchReportByteForByte()` and
+`BootstrapLaunchFormatConstantsTest::testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints()`).
+
+**What is still missing is the sweep.** It was run by hand, once, at one commit. The next format promoted,
+or the next page that decides to quote a launch line, restores the same silence — and the failure mode is
+the quiet one: a page that PROMISES agreement and is checked by nothing is worse than one that
+paraphrases, because the promise is what stops the next reader from checking it by hand.
+
+**Careful — the sweep's alphabet is part of its answer, and it lied once here.** The longest literal span
+of `PROJECT_TIER_REFUSAL_FORMAT` is `'ignoring '`, nine characters of ordinary English, and the sweep duly
+nominated `README.md`, whose actual sentence is "reject one at exit `2` rather than ignoring it". A span
+short enough to occur by accident nominates candidates; it does not identify readers. Any automated
+version has to either impose a minimum span length and REPORT the formats it therefore cannot check —
+rather than passing them silently — or compare rendered samples instead of spans.
+
+**Step.** Turn the sweep into a test: for each entry in `BootstrapLaunchFormatConstantsTest::NAMED_FORMATS`,
+derive its longest literal span, and assert that every page containing that span is on a declared list of
+guarded readers. New page quoting a format, or a newly promoted format some page already quotes, then reds
+with "this page quotes a format nothing checks" instead of going unnoticed. Formats whose longest span is
+below the length threshold must be listed as unsweepable rather than dropped.
