@@ -4316,6 +4316,42 @@ code, so the guard goes red first. Note E69 below when choosing the authority: a
 `Width::string` is not a clamp against what `Style::render()` finally lays out. Do this in its own
 diff — it is a foundation change with callers outside this pane.
 
+**FIXED 2026-08-22, ROUND 40 `lsp` lane. The stated mechanism above was wrong; the reproduction was
+right.** `truncateAnsi()` does NOT slice at codepoints and was already stopping BEFORE a cluster it
+could not fit — it walks `nextCluster()`, i.e. `grapheme_extract()`. The over-budget return came from
+the OTHER side: `Width::string()` preferred `grapheme_str_split()`, which is **PHP 8.4+** and absent
+on this PHP 8.3.6, so it fell back to `mb_str_split()` and measured per CODEPOINT. Two splitters, one
+class. `truncateAnsi("\u{1F44D}\u{1F3FD}xy", 3)` returned `"\u{1F44D}\u{1F3FD}x"` — 3 cells by the
+cluster measure that chose it, 5 by the codepoint measure the caller checked it with. So "fix
+truncateAnsi to stop before a cluster it cannot fit" would have changed nothing.
+
+Fix: `Width::graphemes()` now walks `nextCluster()`, so `string()` and every truncator share ONE
+segmentation, and `graphemeWidth()` gained the regional-indicator-pair rule (a flag is 2 cells, a lone
+regional indicator 1) that the per-codepoint sum used to supply by accident. Fuzz, 20,000
+cluster-heavy strings x budgets 1-8 = 160,000 `truncateAnsi` calls: **7,966 over-budget (worst +6) ->
+0**. The E68 end-to-end table above re-derived exactly (0/35/34/41 of 77 widths).
+
+`AgentViewPaneGeometryTest::testTheAgentDashboardPaneFitsTheOutsideWidthItWasHanded()` was widened to
+the four tabulated descriptions x widths 24..100 BEFORE the fix and went red at width 38. Confirmed
+non-vacuous: with the fixtures reverted to ASCII it PASSES against the pre-fix `Width` over the same
+77 widths and 385 assertions, so the ASCII fixture — not the narrow width list — was the blindness.
+
+**The bound is not fully closed, and `Renderer::hardFit()` is still load-bearing.** A SECOND
+disagreement survives, unrelated to clusters: `Ansi::strip()` (which `Width::of()` measures through)
+eats a two-byte escape whose second byte is an ECMA-48 Fe final (`ESC \`, `ESC P`, `ESC M`), while
+`truncateAnsi()`'s scanner passes `ESC [` / `ESC ]` only. Alone it makes `truncateAnsi()` stop early;
+followed by a grapheme Extend it goes over. Measured over 400,000 escape- and cluster-bearing calls at
+budgets 1-10: **548 over-budget, worst +1**, all of that shape, minimum `ESC M` + U+1F3FD at budget 1.
+`PaneWidthInvariantTest::testTheHardFitBackstopHoldsTheBoundWhereTruncateAnsiAloneDoesNot` fired on the
+fix (its first assertion PINNED the flags defect) and was repointed at this live shape, keeping the
+flags case as a fixed-and-pinned equality. Worth its own finding if anyone wants the bound closed.
+
+**Also found, out of scope:** the `grapheme_str_split() -> mb_str_split()` cascade that caused this is
+duplicated in `sugar-charts` (3 sites), `sugar-table` (2), `sugar-stickers`, `sugar-calendar` and
+`candy-lister`. Each degrades to codepoint splitting on PHP 8.3 exactly as `Width` did.
+`findings/README.md` already records the duplication as a shape ("repeated in 8+ libs") but not as a
+correctness defect.
+
 ---
 
 ### E69 — `Width::string()` scores a tab 0; `Style::render()` expands it to four spaces
@@ -4358,3 +4394,33 @@ today it is not — it is `Style` state), or `Style::render()` stops rewriting c
 and the expansion moves to the caller that knows both. Whichever way it goes, land it with a test that
 renders a tab-bearing string through `Style` and asserts `Width::string()` of the result equals
 `Width::string()` of the input, which is the property that is false today.
+
+**FIXED 2026-08-22, ROUND 40 `lsp` lane — and the proposed remedy is incomplete by construction.**
+
+Authority chosen: **`Width::string()` charges the tab.** Blast radius measured both ways across the
+11 libs that reference `truncateAnsi`, plus `sugar-dash`. Charging a tab 4 cells in `Width`: **0 test
+failures**. Removing the expansion from `Style::render()`: **2 failures in `candy-sprinkles`**, and it
+deletes the effect of a documented public API (`tabWidth()` / `getTabWidth()` / `unsetTabWidth()`,
+mirroring lipgloss) — a removal, which this project's rules forbid in favour of wiring.
+
+`Width::TAB_WIDTH = 4` is now the single number: `graphemeWidth()` charges it and `Style`'s default
+`$tabWidth` reads it, so the two move together instead of agreeing by coincidence.
+
+**A THIRD tab measure was found and fixed with it:** `Width::wrapAnsi()` charged a `\t` **1** cell in
+its whitespace branch — against `string()`'s 0 and `Style::render()`'s 4. `wrapAnsi("ab\tcd", 7)`
+returned ONE line of 8 cells against a 7-cell column. It now routes through `graphemeWidth()`.
+
+**What no per-tab charge can fix, and this is the correction to the Step above.** `render()` does not
+re-measure content, it REWRITES it, and substituting spaces for a tab changes GRAPHEME CLUSTERING
+after the substitution. A tab is a Control character, which by UAX #29 never joins a following Extend;
+a space is not, and does. So `"\t" . U+1F3FD` is `TAB_WIDTH + 2` cells while the rendered
+`"    " . U+1F3FD` is `TAB_WIDTH` — the modifier joins the final space and contributes 0. That is the
+same two-codepoint input this finding delta-debugged. Measured over 4,797 tab-bearing random strings,
+`Style::render()` moving `Width::string()`: **4,797/4,797 (100%) at `8add627b` -> 568/4,797 (11.84%)**,
+and **all 568 are that one shape, 0 unexplained**. Only not rewriting the content closes it, which is
+`Style::tabWidth(0)`. Both the property and the residue are pinned in `candy-sprinkles/tests/StyleTest.php`.
+
+**Residue also left deliberately:** a `Style` with a non-default `tabWidth` still disagrees with
+`Width::string()` by `abs($tabWidth - TAB_WIDTH)` per tab; documented on `Width::TAB_WIDTH` and pinned.
+Note `\SugarCraft\Dash\Components\Card\Highlight` carries its OWN unrelated `$tabWidth` field, same
+name, same default of 4, settable to any value >= 1 — a fourth tab-width authority, untouched.
