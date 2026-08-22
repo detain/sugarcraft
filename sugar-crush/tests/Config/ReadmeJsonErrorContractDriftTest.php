@@ -1329,6 +1329,72 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
     }
 
     /**
+     * THE SINGLE-VALUED CONTRACT REDS, AND NOTHING IN `src/` EXERCISES IT.
+     *
+     * DORMANT, AND PINNED RATHER THAN REMOVED. {@see exitCodeAfter()} fails
+     * when the terminator after a producer names two different exit codes,
+     * because its callers map one producer to one code and a `null` there is
+     * indistinguishable from "no terminator". No error producer in `src/` is
+     * followed by such a terminator today — measured by mutation on PHP 8.3.6
+     * at round 45: replacing the `assertCount(1, …)` with a mere "found
+     * something" check left the whole suite green. A guard nothing exercises is
+     * a guard nobody notices deleting, so the fixture below exercises it.
+     *
+     * WHY IT IS NOT WIRED TO ANYTHING WIDER: `doctor()`'s ternary IS this shape
+     * and would trip it — but `doctor()` emits a `result`-only document, so it
+     * is never an error PRODUCER and {@see exitCodeAfter()} is never called on
+     * it. {@see exitCodesAfter()} is what reads it, and that one is
+     * multi-valued by design. The seam is the split between the two, and the
+     * measured reason to keep it is that the day an error document lands on a
+     * ternary branch, `shippedTypes()` needs a decision from a person rather
+     * than a silent `null`.
+     */
+    public function testTheSingleValuedExitWalkRedsOnATerminatorItCannotSummarise(): void
+    {
+        $source = '<?php class F { const EXIT_OK = 0; const EXIT_FAILURE = 1;
+            static function f(bool $ok): int {
+                self::emitErrorDocument(["error" => ["type" => "x"]]);
+
+                return $ok ? F::EXIT_OK : F::EXIT_FAILURE;
+            } }';
+
+        $tokens = $this->significantTokens($source);
+        $at = null;
+        foreach ($tokens as $i => $token) {
+            if ($token->is(T_STRING) && $token->text === 'emitErrorDocument') {
+                $at = $i;
+
+                break;
+            }
+        }
+        self::assertNotNull($at, 'the fixture lost its producer, so nothing below is being exercised');
+
+        self::assertSame(
+            [0, 1],
+            $this->exitCodesAfter($tokens, $at, count($tokens) - 1, []),
+            'the multi-valued walk no longer reads both arms of the ternary, so the ambiguity the '
+            . 'single-valued walk is supposed to refuse never reaches it',
+        );
+
+        try {
+            $this->exitCodeAfter($tokens, $at, count($tokens) - 1, []);
+        } catch (\PHPUnit\Framework\AssertionFailedError $failure) {
+            self::assertStringContainsString(
+                'no single answer',
+                $failure->getMessage(),
+                'exitCodeAfter() failed for some reason other than the ambiguity it exists to refuse',
+            );
+
+            return;
+        }
+
+        self::fail(
+            'exitCodeAfter() accepted a terminator naming two different exit codes instead of going '
+            . 'red. It would have handed one of them to a caller mapping one producer to one code.',
+        );
+    }
+
+    /**
      * `Subcommands::doctor()` really is the shipped case, read from the tree.
      *
      * The fixture above is `doctor()` reduced to a skeleton, and a skeleton is
