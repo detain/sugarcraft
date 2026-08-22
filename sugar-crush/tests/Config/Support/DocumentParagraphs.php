@@ -70,11 +70,15 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  * - Everything else splits on a blank line, exactly as before.
  *
  * THE OLD RULE ALSO MIS-SPLIT FENCES, in the opposite direction, and that is
- * the half that is easy to miss: a fenced block containing a blank line was
- * cut in two, and its closing fence was glued onto the prose paragraph that
- * followed. `docs/AGENTS_AUTHORING.md`'s `yaml` preset example, `docs/SKILLS.md`'s
- * frontmatter example and `README.md`'s `ProviderInterface` example were all
- * in that state — prose and code in one unit, with an unbalanced fence in it.
+ * the half that is easy to miss: a fenced block containing a blank line was cut
+ * in two, leaving an unbalanced fence in each half. Three were in that state at
+ * round 45 — `docs/AGENTS_AUTHORING.md`'s `yaml` preset example,
+ * `docs/SKILLS.md`'s frontmatter example and `README.md`'s `ProviderInterface`
+ * example. In the first two the closing fence then landed INSIDE the prose
+ * paragraph that followed, so prose and code shared a unit; in the third both
+ * halves were code. Checked one at a time rather than asserted of all three,
+ * because the two outcomes are not the same defect and a sentence covering
+ * both was wrong about one of them.
  *
  * AN OPENING FENCE FOLLOWS COMMONMARK'S INFO-STRING RULE — the remainder of a
  * backtick fence's opening line may not itself contain a backtick. This is not

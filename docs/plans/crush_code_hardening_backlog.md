@@ -6276,3 +6276,65 @@ of the merge step.
 **Step.** Either a supervisor-allocated number block per lane, or lane-prefixed provisional ids
 (`Eb1`, `Ec1`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
 shared scratchpad but not this.
+
+### Ec1 — a FOURTH `paragraphs()` copy carries the same blind spot and was not routed
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135 — the
+supervisor should renumber at merge.**
+
+**What.** E125 named three suites carrying a byte-identical private `paragraphs()`. There are **four**.
+`tests/Chat/ChatConfigChangeDoorsDocumentationDriftTest` carries the same rule spelled `private static
+function paragraphs()`, which is why a grep for the instance signature finds three. It was left alone
+this round on file-ownership grounds only.
+
+**Measured before saying so**, on PHP 8.3.6: both doc-blocks it reads (`Chat::$onConfigChange` and
+`Chat::withOnConfigChange()`) are plain prose with no list, table or fence, so the old blank-line window
+and the new `Tests\Config\Support\DocumentParagraphs` window give it **identical unit counts and
+identical verdicts** (property: 4 units / 1 retraction / live hit; method: 3 units / 1 retraction / live
+hit, under both). Nothing is hiding in it **today**. It is a latent carrier: the first `-` bullet or
+table anyone adds to either doc-block reopens the blind spot in that file alone.
+
+**Step.** Delete the private copy and call `DocumentParagraphs::of()`. One line, plus the rule-7
+three-part note the other three carry. Note that its four-doors rule ALSO has the "two adjacent
+half-claims satisfy it" shape that round 45 replaced with a per-key rule in
+`ConfigWriteProducerDocumentationDriftTest`; the same replacement probably belongs here, but its
+retraction-exclusion machinery is different enough that it needs its own measurement rather than a
+transplant.
+
+### Ec2 — the mention oracle has no way to record a variable another page deliberately says is unread
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135.**
+
+**What.** E123's new `EnvRosterDriftTest::testEveryVariableAnotherPageNamesIsOneTheCodeReads()` treats
+every `SUGARCRUSH_*` name on any page except `docs/ENVIRONMENT.md` as a promise the code must keep. The
+roster page is excluded from that scrape precisely so its two deliberate not-read discussions
+(`SUGARCRUSH_TOOL_CALL_PARSER`, `SUGARCRUSH_REASONING_EFFORT`) stay out of the rule — **verified by
+mutation**: removing the `continue` that skips it reds three tests, two of them on exactly those two
+names.
+
+**The residual.** A page OTHER than the roster that legitimately says "nothing reads this" now reds, and
+there is no exemption. No such sentence exists on any other page at round 45 (measured: every name on
+every mention surface is read), so the machinery was **deliberately not built** — an unmeasured exemption
+rule is what round 43 shipped stale, and "no such paragraph exists" is a statement about a day's tree
+rather than a property of a rule.
+
+**Step, when it first reds.** Do not add a filename exemption list. The window is now available: reuse
+`DocumentParagraphs::of()` and make the exemption a property of the UNIT the name appears in — the
+`GlobFigureDriftTest` retraction pattern — so it is semantic rather than keyed to a path.
+
+### Ec3 — `exitCodeAfter()`'s red-on-ambiguity contract is dormant in `src/`
+
+**Recorded 2026-08-22 by round-45 lane c.** Severity: informational. **Lane-local provisional id.**
+
+**What.** E132 split the exit walk into a multi-valued `exitCodesAfter()` and a single-valued
+`exitCodeAfter()` that now FAILS, rather than returning `null`, when a terminator names two different
+exit codes. Nothing in `src/` exercises that failure — measured by mutation on PHP 8.3.6: replacing the
+`assertCount(1, …)` with a "found something" check left the entire suite green.
+
+**Not removed, per the standing no-dormant-deletion rule; pinned instead** by
+`testTheSingleValuedExitWalkRedsOnATerminatorItCannotSummarise()`, which drives a fixture through the
+real method and asserts the failure fires. `Subcommands::doctor()` IS this shape but emits a
+`result`-only document, so it is never an error producer and reaches `exitCodesAfter()` instead. The
+seam is the split between the two methods; the measured reason to keep it is that the day an error
+document lands on a ternary branch, `shippedTypes()` needs a decision from a person rather than a
+silent `null`.
