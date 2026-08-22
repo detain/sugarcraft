@@ -318,6 +318,21 @@ final class SkillRegistry
      * is pinned in
      * {@see \SugarCraft\Crush\Tests\Skills\SkillPathPatternTest}.
      *
+     * FASTER, INCIDENTALLY, WHICH MATTERS BECAUSE THIS IS ON A TOOL-CALL PATH:
+     * {@see SkillPathNudge} runs this per pattern per path, and a
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Glob} hands over a whole match
+     * list. GENERATOR, so the figure can be re-taken: 5 patterns
+     * (`**\/*.php`, `src/**\/*.php`, `a/**\/b/**\/c/**\/d`, `docs/**\/*.md`,
+     * `**\/node_modules/**`) x 40 paths of the form `src/` + 8 path segments
+     * + a filename, 200 trials = 40,000 pairs, no randomness, PHP 8.3.6. The
+     * old predicate took 0.032s / 0.033s / 0.034s over three runs; this one
+     * 0.0095s / 0.0094s / 0.0095s — 0.29x, one cached `preg_match` where the
+     * old path ran up to four `fnmatch()` calls plus three `str_replace()`
+     * rewrites. A deliberately pathological case (three globstars against a
+     * 60-segment non-matching path) ran 2,000 times in 0.0004s: the leading
+     * literal anchors it, so PCRE fails before it can backtrack. The
+     * `preg_match() === false` branch catches a backtrack limit anyway.
+     *
      * AND THE THREE REWRITES ARE STILL HERE, in {@see legacyPathMatch()},
      * because "never narrows" has to be a THEOREM and not a sample. The
      * translation reproduces `fnmatch()`'s `*`, `?`, `\\` and `[...]` — but
