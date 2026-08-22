@@ -20,6 +20,27 @@ declare(strict_types=1);
     // JSON document here to cover it would create the drift that centralising
     // the shape exists to prevent, over a case a `| jq` consumer can only hit
     // by running the binary out of a broken checkout. Documented in README.md.
+    //
+    // AND IT CANNOT USE THE TRANSCRIPT SEAM EITHER — re-examined in round 42
+    // (E78) alongside the other raw stderr writes in this project, and this is
+    // the one that is structurally exempt rather than merely judged.
+    // Bootstrap's launch-notice seam is a static method on a class the
+    // autoloader supplies, and the whole point of this branch is that the
+    // autoloader was not found; there is also no transcript for a notice to
+    // reach, because Chat is never constructed on this path. `error_log()` —
+    // the assertable stderr seam Bootstrap::mcpClient() reaches for — is
+    // likewise off the table: it is a bare PHP function and so WOULD run here,
+    // but it routes to whatever destination the operator's `error_log` ini
+    // names, and a binary that cannot start at all has to say so on the channel
+    // the invoking shell is already watching. So: an intentional exception,
+    // documented in place rather than forced onto a seam that does not exist
+    // yet at this point in the process. It is not unassertable for being raw,
+    // which is the other half of what round 42 checked: nothing asserted this
+    // branch before, because reaching it needs a checkout WITHOUT
+    // vendor/autoload.php. Copying this script into a bare
+    // `<tmp>/bin/sugarcrush` is enough to produce one, and
+    // Tests\Integration\BinSugarcrushAutoloadGuardTest now does exactly that
+    // and reads the real stderr and exit code back.
     fwrite(STDERR, "sugarcrush: cannot find composer autoload.php\n");
     exit(2);
 })();

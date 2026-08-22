@@ -10,7 +10,9 @@ use SugarCraft\Crush\Config\LayeredSettings;
 
 /**
  * Round 39 built {@see Bootstrap::warnPermissionConfigInTranscript()} and
- * migrated ONE caller onto it. This file is the guard for the other thirteen.
+ * migrated ONE caller onto it. This file is the guard for the other fourteen
+ * — thirteen until round 42 (E78) routed Bootstrap::reportPrunedSessions()'s
+ * retention summary onto the seam as the fifteenth call site.
  *
  * WHAT IS PINNED, AND WHY IT IS NOT "THE NOTICE EXISTS". A test asserting that
  * the transcript list is non-empty passes while the sentence is wrong, and a
@@ -184,7 +186,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      * have, and the user meets it as `/skill` not offering something they wrote.
      *
      * ONE ROW WHATEVER THE COUNT — this message is an aggregate, and that is
-     * what makes it safe to seat in a transcript that also carries thirteen
+     * what makes it safe to seat in a transcript that also carries fourteen
      * other sources. Two unreadable files, one notice, and the notice says two.
      */
     public function testSkippedSkillFilesReachBothChannelsAsOneAggregateRow(): void
@@ -404,6 +406,103 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             substr_count(implode("\n", $viaApp), 'more launch warnings this transcript could not fit'),
             'the overflow row must appear exactly once in the hosted transcript',
         );
+    }
+
+    /**
+     * RETENTION DELETED CONVERSATIONS, and this is the only thing on the seam
+     * whose subject is data the launch destroyed rather than a setting it
+     * declined. Migrated in round 42 (E78).
+     *
+     * WHAT THE ROUTING RULE USED TO SAY ABOUT IT, in
+     * {@see Bootstrap::warnPermissionConfigInTranscript()}: stderr only,
+     * because this is "about history already deleted, not about this session's
+     * capabilities". WHAT IS TRUE NOW: the rule is "iff it names something the
+     * session can no longer DO", and after a prune the session can no longer
+     * resume, branch, rename or rewind the rows named here — `/resume` and
+     * `session list` are shorter than the user left them. The 0.47s alternate-
+     * screen window the seam's doc-block measures applies to this line exactly
+     * as it does to a provider fallback.
+     *
+     * THE SPLIT IS THE POINT, and it is asserted from both sides: ONE summary
+     * row on the transcript whatever the prune deleted, and the per-session ids
+     * on stderr ONLY. A prune of fifty sessions must not put fifty rows into a
+     * list that is re-sent to the model on every turn — that is the per-ENTRY
+     * fan-out {@see Bootstrap::LAUNCH_NOTICE_LIMIT} exists to refuse. So this
+     * fixture prunes TWO sessions and asserts the transcript carries one row
+     * naming neither id, while stderr carries both.
+     *
+     * DRIVEN THROUGH Bootstrap::sessionStore() rather than chat(): that is the
+     * production caller (chat() calls it early and reads launchNotices() last,
+     * which is what makes the notice reachable at all), and it keeps the
+     * fixture to a session.db instead of a whole project tree.
+     */
+    public function testRetentionSummaryReachesBothChannelsWhileTheIdsStayOnStderr(): void
+    {
+        $db = $this->configDir . '/session.db';
+        $store = new \SugarCraft\Crush\Session\EnhancedSessionStore($db);
+        // `keeper` is the row seedSession() would resume, and retention exempts
+        // it whatever its age — so the two aged rows below are the only
+        // candidates and the count in the summary is not an accident of
+        // ordering.
+        foreach (['keeper', 'gone-one', 'gone-two'] as $id) {
+            $store->createSession($id, 'p', 'm', null, null);
+        }
+        $store->addMessage('gone-one', ['role' => 'user', 'content' => 'a month of work']);
+        unset($store);
+
+        $pdo = new \PDO('sqlite:' . $db);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->prepare('UPDATE sessions SET updated_at = ? WHERE id IN (?, ?)')
+            ->execute(['2020-01-01 00:00:00', 'gone-one', 'gone-two']);
+        unset($pdo);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Crush\\Cli\\Bootstrap::sessionStore();\n",
+            ['SUGARCRUSH_SESSION_RETENTION_DAYS' => '30'],
+        );
+
+        self::assertSame(
+            ['retention removed 2 unnamed sessions untouched for 30+ days (ids on stderr)'],
+            $notices,
+            'the transcript must carry exactly one aggregate row for the prune',
+        );
+        self::assertStringContainsString(
+            "sugarcrush: retention removed 2 unnamed sessions untouched for 30+ days (ids on stderr).\n",
+            $stderr,
+            'the stderr half of the seam must still say it',
+        );
+
+        // The ids are the unbounded half, and they are on stderr ONLY.
+        foreach (['gone-one', 'gone-two'] as $id) {
+            self::assertStringContainsString($id . ' (last used 2020-01-01 00:00:00 UTC,', $stderr);
+            self::assertStringNotContainsString($id, $notices[0]);
+        }
+
+        // Not vacuous in the direction that matters: the exempt row survived,
+        // so this is a real prune and not "the whole table went".
+        self::assertStringNotContainsString('keeper', $stderr);
+    }
+
+    /**
+     * The complement, and the reason the case above is not just "a string
+     * appears": a launch that pruned NOTHING must seed no row at all. Without
+     * this, a seam that unconditionally announced retention would pass every
+     * assertion above and put a line about deleted history into the transcript
+     * of every single launch.
+     */
+    public function testALaunchThatPrunedNothingSeedsNoRetentionRow(): void
+    {
+        $store = new \SugarCraft\Crush\Session\EnhancedSessionStore($this->configDir . '/session.db');
+        $store->createSession('fresh', 'p', 'm', null, null);
+        unset($store);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Crush\\Cli\\Bootstrap::sessionStore();\n",
+            ['SUGARCRUSH_SESSION_RETENTION_DAYS' => '30'],
+        );
+
+        self::assertSame([], $notices);
+        self::assertStringNotContainsString('retention removed', $stderr);
     }
 
     /**
