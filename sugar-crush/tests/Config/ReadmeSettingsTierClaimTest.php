@@ -93,9 +93,23 @@ final class ReadmeSettingsTierClaimTest extends TestCase
 
     private function readme(): string
     {
-        $path = __DIR__ . '/../../README.md';
+        return $this->document('README.md');
+    }
+
+    /**
+     * Any page in the package root, read as bytes.
+     *
+     * PATH-RELATIVE AND ASSERTED PRESENT, because a page that has been renamed
+     * or moved must red as "the reader is gone" rather than as a containment
+     * miss against an empty string.
+     */
+    private function document(string $relativePath): string
+    {
+        $path = \dirname(__DIR__, 2) . '/' . $relativePath;
+        self::assertFileExists($path, "{$relativePath} is quoted as a reader of the launch report but is gone");
+
         $text = file_get_contents($path);
-        self::assertIsString($text, 'README.md is unreadable');
+        self::assertIsString($text, "{$relativePath} is unreadable");
 
         return $text;
     }
@@ -234,8 +248,58 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         // fenced sample block is extracted and compared whole.
         self::assertSame(
             $this->launchReportSample($ceiling, $removed),
-            $this->readmeLaunchReportBlock(),
+            $this->launchReportBlockIn('README.md'),
             "README.md's launch-report sample is not what the launcher would print",
+        );
+    }
+
+    /**
+     * THE SECOND PAGE CARRYING THE SAME SAMPLE, and until round 46 nothing read
+     * it at all.
+     *
+     * HOW IT WAS FOUND. E152 repaired README.md's copy of the launch report and
+     * the doc-block written for it said the README held "the only other copy of
+     * the phrase". That was a claim about a grep, not a measurement, and it was
+     * wrong: `docs/SETTINGS.md` fences the identical line and then tells the
+     * reader, in prose, "That is the stderr form, byte for byte." MEASURED on
+     * PHP 8.3.6, scope = the nine classes in `tests/` that read `SETTINGS.md`:
+     * with {@see Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT} mutated
+     * `disabled` → `removed`, exactly one of them redded, and it was
+     * {@see ReadmeRosterDriftTest::testTheLaunchReportSampleIsStillTheLineTheLauncherWouldPrint()}
+     * reading README.md. A page that promises byte-for-byte agreement and is
+     * checked by nothing is worse than one that paraphrases, because its
+     * promise is what stops the next reader from checking it by hand.
+     *
+     * RENDERED FROM THE SAME HELPER AS THE README ASSERTION, deliberately, and
+     * this is NOT the render-from-the-code-under-test tautology the backlog
+     * records for this round. The tautology is when expectation and actual both
+     * come from `src/`. Here the actual is a MARKDOWN PAGE — a byte string no
+     * part of the launcher can move — so rendering the expectation from the
+     * launcher's constants is exactly what makes the two parties independent.
+     *
+     * THE PATH FIELD IS THE PAGE'S OWN EXAMPLE, `/repo/…`, which is why
+     * {@see launchReportSample()} substitutes it rather than measuring it. Both
+     * pages chose the same example; if one changes it, this reds and the answer
+     * is to make them agree rather than to soften the assertion.
+     */
+    public function testTheSettingsPageQuotesTheSameLaunchReportByteForByte(): void
+    {
+        $ceiling = $this->toolCeiling();
+
+        $removed = array_values(array_filter(
+            $ceiling,
+            static function (string $name): bool {
+                return PermissionRule::matchesToolName(self::COUNTEREXAMPLE_GLOB, $name);
+            },
+        ));
+
+        self::assertNotSame([], $removed, 'the counterexample removed nothing, so there is no sample to check');
+
+        self::assertSame(
+            $this->launchReportSample($ceiling, $removed),
+            $this->launchReportBlockIn('docs/SETTINGS.md'),
+            "docs/SETTINGS.md calls its launch-report sample the stderr form byte for byte, and it is not "
+            . 'what the launcher would print',
         );
     }
 
@@ -268,17 +332,17 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * on a README this extractor cannot read, rather than comparing against
      * whatever a shifted pairing happened to select.
      */
-    private function readmeLaunchReportBlock(): string
+    private function launchReportBlockIn(string $relativePath): string
     {
-        $readme = $this->readme();
+        $page = $this->document($relativePath);
 
-        preg_match_all('/^```[^\n]*\n(.*?)^```/ms', $readme, $blocks);
+        preg_match_all('/^```[^\n]*\n(.*?)^```/ms', $page, $blocks);
 
         self::assertSame(
-            preg_match_all('/^```/m', $readme),
+            preg_match_all('/^```/m', $page),
             2 * count($blocks[1]),
-            'README.md has an odd or nested run of ``` fences, so this extractor cannot say which lines '
-            . 'belong to which block; the launch-report sample it would compare is not trustworthy',
+            "{$relativePath} has an odd or nested run of ``` fences, so this extractor cannot say which "
+            . 'lines belong to which block; the launch-report sample it would compare is not trustworthy',
         );
 
         $samples = array_values(array_filter(
@@ -291,8 +355,8 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         self::assertCount(
             1,
             $samples,
-            'README.md no longer holds exactly one fenced block showing the (disabledTools) launch report; '
-            . 'this guard cannot say which one it is comparing',
+            "{$relativePath} no longer holds exactly one fenced block showing the (disabledTools) launch "
+            . 'report; this guard cannot say which one it is comparing',
         );
 
         return trim((string) preg_replace('/\s+/', ' ', $samples[0]));
