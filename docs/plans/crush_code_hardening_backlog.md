@@ -6444,3 +6444,43 @@ rather than an edit.
 creates and SIGKILLs any survivor in `tearDown()`, which is inside the parent's control and needs no
 phpunit.xml change.
 
+### Eb45-8 — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
+
+**Recorded 2026-08-22 by round-45 lane b (fix stage).** Severity: low for correctness, HIGH for every
+future round's reporting. **Measured, with the generator below.**
+
+**What.** `GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()`
+alone accounted for **18,234** of the suite's 127,822 assertions at the time of writing — about one in
+seven. The mechanism: `census()` calls `carriesTheStaleFigure()` once per paragraph of every `.php` under
+`sugar-crush/src/` and every `.md` under `sugar-crush/docs/`; that calls `stalePattern()`; and
+`stalePattern()` calls `word(8)`, whose first statement is `assertArrayHasKey()`. So the test performs
+**one assertion per paragraph in scope**, asserting each time that a hard-coded constant array still
+contains the key `8`.
+
+**Why it matters far more than it looks.** Every lane that writes a comment paragraph into `src/` silently
+moves the suite's assertion total, with no new test and no new behaviour. That is the exact reconciliation
+failure round 45 lane b's reviewer could not close: a `+16` full-suite assertion delta against a `+14`
+delta over the changed test files, with two assertions unaccounted for. They were these — this round's
+`src/Runtime.php` edits net **+2 paragraphs** (237 → 239), measured with the test's own splitter:
+
+```php
+// paragraphs() copied verbatim out of GlobFigureDriftTest, run over one file
+$lines = [];
+foreach (preg_split('/\R/', $text) as $line) { $lines[] = preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line); }
+$n = 0;
+foreach (preg_split('/\n\s*\n/', implode("\n", $lines)) as $p) { if (trim(preg_replace('/\s+/', ' ', $p)) !== '') { $n++; } }
+```
+
+PHP 8.3.6. Note the splitter treats a blank line as the separator and strips only `/**`, `*/` and `*`, so
+a `//` block with `//`-only spacer lines is ONE paragraph however long it is, while a doc-block with ` *`
+spacers is many — which is why the delta is nowhere near the number of lines a round writes.
+
+**Step.** Hoist the invariant out of the hot path: `word(8)` and `stalePattern()` are constant for the
+whole run, so compute the pattern once (a `?string` cache, or a `setUp()` field) and keep a SINGLE
+`assertArrayHasKey()` outside the paragraph loop. The scanner's behaviour does not change; the suite
+loses ~18k assertions of pure noise, and a lane's assertion delta becomes a function of the tests it
+wrote. The file already made this exact call once — see its `matchOrFail()` comment, which chose `fail()`
+over `assertIsInt()` for precisely this reason ("an assertion per call added ~34,000 to the suite's
+assertion count while pinning nothing") — and then reintroduced the same cost one call deeper.
+`tests/Config/GlobFigureDriftTest.php` belongs to another lane, hence a backlog entry rather than a fix.
+
