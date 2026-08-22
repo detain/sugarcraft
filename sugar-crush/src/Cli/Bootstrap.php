@@ -4517,9 +4517,25 @@ final class Bootstrap
             // is what {@see warnPermissionConfigInTranscript()}'s routing rule
             // asks for: a warning reaches the transcript iff it names something
             // the session can no longer DO, and a partly started MCP config is a
-            // cut tool set. On a box whose `error_log` ini is unset BOTH land on
-            // stderr, and phrasing them as diagnostic + consequence is what keeps
-            // that pair from reading as a stutter.
+            // cut tool set.
+            //
+            // WHAT WAS CLAIMED ABOUT THE PAIR: "on a box whose `error_log` ini is
+            // unset BOTH land on stderr, and phrasing them as diagnostic +
+            // consequence is what keeps that pair from reading as a stutter."
+            // Round 43's review noted that no test had ever run this on such a
+            // box. WHAT THE MEASUREMENT FOUND when one did: the two lines share
+            // the clause "could not be fully started", the path, and the
+            // exception MESSAGE — considerably more overlap than "diagnostic +
+            // consequence" implies. They are still two different lines: only the
+            // first names the exception CLASS and "continuing without it", and
+            // only the second names "MCP tools from …" and what the session is
+            // left with. WHY THE DUPLICATION EARNS ITS PLACE: the transcript row
+            // has to stand ALONE. On the surface it exists for there is no
+            // `error_log()` line beside it, so a row that omitted the cause would
+            // tell the user tools are missing and nothing about why. The pairing
+            // on an unset-ini box is the price of that, and it is now asserted
+            // rather than asserted-in-prose —
+            // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()}.
             //
             // STILL NOT ROUTED INTO {@see $projectTierRefusals}: that collector's
             // subject is a path this launch declined to READ, and this file was
@@ -4527,11 +4543,29 @@ final class Bootstrap
             // two refusals above already own, so an entry here would collide with
             // them.
             //
-            // BOUNDED AT ONE ROW PER PATH PER PROCESS, by construction rather
-            // than by the seam's cap: the memo at the top of this method stores
-            // the client BEFORE `startServers()` is called, so a second
-            // `mcpClient()` for the same path returns from that memo and never
-            // reaches this `catch`. That is what makes a transcript row safe on
+            // BOUNDED AT ONE ROW PER PATH PER PROCESS — and the bound has TWO
+            // parts, where an earlier revision of this comment claimed one.
+            //
+            // WHAT IT SAID: "by construction rather than by the seam's cap: the
+            // memo AT THE TOP OF THIS METHOD stores the client BEFORE
+            // startServers()".
+            //
+            // WHAT IS TRUE NOW: the memo is CHECKED at the top of this method;
+            // it is STORED immediately above this `try`, which is the placement
+            // that actually matters and carries its own note there. And the memo
+            // is not the whole bound: {@see stopMcpServers()} clears this pid's
+            // bucket outright (`unset(self::$mcpClients[$pid])`), so an
+            // `mcpClient()` for the same path AFTER a stop builds a new client
+            // and re-enters this `catch`.
+            //
+            // WHY THE BOUND STILL HOLDS: in production nothing calls
+            // {@see stopMcpServers()} except the `register_shutdown_function`
+            // closure {@see registerMcpShutdown()} installs, so there is no
+            // "after" in which to re-enter; and in the only shape where there is
+            // — an in-process test that stops and then asks again — the seam's
+            // own `in_array($notice, …, true)` de-dup drops the repeat before it
+            // can reach the transcript. Memoized on the production path, de-duped
+            // on the other: that is what makes a transcript row safe on
             // {@see tools()}, which every launch AND every provider switch runs.
             // The seam's {@see LAUNCH_NOTICE_MAX_CHARS} clip then bounds the
             // LENGTH, which matters here because `$e->getMessage()` interpolates

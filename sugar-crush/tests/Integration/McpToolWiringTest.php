@@ -1164,18 +1164,7 @@ final class McpToolWiringTest extends TestCase
      */
     public function testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog(): void
     {
-        // ORDER MATTERS, the same way it does in the sibling test: the good
-        // server is first, so it is up by the time the bad entry throws.
-        file_put_contents($this->repo . '/.mcp.json', (string) json_encode(['mcpServers' => [
-            'fake' => [
-                'type' => 'stdio',
-                'command' => PHP_BINARY,
-                'args' => [$this->tempDir . '/server.php', $this->callLog, $this->handshakeLog],
-                'startTimeout' => 5,
-            ],
-            'broken' => ['type' => 'nonsense-transport'],
-        ]]));
-        $this->trustTheRepo();
+        $this->writePartlyStartingMcpConfig();
 
         $log = $this->tempDir . '/child_error_log.txt';
         [$stderr, $payload] = $this->launchChatInChild($log);
@@ -1187,9 +1176,23 @@ final class McpToolWiringTest extends TestCase
         $this->assertStringContainsString('continuing without it', $diagnostic);
 
         // THE ROW ITSELF, matched on the sentence rather than on "the list is
-        // non-empty": a launch under this fixture raises other notices too (the
-        // provider degrading to echo is one), so a count or an emptiness check
-        // would stay green with this site's row gone.
+        // non-empty".
+        //
+        // WHAT THIS COMMENT USED TO SAY: "a launch under this fixture raises
+        // other notices too (the provider degrading to echo is one), so a count
+        // or an emptiness check would stay green with this site's row gone."
+        // WHAT IS TRUE NOW: that is backwards, and round 43's review measured it.
+        // Removing the seam call from `Bootstrap::mcpClient()`'s catch leaves
+        // `notices` as `array ()` and `rows` empty of everything but the seeded
+        // history — an emptiness check WOULD have killed today's mutation. (The
+        // offline-provider notice does not appear here because it is
+        // `NonInteractive::noticeOfflineDefault()`, on the one-shot path, and
+        // this launch is `Bootstrap::chat()`.) WHY THE SENTENCE MATCH STILL
+        // EARNS ITS PLACE: it is the assertion that keeps its SUBJECT. An
+        // emptiness check discriminates only while this site is the sole notice
+        // a `chat()` under this fixture raises, and stops the moment a second
+        // one appears — silently, with the test still green and no longer about
+        // this row.
         $notices = $payload['notices'];
         $this->assertIsArray($notices);
         $matching = array_values(array_filter(
@@ -1221,6 +1224,105 @@ final class McpToolWiringTest extends TestCase
     }
 
     /**
+     * THE UNSET-`error_log` BOX, which every other test here redirects away
+     * from.
+     *
+     * `Bootstrap::mcpClient()`'s catch writes twice — `error_log()` for the
+     * operator and the transcript seam for the user — and the comment defending
+     * that pair says the two texts are deliberately different so that on a box
+     * whose `error_log` ini is unset, where BOTH land on stderr, they read as
+     * diagnostic + consequence rather than as a stutter. Round 43's review
+     * pointed out that this was the one claim in the bundle with nothing behind
+     * it: every other test points `error_log` at a file precisely so it can read
+     * the diagnostic back, so the both-on-stderr pairing was asserted nowhere.
+     *
+     * So this launch sets the ini EMPTY, which for the CLI SAPI means the
+     * default destination, and reads the pair back.
+     *
+     * AND THE MEASUREMENT NARROWED THE CLAIM IT WAS CHECKING. The first version
+     * of this test asserted that neither line's wording appears in the other's,
+     * and it went red: both lines carry the clause "could not be fully started"
+     * and both interpolate the same path and the same exception MESSAGE. They
+     * are not a stutter — each says something the other does not — but they
+     * overlap far more than "diagnostic + consequence" suggested, and the
+     * overlap is deliberate rather than sloppy: the transcript row has to stand
+     * ALONE, because in the transcript (the surface it exists for) there is no
+     * `error_log()` line beside it to name the cause. So what is asserted is
+     * what is true: two distinct lines, each carrying a part the other lacks —
+     * the exception CLASS and "continuing without it" on the operator's,
+     * "MCP tools from" and "only the tools that did load" on the user's.
+     */
+    public function testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings(): void
+    {
+        $this->writePartlyStartingMcpConfig();
+
+        [$stderr] = $this->launchChatInChild();
+
+        // Discriminated on the two openings, which ARE disjoint —
+        // `error_log()`'s "MCP config <path>" against the seam's "MCP tools from
+        // <path>". The clause they share is asserted below rather than used to
+        // tell them apart.
+        $diagnosticLines = $this->stderrLinesContaining($stderr, 'sugarcrush: MCP config ');
+        $consequenceLines = $this->stderrLinesContaining($stderr, 'MCP tools from ');
+
+        $this->assertCount(1, $diagnosticLines, "no single operator diagnostic on stderr; stderr was:\n" . $stderr);
+        $this->assertCount(1, $consequenceLines, "no single consequence line on stderr; stderr was:\n" . $stderr);
+
+        // Each line carries something the other does not. This is the whole of
+        // what "not a stutter" can honestly mean here.
+        $this->assertStringContainsString('RuntimeException', $diagnosticLines[0]);
+        $this->assertStringContainsString('continuing without it', $diagnosticLines[0]);
+        $this->assertStringNotContainsString('only the tools that did load', $diagnosticLines[0]);
+
+        $this->assertStringContainsString('only the tools that did load', $consequenceLines[0]);
+        $this->assertStringNotContainsString('RuntimeException', $consequenceLines[0]);
+
+        $this->assertNotSame($diagnosticLines[0], $consequenceLines[0]);
+
+        // THE OVERLAP, asserted so it cannot be quietly removed and then
+        // re-justified from the old prose: the transcript row repeats the cause
+        // because in the transcript nothing else states it.
+        $this->assertStringContainsString('could not be fully started', $diagnosticLines[0]);
+        $this->assertStringContainsString('could not be fully started', $consequenceLines[0]);
+        $this->assertStringContainsString('Unknown MCP server type: nonsense-transport', $diagnosticLines[0]);
+        $this->assertStringContainsString('Unknown MCP server type: nonsense-transport', $consequenceLines[0]);
+    }
+
+    /**
+     * The start-then-throw fixture both child-launch tests drive: a good stdio
+     * server FIRST, so it is up by the time the bad entry throws, then an entry
+     * whose `type` `McpClient::startServer()` does not know.
+     */
+    private function writePartlyStartingMcpConfig(): void
+    {
+        file_put_contents($this->repo . '/.mcp.json', (string) json_encode(['mcpServers' => [
+            'fake' => [
+                'type' => 'stdio',
+                'command' => PHP_BINARY,
+                'args' => [$this->tempDir . '/server.php', $this->callLog, $this->handshakeLog],
+                'startTimeout' => 5,
+            ],
+            'broken' => ['type' => 'nonsense-transport'],
+        ]]));
+        $this->trustTheRepo();
+    }
+
+    /**
+     * The stderr lines carrying $needle. Line-wise rather than
+     * assertStringContainsString on the whole stream, because the claim under
+     * test is about two LINES being distinguishable from each other.
+     *
+     * @return list<string>
+     */
+    private function stderrLinesContaining(string $stderr, string $needle): array
+    {
+        return array_values(array_filter(
+            explode("\n", $stderr),
+            static fn (string $line): bool => str_contains($line, $needle),
+        ));
+    }
+
+    /**
      * A real `Bootstrap::chat()` in a child `php`, under this test's sandboxed
      * HOME and with `error_log` pointed at $log, reporting back the transcript
      * rows and the launch-notice list.
@@ -1230,9 +1332,15 @@ final class McpToolWiringTest extends TestCase
      * that starts a server really does start one, and a leaked `php` fixture
      * would outlive the suite.
      *
+     * `$log` empty means "do not redirect": the child runs with an EMPTY
+     * `error_log` ini, which for the CLI SAPI is the default destination, i.e.
+     * stderr. That is the box
+     * {@see testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()}
+     * needs, and it is the reason this parameter is not simply always a file.
+     *
      * @return array{0: string, 1: array<string, mixed>}
      */
-    private function launchChatInChild(string $log): array
+    private function launchChatInChild(string $log = ''): array
     {
         $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
         $script = $this->tempDir . '/child_launch.php';
@@ -1252,6 +1360,9 @@ final class McpToolWiringTest extends TestCase
             'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s -d %s %s >%s 2>%s',
             escapeshellarg($this->tempDir . '/home'),
             escapeshellarg(PHP_BINARY),
+            // An EMPTY value, not an omitted flag: the box under test is one
+            // where `error_log` names no file, and the suite's own php.ini may
+            // well name one.
             escapeshellarg('error_log=' . $log),
             escapeshellarg($script),
             escapeshellarg($outFile),
