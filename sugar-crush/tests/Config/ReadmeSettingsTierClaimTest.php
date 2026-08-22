@@ -223,11 +223,49 @@ final class ReadmeSettingsTierClaimTest extends TestCase
             "README.md's retraction spells a built-in tool count that is not the measured one",
         );
 
-        self::assertStringContainsString(
+        // EXACT, NOT CONTAINED, and the difference is not pedantry — it is a
+        // survived mutation. `assertStringContainsString($rendered, $flat)` was
+        // written first and MEASURED: with {@see Bootstrap::STDERR_LINE_FORMAT}
+        // mutated `"sugarcrush: %s.\n"` → `"sugarcrush: %s\n"`, the rendered
+        // needle loses its trailing full stop and is then a PREFIX of the
+        // page's sample, so the containment passed —
+        // `OK (5 tests, 27 assertions)` on PHP 8.3.6. Any mutation that only
+        // SHORTENS the envelope is invisible to a containment check. So the
+        // fenced sample block is extracted and compared whole.
+        self::assertSame(
             $this->launchReportSample($ceiling, $removed),
-            $flat,
-            "README.md's launch-report sample no longer matches what the launcher would print",
+            $this->readmeLaunchReportBlock(),
+            "README.md's launch-report sample is not what the launcher would print",
         );
+    }
+
+    /**
+     * The one fenced block in README.md that shows the launch-report line,
+     * flattened the same way {@see launchReportSample()} flattens its render.
+     *
+     * EXACTLY ONE IS ASSERTED. A second block carrying `(disabledTools)` would
+     * make "the sample" ambiguous, and picking the first would silently stop
+     * checking the other — the shape of hole rule 14 is about.
+     */
+    private function readmeLaunchReportBlock(): string
+    {
+        preg_match_all('/^```text\n(.*?)^```/ms', $this->readme(), $blocks);
+
+        $samples = array_values(array_filter(
+            $blocks[1],
+            static function (string $block): bool {
+                return str_contains($block, '(disabledTools)');
+            },
+        ));
+
+        self::assertCount(
+            1,
+            $samples,
+            'README.md no longer holds exactly one ```text block showing the (disabledTools) launch report; '
+            . 'this guard cannot say which one it is comparing',
+        );
+
+        return trim((string) preg_replace('/\s+/', ' ', $samples[0]));
     }
 
     /**
