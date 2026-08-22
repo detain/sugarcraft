@@ -142,6 +142,27 @@ final class ToolIpcFiles
     }
 
     /**
+     * Every path handed out by {@see reserve()} since the ledger was armed,
+     * collected or not.
+     *
+     * {@see strandedReservations()} answers "did anything leak"; this answers
+     * "was there anything that COULD have leaked". A leak detector needs both,
+     * because the empty-set answer is ambiguous on its own: a run that reserved
+     * nothing at all -- a dispatcher that stopped forking, a fixture that
+     * stopped producing parallel-safe calls, a `pcntl` skip -- is
+     * indistinguishable from a run that reserved and cleaned up perfectly, and
+     * only the second one is the thing under test. A caller that asserts
+     * "stranded is empty" without also asserting "reservations is not" has a
+     * detector that passes hardest when it is looking at nothing.
+     *
+     * @return list<string>
+     */
+    public static function reservations(): array
+    {
+        return self::$reserved ?? [];
+    }
+
+    /**
      * Of the paths reserved since the ledger was armed, those still on disk --
      * either the payload itself or the `.partial` a child SIGKILLed mid-write
      * leaves beside it.

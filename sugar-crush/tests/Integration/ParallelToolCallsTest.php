@@ -20,6 +20,7 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
@@ -84,10 +85,24 @@ final class ParallelToolCallsTest extends TestCase
 
         $this->hookRegistry = new HookRegistry();
         $this->hookManager = new HookManager($this->hookRegistry);
+
+        // Arms (and clears) the payload ledger this class's leak detection
+        // reads -- see strandedRuntimePayloads(). Per TEST rather than per
+        // class because the assertions below are before/after within a single
+        // test, and a ledger accumulating across the file would make every
+        // later test inherit every earlier test's reservations.
+        //
+        // Arming here cannot disturb ChatTest, the only other armer: PHPUnit
+        // runs one test class at a time in one process, and ChatTest arms in
+        // setUpBeforeClass() and disarms in tearDownAfterClass(), so the two
+        // windows cannot overlap in either order.
+        ToolIpcFiles::recordReservations(true);
     }
 
     protected function tearDown(): void
     {
+        ToolIpcFiles::recordReservations(false);
+
         $this->removeTree($this->dir);
 
         parent::tearDown();
@@ -613,7 +628,6 @@ final class ParallelToolCallsTest extends TestCase
     public function testAThrowingSessionStateMergeCostsOnlyThatCallsMark(): void
     {
         $before = $this->childPids();
-        $ipcBefore = $this->runtimeIpcFiles();
 
         // Each child exports exactly its own marker, so only 'b' makes the
         // parent's merge throw.
@@ -666,7 +680,8 @@ final class ParallelToolCallsTest extends TestCase
         );
 
         $this->assertSame($before, $this->childPids(), 'every child must still have been reaped');
-        $this->assertSame($ipcBefore, $this->runtimeIpcFiles(), 'every payload must still have been unlinked');
+        $this->assertSame(3, $this->reservedRuntimePayloadCount(), 'all three calls must have gone through the fork path');
+        $this->assertSame([], $this->strandedRuntimePayloads(), 'every payload must still have been unlinked');
     }
 
     // =========================================================================
@@ -809,14 +824,17 @@ final class ParallelToolCallsTest extends TestCase
      */
     public function testACompletedGroupLeavesNoPayloadFilesBehind(): void
     {
-        $before = $this->runtimeIpcFiles();
-
         $this->execute(
             $this->rendezvousCalls(['a', 'b', 'c'], peers: 3, wait: self::RENDEZVOUS_WAIT),
             [$this->rendezvousTool()],
         );
 
-        $this->assertSame($before, $this->runtimeIpcFiles());
+        $this->assertSame(
+            3,
+            $this->reservedRuntimePayloadCount(),
+            'the detector must have had three payloads to be wrong about',
+        );
+        $this->assertSame([], $this->strandedRuntimePayloads());
     }
 
     /**
@@ -1082,14 +1100,55 @@ final class ParallelToolCallsTest extends TestCase
     }
 
     /**
-     * Every payload file either dispatcher could have left in the temp
-     * directory, sorted so a before/after comparison is stable.
+     * Of the payload paths THIS PROCESS reserved during this test, the ones
+     * still on disk. Empty is the pass.
+     *
+     * ATTRIBUTION IS BY IDENTITY, NOT BY WINDOW, and that is the whole content
+     * of this helper. WHAT IT USED TO DO: `glob(sys_get_temp_dir() .
+     * '/sc_runtime_tool_*')`, snapshotted before the group and compared after.
+     * WHAT IS TRUE ABOUT THAT: it does not measure "did this group leak", it
+     * measures "did the set of payload files in a directory shared with every
+     * other process on the box change while this test ran" — and a sibling
+     * test lane, or the developer's own `sugar-crush` session, changes it. WHY
+     * THE ASSERTION STILL EARNS ITS PLACE: the leak it looks for is real —
+     * {@see \SugarCraft\Crush\Runtime::executeConcurrently()}'s collect-side
+     * `discard()` is the only unlink on the normal path, and losing it strands
+     * a serialized ToolResult in a world-listable directory until
+     * {@see ToolIpcFiles::sweep()}'s one-hour backstop — so the fix is to
+     * narrow the WINDOW to an identity, not to loosen the assertion.
+     *
+     * This is E96, and it is the same defect E63 fixed one dispatcher over:
+     * {@see \SugarCraft\Crush\Tests\ChatTest::tearDownAfterClass()} carries
+     * the argument in full, and {@see ToolIpcFiles::strandedReservations()}
+     * carries why the parent that CHOSE the name is the only place identity
+     * exists at all. It was not hypothetical here either: round 44's baseline
+     * run of this suite failed both call sites of this helper, with foreign
+     * `sc_runtime_tool_*` files from concurrent lanes on both sides of the
+     * snapshot.
      *
      * @return list<string>
      */
-    private function runtimeIpcFiles(): array
+    private function strandedRuntimePayloads(): array
     {
-        return $this->sorted(glob(sys_get_temp_dir() . '/sc_runtime_tool_*') ?: []);
+        return $this->sorted(ToolIpcFiles::strandedReservations());
+    }
+
+    /**
+     * How many payload paths this test reserved — the control that keeps
+     * {@see strandedRuntimePayloads()} honest.
+     *
+     * An empty stranded list means "nothing leaked" ONLY if something was
+     * reserved. A group that never forked reserves nothing and strands
+     * nothing, and reads as a clean pass; see {@see ToolIpcFiles::reservations()}
+     * for why the detector needs both halves.
+     */
+    private function reservedRuntimePayloadCount(): int
+    {
+        return \count(array_filter(
+            ToolIpcFiles::reservations(),
+            static fn (string $path): bool
+                => str_contains(basename($path), ToolIpcFiles::RUNTIME_PREFIX),
+        ));
     }
 
     /**

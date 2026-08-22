@@ -5304,8 +5304,31 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * FOURTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
-     * SITES ARE ROUTED HERE, and the rest deliberately are not. The rule the split was
+     * SIXTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * SITES ARE ROUTED HERE, and the rest deliberately are not.
+     *
+     * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier
+     * `warnPermissionConfigInTranscript` occurs about twice as often in
+     * `Bootstrap.php` as it is CALLED, because most occurrences are the
+     * declaration and `{@see}` references in the doc-blocks explaining this
+     * very split. The count is a token scan: `token_get_all()` with whitespace
+     * and comments stripped, counting each T_STRING of that name both preceded
+     * by `::` and followed by `(`. One command re-derives it —
+     * `vendor/bin/phpunit --filter BootstrapTranscriptSeamCallSiteCensusTest` —
+     * and {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}
+     * fails this sentence, by name, the moment a call site is added.
+     *
+     * WHAT THIS SAID: FOURTEEN. WHAT IS TRUE NOW: sixteen — E78 (round 42)
+     * routed `reportPrunedSessions()`'s retention summary onto the seam and E86
+     * (round 43) routed `mcpClient()`'s start-then-throw catch, and neither
+     * round updated this paragraph. WHY THE SENTENCE STILL EARNS ITS PLACE: the
+     * number is not decoration, it is the claim that the split below is a
+     * DECISION applied to a known set rather than a description of wherever the
+     * calls happen to be; without a count a reader cannot tell those apart.
+     * That is also why round 44 (E97) made it a test instead of just correcting
+     * it for the third time.
+     *
+     * The rule the split was
      * made on lives on
      * {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}:
      * a warning earns a row iff it names something the session can no longer DO
