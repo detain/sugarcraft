@@ -250,7 +250,10 @@ text. (This line said "eight characters" until the count was re-derived:
 The point the figure was making — that the value names none of the ten tools it
 removes — is what survives, so the sentence stays and the number is corrected.
 `src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
-still carry the old figure in their doc-blocks.)
+still carry the old figure in their doc-blocks. A THIRD occurrence was in this
+file, sixty lines below — "refusing negated classes would close the
+eight-character version" — and is corrected; a page that re-derives a number and
+then contradicts itself further down is worse than one that never re-derived it.)
 
 **Two things narrow this, and both are measured.** An *untrusted* project's
 `disabledTools` never reaches the merge — all eleven tools survive — so this
@@ -274,8 +277,15 @@ took and the tools it left:
 ```
 sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 10 of the
 11 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
-WebSearch, doctor, Skill, Lsp — leaving: Bash
+WebSearch, doctor, Skill, Lsp — leaving: Bash.
 ```
+
+That is the stderr form, byte for byte. The `sugarcrush: ` prefix and the
+trailing full stop are added by `Bootstrap::warnPermissionConfig()`, not by
+`Bootstrap::reportProjectTierToolRemovals()`, so the **transcript** row two
+paragraphs down carries the same sentence WITHOUT either of them — the message
+the reporter builds ends at `leaving: Bash`. (This block used to be printed
+here without the full stop, which made it neither form.)
 
 **In two places, because one of them you cannot read.** The line above goes to
 stderr, which is the right channel for `-p` and for the scrollback you get back
@@ -312,7 +322,7 @@ capped, so an overflowed launch says so in the transcript and points at the
 channel that has the rest.
 
 The report is the *effect*, not the pattern, and that is deliberate. Refusing
-negated classes at the project tier would close the eight-character version and
+negated classes at the project tier would close the five-character version and
 nothing else: `["[C-Z]*", "[a-z]*"]` uses no negation, is barely longer, and
 also leaves only `Bash` — measured. Restricting the tier to literal names would
 close it, at the cost of the use the key was admitted for (a checkout saying
