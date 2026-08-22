@@ -6899,7 +6899,10 @@ about `error_log()` more often than it calls it.
 identity **per file** — naive occurrences = token-scanned calls + comment mentions — with both totals
 known-positive in the same test. It reds on a residue, which is the case neither count can see: an
 `error_log(` inside a string literal, smuggled in by a `sprintf()` template or a heredoc. Mutating one in
-(`const A46_RESIDUE_PROBE = 'error_log(';` in `SkillDiscovery`) kills it and nothing else.
+(`const A46_RESIDUE_PROBE = 'error_log(';` in `SkillDiscovery`) kills it. **Scope: that verdict was measured
+under `--filter StderrEmitterCensusTest`, so it supports "killed by the guards that claim to cover it" and
+NOT "and nothing else in the suite", which is what it originally said. The mutation was never run against
+the full suite.**
 
 **Step.** None. Do not re-derive the 58 — it is not a count of anything.
 
@@ -6925,7 +6928,7 @@ seam Ea46-3 names. Second best, and much cheaper: drop `readonly`, add a `degrad
 mirroring `SkillLoader::skipped()`, gate the `error_log()` behind `SUGARCRUSH_DEBUG_TOOLCALLS`, and update
 the two parser test files to set the flag. One lane, three src files plus two test files.
 
-### Ea46-3 — the transcript seam is LAUNCH-ONLY, and four subsystems need a mid-session one
+### Ea46-3 — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: medium, architectural. **Verified at the source.**
 
@@ -6935,16 +6938,20 @@ second-scan path, as a delta). Every round from 42 to 45 has described it as "th
 that qualifier, and the qualifier is what decides most of E154's remaining triage: a subsystem that warns
 mid-turn cannot use it. A row recorded there after the drain goes into a static array nobody reads.
 
-**Who needs one.** The two tool-call parsers (Ea46-2, 18 sites); `SglangProvider`'s three
-(malformed/degraded tool arguments and the MiniMax truncation warning, all per-response);
-`AgentWorkerPool::warnSequentialFallback()` (one site, fires when a pool first degrades to sequential);
-`WorktreeManager`'s four (agent worktree creation and include-file refusals, all mid-session).
+**Who needs one — FIVE CLASSES, 26 SITES, and the generator is the roster.** This entry originally said
+"four" in its heading, "six" in its Step and enumerated five; none of the three carried a way to check it.
+Counted off `StderrEmitterCensusTest::ERROR_LOG_SITES` (which a test keeps honest), the classes that warn
+mid-turn are: `DsmlToolCallParser` (11) and `MinimaxXmlFallbackToolCallParser` (7), together Ea46-2;
+`SglangProvider` (3 — malformed/degraded tool arguments and the MiniMax truncation warning, all
+per-response); `AgentWorkerPool` (1 — `warnSequentialFallback()`, fires when a pool first degrades to
+sequential); and `WorktreeManager` (4 — agent worktree creation and include-file refusals, all
+mid-session). 11+7+3+1+4 = 26. Do not restate these figures elsewhere; read them off the roster.
 `HeadlessPermissionPrompt`'s four `sugarcrush:` shapes are the same shape of problem seen from the
 headless side and are analysed in that class's docblock (E155) — they are correct on stderr precisely
 because nothing on their paths opens the alternate screen.
 
 **Step.** A `Chat`-side notice inbox reachable from a `Cmd`, or a process-wide sink `Chat` polls in
-`subscriptions()`. Design it once; six subsystems queue behind it.
+`subscriptions()`. Design it once; the five classes above queue behind it.
 
 ### Ea46-4 — three CommandLoader `error_log()` sites duplicate a message already on the seam
 

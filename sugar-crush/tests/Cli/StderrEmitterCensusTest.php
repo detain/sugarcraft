@@ -258,6 +258,23 @@ final class StderrEmitterCensusTest extends TestCase
      * this map is a sentence the guard cannot read, and that is a FAILURE
      * rather than a skip.
      *
+     * WIDER THAN THE ONE WORD IT READS TODAY, ON PURPOSE, and this paragraph
+     * exists because a reviewer read that as softening the rule above. It does
+     * not, and the reason is that BOTH arms of the guard are failures.
+     * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} does
+     * `assertArrayHasKey()` and then `assertSame()` against the live scan, so
+     * for a prose word this map does not carry the verdict is "the guard cannot
+     * read the sentence", and for one it does carry the verdict is "the prose
+     * says N and the scan counts M". A word in this map is still COMPARED; it
+     * is never waved through. Adding an entry therefore cannot turn a red into
+     * a green — it can only exchange the vaguer failure for the one that names
+     * both numbers. What WOULD soften the rule is an `?? continue`, and there
+     * is none.
+     *
+     * The reason to keep the list bounded at all is the other direction: a
+     * sentence saying "several" or "a couple" must not be silently readable,
+     * and it is not.
+     *
      * @var array<string, int>
      */
     private const NUMBER_WORDS = [
