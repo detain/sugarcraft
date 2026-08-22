@@ -1161,12 +1161,16 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     {
         // KNOWN-POSITIVE FIRST, so a dead scanner cannot pass the real check.
         // Assembled, never written out: see the doc-block.
-        $tests = 'Tests' . ': 14';
-        $assertions = 'Assertions' . ': 92';
-        $wrapped = "    /**\n     * measured at `06126017`: that mutation gives `{$tests},\n"
-            . "     * {$assertions}, Failures: 1`, so it was not blind.\n     */\n";
+        // The wrap falls INSIDE each figure, not between them. That is the
+        // shape the flattening exists for, and the first draft got it wrong:
+        // it wrapped between the two, where every token is still contiguous on
+        // its own line, so deleting the flattening left the fixture GREEN.
+        $tests = 'Tests';
+        $assertions = 'Assertions';
+        $wrapped = "    /**\n     * measured at `06126017`: that mutation gives `{$tests}:\n"
+            . "     * 14, {$assertions}:\n     * 92, Failures: 1`, so it was not blind.\n     */\n";
         self::assertSame(
-            [$tests, $assertions],
+            [$tests . ': 14', $assertions . ': 92'],
             self::classTotalsIn($wrapped),
             'the class-total scanner can no longer see a total wrapped across a doc-block continuation, '
             . 'which is the only shape a long one ever has; the absence asserted below is vacuous',
