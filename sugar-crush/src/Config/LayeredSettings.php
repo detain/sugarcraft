@@ -356,18 +356,28 @@ final class LayeredSettings
      * so it reds instead of rotting". WHAT IS TRUE NOW: that test derives the
      * TOOL SET this glob leaves. It never measures the glob's LENGTH — the glob
      * is a class constant there, and no `strlen()` in `tests/` is applied to it
-     * (VERIFIED at `8416d98e`; RE-DERIVED at round 44 with the command the
-     * sentence used to omit — `grep -rl 'strlen(' tests --include='*.php'`
-     * counts 66 files and `grep -rl 'strlen'` counts 68, none of them applying
-     * it to `COUNTEREXAMPLE_GLOB` or to any spelling of `[!B]*`. The sentence
-     * carried "66 files" with no command beside it, and neither reading was 66
-     * on the day it was written: a figure without a generator, inside the
-     * paragraph complaining about figures without generators. An earlier draft
-     * said "no `strlen()` appears anywhere in `tests/`", which is plainly false
-     * and is corrected here rather than dropped, since a doc-block that catches
-     * a false claim by writing a second one has learnt nothing) — so the
-     * citation was a number written down beside the name of something that does
-     * not produce it.
+     * (VERIFIED at `8416d98e`, and again at round 44 with the command the
+     * sentence used to omit — `grep -rl 'strlen(' tests --include='*.php'`,
+     * cross-checked against the looser `grep -rl 'strlen'`: no file either
+     * command reports applies it to `COUNTEREXAMPLE_GLOB` or to any spelling
+     * of `[!B]*`. An earlier draft said "no `strlen()` appears anywhere in
+     * `tests/`", which is plainly false and is corrected here rather than
+     * dropped, since a doc-block that catches a false claim by writing a second
+     * one has learnt nothing) — so the citation was a number written down
+     * beside the name of something that does not produce it.
+     *
+     * AND THE REPAIR CARRIED TWO CARDINALITIES THAT WERE STALE BEFORE THE ROUND
+     * CLOSED. WHAT IT SAID: those two commands "count 66 files and 68". WHAT IS
+     * TRUE NOW: 71 and 73 at `98d59bfb`. Both were right when round 44's lane
+     * `a` measured them in its own worktree, and both were wrong by the time
+     * that worktree merged, because two sibling lanes added test files
+     * containing `strlen` in the same round. WHY THIS STILL EARNS ITS PLACE:
+     * the claim the paragraph actually makes is a NEGATIVE — that no such call
+     * reaches this constant — and that survived the merge untouched. The
+     * cardinalities never supported it; they only looked like evidence. A count
+     * taken over `tests/` in one lane's worktree is invalidated by any sibling
+     * lane's merge, so the generator is kept and the two totals are dropped
+     * rather than re-derived into the next round's staleness. This is E131.
      *
      * THE MEASUREMENT OFFERED IN ITS PLACE HAD NO GENERATOR EITHER, and it is
      * rewritten for the same reason. WHAT IT SAID: on PHP 8.3.6, restoring
