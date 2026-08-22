@@ -282,44 +282,58 @@ remains after them:
 - then **Phase 9** (interactive-prompt containment: layered A+C, parameter not second tool,
   **no askpass**) · then the deferred security pass.
 
-### 🟢 STANDING REQUEST, ROUND 42 — "KEEP EVERY LIB ON THE LATEST" · `scripts/refresh-deps.php` (`ff295130`)
+### 🟢 STANDING REQUEST, ROUND 42 — "KEEP EVERY LIB ON THE LATEST" · `scripts/refresh-deps.php` (`9c9872ea`)
 
 The user asked, 2026-08-22: *"in general id like them kept updated like when we push a change to master
 soon after should do a composer update in the sugarcraft root and all subdir repos that use whatever
 packages were updated .. or just all of them so we're always working w/ the latest versions of changes
 we put in."*
 
-🔴 **TAKEN LITERALLY, THIS MAKES THINGS STALER, AND THE PROOF IS THIS ROUND.** For a `sugarcraft/*`
-sibling, `composer update` resolves from **Packagist**, which lags the working tree by: local commit →
-push → `sync-sugarcraft.yml` splitsh → `sugarcraft/<lib>` → Packagist index. **There were 22 unpushed
-commits on master when the user ran it**, so Packagist could not have had round 41 at all — and indeed
-it handed back a `candy-core` whose `Width.php` was the pre-E73 file. The update did not fetch the
-latest of our own changes; it **replaced** the latest with a two-round-old snapshot. Siblings need no
-updating whatsoever: with the path repo injected, `vendor/sugarcraft/candy-core` **is** `../candy-core`,
-current the instant a file is saved. Only THIRD-PARTY packages (phpunit, guzzle, react, aws-sdk) go
-stale. **Say this plainly to the user again if the request recurs — it is a correction, not a quibble.**
+⚠️ **THE SUPERVISOR FIRST CALLED THIS WRONG, AND IT WAS NOT. Record the correction, not the first
+take.** The initial response was that a per-lib `composer update` makes siblings *staler*, because it
+resolves them from Packagist. That was true only of the moment it was measured: master had **22 unpushed
+commits**, so Packagist could not have had round 41 and duly served a pre-E73 `candy-core`. **It is not
+a general law.** The user pushed; `sync-sugarcraft.yml` split; Packagist indexed; and a published-mode
+update in `candy-buffer` then installed `candy-core/src/Util/Width.php` at md5 `270fc3f2…` / 38,125 B —
+**byte-identical to the working tree, as a real directory, not a symlink.** The user's model was right
+in every particular: 182 `dev-master` refs + 10 `@dev`, zero committed path repos, sync on push to
+master, and these libs really are installed standalone by people who will never clone the monorepo.
+
+**THE TWO STATES ARE EQUIVALENT WHEN THE TREE IS CLEAN AND PUSHED, AND ONLY THEN.** That is the whole
+of it. `published` (siblings from Packagist) additionally proves the publish pipeline works — that the
+split manifest resolves from Packagist alone, that nothing shipped depending on something unpublished.
+`linked` (siblings symlinked) is the only state in which an uncommitted edit to
+`candy-core/src/Util/Width.php` shows up in `candy-shine`'s run, which is why CI injects before every
+install. Use published as the routine post-push refresh; use linked while developing across libs, and
+before trusting any figure taken on work that is not yet pushed.
+
+🔴 **`--mode=published` ON `sugar-crush` MOVES ITS SKIP COUNT 1 → 2 AND VOIDS THE FLOOR COMPARISON.**
+`GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed` skips when there are no
+path-repo symlinks to walk — which is exactly the alarm this file uses to detect a destroyed closure.
+The figure is not *wrong*, it is simply not comparable to any recorded floor. **Keep `sugar-crush`
+LINKED for the audit.** The script warns about this by name before it runs.
 
 **But the underlying worry was justified, and bigger than the trigger.** Measured across the monorepo:
 of **54** libs with a vendored closure, only **12** were fully symlinked; **12** were partially
 Packagist and **30** were **entirely** Packagist (`0/N`). CI is unaffected (it injects per job), but any
 LOCAL suite run in those 30 was testing two-rounds-stale siblings and saying nothing about it.
 
-**`php scripts/refresh-deps.php`** is the safe form of the request: inject the closure → `composer
-update -o -W` per lib (third-party moves, siblings resolve to symlinks) → discard the scratch manifests
-in a `finally` → prove `is_link()` per lib → assert `--no-lib-path-repos` rc 0 and zero tracked per-lib
-locks. `--root` also updates the root, whose `repositories[]` is legitimate and whose `composer.lock` is
-tracked and **kept**. `--verify-only` proves the closure and changes nothing; `--dry-run` prints the
-plan. It exits non-zero unless every targeted lib ends fully symlinked.
+**`php scripts/refresh-deps.php`** does both, deliberately, and names the state it leaves behind.
+`--mode=published` (DEFAULT) runs a plain `composer update -o -W` per lib — no injection, because the
+committed manifests already say `dev-master` with no `repositories[]`, which is precisely what an
+outside consumer installs. `--mode=linked` injects the closure, updates, then discards the scratch
+manifests in a `finally` and proves `is_link()` per lib. `--root` also updates the root, whose
+`repositories[]` is legitimate and whose `composer.lock` is tracked and **kept**. `--status` prints
+which state every lib is in (`linked` / `published` / **`mixed`** — the dangerous one, part working tree
+and part snapshot of unknown age). `--dry-run` prints the plan. Exit is non-zero unless every targeted
+lib ends in the requested state.
 
-⚠️ **It computes its OWN closure rather than trusting `--fix`.** Verified this round: `check-path-repos
---fix --strict-closure` injects **zero** entries for `candy-buffer`, whose only sibling dep
-(`sugarcraft/candy-core`) sits in `require-dev` — the checker reads require-dev in its validation and
-`--unused` paths but NOT in `--fix`'s injection path. Same gap explains the residual `candy-testing`
-Packagist copies in `candy-forms`/`candy-kit`/`candy-shine`. The checker is deliberately left alone: CI
-depends on `--fix` behaving exactly as it does. ⚠️ A lib can reach **itself** through a dependency's
-requires (`candy-core` → `candy-pty` → `candy-core`); the self-entry is dropped or the injection is
-circular. Cross-check that the algorithm is right: `sugar-crush`'s computed closure is **18**, matching
-its known-good 18/18.
+**Published mode has two guards the manual command does not.** It REFUSES to run with unpushed commits
+(`--force` overrides), because Packagist cannot serve what has not been pushed — that is the exact
+mistake that voided two suite runs. And afterwards it fingerprints every vendored sibling's `src/`
+against the working tree: on a clean tree they MUST match, so any drift means the pipeline has not
+caught up (sync still running, webhook not indexed, or the lib was not in the affected set) and it says
+so rather than reporting a clean success.
 
 **WHEN TO RUN IT:** at a round boundary, AFTER the merged floor is measured — never between a lane merge
 and its measurement. Re-measure the floor afterwards if third-party versions actually moved.
