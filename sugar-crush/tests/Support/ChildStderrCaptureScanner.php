@@ -324,6 +324,35 @@ final class ChildStderrCaptureScanner
 
     /**
      * A `proc_open()` descriptor spec, read for what fd 2 is pointed at.
+     *
+     * FD 2 BEING *NAMED* IS NOT FD 2 BEING *READ*, and until round 48 this
+     * method treated the two as the same thing. It answered `captured` for
+     * any spec that mentioned `2 =>` and did not contain the literal
+     * `/dev/null` - so an entry the scanner cannot actually read came back as
+     * compliant on the strength of the key alone. The live example is
+     * `Integration/BinSugarcrushDispatchTest::armWatchdog()`'s
+     * `2 => $devNull('w')`, a CLOSURE returning `['file','/dev/null','w']`:
+     * the truth there is a discard and the answer was `captured`, the
+     * polarity that waves a real offender through.
+     *
+     * Now an entry that is not an inline literal array is
+     * {@see SHAPE_UNCLASSIFIED} - a failure, which is the honest answer to
+     * "I cannot tell". A guard that quietly ignores what it cannot parse has
+     * a hole shaped exactly like the next defect.
+     *
+     * MEASURED BEFORE IT WAS WRITTEN, per the rule that a prescription is a
+     * hypothesis - and the measurement corrected the sentence that stood here
+     * first. A per-site census of all 95 spawn sites under `tests/` was taken
+     * with the old decision and with this one: ZERO of them moved. Not one,
+     * as the first draft of this paragraph claimed. `armWatchdog()`'s site -
+     * the only non-literal fd-2 entry anywhere in `tests/` - reads
+     * `discarded` on BOTH sides, because its command string carries
+     * `>/dev/null 2>&1` and {@see classifyProcOpen()} settles that on an
+     * earlier branch before any descriptor spec is consulted. So the one
+     * occurrence this change was written for never reaches this method at
+     * all. It closes the SHAPE and adds no exemption row anywhere, which is
+     * also why it needed a synthetic fixture to be provable: there is nothing
+     * in the tree that exercises it.
      */
     private static function classifySpec(string $spec): string
     {
@@ -331,28 +360,36 @@ final class ChildStderrCaptureScanner
             return self::SHAPE_INHERITED;
         }
 
-        return self::fdTwoSpecIsTheNullDevice($spec) ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+        $entry = self::fdTwoEntry($spec);
+        if ($entry === null) {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /**
+     * The inside of fd 2's entry when that entry is an inline literal array,
+     * null when it is anything else.
+     *
+     * Null is the load-bearing return: it is what makes a `2 => $spec()`,
+     * a `2 => self::PIPE` or a `2 => array('pipe','w')` (long syntax, which
+     * this deliberately does not accept) fail rather than pass. Widening it
+     * to a shape is a decision somebody should make with a census in hand,
+     * not something a scanner should assume.
+     */
+    private static function fdTwoEntry(string $spec): ?string
+    {
+        if (\preg_match('~(?:^|[\[,\s])2\s*=>\s*\[([^\]]*)\]~', $spec, $entry) !== 1) {
+            return null;
+        }
+
+        return $entry[1];
     }
 
     private static function namesFdTwo(string $spec): bool
     {
         return \preg_match('/(^|[\[,\s])2\s*=>/', $spec) === 1;
-    }
-
-    /**
-     * Whether fd 2's entry in a descriptor spec is `['file', '/dev/null', …]`.
-     *
-     * Only fd 2's own entry is inspected, so a spec that parks fd 0 on the
-     * null device - which is ordinary and correct, a child with no stdin -
-     * is not mistaken for a silenced stderr.
-     */
-    private static function fdTwoSpecIsTheNullDevice(string $spec): bool
-    {
-        if (\preg_match('~(?:^|[\[,\s])2\s*=>\s*\[([^\]]*)\]~', $spec, $entry) !== 1) {
-            return false;
-        }
-
-        return \str_contains($entry[1], '/dev/null');
     }
 
     /**

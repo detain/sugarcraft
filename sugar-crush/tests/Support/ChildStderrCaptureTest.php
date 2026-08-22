@@ -196,6 +196,49 @@ final class ChildStderrCaptureTest extends TestCase
             $one('proc_open("ls", self::descriptors(), $pipes);')['shape'],
         );
 
+        // ...AND NEITHER IS AN fd-2 ENTRY IT CANNOT READ, which is a
+        // different hole in the same wall and was open until round 48. The
+        // scanner used to answer `captured` for any spec that merely NAMED
+        // fd 2 without holding the literal `/dev/null`, so an entry behind a
+        // call came back compliant on the strength of the key. The live shape
+        // is `BinSugarcrushDispatchTest::armWatchdog()`'s `2 => $devNull('w')`
+        // - a closure returning `['file','/dev/null','w']`, i.e. a discard
+        // reported as a capture.
+        //
+        // NOTHING IN THE TREE EXERCISES THIS, and that is stated rather than
+        // discovered later: a census of all of `tests/` before and after the
+        // change moved ZERO real sites, because that one site is settled as
+        // `discarded` on the command-string branch before its spec is ever
+        // read. These fixtures are the only thing keeping the branch honest.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [1 => ["pipe","w"], 2 => $devNull("w")], $p);')['shape'],
+            'an fd-2 entry behind a call is not a capture - the scanner cannot see where it goes',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [2 => self::PIPE], $p);')['shape'],
+            'an fd-2 entry that is a constant is not a capture either',
+        );
+        // The long array syntax is deliberately NOT accepted as a literal:
+        // widening the shape is a decision for somebody holding a census.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [2 => array("pipe","w")], $p);')['shape'],
+        );
+
+        // THE OTHER POLARITY, because a rule that answers `unclassified` for
+        // everything reds correct code, and that is how the next real
+        // offender buys its exemption. Both literal shapes still resolve.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [2 => ["file", "/tmp/err", "w"]], $p);')['shape'],
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $one('proc_open("ls", [2 => ["file", "/dev/null", "w"]], $p);')['shape'],
+        );
+
         // THE SPELLING THAT WAS MISSED. `\proc_open(...)` is
         // T_NAME_FULLY_QUALIFIED, and matching only T_STRING made three real
         // sites vanish.
