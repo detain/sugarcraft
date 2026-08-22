@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  * them as a HARNESS property - "child-process launches whose stderr the
  * PHPUnit process inherits rather than keeping on the pipe the test already
  * reads", with `tests/Integration/BinSugarcrushDispatchTest.php` and
- * `tests/Integration/McpToolWiringTest.php` named as two of the eleven owning
+ * `tests/Integration/McpToolWiringTest.php` named among the owning
  * files. Measured at 62f4e5d1 on PHP 8.3.6, run one file at a time and counted
  * with `grep -ac 'sugarcrush: '`:
  *
@@ -31,8 +31,8 @@ use PHPUnit\Framework\TestCase;
  * merits.
  *
  * The mechanism behind the bulk of the 62 is the same one: in-process
- * `fwrite(\STDERR, ...)`. `src/Cli/NonInteractive.php` alone holds six such
- * sites, and the two test files that drive it hardest -
+ * `fwrite(\STDERR, ...)`. `src/Cli/NonInteractive.php` writes on it directly
+ * in several places, and the two test files that drive it hardest -
  * `tests/Cli/NonInteractiveProviderFailureTest.php` and
  * `tests/Cli/NonInteractiveTest.php` - account for 18 and 8 lines with no
  * child process anywhere in either. Closing those needs a stderr sink seam in
