@@ -71,21 +71,6 @@ final class ForkedChildExitConventionTest extends TestCase
             . 'are only the unreachable "the handler did not fire" sentinels beside it. Converting '
             . 'the sentinels alone would turn this row green while leaving the path it stands for '
             . 'entirely untouched, which is worse than the row.',
-
-        'Agents/TaskListTest.php' =>
-            'RECORDED OPEN, and found only because the scanner learned to read '
-            . '`\\pcntl_fork()`. testForkedClaimRace() forks $childCount claimants and one '
-            . 'completer, all spelled with a leading backslash, and every child branch ends in a '
-            . 'plain exit(0) inside PHPUnit. They were invisible to the census until '
-            . 'T_NAME_FULLY_QUALIFIED was added to the fork token types - the guard reported this '
-            . 'file as having no forks at all. Out of this lane\'s file split to fix; they should '
-            . 'be ForkedChild::exitNow(0).',
-
-        'Agents/MailboxTest.php' =>
-            'RECORDED OPEN. testCrossProcessWake()\'s child sends a real Mailbox message and then '
-            . 'falls into a plain exit(0) inside PHPUnit. It has no inherited tty and no armed '
-            . 'loop watcher today, which is why it has not bitten - but that is a property of '
-            . 'what the test currently does, not a reason. It should be ForkedChild::exitNow(0).',
     ];
 
     /**
