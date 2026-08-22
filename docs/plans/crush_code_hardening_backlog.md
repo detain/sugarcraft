@@ -3369,6 +3369,86 @@ genuinely does paint the stub. `src/App/App.php:437-444` carries the same note, 
 
 **Size L. Do not bundle it** — the test rewrite is the risky part and deserves an isolated diff.
 
+---
+
+**ROUND 42 `lane c` — THE TEST HALF IS FIXED. 🔴 THE WORKER HALF IS DEFERRED, DELIBERATELY; this stamp
+does not close the entry.**
+
+**The round-39 scout's correction was right, and it was one anchor short.** It found two literals in
+`WorkflowLivePaneTest` (`Processing:` and `[<name>] Processing:`). There are **three** in that file:
+the third is `assertStringNotContainsString('Processing:', $frame)` in
+`testThePaneIsGoneOnceTheWorkflowHasFinished()` — a NEGATIVE assertion, which is the one that could
+never have announced its own rot. **Measured, not argued:** with `Tui\Renderer::liveAgentOutputs()`
+mutated to inject a stuck tile carrying the stub's *final* line
+(`[docs-explorer] Task finished: explore the docs`), the OLD test file passed — `OK (1 test, 5
+assertions)`, rc 0 — while the rewritten one reds. The pane was pinned open and the negative anchor,
+looking for a word the stub only emits *mid*-run, saw nothing wrong.
+
+There is a **fourth** anchor outside that file, and it is NOT touched here: `tests/ChatTest.php`'s
+config-built-pool dispatch test asserts `'[ConfigBuiltPoolAgent] Task finished: Say hello'` verbatim
+against `Chat::executeAgents()`'s result. It is a legitimate end-to-end assertion *today* and it will
+break the day the worker is real; recorded so that day's implementer finds it.
+
+**What the anchors are now.** Not a string — a contract. On each painter tick the test reads
+`AgentManager::liveOutputs()` FIRST and renders SECOND, then asserts that the agent's own tile, sliced
+out of the frame by column (`WorkflowLivePaneTest::paneColumn()`), carries 16 cells of whatever that
+buffer's first non-blank line was (`WorkflowLivePaneTest::livenessProbe()`, `LIVE_TEXT_PROBE_CELLS`).
+A real worker satisfies it by emitting anything at all. The negative test asserts the TILE is gone
+(`╭ <name> `, `[working]`) rather than a stub word, and is guarded against vacuity: the finished
+sub-agent is checked to be terminal AND non-empty via `AgentManager::subAgentsOf()`, so "the pane is
+down" cannot pass because the worker never spoke.
+
+🔴 **ROUND-42 REVIEW CORRECTION, applied: as first written the derived probe was the AGENT'S NAME and
+pinned nothing.** `livenessProbe()` took the first 16 cells from cell 0, the stub tags every line
+`[<name>] `, and `[docs-explorer] ` is exactly 16 cells — so the probe was a datum
+`AgentSplitColumn::state()` is handed as a parameter and could paint without reading a byte from the
+worker. Measured (PHP 8.3.6, PHPUnit 10.5.64): a mutant passing
+`self::tail('[' . $name . '] MUTANT never came from the worker')` as `outputBuffer:` passed the whole
+file, `OK (11 tests, 49 assertions)`, rc 0. The probe now skips a leading `[<agent name>] ` tag and
+FAILS if what remains still contains the name; the same mutant reds, as does the tag-free
+`'MUTANT placeholder text'` variant. A new `tileTopBorder()` measures the painted tile's own budget so
+the window's upper bound is an assertion rather than a sentence.
+
+🔴 **And a figure in the same docblock did not reproduce (RULE 9).** It claimed "the tile is 40 cells,
+inner 36, and the stub's 34-cell first line survives whole". The arithmetic is right —
+`Renderer::agentSplitWidth()` at `cols = 120` gives `min(60, max(24, intdiv(120, 3))) = 40`, and
+`AgentSplitColumn::render()` clips to `$width - PANE_CHROME` = 36 — and the rest is wrong twice.
+Instrumenting a scratch copy of the test file: the live buffer holds NO newline, because
+`AgentWorkerPool::pumpProgress()` concatenates both `streaming` chunks, so the "first line" is one
+88-cell string; the stub's first *emitted* line is 44 cells, not 34; and it is clipped, the painted row
+being `│ [docs-explorer] Processing: explore  │`. Rewritten in place per RULE 7.
+
+🔴 **A third negation was narrower than the prose around it.** All three frame negations in
+`testThePaneIsGoneOnceTheWorkflowHasFinished()` name this agent or `[working]`, so a stopped tile for a
+DIFFERENT agent satisfied every one — measured by injecting `['other-agent' => 'zzz mutant filler']`
+into `Renderer::liveAgentOutputs()`. That is not a regression (the old `Processing:` negation had the
+same hole), but the docblock implied otherwise. The test now asserts `Renderer::liveAgentOutputs()`
+empty directly — the compositor's own source for the split, and a different method from the
+`AgentManager::liveOutputs()` asserted beside it — and that mutation reds.
+
+**Why the worker half is not here, stated as a size and not as a preference.** `php -r` is the whole
+worker: `ProcessExecutor::spawnWorker()` launches `[$binaryPath, '-r', $workerScript]` with **no
+autoloader in the child**. A real one needs (1) composer's autoloader bootstrapped in that child, (2) a
+provider IDENTITY plus credentials crossing the startup message — which today carries `agent.id`,
+`agent.name`, `agent.model`, `agent.prompt`, `task` and a `request` sub-object of
+`model`/`messages`/`tools`/`systemPrompt`/`temperature`/`maxTokens`, eleven fields and not one of them
+a provider or a credential; `Agents\Agent` even HAS a `provider` field that `spawnWorker()` does not
+forward (an earlier revision of this stamp and of the `createInlineWorkerScript()` docblock listed only
+the six `request` fields and called that the whole message — corrected in both, and the point stands
+harder for it) — and (3) an offline substitute, because CI has no model — so the simulation does not disappear even
+then, it moves behind a seam. (1) and (2) touch `bin/` and `Cli/Bootstrap.php`, held by other lanes
+this round, and (3) is a new `src/` file, which moves four figures in `BuiltInToolCorpusTest`, a prose
+restatement in `RepoMapBlock`, and `BinSugarcrushWiringTest::crushSourceFiles`. That is not a
+drive-by; half-landing it is worse than not landing it.
+
+`ProcessExecutor::createInlineWorkerScript()` now carries the RULE-6 seam docblock saying all of the
+above at the site, including which parts around it are genuinely production (the `proc_open()`, the
+line protocol, `AgentWorkerPool::pumpProgress()`, the compositor) and that deleting the simulation
+would remove the only exercise that chain has. The two "Real LLM integration comes in later phases"
+comments are rewritten, not deleted, per RULE 7 — the phase they deferred to has passed.
+
+**Still open, unchanged:** the worker is a simulation. Size of what remains: L.
+
 ## ROUND 37 SCOUT — E55 and E56 both reproduce; figures restated at master `4a4ecb98`
 
 **E55.** Cap 400 → **7022 bytes returned, 17.6× the cap**; the hit list clipped to one line and a
@@ -4962,6 +5042,85 @@ Confirm first whether `Tui\Renderer::statusBar()` is genuinely dead on the live 
 that it is, because `renderView()` sets `$bottom = ''` whenever `$a->chat !== null`, which is always
 true on a real launch. If so, say *that*, rather than that nothing constructs the system.
 
+**ROUND 42 `lane c` — FIXED. THE ENTRY WAS RIGHT ABOUT THE FALSE CLAIM AND MISSED A SECOND ONE IN THE
+SAME DOCBLOCK.**
+
+**Launch path, traced rather than accepted.** `bin/sugarcrush` ends in
+`new Program(Bootstrap::app($args->root), Chat::programOptions())`; `Cli\Bootstrap::app()` builds the
+`App` and calls `->withChat(self::chat($root))`; `App::view()` calls `Tui\Renderer::renderView()`. So
+the entry is correct: the system IS constructed and `nothing constructs it` was false.
+
+**`Tui\Renderer::statusBar()` is dead on that path — re-confirmed.** `renderView()` sets
+`$hosted = $a->chat !== null` and `$bottom = $hosted ? '' : InputPane::render(...) . "\n" .
+self::statusBar($a)`, and `Bootstrap::app()` always attaches a chat. Round-41 lane a's finding holds.
+**Already pinned, so not re-pinned:** `AppModelTest::testHostedFrameHasExactlyOneInputBoxAndOneStatusBar()`
+asserts `Switch Pane` absent from a hosted frame and `::testViewRendersTheShellChrome()` asserts it
+present un-hosted. `Renderer\StatusLineSegmentTest`'s class docblock already narrates it.
+
+🔴 **THE ENTRY'S SUGGESTED REPLACEMENT WOULD HAVE LEFT A SECOND FALSEHOOD STANDING.** The Step says to
+say "constructed, but this particular method is unreachable because …". That is the right shape for
+`statusBar()`. It is the wrong diagnosis for `Chat::selectPane()`, whose docblock went on to conclude
+that "jumping a pane field **no live frame reads** would be a switch the user can never see" — and
+**the live frame does read `App::$pane`**: `renderView()` diverts `Pane::Agents` to the full-width
+dashboard before any sidebar exists, `leftSidebar()` branches on `Pane::Files`/`Pane::Tools`, and
+`rightSidebar()` branches on `Pane::Skills`/`Pane::Settings`. A pane switch is plainly visible. A third
+sentence lower in the same docblock — "Files/Tools/Skills/Settings/Help have NO live surface on this
+path at all" — was false for the same reason, and is rewritten too.
+
+🔴 **ROUND-42 REVIEW CORRECTION, applied: the rewrite above introduced a THIRD falsehood about `Help`.**
+This stamp and the docblock both said "`Help` alone was right: it has no `Pane` case". `src/Tui/Pane.php`
+declares `case Help = 'help';`, `Pane::Help->label()` returns `'Help'`, and `tests/Tui/PaneTest.php`
+asserts `value`, `label()` and `from('help')`. Only the *arm* half held — nothing in `src/` matches on
+`Pane::Help`. And it has a live surface by the same criterion used to condemn the sentence for
+Files/Tools/Skills/Settings: `MenuBar::paneTabs()` renders `'Currently: ' . $a->pane->label()`
+unconditionally. Measured at 120x40, line 0 reads `… Currently: Help` for `Pane::Help` against
+`… Currently: Chat` for `Pane::Chat`, and the two frames differ — and it was already pinned all along:
+`ComponentTest::testMenuBarWithDifferentPaneLabels()`'s all-panes `Currently:` table has a `Pane::Help => 'Help'` row. The docblock now records the
+correction in place rather than deleting it (RULE 7); the argument it was attached to — these panes
+lack a *writer* reachable from `selectPane()`, not a surface — is unchanged and covers `Help` too.
+
+**The real reason `selectPane()` cannot take §8 E3's `$app->withPane(...)` sketch is ownership, not
+reachability.** `Chat::update()` returns `array{0:self,1:?\Closure}`;
+`App::delegateToChat()` re-wraps the returned Chat with `withChat()`. There is no channel from a value
+this method computes to the host's `$pane`, and Chat holds no reference to its host. That is what the
+docblock now says.
+
+**A dormant seam found while verifying, kept and recorded per RULE 6.** `App\SelectPaneMsg` exists,
+`App::update()` answers it with `withPane($msg->pane)`, and `delegateToChat()` passes Chat's Cmd
+straight up to `Program` — so a Cmd dispatching a `SelectPaneMsg` **would** reach the host. **Nothing
+in `src/` or `bin/` constructs one** (`grep -c 'new SelectPaneMsg' src/ bin/` → 0; the 5 textual hits
+are the class definition and `App::update()`'s two match arms). Only `tests/App/AppTest.php` and
+`tests/App/AppModelTest.php` build one. Wiring it is a behavioural change and was out of scope for a
+comment-only item, so it stays a seam — and
+`HostedFrameReadsThePaneTest::testNothingInSrcConstructsASelectPaneMsg()` now reds the day somebody
+wires it, which is the commit on which the docblock's ⚠️ paragraph becomes wrong.
+
+🔴 **ROUND-42 REVIEW CORRECTION, applied: as first written that census could not see the wiring it
+existed to catch.** The regex `/\bnew\s+(\\[\w\\]+\\)?SelectPaneMsg\s*\(/` requires a LEADING
+backslash on its optional namespace prefix, so it matched `new SelectPaneMsg(` and
+`new \Fully\Qualified\SelectPaneMsg(` and was blind to `new App\SelectPaneMsg(` — the relative form
+`Chat.php` would use, since it sits in `SugarCraft\Crush` and imports no `SelectPaneMsg`. Measured: with
+that arm added to `selectPane()`'s match the test stayed green, and reflection on the mutated method
+really did return a `SugarCraft\Crush\App\SelectPaneMsg`, so it was a producer and not a phantom.
+It also scanned only `src/`, while this entry claimed `src/ or bin/`. Both are fixed: any namespace
+prefix or none, `use … as` aliases resolved, `bin/sugarcrush` included, plus a second assertion pinning
+the exact set of production files that so much as name the symbol (`src/App/App.php`, `src/Chat.php`) —
+which is what catches an alias import landing in a file not already on the list. All four construction
+syntaxes were driven as mutations and all four now red. **Residual, stated rather than papered over:**
+`$c = SelectPaneMsg::class; new $c(…)` inside a file already on the allowlist is invisible to a textual
+census. That is the floor of this technique, not an oversight.
+
+**New file `tests/App/HostedFrameReadsThePaneTest.php`** pins the corrected behavioural claims: the
+hosted frame's left sidebar follows `Pane::Files`/`Pane::Tools`, its right sidebar follows
+`Pane::Skills`, `Pane::Agents` diverts to the full-width dashboard, and the seam census above.
+
+⚠️ **A TESTING HAZARD WORTH ONE LINE, because it cost a survived mutation here.** "Frame A differs from
+frame B when the pane changes" proves nothing about the panes: `MenuBar::render()` prints
+`Currently: <pane>` on line 0 for *every* pane, so two frames always differ. The first version of the
+right-sidebar test asserted `assertNotSame($files, $skills)` and **survived** deletion of
+`rightSidebar()`'s entire `Pane::Skills` arm. It now asserts the `╭ skills ` border title, and that
+mutation reds.
+
 ### E77 — `nextCluster()`'s no-ext-intl fallback is now measurably wrong for real ZWJ sequences
 
 **Recorded 2026-08-22 by the round-41 lane-b reviewer.** Severity: **latent — currently unreachable.**
@@ -5095,3 +5254,46 @@ one-shot *prompt*, which is a different mechanism with a different blast radius.
 reads the list back, because today nothing on those paths does. The six writes that accompany a
 non-zero exit (`run()` x2, `failUsage()`, `failUnusableProvider()`, and both in `Subcommands`) need no
 decision: the process ends, and there is no transcript for a row to survive into.
+### E80 — `MultiAgentRefactorTest`'s forked claim race aborts at 60s under concurrent machine load
+
+**Recorded 2026-08-22 by the round-42 lane-c implementer.** Severity: **CI flake, not a product
+defect** — but it turns a green suite red and it is not obvious from the failure text why.
+
+**What.** `Integration\MultiAgentRefactorTest::testArchitectPlansTwoCodersImplementInParallelReviewerVerifiesLeadMerges`
+was reported **risky — "aborted after 60 seconds"** on one full-suite run and clean on the next, same
+tree, same commit, nothing between the two runs but load. Both figures are mine and both are
+reproducible only in the statistical sense:
+
+| run | tests | assertions | skipped | risky | rc | wall |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 8982 | 105,026 | 1 | 1 | **1** | 06:22 |
+| 2 | 8982 | **105,048** | 1 | 0 | **0** | 04:12 |
+
+The 22-assertion gap is *consistent with* that one test being the whole of the difference: it asserts
+25 in isolation (re-measured by a reviewer at `OK (1 test, 25 assertions)`, 00:00.114 — the 0.128 s
+first reported was a different run of the same command), and 25 − 22 = 3 would then be what landed
+before the abort.
+
+⚠️ **That "3" is arithmetic, not a measurement, and the inference is circular if read the other way
+round.** Nobody exported the assertion count at the moment of the abort; run 1's 105,026 is by
+construction not reproducible. What is actually established is: exactly one test went risky, and the
+gap is small enough to be that one test. Treat "3 landed" as a consequence of assuming the abort
+explains the gap, never as evidence for it.
+
+**Mechanism, as far as it was chased.** The test does not touch `ProcessExecutor`. It `pcntl_fork()`s
+two real children that race for one task through `flock()` on a SQLite file, with a start barrier and
+a spin whose backoff is capped: `usleep(min(20_000, 1_000 * $attempts) + (crc32($coderId) % 3_000))`.
+A **capped** backoff under a loser that keeps re-attempting is a lock-starvation shape — the delay
+stops growing at 20 ms however long contention lasts — and the machine was running sibling lanes'
+suites concurrently. That is a hypothesis consistent with both runs, not a measurement; nobody has
+instrumented the attempt count at the moment of the abort.
+
+**Why it is not fixed here.** Diagnosing it properly means running that one test under synthetic load
+with the attempt counter exported, and the honest fix is probably an uncapped (or much higher-capped)
+backoff plus a bound on total attempts — a change to a concurrency test's timing, which is exactly the
+kind of edit that should not ride along in a lane about docblocks and pane anchors.
+
+**Step.** Reproduce under deliberate load (`stress-ng`, or two suites in parallel) rather than by
+re-running and hoping. Export `$attempts` at abort. Then decide between raising the backoff cap and
+raising the 60 s limit for this one test — and prefer the backoff, because a 60 s limit that is
+routinely brushed is a limit that has stopped meaning anything.

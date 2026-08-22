@@ -4416,12 +4416,59 @@ final class Chat implements Model
     /**
      * Click-to-switch pane (crush_feat.md §8 E3).
      *
-     * §8 E3 sketches `$app->withPane(Pane::from($name))`, but `App::$pane`
-     * belongs to the `App`/`Tui\Renderer` system that nothing constructs
-     * (`bin/sugarcrush` runs THIS model — see {@see Renderer}'s class
-     * docblock, and §5 E7, which recommends retiring that system outright).
-     * Jumping a pane field no live frame reads would be a switch the user
-     * can never see. So a pane click dispatches the same thing the keyboard
+     * §8 E3 sketches `$app->withPane(Pane::from($name))`. This method does
+     * something else, and the reason recorded here for that was FALSE.
+     *
+     * ## WHAT THIS DOCBLOCK USED TO SAY
+     *
+     * That `App::$pane` "belongs to the `App`/`Tui\Renderer` system that
+     * nothing constructs (`bin/sugarcrush` runs THIS model)", and therefore
+     * that "jumping a pane field no live frame reads would be a switch the
+     * user can never see". It cited {@see Renderer}'s class docblock as
+     * agreeing, and §5 E7's recommendation to retire the system outright.
+     *
+     * ## WHAT IS TRUE NOW — BOTH HALVES WERE WRONG
+     *
+     * **The system is constructed.** `bin/sugarcrush` ends in
+     * `new Program(Bootstrap::app($args->root), Chat::programOptions())`, and
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::app()} builds the `App` with
+     * `->withChat(self::chat($root))`. So the root Model on a real launch is
+     * the `App` shell HOSTING this Chat, not this Chat;
+     * {@see \SugarCraft\Crush\App\App::view()} calls
+     * {@see \SugarCraft\Crush\Tui\Renderer::renderView()}, which is the live
+     * frame. {@see Renderer}'s class docblock has said so since the R20.fix
+     * paragraph ("the `App`-keyed pane system it belongs to is no longer
+     * disconnected"); the tree was contradicting itself, and this side was the
+     * stale one.
+     *
+     * **And the live frame does read `$a->pane`.** `renderView()` diverts
+     * `Pane::Agents` to the full-width `AgentDashboardPane` before any sidebar
+     * is built; `Tui\Renderer::leftSidebar()` branches on `Pane::Files` /
+     * `Pane::Tools`; `Tui\Renderer::rightSidebar()` branches on `Pane::Skills`
+     * / `Pane::Settings`. A pane switch is emphatically visible.
+     *
+     * ## THE REAL REASON THIS METHOD CANNOT TAKE E3'S SKETCH
+     *
+     * Ownership, not reachability. `$app` is not in scope and cannot be: this
+     * is a method on the HOSTED content model, whose `update()` contract
+     * returns `array{0:self,1:?\Closure}` — a Chat and a Cmd.
+     * {@see \SugarCraft\Crush\App\App::delegateToChat()} takes the returned
+     * Chat and re-wraps it with `withChat()`; there is no channel by which a
+     * value this method computes becomes the host's `$pane`. Chat holds no
+     * reference to its host, and giving it one would invert the hosting
+     * relation.
+     *
+     * ⚠️ There IS a channel, and it is unwired rather than absent — recorded so
+     * the next reader does not re-derive "impossible" from this paragraph.
+     * `App\SelectPaneMsg` exists, `App::update()` answers it with
+     * `withPane($msg->pane)`, and `delegateToChat()` passes this method's Cmd
+     * straight up to `Program` — so a Cmd dispatching a `SelectPaneMsg` WOULD
+     * reach the host. Nothing in `src/` constructs one today (only
+     * `tests/App/AppTest.php` and `tests/App/AppModelTest.php` do), so that
+     * message is a dormant seam, not a live route, and wiring it is a
+     * behavioural change and not this docblock's business. Backlog E76.
+     *
+     * So a pane click dispatches the same thing the keyboard
      * already dispatches for that pane on the live path — E3's "just a
      * direct jump instead of `next()`", against the surfaces that exist:
      *
@@ -4465,13 +4512,45 @@ final class Chat implements Model
      * - {@see Pane::Agents} → the same `handleAgentsCommand('/agents')` the
      *   Ctrl+A shortcut and the palette's SwitchAgent action already run.
      *
-     * Every other case is honestly inert. Files/Tools/Skills/Settings/Help
-     * have NO live surface on this path at all (they are `Tui\Components\*`
-     * stubs keyed on `App`), and Chat/Input have no separate focus to move —
-     * every keystroke already goes to the input box. Nothing marks a zone
-     * for those panes, so this arm is only reached by a stale zone from a
-     * previous frame; answering it with an invented state change would be
-     * worse than answering it with nothing.
+     * Every other case is inert HERE, which is a narrower claim than the one
+     * this paragraph used to make.
+     *
+     * ⚠️ WHAT IT USED TO SAY: "Files/Tools/Skills/Settings/Help have NO live
+     * surface on this path at all (they are `Tui\Components\*` stubs keyed on
+     * `App`)". WHAT IS TRUE NOW — and was already true when that was written,
+     * for the same reason the paragraph above is being rewritten — is that
+     * `FilesPane`, `ToolsPane`, `SkillsPane` and `SettingsPane` are all
+     * rendered by the live `Tui\Renderer::leftSidebar()`/`rightSidebar()` off
+     * `App::$pane`. They have live surfaces.
+     *
+     * ⚠️ AND THE CORRECTION ITSELF WAS WRONG ABOUT `Help`, which is worth more
+     * than a silent edit because it is the second time this docblock has
+     * argued from an absence that is not there. WHAT THE CORRECTION SAID:
+     * "(`Help` has no `Pane` case and no arm anywhere, so for that one the old
+     * sentence held.)" WHAT IS TRUE NOW: {@see Pane} declares
+     * `case Help = 'help';`, `Pane::Help->label()` returns `'Help'`, and
+     * `tests/Tui/PaneTest.php` asserts all of it. Only the second half holds —
+     * no `match` arm anywhere in `src/` names `Pane::Help`. And it has a live
+     * surface for the same reason every other pane does:
+     * `Tui\Components\MenuBar::paneTabs()` renders
+     * `'Currently: ' . $a->pane->label()` unconditionally, so a frame on
+     * `Pane::Help` differs from one on `Pane::Chat` (measured at 120x40: line 0
+     * reads `… Currently: Help` against `… Currently: Chat`), and that is
+     * already pinned — `Tui\ComponentTest::testMenuBarWithDifferentPaneLabels()`'s
+     * table includes `Pane::Help => 'Help'`. WHY THIS STILL
+     * EARNS ITS PLACE: the point the paragraph is making — that these panes
+     * lack a WRITER reachable from here, not a surface — is unchanged and
+     * covers `Help` too. What it cannot claim is that `Help` is a special case.
+     *
+     * WHY THE ARM STILL EARNS `default => [$this, null]`: what those panes
+     * lack is not a surface but a WRITER reachable from here — see the
+     * ownership paragraph above. Chat cannot move `App::$pane`, and it has no
+     * second, Chat-local rendering of Files/Tools/Skills/Settings to move
+     * instead; Chat/Input have no separate focus to move either, because every
+     * keystroke already goes to the input box. Nothing marks a zone for those
+     * panes, so this arm is only reached by a stale zone from a previous
+     * frame; answering it with an invented state change would be worse than
+     * answering it with nothing.
      *
      * @param string $name A {@see Pane} case value, as parsed off the zone id.
      *

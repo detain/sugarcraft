@@ -20,6 +20,7 @@ use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tests\Support\DrivesWorkflowRunsTrait;
+use SugarCraft\Crush\Tui\Components\AgentSplitColumn;
 use SugarCraft\Crush\Tui\Renderer;
 use SugarCraft\Crush\Workflows\Tasks;
 use SugarCraft\Crush\Workflows\WorkflowBuilder;
@@ -71,6 +72,76 @@ final class WorkflowLivePaneTest extends TestCase
 
     /** The name the workflow's parallel task carries, and so the agent's. */
     private const AGENT_NAME = 'docs-explorer';
+
+    /**
+     * Cells of the running worker's own text — PAST ITS OWN NAME TAG — that
+     * the pane has to be showing.
+     *
+     * ## Why a length and not a string
+     *
+     * Every assertion in this file used to name the SIMULATION STUB's output
+     * literally: `ProcessExecutor::createInlineWorkerScript()` emits
+     * `"[<name>] Processing: <task>"`, and three anchors across two tests
+     * matched on `Processing:`. That pinned the stub, not the mechanism — the
+     * day the worker talks to a model it emits no such string, and one of the
+     * three (a `assertStringNotContainsString()`) would have gone on passing
+     * for the rest of the project's life while asserting nothing at all.
+     *
+     * So the anchor is derived at paint time from
+     * {@see AgentManager::liveOutputs()} — whatever the live worker has
+     * actually produced — and this constant is the only thing left that a
+     * rewrite of the worker could invalidate.
+     *
+     * ## ⚠️ WHAT THIS USED TO SAY, AND WHY THE FIRST DERIVED PROBE WAS BLIND
+     *
+     * WHAT IT USED TO SAY: the window was bounded "below, by coincidence: 16
+     * cells of the worker's own first line appearing verbatim inside the
+     * agent's tile is not something a piece of unrelated chrome does by
+     * accident."
+     *
+     * WHAT IS TRUE NOW: for THIS worker those 16 cells were the chrome's own
+     * datum. The stub tags every line `[<name>] `, `[docs-explorer] ` is
+     * exactly 16 cells, so {@see livenessProbe()} returned the AGENT NAME and
+     * nothing else — and the name is handed straight to
+     * {@see AgentSplitColumn::state()}, which could therefore paint a
+     * satisfying tile without ever reading a byte from the worker. Measured on
+     * PHP 8.3.6 in this lane: a mutant whose `outputBuffer:` argument was
+     * `self::tail('[' . $name . '] MUTANT never came from the worker')` passed
+     * this whole file — `OK (11 tests, 49 assertions)`, rc 0.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the length is still the right knob, the
+     * OFFSET it is taken from was the defect. {@see livenessProbe()} now skips
+     * a leading `[<agent name>] ` tag before slicing and FAILS a probe that
+     * still contains the agent's name, so what the tile has to be showing is
+     * 16 cells the compositor had no other way to obtain. The same mutant now
+     * reds.
+     *
+     * ## The window's upper bound is asserted, not described
+     *
+     * ⚠️ WHAT THE OLD "measured on the 120x40 frame" SENTENCE CLAIMED: "the
+     * tile is 40 cells, inner 36, and the stub's 34-cell first line survives
+     * whole." The two arithmetic figures are right and re-derive —
+     * {@see Renderer::agentSplitWidth()} at `cols = 120` gives
+     * `min(60, max(24, intdiv(120, 3))) = 40`, and
+     * {@see AgentSplitColumn::render()} clips body lines to
+     * `$width - AgentSplitColumn::PANE_CHROME` = 36. The rest was wrong twice.
+     *
+     * WHAT IS TRUE NOW (PHP 8.3.6, this lane, measured by instrumenting a
+     * scratch copy of this file rather than by reading the stub): the live
+     * buffer holds NO newline at all — `AgentWorkerPool::pumpProgress()`
+     * concatenates both `streaming` chunks — so the "first line" is one
+     * 88-cell string, `'[docs-explorer] Processing: explore the
+     * docs[docs-explorer] Completed task successfully.'`. The stub's first
+     * EMITTED line is 44 cells, not 34, and it does not survive whole: the
+     * painted row is `│ [docs-explorer] Processing: explore  │`, clipped at
+     * inner 36.
+     *
+     * Which is why the fit is no longer a sentence here. The positive test
+     * measures the tile's own top border and asserts that the probe's end
+     * offset — tag included — lands inside the clip. Raise this constant past
+     * what the tile can show and that assertion says so by name.
+     */
+    private const LIVE_TEXT_PROBE_CELLS = 16;
 
     private ProviderInterface $provider;
 
@@ -168,6 +239,34 @@ final class WorkflowLivePaneTest extends TestCase
      * content only AFTER the run settled would pass on the unfixed build, so
      * every recorded frame is stamped with whether the workflow had finished,
      * and only the un-settled ones count.
+     *
+     * ## The second trap, and it is the one this test used to fall into
+     *
+     * The recorded liveness anchor was the SIMULATION STUB's literal output —
+     * a frame counted as live if it contained `Processing:`. That is a
+     * statement about `ProcessExecutor::createInlineWorkerScript()`, not about
+     * the compositor: a real worker satisfies none of it, so the day the stub
+     * goes the probe has nothing to look for and the test either fails for the
+     * wrong reason or (see the sibling test) silently stops asserting.
+     *
+     * The anchor now comes out of the running system. On each tick the probe
+     * reads {@see AgentManager::liveOutputs()} FIRST and renders SECOND, so the
+     * text it is about to look for is text the frame has already been given —
+     * a worker that emits `Processing:`, a JSON delta or a haiku all pin the
+     * same thing. What is asserted is that the agent's OWN TILE is showing the
+     * agent's OWN BYTES while the workflow is un-settled; nothing in it names
+     * the worker's implementation.
+     *
+     * ## ⚠️ The third trap, which the first rewrite of this test fell into
+     *
+     * "The agent's own bytes" is only a claim if the probe carries bytes the
+     * compositor could not have invented. It did not: the derived probe came
+     * out as exactly `[docs-explorer] `, the agent's own name, which
+     * {@see AgentSplitColumn::state()} is handed as a parameter. A mutant that
+     * built the tile body from `$name` alone passed. The probe now starts
+     * AFTER the tag and refuses to contain the name — see
+     * {@see LIVE_TEXT_PROBE_CELLS} and {@see livenessProbe()} for the
+     * measurement and the fix.
      */
     public function testAFramePaintsTheRunningAgentsOutputWhileTheWorkflowIsStillRunning(): void
     {
@@ -185,19 +284,26 @@ final class WorkflowLivePaneTest extends TestCase
 
         $settled = false;
         $ticks = 0;
+
+        /** @var list<array{text: string, frame: string}> */
         $liveFrames = [];
 
         $painter = Loop::get()->addPeriodicTimer(
             0.02,
-            function () use ($app, &$settled, &$ticks, &$liveFrames): void {
+            function () use ($app, $manager, &$settled, &$ticks, &$liveFrames): void {
                 $ticks++;
                 if ($settled) {
                     return;
                 }
 
-                $body = Ansi::strip(Renderer::renderView($app, 120, 40)->body);
-                if (str_contains($body, 'Processing:')) {
-                    $liveFrames[] = $body;
+                // Source first, frame second — see the docblock. The pane
+                // derives from this same accessor, so a frame rendered after
+                // the read can only carry MORE than the read saw, never less.
+                $text = $manager->liveOutputs()[self::AGENT_NAME] ?? '';
+                $frame = Ansi::strip(Renderer::renderView($app, 120, 40)->body);
+
+                if ($text !== '') {
+                    $liveFrames[] = ['text' => $text, 'frame' => $frame];
                 }
             },
         );
@@ -215,19 +321,63 @@ final class WorkflowLivePaneTest extends TestCase
         $this->assertNotSame(
             [],
             $liveFrames,
-            'No frame painted during the run carried the sub-agent\'s output: '
+            'No frame was painted while the sub-agent had live output: '
             . 'either nothing repainted, or liveOutputs() was empty the whole time.',
         );
 
         // It is the AGENT's tile, and the text in it is the worker's own
-        // streamed line — not some other piece of chrome that happens to
-        // contain the word. The tile is titled with the agent name, the row
-        // above the text carries the liveness marker, and the line itself is
-        // clipped to the tile's width, so the assertion is on its prefix.
-        $frame = $liveFrames[0];
-        $this->assertStringContainsString('╭ ' . self::AGENT_NAME . ' ', $frame);
-        $this->assertStringContainsString('[working]', $frame);
-        $this->assertStringContainsString('[' . self::AGENT_NAME . '] Processing:', $frame);
+        // streamed bytes — not some other piece of chrome that happens to
+        // contain the same characters. Everything below is asserted against
+        // the pane COLUMN alone (see paneColumn()), so a match anywhere in the
+        // menu bar, the transcript or the status line does not count.
+        $text = $liveFrames[0]['text'];
+        $column = $this->paneColumn($liveFrames[0]['frame']);
+
+        $this->assertStringContainsString(
+            '╭ ' . self::AGENT_NAME . ' ',
+            $column,
+            'The split column exists but is not the agent\'s tile.',
+        );
+        $this->assertStringContainsString(
+            '[working]',
+            $column,
+            'The tile is up but does not claim the agent is still working.',
+        );
+
+        // And the slice really is a slice: the echoed command sits in the chat
+        // column, left of the split, and must not be inside it. Without this,
+        // a paneColumn() that quietly returned the whole frame would make all
+        // three assertions above frame-wide again.
+        $this->assertStringNotContainsString(
+            'user> /workflow run live',
+            $column,
+            'paneColumn() is not isolating the split column.',
+        );
+
+        [$probe, $probeEnd] = $this->livenessProbe($text);
+        $this->assertStringContainsString(
+            $probe,
+            $column,
+            'The tile is up and marked [working], but it is not showing what the '
+            . 'worker actually produced. liveOutputs() held ' . var_export($text, true)
+            . ' when this frame was rendered.',
+        );
+
+        // And the window fits inside the tile — MEASURED off the tile that was
+        // actually painted, not asserted in prose. The top border's own length
+        // is the column budget AgentSplitColumn was given, and it clips every
+        // body line to that minus its chrome. This is the assertion that
+        // reports it when LIVE_TEXT_PROBE_CELLS is raised past what a tile can
+        // show, instead of the containment assertion above failing as though
+        // the compositor were broken.
+        $tileInner = mb_strlen($this->tileTopBorder($column)) - AgentSplitColumn::PANE_CHROME;
+        $this->assertLessThanOrEqual(
+            $tileInner,
+            $probeEnd,
+            'The probe ends at cell ' . $probeEnd . ' of the worker\'s line and the '
+            . 'tile clips at ' . $tileInner . ', so no correct compositor could show '
+            . 'it. Lower LIVE_TEXT_PROBE_CELLS.',
+        );
 
         // And the run really did finish afterwards, so the frames above were
         // mid-run rather than the whole thing having failed instantly.
@@ -240,6 +390,41 @@ final class WorkflowLivePaneTest extends TestCase
      * that only ever gained content would leave a column open for the rest of
      * the session — which is what the liveness filter is for, and which the
      * progress pump must not defeat by leaving a finished agent `streaming`.
+     *
+     * ## This was the rotting one
+     *
+     * The frame assertion here was `assertStringNotContainsString('Processing:')`
+     * — the SIMULATION STUB's literal output, negated. A negative assertion
+     * against a string the system has stopped producing passes forever and
+     * means nothing, so the day the worker changed, this test would have gone
+     * on reporting green while checking that a frame does not contain a word
+     * nothing in the build emits. It is replaced by the tile's own structure,
+     * which every worker produces or fails to produce identically.
+     *
+     * And it is guarded against the OTHER way of passing for nothing: a run in
+     * which the worker never spoke at all would leave `liveOutputs()` empty and
+     * no tile in the frame, and every assertion below would hold. So the
+     * sub-agent is checked to have finished WITH text — the pane is down
+     * because the liveness filter dropped a completed agent, not because there
+     * was never anything to paint.
+     *
+     * ## What the frame negations do and do not cover, stated exactly
+     *
+     * All three of them are scoped: two name THIS agent, one names
+     * `[working]`. That is narrower than "no tile is open", and measurably so
+     * — injecting `['other-agent' => 'zzz mutant filler']` into
+     * {@see Renderer::liveAgentOutputs()} leaves a stopped tile standing in
+     * the frame and reds none of them. The unscoped statement is the
+     * `liveAgentOutputs()` assertion added below them, which is the
+     * compositor's actual source for the split.
+     *
+     * The probe negation is also deliberately FRAME-wide rather than
+     * tile-scoped, which is broader than "the tile is gone": it additionally
+     * says the transcript does not echo the worker's raw bytes. That is a real
+     * property of today's build and it is asserted on purpose, but it is the
+     * one assertion here that a legitimate future feature (streaming agent
+     * output into the transcript) would red without anything being wrong with
+     * the pane.
      */
     public function testThePaneIsGoneOnceTheWorkflowHasFinished(): void
     {
@@ -257,10 +442,57 @@ final class WorkflowLivePaneTest extends TestCase
 
         $this->assertSame([], $manager->liveOutputs());
 
-        $frame = Ansi::strip(
-            Renderer::renderView(App::new($this->provider, 'test-model')->withChat($after), 120, 40)->body,
+        // Anti-vacuity: the worker really did run and really did produce text,
+        // so the empty liveOutputs() above is the FILTER's doing.
+        $finished = $manager->subAgentsOf(self::AGENT_NAME);
+        $this->assertCount(1, $finished, 'The parallel stage did not file a sub-agent.');
+        $this->assertNotSame(
+            '',
+            $finished[0]->output,
+            'The worker finished without producing any output, so "the pane is down" '
+            . 'is true for the wrong reason and this test proves nothing.',
         );
-        $this->assertStringNotContainsString('Processing:', $frame);
+        $this->assertTrue(
+            $finished[0]->isComplete() || $finished[0]->isStopped(),
+            'The sub-agent is neither complete nor stopped, so the filter had no '
+            . 'reason to drop it and the assertions below are about a different bug.',
+        );
+
+        $app = App::new($this->provider, 'test-model')->withChat($after);
+
+        // No tile for ANY agent, which the frame negations below cannot say.
+        // They are all scoped to THIS agent's name or to `[working]`, so a
+        // compositor that left a DIFFERENT agent's tile up in a non-working
+        // state satisfies every one of them — measured: injecting
+        // `['other-agent' => 'zzz mutant filler']` into liveAgentOutputs() left
+        // this test green. This reads the renderer's own source for the split,
+        // which is a different method from the `liveOutputs()` asserted above.
+        $this->assertSame(
+            [],
+            (new \ReflectionMethod(Renderer::class, 'liveAgentOutputs'))->invoke(null, $app),
+            'The renderer still has a live-agent map, so the split column opens for '
+            . 'whatever is in it — including an agent this test never names.',
+        );
+
+        $frame = Ansi::strip(Renderer::renderView($app, 120, 40)->body);
+
+        // The TILE is gone, not merely one string the stub used to emit.
+        $this->assertStringNotContainsString(
+            '╭ ' . self::AGENT_NAME . ' ',
+            $frame,
+            'The finished agent still has a tile in the split column.',
+        );
+        $this->assertStringNotContainsString(
+            '[working]',
+            $frame,
+            'Something in the frame still claims an agent is working.',
+        );
+        [$goneProbe] = $this->livenessProbe($finished[0]->output);
+        $this->assertStringNotContainsString(
+            $goneProbe,
+            $frame,
+            'The finished worker\'s output is still being painted somewhere in the frame.',
+        );
     }
 
     /**
@@ -527,6 +759,140 @@ final class WorkflowLivePaneTest extends TestCase
     // =====================================================================
     // Helpers
     // =====================================================================
+
+    /**
+     * The split column, sliced out of a stripped frame.
+     *
+     * `renderView()` composes the shell band and the agent column side by side
+     * and pads every row to the full terminal width, so the column is a fixed
+     * cell range on every line — the range that opens at the tile's own top
+     * border. Isolating it is what lets the assertions above say "in the
+     * agent's tile" rather than "somewhere in 120x40 cells of chrome", which
+     * matters now that what they look for is arbitrary worker text.
+     *
+     * Returns `''` when there is no tile at all; the caller's border assertion
+     * is the one that then reports it, with a better message than a slice
+     * helper could.
+     */
+    private function paneColumn(string $frame): string
+    {
+        $marker = '╭ ' . self::AGENT_NAME . ' ';
+        $lines = explode("\n", $frame);
+
+        $column = null;
+        foreach ($lines as $line) {
+            $at = mb_strpos($line, $marker);
+            if ($at !== false) {
+                $column = $at;
+                break;
+            }
+        }
+
+        if ($column === null) {
+            return '';
+        }
+
+        $sliced = [];
+        foreach ($lines as $line) {
+            $sliced[] = mb_strlen($line) > $column ? mb_substr($line, $column) : '';
+        }
+
+        return implode("\n", $sliced);
+    }
+
+    /**
+     * The bytes of a live buffer that a tile has to be showing, and where they
+     * end within the line they came from.
+     *
+     * The FIRST non-blank line, clipped to {@see LIVE_TEXT_PROBE_CELLS} — the
+     * pane splits its buffer on newlines and clips each one, so a probe that
+     * spanned a newline could not appear in any frame however correct the
+     * compositor was, and one longer than the tile's inner width could not
+     * either. Both are properties of the pane, not of the worker, which is why
+     * the probe is derived rather than written down.
+     *
+     * ## The slice does not start at cell 0, and that is the whole point
+     *
+     * {@see AgentSplitColumn::state()} is handed the agent's NAME alongside
+     * its output. Any part of the probe that is also part of the name is
+     * therefore something the compositor can produce out of data it already
+     * holds, and a probe made entirely of it proves nothing about the worker —
+     * which is exactly what happened: this stub tags every line
+     * `[<name>] `, and for `docs-explorer` that tag is 16 cells, so the first
+     * version of this method returned the name and a mutant that fabricated
+     * the whole buffer from `$name` survived. See {@see LIVE_TEXT_PROBE_CELLS}
+     * for the measurement.
+     *
+     * So the tag is skipped when present, and a probe that still carries the
+     * agent's name fails here rather than passing weakly at the call site.
+     * A worker that does not tag its lines simply starts at 0 and is held to
+     * the same no-name rule.
+     *
+     * @return array{0: string, 1: int} the probe, and the cell offset one past
+     *                                  its end within its line — what the
+     *                                  caller compares against the tile's clip
+     */
+    private function livenessProbe(string $liveText): array
+    {
+        $tag = '[' . self::AGENT_NAME . '] ';
+
+        foreach (explode("\n", $liveText) as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+
+            $offset = str_starts_with($line, $tag) ? mb_strlen($tag) : 0;
+            $probe = mb_substr($line, $offset, self::LIVE_TEXT_PROBE_CELLS);
+
+            self::assertSame(
+                self::LIVE_TEXT_PROBE_CELLS,
+                mb_strlen($probe),
+                'The worker produced fewer than ' . self::LIVE_TEXT_PROBE_CELLS
+                . ' cells past its own name tag, so there is no window here wide '
+                . 'enough to tell a live tile from a fabricated one: '
+                . var_export($liveText, true),
+            );
+
+            self::assertStringNotContainsString(
+                self::AGENT_NAME,
+                $probe,
+                'The probe is made of the agent\'s own name, which '
+                . 'AgentSplitColumn::state() is handed directly and can paint without '
+                . 'reading the worker at all. A probe like that cannot distinguish a '
+                . 'live tile from a fabricated one — measured, it did not.',
+            );
+
+            return [$probe, $offset + self::LIVE_TEXT_PROBE_CELLS];
+        }
+
+        self::fail(
+            'The worker published a live buffer with no non-blank line in it, so '
+            . 'there is nothing a pane could have painted: ' . var_export($liveText, true),
+        );
+    }
+
+    /**
+     * The agent tile's top border row, out of an isolated pane column.
+     *
+     * Line 0 of a {@see paneColumn()} slice is NOT the border — it is whatever
+     * the menu bar had at that cell offset — so the row has to be found rather
+     * than indexed. Its length is the column budget
+     * {@see AgentSplitColumn::render()} was given, which is the only place a
+     * test can read that budget without reflecting into
+     * {@see Renderer::agentSplitWidth()}.
+     */
+    private function tileTopBorder(string $column): string
+    {
+        $marker = '╭ ' . self::AGENT_NAME . ' ';
+
+        foreach (explode("\n", $column) as $line) {
+            if (str_starts_with($line, $marker)) {
+                return $line;
+            }
+        }
+
+        self::fail('The isolated pane column has no tile top border in it.');
+    }
 
     private function requireForking(): void
     {
