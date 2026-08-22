@@ -505,26 +505,23 @@ final class WidthTest extends TestCase
      */
     public function testMeasuringCarriesNoStateAcrossClusterBoundaries(): void
     {
-        $alphabet = self::widthFuzzAlphabet();
-        $n = \count($alphabet);
-        \mt_srand(20260822);
+        $mismatches = [];
         $checked = 0;
-        for ($t = 0; $t < 20000; $t++) {
-            $s = '';
-            for ($k = 0; $k <= \mt_rand(0, 5); $k++) {
-                $s .= $alphabet[\mt_rand(0, $n - 1)];
-            }
+        foreach (self::widthFuzzCorpus(20000, 20260822) as $s) {
+            $checked++;
             $sum = 0;
             foreach (self::icuClusters($s) as $cluster) {
                 $sum += Width::string($cluster);
             }
-            $this->assertSame(
-                $sum,
-                Width::string($s),
-                sprintf('cross-cluster state moved the width of %s', bin2hex($s)),
-            );
-            $checked++;
+            $whole = Width::string($s);
+            if ($sum !== $whole && \count($mismatches) < 5) {
+                $mismatches[] = sprintf('%s: clusters sum to %d, whole measures %d', bin2hex($s), $sum, $whole);
+            }
         }
+        // Aggregated rather than asserted per trial: 20,000 per-trial
+        // assertions would swamp this lib's assertion count without adding
+        // information, and the first five failures name their own input.
+        $this->assertSame([], $mismatches, 'cross-cluster state moved a width');
         $this->assertSame(20000, $checked);
     }
 
@@ -536,25 +533,41 @@ final class WidthTest extends TestCase
      */
     public function testAnInputContainingANonZeroWidthClusterNeverMeasuresZero(): void
     {
-        $alphabet = self::widthFuzzAlphabet();
-        $n = \count($alphabet);
-        \mt_srand(776611);
-        for ($t = 0; $t < 20000; $t++) {
-            $s = '';
-            for ($k = 0; $k <= \mt_rand(0, 5); $k++) {
-                $s .= $alphabet[\mt_rand(0, $n - 1)];
-            }
+        $swallowed = [];
+        $checked = 0;
+        foreach (self::widthFuzzCorpus(20000, 776611) as $s) {
+            $checked++;
             $w = Width::string($s);
-            $this->assertGreaterThanOrEqual(0, $w, sprintf('%s measured negative', bin2hex($s)));
             $widest = 0;
             foreach (self::icuClusters($s) as $cluster) {
                 $widest = \max($widest, Width::string($cluster));
             }
-            $this->assertGreaterThanOrEqual(
-                $widest,
-                $w,
-                sprintf('%s measured narrower than its widest single cluster', bin2hex($s)),
-            );
+            if (($w < 0 || $w < $widest) && \count($swallowed) < 5) {
+                $swallowed[] = sprintf('%s measured %d, widest cluster alone is %d', bin2hex($s), $w, $widest);
+            }
+        }
+        $this->assertSame([], $swallowed, 'a string measured narrower than one of its own clusters');
+        $this->assertSame(20000, $checked);
+    }
+
+    /**
+     * `$count` deterministic random strings of 1-6 symbols drawn from
+     * {@see self::widthFuzzAlphabet()}, seeded so a failure is reproducible.
+     *
+     * @return \Generator<int, string>
+     */
+    private static function widthFuzzCorpus(int $count, int $seed): \Generator
+    {
+        $alphabet = self::widthFuzzAlphabet();
+        $n = \count($alphabet);
+        \mt_srand($seed);
+        for ($t = 0; $t < $count; $t++) {
+            $len = 1 + \mt_rand(0, 5);
+            $s = '';
+            for ($k = 0; $k < $len; $k++) {
+                $s .= $alphabet[\mt_rand(0, $n - 1)];
+            }
+            yield $s;
         }
     }
 

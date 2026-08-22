@@ -1292,36 +1292,34 @@ final class StyleTest extends TestCase
         $n = \count($alphabet);
         $style = Style::new();
         \mt_srand(20260822);
-        $overRuns = 0;
+        $overRuns = [];
+        $unexplained = [];
         $underRuns = 0;
         for ($t = 0; $t < 20000; $t++) {
+            $len = 1 + \mt_rand(0, 5);
             $s = '';
-            for ($k = 0; $k <= \mt_rand(0, 5); $k++) {
+            for ($k = 0; $k < $len; $k++) {
                 $s .= $alphabet[\mt_rand(0, $n - 1)];
             }
             $promised = Width::string($s);
             $laidOut = Width::string($style->render($s));
             if ($laidOut > $promised) {
-                $overRuns++;
-                $this->fail(sprintf(
-                    'OVER-RUN: %s measured %d cells, render() laid out %d',
-                    bin2hex($s),
-                    $promised,
-                    $laidOut,
-                ));
+                if (\count($overRuns) < 5) {
+                    $overRuns[] = sprintf('%s measured %d cells, render() laid out %d', bin2hex($s), $promised, $laidOut);
+                }
+                continue;
             }
             if ($laidOut < $promised) {
                 $underRuns++;
                 // Every under-run must be the tab-reclustering shape: a
                 // default Style rewrites nothing else in a single-line input.
-                $this->assertStringContainsString(
-                    "\t",
-                    $s,
-                    sprintf('under-run with no tab to explain it: %s', bin2hex($s)),
-                );
+                if (!\str_contains($s, "\t") && \count($unexplained) < 5) {
+                    $unexplained[] = sprintf('%s: %d -> %d with no tab to explain it', bin2hex($s), $promised, $laidOut);
+                }
             }
         }
-        $this->assertSame(0, $overRuns);
+        $this->assertSame([], $overRuns, 'render() laid out more cells than Width::string() promised');
+        $this->assertSame([], $unexplained, 'an under-run that is not the tab-reclustering shape');
         // Not zero, and that is the documented residue — asserted so a future
         // change that silently makes it zero (or makes it everything) is
         // visible here rather than inferred.
