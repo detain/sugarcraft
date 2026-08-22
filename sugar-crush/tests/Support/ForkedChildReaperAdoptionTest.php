@@ -261,11 +261,16 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      * the other two iterate `tests/` inline. What all three share, and what
      * this fixture therefore proves is alive, is the pair that DECIDES:
      * {@see ForkedChildExitScanner::scan()} finding the sites and
-     * {@see missingHalves()} judging them. Measured: mutating either to a
-     * constant answer reds every real-tree test in this file. So the claim
-     * this method supports is "the predicate is alive", which is what the
-     * absences depend on - not "this exact walk is alive", which would be
-     * true of one caller in three.
+     * {@see missingHalves()} judging them. Measured, and stated precisely
+     * because the first draft of this paragraph rounded it up: stubbing
+     * `scan()` to `[]` reds all four real-tree tests here, and stubbing
+     * `missingHalves()` to `[]` reds three of them plus
+     * {@see testThePredicateReportsEachHalfItLooksFor()} - the fourth,
+     * {@see testEveryUntrackedForkExemptionStillDescribesRealSites()},
+     * counts sites and never consults the judgement. So the claim this
+     * method supports is "the predicate is alive", which is what the absences
+     * depend on - not "this exact walk is alive", which would be true of one
+     * caller in three.
      *
      * WHY THIS EXISTS AT ALL, and it is the whole reason it was written in
      * the commit that emptied {@see OUT_OF_SCOPE} rather than in a later one.
