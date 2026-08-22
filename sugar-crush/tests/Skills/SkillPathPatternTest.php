@@ -612,8 +612,10 @@ final class SkillPathPatternTest extends TestCase
      * The compile cache exists, which nothing else in this suite noticed.
      *
      * {@see SkillRegistry::pathMatches()}'s doc-block spends a paragraph on
-     * the measured 0.29x cost of the new matcher, and the whole of that figure
-     * rests on compiling each pattern once; the class doc-block on
+     * the measured cost of the new matcher — a ratio, deliberately not quoted
+     * again here, because two takes on this same box disagreed on the absolute
+     * times and agreed on the ratio. The whole of that figure rests on
+     * compiling each pattern once; the class doc-block on
      * `$compiledPathPatterns` justifies the STATIC lifetime on the same
      * grounds. Deleting the cache left the entire suite green — a perf claim
      * with no guard under it is a comment, so this is the guard.
@@ -636,9 +638,10 @@ final class SkillPathPatternTest extends TestCase
         self::assertArrayHasKey(
             $pattern,
             $compiled,
-            'pathMatches() no longer caches the compiled regex; the 0.29x figure in its doc-block is the '
-            . 'cost of compiling once per pattern, not once per path, and SkillPathNudge calls it per '
-            . 'pattern per path on a tool-call path',
+            'pathMatches() no longer caches the compiled regex. The measured ratio in its doc-block is '
+            . 'the cost of compiling once per PATTERN and matching once per path; SkillPathNudge calls '
+            . 'it per pattern per path on a tool-call path, so without this the compile moves inside '
+            . 'that product. Re-take the figure before deciding the cache is not worth it.',
         );
         self::assertSame('#^cache\-probe\-' . __FUNCTION__ . '(?:/.*)?/.*\.php$#Ds', $compiled[$pattern]);
     }
