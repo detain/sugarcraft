@@ -348,15 +348,16 @@ final class SkillRegistry
      *  - NEWLINE IN THE PATH. PCRE's `.` does not cross `\n` without /s;
      *    `fnmatch()`'s `*` and `?` do. MEASURED, PHP 8.3.6:
      *    `fnmatch('*.php', "a\nb.php")` is true. Closed by the /s on the
-     *    compiled delimiter. The grid's 50 paths contain no newline, so it was
-     *    blind to this BY CONSTRUCTION rather than by omission.
+     *    compiled delimiter. NO path in the grid as it then stood contained a
+     *    newline, so it was blind to this BY CONSTRUCTION rather than by
+     *    omission; one has since been added.
      *  - `X/***`, three or more stars after a slash. Closed in the `/**`
-     *    branch of {@see compilePathPattern()}. Note that `src/***` IS one of
-     *    the grid's 42 pattern rows: the pattern was characterised and the
-     *    grid's 50 paths simply held nothing that could expose the difference.
-     *    A window defect, not a coverage gap — the distinction matters,
-     *    because adding patterns would not have found it and adding one path
-     *    would.
+     *    branch of {@see compilePathPattern()}. Note that `src/***` was
+     *    ALREADY one of the grid's pattern rows: the pattern was characterised
+     *    and its 50 paths simply held nothing that could expose the
+     *    difference. A window defect, not a coverage gap — the distinction
+     *    matters, because adding more patterns would never have found it and
+     *    adding one path did.
      *  - PCRE ESCAPES INSIDE A CLASS BODY. `[\d]` means the literal `d` to
      *    `fnmatch()` and the digit class to PCRE. Closed by
      *    {@see compileClassBody()}.
@@ -375,7 +376,9 @@ final class SkillRegistry
      * this same box read 0.033s / 0.0095s = 0.29x; the RATIO is stable to
      * within the box's own drift and the absolute times are not, so quote the
      * ratio and re-take the rest. /s and the class-body walk cost nothing here
-     * — the walk happens once per pattern, at compile. A deliberately pathological case (three globstars against a
+     * — the walk happens once per pattern, at compile.
+     *
+     * A deliberately pathological case (three globstars against a
      * 60-segment non-matching path) ran 2,000 times in 0.0004s: the leading
      * literal anchors it, so PCRE fails before it can backtrack. The
      * `preg_match() === false` branch catches a backtrack limit anyway.
