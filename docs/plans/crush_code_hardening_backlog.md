@@ -5426,3 +5426,74 @@ but the original assertion is still weaker than it reads.
 **Step.** Strengthen it to assert on the rendered pane content, or rename it to say what it actually
 checks. A test whose name overstates its coverage is worse than no test, because it stops anyone
 looking.
+
+### E90 — `paths:` frontmatter now accepts a leading `**`, and no user-facing doc says so
+
+**Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low, docs. **Behaviour change,
+user-visible, already shipped.**
+
+**What.** E85 (round 43) replaced `SkillRegistry::pathMatches()`'s `**` handling. A pattern starting
+with `**` previously matched none of the three `str_replace` rewrites and fell through to a bare
+`fnmatch()`, which reads `**/` as "some characters, then a literal slash" — so `**/*.php` did not
+claim `a.php`. It does now. Three SHIPPED built-in skills are affected: `security-audit` and
+`php-best-practices` both declare `paths: ["**/*.php"]`, and `phpunit-master` declares
+`**/*Test.php`. All three previously stayed silent on root-level files and now fire on them.
+
+`README.md` and `docs/SETTINGS.md` were lane `c`'s files in round 43, so lane `a` could not add the
+note without an out-of-lane edit.
+
+**Step.** One sentence under the skills-frontmatter documentation: `paths:` globs are `fnmatch`
+semantics with `**` meaning zero-or-more directory levels at any position, including the first, and
+a single `*` crossing `/` (no `FNM_PATHNAME`). Mention that skills scoped with a leading `**` began
+firing on tree-root files as of E85.
+
+### E91 — `TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES` carries no pointer to the nudge ceiling it constrains
+
+**Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low, comment-only.
+
+**What.** E87 decided a 2.0x margin between the tightest shipped tool output cap and
+`SkillPathNudge::maxBytes()`, and recorded it in `SkillPathNudge` and in
+`SkillPathScopingWiringTest`. The other half of the relationship is
+`TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES` (65,536), which is where someone lowering a cap will
+actually be standing, and it says nothing. `SkillPathNudge::smallestUnclippedCallerCap()` exists
+precisely to be cited from there. Not lane `a`'s file in round 43.
+
+**Step.** A short paragraph on `DEFAULT_MAX_OUTPUT_BYTES` pointing at
+`SkillPathNudge::smallestUnclippedCallerCap()` and at the margin guard, so the loop closes for a
+reader who arrives at the cap first.
+
+### E92 — the `paths:` translation still does not implement POSIX character classes
+
+**Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low. **Strictly no worse than
+before E85.**
+
+**What.** `SkillRegistry::compilePathPattern()` does not translate `[[:alpha:]]`, which `fnmatch()`
+supports via libc. Such a pattern emits an uncompilable regex and routes to `legacyPathMatch()` — the
+pre-E85 predicate — so a glob combining both, `**/[[:alpha:]]*.php`, gets the OLD `**` handling and
+still misses root-level files. No shipped skill uses one. Round 43 also left a second uncompilable
+shape deliberately: a backslash-escaped `]` inside a class (`a[\]]b`), because the scan that finds a
+class's closing `]` is not escape-aware, and making that body compile would make it compile *wrong*
+(see `SkillRegistry::compileClassBody()`'s doc-block and
+`SkillPathPatternTest::testAnEscapedClassTerminatorIsLeftToTheFallback()`).
+
+**Step.** Teach the bracket scanner to skip escapes and to pass `[:class:]` through — PCRE supports
+the syntax natively. **Whoever does it must find a NEW uncompilable input first**, or the fallback
+branch stops being pinned and the M6-class mutation (fallback → `return false`) goes back to
+surviving. The 45x54 characterisation grid and the seeded differential fuzz described in
+`SkillRegistry::pathMatches()` are the harness to prove no narrowing.
+
+### E93 — a `preg_match()` backtrack-limit hit is silently absorbed by the fallback
+
+**Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low, observability.
+
+**What.** `SkillRegistry::pathMatches()` treats `preg_match() === false` as "route to
+`legacyPathMatch()`", which is right for an uncompilable pattern and silent for a
+`pcre.backtrack_limit` exhaustion. In that case a tool call quietly answers with the *old* predicate
+and nothing is logged. Measured as theoretical today: the deliberately pathological case (three
+globstars against a 60-segment non-matching path) runs 2,000 iterations in 0.0004s on PHP 8.3.6,
+because the leading literal anchors the match before PCRE can backtrack.
+
+**Step.** Distinguish the two causes — `preg_last_error()` is `PREG_BACKTRACK_LIMIT_ERROR` for one
+and `PREG_INTERNAL_ERROR` for the other — and count or log the backtrack case if `SkillRegistry`
+ever gains a logging seam. Adding a logger dependency to a pure static matcher is a bigger design
+call than the finding warrants on its own.
