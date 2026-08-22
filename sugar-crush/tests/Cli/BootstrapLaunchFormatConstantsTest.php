@@ -248,9 +248,21 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * {@see PAGE_QUOTE_IS_PROSE}.
      *
      * THE PAGE LIST IS DERIVED, NEVER LISTED, which is the half of E187 that a
-     * hand-run sweep cannot have: {@see docPages()} globs `docs/*.md` beside
-     * `README.md`, so a page ADDED next round is swept without anyone
-     * remembering to add it here.
+     * hand-run sweep cannot have: a page ADDED next round is swept without
+     * anyone remembering to add it here.
+     *
+     * WHAT THIS PARAGRAPH SAID about how: that {@see docPages()} "globs
+     * `docs/*.md` beside `README.md`". WHAT IS TRUE NOW: the very next commit
+     * of the round that wrote this sentence replaced that with
+     * {@see markdownPagesUnder()}, which walks `docs/` RECURSIVELY and takes
+     * every `*.md` at the package root — so the description outlived the
+     * mechanism by one commit, in the same file, by the same hand. WHY THE
+     * CORRECTION EARNS ITS PLACE RATHER THAN A SILENT EDIT: this is the second
+     * time in three rounds that a mechanism written into a NEW comment was
+     * inverted in fact, and the two paragraphs saying the same thing about the
+     * same method is what let one of them rot unnoticed. {@see docPages()}
+     * owns the description of HOW the list is derived; this one owns only the
+     * fact THAT it is derived, and deliberately no longer restates the other.
      *
      * @var array<string, array<string, string>> constant => page => verdict
      */
@@ -1055,6 +1067,23 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             ['literal.md'],
             self::pagesQuoting('was 100% warm', $percent),
         );
+
+        // AND A PAGE THE MATCHER CANNOT PARSE GOES RED, NEVER QUIET. This is
+        // the arm a `=== 1` test cannot have: `preg_match()` on a `/u` pattern
+        // answers `false` for a subject that is not valid UTF-8, and `false`
+        // is not `1`, so the page used to leave the sweep indistinguishable
+        // from one that carries no quotation. `\xC3\x28` is a truncated
+        // two-byte sequence — the shortest thing a stray `latin-1` byte in a
+        // markdown page actually looks like.
+        $unreadable = self::flattenPages([
+            'mojibake.md' => "\xC3\x28 the cache was 100% warm",
+        ]);
+        try {
+            self::pagesQuoting('was 100% warm', $unreadable);
+            self::fail('a page the matcher cannot parse was silently recorded as quoting nothing');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('mojibake.md', $e->getMessage());
+        }
     }
 
     /**
@@ -1444,7 +1473,25 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
 
         $out = [];
         foreach ($pages as $page => $text) {
-            if (preg_match($pattern, $text) === 1) {
+            $hit = preg_match($pattern, $text);
+            if ($hit === false) {
+                // A PAGE THE MATCHER CANNOT PARSE MUST BE LOUD, and `=== 1`
+                // alone made it silent. {@see shapePatternFor()} emits a `/u`
+                // pattern, and on PHP 8.3.6 `preg_match()` answers a subject
+                // that is not valid UTF-8 with `false` — which is `!== 1`, so
+                // the page dropped out of the sweep reporting "quotes
+                // nothing", the exact verdict an unguarded quotation would
+                // also produce. {@see markdownPagesUnder()} already refuses a
+                // page it cannot READ for this reason; the matcher was
+                // swallowing what the collector refuses.
+                throw new \RuntimeException(\sprintf(
+                    '%s could not be matched against the shape of "%s" (%s); the sweep cannot answer for it',
+                    $page,
+                    $format,
+                    \preg_last_error_msg(),
+                ));
+            }
+            if ($hit === 1) {
                 $out[] = $page;
             }
         }
