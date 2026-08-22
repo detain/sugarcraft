@@ -465,8 +465,17 @@ final class ParallelToolCallsTest extends TestCase
             return HookResult::allow();
         }));
 
+        // peers: 3 rather than 2, and that is a correctness fix rather than a
+        // stronger claim for its own sake. All three of these calls run and
+        // share one marker directory, so with peers: 2 the rendezvous returns
+        // on its FIRST look -- and that look reports however many markers
+        // happen to exist at that instant, which is 3 whenever the third
+        // sibling gets there first. `saw=2` was therefore a coin flip:
+        // measured on this host (PHP 8.3.6), 3 failures in 150 unloaded runs
+        // of this test alone, every one of them `saw=3`. Requiring all three
+        // peers makes the count exact, because 3 is also the ceiling.
         $results = $this->execute(
-            $this->rendezvousCalls(['a', 'b', 'c'], peers: 2, wait: self::RENDEZVOUS_WAIT),
+            $this->rendezvousCalls(['a', 'b', 'c'], peers: 3, wait: self::RENDEZVOUS_WAIT),
             [$this->rendezvousTool()],
         );
 
@@ -475,7 +484,7 @@ final class ParallelToolCallsTest extends TestCase
         $ran = array_map('basename', glob($this->dir . '/markers/*') ?: []);
         sort($ran);
         $this->assertSame(['a-rw', 'b-rw', 'c-rw'], $ran);
-        $this->assertSame('saw=2', $results[0]->content());
+        $this->assertSame('saw=3', $results[0]->content());
 
         $this->assertSame(['a-rw', 'b-rw', 'c-rw'], $observed, 'PostToolUse must see each call OWN rewrite, in provider order');
     }
