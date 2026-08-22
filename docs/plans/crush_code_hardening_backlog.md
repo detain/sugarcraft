@@ -5788,11 +5788,15 @@ lists are the two most likely to become checkable, since both are already enumer
 **What.** `tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest::EXPECTED_CALL_SITES` (16) holds the count
 of `warnPermissionConfigInTranscript(` call sites because `src/Cli/Bootstrap.php` belonged to lane `a`
 the round the test was written. It belongs next to the thing it counts, as
-`Bootstrap::TRANSCRIPT_SEAM_CALL_SITES`, so the four prose sites can `{@see}` it instead of spelling an
-English number word.
+`Bootstrap::TRANSCRIPT_SEAM_CALL_SITES`, so the nine prose sites can `{@see}` it instead of spelling an
+English number word. (Four when this entry was written; round 44's review found five more and they are
+all `PROSE_SITES` rows now.)
 
 **Step.** Add the const; have the test assert the const and its own token scan agree, so
-`EXPECTED_CALL_SITES` becomes a second opinion rather than the only one. Sibling of **E104** (extracting
+`EXPECTED_CALL_SITES` becomes a second opinion rather than the only one. Note the token scan now carries
+a first-class-callable exclusion (`self::seam(...)` lexes with the paren immediately after the name on
+PHP 8.3.6, so the paren test alone counts it as a call); a `grep`-shaped second opinion will disagree
+with it the day such a callable exists. Sibling of **E104** (extracting
 `Bootstrap`'s stderr `sprintf` formats to constants) — same file, same motive, worth one PR.
 
 ### E113 — `Bootstrap.php` still says "eleven other sources" on the skill-skip seam call
@@ -5807,11 +5811,21 @@ comment above `reportSkillSkips()`'s seam call: "safe to put in a transcript tha
 
 `Bootstrap.php` was lane `a`'s file in round 44, so lane `c` could not edit it. Everything else in that
 file is correct at `8ade35dd`: the "SIXTEEN call sites now routed" comment and the "the other fifteen
-call sites" comment in `mcpClient()`'s catch both check out.
+call sites" comment in `mcpClient()`'s catch both check out, and both are `PROSE_SITES` rows as of round
+44's fix pass (a row only READS the file, so lane ownership was never a reason to leave them uncovered).
+
+**What this entry got wrong when it was written.** It presented itself as closing the family — "a
+**fourth** instance", "everything else in that file is correct" — and the second clause is true only of
+`Bootstrap.php`. `docs/SETTINGS.md` was also stale, saying **fifteen** while quoting a generator
+(`grep -c 'self::warnPermissionConfigInTranscript(' src/Cli/Bootstrap.php`) that returns sixteen, so the
+page contradicted itself and nothing anchored it. That was fixed and made a `PROSE_SITES` row in round
+44's fix pass; this entry is now the only member of the family still open.
 
 **Step.** Fix the one word, then add the site to `BootstrapTranscriptSeamCallSiteCensusTest::PROSE_SITES`
-with `offset: 1`. The guard is built to take the row and refuses an anchor it cannot match, so adding it
-is three lines.
+with `offset: 1` and **delete
+`BootstrapTranscriptSeamCallSiteCensusTest::testTheKnownStaleSentenceOutsideThisLaneIsStillStale()`** in
+the same commit — that test asserts the sentence is STILL stale, precisely so this hole in the census
+cannot go quiet, and it will fail the moment this is fixed. Its failure message says the same thing.
 
 ### E114 — the suite prints 62 unowned `sugarcrush:` stderr lines, and only one of them was ever argued for
 
@@ -5867,19 +5881,69 @@ directory to `ToolIpcFiles`' identity ledger, one round apart and each after fir
 files: `ChatTest` (E63, round 38) and `ParallelToolCallsTest` (E96, round 44 — its two call sites both
 failed on round 44's own baseline run). Nobody had swept for a third.
 
-**The census was run and found none.** Pattern: `glob(`/`scandir(` whose argument reaches
-`sys_get_temp_dir()` or a literal `/tmp`, over `src/` and `tests/`. Deliberately **not** keyed on the
-`sc_runtime_tool_`/`sc_chat_tool_` prefixes — an alphabet built from the two known cases can only
-rediscover them, and `crush-hook-payload-` is a third prefix `ToolIpcFiles` sweeps. Results: zero in
-`src/`; in `tests/`, only
-`ChatTest::testTheStrandedPayloadDetectorAttributesByIdentityNotByWindow()`, which is **not** this defect
-— it globs in order to `assertContains()` its own fixture, and a concurrent lane adding files cannot
-falsify a containment check the way it falsifies a before/after diff.
+**The census.** Pattern: `glob(`/`scandir(` whose argument reaches `sys_get_temp_dir()` or a literal
+`/tmp`, over `src/` and `tests/`. Deliberately **not** keyed on the `sc_runtime_tool_`/`sc_chat_tool_`
+prefixes — an alphabet built from the two known cases can only rediscover them, and
+`crush-hook-payload-` is a third prefix `ToolIpcFiles` sweeps.
 
-**Residual, which is why this is recorded rather than closed.** The census reads syntax, so it cannot see
-a snapshot assembled indirectly (a helper returning a listing, a `FilesystemIterator` over a path built
-elsewhere), and it says nothing about shared directories other than the temp dir. The defect is
-"before/after diff of anything concurrently written"; only the temp-dir spelling has been swept.
+**What this entry claimed, and what is true.** WHAT IT SAID: "run and found none … zero in `src/`; in
+`tests/`, only `ChatTest`". WHAT IS TRUE NOW, re-run in round 44's fix pass
+(`grep -rnE '\b(glob|scandir)\s*\(' --include=*.php src tests | grep -i tmp`, GNU grep 3.11): zero in
+`src/` holds — `ToolIpcFiles::sweep()` is an age sweep over a `$dir` parameter, not a diff, and every
+other `glob()` in `src/` is over a project directory. The `tests/` half was **wrong in both
+directions**. It missed `tests/Support/ToolIpcFilesTest.php`'s
+`glob(sys_get_temp_dir() . CHAT_PREFIX . '*')`, a second instance of the benign `assertContains`-on-its-
+own-fixture shape the entry does name; harmless, but a roster that names one of two is not a roster. And
+it missed a REAL one, forty lines from the fix the entry is about:
+`ParallelToolCallsTest::testAChildsPayloadIsNeverReadableByAnotherUser()`'s probe tool snapshotted
+`glob('/tmp/sc_runtime_tool_*')` in its constructor and read the mode of the first path that was not in
+the snapshot — the same before/after diff over the same shared directory with the same prefix that E96
+had just removed. Fixed in round 44's fix pass by moving attribution to the parent, which is the only
+side that holds `ToolIpcFiles::reservations()`.
 
-**Step.** Re-run the census when a new dispatcher or payload prefix appears, and widen it to
-`FilesystemIterator`/`DirectoryIterator` if either ever shows up in a test.
+**Why the census could not see it, which is the transferable part.** The census is keyed on the
+ARGUMENT reaching `sys_get_temp_dir()`. There, it reaches it through a constructor hop —
+`new class (sys_get_temp_dir())` and then `glob($this->tmp . '/sc_runtime_tool_*')` — so no syntactic
+pattern anchored on the call site can find it. The entry's residual paragraph named this class of miss
+in the abstract and then stated a concrete negative that the same paragraph explains away. **A census
+that admits a blind spot and then reports zero has reported nothing.**
+
+**Residual, restated.** The census reads syntax, so it cannot see a snapshot assembled indirectly (a
+helper returning a listing, a value carried through a constructor or a field, a `FilesystemIterator`
+over a path built elsewhere), and it says nothing about shared directories other than the temp dir. The
+defect is "before/after diff of anything concurrently written"; only the temp-dir spelling, spelled
+literally at the call site, has been swept. A stronger sweep would key on the SHAPE — a directory
+listing captured into a variable before an action and compared after it — which is not a grep.
+
+**Step.** Re-run the census when a new dispatcher or payload prefix appears; widen it to
+`FilesystemIterator`/`DirectoryIterator` if either ever shows up in a test; and prefer the shape-keyed
+sweep above to the argument-keyed one, since the one real instance it missed was missed on the
+argument.
+
+### E116 — the E81 four-doors guard has the same "satisfied by its own retraction" hole, currently masked by luck
+
+**Recorded 2026-08-22 by the round-44 lane-c fix pass.** Severity: low, but it is a guard that can stop
+guarding without anything going red.
+
+**What.** `ConfigWriteProducerDocumentationDriftTest::testOneParagraphNamesAllFourDoors()` searches EVERY
+paragraph of `LayeredSettings`' class doc-block (and of `docs/SETTINGS.md`) for one that names all four
+doors. A retraction written in the repo's three-part form quotes the wording that omitted a door and then
+names the missing door in its correction, so it can name the full roster BY ITSELF — at which point the
+guard is satisfied by the apology and the live enumeration is free to go stale again. That is exactly
+what happened to the sibling guard this file was copied into
+(`ChatConfigChangeDoorsDocumentationDriftTest`, E106): both of its doc-blocks' retractions scored 4/4 and
+reverting the live enumeration left all six tests green (round 44 review, mutations D1/D2). Fixed there
+by excluding retraction paragraphs from the search and asserting the exclusion removes exactly one.
+
+**Why it does not fire here today, measured** (`php -r` over the class doc-block's paragraphs, PHP 8.3.6,
+this commit): `LayeredSettings`' paragraphs score `[6] 4/4` for the live enumeration and `[7] 2/4` for the
+retraction, which names "Switch Model" and `/model` and neither theme door. So the live paragraph is the
+only one that can satisfy the guard — **by accident of how that retraction happens to be worded**, not by
+design. Reword paragraph 7 to mention `/theme` while correcting it and the guard silently goes hollow.
+
+**Step.** Port the fix: give the E81 file the same `isRetraction()` exclusion (match `RETRACTED`, plus
+`WHAT IT SAID`/`WHAT THIS SAID` — that file's retraction uses the `IT` spelling and the E106 file uses
+`THIS`, so both are needed), and assert the exclusion removes exactly one paragraph per document so it
+cannot pass by excluding nothing or by excluding the enumeration. Not done in round 44 because
+`tests/Config/` was not this lane's; the change is ~15 lines and carries its own mutation (revert the
+live enumeration to the omitting form, keep the retraction, expect red).
