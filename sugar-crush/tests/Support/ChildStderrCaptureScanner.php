@@ -41,8 +41,17 @@ namespace SugarCraft\Crush\Tests\Support;
  * is writing on the suite's own stderr with no child process anywhere in the
  * picture. No amount of
  * per-spawn redirection touches one of those; they need a sink seam in
- * `src/`. This scanner is about the other kind, and reports honestly that
- * under `tests/Integration/` there is currently none of it.
+ * `src/`. This scanner is about the other kind.
+ *
+ * THAT SENTENCE USED TO END "and reports honestly that under
+ * `tests/Integration/` there is currently none of it". WHAT IS TRUE NOW: the
+ * guard that points this scanner at the tree covers six directories, not one,
+ * and which ones is {@see ChildStderrCaptureTest::SCOPE}'s business rather
+ * than a scanner's. WHY THE REST OF THE PARAGRAPH STILL EARNS ITS PLACE: the
+ * distinction it draws does not move with the scope. A reader who takes a
+ * green run as evidence that the suite's `sugarcrush: ` lines are gone has
+ * misread what this instrument can see, and most of those lines are the kind
+ * it cannot.
  */
 final class ChildStderrCaptureScanner
 {

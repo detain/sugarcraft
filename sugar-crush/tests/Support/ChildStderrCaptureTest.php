@@ -7,8 +7,13 @@ namespace SugarCraft\Crush\Tests\Support;
 use PHPUnit\Framework\TestCase;
 
 /**
- * No child process launched from `tests/Integration/` may leave its stderr on
- * the suite's.
+ * No child process launched from a directory in {@see SCOPE} may leave its
+ * stderr on the suite's.
+ *
+ * The heading used to name `tests/Integration/`, which was the whole of
+ * SCOPE when this file was written and has been three directories and then
+ * six since. The constant is the list; a heading that repeats it is a second
+ * copy that goes stale on the commit that widens the first.
  *
  * WHAT THIS WAS COMMISSIONED TO FIX, AND WHAT WAS ACTUALLY THERE. Round 45
  * recorded the suite's `sugarcrush: ` stderr lines as a HARNESS property -
@@ -71,27 +76,39 @@ final class ChildStderrCaptureTest extends TestCase
     /**
      * Path prefixes, relative to `tests/`, the rule is enforced under.
      *
-     * WHAT THIS WAS: the single prefix `Integration/`, chosen when that was
-     * the only directory anyone had censused. WHAT IS TRUE NOW: it is all
-     * three directories round 47's lane split gave this lane, and widening
-     * cost nothing - measured with this file's own scanner over the whole of
-     * `tests/`, `Agents/` was already clean, and `Support/` had exactly one
-     * non-capture, `ForkedChildTest::isRaw()`'s `stty ... 2>/dev/null`, which
-     * was FIXED rather than exempted. Widening added no row to
-     * {@see ACCEPTED_DISCARDED_STDERR}.
+     * WHAT THIS WAS: three prefixes - `Agents/`, `Integration/`, `Support/` -
+     * the directories round 47's lane split gave that lane, widened from the
+     * single `Integration/` that was all anyone had censused. Alongside them
+     * it recorded that `Chat/` and `MCP/` had been measured clean and were
+     * "free to adopt", left for whichever round owned them.
+     *
+     * WHAT IS TRUE NOW: round 48 owned them and adopted both, plus
+     * `Backend/`. The census was re-run rather than inherited - a count taken
+     * in one lane's worktree is invalidated by the next merge, so the claim
+     * was re-derived at this commit with this file's own scanner over the
+     * whole of `tests/`. `Chat/` and `MCP/` held non-captures: NONE.
+     * `Backend/` held exactly one, `EngineBackendTest::isRaw()`'s
+     * `stty ... 2>/dev/null` - a COPY of the helper round 47 fixed in
+     * `Support/ForkedChildTest.php`, sitting one directory away with the
+     * opposite behaviour because it was in no lane's file list. It was FIXED
+     * the same way rather than exempted, so widening to five directories
+     * still added no row to {@see ACCEPTED_DISCARDED_STDERR}.
      *
      * WHY THE REMAINDER IS STILL OUT, stated rather than silently omitted:
      * every other directory under `tests/` either holds non-captures that
-     * only its owning lane may edit, or is clean but owned by another lane -
-     * and adding a clean directory here is not free either, because it makes
-     * this guard an obligation on every spawn a sibling adds there, which
-     * reds at merge in a lane that never saw this file. That is a decision
-     * for the round that owns those directories; the scanner is pointed at a
-     * new one by adding a prefix here.
+     * only its owning lane may edit - measured at this commit, they are
+     * concentrated in `Context/`, `Tools/` and `Commands/`, the last of them
+     * almost entirely `inherited` rather than `discarded`, which is the
+     * cheaper shape to close - or is clean but owned by another lane. And
+     * adding a clean directory is not free either: it makes this guard an
+     * obligation on every spawn a sibling adds there, which reds at merge in
+     * a lane that never saw this file. That is a decision for the round that
+     * owns those directories; the scanner is pointed at a new one by adding a
+     * prefix here.
      *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Integration/', 'Support/'];
+    private const SCOPE = ['Agents/', 'Backend/', 'Chat/', 'Integration/', 'MCP/', 'Support/'];
 
     /**
      * Spawn sites that send fd 2 to the null device ON PURPOSE, with the count
