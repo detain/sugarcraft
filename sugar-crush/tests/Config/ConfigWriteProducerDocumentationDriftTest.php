@@ -50,6 +50,17 @@ use SugarCraft\Core\Msg\KeyMsg;
  * `testConfigJsonEverReceivesExactlyTwoKeys()` catches a new KEY, which is the
  * half that is mechanically derivable.
  *
+ * THAT LAST SENTENCE WAS ONCE TRUE OF THE IDEA AND FALSE OF THE CODE, and the
+ * correction is kept here because it is the more useful half of the lesson.
+ * WHAT IT SAID: the census "catches a new KEY". WHAT WAS TRUE: it caught a new
+ * key written in one syntax with one alphabet; two third keys were measured
+ * straight past it. WHY THE CLAIM SURVIVES IN CORRECTED FORM: it is now derived
+ * from the token stream rather than from a regex over reassembled source, an
+ * argument it cannot read is recorded rather than skipped, and the alias routes
+ * a token walk cannot follow are refused outright by
+ * `testTheCallbackIsNeverInvokedThroughAnAliasThisCensusCannotFollow()`. The
+ * generator behind the claim is named on {@see keysWrittenFromSource()}.
+ *
  * @internal
  */
 final class ConfigWriteProducerDocumentationDriftTest extends TestCase
@@ -61,42 +72,53 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
      * Every key literal handed to `onConfigChange`, read from CODE ONLY.
      *
      * `token_get_all()` rather than a plain `preg_match_all()` over the file:
-     * `Chat::handleModelCommand()`'s own doc-block writes
+     * {@see \SugarCraft\Crush\Chat}'s `handleModelCommand()` doc-block writes
      * `$onConfigChange('provider', …)` in prose, so a text scan reports a call
      * site that is a sentence. A census that counts documentation as evidence
      * cannot then be used to check documentation.
+     *
+     * STRUCTURAL, AND THIS PARAGRAPH REPLACES A REGEX THAT WAS NOT.
+     * WHAT IT SAID: the first cut tokenised the file only to strip comments and
+     * then ran `/onConfigChange\s*(?:\?)?->__invoke\(\s*['"]([A-Za-z]+)['"]/`
+     * over the reassembled text, with the doc-block claiming this "catches a new
+     * KEY, which is the half that is mechanically derivable".
+     * WHAT IS TRUE NOW: it caught a new key only if the key was spelled in one
+     * particular way through one particular call syntax. Two third keys were
+     * MEASURED past it on PHP 8.3.6, 2026-08-22, each leaving the whole file
+     * green: `($this->onConfigChange)('titleModel', …)`, the ordinary
+     * parenthesised-closure call, which the regex has no arm for; and
+     * `$this->onConfigChange?->__invoke('title_model', …)`, the canonical
+     * spelling, whose underscore `[A-Za-z]+` rejects — and rejecting the KEY
+     * silently skipped the whole CALL, so a key class too narrow to name a key
+     * hid the call site as well.
+     * WHY THE CENSUS STILL EARNS ITS PLACE: the failure was the oracle, not the
+     * idea. A key reaching `config.json` is still mechanically derivable, and it
+     * is still the half of this file that does not depend on prose. It is now
+     * derived from the TOKEN STREAM: a `T_STRING` `onConfigChange` is treated as
+     * a call only in the two shapes PHP has for invoking a closure property, and
+     * an argument that is not a literal is recorded as {@see UNRESOLVED_KEY}
+     * rather than skipped — a call this method cannot read must red, not vanish.
+     *
+     * THE TWO SHAPES ARE THE WHOLE COVERAGE, and the remaining ways to reach a
+     * closure through a variable are closed by
+     * {@see testTheCallbackIsNeverInvokedThroughAnAliasThisCensusCannotFollow()}
+     * rather than left as a stated hope.
      *
      * @return list<string>
      */
     private function keysWrittenFromSource(): array
     {
-        $root = realpath(__DIR__ . '/../../src');
-        self::assertIsString($root);
-
         $found = [];
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root)) as $file) {
-            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
-                continue;
-            }
-
-            $code = '';
-            foreach (token_get_all((string) file_get_contents($file->getPathname())) as $token) {
-                if (\is_array($token)) {
-                    if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
-                        continue;
-                    }
-                    $code .= $token[1];
-
+        foreach ($this->sourceFiles() as $path) {
+            $tokens = $this->codeTokens($path);
+            foreach ($tokens as $i => $token) {
+                if (!\is_array($token) || $token[0] !== T_STRING || $token[1] !== 'onConfigChange') {
                     continue;
                 }
-                $code .= $token;
-            }
-
-            if (preg_match_all('/onConfigChange\s*(?:\?)?->__invoke\(\s*[\'"]([A-Za-z]+)[\'"]/', $code, $m) === 0) {
-                continue;
-            }
-            foreach ($m[1] as $key) {
-                $found[$key] = true;
+                $key = $this->invokedKeyAt($tokens, $i);
+                if ($key !== null) {
+                    $found[$key] = true;
+                }
             }
         }
 
@@ -104,6 +126,112 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
         sort($keys);
 
         return $keys;
+    }
+
+    /**
+     * Recorded in place of a key whose argument is not a literal string.
+     *
+     * A census that cannot read an argument must SAY SO in its result. The
+     * regex this replaced returned the same value for "no third key exists" and
+     * for "a third key exists in a shape I do not parse", which is the property
+     * that let two of them through.
+     */
+    private const UNRESOLVED_KEY = '<not a literal>';
+
+    /** @return list<string> */
+    private function sourceFiles(): array
+    {
+        $root = realpath(__DIR__ . '/../../src');
+        self::assertIsString($root);
+
+        $paths = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root)) as $file) {
+            if ($file instanceof \SplFileInfo && $file->getExtension() === 'php') {
+                $paths[] = $file->getPathname();
+            }
+        }
+        sort($paths);
+
+        return $paths;
+    }
+
+    /** @var array<string, list<array{0: int, 1: string}|string>> */
+    private array $codeTokenCache = [];
+
+    /**
+     * One file's tokens with comments AND whitespace dropped, so index+1 is the
+     * next thing PHP actually reads rather than a space.
+     *
+     * @return list<array{0: int, 1: string}|string>
+     */
+    private function codeTokens(string $path): array
+    {
+        if (isset($this->codeTokenCache[$path])) {
+            return $this->codeTokenCache[$path];
+        }
+
+        $out = [];
+        foreach (token_get_all((string) file_get_contents($path)) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE], true)) {
+                continue;
+            }
+            $out[] = \is_array($token) ? [$token[0], $token[1]] : $token;
+        }
+
+        return $this->codeTokenCache[$path] = $out;
+    }
+
+    /**
+     * The key argument of the call at `$i`, or `null` when `$i` is a mere
+     * reference to the property rather than an invocation of it.
+     *
+     * PHP has exactly two shapes for calling a closure held in a property, and
+     * both are here:
+     *
+     *   `$this->onConfigChange?->__invoke('theme', …)`   — the one `src/` uses
+     *   `($this->onConfigChange)('theme', …)`            — the one it does not
+     *
+     * The second is included precisely BECAUSE `src/` does not use it: a census
+     * that only knows the spelling already in the tree cannot catch the day
+     * someone writes the other one, and that day is the only day it matters.
+     *
+     * @param list<array{0: int, 1: string}|string> $tokens
+     */
+    private function invokedKeyAt(array $tokens, int $i): ?string
+    {
+        $isOp = static fn(mixed $t, int $id): bool => \is_array($t) && $t[0] === $id;
+        $isPunct = static fn(mixed $t, string $c): bool => $t === $c;
+
+        // `?->__invoke(` / `->__invoke(`
+        if (
+            (($tokens[$i + 1] ?? null) !== null)
+            && ($isOp($tokens[$i + 1], T_NULLSAFE_OBJECT_OPERATOR) || $isOp($tokens[$i + 1], T_OBJECT_OPERATOR))
+            && $isOp($tokens[$i + 2] ?? null, T_STRING)
+            && ($tokens[$i + 2][1] ?? '') === '__invoke'
+            && $isPunct($tokens[$i + 3] ?? null, '(')
+        ) {
+            return $this->literalAt($tokens[$i + 4] ?? null);
+        }
+
+        // `)(` — the parenthesised-closure call.
+        if ($isPunct($tokens[$i + 1] ?? null, ')') && $isPunct($tokens[$i + 2] ?? null, '(')) {
+            return $this->literalAt($tokens[$i + 3] ?? null);
+        }
+
+        return null;
+    }
+
+    /** @param array{0: int, 1: string}|string|null $token */
+    private function literalAt(mixed $token): string
+    {
+        if (\is_array($token) && $token[0] === T_CONSTANT_ENCAPSED_STRING) {
+            $raw = $token[1];
+            $unquoted = substr($raw, 1, -1);
+
+            return $unquoted === '' ? self::UNRESOLVED_KEY : $unquoted;
+        }
+
+        return self::UNRESOLVED_KEY;
     }
 
     /**
@@ -156,6 +284,47 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
             ['provider', 'theme'],
             $this->keysWrittenFromSource(),
             'a third key now reaches onConfigChange; update LayeredSettings, docs/SETTINGS.md and README.md together',
+        );
+    }
+
+    /**
+     * THE CENSUS FOLLOWS TOKENS, SO THE WAYS OF LOSING THE TOKEN ARE REFUSED.
+     *
+     * {@see keysWrittenFromSource()} recognises a call only where the property
+     * itself is the callee. Two spellings would move the invocation somewhere a
+     * token walk cannot follow it — `$cb = $this->onConfigChange; $cb('k', …)`,
+     * and `call_user_func($this->onConfigChange, 'k', …)` — and in both the key
+     * literal sits beside a name the census has never heard of.
+     *
+     * Rather than record that as a blind spot and hope, this makes the blind
+     * spot unreachable: neither spelling may appear in `src/` at all. That is a
+     * real constraint on future code and it is the cheaper half of the trade —
+     * the property is private, there is no legitimate reason to hand it to
+     * `call_user_func()`, and the day someone needs to, this test is the note
+     * telling them the census must grow an arm first.
+     */
+    public function testTheCallbackIsNeverInvokedThroughAnAliasThisCensusCannotFollow(): void
+    {
+        $offenders = [];
+        foreach ($this->sourceFiles() as $path) {
+            $code = '';
+            foreach ($this->codeTokens($path) as $token) {
+                $code .= \is_array($token) ? $token[1] : $token;
+            }
+
+            if (preg_match('/call_user_func(?:_array)?\(\$this->onConfigChange/', $code) === 1) {
+                $offenders[] = basename($path) . ': handed to call_user_func()';
+            }
+            if (preg_match('/=\$this->onConfigChange;/', $code) === 1) {
+                $offenders[] = basename($path) . ': aliased to a local variable';
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            'onConfigChange is now invoked through a route the key census cannot follow; '
+            . 'teach keysWrittenFromSource() that shape before shipping this',
         );
     }
 
