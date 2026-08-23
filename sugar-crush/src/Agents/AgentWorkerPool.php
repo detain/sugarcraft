@@ -113,6 +113,20 @@ final class AgentWorkerPool
     /** True once the sequential-fallback warning has been logged for this pool instance. */
     private bool $sequentialFallbackWarned = false;
 
+    /** @var bool Whether {@see warnForkFailed()} has already fired on this pool. */
+    private bool $forkFailureWarned = false;
+
+    /**
+     * @var bool Force {@see forkProcess()} to report failure, for tests.
+     *
+     * The sibling of {@see $forcePcntlUnavailableForTesting} and set the same
+     * way — by Reflection, because this class is `final`. A fork that FAILS
+     * cannot be provoked honestly: it needs `RLIMIT_NPROC` exhausted or the
+     * machine out of memory, and a test that arranged either would take the
+     * whole box down with it rather than just this arm.
+     */
+    private bool $forceForkFailureForTesting = false;
+
     /**
      * @internal Test-only seam. When non-null, overrides pcntlForkAvailable()
      * so the sequential-fallback path can be exercised deterministically via
@@ -587,10 +601,11 @@ final class AgentWorkerPool
             return;
         }
 
-        $pid = pcntl_fork();
+        $pid = $this->forkProcess();
         if ($pid === -1) {
             // Fork failed — execute synchronously. Same reasoning as above:
             // leave the agent in $active for waitForCompletion() to reap.
+            $this->warnForkFailed();
             $result = $executor->execute($agent, $request);
             $this->storeResult($agent->id, $result);
             return;
@@ -1252,11 +1267,100 @@ final class AgentWorkerPool
      * "your agents ran one after another" is neither something the model can
      * act on nor something the user cannot infer from the wall clock.
      *
-     * WHAT WOULD CHANGE THE ANSWER: an agent that does not run at all. That is
-     * a different site — see the DEFERRED FINDING recorded against the
-     * `pcntl_fork() === -1` arm in {@see startAgent()}, which degrades to the
-     * same sequential execution and warns about NOTHING, not even on stderr.
+     * WHAT WOULD CHANGE THE ANSWER: an agent that does not run at all. Neither
+     * arm does that, which is why neither is on the seam.
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY: it pointed at "the DEFERRED FINDING
+     * recorded against the `pcntl_fork() === -1` arm in {@see startAgent()},
+     * which degrades to the same sequential execution and warns about NOTHING,
+     * not even on stderr." WHAT IS TRUE NOW: that arm warns —
+     * {@see warnForkFailed()} — and the finding is closed. WHY THE SENTENCE
+     * STILL EARNS ITS PLACE: the two arms remain a matched pair that a reader
+     * will compare, and the comparison is the argument. They reach the same
+     * fallback by different causes, they answer the routing rule the same way
+     * for the same reason, and their messages differ only where the operator's
+     * remedy differs. A future change that moves one onto the seam and leaves
+     * the other here has almost certainly got the rule wrong.
      */
+    /**
+     * `pcntl_fork()`, behind a seam so the failure arm can be driven.
+     *
+     * Factored out for exactly the reason {@see pcntlForkAvailable()} was, and
+     * with more need: "pcntl is missing" can at least be simulated by claiming
+     * it is, whereas "the fork failed" is a kernel resource verdict. Without
+     * this seam {@see startAgent()}'s `-1` branch was unreachable from any
+     * test, which is a large part of how it went so long emitting nothing.
+     *
+     * @return int the child PID in the parent, 0 in the child, -1 on failure
+     */
+    private function forkProcess(): int
+    {
+        if ($this->forceForkFailureForTesting) {
+            return -1;
+        }
+
+        return pcntl_fork();
+    }
+
+    /**
+     * Report, once per pool, that a `pcntl_fork()` actually FAILED.
+     *
+     * A FAILED FORK AND AN ABSENT `pcntl` ARE DIFFERENT EVENTS, and until this
+     * existed they were indistinguishable to the operator: both degrade to
+     * sequential execution in the parent, and only one of them said so. The
+     * distinction is the actionable part. A build without `pcntl` is a static
+     * fact about the installation, fixed by installing an extension, and it
+     * will be true for every pool in every run. A fork that returns -1 is a
+     * runtime resource verdict — `EAGAIN` for `RLIMIT_NPROC`, `ENOMEM` for
+     * memory — which may clear by itself, may be caused by this application's
+     * own concurrency, and tells the operator to look at limits rather than at
+     * packages. That is why the errno is named rather than merely the outcome.
+     *
+     * `error_log()` AND NOT THE MID-SESSION TRANSCRIPT SEAM, under the rule the
+     * two tool-call parsers' class doc-blocks state — a notice reaches
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} if and
+     * only if the emitter did not produce what the caller asked for. The answer
+     * is NO here, checked at the arm rather than assumed: {@see startAgent()}'s
+     * `-1` branch falls straight through to `$executor->execute($agent,
+     * $request)` and `storeResult()`, byte for byte what the
+     * `pcntlForkAvailable()` arm above it does, so the agent still runs and its
+     * result is still stored and reaped. What is lost is CONCURRENCY, which is
+     * not an action the model can take and not a row worth re-sending to it on
+     * every subsequent turn. Same answer as {@see warnSequentialFallback()},
+     * same reasoning, different event.
+     *
+     * ONCE PER POOL, matching the sibling and for the sibling's reason: the
+     * alternative is one line per dispatched agent, and a pool that has run out
+     * of processes is precisely the one about to dispatch many. The cost is
+     * that a fork failure which clears and later recurs is logged only the
+     * first time; the count is not surfaced anywhere, which is recorded as a
+     * finding rather than fixed here.
+     */
+    private function warnForkFailed(): void
+    {
+        if ($this->forkFailureWarned) {
+            return;
+        }
+
+        $this->forkFailureWarned = true;
+
+        // Guarded rather than called bare: this arm is reachable through the
+        // testing seam on a build where `pcntl_fork()` itself was never called,
+        // and `pcntl_strerror(0)` reports "Success", which is the one thing
+        // this line must not say.
+        $errno = \function_exists('pcntl_get_last_error') ? pcntl_get_last_error() : 0;
+
+        error_log(sprintf(
+            'AgentWorkerPool: pcntl_fork() FAILED (%s) — this agent, and any later one that '
+            . 'hits the same failure, runs sequentially in the parent instead of concurrently. '
+            . 'Unlike a build without pcntl this is a runtime resource limit and may clear on '
+            . 'its own; if it does not, raise the process limit (RLIMIT_NPROC) or lower '
+            . 'maxConcurrent, currently %d.',
+            $errno === 0 ? 'no errno was reported' : pcntl_strerror($errno) . ' (errno ' . $errno . ')',
+            $this->maxConcurrent,
+        ));
+    }
+
     protected function warnSequentialFallback(): void
     {
         if ($this->sequentialFallbackWarned) {
