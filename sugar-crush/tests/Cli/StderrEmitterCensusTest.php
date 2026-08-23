@@ -1916,6 +1916,157 @@ final class StderrEmitterCensusTest extends TestCase
 
         return $count;
     }
+    /**
+     * How many times `$class` is CONSTRUCTED in `$source`: the `new` shapes,
+     * plus this project's canonical `::new()` factory.
+     *
+     * TOKENS AND NOT TEXT, for the reason {@see scan()} gives at length. It
+     * matters more here than anywhere else in this file, because the class this
+     * guard is pointed at documents its own constructor: a `grep`-based version
+     * would red on the prose explaining why it is green.
+     *
+     * MATCHED ON THE LAST NAMESPACE SEGMENT, so `new WorktreeManager`,
+     * `new \SugarCraft\Crush\Agents\WorktreeManager` and
+     * `Agents\WorktreeManager::new(` each count once. The cost of that
+     * shortcut is that a DIFFERENT class of the same short name would count
+     * too; this package has one of each, and a false POSITIVE here reds a
+     * dormancy claim rather than hiding a live one, which is the direction an
+     * over-eager guard should fail in.
+     *
+     * WHY THE FACTORY ARM KEYS ON `T_NEW` AND NOT ON A NAME. In `Foo::new(`,
+     * PHP 8.3.6 lexes `new` as `T_NEW` and not as `T_STRING` — MEASURED on this
+     * box — so {@see callableName()} returns `null` for it and
+     * {@see methodCallSites('new', …)} cannot see the factory at all. The
+     * factory arm therefore matches a `T_NEW` PRECEDED by `T_DOUBLE_COLON` and
+     * reads the class name from the token before that operator. The same rule
+     * is what excludes the factory's own DECLARATION, `public static function
+     * new()`, whose `T_NEW` is preceded by `T_FUNCTION`.
+     *
+     * NO `(` IS REQUIRED ON THE CONSTRUCTOR ARM, because `new Foo;` is legal
+     * PHP and constructs exactly as much as `new Foo()` does. The factory arm
+     * does require one, since `Foo::new` without a call is a syntax error and a
+     * bare `T_NEW` after `::` in any other position is not a construction.
+     *
+     * WHAT IT REFUSES RATHER THAN MISSES: `new class … extends <target>`, which
+     * constructs a subclass and so defeats a dormancy claim just as thoroughly,
+     * but which this walk cannot attribute. It throws rather than answering
+     * zero — a guard that quietly ignores the unparseable has a hole shaped
+     * exactly like the next defect. There are no `new class` sites in `src/` or
+     * `bin/` today (MEASURED, PHP 8.3.6), so the arm is a tripwire and not a
+     * live path. `new $variable` it can neither see nor detect; that hole is
+     * named and measured in {@see
+     * testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt()}.
+     */
+    private static function constructionSites(string $class, string $source): int
+    {
+        $significant = self::significantTokens($source);
+        $count = 0;
+
+        foreach ($significant as $i => $token) {
+            if (!\is_array($token) || $token[0] !== T_NEW) {
+                continue;
+            }
+
+            $previous = $significant[$i - 1] ?? null;
+            if (\is_array($previous) && $previous[0] === T_DOUBLE_COLON) {
+                if (($significant[$i + 1] ?? null) !== '(') {
+                    continue;
+                }
+                if (self::constructedName($significant[$i - 2] ?? null) === $class) {
+                    $count++;
+                }
+
+                continue;
+            }
+
+            $named = $significant[$i + 1] ?? null;
+            if (\is_array($named) && $named[0] === T_CLASS) {
+                self::refuseUnattributableAnonymousClass($significant, $i + 1, $class);
+
+                continue;
+            }
+
+            if (self::constructedName($named) === $class) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * The short class name a `new`-adjacent token denotes, or `null` if the
+     * token names no class at all.
+     *
+     * Deliberately NOT {@see callableName()}, which accepts only `T_STRING` and
+     * `T_NAME_FULLY_QUALIFIED` because the calls it serves are function calls.
+     * A class reference is also spelled `T_NAME_QUALIFIED` — `Agents\Worktree`
+     * — and two of the four constructions this file's own fixture pins arrive
+     * in exactly that shape.
+     */
+    private static function constructedName(array|string|null $token): ?string
+    {
+        if (!\is_array($token)) {
+            return null;
+        }
+        if (!\in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+            return null;
+        }
+
+        $segments = explode('\\', $token[1]);
+        $short = array_pop($segments);
+
+        return $short === '' ? null : $short;
+    }
+
+    /**
+     * Throw if the anonymous class whose `T_CLASS` sits at `$classToken` names
+     * `$class` in its header, since {@see constructionSites()} cannot decide
+     * whether that is a construction of a subclass or an unrelated mention.
+     *
+     * Walks to the `{` that opens the class body, tracking parenthesis depth so
+     * that a constructor argument list is skipped rather than read as a header.
+     * A header that never opens a body is itself unparseable and also throws.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $significant
+     */
+    private static function refuseUnattributableAnonymousClass(
+        array $significant,
+        int $classToken,
+        string $class,
+    ): void {
+        $depth = 0;
+        $total = \count($significant);
+
+        for ($j = $classToken + 1; $j < $total; $j++) {
+            $token = $significant[$j];
+
+            if ($token === '(') {
+                $depth++;
+
+                continue;
+            }
+            if ($token === ')') {
+                $depth--;
+
+                continue;
+            }
+            if ($depth === 0 && $token === '{') {
+                return;
+            }
+            if ($depth === 0 && self::constructedName($token) === $class) {
+                throw new \RuntimeException(
+                    "constructionSites() found `new class` naming {$class} in its header and cannot "
+                        . 'attribute it. Teach it that shape rather than letting it answer zero.',
+                );
+            }
+        }
+
+        throw new \RuntimeException(
+            'constructionSites() found a `new class` header that never opens a body; the token walk '
+                . 'has lost sync with the source it is reading.',
+        );
+    }
 
     /**
      * Whether the `use` at `$i` is a `use function`/`use const` import naming
