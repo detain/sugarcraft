@@ -10876,15 +10876,26 @@ final class Chat implements Model
         // from the real transcript rather than duplicate them.
         //
         // ORed WITH $inFlight RATHER THAN RELYING ON hasPending() ALONE, and
-        // that is the load-bearing half. The mid-session emitters — the two
-        // tool-call parsers, `SglangProvider`'s two argument-decode refusals
-        // and `WorktreeManager`'s four (E192) — raise their notices DURING a
-        // turn, and on the interactive path they do so inside
+        // that is the load-bearing half. The mid-session emitters that are on a
+        // live path — the two tool-call parsers, and `SglangProvider`'s two
+        // argument-decode refusals — raise their notices DURING a turn, and on
+        // the interactive path they do so inside
         // {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
         // forked child. Waiting for `hasPending()` to go true would work, but
         // only on whatever Msg happened to arrive next; arming for the whole
         // turn means the row appears while the turn is still running, which is
         // the entire point of a seam that is not launch-only.
+        //
+        // `WorktreeManager`'S FOUR (E192) ARE ON THE SEAM AND ON NO PATH, and
+        // this list named them among the four above as though they were. WHAT
+        // IS TRUE NOW, checked rather than assumed: nothing in `src/` or `bin/`
+        // constructs a `WorktreeManager` — only its own doc-comments mention
+        // the constructor and the factory — and `Team::claimTask()`, the one
+        // method that takes one, has no caller in `src/` either. The class is
+        // dormant, its own doc-block now says so, and the census pins it. They
+        // are named here anyway rather than dropped, because when a first
+        // caller does arrive it will be from tool dispatch, i.e. inside a turn,
+        // and this clause is the one that will cover it.
         //
         // AND `hasPending()` ALONE IS NOT MERELY WEAKER, IT CAN NEVER FIRE ON
         // ITS OWN (E193). `Program` consults this method only when it

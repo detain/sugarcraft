@@ -674,6 +674,107 @@ final class StderrEmitterCensusTest extends TestCase
         );
     }
 
+    /**
+     * {@see \SugarCraft\Crush\Agents\WorktreeManager} carries FOUR channel-6
+     * sites and NOTHING IN `src/` OR `bin/` CONSTRUCTS IT, so all four are
+     * dormant — and this test is what makes that a pinned fact rather than a
+     * sentence three doc-blocks happen to agree on.
+     *
+     * WHY A DORMANCY GUARD AND NOT A DELETION. "DORMANT IS NOT UNGATED" is this
+     * package's own doctrine — {@see \SugarCraft\Crush\Agents\WorktreeConfig}
+     * is the file it was written against — and a dormant emitter's channel is
+     * the channel its FIRST caller inherits. Round 48 routed all four onto the
+     * seam for that reason, and then wrote two doc-blocks describing them as
+     * firing "while the alternate screen is up", which was a reachability claim
+     * that had never been checked and was false. This guard exists so the next
+     * such sentence is a red rather than a plausible paragraph.
+     *
+     * WHAT IT ASSERTS, in two halves that fail differently. The roster half
+     * pins the four sites; the construction half pins the zero. A file that
+     * starts building one reds here with a message telling the reader which
+     * paragraphs are now out of date, which is the moment to REWRITE them — not
+     * to delete this test.
+     *
+     * WHAT THE SCANNER CANNOT SEE, named rather than left to be found:
+     * `new $class` with the name in a variable. MEASURED on this tree, PHP
+     * 8.3.6, there are SIX such sites and all six are in
+     * `src/Providers/VertexProvider.php`, where the variable is assigned a
+     * literal `Google\…` protobuf class name three lines above the `new` — so
+     * none of them can be this class. Also invisible:
+     * `(new ReflectionClass(...))->newInstance()` and container resolution,
+     * neither of which this package does.
+     *
+     * A NOTE ON THE LEXER THAT COST A DRAFT OF THIS TEST. In `Foo::new(`, PHP
+     * 8.3.6 lexes `new` as `T_NEW` and not as `T_STRING` — so the project's
+     * canonical `::new()` factory is invisible to every scanner in this file
+     * that keys on {@see callableName()}, {@see methodCallSites()} included.
+     * That is why {@see constructionSites()} matches the factory shape on
+     * `T_NEW` explicitly, and why a naive "count the `new` tokens" scan of
+     * `src/` reports 285 rather than 6.
+     */
+    public function testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt(): void
+    {
+        self::assertSame(
+            4,
+            self::RUNTIME_NOTICE_SITES['src/Agents/WorktreeManager.php'] ?? 0,
+            'WorktreeManager left channel 6; the dormancy reasoning below is about sites that no longer exist',
+        );
+
+        $built = [];
+        foreach (self::sources() as $relative => $absolute) {
+            $sites = self::constructionSites('WorktreeManager', (string) file_get_contents($absolute));
+            if ($sites > 0) {
+                $built[$relative] = $sites;
+            }
+        }
+        ksort($built);
+
+        self::assertSame(
+            [],
+            $built,
+            'something in src/ or bin/ now constructs a WorktreeManager, so its four seam sites are live. '
+                . 'That is a good change and this is not a request to revert it — but three doc-blocks say '
+                . 'the class is dormant (WorktreeManager\'s own, Bootstrap\'s, WorktreeConfig\'s) and '
+                . 'Chat::subscriptions() says its notices are NOT among the in-turn emitters. Rewrite those '
+                . 'four, then update this test to pin the new reachability instead of the old dormancy.',
+        );
+
+        // KNOWN-POSITIVE THROUGH THE SAME SCANNER IN THE SAME TEST (rule 15).
+        // An assertion of [] proves nothing unless something here proves the
+        // instrument still matches. Round 44 shipped an empty census whose
+        // scanner was dead and stayed green through 18,228 assertions.
+        //
+        // FOUR CONSTRUCTIONS AND FOUR NON-CONSTRUCTIONS, in one fixture: the
+        // bare, fully-qualified and namespace-qualified `new`, plus the
+        // `::new()` factory; against a different class, a `::class` reference,
+        // the DECLARATION of a static method named `new`, and — the shape that
+        // matters most, because it is what `src/` is full of — a `::new()`
+        // factory call on some other class.
+        self::assertSame(4, self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            use SugarCraft\Crush\Agents\WorktreeManager;
+            $a = new WorktreeManager();
+            $b = new \SugarCraft\Crush\Agents\WorktreeManager($config);
+            $c = Agents\WorktreeManager::new('/repo');
+            $d = new Agents\WorktreeManager($config);
+            $e = new WorktreeConfig();
+            $f = WorktreeManager::class;
+            $g = WorktreeConfig::new();
+            class X { public static function new(): self { return new self(); } }
+            PHP), 'constructionSites() has gone blind; the empty assertion above is vacuous');
+
+        // AND IT MUST NOT SEE A DOC-COMMENT. This class\'s own doc-blocks
+        // mention `new WorktreeManager()` and `WorktreeManager::new($repoRoot)`
+        // five times between them (MEASURED, this tree) — a grep-based guard
+        // would red on its own explanation of why it is green.
+        self::assertSame(0, self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            /** Built by `new WorktreeManager()` or `WorktreeManager::new($root)`. */
+            // new WorktreeManager();
+            $x = 1;
+            PHP), 'constructionSites() reads comments, so it would red on prose about the constructor');
+    }
+
     public function testThePrefixedWriterRosterIsUnchanged(): void
     {
         self::assertSame(

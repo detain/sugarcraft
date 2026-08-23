@@ -56,11 +56,44 @@ use SugarCraft\Crush\Support\HomeDirectory;
  *    de-duplicates identical rows within a batch.
  *
  * WHY THAT IS WORTH TRANSCRIPT TOKENS, which is the objection the routing rule
- * exists to answer. These fire while the alternate screen is up, so today they
- * land as unprefixed lines on a frame the renderer believes it owns — visible
- * as corruption, or not at all. And the reader who can act on them is the
- * model as much as the user: a worktree that was not created is a step the
- * next turn must not assume happened.
+ * exists to answer — and the first thing this paragraph has to say is that
+ * NOTHING IN `src/` OR `bin/` CONSTRUCTS THIS CLASS, so none of the four sites
+ * above fires on any path today.
+ *
+ * WHAT THIS PARAGRAPH SAID: "These fire while the alternate screen is up, so
+ * today they land as unprefixed lines on a frame the renderer believes it owns
+ * — visible as corruption, or not at all."
+ *
+ * WHAT IS TRUE NOW, checked rather than asserted: neither `new WorktreeManager`
+ * nor `WorktreeManager::new(` occurs anywhere in `src/` or `bin/` outside this
+ * file's own doc-comments, and {@see Team::claimTask()} — the one method that
+ * takes a `WorktreeManager` — has no caller in `src/` either. Only tests build
+ * one. So the sentence above describes a FUTURE and not a present, and it was
+ * written as a present. Two other files in this package already said as much
+ * and this one did not read them: {@see \SugarCraft\Crush\Cli\Bootstrap}'s
+ * "DORMANT: nothing in `src/` constructs a `WorktreeManager`", and
+ * {@see WorktreeConfig}'s "DORMANT IS NOT UNGATED". The property doc-block
+ * thirty lines below says it too.
+ *
+ * WHY THE ROUTING STILL EARNS ITS PLACE, which is a different question from
+ * whether it fires. "DORMANT IS NOT UNGATED" is this package's own doctrine
+ * and {@see WorktreeConfig} is the file it was written against: a dormant
+ * emitter's channel is the channel its FIRST caller inherits, and choosing it
+ * now costs one commit while changing it after that caller exists costs a
+ * reader who has already learned the wrong one. The routing rule answers YES
+ * for all four sites on their merits — each reports a thing the caller asked
+ * for and did not get — and that answer does not depend on when the first
+ * caller arrives. What DOES depend on it is the alternate-screen harm, which
+ * is why it is now stated conditionally. The reader who could act on these is
+ * the model as much as the user: a worktree that was not created is a step the
+ * next turn must not assume happened, on the day a next turn can reach one.
+ *
+ * THE DORMANCY IS PINNED RATHER THAN MERELY WRITTEN DOWN, which is the other
+ * half of that doctrine — see
+ * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s
+ * construction-site guard. It reds the day something in `src/` builds one, at
+ * which point the paragraph above becomes true and is to be rewritten to say
+ * so rather than the guard being deleted.
  */
 final class WorktreeManager
 {
