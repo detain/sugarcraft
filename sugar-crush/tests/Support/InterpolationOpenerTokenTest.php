@@ -31,15 +31,34 @@ use PHPUnit\Framework\TestCase;
  * neither of those can be made to answer for PHP 9. A guard that asks the
  * running interpreter answers on whatever version is running it.
  *
- * WHAT WAS MEASURED, because E208 asserted a hazard that does not reproduce.
- * On PHP 8.3.6: the constant is defined (395); REFERENCING it emits nothing
- * at all, because the deprecation is on the `"${a}"` SYNTAX and not on the
- * token; `token_get_all()` on a source that does use that syntax still
- * produces the token and still emits nothing, since it lexes rather than
- * compiles; and the syntax occurs ZERO times in `src/` and `tests/`
- * combined. So "a deprecation notice on 8.4" is not the risk. The risk is
- * REMOVAL, it is further out than 8.4, and it is a hard error rather than a
- * notice - which is what this file is pointed at.
+ * WHAT AN EARLIER ENTRY SAID: that the constant is 8.2-deprecated, that it is
+ * referenced from TWO files, and that "a deprecation notice on 8.4 is a real
+ * risk you cannot test".
+ *
+ * WHAT IS TRUE NOW, re-measured on PHP 8.3.6 with an error handler recording
+ * every diagnostic rather than by reading output. The constant is defined
+ * (395). REFERENCING it emits nothing at all - zero diagnostics - because the
+ * deprecation is on the `"${a}"` SYNTAX and not on the token. LEXING a source
+ * that does use that syntax emits nothing either, and still produces the
+ * token, because `token_get_all()` lexes rather than compiles. COMPILING the
+ * same source DOES emit one `E_DEPRECATED` - which is the control that keeps
+ * the two facts above from being a statement about a measurement that reports
+ * nothing whatever it is handed. And no file in `src/` or `tests/` uses the
+ * syntax at all, which is pinned by
+ * {@see testNoFileUsesTheDeprecatedInterpolationSyntax()} rather than
+ * asserted here. So "a deprecation notice on 8.4" is not the risk. The risk
+ * is REMOVAL, it is further out than 8.4, and it is a hard error rather than
+ * a notice - which is what this file is pointed at.
+ *
+ * AND THE FILE COUNT WAS THE REASON THE PROPOSED FIX WAS THE WRONG SHAPE. It
+ * is not two. The count itself is not written here - a cardinality over
+ * `tests/` is wrong by the next merge - but the SPREAD is, and it is checked:
+ * {@see testTheConstantIsNamedAcrossDirectoriesNoOneLaneOwns()} derives the
+ * naming set from the tree and requires it to span several directories, which
+ * is the property that makes "edit the literal pair" an edit no single lane
+ * can make. Note which file is NOT in that set: this one. It reaches the
+ * constant only through `defined()` and string literals, deliberately, so the
+ * guard cannot be the thing that fatals on the PHP it exists to warn about.
  *
  * WHAT THE FIRST VERSION OF THIS FILE GOT WRONG, kept rather than quietly
  * corrected because each mistake names a hole a reader could reopen:
@@ -554,6 +573,187 @@ final class InterpolationOpenerTokenTest extends TestCase
                 $name . ' does not evaluate to the id the lexer emitted',
             );
         }
+    }
+
+    /**
+     * NO FILE IN `tests/` OR `src/` USES THE 8.2-DEPRECATED SPELLING.
+     *
+     * This is the claim an earlier entry made in prose and nothing checked. It
+     * matters in the direction prose cannot hold: the day a `"${a}"` is
+     * written into a file that a brace walker scans, the walk loses a level
+     * silently - and on a PHP that has removed the syntax outright the file
+     * stops parsing. Every spelling this suite needs is supplied as a SOURCE
+     * STRING instead, which is why the fixtures below are nowdocs: a nowdoc's
+     * body is one `T_ENCAPSED_AND_WHITESPACE` token in the FILE that holds it,
+     * so writing one costs the tree no occurrence at all.
+     *
+     * THE SCANNER IS RUN AGAINST A KNOWN POSITIVE IN THE SAME TEST, because
+     * this asserts an absence and an absence is satisfied perfectly by a dead
+     * instrument - and by a fixture whose expected value is what a dead
+     * instrument returns. A fixture asserting `false` on a clean source would
+     * pass with {@see usesDeprecatedInterpolation()} deleted, so the positive
+     * fixture is the load-bearing one and the negative is the control that
+     * stops the predicate being stuck at "everything".
+     */
+    public function testNoFileUsesTheDeprecatedInterpolationSyntax(): void
+    {
+        $deprecated = <<<'PHP'
+            <?php $a = 1; $s = "x${a}y";
+            PHP;
+        $modern = <<<'PHP'
+            <?php $a = 1; $s = "x{$a}y";
+            PHP;
+
+        $this->assertTrue(
+            self::usesDeprecatedInterpolation($deprecated),
+            'the scanner did not see the deprecated spelling in a source that plainly uses it, '
+                . 'so every "no file uses it" answer below is a statement about a dead '
+                . 'instrument',
+        );
+        $this->assertFalse(
+            self::usesDeprecatedInterpolation($modern),
+            'the scanner called the NON-deprecated spelling deprecated, so it is stuck at yes '
+                . 'and the positive above proves nothing',
+        );
+
+        $offenders = [];
+        $scanned = 0;
+        foreach (self::everyPhpFile() as $relative => $path) {
+            $scanned++;
+            if (self::usesDeprecatedInterpolation((string) file_get_contents($path))) {
+                $offenders[] = $relative;
+            }
+        }
+
+        $this->assertGreaterThan(
+            0,
+            $scanned,
+            'the walk over tests/ and src/ found no PHP file at all, so it checked nothing',
+        );
+
+        $this->assertSame(
+            [],
+            $offenders,
+            'this file uses the `"${a}"` interpolation spelling PHP 8.2 deprecated. It emits '
+                . 'an E_DEPRECATED wherever it is COMPILED (measured: one, on PHP 8.3.6), and '
+                . 'on the PHP that removes it the file stops parsing. Write `"{$a}"`. If the '
+                . 'spelling is needed as DATA - to hand a scanner something to lex - put it in '
+                . 'a nowdoc or a single-quoted string, as INTERPOLATIONS does: the body of one '
+                . 'is a single token in the file that holds it, so it costs no occurrence.',
+        );
+    }
+
+    /**
+     * THE NAMING SET SPANS DIRECTORIES NO ONE LANE OWNS.
+     *
+     * WHY A SPREAD AND NOT A COUNT. The retired claim was "two files", and the
+     * fix it implied - edit the literal pair - was wrong for a reason a
+     * corrected COUNT would not carry either: a count measured in one lane's
+     * worktree is wrong by the next merge, and the number was never the point.
+     * The point is that the constant is named from several directories at
+     * once, so no single lane can make that edit and any change to how these
+     * scanners spell the opener is a cross-lane change. That is a LOWER BOUND,
+     * which is the direction that survives a merge adding files.
+     */
+    public function testTheConstantIsNamedAcrossDirectoriesNoOneLaneOwns(): void
+    {
+        $this->assertTheScannerIsAlive();
+
+        $directories = [];
+        foreach (self::phpFilesToScan() as $relative => $path) {
+            $named = self::constantsNamedInCode((string) file_get_contents($path));
+            if (!\in_array('T_DOLLAR_OPEN_CURLY_BRACES', $named, true)) {
+                continue;
+            }
+            $directories[\dirname($relative)] = true;
+        }
+
+        ksort($directories);
+
+        $this->assertGreaterThanOrEqual(
+            3,
+            \count($directories),
+            'the deprecated opener is named as code from ' . implode(', ', array_keys($directories))
+                . ' - fewer directories than the claim this test exists to hold. Either the '
+                . 'scanners have been consolidated, in which case say so and retire this test, '
+                . 'or the derivation has stopped seeing files it used to see.',
+        );
+
+        // THIS FILE MUST NOT BE IN THAT SET. It is the guard that has to keep
+        // working on the PHP that removes the constant, so it may only reach
+        // the name through defined() and string literals. Measured by asking
+        // the same predicate the rest of the suite is judged by.
+        $this->assertNotContains(
+            'T_DOLLAR_OPEN_CURLY_BRACES',
+            self::constantsNamedInCode((string) file_get_contents(__FILE__)),
+            'this file now names the deprecated constant AS CODE, so it is one of the files '
+                . 'that would hard-error on the PHP that removes it - and it is the file whose '
+                . 'job is to report that, not to die of it.',
+        );
+    }
+
+    /**
+     * Whether a source's OWN token stream contains the deprecated opener.
+     *
+     * File level, deliberately: a nowdoc or single-quoted string whose TEXT
+     * spells `${a}` is one token here and contributes nothing, which is what
+     * makes it safe for a fixture to carry the spelling this refuses.
+     *
+     * On a PHP that has removed the syntax the lexer stops producing the
+     * token, `defined()` goes false, and this answers false for everything -
+     * which is correct: there is then nothing to refuse.
+     */
+    private static function usesDeprecatedInterpolation(string $source): bool
+    {
+        if (!\defined('T_DOLLAR_OPEN_CURLY_BRACES')) {
+            return false;
+        }
+
+        $id = \constant('T_DOLLAR_OPEN_CURLY_BRACES');
+        foreach (\token_get_all($source) as $token) {
+            if (\is_array($token) && $token[0] === $id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Every `.php` file under `tests/` and `src/`, keyed by its path relative
+     * to the library root.
+     *
+     * NO SUBSTRING PRE-FILTER, unlike {@see phpFilesToScan()}. That one gates
+     * on the anchor token because a file that cannot name it cannot be a brace
+     * walker; here the question is what the file's own lexer output contains,
+     * and a pre-filter would be the alphabet deciding the answer.
+     *
+     * @return array<string,string> relative path => absolute path
+     */
+    private static function everyPhpFile(): array
+    {
+        $library = \dirname(__DIR__, 2);
+        $found = [];
+
+        foreach (['tests', 'src'] as $directory) {
+            $root = $library . '/' . $directory;
+            if (!is_dir($root)) {
+                continue;
+            }
+
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+            foreach ($files as $file) {
+                /** @var \SplFileInfo $file */
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                    continue;
+                }
+                $found[substr($file->getPathname(), \strlen($library) + 1)] = $file->getPathname();
+            }
+        }
+
+        ksort($found);
+
+        return $found;
     }
 
     /**
