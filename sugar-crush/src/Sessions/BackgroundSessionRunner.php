@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\PermissionConfigException;
+use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
 
 /**
@@ -49,6 +51,22 @@ final class BackgroundSessionRunner
 {
     /** Handshake prefix the supervisor parses the daemon PID out of. */
     public const HANDSHAKE_PREFIX = 'HELLO:';
+
+    /**
+     * Record prefix for a tool call this session was not allowed to make
+     * (E241).
+     *
+     * `[session:` FIRST, and that is load-bearing rather than cosmetic:
+     * {@see BackgroundSupervisor::restoreOutput()} treats every line with that
+     * opening as the daemon's own bookkeeping and drops it, so a refusal
+     * record cannot be quoted back to the user as if the MODEL had written it.
+     * `tool:` and not `task:` for the same reason in the other direction —
+     * {@see BackgroundSupervisor::bufferReportsFailure()} decides a settled
+     * session's status from the last `[session:task:` line, and a refusal is an event
+     * inside a turn, not the turn's outcome. A turn that refuses a call and
+     * then answers is a COMPLETED turn.
+     */
+    public const REFUSAL_RECORD = '[session:tool:refused]';
 
     /**
      * How often the daemon stamps a heartbeat record into the buffer file.
@@ -186,6 +204,12 @@ final class BackgroundSessionRunner
      * Streamed tokens are flushed a whole line at a time so a reconnecting
      * TUI sees partial output while the turn is still running.
      *
+     * THE THIRD ARGUMENT IS THE ONE E241 EXISTS FOR. Without it a hook DENY
+     * inside a background session reached the operator on no channel at all —
+     * the same gap E219 closed for `-p`, on the surface where it is worst.
+     * {@see self::noticeRefusal()} carries the measurement of where the line
+     * had to go.
+     *
      * @return int 0 when the turn completed, 1 when it failed
      */
     public function executeTask(?Backend $backend = null): int
@@ -220,7 +244,13 @@ final class BackgroundSessionRunner
         };
 
         try {
-            $message = $backend->complete([Message::user($this->task)], $onToken);
+            $message = $backend->complete(
+                [Message::user($this->task)],
+                $onToken,
+                function (object $event): void {
+                    $this->noticeRefusal($event);
+                },
+            );
         } catch (\Throwable $e) {
             if ($pending !== '') {
                 $this->append($pending . "\n");
@@ -240,6 +270,86 @@ final class BackgroundSessionRunner
         $this->log('[session:task:complete]');
 
         return 0;
+    }
+
+    /**
+     * Record, in the session buffer, that a tool call was stopped (E241).
+     *
+     * THE GAP. {@see \SugarCraft\Crush\Cli\NonInteractive::noticeRefusal()}
+     * closed this for the `-p` one-shot path in round 48. The daemon is the
+     * OTHER headless caller and it was left out: `executeTask()` called
+     * `complete()` with a token callback and no `$onEvent` at all, so a hook
+     * DENY here produced the answer the model wrote around the missing tool
+     * and nothing, anywhere, saying a call had been stopped. It is the worse
+     * of the two surfaces, because a background session has no operator
+     * watching it happen — the buffer file IS the whole record.
+     *
+     * WHY NOT `fwrite(\STDERR, …)`, WHICH IS THE SHAPE E219 USED AND WHICH
+     * E241 EXPECTED TO WORK HERE. It would in fact land somewhere readable —
+     * but somewhere ELSE, and that is the objection. MEASURED at
+     * {@see BackgroundSupervisor::spawnSession()}: the daemon is opened with
+     * `[['file', '/dev/null', 'r'], ['file', $logPath, 'a'],
+     * ['file', $logPath, 'a']]` where `$logPath` is `$bufferPath . '.log'` — a
+     * SIDECAR, deliberately not the buffer, so a stray provider warning is
+     * never quoted back as model output. Descriptor 2 is therefore a second
+     * file, and a refusal written there would sit in one place while every
+     * other thing this class says about the turn — `[session:task:start]`,
+     * `[session:provider:fallback]`, `[session:task:failed]` — sits in the
+     * buffer. Two files to read to reconstruct one turn is the observability
+     * gap re-opened at a different address.
+     *
+     * WHAT IS ON STDERR ANYWAY, said plainly so this reads as a choice rather
+     * than an oversight: an ASK refused with no terminal already writes
+     * "sugarcrush: refused <tool>." from
+     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt::__invoke()},
+     * into that sidecar. So the ASK case produces two records in two files and
+     * the DENY case — which reaches no approver at all — produces exactly this
+     * one. Suppressing either would need this class to know what some approver
+     * built four frames away inside {@see Bootstrap::backend()} had already
+     * announced, which is a coupling that does not exist.
+     *
+     * `oneLine()` IS NOT COSMETIC HERE. The buffer is a line protocol:
+     * {@see BackgroundSupervisor::restoreOutput()} decides line by line, and
+     * only a line that STARTS with `[session:` is dropped. A refusal reason
+     * carrying a newline would therefore have its first line skipped and every
+     * continuation line restored as model output — a hook author's error text
+     * injected into the transcript. The same collapse is applied to every
+     * other free text this class logs, for the same reason.
+     *
+     * THE CLASSIFIER IS DUPLICATED AND THE ROSTER IS NOT, which is the half
+     * that matters. {@see Chat::DENIED_ERROR_PREFIXES} is read rather than
+     * copied, so this daemon and the `-p` path and the TUI's struck-through
+     * refusal state cannot disagree about what a refusal IS. The twelve lines
+     * of `str_starts_with` around it are duplicated from
+     * `NonInteractive::refusalFrom()`, which is private and in another file;
+     * hoisting them to a shared owner is worth doing and is recorded, but a
+     * shared classifier reading a shared roster and two classifiers reading
+     * one shared roster fail in the same way — which is to say they do not.
+     *
+     * {@see Chat} IS TOUCHED LAZILY, on purpose and for the same reason the
+     * `-p` path does it: a class constant is still a class load, and the guard
+     * above is "an errored tool result", so a turn that errors nothing never
+     * loads it.
+     */
+    private function noticeRefusal(object $event): void
+    {
+        if (!$event instanceof ToolFinished || !$event->result->isError()) {
+            return;
+        }
+
+        $reason = $event->result->content();
+        foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
+            if (!\str_starts_with($reason, $prefix)) {
+                continue;
+            }
+
+            $this->log(
+                self::REFUSAL_RECORD . ' ' . $this->oneLine($event->toolName)
+                . ' was not run - ' . $this->oneLine($reason),
+            );
+
+            return;
+        }
     }
 
     /**

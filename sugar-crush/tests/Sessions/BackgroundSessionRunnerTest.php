@@ -8,8 +8,12 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
+use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Sessions\BackgroundSessionRunner;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Tools\ToolResult;
 
 /**
  * Covers the agent loop a `/bg` session actually runs.
@@ -296,6 +300,200 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertStringNotContainsString('[session:task:complete]', $contents);
     }
 
+    // =========================================================================
+    // E241 — a refused tool call reaches the operator. Round 48 closed this for
+    // the `-p` one-shot path (E219) and left the daemon out, which is the
+    // surface where "nobody saw it" is literally true: there is no operator in
+    // front of a background session, and the buffer file is the whole record.
+    // =========================================================================
+
+    /**
+     * The turn's observer is HANDED OVER, which is the half a buffer assertion
+     * cannot prove on its own.
+     *
+     * `executeTask()` passed `complete()` two arguments and the third — the
+     * tool-lifecycle observer — defaulted to null. A backend double that emits
+     * nothing produces an identical (empty) buffer whether the argument is
+     * there or not, so this asserts the argument itself.
+     */
+    public function testTheTurnIsGivenAToolLifecycleObserver(): void
+    {
+        $backend = new FakeRunnerBackend('done');
+
+        $this->runner($this->bufferPath())->executeTask($backend);
+
+        $this->assertTrue(
+            $backend->sawEventObserver,
+            'complete() was called without an $onEvent observer, so a refusal reaches nothing',
+        );
+    }
+
+    public function testARefusedToolCallIsRecordedInTheSessionBuffer(): void
+    {
+        $buffer = $this->bufferPath();
+        $backend = new FakeRunnerBackend('I could not remove it.', events: [
+            new ToolFinished('call_1', 'Bash', new ToolResult('call_1', 'Hook denied: rm -rf is blocked', true)),
+        ]);
+
+        $exit = $this->runner($buffer)->executeTask($backend);
+        $contents = (string) file_get_contents($buffer);
+
+        $this->assertSame(0, $exit, 'a refusal is an event inside the turn, not a failed turn');
+        $this->assertStringContainsString(
+            BackgroundSessionRunner::REFUSAL_RECORD . ' Bash was not run - Hook denied: rm -rf is blocked',
+            $contents,
+        );
+        // The answer is still the answer.
+        $this->assertStringContainsString("I could not remove it.\n", $contents);
+    }
+
+    /**
+     * KNOWN-POSITIVE, PER ROSTER ENTRY. The roster is
+     * {@see \SugarCraft\Crush\Chat::DENIED_ERROR_PREFIXES}, which the daemon
+     * READS rather than copies — so this fails the day an entry is added and
+     * the daemon stops recognising it, which is the only way the daemon and
+     * the `-p` path can drift apart on what a refusal is.
+     */
+    public function testEveryPrefixInTheSharedDenialRosterIsRecordedAsARefusal(): void
+    {
+        $this->assertNotSame([], Chat::DENIED_ERROR_PREFIXES, 'the shared roster is empty - the guard is dead');
+
+        foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
+            $buffer = $this->bufferPath();
+            $backend = new FakeRunnerBackend('ok', events: [
+                new ToolFinished('c', 'Edit', new ToolResult('c', $prefix . ' because reasons', true)),
+            ]);
+
+            $this->runner($buffer)->executeTask($backend);
+
+            $this->assertStringContainsString(
+                BackgroundSessionRunner::REFUSAL_RECORD . ' Edit was not run - ' . $prefix . ' because reasons',
+                (string) file_get_contents($buffer),
+                'roster entry "' . $prefix . '" was not recognised by the daemon',
+            );
+        }
+    }
+
+    /**
+     * KNOWN-NEGATIVE. A tool that RAN AND FAILED is not a refusal, and neither
+     * is a tool that succeeded. Without this the roster loop above is
+     * satisfied by a classifier that records everything.
+     */
+    public function testAToolThatRanAndFailedIsNotRecordedAsARefusal(): void
+    {
+        $buffer = $this->bufferPath();
+        $backend = new FakeRunnerBackend('ok', events: [
+            new ToolFinished('c1', 'Read', new ToolResult('c1', 'No such file or directory', true)),
+            new ToolFinished('c2', 'Bash', new ToolResult('c2', 'exit status 0', false)),
+            new ToolFinished('c3', 'Grep', new ToolResult('c3', 'the hook denied: lower case is not the prefix', true)),
+            // Not a ToolFinished at all: the observer sees ToolStarted too.
+            new \stdClass(),
+        ]);
+
+        $this->runner($buffer)->executeTask($backend);
+
+        $this->assertStringNotContainsString(
+            BackgroundSessionRunner::REFUSAL_RECORD,
+            (string) file_get_contents($buffer),
+        );
+    }
+
+    /**
+     * A refusal reason carrying a newline CANNOT inject text into the
+     * transcript, and this is why the record is collapsed to one line.
+     *
+     * The buffer is a line protocol:
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::restoreOutput()}
+     * drops a line only when THAT LINE starts with `[session:`, so a two-line
+     * record would have its first line dropped and its second restored as
+     * model output — a hook author's error text quoted back to the user as if
+     * the assistant had written it. Asserted through the supervisor's own
+     * method rather than against a hand-rolled copy of the rule.
+     */
+    public function testAMultiLineRefusalReasonCannotReachTheRestoredTranscript(): void
+    {
+        $buffer = $this->bufferPath();
+        $backend = new FakeRunnerBackend('the answer', events: [
+            new ToolFinished('c', 'Bash', new ToolResult(
+                'c',
+                "Permission denied: rm\nINJECTED SECOND LINE\nand a third",
+                true,
+            )),
+        ]);
+
+        $this->runner($buffer)->executeTask($backend);
+        $contents = (string) file_get_contents($buffer);
+
+        $recordLines = array_filter(
+            explode("\n", $contents),
+            static fn (string $line): bool => str_contains($line, 'INJECTED SECOND LINE'),
+        );
+        $this->assertCount(1, $recordLines, 'the reason was not collapsed onto one line');
+        $this->assertStringStartsWith(BackgroundSessionRunner::REFUSAL_RECORD, (string) reset($recordLines));
+
+        $restored = self::restoreOutputOf($contents);
+        $this->assertSame("the answer\n", $restored);
+    }
+
+    /**
+     * The record is BOOKKEEPING, not the turn's outcome — pinned against both
+     * of the supervisor's own buffer readers.
+     *
+     * `restoreOutput()` must drop it (it opens `[session:`) and
+     * `bufferReportsFailure()` must ignore it (it does NOT open
+     * `[session:task:`), so a turn that refuses a call and then answers still
+     * settles as Completed. Naming the record `[session:task:refused]` would
+     * have passed the first check and silently turned every such turn into a
+     * failed session.
+     */
+    public function testTheRefusalRecordIsBookkeepingAndDoesNotSettleTheSession(): void
+    {
+        $buffer = $this->bufferPath();
+        $backend = new FakeRunnerBackend('the answer', events: [
+            new ToolFinished('c', 'Bash', new ToolResult('c', 'Hook denied: no', true)),
+        ]);
+
+        $this->runner($buffer)->executeTask($backend);
+        $contents = (string) file_get_contents($buffer);
+
+        $this->assertStringContainsString(BackgroundSessionRunner::REFUSAL_RECORD, $contents);
+        $this->assertSame("the answer\n", self::restoreOutputOf($contents));
+        $this->assertFalse(
+            self::bufferReportsFailureOf($contents),
+            'a turn that refused a call and then answered was settled as a failure',
+        );
+    }
+
+    /**
+     * KNOWN-ANSWER CONTROL for the two reflection probes above (rule 15): both
+     * are private statics on another class, and a probe that silently stopped
+     * reaching them would make every assertion built on it vacuous.
+     */
+    public function testTheSupervisorProbesUsedAboveStillReadWhatTheyClaimTo(): void
+    {
+        $this->assertSame(
+            "plain\n",
+            self::restoreOutputOf("[session:task:start]\nplain\n[session:heartbeat] pid=1\n"),
+        );
+        $this->assertFalse(self::bufferReportsFailureOf("[session:task:complete]\n"));
+        $this->assertTrue(self::bufferReportsFailureOf("[session:task:failed] boom\n"));
+        $this->assertTrue(self::bufferReportsFailureOf("plain output only\n"));
+    }
+
+    private static function restoreOutputOf(string $buffer): string
+    {
+        $m = new \ReflectionMethod(BackgroundSupervisor::class, 'restoreOutput');
+
+        return (string) $m->invoke(null, $buffer);
+    }
+
+    private static function bufferReportsFailureOf(string $buffer): bool
+    {
+        $m = new \ReflectionMethod(BackgroundSupervisor::class, 'bufferReportsFailure');
+
+        return (bool) $m->invoke(null, $buffer);
+    }
+
     public function testServeClientAnswersHeartbeatAndReportsStatusOnResume(): void
     {
         $buffer = $this->bufferPath();
@@ -504,15 +702,29 @@ final class FakeRunnerBackend implements Backend
     /** @var list<Message> */
     public array $history = [];
 
+    /** Whether complete() was handed a tool-lifecycle observer at all. */
+    public bool $sawEventObserver = false;
+
+    /**
+     * @param list<object> $events emitted through $onEvent before the reply
+     */
     public function __construct(
         private readonly string $reply,
         private readonly bool $streaming = false,
         private readonly ?\Throwable $throw = null,
+        private readonly array $events = [],
     ) {}
 
     public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
     {
         $this->history = $history;
+        $this->sawEventObserver = $onEvent !== null;
+
+        if ($onEvent !== null) {
+            foreach ($this->events as $event) {
+                $onEvent($event);
+            }
+        }
 
         if ($this->throw !== null) {
             throw $this->throw;
