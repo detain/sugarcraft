@@ -8050,3 +8050,75 @@ STDERR as E; fwrite(E, "x")` and `use function fwrite as w; w(STDERR, "x")` both
 for the write.
 
 **Step.** None — recorded so the count of wrong prescriptions stays honest. This is the eighth.
+
+### Ea48-6 — four stacked doc-comment pairs remain in `src/`, in files round 48 did not own
+
+Round 48's `Chat::pumpRuntimeNotices()` had E193's reasoning landed as a SECOND doc-comment above the
+block already there. PHP attaches only the LAST doc-comment of a run, so the earlier one documents
+nothing: the method had lost its `@return array{0:Chat,1:?\Closure}` tag entirely (VERIFIED by
+`ReflectionMethod::getDocComment()`) and two paragraphs of reasoning were orphaned.
+
+Scanning for the shape found it is not a one-off. SIX pairs existed in `src/` plus `bin/sugarcrush`
+(MEASURED, PHP 8.3.6, adjacent `T_DOC_COMMENT` tokens with nothing significant between). Three were in
+`src/Chat.php` and were fixed; the other two there were WORSE than the pump's, because the stranded block
+belonged to a DIFFERENT method: `refuseInFlightCommand()` and `dispatchCommand()` both read as
+undocumented while their prose sat above `refuseEmptyCustomCommand()` and `expandCustomCommand()`
+respectively — and `expandCustomCommand()` returns `?string` while the block stranded above it carried
+`@return array{0: self, 1: ?\Closure}|null`.
+
+FOUR remain, all outside lane `a`'s file set and therefore untouched and UNEXAMINED — nobody has checked
+whether these are the harmless kind (two blocks that merge) or the expensive kind (a method silently
+undocumented and another mis-described):
+
+- `src/Commands/CommandSpec.php:816`
+- `src/Runtime.php:73`
+- `src/Tools/BuiltIn/Glob.php:969`
+- `src/Tui/Components/MenuBar.php:368`
+
+The guard shipped in round 48 (`RuntimeNoticeSinkDeliveryTest::testChatCarriesNoStackedDocComments()`) is
+scoped to `Chat.php` ON PURPOSE: widening it would have redded four files belonging to work in flight in
+sibling lanes, which is a merge conflict dressed as a finding.
+
+**Step.** Once the parallel lanes have merged, check each of the four for a lost `@return` or a
+mis-attributed block, fix them, then widen the existing guard from `Chat.php` to `src/` plus
+`bin/sugarcrush`. The scanner and both its fixtures already exist and move as-is; only the file list
+changes. The generator for the census is
+`stackedDocCommentLines()` in that test.
+
+### Ea48-7 — `SglangProvider`'s reachability was never asked, though `WorktreeManager`'s was
+
+Round 48 routed six refusals onto the mid-session seam: four in `WorktreeManager` and two in
+`SglangProvider::decodeToolArguments()`. It then went to considerable length establishing that
+`WorktreeManager` is DORMANT — nothing in `src/` or `bin/` constructs it — and pinned that with
+`StderrEmitterCensusTest::testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt()`.
+
+No symmetric question was asked of `SglangProvider`. If it is also unreachable, then two of the round's
+six seam moves rest on the same unstated assumption the dormancy guard exists to correct, and the
+doc-blocks describing when those two notices fire are the same kind of unverified reachability claim that
+the `WorktreeManager` rewrite was needed to undo.
+
+UNMEASURED. Recorded from the shape of the round, not from a scan.
+
+**Step.** Run `constructionSites('SglangProvider', …)` — the scanner now exists and handles the `::new()`
+factory shape — over `src/` and `bin/`, and over the provider registry's dispatch as well, since a
+provider is likelier to be reached through a name-keyed table than through a literal `new`. Then either
+pin the dormancy the way `WorktreeManager`'s is pinned, or state the live path in the doc-block.
+
+### Ea48-8 — the comment fixture that could not fail, and the class of fixture it belongs to
+
+Round 48's first draft of `constructionSites()`'s guard asserted `0` over an all-comments source, with the
+message "constructionSites() reads comments, so it would red on prose about the constructor". That
+assertion CANNOT go red for any token-based scanner: `token_get_all()` returns a whole comment as a single
+`T_DOC_COMMENT`/`T_COMMENT` token (MEASURED, PHP 8.3.6), so no `T_NEW` ever appears inside one. Mutating
+`significantTokens()` out of the scanner entirely — the exact mutation the fixture names — left it green.
+
+It was fixed by asserting ONE over a source carrying a commented construction AND a live one, which fails
+in both directions. But the general shape is worth a sweep: a fixture whose expected value is the value
+the instrument returns when it is DEAD proves nothing, and "assert 0 on a comments-only source" is a
+common and comfortable-looking instance of exactly that. It is rule 15 one level down — the known-positive
+control was present in that test and still did not save the fixture next to it, because the fixture had
+its own independent hole.
+
+**Step.** Sweep the census tests for fixtures whose expected value is `0`, `[]` or `''` and ask, per
+fixture, what mutation of the instrument that fixture would survive. Where the answer is "all of them",
+give the fixture a positive component so the number it asserts is one only a live instrument produces.
