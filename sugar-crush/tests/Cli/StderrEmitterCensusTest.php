@@ -441,6 +441,25 @@ final class StderrEmitterCensusTest extends TestCase
     ];
 
     /**
+     * The three operators a method call can be spelled with, and the two
+     * partitions of them that
+     * {@see testEveryWarnCallInSrcIsEitherASeamSiteOrOnTheNonSeamRoster()}
+     * measures separately.
+     *
+     * EXHAUSTIVE BY CONSTRUCTION, and asserted to be: a method call in PHP
+     * 8.3.6 reaches its name through `::`, `->` or `?->` and through nothing
+     * else, so the two partitions must sum to the whole. That sum is checked
+     * per file rather than assumed, because a fourth spelling appearing in some
+     * later PHP is exactly the kind of change that would otherwise make both
+     * partitions quietly under-count at once.
+     */
+    private const WARN_CALL_OPERATORS = [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR];
+
+    private const SCOPED_CALL_OPERATORS = [T_DOUBLE_COLON];
+
+    private const INSTANCE_CALL_OPERATORS = [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR];
+
+    /**
      * The bracket openers PHP lexes as an ARRAY token while lexing the closer
      * that balances them as a plain one-byte string token.
      *
@@ -603,6 +622,42 @@ final class StderrEmitterCensusTest extends TestCase
             }
             PHP), 'methodCallSites() has gone blind; the assertion above is vacuous');
 
+        // AND THE SAME FIXTURE THROUGH THE PARTITION
+        // {@see testEveryWarnCallInSrcIsEitherASeamSiteOrOnTheNonSeamRoster()}
+        // now measures with, since a partition whose halves are both dead sums
+        // to a correct-looking whole in every file that has no calls at all.
+        // Four of the five are `::` — self, static, an aliased import and a
+        // variable class name, which is every spelling channel 6 cannot read —
+        // and exactly one is `->`.
+        $partitionFixture = <<<'PHP'
+            <?php
+            use A\B\RuntimeNoticeSink as Sink;
+            class A {
+                public static function warn(string $m): void {}
+                public function f(): void {
+                    self::warn('a');
+                    static::warn('b');
+                    $this?->warn('c');
+                    Sink::warn('d');
+                    $c = RuntimeNoticeSink::class;
+                    $c::warn('e');
+                    $callable = self::warn(...);
+                }
+            }
+            PHP;
+        self::assertSame(
+            4,
+            self::methodCallSites('warn', $partitionFixture, self::SCOPED_CALL_OPERATORS),
+            'the scoped half of the partition has gone blind, so a seam write in any `::` spelling '
+                . 'would now pass the roster it is supposed to red',
+        );
+        self::assertSame(
+            1,
+            self::methodCallSites('warn', $partitionFixture, self::INSTANCE_CALL_OPERATORS),
+            'the instance half of the partition has gone blind — `?->` included, which is the spelling '
+                . 'this fixture uses precisely because the bare `->` one is the obvious one to test',
+        );
+
         self::assertArrayNotHasKey('src/Diagnostics/RuntimeNoticeSink.php', self::RUNTIME_NOTICE_SITES);
     }
 
@@ -610,9 +665,35 @@ final class StderrEmitterCensusTest extends TestCase
      * EVERY `warn(` CALL IN `src/` IS EITHER A CHANNEL-6 SITE OR ON
      * {@see NON_SEAM_WARN_SITES} — see that constant for why (E195).
      *
-     * THE ASSERTION IS THE DIFFERENCE, PER FILE, and not two totals. A total
-     * would net a new hidden seam call against a removed `$this->warn(` and
-     * report nothing; the per-file identity cannot.
+     * WHAT THIS SAID: "THE ASSERTION IS THE DIFFERENCE, PER FILE, and not two
+     * totals. A total would net a new hidden seam call against a removed
+     * `$this->warn(` and report nothing; the per-file identity cannot."
+     *
+     * WHAT IS TRUE NOW, MEASURED rather than reasoned. The per-file identity
+     * nets too, inside a file, and round 48's review demonstrated it: add
+     * `use …\RuntimeNoticeSink as Sink;` to
+     * `src/Agents/ForeignAgentPresetRegistry.php` and turn ONE of its three
+     * `$this->warn(` calls into `Sink::warn(`. That is a working seam write in
+     * the spelling channel 6 is blindest to. {@see methodCallSites()} is
+     * receiver-agnostic and still counts 3; `scan('runtime_notice', …)` still
+     * scores 0; the gap is still 3; the roster still matches. The whole census
+     * ran byte-identical to baseline. The netting was available in that file
+     * precisely BECAUSE it is the only one carrying a non-zero non-seam budget
+     * — there were three calls to displace.
+     *
+     * WHY THIS STILL EARNS ITS PLACE, and what was added rather than removed.
+     * The difference is kept, because its `assertGreaterThanOrEqual()` arm is
+     * the only thing that reds when the two scanners contradict each other. But
+     * the identity is no longer the whole guard: the `warn(` calls are now
+     * PARTITIONED BY OPERATOR and each half pinned against its own roster.
+     * `::warn(` — every spelling of a seam write, `self::`, `static::`,
+     * `$class::` and an aliased import included — must equal
+     * {@see RUNTIME_NOTICE_SITES} per file; `->warn(`/`?->warn(` must equal
+     * {@see NON_SEAM_WARN_SITES}. A hidden seam write now reds TWICE over: it
+     * appears in a file the scoped roster credits with none, and it is missing
+     * from the instance roster it displaced. Displacement is what the old
+     * formulation could not see, and it is the direction a partition closes and
+     * a difference cannot.
      *
      * BOTH INSTRUMENTS ARE LOAD-BEARING IN BOTH DIRECTIONS, which is what makes
      * this something other than an absence assertion. A dead
@@ -626,10 +707,30 @@ final class StderrEmitterCensusTest extends TestCase
     public function testEveryWarnCallInSrcIsEitherASeamSiteOrOnTheNonSeamRoster(): void
     {
         $gaps = [];
+        $scoped = [];
+        $instance = [];
 
         foreach (self::sources() as $relative => $absolute) {
             $source = (string) file_get_contents($absolute);
-            $gap = self::methodCallSites('warn', $source) - self::scan('runtime_notice', $source);
+            $all = self::methodCallSites('warn', $source);
+            $viaScope = self::methodCallSites('warn', $source, self::SCOPED_CALL_OPERATORS);
+            $viaObject = self::methodCallSites('warn', $source, self::INSTANCE_CALL_OPERATORS);
+
+            self::assertSame(
+                $all,
+                $viaScope + $viaObject,
+                "{$relative}: the two operator partitions no longer sum to every warn() call, so a "
+                    . 'method-call spelling exists that neither roster below can see',
+            );
+
+            if ($viaScope > 0) {
+                $scoped[$relative] = $viaScope;
+            }
+            if ($viaObject > 0) {
+                $instance[$relative] = $viaObject;
+            }
+
+            $gap = $all - self::scan('runtime_notice', $source);
 
             self::assertGreaterThanOrEqual(
                 0,
@@ -643,6 +744,33 @@ final class StderrEmitterCensusTest extends TestCase
             }
         }
         ksort($gaps);
+        ksort($scoped);
+        ksort($instance);
+
+        // THE PARTITION, WHICH IS WHAT CLOSES DISPLACEMENT. Every `::warn(` in
+        // `src/` is a seam write in SOME spelling — this package has no other
+        // static `warn()` — so the scoped half must be channel 6's roster
+        // exactly. An aliased import, `self::`, `static::` or a variable class
+        // name all land here whether or not `scan('runtime_notice', …)` can
+        // read them, which is the point: this roster is keyed on the CALL and
+        // channel 6's is keyed on the RECEIVER, so a write that hides from one
+        // is counted by the other.
+        self::assertSame(
+            self::RUNTIME_NOTICE_SITES,
+            $scoped,
+            'a `::warn(` call in src/ is not where channel 6 says the seam writes are. Either a seam '
+                . 'write appeared in a spelling channel 6 cannot read (an aliased import, self::, '
+                . 'static::, $class::) — in which case the census is under-counting by that much — or '
+                . 'somebody added a static warn() that is not the sink\'s, which needs its own roster.',
+        );
+
+        self::assertSame(
+            self::NON_SEAM_WARN_SITES,
+            $instance,
+            'an instance `->warn(` call in src/ is not on the non-seam roster. A DISAPPEARING one matters '
+                . 'as much as a new one: round 48 hid a seam write by replacing exactly one of these, and '
+                . 'the difference-based assertion below saw nothing because the totals still balanced.',
+        );
 
         self::assertSame(
             self::NON_SEAM_WARN_SITES,
@@ -1939,10 +2067,10 @@ final class StderrEmitterCensusTest extends TestCase
      * Named rather than left to be discovered, for the reason the class
      * doc-block's channel-6 bullet gives.
      */
-    private static function methodCallSites(string $method, string $source): int
+    private static function methodCallSites(string $method, string $source, ?array $only = null): int
     {
         $significant = self::significantTokens($source);
-        $operators = [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR];
+        $operators = $only ?? self::WARN_CALL_OPERATORS;
 
         $count = 0;
         foreach ($significant as $i => $token) {
