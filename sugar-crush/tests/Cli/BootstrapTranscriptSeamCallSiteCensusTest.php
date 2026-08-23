@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 
 /**
  * How many of {@see \SugarCraft\Crush\Cli\Bootstrap}'s launch warnings are
@@ -149,6 +150,24 @@ use SugarCraft\Crush\Cli\Bootstrap;
  */
 final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
 {
+    /**
+     * WHY THIS CONSUMER USES `flattened()` IN ONE PLACE AND NOT THE OTHER, kept
+     * here rather than moved into the trait because it is true of this file
+     * only (E224). {@see testTheProseSiteCountInThisFilesOwnDocBlocksMatchesTheList()}
+     * matches against the flattened source; {@see testTheProseCountsMatchTheTokenScan()}
+     * deliberately does NOT: those ten anchors each carry their own explicit
+     * handling of the wrap they cross, they are proven against the files they
+     * name, and re-pointing ten working anchors at a different input to gain
+     * nothing is how a guard gets broken by its own improvement.
+     *
+     * BOTH NUMBERS IN THAT SENTENCE ARE ANCHORED, by
+     * {@see SELF_COUNT_ANCHORS}, which is why the sentence lives in this file
+     * and not in the trait: the anchors name the file they read, and a
+     * paragraph about one consumer sitting in shared code would be a claim
+     * about every consumer.
+     */
+    use FlattensSourceProseTrait;
+
     private const SEAM_METHOD = 'warnPermissionConfigInTranscript';
 
     /**
@@ -661,34 +680,6 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
                     . "{$expected} rows",
             );
         }
-    }
-
-    /**
-     * `$source` with doc-block and line-comment continuation markers removed
-     * and every run of whitespace collapsed to one space.
-     *
-     * See {@see SELF_COUNT_ANCHORS} for why prose in source may not be matched
-     * against the raw bytes. Deliberately NOT used by
-     * {@see testTheProseCountsMatchTheTokenScan()}: those ten anchors each carry
-     * their own explicit handling of the wrap they cross, they are proven
-     * against the files they name, and re-pointing ten working anchors at a
-     * different input to gain nothing is how a guard gets broken by its own
-     * improvement.
-     */
-    private static function flattened(string $source): string
-    {
-        // `\*(?!/)` — the CONTINUATION marker, never the terminator. Letting
-        // `*/` be stripped too would run the end of one doc-block into the
-        // start of the next, and an anchor could then match a "sentence" that
-        // spans two of them and exists in neither.
-        $joined = (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', $source);
-
-        // `\s+` and not `[ \t]+`: the marker strip leaves the newline of any
-        // line it did not match (a bare code line, the last line of a file), and
-        // a sentence that wraps onto one of those would still be split. Caught
-        // by the fixture in the caller, which is the reason the fixture is a
-        // known-POSITIVE and not a smoke test.
-        return (string) preg_replace('/\s+/', ' ', $joined);
     }
 
     /**
