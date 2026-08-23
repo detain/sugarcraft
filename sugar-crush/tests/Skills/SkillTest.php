@@ -161,7 +161,7 @@ SKILL;
     public function testFromFileParsesFrontmatter(): void
     {
         // Arrange - create a temporary SKILL.md file
-        $tmpDir = sys_get_temp_dir() . '/skill-test-' . uniqid();
+        $tmpDir = sys_get_temp_dir() . '/skill-test-' . uniqid((string) getmypid(), true);
         mkdir($tmpDir, 0777, true);
         $skillPath = $tmpDir . '/SKILL.md';
 
@@ -208,7 +208,7 @@ SKILL;
     public function testFromFileThrowsOnMissingFrontmatter(): void
     {
         // Arrange - create a temporary SKILL.md file without frontmatter
-        $tmpDir = sys_get_temp_dir() . '/skill-test-' . uniqid();
+        $tmpDir = sys_get_temp_dir() . '/skill-test-' . uniqid((string) getmypid(), true);
         mkdir($tmpDir, 0777, true);
         $skillPath = $tmpDir . '/SKILL.md';
 

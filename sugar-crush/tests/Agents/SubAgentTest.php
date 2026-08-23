@@ -460,7 +460,7 @@ final class SubAgentTest extends TestCase
         $agent = $this->createAgent();
 
         $subAgent = new SubAgent(
-            id: 'status_test_' . uniqid(),
+            id: 'status_test_' . uniqid((string) getmypid(), true),
             agent: $agent,
             task: 'Status test task',
         );

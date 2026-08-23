@@ -101,8 +101,8 @@ SKILL;
     public function testLoadAllRegistersManifestOnlyNotFullBody(): void
     {
         // Arrange
-        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid();
-        $bodyMarker = 'MANAGER_LOAD_ALL_BODY_SHOULD_STAY_UNREAD_' . uniqid();
+        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid((string) getmypid(), true);
+        $bodyMarker = 'MANAGER_LOAD_ALL_BODY_SHOULD_STAY_UNREAD_' . uniqid((string) getmypid(), true);
         mkdir($projectRoot . '/.sugar-crush/skills/marker-skill', 0777, true);
         file_put_contents(
             $projectRoot . '/.sugar-crush/skills/marker-skill/SKILL.md',
@@ -137,7 +137,7 @@ SKILL;
     public function testLoadAllPreservesPathsForPathBasedScoping(): void
     {
         // Arrange
-        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid();
+        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid((string) getmypid(), true);
         mkdir($projectRoot . '/.sugar-crush/skills/path-scoped-skill', 0777, true);
         file_put_contents(
             $projectRoot . '/.sugar-crush/skills/path-scoped-skill/SKILL.md',
@@ -163,7 +163,7 @@ SKILL;
     public function testLoadAllProjectSkillOverridesRegistrySafely(): void
     {
         // Arrange
-        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid();
+        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid((string) getmypid(), true);
         mkdir($projectRoot . '/.sugar-crush/skills/override-skill', 0777, true);
         file_put_contents(
             $projectRoot . '/.sugar-crush/skills/override-skill/SKILL.md',

@@ -14,7 +14,7 @@ final class CompactorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_compactor_test_' . uniqid();
+        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_compactor_test_' . uniqid((string) getmypid(), true);
         mkdir($this->tmpDir, 0755, true);
     }
 

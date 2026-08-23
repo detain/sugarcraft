@@ -20,7 +20,7 @@ final class LspConnectionTest extends TestCase
         parent::setUp();
 
         // Create a mock LSP server script that echoes back canned responses.
-        $this->workDir = sys_get_temp_dir() . '/lsp-test-' . uniqid();
+        $this->workDir = sys_get_temp_dir() . '/lsp-test-' . uniqid((string) getmypid(), true);
         mkdir($this->workDir, 0777, true);
 
         // Build a mock server that reads requests and emits matching responses.

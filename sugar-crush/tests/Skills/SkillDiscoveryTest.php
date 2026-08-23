@@ -22,7 +22,7 @@ final class SkillDiscoveryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-discovery-test-' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-discovery-test-' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
         // discoverUserSkills()/discoverAll() read ~/.sugar-crush/skills, so the
         // class-wide default is an empty sandbox HOME rather than the

@@ -48,7 +48,7 @@ final class GitCommandHandlersTest extends TestCase
 
     private function makeCommit(string $message): void
     {
-        $file = $this->repoPath . '/file_' . uniqid() . '.txt';
+        $file = $this->repoPath . '/file_' . uniqid((string) getmypid(), true) . '.txt';
         file_put_contents($file, "content for {$message}");
         $git = '/usr/bin/git';
         exec($git . ' -C ' . escapeshellarg($this->repoPath) . ' add . 2>&1');

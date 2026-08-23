@@ -27,7 +27,7 @@ final class OAuthClientRegistrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/oauth_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/oauth_test_' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0700, true);
         $this->authFilePath = $this->tempDir . '/auth.json';
     }

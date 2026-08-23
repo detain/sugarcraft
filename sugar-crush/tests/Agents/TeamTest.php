@@ -380,7 +380,7 @@ final class TeamTest extends TestCase
     public function testGetTaskListReturnsTaskListInstance(): void
     {
         $team = new Team(
-            id: 'team-tasklist-' . uniqid(),
+            id: 'team-tasklist-' . uniqid((string) getmypid(), true),
             name: 'Task List Test',
             leadAgentId: 'lead-tasklist',
             createdAt: new \DateTimeImmutable(),
@@ -392,7 +392,7 @@ final class TeamTest extends TestCase
     public function testGetTaskListReturnsSameInstance(): void
     {
         $team = new Team(
-            id: 'team-tasklist-same-' . uniqid(),
+            id: 'team-tasklist-same-' . uniqid((string) getmypid(), true),
             name: 'Task List Same Test',
             leadAgentId: 'lead-tasklist-same',
             createdAt: new \DateTimeImmutable(),
@@ -411,7 +411,7 @@ final class TeamTest extends TestCase
     public function testGetMailboxReturnsMailboxInstance(): void
     {
         $team = new Team(
-            id: 'team-mailbox-' . uniqid(),
+            id: 'team-mailbox-' . uniqid((string) getmypid(), true),
             name: 'Mailbox Test',
             leadAgentId: 'lead-mailbox',
             createdAt: new \DateTimeImmutable(),
@@ -423,7 +423,7 @@ final class TeamTest extends TestCase
     public function testGetMailboxReturnsSameInstance(): void
     {
         $team = new Team(
-            id: 'team-mailbox-same-' . uniqid(),
+            id: 'team-mailbox-same-' . uniqid((string) getmypid(), true),
             name: 'Mailbox Same Test',
             leadAgentId: 'lead-mailbox-same',
             createdAt: new \DateTimeImmutable(),
@@ -471,7 +471,7 @@ final class TeamTest extends TestCase
 
     public function testClaimTaskReturnsFalseWhenTeammateNotFound(): void
     {
-        $team = $this->createTeam('team-claim-no-tm-' . uniqid());
+        $team = $this->createTeam('team-claim-no-tm-' . uniqid((string) getmypid(), true));
 
         // No teammates added — claimTask must return false.
         $wm = $this->createRealWorktreeManager();
@@ -481,14 +481,14 @@ final class TeamTest extends TestCase
 
     public function testClaimTaskReturnsFalseWhenTaskAlreadyClaimed(): void
     {
-        $team = $this->createTeam('team-claim-taken-' . uniqid());
+        $team = $this->createTeam('team-claim-taken-' . uniqid((string) getmypid(), true));
 
         $teammate = $this->createTeammate('tm-1', $team->id, 'Alice', AgentType::Coder);
         $team->addTeammate($teammate);
 
         // Pre-add a task that is already in-progress (simulating already-claimed)
         $task = new \SugarCraft\Crush\Agents\Task(
-            id: 'task-taken-' . uniqid(),
+            id: 'task-taken-' . uniqid((string) getmypid(), true),
             teamId: $team->id,
             title: 'Already Claimed',
             description: '',
@@ -513,12 +513,12 @@ final class TeamTest extends TestCase
 
     public function testClaimTaskReturnsTrueAndWiresWorktreePathOnSuccess(): void
     {
-        $team = $this->createTeam('team-claim-ok-' . uniqid());
+        $team = $this->createTeam('team-claim-ok-' . uniqid((string) getmypid(), true));
 
         $teammate = $this->createTeammate('tm-claim', $team->id, 'Bob', AgentType::Coder);
         $team->addTeammate($teammate);
 
-        $taskId = 'task-ok-' . uniqid();
+        $taskId = 'task-ok-' . uniqid((string) getmypid(), true);
         $task = new \SugarCraft\Crush\Agents\Task(
             id: $taskId,
             teamId: $team->id,
@@ -556,12 +556,12 @@ final class TeamTest extends TestCase
         // Proxy repro for "sweepIfDue() has a real caller": claimTask() must
         // invoke WorktreeManager::sweepIfDue(), whose only observable side
         // effect is writing the .last-sweep throttle marker file.
-        $team = $this->createTeam('team-claim-sweep-' . uniqid());
+        $team = $this->createTeam('team-claim-sweep-' . uniqid((string) getmypid(), true));
 
         $teammate = $this->createTeammate('tm-sweep', $team->id, 'Sweeper', AgentType::Coder);
         $team->addTeammate($teammate);
 
-        $taskId = 'task-sweep-' . uniqid();
+        $taskId = 'task-sweep-' . uniqid((string) getmypid(), true);
         $task = new \SugarCraft\Crush\Agents\Task(
             id: $taskId,
             teamId: $team->id,

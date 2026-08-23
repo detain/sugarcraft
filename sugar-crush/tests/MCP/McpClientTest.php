@@ -27,7 +27,7 @@ final class McpClientTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/mcp_client_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/mcp_client_test_' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
         $this->configPath = $this->tempDir . '/config.json';
     }

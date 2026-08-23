@@ -20,7 +20,7 @@ final class AuditHookTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempLogFile = sys_get_temp_dir() . '/audit-hook-test-' . uniqid() . '.log';
+        $this->tempLogFile = sys_get_temp_dir() . '/audit-hook-test-' . uniqid((string) getmypid(), true) . '.log';
     }
 
     protected function tearDown(): void

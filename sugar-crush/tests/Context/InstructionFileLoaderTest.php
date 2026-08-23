@@ -19,7 +19,7 @@ final class InstructionFileLoaderTest extends TestCase
     protected function setUp(): void
     {
         // Create a temporary directory structure for testing
-        $this->tempDir = sys_get_temp_dir() . '/instruction_file_loader_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/instruction_file_loader_test_' . uniqid((string) getmypid(), true);
         $this->repoRoot = $this->tempDir . '/repo';
         mkdir($this->repoRoot . '/candy-shine/src', 0777, true);
         mkdir($this->repoRoot . '/candy-shine/lang', 0777, true);

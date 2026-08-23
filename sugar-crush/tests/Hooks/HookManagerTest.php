@@ -208,7 +208,7 @@ final class HookManagerTest extends TestCase
 
     public function testLoadFromFileWithValidYaml(): void
     {
-        $tempFile = sys_get_temp_dir() . '/test_hooks_' . uniqid() . '.yaml';
+        $tempFile = sys_get_temp_dir() . '/test_hooks_' . uniqid((string) getmypid(), true) . '.yaml';
         file_put_contents($tempFile, <<<'YAML'
 hooks:
   PreToolUse:

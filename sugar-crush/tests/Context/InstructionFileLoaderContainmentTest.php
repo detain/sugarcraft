@@ -65,7 +65,7 @@ final class InstructionFileLoaderContainmentTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->sandbox = sys_get_temp_dir() . '/instruction_loader_containment_' . uniqid();
+        $this->sandbox = sys_get_temp_dir() . '/instruction_loader_containment_' . uniqid((string) getmypid(), true);
         $this->repoRoot = $this->sandbox . '/repo';
         $this->outside = $this->sandbox . '/outside';
 

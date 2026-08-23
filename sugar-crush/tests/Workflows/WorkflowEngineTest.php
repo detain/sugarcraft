@@ -50,7 +50,7 @@ final class WorkflowEngineTest extends TestCase
     private function successfulAgentResult(string $output, int $tokens = 100, float $cost = 0.01): AgentResult
     {
         return new AgentResult(
-            agentId: 'agent-' . uniqid(),
+            agentId: 'agent-' . uniqid((string) getmypid(), true),
             status: AgentStatus::Completed,
             output: $output,
             tokensUsed: $tokens,
@@ -63,7 +63,7 @@ final class WorkflowEngineTest extends TestCase
     private function failedAgentResult(string $error): AgentResult
     {
         return new AgentResult(
-            agentId: 'agent-' . uniqid(),
+            agentId: 'agent-' . uniqid((string) getmypid(), true),
             status: AgentStatus::Failed,
             output: 'failed',
             error: new \RuntimeException($error),
@@ -703,7 +703,7 @@ final class WorkflowEngineTest extends TestCase
 
         // Override HOME to a temp directory so we don't pollute ~/.sugar-crush/
         $oldHome = $_SERVER['HOME'] ?? '/root';
-        $tmpDir = sys_get_temp_dir() . '/sugar-crush-pause-test-' . uniqid();
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-pause-test-' . uniqid((string) getmypid(), true);
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
         putenv('HOME=' . $_SERVER['HOME']);
@@ -770,7 +770,7 @@ final class WorkflowEngineTest extends TestCase
 
         // Override HOME to a temp directory
         $oldHome = $_SERVER['HOME'] ?? '/root';
-        $tmpDir = sys_get_temp_dir() . '/sugar-crush-resume-test-' . uniqid();
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-resume-test-' . uniqid((string) getmypid(), true);
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
         putenv('HOME=' . $_SERVER['HOME']);
@@ -857,7 +857,7 @@ final class WorkflowEngineTest extends TestCase
     {
         // Override HOME to a temp directory with no pause file
         $oldHome = $_SERVER['HOME'] ?? '/root';
-        $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-pause-' . uniqid();
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-pause-' . uniqid((string) getmypid(), true);
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
         putenv('HOME=' . $_SERVER['HOME']);
@@ -881,7 +881,7 @@ final class WorkflowEngineTest extends TestCase
     {
         // Override HOME to a temp directory with no pause file
         $oldHome = $_SERVER['HOME'] ?? '/root';
-        $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-status-' . uniqid();
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-status-' . uniqid((string) getmypid(), true);
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
         putenv('HOME=' . $_SERVER['HOME']);
@@ -905,7 +905,7 @@ final class WorkflowEngineTest extends TestCase
     {
         // Override HOME to a temp directory
         $oldHome = $_SERVER['HOME'] ?? '/root';
-        $tmpDir = sys_get_temp_dir() . '/sugar-crush-status-test-' . uniqid();
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-status-test-' . uniqid((string) getmypid(), true);
         mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
         $_SERVER['HOME'] = $tmpDir;
         putenv('HOME=' . $_SERVER['HOME']);
@@ -1571,8 +1571,8 @@ final class WorkflowEngineTest extends TestCase
      */
     public function testThePauseFileLandsBesideTheRegistrysWorkflowsNotUnderHome(): void
     {
-        $home = sys_get_temp_dir() . '/sugar-crush-pause-home-' . uniqid();
-        $workflowsDir = sys_get_temp_dir() . '/sugar-crush-pause-wf-' . uniqid();
+        $home = sys_get_temp_dir() . '/sugar-crush-pause-home-' . uniqid((string) getmypid(), true);
+        $workflowsDir = sys_get_temp_dir() . '/sugar-crush-pause-wf-' . uniqid((string) getmypid(), true);
         mkdir($home, 0755, true);
         mkdir($workflowsDir, 0755, true);
 

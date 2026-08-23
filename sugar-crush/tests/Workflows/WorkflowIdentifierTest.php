@@ -67,7 +67,7 @@ final class WorkflowIdentifierTest extends TestCase
             ->getMock();
         $this->mockExecutor->method('execute')->willReturnCallback(
             fn (): AgentResult => new AgentResult(
-                agentId: 'agent-' . uniqid(),
+                agentId: 'agent-' . uniqid((string) getmypid(), true),
                 status: AgentStatus::Completed,
                 output: 'ok',
                 tokensUsed: 10,

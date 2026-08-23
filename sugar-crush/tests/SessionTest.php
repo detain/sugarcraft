@@ -17,7 +17,7 @@ final class SessionTest extends TestCase
     {
         parent::setUp();
         // Create a temp directory to isolate session file I/O
-        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-session-test-' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-session-test-' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0755, true);
         // Override HOME to point to our temp directory
         $this->originalHome = getenv('HOME') ?: '';

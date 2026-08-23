@@ -24,7 +24,7 @@ final class WorkflowRegistryTest extends TestCase
 
         // Save original HOME and create temp directory for tests
         $this->originalHome = $_SERVER['HOME'] ?? '/root';
-        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-test-' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-test-' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0755, true);
         $_SERVER['HOME'] = $this->tempDir;
     }

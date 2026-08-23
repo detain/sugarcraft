@@ -37,7 +37,7 @@ final class BuiltInToolCorpusTest extends TestCase
     protected function setUp(): void
     {
         $this->srcDir = \dirname(__DIR__, 2) . '/src';
-        $this->probeDir = sys_get_temp_dir() . '/builtin_tool_corpus_probe_' . uniqid();
+        $this->probeDir = sys_get_temp_dir() . '/builtin_tool_corpus_probe_' . uniqid((string) getmypid(), true);
         mkdir($this->probeDir, 0o777, true);
 
         // The scanner resolves a file to a class name and asks PHP whether that

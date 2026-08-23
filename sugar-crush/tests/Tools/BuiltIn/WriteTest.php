@@ -21,7 +21,7 @@ final class WriteTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->root = (string) realpath((string) sys_get_temp_dir()) . '/sugarcrush_write_' . uniqid();
+        $this->root = (string) realpath((string) sys_get_temp_dir()) . '/sugarcrush_write_' . uniqid((string) getmypid(), true);
         mkdir($this->root, 0o777, true);
     }
 
@@ -195,7 +195,7 @@ final class WriteTest extends TestCase
 
     public function testRejectsAnAbsolutePathOutsideTheWorkspaceRoot(): void
     {
-        $outside = (string) realpath((string) sys_get_temp_dir()) . '/sugarcrush_write_escape_' . uniqid() . '.txt';
+        $outside = (string) realpath((string) sys_get_temp_dir()) . '/sugarcrush_write_escape_' . uniqid((string) getmypid(), true) . '.txt';
 
         $result = (new Write($this->root))->execute(['file_path' => $outside, 'content' => 'pwned']);
 
@@ -223,7 +223,7 @@ final class WriteTest extends TestCase
 
     public function testRejectsAPathEscapingThroughASymlinkedDirectory(): void
     {
-        $outsideDir = \dirname($this->root) . '/sugarcrush_write_out_' . uniqid();
+        $outsideDir = \dirname($this->root) . '/sugarcrush_write_out_' . uniqid((string) getmypid(), true);
         mkdir($outsideDir, 0o777, true);
         symlink($outsideDir, $this->root . '/link');
 
@@ -274,7 +274,7 @@ final class WriteTest extends TestCase
     public function testRejectsAWriteOutsideTheWorktreeJail(): void
     {
         $jail = new AgentPathJail($this->root, new PathJailConfig());
-        $outside = \dirname($this->root) . '/sugarcrush_write_wt_escape_' . uniqid() . '.txt';
+        $outside = \dirname($this->root) . '/sugarcrush_write_wt_escape_' . uniqid((string) getmypid(), true) . '.txt';
 
         $result = (new Write(worktreeJail: $jail))->execute([
             'file_path' => $outside,

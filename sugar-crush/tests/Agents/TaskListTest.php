@@ -24,7 +24,7 @@ final class TaskListTest extends TestCase
     {
         // Use a unique in-memory database per test — ':memory:' is per-connection
         // so we use a file-based tmp db that gets cleaned up automatically.
-        $this->dbPath = \sys_get_temp_dir() . '/tasklist_test_' . \uniqid() . '.sqlite3';
+        $this->dbPath = \sys_get_temp_dir() . '/tasklist_test_' . \uniqid((string) getmypid(), true) . '.sqlite3';
     }
 
     protected function tearDown(): void

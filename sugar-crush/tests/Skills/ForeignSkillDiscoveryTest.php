@@ -26,7 +26,7 @@ final class ForeignSkillDiscoveryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-foreign-skill-test-' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-foreign-skill-test-' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
         // Every discover*() call also scans the real HOME's foreign-skill
         // dirs; point HOME at an empty sandbox by default so tests aren't

@@ -262,7 +262,7 @@ final class ClaudeCodeMcpClientTest extends TestCase
     public function testConnectWithPathSeparatorButNotExecutableThrows(): void
     {
         // Create a file that exists but is not executable
-        $tempFile = sys_get_temp_dir() . '/nonexec_' . uniqid();
+        $tempFile = sys_get_temp_dir() . '/nonexec_' . uniqid((string) getmypid(), true);
         file_put_contents($tempFile, '#!/bin/bash\necho test');
         chmod($tempFile, 0644); // not executable
 

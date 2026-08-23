@@ -32,7 +32,7 @@ final class WorktreeJailRoutingTest extends TestCase
 
     protected function setUp(): void
     {
-        $base = sys_get_temp_dir() . '/sugarcrush_wtjail_' . uniqid();
+        $base = sys_get_temp_dir() . '/sugarcrush_wtjail_' . uniqid((string) getmypid(), true);
         $this->worktreeRoot = $base . '/worktree';
         $this->outsideRoot = $base . '/outside';
         mkdir($this->worktreeRoot, 0777, true);
@@ -528,7 +528,7 @@ final class WorktreeJailRoutingTest extends TestCase
     public function testBashWorktreeJailTakesPrecedenceOverRoot(): void
     {
         // Create a root directory that differs from the worktree
-        $rootDir = sys_get_temp_dir() . '/sugarcrush_root_' . uniqid();
+        $rootDir = sys_get_temp_dir() . '/sugarcrush_root_' . uniqid((string) getmypid(), true);
         mkdir($rootDir, 0777, true);
 
         try {
@@ -548,7 +548,7 @@ final class WorktreeJailRoutingTest extends TestCase
 
     public function testBashWithoutWorktreeJailFallsBackToRoot(): void
     {
-        $rootDir = sys_get_temp_dir() . '/sugarcrush_fallback_' . uniqid();
+        $rootDir = sys_get_temp_dir() . '/sugarcrush_fallback_' . uniqid((string) getmypid(), true);
         mkdir($rootDir, 0777, true);
 
         try {
@@ -571,7 +571,7 @@ final class WorktreeJailRoutingTest extends TestCase
 
     public function testEditWithoutJailFallsBackToRootJail(): void
     {
-        $rootDir = sys_get_temp_dir() . '/sugarcrush_fallback_edit_' . uniqid();
+        $rootDir = sys_get_temp_dir() . '/sugarcrush_fallback_edit_' . uniqid((string) getmypid(), true);
         mkdir($rootDir, 0777, true);
 
         try {
@@ -596,7 +596,7 @@ final class WorktreeJailRoutingTest extends TestCase
 
     public function testReadWithoutJailFallsBackToRootJail(): void
     {
-        $rootDir = sys_get_temp_dir() . '/sugarcrush_fallback_read_' . uniqid();
+        $rootDir = sys_get_temp_dir() . '/sugarcrush_fallback_read_' . uniqid((string) getmypid(), true);
         mkdir($rootDir, 0777, true);
 
         try {

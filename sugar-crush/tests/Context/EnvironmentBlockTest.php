@@ -22,7 +22,7 @@ final class EnvironmentBlockTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/environment_block_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/environment_block_test_' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
     }
 

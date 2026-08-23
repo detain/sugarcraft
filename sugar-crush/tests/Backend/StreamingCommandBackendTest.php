@@ -15,7 +15,7 @@ final class StreamingCommandBackendTest extends TestCase
     public function testStreamingBackendCallsOnTokenForEachLine(): void
     {
         // Create a script that outputs tokens line by line
-        $script = sys_get_temp_dir() . '/stream_test_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_test_' . uniqid((string) getmypid(), true) . '.sh';
         file_put_contents($script, "#!/bin/bash\necho 'Hello'\necho ' '\necho 'World!'");
         chmod($script, 0755);
 
@@ -38,7 +38,7 @@ final class StreamingCommandBackendTest extends TestCase
 
     public function testStreamingBackendWithoutCallback(): void
     {
-        $script = sys_get_temp_dir() . '/stream_test_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_test_' . uniqid((string) getmypid(), true) . '.sh';
         file_put_contents($script, "#!/bin/bash\necho 'No callback test'");
         chmod($script, 0755);
 
@@ -55,7 +55,7 @@ final class StreamingCommandBackendTest extends TestCase
 
     public function testStreamingBackendReportsErrorOnNonZeroExit(): void
     {
-        $script = sys_get_temp_dir() . '/stream_test_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_test_' . uniqid((string) getmypid(), true) . '.sh';
         file_put_contents($script, "#!/bin/bash\necho 'partial output'\nexit 1");
         chmod($script, 0755);
 
@@ -82,7 +82,7 @@ final class StreamingCommandBackendTest extends TestCase
 
     public function testStreamingBackendPassesHistoryToStdin(): void
     {
-        $script = sys_get_temp_dir() . '/stream_test_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_test_' . uniqid((string) getmypid(), true) . '.sh';
         // Script reads stdin and includes it in output
         file_put_contents($script, "#!/bin/bash\ncat > /dev/null && echo 'received history'");
         chmod($script, 0755);
@@ -116,7 +116,7 @@ final class StreamingCommandBackendTest extends TestCase
         $lines[] = "true";
         $scriptContent = implode("\n", $lines);
 
-        $script = sys_get_temp_dir() . '/stream_test_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_test_' . uniqid((string) getmypid(), true) . '.sh';
         file_put_contents($script, $scriptContent);
         chmod($script, 0755);
 
@@ -734,7 +734,7 @@ printf 'ok\n'
 
     public function testCompleteAsyncReturnsPromise(): void
     {
-        $script = sys_get_temp_dir() . '/stream_async_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_async_' . uniqid((string) getmypid(), true) . '.sh';
         file_put_contents($script, "#!/bin/bash\necho 'async test'");
         chmod($script, 0755);
 
@@ -751,7 +751,7 @@ printf 'ok\n'
 
     public function testCompleteAsyncResolvesWithTheCommandsOutput(): void
     {
-        $script = sys_get_temp_dir() . '/stream_async_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_async_' . uniqid((string) getmypid(), true) . '.sh';
         file_put_contents($script, "#!/bin/bash\necho 'async test'");
         chmod($script, 0755);
 
@@ -777,7 +777,7 @@ printf 'ok\n'
      */
     public function testCompleteAsyncDoesNotStopTheSharedEventLoop(): void
     {
-        $script = sys_get_temp_dir() . '/stream_async_' . uniqid() . '.sh';
+        $script = sys_get_temp_dir() . '/stream_async_' . uniqid((string) getmypid(), true) . '.sh';
         file_put_contents($script, "#!/bin/bash\necho 'async test'");
         chmod($script, 0755);
 

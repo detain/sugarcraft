@@ -72,7 +72,7 @@ final class WorkflowExecutionTest extends TestCase
     private function successfulAgentResult(string $output, int $tokens = 100, float $cost = 0.01): AgentResult
     {
         return new AgentResult(
-            agentId: 'agent-' . uniqid(),
+            agentId: 'agent-' . uniqid((string) getmypid(), true),
             status: AgentStatus::Completed,
             output: $output,
             tokensUsed: $tokens,

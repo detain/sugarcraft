@@ -21,7 +21,7 @@ final class MailboxTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->basePath = sys_get_temp_dir() . '/mailbox_test_' . uniqid();
+        $this->basePath = sys_get_temp_dir() . '/mailbox_test_' . uniqid((string) getmypid(), true);
     }
 
     protected function tearDown(): void

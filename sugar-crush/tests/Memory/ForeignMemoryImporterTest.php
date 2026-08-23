@@ -21,7 +21,7 @@ final class ForeignMemoryImporterTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/foreign_memory_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/foreign_memory_' . uniqid((string) getmypid(), true);
         $this->storeDir = $this->tempDir . '/store';
         $this->projectRoot = $this->tempDir . '/project';
         mkdir($this->storeDir, 0777, true);

@@ -22,9 +22,9 @@ final class ToolSecurityTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_security_' . uniqid();
+        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_security_' . uniqid((string) getmypid(), true);
         mkdir($this->tmpDir, 0777, true);
-        $this->markerFile = $this->tmpDir . '/injection_marker_' . uniqid();
+        $this->markerFile = $this->tmpDir . '/injection_marker_' . uniqid((string) getmypid(), true);
     }
 
     protected function tearDown(): void

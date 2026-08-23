@@ -582,7 +582,7 @@ final class ContainedPathInventoryTest extends TestCase
      */
     public function testAnUnresolvablePathIsRefusedWhichIsWhyTheDenyHookStaysHandSpelled(): void
     {
-        $root = sys_get_temp_dir() . '/contained_path_inventory_' . uniqid();
+        $root = sys_get_temp_dir() . '/contained_path_inventory_' . uniqid((string) getmypid(), true);
         mkdir($root . '/sub', 0o777, true);
 
         try {

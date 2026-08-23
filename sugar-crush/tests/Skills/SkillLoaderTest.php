@@ -33,7 +33,7 @@ final class SkillLoaderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-test-' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-test-' . uniqid((string) getmypid(), true);
         $this->errorLogCalls = [];
         $this->useHomeSandbox($this->tempDir . '/home');
     }
@@ -100,7 +100,7 @@ SKILL;
     {
         // Arrange
         $loader = new SkillLoader();
-        $nonExistentDir = '/non/existent/directory/path/' . uniqid();
+        $nonExistentDir = '/non/existent/directory/path/' . uniqid((string) getmypid(), true);
 
         // Act
         $result = $loader->loadFromDirectory($nonExistentDir);
@@ -202,7 +202,7 @@ SKILL;
         $loader = new SkillLoader();
 
         // Act
-        $result = $loader->loadProjectSkills('/non/existent/project/' . uniqid());
+        $result = $loader->loadProjectSkills('/non/existent/project/' . uniqid((string) getmypid(), true));
 
         // Assert
         $this->assertIsArray($result);
@@ -312,7 +312,7 @@ SKILL;
     {
         // Arrange
         $loader = new SkillLoader();
-        $emptyProject = $this->tempDir . '/empty-project-' . uniqid();
+        $emptyProject = $this->tempDir . '/empty-project-' . uniqid((string) getmypid(), true);
         mkdir($emptyProject, 0777, true);
 
         // Act
@@ -773,7 +773,7 @@ SKILL
     {
         // Arrange
         $loader = new SkillLoader();
-        $nonExistentDir = '/non/existent/directory/path/' . uniqid();
+        $nonExistentDir = '/non/existent/directory/path/' . uniqid((string) getmypid(), true);
 
         // Act
         $result = $loader->loadManifestsFromDirectory($nonExistentDir);
@@ -790,7 +790,7 @@ SKILL
         // whole body into memory at startup; the manifest-only path must
         // not, so the marker string must never surface in the manifest.
         $loader = new SkillLoader();
-        $bodyMarker = 'BODY_SHOULD_NOT_BE_READ_AT_STARTUP_' . uniqid();
+        $bodyMarker = 'BODY_SHOULD_NOT_BE_READ_AT_STARTUP_' . uniqid((string) getmypid(), true);
         $this->createSkillFile('lazy-skill', 'A lazily-loaded skill', $bodyMarker);
 
         // Act
@@ -873,7 +873,7 @@ SKILL
         // Arrange
         $loader = new SkillLoader();
         $projectRoot = $this->tempDir . '/manifest-override-project';
-        $bodyMarker = 'PROJECT_MANIFEST_BODY_MARKER_' . uniqid();
+        $bodyMarker = 'PROJECT_MANIFEST_BODY_MARKER_' . uniqid((string) getmypid(), true);
         mkdir($projectRoot . '/.sugar-crush/skills/override-skill', 0777, true);
         file_put_contents(
             $projectRoot . '/.sugar-crush/skills/override-skill/SKILL.md',
@@ -893,7 +893,7 @@ SKILL
     {
         // Arrange
         $loader = new SkillLoader();
-        $emptyProject = $this->tempDir . '/empty-manifest-project-' . uniqid();
+        $emptyProject = $this->tempDir . '/empty-manifest-project-' . uniqid((string) getmypid(), true);
         mkdir($emptyProject, 0777, true);
 
         // Act

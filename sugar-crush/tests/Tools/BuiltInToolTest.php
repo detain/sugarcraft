@@ -663,7 +663,7 @@ final class BuiltInToolTest extends TestCase
 
     private function createTempFile(string $content): string
     {
-        $tempFile = sys_get_temp_dir() . '/test_tool_' . uniqid() . '.txt';
+        $tempFile = sys_get_temp_dir() . '/test_tool_' . uniqid((string) getmypid(), true) . '.txt';
         file_put_contents($tempFile, $content);
 
         return $tempFile;
@@ -671,7 +671,7 @@ final class BuiltInToolTest extends TestCase
 
     private function createTempDir(): string
     {
-        $tempDir = sys_get_temp_dir() . '/test_tool_dir_' . uniqid();
+        $tempDir = sys_get_temp_dir() . '/test_tool_dir_' . uniqid((string) getmypid(), true);
         mkdir($tempDir);
 
         return $tempDir;

@@ -18,7 +18,7 @@ final class HookConfigTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/hook_config_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/hook_config_test_' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
     }
 

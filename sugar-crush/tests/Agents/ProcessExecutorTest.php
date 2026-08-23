@@ -26,7 +26,7 @@ final class ProcessExecutorTest extends TestCase
         parent::setUp();
         $this->executor = new ProcessExecutor();
         $this->agent = new SubAgent(
-            id: 'test-agent-' . uniqid(),
+            id: 'test-agent-' . uniqid((string) getmypid(), true),
             agent: new Agent(
                 name: 'TestAgent',
                 description: 'Test agent for unit tests',
@@ -195,7 +195,7 @@ final class ProcessExecutorTest extends TestCase
     public function testExecuteMultipleAgentsInSequence(): void
     {
         $agent2 = new SubAgent(
-            id: 'test-agent-2-' . uniqid(),
+            id: 'test-agent-2-' . uniqid((string) getmypid(), true),
             agent: new Agent(
                 name: 'TestAgent2',
                 description: 'Second test agent',
@@ -246,7 +246,7 @@ final class ProcessExecutorTest extends TestCase
     public function testExecuteWithEmptyTask(): void
     {
         $agentWithEmptyTask = new SubAgent(
-            id: 'empty-task-agent-' . uniqid(),
+            id: 'empty-task-agent-' . uniqid((string) getmypid(), true),
             agent: $this->agent->agent,
             task: '',
         );

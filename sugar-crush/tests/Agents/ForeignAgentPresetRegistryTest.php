@@ -30,7 +30,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-foreign-agent-test-' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-foreign-agent-test-' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
         $this->origHome = $_SERVER['HOME'] ?? '/root';
         // Every discover* call also scans the real HOME's foreign-agent dirs;

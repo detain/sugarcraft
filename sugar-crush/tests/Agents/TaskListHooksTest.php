@@ -28,7 +28,7 @@ final class TaskListHooksTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->dbPath = \sys_get_temp_dir() . '/tasklist_hooks_test_' . \uniqid() . '.sqlite3';
+        $this->dbPath = \sys_get_temp_dir() . '/tasklist_hooks_test_' . \uniqid((string) getmypid(), true) . '.sqlite3';
     }
 
     protected function tearDown(): void

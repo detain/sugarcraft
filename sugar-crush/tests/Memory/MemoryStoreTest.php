@@ -16,7 +16,7 @@ final class MemoryStoreTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/memory_store_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/memory_store_' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
     }
 

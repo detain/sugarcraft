@@ -21,7 +21,7 @@ final class MemoryCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/memory_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/memory_test_' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0755, true);
         $this->memoryStore = new MemoryStore($this->tempDir);
     }

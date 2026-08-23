@@ -17,7 +17,7 @@ final class PathJailTest extends TestCase
 
     protected function setUp(): void
     {
-        $base = sys_get_temp_dir() . '/sugarcrush_pathjail_' . uniqid();
+        $base = sys_get_temp_dir() . '/sugarcrush_pathjail_' . uniqid((string) getmypid(), true);
         $this->jail = $base . '/jail';
         $this->outside = $base . '/outside';
         mkdir($this->jail, 0777, true);

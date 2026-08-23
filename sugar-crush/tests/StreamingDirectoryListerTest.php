@@ -13,7 +13,7 @@ final class StreamingDirectoryListerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_lister_test_' . uniqid();
+        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_lister_test_' . uniqid((string) getmypid(), true);
         mkdir($this->tmpDir, 0755, true);
     }
 
