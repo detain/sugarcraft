@@ -1546,12 +1546,74 @@ final class StderrEmitterCensusTest extends TestCase
      * handle, say, expected absent) the `[]` shape and its vacuity arrive with
      * it.
      *
+     * WHAT EACH ROW EXPECTING 0 ACTUALLY KILLS (E228). Round 48 shipped a
+     * fixture asserting 0 whose failure message named a mutation the fixture
+     * survived, so the rows here were swept the same way: mutate the
+     * instrument, re-run the whole provider, and record which rows change
+     * answer. MEASURED, PHP 8.3.6. The result, in three groups:
+     *
+     *  - CLAUSE ROWS, which kill the removal of the clause they describe and
+     *    are what they claim to be. `the declaration is not a call` and
+     *    `an unscoped same-named function is not one of ours` kill the scope
+     *    operator; the two first-class-callable rows kill the ellipsis guard;
+     *    `some other class's warn() is not the seam` kills the receiver check
+     *    and `the seam class reached with an instance operator is not the seam`
+     *    kills the operator check beside it; `the seam record() is not the warn
+     *    funnel` kills the method-name check; three rows kill the
+     *    `T_CONST`/`T_FUNCTION` disambiguation in the import walk; `a const
+     *    import of something else is not a channel` kills a widened
+     *    {@see ALIASABLE_STDERR_NAMES}; and the destination-form rows kill both
+     *    a relaxed threshold and the loss of a {@see ARRAY_TOKEN_OPENERS}
+     *    entry, the latter by making the walk THROW rather than answer.
+     *  - GREP ROWS. Every row whose subject is a comment, a doc-block or a
+     *    string literal — and there are seven — answers 0 under every
+     *    structural mutation of the scanners, because a comment is a single
+     *    token and the names never appear as a T_STRING inside one. What they
+     *    kill is the channel reimplemented as a `substr_count()`, which is the
+     *    exact temptation {@see scan()}'s own doc-block spends a paragraph
+     *    talking a reader out of. They are load-bearing; they are just not
+     *    load-bearing for the reason a reader would assume.
+     *  - THE FOUR BARE CONTROLS at the bottom, `<?php echo 1;` on each channel.
+     *    These kill only a scanner that counts something in a source with
+     *    nothing in it (measured: one that increments per significant token
+     *    answers 4). They cannot kill a dead scanner and are not asked to —
+     *    thirty-odd rows here expect a non-zero count, so a dead {@see scan()}
+     *    reds this provider on its own. That was measured too, by blinding
+     *    {@see scan()}: thirty-two rows go red.
+     *
+     * THE ONE HOLE THE SWEEP FOUND was the comment strip in
+     * {@see significantTokens()} — no row killed its removal, on any channel.
+     * The three rows added for it are marked in place.
+     *
      * @return iterable<string, array{0: string, 1: string, 2: int}>
      */
     public static function scannerCases(): iterable
     {
         yield 'a direct write' => ['direct', '<?php fwrite(STDERR, "x");', 1];
         yield 'a namespaced direct write' => ['direct', '<?php \\fwrite(\\STDERR, "x");', 1];
+
+        // THE COMMENT STRIP, PINNED (E228). {@see significantTokens()} drops
+        // T_WHITESPACE, T_COMMENT and T_DOC_COMMENT, and until this row nothing
+        // in this provider noticed if it stopped dropping the last two: the
+        // three rows that MENTION a comment all answer 0 whether the strip runs
+        // or not, because `token_get_all()` returns a whole comment as ONE
+        // token and the names these channels key on never appear as a T_STRING
+        // inside one. What the strip actually buys is ADJACENCY — every channel
+        // here reads `$significant[$i - 1]` and `$significant[$i + 1]` — and a
+        // comment is legal in exactly those two positions. MEASURED, PHP 8.3.6:
+        // this row is 1 at head, 0 with T_COMMENT/T_DOC_COMMENT out of the
+        // strip, and 0 with T_WHITESPACE out of it, so it fails in both
+        // directions against either half.
+        yield 'a direct write with a comment before the handle' => [
+            'direct',
+            '<?php fwrite(/* c */ STDERR, "x");',
+            1,
+        ];
+        yield 'and that write is still not indirect' => [
+            'indirect',
+            '<?php fwrite(/* c */ STDERR, "x");',
+            0,
+        ];
         yield 'a direct write is not indirect' => ['indirect', '<?php fwrite(STDERR, "x");', 0];
 
         // PHP'S OWN ALIASES OF fwrite(), which need no import and so cannot be
@@ -1588,6 +1650,14 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a prefixed interpolation' => ['shape', '<?php $x = "sugarcrush: {$y} nope";', 1];
         yield 'the prefix only in a comment' => ['shape', "<?php // sugarcrush: nope\n\$x = 1;", 0];
         yield 'a warn call' => ['prefixed', '<?php self::warnPermissionConfigOnce("x");', 1];
+        // The same adjacency, on the channel that reads the token BEFORE the
+        // name rather than the token before the handle. 0 with the comment
+        // strip removed.
+        yield 'a warn call with a comment before the name' => [
+            'prefixed',
+            '<?php self::/* c */warnPermissionConfigOnce("x");',
+            1,
+        ];
         yield 'all three entry points' => [
             'prefixed',
             '<?php self::warnPermissionConfig("a"); self::warnPermissionConfigOnce("b"); '
@@ -1629,6 +1699,14 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a fully-qualified runtime-notice seam call' => [
             'runtime_notice',
             '<?php \\SugarCraft\\Crush\\Diagnostics\\RuntimeNoticeSink::warn("x");',
+            1,
+        ];
+        // And on channel 6, which reads TWO tokens back — the operator and then
+        // the class — so a comment in either position blinds it without the
+        // strip. 0 with the comment strip removed.
+        yield 'a seam call with a comment before the name' => [
+            'runtime_notice',
+            '<?php RuntimeNoticeSink::/* c */warn("x");',
             1,
         ];
         yield 'some other class\'s warn() is not the seam' => ['runtime_notice', '<?php Logger::warn("x");', 0];
