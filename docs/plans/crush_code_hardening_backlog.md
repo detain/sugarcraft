@@ -7999,6 +7999,19 @@ refused.
 the roster's own declaration lines carved out. Owner: whoever holds `src/Chat.php`. Note the scanner must
 keep reading `T_ENCAPSED_AND_WHITESPACE` — see Ec48-2.
 
+**Amended 2026-08-23, round-48 lane c fix stage — the Step above had a trap in it, and the trap is now
+gone.** Under the alphabet this entry was written against (`/^(Hook|Permission) [a-z]+:/`) the widened
+scan over `src/Chat.php` returns a FOURTH constant hit that is not a denial prefix at all:
+`'Permission mode: %s — from %s'`, the `sprintf` template behind the permission-summary line. Carving out
+"the roster's own declaration lines" would therefore have left that one in and reddened the widened guard
+on the day it landed, on a string that is entirely correct. The scanner's alphabet has since been replaced
+with a frame plus a denial VOCABULARY, and re-measured on PHP 8.3.6 the scan over `src/Chat.php` is now
+exactly the six real spellings (the three interpolated producers above and the roster's three entries) with
+`Permission mode:` correctly absent — so the carve-out needed is the three roster declaration lines and
+nothing more. Two things this amendment does NOT establish: the same scan has not been run over
+`src/Renderer.php` or `src/Cli/`, so a genuinely repo-wide version may need carve-outs this entry has not
+enumerated; and every token-kind claim here is measured on PHP 8.3.6 only, while CI also runs 8.4.
+
 ---
 
 ## Ec48-2 — a scanner that reads only `T_CONSTANT_ENCAPSED_STRING` cannot see this tree's denial strings at all
@@ -8007,10 +8020,18 @@ keep reading `T_ENCAPSED_AND_WHITESPACE` — see Ec48-2.
 
 **What.** The first cut of `DenialPrefixRosterTest`'s "no second spelling" scanner read
 `T_CONSTANT_ENCAPSED_STRING` only. Every denial producer in this tree is an INTERPOLATED string, whose
-literal run is `T_ENCAPSED_AND_WHITESPACE`. MEASURED on PHP 8.3.6: the constant-only scanner reported
-**3** hits in `src/Chat.php` — all three the roster's own constant entries — and **zero** for any of the
-three producers in the table above, including the exact line E210 replaced. The guard was green over a
-tree where all three producers were hand-rolled.
+literal run is `T_ENCAPSED_AND_WHITESPACE`. The guard was green over a tree where all three producers were
+hand-rolled.
+
+**The figure this entry first carried was wrong, and is corrected rather than removed.** WHAT IT SAID: the
+constant-only scanner reported "**3** hits in `src/Chat.php` — all three the roster's own constant
+entries". WHAT IS TRUE, re-derived 2026-08-23 on PHP 8.3.6 by running the guard's own `denialLiteralsIn()`
+logic under the OLD regex over `src/Chat.php`: **4** constant hits — the roster's three plus
+`'Permission mode: %s — from %s'`, which is not a denial prefix — and, unchanged, **zero** for any of the
+three interpolated producers in Ec48-1's table, including the exact line E210 replaced. WHY THE ENTRY
+STILL EARNS ITS PLACE: the finding is the ZERO, not the three. A constant-only scanner sees none of this
+tree's denial producers, which is the whole point, and the miscounted control hits made the guard look
+MORE alive than it was rather than less.
 
 This is the rule-2 shape (the mutation survives because the assertion's WINDOW is wrong) occurring inside
 a guard written the same hour the lane was warned about it.
@@ -8124,3 +8145,74 @@ holds, key the sandbox by uid **plus** the checkout's real path, which is the co
 distinguishes two lanes — and check what that does to the `ToolIpcFiles::sweepOnce()` reasoning in the
 same comment, which assumes one sandbox per uid. `tests/bootstrap.php` is shared infrastructure: a change
 there reds every lane at merge, so this wants its own round rather than a corner of one.
+## Ec48-8 — `HeadlessPermissionPrompt`'s `?? \STDIN` default is the second half of E212's hazard family
+
+**Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: latent hang, bounded. **Measured, PHP 8.3.6.**
+
+**What.** E212 closed one `?? \STDIN` default — `NonInteractive::readStdinIfPiped()` now resolves through
+`NonInteractive::stdinDefault()`, pinned in `tests/bootstrap.php`. There is a second one and it was neither
+closed nor recorded: `HeadlessPermissionPrompt::__construct()` does `$this->in = $in ?? \STDIN;`, and
+`Bootstrap::withConsolePermissionPrompt()` constructs it as `new HeadlessPermissionPrompt($gate->mode())`
+with no `$in` at all — so an approver attached that way reads whatever descriptor 0 the runner inherited.
+
+**The bound, verified by symbol rather than assumed.** `\fgets($this->in)` sits inside `__invoke()`'s
+interactive arm, behind `isInteractive()`, which is `\is_resource($this->in) && \stream_isatty($this->in)`.
+A held-open PIPE is not a tty, so it takes the no-tty refusal arm and returns false immediately — this
+CANNOT hang the way E212's `stream_get_contents()` could. What it can do is block for a human answer when
+the suite is run from a real terminal, which is exactly the shape E212 existed to remove.
+
+**Not established.** Whether any test in `tests/` actually reaches the constructed approver with fd 0 a
+tty — the callers of `Bootstrap::backendFor()` with `$consolePermissionPrompt: true` were not enumerated.
+If one does, running the suite interactively is a latent block; if none does, that dormancy is worth
+pinning rather than leaving to be rediscovered.
+
+**Step.** Either extend the E212 seam to this class (a `pinStdinDefault()` equivalent, or pass the pinned
+stream at the `Bootstrap` construction site), or write the `stream_isatty()` bound down as an intentional
+property with a test that pins it. Do NOT close it by making `fgets` non-blocking; the tty arm answering a
+human is the feature.
+
+---
+
+## Ec48-9 — `stderrWritesIn()` still cannot see a `proc_open()` descriptor spec
+
+**Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: guard coverage. **Partly measured.**
+
+**What.** `NonInteractiveRefusalDocumentTest::stderrWritesIn()` is the scanner behind
+`testRuntimeStillWritesNothingToStderrBecauseTheTuiForksIntoIt()`, which is now a SAFETY guard: a write to
+descriptor 2 from `Runtime` lands on top of a live alternate screen, because `EngineBackend::completeAsync()`
+forks and the child inherits fd 2 from a `Program` that opened one. Its alphabet was widened this round
+after `php://fd/2` was MEASURED as a surviving mutation (PHP 8.3.6); `php://fd/2` and `/dev/err` are now
+alternatives in their own right, with fixtures.
+
+**What still escapes.** A `proc_open()` descriptor spec — `2 => ['pipe', 'w']`, or `2 => \STDERR` passed
+through to a child — and anything that computes the stream name at runtime. A `2\s*=>` alternative was
+considered and rejected because it matches any array literal keyed 2, which is a false positive the guard
+cannot absorb (it asserts an empty set). `src/Runtime.php` contains no `proc_open` today, measured, so the
+hole is real but not currently reachable — and the reaper code in that file is exactly the kind that grows
+one.
+
+**Step.** When `Runtime` acquires a `proc_open`, decide then whether the guard becomes token-based over the
+descriptor array rather than regex-based over the source. Recorded now so that decision is not made by
+whoever notices the guard stayed green.
+
+---
+
+## Ec48-10 — `StderrEmitterCensusTest`'s method name states a cardinality its body no longer carries
+
+**Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: cosmetic / rot. **Measured.** Lane a's file.
+
+**What.** E219 added a seventh `fwrite(\STDERR, …)` site to `src/Cli/NonInteractive.php`, and lane c bumped
+the three census rosters that went red on it (`6` → `7` in two rosters, and the prose `eleven sites` →
+`twelve sites`). The guard body is generic — it reads whatever number word the prose carries — so nothing
+is broken. But the METHOD NAME is now false:
+`StderrEmitterCensusTest::testTheInheritedElevenSiteCensusStillAgreesWithTheScan()` validates a census that
+says twelve.
+
+**Step.** Rename it to something cardinality-free (`testTheInheritedCensusStillAgreesWithTheScan()`). Owner:
+whoever holds `tests/Cli/StderrEmitterCensusTest.php` — lane c deliberately did not rename a method in
+another lane's file, since a rename is not the minimal edit a guard forced. This is the general lesson too:
+a cardinality baked into a test METHOD NAME rots exactly like one baked into prose, and unlike the prose it
+has no generator to catch it.
+
+---
+
