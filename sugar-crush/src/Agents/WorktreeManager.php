@@ -72,8 +72,10 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * written as a present. Two other files in this package already said as much
  * and this one did not read them: {@see \SugarCraft\Crush\Cli\Bootstrap}'s
  * "DORMANT: nothing in `src/` constructs a `WorktreeManager`", and
- * {@see WorktreeConfig}'s "DORMANT IS NOT UNGATED". The property doc-block
- * thirty lines below says it too.
+ * {@see WorktreeConfig}'s "DORMANT IS NOT UNGATED". The doc-block on the
+ * `$config` property below says it too — cited by the symbol and not by a line
+ * distance, because the distance was written as "thirty lines below" and is
+ * nearer fifty.
  *
  * WHY THE ROUTING STILL EARNS ITS PLACE, which is a different question from
  * whether it fires. "DORMANT IS NOT UNGATED" is this package's own doctrine

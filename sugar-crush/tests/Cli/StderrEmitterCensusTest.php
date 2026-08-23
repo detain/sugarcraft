@@ -826,9 +826,14 @@ final class StderrEmitterCensusTest extends TestCase
      * WHAT THE SCANNER CANNOT SEE, named rather than left to be found:
      * `new $class` with the name in a variable. MEASURED on this tree, PHP
      * 8.3.6, there are SIX such sites and all six are in
-     * `src/Providers/VertexProvider.php`, where the variable is assigned a
-     * literal `Google\…` protobuf class name three lines above the `new` — so
-     * none of them can be this class. Also invisible:
+     * `src/Providers/VertexProvider.php`, across four variables —
+     * `$requestClass`, `$clientClass`, `$bodyClass`, `$valueClass` — each
+     * assigned a literal `Google\…` protobuf class-name string earlier in the
+     * same method, so none of them can be this class. (A previous draft of this
+     * sentence said "three lines above the `new`". The six distances are 3, 4,
+     * 4, 4, 4 and 6, so that was one site of six; a line-distance in a comment
+     * rots on the next edit anyway, and naming the variables does not.) Also
+     * invisible:
      * `(new ReflectionClass(...))->newInstance()` and container resolution,
      * neither of which this package does.
      *
@@ -837,8 +842,27 @@ final class StderrEmitterCensusTest extends TestCase
      * canonical `::new()` factory is invisible to every scanner in this file
      * that keys on {@see callableName()}, {@see methodCallSites()} included.
      * That is why {@see constructionSites()} matches the factory shape on
-     * `T_NEW` explicitly, and why a naive "count the `new` tokens" scan of
-     * `src/` reports 285 rather than 6.
+     * `T_NEW` explicitly.
+     *
+     * WHAT THIS SAID: "…and why a naive 'count the `new` tokens' scan of `src/`
+     * reports 285 rather than 6."
+     *
+     * WHAT IS TRUE NOW: no generator produces 285. MEASURED, PHP 8.3.6, token
+     * walk over `src/` plus `bin/sugarcrush`: `T_NEW` tokens number in the
+     * thousands, `T_NEW` followed by a name token slightly fewer, textual
+     * occurrences of `new ` slightly fewer again — and none of the five
+     * candidate readings lands anywhere near 285. The trailing "rather than 6"
+     * was borrowed from a different paragraph two sentences earlier, where 6 is
+     * the `new $variable` count; the fixture below asserts 4, not 6, so the
+     * comparison did not even name this test's own answer.
+     *
+     * WHY THE POINT STILL EARNS ITS PLACE, restated over something that cannot
+     * rot. A cardinality over `src/` written into prose is wrong the moment any
+     * other work merges, which is half of why that figure went unchallenged.
+     * The comparison is therefore made against the FIXTURE below, in the
+     * fixture's own assertion: a bare `T_NEW` count over it is EIGHT where
+     * {@see constructionSites()} answers FOUR. The gap is the whole reason this
+     * scanner discriminates by token shape instead of counting `new`.
      */
     public function testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt(): void
     {
@@ -878,7 +902,7 @@ final class StderrEmitterCensusTest extends TestCase
         // the DECLARATION of a static method named `new`, and — the shape that
         // matters most, because it is what `src/` is full of — a `::new()`
         // factory call on some other class.
-        self::assertSame(4, self::constructionSites('WorktreeManager', <<<'PHP'
+        $fixture = <<<'PHP'
             <?php
             use SugarCraft\Crush\Agents\WorktreeManager;
             $a = new WorktreeManager();
@@ -889,7 +913,32 @@ final class StderrEmitterCensusTest extends TestCase
             $f = WorktreeManager::class;
             $g = WorktreeConfig::new();
             class X { public static function new(): self { return new self(); } }
-            PHP), 'constructionSites() has gone blind; the empty assertion above is vacuous');
+            PHP;
+
+        self::assertSame(
+            4,
+            self::constructionSites('WorktreeManager', $fixture),
+            'constructionSites() has gone blind; the empty assertion above is vacuous',
+        );
+
+        // THE NAIVE COUNT, GENERATED HERE RATHER THAN QUOTED. Eight `T_NEW`
+        // tokens against four constructions of this class — the four the
+        // scanner must reject are a different class, that class's `::new()`
+        // factory, the DECLARATION of a static `new()`, and `new self()`. This
+        // is the comparison a `src/`-wide figure used to make in prose, moved
+        // onto something a merge cannot invalidate.
+        $naive = 0;
+        foreach (self::significantTokens($fixture) as $token) {
+            if (\is_array($token) && $token[0] === T_NEW) {
+                $naive++;
+            }
+        }
+        self::assertSame(
+            8,
+            $naive,
+            'the fixture no longer carries eight `new` tokens, so the paragraph above comparing the '
+                . 'naive count against this scanner\'s four is describing a fixture that is gone',
+        );
 
         // AND IT MUST NOT SEE A DOC-COMMENT. `WorktreeManager`'s own doc-blocks
         // mention `new WorktreeManager()` and `WorktreeManager::new($repoRoot)`
