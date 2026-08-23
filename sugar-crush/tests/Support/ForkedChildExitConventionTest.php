@@ -446,10 +446,23 @@ final class ForkedChildExitConventionTest extends TestCase
      * scanners, and this one is not a shape a scanner can see at all - it is
      * a property of the interpreter, and the only honest way to assert it is
      * to run both endings and count. It is also the consequence that survives
-     * every mitigation the tree already has: candy-core's PID-aware
-     * `PosixBackend::restore()` defuses the termios destructor, and
+     * every INDEPENDENT mitigation the tree already has: candy-core's
+     * PID-aware `PosixBackend::restore()` defuses the termios destructor, and
      * `tests/bootstrap.php`'s `StreamSelectLoop` defuses React's shutdown
-     * hook, but nothing defuses an inherited output buffer.
+     * hook - both of which hold whatever ending the child takes. Nothing
+     * plays that role for an inherited output buffer. The one thing that
+     * defuses it is the ending this convention mandates, which the control
+     * below demonstrates: `exitNow()` produces one marker where a plain
+     * `exit()` produces two. So the other two consequences degrade when the
+     * convention is broken and this one does not - it simply happens.
+     *
+     * WHAT THIS TEST DOES NOT BUY, said plainly so nobody counts it twice: no
+     * change to this repository can red it. It runs a standalone `php`
+     * subprocess and asserts a property of the interpreter, which is the only
+     * way to assert this consequence at all, and it is the REASON the
+     * convention exists rather than a regression net over the code that
+     * follows it. The net is {@see ForkedChildExitScanner} and the guards
+     * that point it at the tree.
      *
      * NOT RUN INSIDE PHPUnit, deliberately. Forking under the live runner to
      * demonstrate a double flush would put the duplicate on the SUITE's
