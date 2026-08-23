@@ -5814,6 +5814,24 @@ final class Chat implements Model
     }
 
     /**
+     * Refuse, VISIBLY, a file-based command whose template expanded to nothing.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function refuseEmptyCustomCommand(string $text): array
+    {
+        return [$this->mutate([
+            'history' => [...$this->history, Message::system(sprintf(
+                '%s is a command file whose template expanded to nothing — most often a body that is only '
+                . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
+                . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
+                . 'on its own.',
+                self::quoteDraftForNotice($text),
+            ))],
+        ]), null];
+    }
+
+    /**
      * Refuse, VISIBLY, a slash command submitted while a turn is running.
      *
      * WHY REFUSED AND NOT QUEUED, since an ordinary prompt is queued: a queued
@@ -5845,25 +5863,14 @@ final class Chat implements Model
      * once the turn settles runs it, and the notice says so.
      *
      * @return array{0:self,1:?\Closure}
-     */
-    /**
-     * Refuse, VISIBLY, a file-based command whose template expanded to nothing.
      *
-     * @return array{0:self,1:?\Closure}
+     * MOVED HERE FROM ABOVE {@see refuseEmptyCustomCommand()}, where it had
+     * been stranded as a second stacked doc-comment. PHP attaches only the
+     * LAST of a run of them, so this block documented nothing at all and this
+     * method read as undocumented; a reader who found the prose would have
+     * attributed it to the empty-template refusal, which is a different rule
+     * for a different reason. Three such pairs were in this file.
      */
-    private function refuseEmptyCustomCommand(string $text): array
-    {
-        return [$this->mutate([
-            'history' => [...$this->history, Message::system(sprintf(
-                '%s is a command file whose template expanded to nothing — most often a body that is only '
-                . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
-                . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
-                . 'on its own.',
-                self::quoteDraftForNotice($text),
-            ))],
-        ]), null];
-    }
-
     private function refuseInFlightCommand(string $text): array
     {
         return [$this->mutate([
@@ -6234,45 +6241,6 @@ final class Chat implements Model
     }
 
     /**
-     * Route a submitted draft to a slash-command handler, or return null when
-     * it is an ordinary prompt for the model.
-     *
-     * The name is parsed by {@see CommandParser::parse()} (crush_code.md Phase
-     * 4 item 7), which was already built, already tested, and already used by
-     * {@see \SugarCraft\Crush\Commands\AgentsCommand} - while this method's
-     * predecessor re-derived the same thing inline as sixteen
-     * `str_starts_with($text, '/name')` calls. Dispatching on the parsed NAME
-     * instead of on a prefix is what makes the set of live commands a thing a
-     * test can enumerate: `tests/Commands/SlashDispatchTest.php`'s
-     * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits
-     * `/name` for every `slashVisible` row in {@see CommandRegistry} and fails
-     * when the turn reaches the backend, so a registry row with no arm here
-     * reds the suite. The before/after dispatch table for the refactor lives in
-     * that file's other methods rather than in prose here.
-     *
-     * Two guards keep the parse from widening what dispatches, because
-     * `parse()` is deliberately more forgiving than the chain it replaced:
-     *
-     * - it LOWERCASES and strips punctuation out of the name it reports, so
-     *   `/KEYS` and `/keys` and `/k:eys` all parse to `keys`. The old chain
-     *   compared raw bytes and matched none but the last, and `KeyHelpTest`'s
-     *   draft corpus asserts `/KEYS` is sent to the model as prose. Requiring
-     *   the canonical spelling to appear verbatim at the head of the draft
-     *   keeps that exact, for every command at once.
-     * - `$text === '/' . $name` is what keeps the four argument-less commands
-     *   argument-less. `/exit now` and `/keys foo` were prompts before this
-     *   refactor because their arms compared the WHOLE trimmed buffer; a bare
-     *   name match would have quietly turned both into commands.
-     *
-     * What did change, deliberately, is that a name is no longer a PREFIX:
-     * `/compactfoo` and `/rewind3` used to be swallowed by the `/compact` and
-     * `/rewind` handlers, and now go to the model like any other typo. Nothing
-     * advertised them and no test named them - the before/after table for
-     * every registry spelling is in the Phase 4 item 7 report.
-     *
-     * @return array{0: self, 1: ?\Closure}|null
-     */
-    /**
      * The prompt a typed `/name …` should send when `name` is one of this
      * session's file-based commands, or null when it is not one — in which case
      * {@see submit()} falls through to {@see dispatchCommand()} and then to the
@@ -6461,6 +6429,52 @@ final class Chat implements Model
         return null;
     }
 
+    /**
+     * Route a submitted draft to a slash-command handler, or return null when
+     * it is an ordinary prompt for the model.
+     *
+     * The name is parsed by {@see CommandParser::parse()} (crush_code.md Phase
+     * 4 item 7), which was already built, already tested, and already used by
+     * {@see \SugarCraft\Crush\Commands\AgentsCommand} - while this method's
+     * predecessor re-derived the same thing inline as sixteen
+     * `str_starts_with($text, '/name')` calls. Dispatching on the parsed NAME
+     * instead of on a prefix is what makes the set of live commands a thing a
+     * test can enumerate: `tests/Commands/SlashDispatchTest.php`'s
+     * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits
+     * `/name` for every `slashVisible` row in {@see CommandRegistry} and fails
+     * when the turn reaches the backend, so a registry row with no arm here
+     * reds the suite. The before/after dispatch table for the refactor lives in
+     * that file's other methods rather than in prose here.
+     *
+     * Two guards keep the parse from widening what dispatches, because
+     * `parse()` is deliberately more forgiving than the chain it replaced:
+     *
+     * - it LOWERCASES and strips punctuation out of the name it reports, so
+     *   `/KEYS` and `/keys` and `/k:eys` all parse to `keys`. The old chain
+     *   compared raw bytes and matched none but the last, and `KeyHelpTest`'s
+     *   draft corpus asserts `/KEYS` is sent to the model as prose. Requiring
+     *   the canonical spelling to appear verbatim at the head of the draft
+     *   keeps that exact, for every command at once.
+     * - `$text === '/' . $name` is what keeps the four argument-less commands
+     *   argument-less. `/exit now` and `/keys foo` were prompts before this
+     *   refactor because their arms compared the WHOLE trimmed buffer; a bare
+     *   name match would have quietly turned both into commands.
+     *
+     * What did change, deliberately, is that a name is no longer a PREFIX:
+     * `/compactfoo` and `/rewind3` used to be swallowed by the `/compact` and
+     * `/rewind` handlers, and now go to the model like any other typo. Nothing
+     * advertised them and no test named them - the before/after table for
+     * every registry spelling is in the Phase 4 item 7 report.
+     *
+     * @return array{0: self, 1: ?\Closure}|null
+     *
+     * MOVED HERE FROM ABOVE {@see expandCustomCommand()}, where it had been
+     * stranded as a second stacked doc-comment and so documented nothing. The
+     * mis-attribution was the expensive half: `expandCustomCommand()` returns
+     * `?string`, and a reader taking the block above it at face value would
+     * have read this `@return array{0: self, 1: ?\Closure}|null` as ITS
+     * contract.
+     */
     private function dispatchCommand(string $text): ?array
     {
         // The bare "mcp auth …" form, which predates the discoverable `/mcp`
@@ -11037,11 +11051,6 @@ final class Chat implements Model
      * new-but-identical Chat would repaint the transcript twice a second for
      * the whole of every turn.
      *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    /**
-     * Drain the sink into the transcript, and RE-ARM the edge-driven wake-up.
-     *
      * BOTH RETURN PATHS RE-ARM, INCLUDING THE EMPTY ONE, and that is not
      * symmetry for its own sake. {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::notifyOnceWhenPending()}
      * is one-shot, so whatever fires it consumes it; if the empty path did not
@@ -11060,6 +11069,18 @@ final class Chat implements Model
      * IT STILL RETURNS `$this` UNCHANGED WHEN THERE IS NOTHING, so
      * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest::testTheSecondPumpAddsNothingBecauseTheFirstConsumedTheInbox()}'s
      * point survives: an empty pump must not repaint. Only the Cmd differs.
+     *
+     * ONE DOC-BLOCK AND NOT TWO, which is why the paragraphs above read as two
+     * halves written a round apart — they were. E193's re-arm paragraphs landed
+     * as a SECOND doc-comment stacked between the original block and this
+     * declaration, and PHP attaches only the last one: the `@return` tag below
+     * had come off the method entirely (VERIFIED by
+     * `ReflectionMethod::getDocComment()`, which returned the re-arm block with
+     * no `@return` in it), and the original block's reasoning — the batching
+     * argument, the `Role::System` argument — was orphaned prose that no tool
+     * and no `{@see}` could resolve. Merged rather than either half deleted.
+     *
+     * @return array{0:Chat,1:?\Closure}
      */
     private function pumpRuntimeNotices(): array
     {

@@ -1048,6 +1048,99 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         return $model;
     }
 
+    /**
+     * `Chat` CARRIES NO STACKED DOC-COMMENTS, which is a guard this round owes
+     * the file rather than a general style rule.
+     *
+     * E193's re-arm reasoning landed as a SECOND doc-comment immediately
+     * above {@see \SugarCraft\Crush\Chat::pumpRuntimeNotices()} instead of
+     * being merged into the block already there. PHP attaches only the LAST
+     * doc-comment in such a run, so the earlier one stops documenting anything:
+     * `pumpRuntimeNotices()` lost its `@return array{0:Chat,1:?\Closure}` tag
+     * (VERIFIED at the time by `ReflectionMethod::getDocComment()`, which
+     * returned the re-arm block with no `@return` in it) and the batching and
+     * `Role::System` arguments became prose no tool could resolve.
+     *
+     * IT WAS NOT THE ONLY ONE. Scanning for the shape found THREE pairs in this
+     * file, and the other two were worse: `refuseInFlightCommand()` and
+     * `dispatchCommand()` had each lost their doc-block to the method BELOW
+     * them, so both read as undocumented while their prose sat above an
+     * unrelated declaration — and `expandCustomCommand()`, which returns
+     * `?string`, was preceded by a stranded `@return array{0: self, 1:
+     * ?\Closure}|null`.
+     *
+     * SCOPED TO `Chat.php` DELIBERATELY. The same scan finds four more pairs
+     * elsewhere in `src/`, in files this change does not own; widening the
+     * guard would red on work in flight rather than on this defect. The finding
+     * is recorded in the hardening backlog instead.
+     */
+    public function testChatCarriesNoStackedDocComments(): void
+    {
+        $chat = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Chat.php');
+
+        self::assertSame(
+            [],
+            self::stackedDocCommentLines($chat),
+            'src/Chat.php has doc-comments stacked immediately on top of each other at the lines '
+                . 'listed. PHP attaches only the last of a run, so every earlier one documents '
+                . 'nothing: its @return tag is off the method and its reasoning is orphaned. Merge '
+                . 'them into one block, or move the stranded one down to the declaration it describes.',
+        );
+
+        // KNOWN-POSITIVE THROUGH THE SAME SCANNER IN THE SAME TEST (rule 15).
+        // An assertion of [] is worth nothing if the instrument is dead, and
+        // this one would stay green with the scanner mutated to never match.
+        // Both halves: a stacked pair IS found, and an ordinary run of
+        // separately-documented methods is NOT.
+        self::assertSame([2], self::stackedDocCommentLines(<<<'PHP'
+            <?php
+            /** First, which PHP will drop on the floor. */
+            /** Second, which wins. */
+            function f(): void {}
+            PHP));
+
+        self::assertSame([], self::stackedDocCommentLines(<<<'PHP'
+            <?php
+            /** One block. */
+            function f(): void {}
+            /** Another block, with a declaration between them. */
+            function g(): void {}
+            PHP));
+    }
+
+    /**
+     * The 1-indexed lines of every doc-comment immediately followed by another
+     * doc-comment, with nothing significant between them.
+     *
+     * `T_COMMENT` is skipped but `T_DOC_COMMENT` is not, so a `//` line between
+     * two blocks does NOT rescue the first — PHP does not attach it either.
+     *
+     * @return list<int>
+     */
+    private static function stackedDocCommentLines(string $source): array
+    {
+        $significant = [];
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT], true)) {
+                continue;
+            }
+            $significant[] = $token;
+        }
+
+        $lines = [];
+        foreach ($significant as $i => $token) {
+            if (!\is_array($token) || $token[0] !== T_DOC_COMMENT) {
+                continue;
+            }
+            $next = $significant[$i + 1] ?? null;
+            if (\is_array($next) && $next[0] === T_DOC_COMMENT) {
+                $lines[] = $token[2];
+            }
+        }
+
+        return $lines;
+    }
+
     public function testTheTranscriptRowCarriesNoStderrEnvelope(): void
     {
         // Bootstrap's launch rows deliberately carry neither the `sugarcrush: `
