@@ -763,16 +763,69 @@ final class StderrEmitterCensusTest extends TestCase
             class X { public static function new(): self { return new self(); } }
             PHP), 'constructionSites() has gone blind; the empty assertion above is vacuous');
 
-        // AND IT MUST NOT SEE A DOC-COMMENT. This class\'s own doc-blocks
+        // AND IT MUST NOT SEE A DOC-COMMENT. `WorktreeManager`'s own doc-blocks
         // mention `new WorktreeManager()` and `WorktreeManager::new($repoRoot)`
-        // five times between them (MEASURED, this tree) — a grep-based guard
-        // would red on its own explanation of why it is green.
-        self::assertSame(0, self::constructionSites('WorktreeManager', <<<'PHP'
+        // five times between them (MEASURED, this tree) — a guard that read
+        // them would red on its own explanation of why it is green.
+        //
+        // ONE COMMENTED CONSTRUCTION AND ONE LIVE ONE, ASSERTING *ONE*, and not
+        // a comment-only fixture asserting zero. A comment-only fixture cannot
+        // discriminate here and the first draft of this test shipped one:
+        // `token_get_all()` returns a whole comment as a SINGLE `T_DOC_COMMENT`
+        // or `T_COMMENT` token (MEASURED, PHP 8.3.6), so a `T_NEW` never
+        // appears inside one and NO mutation of this scanner's comment handling
+        // can make an all-comments source answer anything but zero. Mutating
+        // `significantTokens()` out of {@see constructionSites()} entirely left
+        // that assertion green. Asserting ONE fails in both directions instead:
+        // a grep-shaped reimplementation counts the comments and answers two,
+        // a dead scanner answers zero.
+        self::assertSame(1, self::constructionSites('WorktreeManager', <<<'PHP'
             <?php
             /** Built by `new WorktreeManager()` or `WorktreeManager::new($root)`. */
             // new WorktreeManager();
-            $x = 1;
-            PHP), 'constructionSites() reads comments, so it would red on prose about the constructor');
+            $live = new WorktreeManager();
+            PHP), 'constructionSites() no longer separates a commented constructor from a called one');
+    }
+
+    /**
+     * AN ANONYMOUS CLASS NAMING THE TARGET IN ITS HEADER IS A FAILURE, NOT A
+     * ZERO — the third of this file's refusals, alongside
+     * {@see testTheDepthWalkRedsOnAnOpenerItDoesNotRecognise()} and
+     * {@see testTheAliasScanRedsOnAnImportThatNeverTerminates()}, and here for
+     * the same reason: `new class extends WorktreeManager {}` constructs a
+     * subclass, which lights the four seam sites exactly as thoroughly as
+     * constructing the class itself, and it is the one construction shape
+     * {@see constructionSites()} cannot attribute.
+     *
+     * NOT REACHABLE FROM THE CENSUS TODAY, which is why it needs its own test:
+     * a token walk over `src/` and `bin/` found no `new class` at all when this
+     * was written (MEASURED, PHP 8.3.6), so nothing else in this suite fires
+     * the throw and an unfired throw is an assumption rather than a guard. The
+     * file count that walk covered is deliberately NOT recorded here: a
+     * cardinality over `src/` written into prose is wrong the moment any other
+     * work merges, and this claim does not need one to stand up.
+     *
+     * THE NEGATIVE HALF MATTERS AS MUCH. An anonymous class that does NOT name
+     * the target must still answer, or the refusal would make every future
+     * `new class` in this package unmeasurable — so the same shape extending
+     * something else scans quietly, and the live construction beside it is
+     * still counted.
+     */
+    public function testTheConstructionScanRedsOnAnAnonymousClassItCannotAttribute(): void
+    {
+        self::assertSame(1, self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            $other = new class ($arg) extends WorktreeConfig implements Countable {};
+            $live = new WorktreeManager();
+            PHP), 'an anonymous class extending something else now derails the walk');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot attribute');
+
+        self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            $x = new class ($config) extends WorktreeManager {};
+            PHP);
     }
 
     public function testThePrefixedWriterRosterIsUnchanged(): void
