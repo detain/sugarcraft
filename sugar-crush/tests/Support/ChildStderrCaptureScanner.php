@@ -381,7 +381,7 @@ final class ChildStderrCaptureScanner
     private static function classifySpec(string $spec): string
     {
         if (!self::namesFdTwo($spec)) {
-            return self::SHAPE_INHERITED;
+            return self::positionalShape($spec);
         }
 
         $entry = self::fdTwoEntry($spec);
@@ -390,6 +390,157 @@ final class ChildStderrCaptureScanner
         }
 
         return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /**
+     * The shape of a descriptor spec that names no `2 =>` key.
+     *
+     * WHAT THIS BRANCH DID, and it is the hole this whole doc-block's thesis
+     * is about, one branch earlier than the thesis looks: a spec without a
+     * literal `2 =>` returned {@see SHAPE_INHERITED} outright. But
+     * `proc_open()` reads a POSITIONAL descriptor array by position - element
+     * 2 IS fd 2 - so `[['file','/dev/null','r'], ['file','/dev/null','w'],
+     * ['file','/dev/null','w']]` is a discard, and it came back `inherited`.
+     *
+     * WHAT IS TRUE NOW, measured on PHP 8.3.6 against the code as it then
+     * stood: EVERY positional spelling collapsed to `inherited` regardless of
+     * what element 2 actually was. A positional `/dev/null` (truth:
+     * discarded), a positional pipe (truth: captured), a two-element spec
+     * (truth: inherited) and a positional spec whose third element is a
+     * variable (truth: unreadable) all returned the same answer. Four
+     * different truths, one reply - and `inherited` is a DEFINITE claim, not
+     * an "I cannot tell", so it was wrong in both polarities at once: it
+     * understates a real discard, and it reds a real capture.
+     *
+     * WHY THIS EARNS ITS PLACE: the paragraph above says "a guard that
+     * quietly ignores what it cannot parse has a hole shaped exactly like the
+     * next defect", and then the very first branch of the method did exactly
+     * that. So the same rule is applied here - a positional element 2 is read
+     * when it can be read, and anything this splitter cannot follow is
+     * {@see SHAPE_UNCLASSIFIED} rather than a confident `inherited`.
+     *
+     * FEWER THAN THREE ELEMENTS IS A REAL `inherited`, not a failure to read:
+     * a spec that supplies only fds 0 and 1 leaves fd 2 pointing wherever the
+     * parent's was, which is the definition of the shape.
+     */
+    private static function positionalShape(string $spec): string
+    {
+        $elements = self::topLevelArrayElements($spec);
+
+        if ($elements === null) {
+            // Not an array literal here at all - a method call, a constant, a
+            // variable that resolved to something this scanner cannot follow.
+            // It may well redirect fd 2; nothing here can say it does not.
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        if ($elements === []) {
+            // An explicitly empty spec supplies no descriptors at all.
+            return self::SHAPE_INHERITED;
+        }
+
+        foreach ($elements as $element) {
+            // A keyed array that does not name `2` - the caller already
+            // established that - genuinely leaves fd 2 alone.
+            if (\str_contains($element, '=>')) {
+                return self::SHAPE_INHERITED;
+            }
+        }
+
+        if (!isset($elements[2])) {
+            return self::SHAPE_INHERITED;
+        }
+
+        $entry = \trim($elements[2]);
+        if (\str_starts_with($entry, '[') && \str_ends_with($entry, ']')) {
+            $entry = \substr($entry, 1, -1);
+        } elseif (\preg_match('/^array\s*\((.*)\)$/s', $entry, $inner) === 1) {
+            $entry = $inner[1];
+        } else {
+            // `STDERR`, a variable, a function call: not a descriptor triple
+            // this scanner can read.
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        if (!self::fdTwoEntryIsAllLiteral($entry)) {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /**
+     * The source text of each top-level element of an array literal, or null
+     * if $spec is not an array literal.
+     *
+     * Lexed rather than split on commas, because a descriptor spec's elements
+     * are themselves arrays and a nested `,` must not end one.
+     *
+     * @return list<string>|null
+     */
+    private static function topLevelArrayElements(string $spec): ?array
+    {
+        $tokens = \token_get_all('<?php ' . $spec . ';');
+        $start = null;
+        $count = \count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (\is_array($token) && \in_array($token[0], [\T_OPEN_TAG, \T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            if (self::tokenText($token) === '[') {
+                $start = $i + 1;
+            } elseif (\is_array($token) && $token[0] === \T_ARRAY) {
+                $next = self::next($tokens, $i);
+                if ($next === null || self::tokenText($tokens[$next]) !== '(') {
+                    return null;
+                }
+                $start = $next + 1;
+            }
+
+            break;
+        }
+
+        if ($start === null) {
+            return null;
+        }
+
+        $elements = [];
+        $current = '';
+        $depth = 0;
+
+        for ($i = $start; $i < $count; $i++) {
+            $text = self::tokenText($tokens[$i]);
+
+            if ($depth === 0 && ($text === ']' || $text === ')')) {
+                $current = \trim($current);
+                if ($current !== '') {
+                    $elements[] = $current;
+                }
+
+                return $elements;
+            }
+
+            if ($text === '[' || $text === '(') {
+                $depth++;
+            } elseif ($text === ']' || $text === ')') {
+                $depth--;
+            }
+
+            if ($depth === 0 && $text === ',') {
+                $elements[] = \trim($current);
+                $current = '';
+
+                continue;
+            }
+
+            $current .= $text;
+        }
+
+        // Ran off the end without closing - not something to guess about.
+        return null;
     }
 
     /**

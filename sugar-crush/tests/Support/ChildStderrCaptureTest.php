@@ -265,6 +265,46 @@ final class ChildStderrCaptureTest extends TestCase
             );
         }
 
+        // A POSITIONAL DESCRIPTOR SPEC, which `proc_open()` reads BY
+        // POSITION - element 2 is fd 2, with no `2 =>` key anywhere in the
+        // source. Every spelling of this returned `inherited` until round 48,
+        // because the classifier's first branch answered on the absence of
+        // the key alone. Four different truths came back as one answer, and
+        // `inherited` is a definite claim rather than an "I cannot tell", so
+        // it was wrong in BOTH polarities at once - understating a real
+        // discard and redding a real capture. All four are pinned.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $one('proc_open("ls", [["file","/dev/null","r"],["file","/dev/null","w"],'
+                . '["file","/dev/null","w"]], $p);')['shape'],
+            'a positional spec sending fd 2 to the null device is a discard - reading it as '
+                . 'inherited is the polarity that waves a real offender through',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [["pipe","r"],["pipe","w"],["pipe","w"]], $p);')['shape'],
+            'a positional spec piping fd 2 is a capture - reading it as inherited is the '
+                . 'polarity that reds correct code',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('proc_open("ls", [["pipe","r"],["pipe","w"]], $p);')['shape'],
+            'a spec with no third element really does leave fd 2 where the parent had it, so '
+                . 'this one shape must NOT move',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [["pipe","r"],["pipe","w"],$err], $p);')['shape'],
+            'a positional element 2 that is not its own value is unreadable, and the honest '
+                . 'answer to that is a failure rather than a confident inherited',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('proc_open("ls", [0 => ["pipe","r"], 1 => ["pipe","w"]], $p);')['shape'],
+            'a KEYED spec that simply does not mention fd 2 leaves it inherited, and must not '
+                . 'be dragged into the positional reading',
+        );
+
         // THE LIMIT OF THAT RULE, named here rather than left to be
         // discovered: both of these are all-literal, so they are judged by
         // the `/dev/null` text alone and come back `captured`. `redirect`
@@ -563,6 +603,24 @@ final class ChildStderrCaptureTest extends TestCase
             'the reversed order points fd 2 at whatever fd 1 held AT THAT MOMENT - the pipe the '
                 . 'caller reads - so reporting it as a discard is the polarity that reds correct '
                 . 'code',
+        );
+
+        // THE FOURTH DISCARD PATH, added when it turned out to exist: a
+        // POSITIONAL spec, decided by `positionalShape()` rather than by
+        // either branch above. Two real sites in the tree read `inherited`
+        // until it was fixed.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $shape('proc_open("ls", [["file","/dev/null","r"],["file","/dev/null","w"],'
+                . '["file","/dev/null","w"]], $p);'),
+            'the positional null-device path is dead, so a spec that discards fd 2 by position '
+                . 'reads as the inherited it is not',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $shape('proc_open("ls", [["pipe","r"],["pipe","w"],["pipe","w"]], $p);'),
+            'the positional path now calls a real capture something else, which is the other '
+                . 'polarity',
         );
 
         // THE UNCLASSIFIED SHAPE, which the caller also asserts zero of. Two
