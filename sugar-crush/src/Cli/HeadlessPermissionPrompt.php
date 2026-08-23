@@ -152,18 +152,31 @@ use SugarCraft\Crush\Tools\ToolCall;
  *    {@see \SugarCraft\Crush\Runtime::gate()} BEFORE `settleAsk()` is
  *    reached, so it never arrives here at all. It follows that "every refusal
  *    is already on stderr" — a sentence lifted from this docblock's four
- *    shapes and generalised across {@see NonInteractive} and `README.md` — is
- *    false: a hook DENY reaches neither stderr nor `--output-format text`.
- *    MEASURED by driving the shipped gate's `rm -rf` denial through a real
- *    `EngineBackend`: zero bytes on stderr. `Runtime` writes to stderr
- *    nowhere, and
- *    {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest::testRuntimeWritesNothingToStderrSoATextFormatDenialIsSilent()}
- *    reds the day that changes.
+ *    shapes and generalised across {@see NonInteractive} and `README.md` — was
+ *    false: a hook DENY reached neither stderr nor `--output-format text`.
+ *    MEASURED at round 47 by driving the shipped gate's `rm -rf` denial
+ *    through a real `EngineBackend`: zero bytes on stderr.
  *
- * So the remaining gap is a deny-path stderr line in `Runtime`, not a routing
- * decision about these four. It is on the hardening backlog. Recorded rather
- * than half-done here — for the same reason as before, and about a different
- * thing.
+ * THE LAST PARAGRAPH HERE SAID "the remaining gap is a deny-path stderr line in
+ * `Runtime`", and E219 closed the gap somewhere else. WHAT IS TRUE NOW: the
+ * line exists, in {@see NonInteractive::noticeRefusal()}, written from the
+ * tool-lifecycle observer for exactly the reason the first bullet above gives —
+ * that seam sees every refusal and this class sees one kind. It is NOT in
+ * `Runtime`, and that doc-block carries the measurement ruling `Runtime` out:
+ * the TUI forks into the same `Runtime` with descriptor 2 pointing at a
+ * terminal that is in the alternate screen, so the prescription would have
+ * painted a refusal line over a live frame on every denied call.
+ * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest::testRuntimeStillWritesNothingToStderrBecauseTheTuiForksIntoIt()}
+ * now pins `Runtime`'s silence as a property to KEEP rather than as a gap to
+ * fill.
+ *
+ * WHY THE WHOLE ENTRY STILL EARNS ITS PLACE: the routing question it answers —
+ * that these four stay on stderr rather than moving to the transcript seam — is
+ * unchanged and independent of where the refusal line ended up. What changed is
+ * only the last sentence's forecast. Note the one visible consequence, recorded
+ * so it does not read as a bug: an ASK refused at a terminal now produces two
+ * stderr lines, this class's terse "refused <tool>." and the observer's fuller
+ * one. {@see NonInteractive::noticeRefusal()} says why neither is suppressed.
  */
 final class HeadlessPermissionPrompt
 {

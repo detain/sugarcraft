@@ -205,33 +205,39 @@ final class NonInteractive
 
         $history = self::historyFrom($args->prompt, self::readStdinIfPiped());
 
-        // E173. A refusal this turn raises reached the JSON consumer nowhere
-        // at all: the document said `{"result": "<the answer>"}` for a turn in
-        // which a tool was stopped and the model answered around it.
+        // E173, THEN E219. A refusal this turn raises reached the JSON consumer
+        // nowhere at all: the document said `{"result": "<the answer>"}` for a
+        // turn in which a tool was stopped and the model answered around it.
         //
-        // THIS COMMENT USED TO OPEN "every refusal this turn raises reaches the
-        // operator on stderr", and round 47's review measured it false. WHAT IS
-        // TRUE NOW: only {@see HeadlessPermissionPrompt} writes to stderr, and
-        // {@see \SugarCraft\Crush\Runtime::gate()} reaches it only for a hook
-        // verdict of ASK — a plain
-        // {@see \SugarCraft\Crush\Hooks\HookResult::deny()} returns from that
-        // method before `settleAsk()` is called, and `Runtime` writes to stderr
-        // nowhere. MEASURED on PHP 8.3.6 by driving the shipped gate's `rm -rf`
-        // denial through a real `EngineBackend`: zero bytes on stderr, and the
-        // tool not executed. WHY THE SENTENCE STILL MATTERS: it was the reason
-        // `--output-format text` was left alone, so the premise for that
-        // decision is weaker than it read — see {@see self::format()}. The tool-lifecycle observer is the
-        // only seam this class has for it — the approver itself is built four
-        // frames away inside {@see Bootstrap::backend()} — and it is enough,
-        // because a blocked call terminates through
-        // {@see \SugarCraft\Crush\Runtime::failure()}, which emits a
-        // {@see ToolFinished} carrying the reason.
+        // THIS COMMENT ONCE OPENED "every refusal this turn raises reaches the
+        // operator on stderr". Round 47 measured that false — only
+        // {@see HeadlessPermissionPrompt} wrote to stderr, and it is reached
+        // only for a hook verdict of ASK, while a plain
+        // {@see \SugarCraft\Crush\Hooks\HookResult::deny()} returns out of
+        // {@see \SugarCraft\Crush\Runtime::gate()} before `settleAsk()` is
+        // called. Round 47 then rewrote it to say the gap was open and belonged
+        // on the deny path in `Runtime`. WHAT IS TRUE NOW: the gap is closed
+        // and it was NOT closed in `Runtime` — see {@see self::noticeRefusal()}
+        // for the measurement that ruled that out. This observer writes the
+        // line, so every refusal reaches BOTH channels on BOTH formats: stderr
+        // as it happens, and the `refusals` array on `--output-format json`.
+        // WHY THE HISTORY STILL EARNS ITS PLACE: the false sentence was the
+        // stated reason `--output-format text` carried no refusal list, and
+        // that decision is still the right one for a different reason — see
+        // {@see self::format()}.
+        //
+        // The tool-lifecycle observer is the only seam this class has for it —
+        // the approver itself is built four frames away inside
+        // {@see Bootstrap::backend()} — and it is enough, because a blocked call
+        // terminates through {@see \SugarCraft\Crush\Runtime::failure()},
+        // which emits a {@see ToolFinished} carrying the reason.
         /** @var list<array{tool: string, reason: string}> $refusals */
         $refusals = [];
         $observeRefusals = static function (object $event) use (&$refusals): void {
             $refusal = self::refusalFrom($event);
             if ($refusal !== null) {
                 $refusals[] = $refusal;
+                self::noticeRefusal($refusal['tool'], $refusal['reason']);
             }
         };
 
@@ -561,13 +567,20 @@ final class NonInteractive
             // refusals here rather than in the ordinary document is the right
             // trade in the one branch where the alternative is an empty pipe,
             // and the JSON consumer is told the message could not be encoded
-            // rather than handed an empty pipe. NOT "and stderr still carried
-            // every one of them", which this comment used to say and which
-            // round 47 measured false: a hook DENY never reaches stderr (see
-            // {@see self::format()}), so the refusals dropped here are dropped
-            // from every channel. That is the cost of this branch, stated
-            // rather than excused — it fires only when the message itself is
-            // unencodable, and an empty stdout at exit 1 is worse.
+            // rather than handed an empty pipe.
+            //
+            // THIS COMMENT SAID "and stderr still carried every one of them",
+            // round 47 measured that false, and the correction it was replaced
+            // with — "so the refusals dropped here are dropped from every
+            // channel" — is now false in its turn. WHAT IS TRUE NOW: E219 put
+            // the line back, from {@see self::noticeRefusal()}, and it is
+            // written as each refusal ARRIVES rather than when the document is
+            // built — so a refusal dropped from this replacement document has
+            // already reached the operator on stderr. WHY THE PARAGRAPH STILL
+            // EARNS ITS PLACE: the loss is real for the MACHINE consumer, which
+            // reads stdout and never sees stderr, and that is the reader this
+            // branch is apologising to. It fires only when the message itself
+            // is unencodable, and an empty stdout at exit 1 is worse.
             $json = \sprintf(
                 '{"result":null,"error":{"type":"%s","message":"error message could not be encoded as JSON"}}',
                 $type,
@@ -638,19 +651,90 @@ final class NonInteractive
     }
 
     /**
+     * The stream {@see readStdinIfPiped()} reads when no caller names one, and
+     * the seam a test process uses to keep the suite off its own descriptor 0.
+     *
+     * Null means "the real STDIN", which is what every production entry point
+     * gets: nothing in `src/` or `bin/` ever assigns this.
+     *
+     * @var resource|null
+     */
+    private static $stdinDefault = null;
+
+    /**
+     * Point {@see readStdinIfPiped()}'s DEFAULT at $stream instead of the
+     * process's real STDIN (E212).
+     *
+     * THIS IS A HAZARD FIX, NOT TIDINESS. Every direct
+     * {@see run()} call in the suite reached
+     * `readStdinIfPiped(\STDIN)`, so what a `-p` test did depended on the
+     * descriptor 0 the runner happened to inherit. Three outcomes, all real on
+     * PHP 8.3.6: a terminal (`stream_isatty()` true) returns null and the test
+     * passes; `/dev/null` or a closed pipe returns `''` and the test passes;
+     * and a pipe that is OPEN AND NEVER WRITTEN blocks in
+     * `stream_get_contents()` forever — the whole suite, not one test, with no
+     * verdict and no output. A CI runner, a supervising agent, or a plain
+     * `cat | vendor/bin/phpunit` all produce the third. The other two are not
+     * safety either: an ambient pipe carrying bytes prepends them to the prompt
+     * of every `-p` test as stdin context.
+     *
+     * PRODUCTION IS DELIBERATELY UNTOUCHED. The parameter of
+     * {@see readStdinIfPiped()} still wins over this, and this still defers to
+     * `\STDIN` when it was never set, so a real `sugarcrush -p "…" < file`
+     * reads exactly the stream it always did. `tests/bootstrap.php` is the only
+     * caller, which is why the pin covers test files that do not exist yet
+     * rather than each `run()` call site one at a time.
+     *
+     * @param resource|null $stream a stream to read instead of `\STDIN`, or
+     *   null to go back to `\STDIN`
+     */
+    public static function pinStdinDefault($stream): void
+    {
+        self::$stdinDefault = $stream;
+    }
+
+    /**
+     * The stream {@see readStdinIfPiped()} reads when its caller names none —
+     * the pin from {@see pinStdinDefault()}, or the real `\STDIN`.
+     *
+     * Public because the pin is worth ASSERTING rather than trusting: a
+     * `tests/bootstrap.php` that quietly stopped installing it would put the
+     * suite back on the runner's descriptor 0 with every test still green, and
+     * the failure that shape produces is a hang rather than a red.
+     *
+     * @return resource
+     */
+    public static function stdinDefault()
+    {
+        return self::$stdinDefault ?? \STDIN;
+    }
+
+    /**
      * Read piped stdin, capped at {@see self::MAX_STDIN_BYTES}. Returns
      * null when $stream is a TTY (nothing was piped, mirrors
      * `sugar-post/bin/pop`'s `!stream_isatty(STDIN)` guard) or when the
      * pipe was empty.
      *
-     * $stream defaults to the real STDIN; tests pass a `php://memory`
-     * stream instead so the suite never blocks on, or depends on, the
-     * PHPUnit process's actual stdin.
+     * THE DEFAULT USED TO BE THE `\STDIN` CONSTANT ITSELF, spelled in this
+     * signature. WHAT THAT SAID: "$stream defaults to the real STDIN; tests
+     * pass a `php://memory` stream instead so the suite never blocks on, or
+     * depends on, the PHPUnit process's actual stdin." WHAT IS TRUE NOW: the
+     * second half described only the three tests that call this method
+     * DIRECTLY. Every test that goes through {@see run()} — which is where the
+     * production call lives — passed nothing and got `\STDIN`, so the suite
+     * both depended on and could block on the runner's descriptor 0. The
+     * default is now {@see stdinDefault()}, which `tests/bootstrap.php` pins
+     * once for the whole process. WHY THE SENTENCE STILL EARNS ITS PLACE: it
+     * states the property the suite is supposed to have, and that property is
+     * now enforced in one place instead of asserted per call site.
      *
-     * @param resource $stream
+     * @param resource|null $stream the stream to read, or null for
+     *   {@see stdinDefault()}
      */
-    public static function readStdinIfPiped($stream = \STDIN): ?string
+    public static function readStdinIfPiped($stream = null): ?string
     {
+        $stream ??= self::stdinDefault();
+
         if (\stream_isatty($stream)) {
             return null;
         }
@@ -714,24 +798,34 @@ final class NonInteractive
      * for why that key alone is conditional, and {@see self::refusalFrom()}
      * for what counts as one.
      *
-     * `text` CARRIES NO REFUSALS, AND THE REASON GIVEN FOR THAT WAS WRONG.
-     * WHAT IT SAID: that the format does not need them, because "on that
+     * `text` CARRIES NO REFUSALS ON STDOUT, AND THE REASON GIVEN FOR THAT HAS
+     * BEEN WRONG TWICE.
+     *
+     * WHAT IT SAID FIRST: that the format does not need them, because "on that
      * format the operator is reading the terminal, where
      * {@see HeadlessPermissionPrompt} has already written every one of them to
-     * stderr". WHAT IS TRUE NOW: that class is reached only for a hook verdict
-     * of ASK, so it covers the prompt-shaped refusals and not the commonest
-     * one. A plain hook DENY returns out of
-     * {@see \SugarCraft\Crush\Runtime::gate()} before `settleAsk()`, and
-     * `Runtime` contains no write to stderr at all — MEASURED on PHP 8.3.6
-     * against the shipped gate's `rm -rf` denial, zero bytes on stderr. On
-     * `text` that refusal reaches NEITHER channel. WHY THE DECISION STILL
-     * STANDS ANYWAY: stdout under `text` is the answer and nothing else, and a
-     * second list there would break the one contract this format has for the
-     * one caller — a shell pipeline — that cannot tolerate it. The gap is real
-     * and its fix belongs on the DENY path in `Runtime`, not here; it is on the
-     * hardening backlog, and
+     * stderr". Round 47 measured that false — that class is reached only for a
+     * hook verdict of ASK, so it covers the prompt-shaped refusals and not the
+     * commonest one; a plain hook DENY returns out of
+     * {@see \SugarCraft\Crush\Runtime::gate()} before `settleAsk()`.
+     *
+     * WHAT IT SAID SECOND: that the gap was real and "its fix belongs on the
+     * DENY path in `Runtime`, not here". The diagnosis was right and the owner
+     * was not — {@see self::noticeRefusal()} carries the measurement, in short
+     * that the TUI forks into the same `Runtime` with descriptor 2 pointing at
+     * a terminal in the alternate screen.
+     *
+     * WHAT IS TRUE NOW: every refusal reaches the operator on stderr, from
+     * {@see self::noticeRefusal()}, on both formats. THE DECISION HERE IS
+     * UNCHANGED AND ITS ORIGINAL REASON IS THE ONE THAT SURVIVED: stdout under
+     * `text` is the answer and nothing else, and a second list there would
+     * break the one contract this format has for the one caller — a shell
+     * pipeline — that cannot tolerate it. That is why the line went to stderr
+     * rather than here.
      * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest}
-     * pins the current behaviour so the day it changes is loud.
+     * pins both halves: the answer alone on stdout, the refusal alone on
+     * stderr, asserted in one child process because splitting them would pass
+     * with the two channels merged.
      *
      * This is a deliberately minimal
      * first cut of crush_feat.md Recommendation 3 — the recommendation's own
@@ -768,6 +862,91 @@ final class NonInteractive
     }
 
     /**
+     * Tell the operator, on stderr, that a tool call was stopped (E219).
+     *
+     * THE GAP THIS CLOSES. Before it, a blocked call reached the operator on
+     * exactly one surface and only in one format: the `refusals` array of an
+     * `--output-format json` document. On the default `text` format a hook
+     * DENY — the commonest refusal there is, and the one the shipped
+     * `ConfirmRemoveHook` raises against `rm -rf` — produced the answer on
+     * stdout, no tool execution, and NOTHING anywhere saying so. A tool
+     * silently not running is the failure a headless caller has the least
+     * chance of noticing: the model sees the refusal and answers around it, so
+     * the reply reads as a completed piece of work.
+     *
+     * WHY THIS IS NOT ON `Runtime`'s DENY PATH, WHICH IS WHERE FIVE PLACES IN
+     * THIS TREE SAID THE FIX BELONGED. That prescription does not survive
+     * contact with the other caller. {@see \SugarCraft\Crush\Runtime} is the
+     * ENGINE, and the TUI reaches it too:
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}
+     * `pcntl_fork()`s and runs the same `Runtime` in the child, and that child
+     * inherits the parent's descriptor 2 — VERIFIED at the fork site and in
+     * `runCompleteInChild()`, which between them close and re-block the socket
+     * pair and touch no standard stream. VERIFIED at the other end too, rather
+     * than assumed from "it is a TUI": `bin/sugarcrush` constructs its
+     * `Program` with {@see \SugarCraft\Crush\Chat::programOptions()}, which
+     * passes `useAltScreen: true` — the parameter's own default is FALSE — and
+     * `candy-core`'s `Program::setupTerminal()` writes `Ansi::altScreenEnter()`
+     * on exactly that flag. An `fwrite(STDERR, …)` in `Runtime::gate()` would
+     * therefore paint a refusal line straight onto a live TUI frame on every
+     * denied call — the hazard
+     * {@see Bootstrap::warnPermissionConfigInTranscript()} exists to avoid for
+     * launch-time writes. `Runtime` writing to stderr nowhere is a PROPERTY,
+     * not an omission, and
+     * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest}
+     * now pins it as one.
+     *
+     * The right owner is a class that knows it owns the console, and there are
+     * exactly two such paths in `src/` — this one and
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}, whose fd 2
+     * is the session log. Neither opens an alternate screen. The TUI is not
+     * silent about these either; it draws a refusal struck through
+     * ({@see \SugarCraft\Crush\Chat::isDeniedResult()}), which is why the gap
+     * was headless-only in the first place.
+     *
+     * STDERR, NEVER STDOUT, and unconditionally on both formats. Under `text`
+     * stdout is the answer and nothing else — a shell pipeline's whole
+     * contract. Under `json` it is exactly one document, which is why
+     * {@see HeadlessPermissionPrompt} puts its question here too.
+     *
+     * ONE DELIBERATE DOUBLE LINE, stated because it is visible and looks like a
+     * bug. An ASK refused at a real terminal already writes
+     * "sugarcrush: refused <tool>." from
+     * {@see HeadlessPermissionPrompt::__invoke()}, so that one case produces two
+     * lines. It is not suppressed: the approver's line records the ANSWER, this
+     * one records the OUTCOME and carries the reason the MODEL was handed,
+     * which the terse one does not. Suppressing it would need this closure to
+     * know which refusals some approver had already announced — and the
+     * approver is constructed four frames away inside
+     * {@see Bootstrap::backend()}, so that coupling does not exist and should
+     * not be invented for a cosmetic duplicate.
+     *
+     * IT ALSO WRITES INTO THE TEST SUITE'S OWN CONSOLE, and that is a
+     * decision rather than an accident. Several suites drive `self::run()`
+     * IN-PROCESS rather than through a child, and `\STDERR` is bound to
+     * descriptor 2 at startup with no `dup2` in PHP to redirect it, so those
+     * turns put their refusal lines in PHPUnit's output. The alternative was
+     * a settable stream on this class — a second piece of global state, on the
+     * path whose whole point is that it has none — bought for tidier logs. The
+     * lines are the same class as the `sugarcrush: ignoring …` notices already
+     * in that output; the tests that must ASSERT on the bytes pay for a child
+     * process instead ({@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest}),
+     * which is where the claim is made and where it is safe to make it.
+     * Deliberately no count is written down: it is a property of how many
+     * suites happen to drive a refusal, and a cardinality in prose is stale
+     * the next time one is added.
+     *
+     * @param string $tool The runtime tool name, as the model called it.
+     * @param string $reason The finished result text, which opens with one of
+     *   {@see \SugarCraft\Crush\Runtime}'s three denial prefixes — so the
+     *   line already says WHICH of the three this was.
+     */
+    private static function noticeRefusal(string $tool, string $reason): void
+    {
+        \fwrite(\STDERR, "sugarcrush: {$tool} was not run - {$reason}\n");
+    }
+
+    /**
      * `$event` as one `refusals` entry, or null when it is not a refusal.
      *
      * THE CLASSIFICATION IS NOT THIS CLASS'S TO INVENT, and that is the whole
@@ -800,16 +979,26 @@ final class NonInteractive
      * cheaper owner would put the headless document and the TUI back on two
      * lists — the thing this method exists not to do.
      *
-     * KNOWN LIMIT, stated because the field's NAME over-promises against it: a
+     * THE KNOWN LIMIT RECORDED HERE IS CLOSED (E210). WHAT IT SAID: "a
      * permission refusal and a plain hook DENY are indistinguishable here, and
-     * the reason is upstream of this class rather than a shortcut taken in it.
-     * {@see \SugarCraft\Crush\Hooks\HookManager::resolveAsk()} settles a
-     * refused ASK as `HookResult::deny($ask->message)`, and
-     * {@see \SugarCraft\Crush\Runtime::gate()} renders every non-allowed
-     * verdict as `Hook denied: <message>` — so by the time an event exists the
-     * two have already been collapsed into one string. Both ARE refusals and
-     * both belong in the array; only the sub-classification is missing, and
-     * recovering it needs a distinguishable verdict from `Runtime`.
+     * the reason is upstream of this class rather than a shortcut taken in it…
+     * recovering it needs a distinguishable verdict from `Runtime`". WHAT IS
+     * TRUE NOW: `Runtime` gives one. {@see \SugarCraft\Crush\Runtime::gate()}
+     * picks its prefix BEFORE `settleAsk()` flattens the verdict, so a
+     * `reason` now opens with one of three roster entries —
+     * {@see \SugarCraft\Crush\Runtime::DENIAL_HOOK} for a hook objecting,
+     * {@see \SugarCraft\Crush\Runtime::DENIAL_REFUSED} for an approver
+     * answering no, {@see \SugarCraft\Crush\Runtime::DENIAL_UNANSWERED} for
+     * an ASK that reached a run with no approver attached. A consumer reading
+     * the `refusals` array can tell the three apart with the same
+     * `str_starts_with` this method uses.
+     *
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the diagnosis in it is the
+     * reason the fix went where it did. The collapse happened in `Runtime`, not
+     * here, so no amount of work in this method could have recovered the
+     * distinction — and the same is true of the next one. This method
+     * classifies; it does not author. {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest}
+     * pins the three, and pins that every one of them is on the roster below.
      *
      * @return array{tool: string, reason: string}|null
      */

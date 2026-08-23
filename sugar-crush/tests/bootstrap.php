@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use React\EventLoop\Loop;
 use React\EventLoop\StreamSelectLoop;
+use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -108,3 +109,36 @@ $sandbox = sys_get_temp_dir() . '/sc_suite_tmp_' . (function_exists('posix_geteu
 ToolIpcFiles::sweepOnce($sandbox);
 
 putenv('TMPDIR=' . $sandbox);
+
+/*
+ * The suite never reads the runner's own descriptor 0 (E212).
+ *
+ * `NonInteractive::run()` — the `-p "<prompt>"` one-shot path — calls
+ * `readStdinIfPiped()`, whose default was the `\STDIN` constant. Roughly
+ * thirty direct `run()` calls across tests/Cli therefore read whatever
+ * descriptor 0 the process running PHPUnit happened to inherit, and the three
+ * shapes that takes are not equally harmless: a terminal returns null, a
+ * `/dev/null` or already-closed pipe returns `''` (also null), and a pipe that
+ * is OPEN AND NEVER WRITTEN blocks inside `stream_get_contents()` with no
+ * timeout. That last one hangs the ENTIRE run — no failure, no output, no
+ * verdict — and it is the ordinary shape when a CI job or a supervising
+ * process holds the child's stdin open. An ambient pipe that DOES carry bytes
+ * is the quieter version of the same defect: those bytes are prepended to the
+ * prompt of every `-p` test as stdin context.
+ *
+ * An empty `php://memory` stream is the pin: `stream_isatty()` is false for it
+ * (so the tty short-circuit is NOT what answers, and the read path stays the
+ * one production takes), and the read returns `''` immediately, so
+ * `readStdinIfPiped()` answers null in bounded time whatever the runner's
+ * stdin is doing.
+ *
+ * Not a redirect of fd 0: `\STDIN` is a constant bound at startup and PHP has
+ * no `dup2`, so the descriptor itself cannot be replaced from here. The pin is
+ * on the DEFAULT only — a test that passes its own stream still gets it, and
+ * `src/`/`bin/` never call `pinStdinDefault()`, so production reads `\STDIN`
+ * exactly as before.
+ *
+ * `tests/Cli/NonInteractiveStdinPinTest.php` asserts this line did its job,
+ * because deleting it fails as a HANG rather than as a red.
+ */
+NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));

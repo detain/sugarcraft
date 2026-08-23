@@ -8341,3 +8341,254 @@ until Eb48-6 fixed the classifier.
 "Move the prefix into SCOPE and delete this row"; an offender in a directory matched by neither list fails
 the partition. So a lane that fixes its directory must move the prefix in the same change-set, exactly as
 in Eb48-5.
+---
+
+## Ec48-1 — `Chat` has three hand-rolled denial-prefix producers, and E211's `NonInteractive` half is only half the roster problem
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: correctness (silent misclassification). **Measured.**
+
+**What.** E210/E211 gave `Runtime` three named prefixes (`Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` /
+`DENIAL_UNANSWERED`), all three of them entries in `Chat::DENIED_ERROR_PREFIXES`, and
+`DenialPrefixRosterTest` pins the coupling. `src/Chat.php` was left alone because it is another lane's
+file, and it still spells three denial prefixes by hand.
+
+MEASURED on PHP 8.3.6 with a `token_get_all()` scan accepting both `T_CONSTANT_ENCAPSED_STRING` and
+`T_ENCAPSED_AND_WHITESPACE`, matching `/^(Hook|Permission) [a-z]+:/`:
+
+| file | symbol | literal |
+|---|---|---|
+| `src/Chat.php` | `answerPermission()` | `"Permission denied: {$request->toolCall->name} was not run."` |
+| `src/Chat.php` | `forkToolCalls()` | `"Permission required: {$toolCall->name} was not approved."` |
+| `src/Chat.php` | `gateToolCall()` | `"Hook denied: {$hookResult->message}"` |
+| `src/Chat.php` | `DENIED_ERROR_PREFIXES` | the roster's own three entries |
+| `src/Runtime.php` | `DENIAL_*` | the three constants, and nothing else |
+
+The failure mode is silent and one-directional: a producer whose spelling drifts off the roster renders a
+BLOCKED call as an ordinary tool ERROR — struck-through state lost in the TUI, entry missing from the
+`--output-format json` `refusals` array, and the model told the call failed rather than that it was
+refused.
+
+**Step.** Route `Chat`'s three producers through the roster (or through `Runtime`'s constants), and extend
+`DenialPrefixRosterTest::testRuntimeSpellsNoDenialPrefixOutsideItsConstants()` to scan `src/Chat.php` with
+the roster's own declaration lines carved out. Owner: whoever holds `src/Chat.php`. Note the scanner must
+keep reading `T_ENCAPSED_AND_WHITESPACE` — see Ec48-2.
+
+**Amended 2026-08-23, round-48 lane c fix stage — the Step above had a trap in it, and the trap is now
+gone.** Under the alphabet this entry was written against (`/^(Hook|Permission) [a-z]+:/`) the widened
+scan over `src/Chat.php` returns a FOURTH constant hit that is not a denial prefix at all:
+`'Permission mode: %s — from %s'`, the `sprintf` template behind the permission-summary line. Carving out
+"the roster's own declaration lines" would therefore have left that one in and reddened the widened guard
+on the day it landed, on a string that is entirely correct. The scanner's alphabet has since been replaced
+with a frame plus a denial VOCABULARY, and re-measured on PHP 8.3.6 the scan over `src/Chat.php` is now
+exactly the six real spellings (the three interpolated producers above and the roster's three entries) with
+`Permission mode:` correctly absent — so the carve-out needed is the three roster declaration lines and
+nothing more. The other two obvious targets were measured at the same time and need no carve-out at all:
+`src/Renderer.php` and `src/Cli/NonInteractive.php` each return **zero**, i.e. both consumers classify
+against the roster rather than spelling a prefix themselves. All of this is measured by driving the SHIPPED
+`DenialPrefixRosterTest::denialLiteralsIn()` through reflection rather than a copy of it, on PHP 8.3.6 only
+— CI also runs 8.4, and no token-kind claim here has been checked there.
+
+---
+
+## Ec48-2 — a scanner that reads only `T_CONSTANT_ENCAPSED_STRING` cannot see this tree's denial strings at all
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: process. **Measured; caught in my own new guard.**
+
+**What.** The first cut of `DenialPrefixRosterTest`'s "no second spelling" scanner read
+`T_CONSTANT_ENCAPSED_STRING` only. Every denial producer in this tree is an INTERPOLATED string, whose
+literal run is `T_ENCAPSED_AND_WHITESPACE`. The guard was green over a tree where all three producers were
+hand-rolled.
+
+**The figure this entry first carried was wrong, and is corrected rather than removed.** WHAT IT SAID: the
+constant-only scanner reported "**3** hits in `src/Chat.php` — all three the roster's own constant
+entries". WHAT IS TRUE, re-derived 2026-08-23 on PHP 8.3.6 by running the guard's own `denialLiteralsIn()`
+logic under the OLD regex over `src/Chat.php`: **4** constant hits — the roster's three plus
+`'Permission mode: %s — from %s'`, which is not a denial prefix — and, unchanged, **zero** for any of the
+three interpolated producers in Ec48-1's table, including the exact line E210 replaced. WHY THE ENTRY
+STILL EARNS ITS PLACE: the finding is the ZERO, not the three. A constant-only scanner sees none of this
+tree's denial producers, which is the whole point, and the miscounted control hits made the guard look
+MORE alive than it was rather than less.
+
+This is the rule-2 shape (the mutation survives because the assertion's WINDOW is wrong) occurring inside
+a guard written the same hour the lane was warned about it.
+
+**Step.** None — fixed in `DenialPrefixRosterTest`, which now asserts both token kinds through
+known-positive fixtures in the same test. Recorded so the next author of a source scanner over this tree
+starts from both token kinds.
+
+---
+
+## Ec48-3 — `RuntimeTest::testExecuteToolCallsYieldsErrorWhenHookDenies` passes with the prefix deleted
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: test-coverage. **Measured.**
+
+**What.** That test registers a hook whose own message is `'Hook denied this tool'` and then asserts
+`assertStringContainsString('Hook denied', $results[0]->content())`. The hook's message already contains
+the asserted substring, so the assertion says nothing about the prefix `Runtime::gate()` adds. MEASURED on
+PHP 8.3.6 through the round-48 mutation harness: substituting `"Hook denied: {$hookResult->message}"` with
+`"Hook refused: {$hookResult->message}"` left that test GREEN (`OK (1 test, 4 assertions)`).
+
+The same run showed `testAskWithNoApproverFailsClosedAndSaysPermissionWasRequired` surviving for the
+mirror reason — it asserts `'Permission required'`, which was present in `settleAsk()`'s own message
+regardless of what `gate()` prefixed.
+
+**Step.** Change the hook's message to something that does not contain the prefix (`'this tool is not
+allowed'`) and assert `assertStringStartsWith(Runtime::DENIAL_HOOK . ' ', …)`. `tests/RuntimeTest.php` was
+out of round-48 lane c's file list; `DenialPrefixRosterTest` now covers the behaviour from outside, so
+this is a strengthening rather than a hole.
+
+---
+
+## Ec48-4 — the denial roster lives on `Chat`, which is why the engine cannot read it
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: design. **Measured.**
+
+**What.** `Chat::DENIED_ERROR_PREFIXES` is the single roster two surfaces classify against, and it lives on
+the TUI model. `Runtime::gate()` therefore cannot read it: doing so would autoload `Chat` on the first
+gated tool call of EVERY run, including the `-p` one-shot path that exists partly so a run never builds
+one — `NonInteractive::refusalFrom()` goes to documented lengths to keep that load lazy and would be
+undone by it. So `Runtime` carries a pinned copy (`DENIAL_*`) and a test enforces the coupling, which
+works but is a copy.
+
+**Step.** Move the roster to a neutral leaf (`src/Permissions/DenialKind.php`, or an enum whose cases carry
+their prefix — which would also give the three kinds a TYPE rather than a string prefix, closing E210
+properly at the event rather than in the text). `Chat` and `Runtime` both re-export from it; the
+`DenialPrefixRosterTest` coupling test becomes unnecessary rather than merely satisfied. Touches
+`src/Chat.php`, so it needs the lane that owns it.
+
+---
+
+## Ec48-5 — an ASK refused at a terminal now writes two stderr lines
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: cosmetic. **Known and deliberate.**
+
+**What.** E219 added `NonInteractive::noticeRefusal()`, which writes one line per refusal from the
+tool-lifecycle observer. `HeadlessPermissionPrompt::__invoke()` already writes `sugarcrush: refused
+<tool>.` when a person answers anything non-affirmative at a real terminal. That one case therefore
+produces two lines: the approver's (the ANSWER) and the observer's (the OUTCOME, carrying the reason the
+model was handed).
+
+Not suppressed, because suppression would require the observer closure to know which refusals some
+approver had already announced, and the approver is constructed four frames away inside
+`Bootstrap::backend()`. Inventing that coupling for a cosmetic duplicate is worse than the duplicate.
+
+**Step.** If it is ever worth removing, the cheap version is for `HeadlessPermissionPrompt` to drop its own
+terse line now that the observer carries a fuller one — the prompt's other three shapes (the question, the
+no-tty refusal, the EOF line) all say things the observer cannot.
+
+---
+
+## Ec48-6 — the background-session daemon gets no refusal notice
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: observability. **Measured.**
+
+**What.** E219's line is written by `NonInteractive::run()`'s refusal observer. The OTHER headless caller,
+`Sessions\BackgroundSessionRunner`, attaches `HeadlessPermissionPrompt` for its refusal text but calls
+`$backend->complete([Message::user($this->task)], $onToken)` with **no `$onEvent` argument** — MEASURED at
+`src/Sessions/BackgroundSessionRunner.php`, the single `complete(` call in the file. So a hook DENY inside
+a background session reaches the session log on no channel at all, exactly the gap E219 closed for `-p`.
+An ASK still reaches it, via the prompt's no-tty refusal branch (that daemon's fd 0 is `/dev/null`).
+
+**Step.** Pass an observer there too. The line belongs in whatever `BackgroundSessionRunner` uses for its
+log rather than raw `STDERR` — its fd 2 is the session log file, so a plain `noticeRefusal()` would in fact
+land correctly, but that should be verified rather than assumed. Not done in round 48: `src/Sessions/` was
+out of lane c's file list.
+
+---
+
+## Ec48-7 — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
+
+**Recorded 2026-08-22 by round-48 lane c.** Severity: test-infrastructure. **Observed, not fully diagnosed.**
+
+**What.** `tests/bootstrap.php` builds the suite's throwaway directory as
+`sys_get_temp_dir() . '/sc_suite_tmp_' . posix_geteuid()` and exports it as `TMPDIR` for every child
+process the suite spawns. The key is the uid and nothing else, so **two lanes running the suite at the
+same time as the same user share one sandbox** — and the comment above it explains the directory is
+deliberately stable rather than per-run and is never torn down.
+
+OBSERVED in round 48: with lane b's suite running concurrently, this lane's identical run went from
+4m 26s wall (measured alone at `5a3fe80b`: `Time: 04:34`, and again at `8b8ece84`: `Time: 04:26`) to
+crawling at roughly 160 tests per ten minutes over the same test range — on a 48-core box at load 6, i.e.
+**not CPU-bound**. That points at wall-clock waits rather than scheduling. A shared `TMPDIR` between two
+suites, plus `ToolIpcFiles`' sweep semantics over it, is the most obvious candidate and was not proved.
+
+NOT PROVED, stated plainly: the slowdown was observed, the mechanism was not isolated, and there are other
+shared resources in play (ports, `/tmp` proper, the MCP handshake children). The figure is one
+observation, not a benchmark — no repeats, no control.
+
+**Step.** First reproduce it deliberately (two suites, one box, timed) before changing anything. If it
+holds, key the sandbox by uid **plus** the checkout's real path, which is the coordinate that actually
+distinguishes two lanes — and check what that does to the `ToolIpcFiles::sweepOnce()` reasoning in the
+same comment, which assumes one sandbox per uid. `tests/bootstrap.php` is shared infrastructure: a change
+there reds every lane at merge, so this wants its own round rather than a corner of one.
+## Ec48-8 — `HeadlessPermissionPrompt`'s `?? \STDIN` default is the second half of E212's hazard family
+
+**Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: latent hang, bounded. **Measured, PHP 8.3.6.**
+
+**What.** E212 closed one `?? \STDIN` default — `NonInteractive::readStdinIfPiped()` now resolves through
+`NonInteractive::stdinDefault()`, pinned in `tests/bootstrap.php`. There is a second one and it was neither
+closed nor recorded: `HeadlessPermissionPrompt::__construct()` does `$this->in = $in ?? \STDIN;`, and
+`Bootstrap::withConsolePermissionPrompt()` constructs it as `new HeadlessPermissionPrompt($gate->mode())`
+with no `$in` at all — so an approver attached that way reads whatever descriptor 0 the runner inherited.
+
+**The bound, verified by symbol rather than assumed.** `\fgets($this->in)` sits inside `__invoke()`'s
+interactive arm, behind `isInteractive()`, which is `\is_resource($this->in) && \stream_isatty($this->in)`.
+A held-open PIPE is not a tty, so it takes the no-tty refusal arm and returns false immediately — this
+CANNOT hang the way E212's `stream_get_contents()` could. What it can do is block for a human answer when
+the suite is run from a real terminal, which is exactly the shape E212 existed to remove.
+
+**Not established.** Whether any test in `tests/` actually reaches the constructed approver with fd 0 a
+tty — the callers of `Bootstrap::backendFor()` with `$consolePermissionPrompt: true` were not enumerated.
+If one does, running the suite interactively is a latent block; if none does, that dormancy is worth
+pinning rather than leaving to be rediscovered.
+
+**Step.** Either extend the E212 seam to this class (a `pinStdinDefault()` equivalent, or pass the pinned
+stream at the `Bootstrap` construction site), or write the `stream_isatty()` bound down as an intentional
+property with a test that pins it. Do NOT close it by making `fgets` non-blocking; the tty arm answering a
+human is the feature.
+
+---
+
+## Ec48-9 — `stderrWritesIn()` still cannot see a `proc_open()` descriptor spec
+
+**Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: guard coverage. **Partly measured.**
+
+**What.** `NonInteractiveRefusalDocumentTest::stderrWritesIn()` is the scanner behind
+`testRuntimeStillWritesNothingToStderrBecauseTheTuiForksIntoIt()`, which is now a SAFETY guard: a write to
+descriptor 2 from `Runtime` lands on top of a live alternate screen, because `EngineBackend::completeAsync()`
+forks and the child inherits fd 2 from a `Program` that opened one. Its alphabet was widened this round
+after `php://fd/2` was MEASURED as a surviving mutation (PHP 8.3.6); `php://fd/2` and `/dev/err` are now
+alternatives in their own right, with fixtures.
+
+**What still escapes.** A `proc_open()` descriptor spec — `2 => ['pipe', 'w']`, or `2 => \STDERR` passed
+through to a child — and anything that computes the stream name at runtime. A `2\s*=>` alternative was
+considered and rejected because it matches any array literal keyed 2, which is a false positive the guard
+cannot absorb (it asserts an empty set). `src/Runtime.php` contains no `proc_open` today, measured, so the
+hole is real but not currently reachable — and the reaper code in that file is exactly the kind that grows
+one.
+
+**Step.** When `Runtime` acquires a `proc_open`, decide then whether the guard becomes token-based over the
+descriptor array rather than regex-based over the source. Recorded now so that decision is not made by
+whoever notices the guard stayed green.
+
+---
+
+## Ec48-10 — `StderrEmitterCensusTest`'s method name states a cardinality its body no longer carries
+
+**Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: cosmetic / rot. **Measured.** Lane a's file.
+
+**What.** E219 added a seventh `fwrite(\STDERR, …)` site to `src/Cli/NonInteractive.php`, and lane c bumped
+the three census rosters that went red on it (`6` → `7` in two rosters, and the prose `eleven sites` →
+`twelve sites`). The guard body is generic — it reads whatever number word the prose carries — so nothing
+is broken. But the METHOD NAME is now false:
+`StderrEmitterCensusTest::testTheInheritedElevenSiteCensusStillAgreesWithTheScan()` validates a census that
+says twelve.
+
+**Step.** Rename it to something cardinality-free (`testTheInheritedCensusStillAgreesWithTheScan()`). Owner:
+whoever holds `tests/Cli/StderrEmitterCensusTest.php` — lane c deliberately did not rename a method in
+another lane's file, since a rename is not the minimal edit a guard forced. This is the general lesson too:
+a cardinality baked into a test METHOD NAME rots exactly like one baked into prose, and unlike the prose it
+has no generator to catch it.
+
+---
+
