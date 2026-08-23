@@ -495,15 +495,32 @@ final class ChildStderrCaptureTest extends TestCase
      * the row goes, and the branch would have been left with no liveness
      * coverage at all.
      *
+     * THREE, and it is why this helper is no longer NAMED for the discard
+     * branch. WHAT THIS DOC-BLOCK SAID: that the thing needing a
+     * known-positive is the discard branch, and the name
+     * `assertTheDiscardBranchIsAlive()` said the same. WHAT IS TRUE NOW:
+     * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()} treats
+     * {@see ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED} as an offender too
+     * and carries a whole paragraph about it in its failure message, so
+     * `unclassified` is a second shape whose ABSENCE that guard asserts - and
+     * nothing here proved that shape could still be produced. Measured:
+     * with `fdTwoEntryIsAllLiteral()` mutated to `return true`, the absence
+     * guard passed - 1 test, 12 assertions, entirely green - while the
+     * unit-level fixture test above killed it. Blind the scanner's
+     * unclassified branch and the REAL-TREE guard stays quiet, which is the
+     * exact failure mode measurements ONE and TWO were about.
+     *
      * WHY THIS EARNS ITS PLACE: an assertion of "no occurrences" is not
      * evidence unless something in the same test proves the instrument can
-     * still produce one. All three discard paths are exercised below - a
-     * shell command string, a `proc_open()` COMMAND STRING, and a
-     * `proc_open()` DESCRIPTOR SPEC - each with the opposite polarity beside
-     * it, because a scanner stuck at `discarded` reds correct code and that
-     * is how the next real offender buys its exemption.
+     * still produce one - for EVERY shape that assertion is claiming zero of,
+     * not just the shape that happened to be found first. All three discard
+     * paths are exercised below - a shell command string, a `proc_open()`
+     * COMMAND STRING, and a `proc_open()` DESCRIPTOR SPEC - and both
+     * unclassified paths after them, each with the opposite polarity beside
+     * it, because a scanner stuck at `discarded` (or at `unclassified`) reds
+     * correct code and that is how the next real offender buys its exemption.
      */
-    private function assertTheDiscardBranchIsAlive(): void
+    private function assertTheOffendingShapeBranchesAreAlive(): void
     {
         $shape = static function (string $body): string {
             $sites = ChildStderrCaptureScanner::scan("<?php\n" . $body . "\n");
@@ -547,6 +564,44 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'caller reads - so reporting it as a discard is the polarity that reds correct '
                 . 'code',
         );
+
+        // THE UNCLASSIFIED SHAPE, which the caller also asserts zero of. Two
+        // paths reach it and a mutation of either one alone left the
+        // real-tree guard green, so both are fixtured here.
+        //
+        // PATH ONE: the fd-2 entry is found, but a member is not its own
+        // value. `fdTwoEntryIsAllLiteral()` is what refuses it; blinded to
+        // `return true` this reads as a capture and the absence guard passes.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $shape('proc_open("ls", [2 => $x], $p);'),
+            'an fd-2 entry whose member is a variable now reads as a shape this guard accepts, so '
+                . 'a spec the scanner cannot actually follow passes as innocent',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $shape('proc_open("ls", [2 => ["file", "/dev/{$n}", "w"]], $p);'),
+            'an interpolated member is not its own value either - if this is classified, a '
+                . '"/dev/{$n}" that resolves to /dev/null is being called a capture',
+        );
+
+        // PATH TWO: the descriptor spec is a variable this scanner cannot
+        // resolve at the call site at all, so there is no entry to read.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $shape('function b() { proc_open("ls", $d, $p); }'),
+            'an unresolvable descriptor spec now reads as a shape this guard accepts, so every '
+                . 'spawn that builds its spec elsewhere becomes invisible to the absence guard',
+        );
+
+        // THE OPPOSITE POLARITY FOR BOTH PATHS, because a scanner stuck at
+        // `unclassified` reds every correct spawn in the tree rather than
+        // hiding one - the other way this instrument can be broken.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $shape('proc_open("ls", [2 => ["file", "/tmp/e.log", "w"]], $p);'),
+            'a fully literal fd-2 entry is readable and must not be reported unclassified',
+        );
     }
 
     private static function inScope(string $relative): bool
@@ -562,7 +617,7 @@ final class ChildStderrCaptureTest extends TestCase
 
     public function testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites(): void
     {
-        $this->assertTheDiscardBranchIsAlive();
+        $this->assertTheOffendingShapeBranchesAreAlive();
 
         $root = \dirname(__DIR__);
         $offenders = [];
@@ -638,7 +693,7 @@ final class ChildStderrCaptureTest extends TestCase
      */
     public function testEveryDiscardExemptionStillDescribesRealSites(): void
     {
-        $this->assertTheDiscardBranchIsAlive();
+        $this->assertTheOffendingShapeBranchesAreAlive();
 
         $root = \dirname(__DIR__);
 
