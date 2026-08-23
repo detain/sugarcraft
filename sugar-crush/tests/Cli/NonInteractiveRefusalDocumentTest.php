@@ -330,8 +330,35 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
             self::stderrWritesIn("<?php \$h = fopen('php://stderr', 'w');
 "),
         );
+        // THE THREE SPELLINGS THAT ARE NOT THE CONSTANT. `php://fd/2` was
+        // MEASURED as a SURVIVING mutation before this scan was widened;
+        // `/dev/stderr` was killed only because the path happens to contain
+        // the substring `stderr`, which is an accident and not a guard.
+        // Assembled from parts so this file cannot red itself if the scan set
+        // is ever widened past Runtime.
+        self::assertSame(
+            ['php://fd/2'],
+            self::stderrWritesIn('<?php \fwrite(\fopen("php:' . '//fd/2", "w"), $e);'),
+            'the scanner cannot see a write to descriptor 2 through the fd wrapper, which is the shape that '
+            . 'survived it',
+        );
+        self::assertSame(
+            ['/dev/stderr'],
+            self::stderrWritesIn('<?php \file_put_contents("/dev/' . 'stderr", $e);'),
+        );
+        self::assertSame(
+            ['/dev/err'],
+            self::stderrWritesIn('<?php \fopen("/dev/' . 'err", "w");'),
+        );
+
+        // AND THE NEGATIVES, so the widening above is not simply "match more".
         self::assertSame([], self::stderrWritesIn("<?php echo 'on stdout';
 "));
+        self::assertSame(
+            [],
+            self::stderrWritesIn('<?php $h = \fopen("php:' . '//fd/1", "w");'),
+            'the scanner now calls a write to descriptor 1 a write to stderr',
+        );
 
         $runtime = @file_get_contents(\dirname(__DIR__, 2) . '/src/Runtime.php');
         if ($runtime === false) {
@@ -402,11 +429,19 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertNotSame([], $prefixes, 'no DENIAL_* constants found; this test is driving nothing');
 
         foreach ($prefixes as $name => $prefix) {
-            [, $stderr, $code] = self::runOneShotInAChildProcess((string) $prefix . ' because reasons', 'json');
+            // Loud, not cast (rule 14). This read `(string) $prefix`, which
+            // quietly turns a DENIAL_* that is not a string into something
+            // this test then drives and passes on. A guard that cannot judge a
+            // value must say so; DenialPrefixRosterTest asserts the same thing
+            // over the same constants and the two should not disagree about
+            // what is judgeable.
+            self::assertIsString($prefix, "Runtime::{$name} is not a string; this test cannot drive it");
+
+            [, $stderr, $code] = self::runOneShotInAChildProcess($prefix . ' because reasons', 'json');
 
             self::assertSame(0, $code);
             self::assertStringContainsString(
-                (string) $prefix . ' because reasons',
+                $prefix . ' because reasons',
                 $stderr,
                 "a refusal carrying Runtime::{$name} did not name its kind on stderr",
             );
@@ -463,6 +498,24 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertSame(0, $code, "child failed:\n{$stderr}");
         self::assertSame("the answer\n", $stdout);
         self::assertStringNotContainsString('was not run', $stderr);
+
+        // KNOWN-POSITIVE IN THIS TEST, NOT THE NEXT ONE (rule 15). The
+        // neighbouring test carries one and that is not the same thing: this
+        // assertion is an emptiness claim about a CHILD PROCESS, and every way
+        // the harness can silently stop producing stderr at all — a child that
+        // dies before the observer runs, a pipe read that returns '' — makes
+        // it pass. One refusal through the same harness on the same channel is
+        // what turns "nothing was written" into evidence.
+        [, $announced] = self::runOneShotInAChildProcess(
+            \SugarCraft\Crush\Runtime::DENIAL_HOOK . ' rm -rf is not allowed',
+            'text',
+        );
+        self::assertStringContainsString(
+            'was not run',
+            $announced,
+            'the child harness cannot produce a refusal line at all, so the absence asserted above is the '
+            . 'instrument being dead rather than the turn being clean',
+        );
     }
 
     public function testAToolThatRanAndFailedIsNotAnnouncedAsARefusal(): void
@@ -490,6 +543,12 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      * The script is written to the suite's own sandbox under a name unique to
      * this process, and deleted by exact path — never a glob, because sibling
      * suites own files in the same directory.
+     *
+     * The prefix names what the file IS rather than the round that added it.
+     * It was `sc_r48c_deny_notice_`, which is unique and correct and would
+     * still be here, meaning nothing, several rounds after round 48 ended;
+     * uniqueness comes from the pid and the sequence number, not the prefix,
+     * so the prefix is free to be descriptive.
      *
      * @return array{0: string, 1: string, 2: int}
      */
@@ -546,7 +605,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
             exit(NonInteractive::run(ArgvParser::parse(['sugarcrush', '-p', 'go']), \$backend, {$formatLiteral}));
             CHILD;
 
-        $path = sys_get_temp_dir() . '/sc_r48c_deny_notice_' . getmypid() . '_' . self::$childSeq++ . '.php';
+        $path = sys_get_temp_dir() . '/sc_refusal_notice_child_' . getmypid() . '_' . self::$childSeq++ . '.php';
         file_put_contents($path, $script);
 
         try {
@@ -579,11 +638,38 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      * wrapper, and `error_log()`'s default sink all reach the same place, and a
      * scanner that knew only the first would answer "nothing" for the other two.
      *
+     * THREE MORE SPELLINGS OF THE SAME DESCRIPTOR, ADDED BECAUSE THIS SCAN
+     * CHANGED SIDES. WHAT IT SAID: three alternatives, written when the
+     * assertion was a REMINDER — "the gap is still open; the day it closes,
+     * come update the prose" — where an escaping spelling cost nothing but a
+     * missed nudge. WHAT IS TRUE NOW: the same assertion is a SAFETY guard
+     * ({@see testRuntimeStillWritesNothingToStderrBecauseTheTuiForksIntoIt()}),
+     * and what escapes it is a write landing on top of a live alternate
+     * screen. MEASURED on PHP 8.3.6 by inserting each into `src/Runtime.php`
+     * and running this file: `\fwrite(\STDERR, …)` KILLED,
+     * `\file_put_contents('/dev/stderr', …)` KILLED — but only incidentally,
+     * because the path happens to contain the substring `stderr` — and
+     * `\fwrite(\fopen('php://fd/2', 'w'), …)` SURVIVED. `php://fd/2` and
+     * `/dev/err` are now alternatives in their own right rather than
+     * accidents of substring, and MEASURED against `src/Runtime.php` the
+     * widened pattern still finds zero, so it costs no false positive.
+     *
+     * WHAT STILL ESCAPES, recorded rather than pretended away: a `proc_open()`
+     * descriptor spec (`2 => ['pipe', 'w']`) and anything that computes the
+     * stream name at runtime. `src/Runtime.php` contains no `proc_open` today
+     * (measured, PHP 8.3.6), so the hole is real but not currently reachable;
+     * a `2\s*=>` alternative was rejected because it matches any array
+     * literal keyed 2.
+     *
      * @return list<string>
      */
     private static function stderrWritesIn(string $source): array
     {
-        preg_match_all('/STDERR|php:\/\/stderr|\berror_log\s*\(/i', $source, $matches);
+        preg_match_all(
+            '/STDERR|php:\/\/(?:stderr|fd\/2)\b|\/dev\/(?:std)?err\b|\berror_log\s*\(/i',
+            $source,
+            $matches,
+        );
 
         return $matches[0];
     }

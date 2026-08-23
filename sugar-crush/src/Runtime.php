@@ -96,15 +96,29 @@ final class Runtime
      * one. {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} is what
      * makes that a red rather than a silent misclassification.
      *
-     * READ FROM THE ROSTER RATHER THAN COPIED? DELIBERATELY NOT, AND THE
-     * REASON IS MEASURED. `Chat` is this application's TUI model; touching
+     * READ FROM THE ROSTER RATHER THAN COPIED? DELIBERATELY NOT, AND HERE IS
+     * THE MEASUREMENT. `Chat` is this application's TUI model; touching
      * `Chat::DENIED_ERROR_PREFIXES` from here would load it on the first
      * gated tool call of every run, including the `-p` one-shot path that
-     * exists partly so a run never builds a `Chat` at all —
-     * `NonInteractive::refusalFrom()` goes to some length to keep that load
-     * lazy, and putting the roster read in the engine's hot gate would undo
-     * it for every run that gates anything. So the coupling is pinned by a
-     * test instead of by an autoload.
+     * exists partly so a run never builds a `Chat` at all.
+     *
+     * The generator is not in this file and is named rather than paraphrased:
+     * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()}'s own
+     * doc-block records `class_exists(Chat::class, false)` sampled after a
+     * full `NonInteractive::run()` on PHP 8.3.6 — FALSE for a turn with no
+     * tool events and for one whose tool succeeded, TRUE for an errored
+     * non-refusal and TRUE for a refusal. So on the headless path the roster
+     * is already reached by any turn that ERRORS anything, and what is still
+     * avoided is the load on every turn that errors nothing, which is the
+     * common `-p` shape. That laziness is a property of WHERE the read sits —
+     * behind an `isError()` guard on an event that most turns never raise —
+     * and NOT of any effort inside `refusalFrom()`, which is a plain
+     * `foreach` over the constant; an earlier version of this paragraph said
+     * the method "goes to some length" to stay lazy, which credited the method
+     * for its position. Putting the same read in the engine's gate would move
+     * it from "turns that error" to "turns that gate anything", which is
+     * every turn with a tool call. So the coupling is pinned by a test instead
+     * of by an autoload.
      */
     public const DENIAL_HOOK = 'Hook denied:';
 

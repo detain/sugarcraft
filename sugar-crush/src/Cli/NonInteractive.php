@@ -921,6 +921,21 @@ final class NonInteractive
      * {@see Bootstrap::backend()}, so that coupling does not exist and should
      * not be invented for a cosmetic duplicate.
      *
+     * IT ALSO WRITES INTO THE TEST SUITE'S OWN CONSOLE, and that is a
+     * decision rather than an accident. Several suites drive `self::run()`
+     * IN-PROCESS rather than through a child, and `\STDERR` is bound to
+     * descriptor 2 at startup with no `dup2` in PHP to redirect it, so those
+     * turns put their refusal lines in PHPUnit's output. The alternative was
+     * a settable stream on this class — a second piece of global state, on the
+     * path whose whole point is that it has none — bought for tidier logs. The
+     * lines are the same class as the `sugarcrush: ignoring …` notices already
+     * in that output; the tests that must ASSERT on the bytes pay for a child
+     * process instead ({@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest}),
+     * which is where the claim is made and where it is safe to make it.
+     * Deliberately no count is written down: it is a property of how many
+     * suites happen to drive a refusal, and a cardinality in prose is stale
+     * the next time one is added.
+     *
      * @param string $tool The runtime tool name, as the model called it.
      * @param string $reason The finished result text, which opens with one of
      *   {@see \SugarCraft\Crush\Runtime}'s three denial prefixes — so the

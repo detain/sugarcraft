@@ -428,15 +428,22 @@ owner was not. `Runtime` is the engine, and the TUI forks into the same
 screen — a refusal line written there would paint over a live frame on every
 denied call.
 
-**What is true now: every refused tool call is announced on stderr,** one
-line per refusal, naming the tool and quoting the reason the model was given
-— which opens with `Hook denied:`, `Permission denied:` or
-`Permission required:` depending on whether a hook objected, you answered no,
-or nothing was attached to ask. It is written from the one-shot path itself,
-which owns its console, and it appears on **both** formats: stdout under
-`text` stays the answer and nothing else, and under `json` it stays exactly
-one object, so a shell pipeline and `jq` are both unaffected. A tool that
-quietly did not run is no longer possible to miss.
+**What is true now: on the `-p` one-shot path, every refused tool call is
+announced on stderr,** one line per refusal, naming the tool and quoting the
+reason the model was given — which opens with `Hook denied:`,
+`Permission denied:` or `Permission required:` depending on whether a hook
+objected, you answered no, or nothing was attached to ask. It is written from
+the one-shot path itself, which owns its console, and it appears on **both**
+formats: stdout under `text` stays the answer and nothing else, and under
+`json` it stays exactly one object, so a shell pipeline and `jq` are both
+unaffected.
+
+The scope in that sentence is deliberate. The interactive TUI has never had
+this gap — it draws a refused call struck through — but a **background
+session** still does: `BackgroundSessionRunner` calls the backend's
+`complete()` with a token callback and no event callback at all, so nothing
+downstream ever sees the refusal to announce it. That one is recorded, not
+fixed here.
 
 Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
 that is the thing to know if you are reading the source to find where a type
