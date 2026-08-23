@@ -651,8 +651,12 @@ final class NonInteractive
     }
 
     /**
-     * The stream {@see readStdinIfPiped()} reads when no caller names one, and
-     * the seam a test process uses to keep the suite off its own descriptor 0.
+     * The stream this class's `-p` console family reads when no caller names
+     * one, and the seam a test process uses to keep the suite off its own
+     * descriptor 0. Two readers: {@see readStdinIfPiped()} and
+     * {@see HeadlessPermissionPrompt::__construct()} — see
+     * {@see stdinDefault()} for why the second one shares this pin rather than
+     * declaring its own.
      *
      * Null means "the real STDIN", which is what every production entry point
      * gets: nothing in `src/` or `bin/` ever assigns this.
@@ -694,13 +698,25 @@ final class NonInteractive
     }
 
     /**
-     * The stream {@see readStdinIfPiped()} reads when its caller names none —
+     * The stream this `-p` console family reads when its caller names none —
      * the pin from {@see pinStdinDefault()}, or the real `\STDIN`.
      *
      * Public because the pin is worth ASSERTING rather than trusting: a
      * `tests/bootstrap.php` that quietly stopped installing it would put the
      * suite back on the runner's descriptor 0 with every test still green, and
      * the failure that shape produces is a hang rather than a red.
+     *
+     * TWO READERS NOW, NOT ONE (E243). WHAT THIS SAID: "the stream
+     * {@see readStdinIfPiped()} reads when its caller names none". WHAT IS
+     * TRUE NOW: {@see HeadlessPermissionPrompt::__construct()} resolves its
+     * own `$in` default through here as well, because it had the same
+     * `?? \STDIN` and the same hazard — an approver built by
+     * {@see Bootstrap::withConsolePermissionPrompt()} takes no `$in` at all.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE: `readStdinIfPiped()` is the
+     * reader this seam was BUILT for and the one whose failure mode is a hang
+     * rather than a prompt, so it is still the reason the seam is worth
+     * having; the prompt is a second beneficiary of one pin rather than a
+     * second pin.
      *
      * @return resource
      */
