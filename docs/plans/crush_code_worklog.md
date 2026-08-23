@@ -11068,3 +11068,50 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 49 — IN FLIGHT (base `db90e768`, run `wf_0bcbe384-775`, FIVE lanes)
+
+**Launched 2026-08-23.** The user raised the lane cap from three to five for this step. Five file-disjoint
+lanes × implement → adversarial review → fix, task `wijsgsm5d`.
+
+**Items.** Lane `a` (denial): **E239 + E236 together** — move the denial roster off `Chat` to a neutral
+leaf and route all three hand-rolled producers through it — plus E238 (a test that passes with the thing
+it tests deleted), E243, E240, E223. Lane `b` (dormancy): 🔴 **E226**, the four stacked doc-comment pairs
+round 48 deliberately deferred to after the merge, plus **E227** (`SglangProvider`'s reachability, never
+asked while `WorktreeManager`'s was), E221, E222. Lane `c` (censuses): 🔴 **E228**, the can't-fail-fixture
+sweep, plus E224 and E245 — tests only. Lane `d` (scanners): E233, E230, E232, E235 — tests only.
+Lane `e` (daemon): E241, E229, and **E242 as a check on the supervisor's diagnosis rather than a redo**.
+
+### The supervisor fixed E242 before launching, and the entry's stated mechanism was wrong
+
+E242 blamed a shared uid-keyed `TMPDIR` for a catastrophic slowdown — a lane crawling at ~160 tests per
+ten minutes. **Measured first, as the entry's own Step demanded. It does not reproduce.** `tests/Cli`:
+9.38s alone, 10.97s with two suites concurrent. `tests/Agents`: 39.95s alone, **41.5s with five**. That is
+4–17%, ordinary contention on a 48-core box, not the ~27× reported.
+
+**What reproduced instead is nondeterminism.** One of five concurrent runs failed with
+`SQLite3Exception: Task not found: dep` in `TaskListTest` — two processes opening one
+`tasklist_test_<id>.sqlite3`. The cause is that an argument-less `uniqid` call is derived from microtime
+and nothing else, so it is **not unique across processes**, and `tests/bootstrap.php` points every
+concurrent suite's `TMPDIR` at one uid-keyed sandbox. **91 call sites across 44 files.**
+
+Fixed with a pid prefix plus the more-entropy flag, and guarded by
+`tests/Support/ProcessUniqueTempNameTest.php` — known-positive control, mutation-verified (reverting one
+site reds it, naming file and line). Floor `9497 → 9499 / 133587`, 1 skipped, rc 0.
+
+**Why the supervisor and why pre-round:** it is shared test infrastructure, so a lane doing it would red
+every other lane; and going from three concurrent lanes to five is what made it urgent. ⚠️ **Rounds 45–48
+all ran three concurrent lanes with this hazard live.** Their figures were green and mutually consistent,
+but any isolated anomalous red in those records could have been this.
+
+### Rule 26, learned twice in one day
+
+The round-48 id renumber corrupted the one sentence in `crush_code_RESUME.md` that *explained how to
+renumber*, turning `Ec48-10`/`-11` into `E245`. Harmless only because that sentence was being deleted.
+Hours later, the `uniqid` sweep ate its own guard's known-positive fixture and mangled the doc-block
+justifying it — **the sweep destroyed the file documenting the sweep.**
+
+A regex cannot tell an offender from a description of an offender. The guard was rewritten so the bad form
+never appears literally in it (the fixture builds it by concatenation), and the immunity is now asserted:
+re-running the blanket pass changes 0 sites and leaves the file's md5 unchanged.
+
+**Nothing merged yet. The merged floor has not been measured.**

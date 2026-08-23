@@ -6,12 +6,96 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 49 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-23 from master `db90e768`, tree clean.** Run `wf_0bcbe384-775`, **task `wijsgsm5d`**.
+🔴 **FIVE lanes this round, not three** — the user raised the cap explicitly for this step. Each lane is
+implement → adversarial review → fix.
+
+**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-49-wf_0bcbe384-775.js`
+🔴 **If a limit kills agents mid-round: RESUME if any completed** (`resumeFromRunId: 'wf_0bcbe384-775'`);
+**RELAUNCH if none did**, and improve the brief first. Either way **check every lane for a dirty tree AND
+for commits its report does not mention** (E168, E190), and **inspect before reverting** — rounds 47 and
+48 both had dirty lanes holding real work, and only round 45's was a mutation.
+
+**Base floor `9499 / 133587 / 1 skipped / rc 0` OBSERVED at `db90e768` itself** (E167); the briefs say so.
+
+**Lane dirs** `/home/sites/crush-lane-{a,b,c,d,e}` are `cp -a` copies at `db90e768`, each verified 18/18
+symlinks resolving INSIDE its own tree by `realpath()`. ⚠️ **DO NOT DELETE until the merged floor is
+measured.**
+
+### THE LANES
+
+- **a — denial.** E239 + E236 together (move the roster off `Chat` to `src/Permissions/DenialKind.php`,
+  then route all three hand-rolled producers through it), E238, E243, E240, E237 (recorded), E223.
+- **b — dormancy + doc-blocks.** E226 (the four stacked doc-comment pairs, **deferred to exactly this
+  moment** by round 48), E227 (`SglangProvider`'s unasked reachability), E221, E222.
+- **c — censuses.** E228 (the can't-fail-fixture sweep — the round's most transferable item), E224, E245,
+  E231/E225 (recorded). **Tests only; edits no `src/` file.**
+- **d — scanners.** E233, E230, E232, E235, E234 (recorded). **Tests only.**
+- **e — daemon + concurrency.** E241, E229, E242 (**check the supervisor's diagnosis, do not redo it**),
+  E244 (recorded).
+
+### 🔴 SUPERVISOR ACTION TAKEN BEFORE LAUNCH — E242's REAL MECHANISM, AND WHY IT HAD TO BE PRE-ROUND
+
+E242 blamed a shared uid-keyed `TMPDIR` for a catastrophic concurrency slowdown (~160 tests per ten
+minutes). **Measured first, as the entry's own Step demanded — it does not reproduce.** `tests/Cli` is
+9.38s alone and 10.97s with two suites concurrent; `tests/Agents` is 39.95s alone and **41.5s with FIVE**.
+That is 4–17%, ordinary contention, not the ~27× reported.
+
+**What does reproduce is nondeterminism, which is worse.** One of five concurrent runs failed with
+`SQLite3Exception: Task not found: dep` from `TaskListTest` — two processes opening one
+`tasklist_test_<id>.sqlite3`. Cause: **an argument-less `uniqid` call is microtime-derived and NOT unique
+across processes**, and every suite writes into the one uid-keyed sandbox. **91 sites across 44 files.**
+
+Fixed at `db90e768` with a pid prefix plus the more-entropy flag, and guarded by
+`tests/Support/ProcessUniqueTempNameTest.php` (known-positive control, mutation-verified). **This had to
+be the supervisor's and had to be pre-round**: it is shared test infrastructure, so a lane doing it would
+red every other lane, and going 3 → 5 concurrent lanes is what made it urgent.
+
+⚠️ **Rounds 45–48 all ran three concurrent lanes with this live.** Their figures were green and
+self-consistent, but the hazard was present; treat any single anomalous red in those rounds' records as
+possibly this.
+
+### 🔴 RULE 26 WAS LEARNED TWICE IN ONE DAY — A BLANKET PASS EATS ITS OWN DOCUMENTATION
+
+The round-48 id renumber corrupted the one sentence in this file that *explained how to renumber*
+(`Ec48-10`/`-11` → `E245`). Hours later the `uniqid` sweep ate its own guard's known-positive fixture and
+mangled the doc-block justifying it. **A regex cannot tell an offender from a description of an offender.**
+The guard is now written so the bad form never appears literally in it — the fixture builds it by
+concatenation — and that immunity is asserted by re-running the sweep and diffing. Do the same for any
+future sweep.
+
+### WHAT THE SUPERVISOR MUST DO WHEN IT LANDS
+
+Merge `a` → `b` → `c` → `d` → `e`. Backlog conflict expected at every step; keep both sides and check the
+`### E` heading count before and after each resolution. Renumber **from E245**, **longest-id-first**, then
+grep the whole tree for the provisional-id pattern. ⚠️ **Exclude this file's own how-to-renumber prose
+from that sweep** (rule 26). Real overlap via `git diff --name-only <base>..HEAD` + `comm -12`, never lane
+self-reports.
+
+⚠️ **Read-side hazards.** Lane `c` owns both censuses and **four other lanes are editing `src/`** — the
+per-file stderr cardinalities will red at merge if any of them adds or removes a write, **which is correct
+and is what makes a shared census safe** (round 48 proved it). Resolve by bumping the count, never by
+loosening the assertion. Lane `b` is widening the stacked-doc-comment guard to all of `src/`, which
+becomes a standing obligation on every other lane. Lane `a` moves the denial roster; lane `e` was told to
+depend on it rather than hard-code a prefix.
+
+**Predict tests additively; assertions as a LOWER BOUND.** ⚠️ Round 48's bound was loose by 2 because a
+sibling's new stderr site fell inside lane a's census PREDICATE. **This round has five lanes and lane `c`
+owns censuses over `src/` that four of them write to — expect the bound to be LOOSE and say which lane's
+additions you expect which census to absorb** (E191).
+
+---
+
 ## 0-NOW-49. ROUND 48 CLOSED (floor 9497) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR: `9497 / 133585 / 1 skipped / rc 0` at `2b57cd9c`** (merges `68189e5e` a, `198ce2f3` b,
 `3c1f8aa8` c; renumbering `2b57cd9c`), supervisor-measured twice in the live tree — once at the merge and
 again after the renumber, byte-identical both times — `sugar-crush` LINKED (04:32.542, 280.40 MB).
 Supersedes every earlier figure (9445 held round 47, 9378 round 46, 9308 round 45, 9215 round 44).
+⚠️ **The CURRENT master floor is `9499 / 133587` at `db90e768`** — the pre-round-49 `uniqid`
+fix added two tests (its guard). 9497 is round 48's close; 9499 is what round 49's lanes branch from.
 **Skips MUST stay exactly 1**, confirmed BY NAME this round:
 `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. A second skip means the
 closure is gone and every figure is void. 18/18 symlinks by `is_link()`; config md5
