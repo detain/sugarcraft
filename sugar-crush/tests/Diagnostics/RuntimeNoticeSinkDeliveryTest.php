@@ -1113,42 +1113,85 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     }
 
     /**
-     * `Chat` CARRIES NO STACKED DOC-COMMENTS, which is a guard this round owes
-     * the file rather than a general style rule.
+     * NO FILE UNDER `src/`, AND NOT `bin/sugarcrush`, CARRIES A STACKED
+     * DOC-COMMENT — two doc-blocks in a row with no declaration between them.
      *
-     * E193's re-arm reasoning landed as a SECOND doc-comment immediately
-     * above {@see \SugarCraft\Crush\Chat::pumpRuntimeNotices()} instead of
-     * being merged into the block already there. PHP attaches only the LAST
-     * doc-comment in such a run, so the earlier one stops documenting anything:
-     * `pumpRuntimeNotices()` lost its `@return array{0:Chat,1:?\Closure}` tag
-     * (VERIFIED at the time by `ReflectionMethod::getDocComment()`, which
-     * returned the re-arm block with no `@return` in it) and the batching and
-     * `Role::System` arguments became prose no tool could resolve.
+     * WHY THE SHAPE COSTS SOMETHING. PHP attaches only the LAST doc-comment in
+     * such a run, so every earlier one stops documenting anything. E193's
+     * re-arm reasoning landed as a second block immediately above
+     * {@see \SugarCraft\Crush\Chat::pumpRuntimeNotices()}: that method lost its
+     * `@return array{0:Chat,1:?\Closure}` tag (VERIFIED at the time by
+     * `ReflectionMethod::getDocComment()`, which returned the re-arm block with
+     * no `@return` in it) and the batching and `Role::System` arguments became
+     * prose no tool could resolve.
      *
-     * IT WAS NOT THE ONLY ONE. Scanning for the shape found THREE pairs in this
-     * file, and the other two were worse: `refuseInFlightCommand()` and
-     * `dispatchCommand()` had each lost their doc-block to the method BELOW
-     * them, so both read as undocumented while their prose sat above an
-     * unrelated declaration — and `expandCustomCommand()`, which returns
-     * `?string`, was preceded by a stranded `@return array{0: self, 1:
-     * ?\Closure}|null`.
+     * THE EXPENSIVE VARIANT IS THE COMMON ONE. A merely-merged pair is cheap;
+     * the costly shape is prose describing method A stranded above method B's
+     * own block, leaving A silently undocumented and A's description attached
+     * to nothing while a reader takes it for B's. `Chat.php` had two of those
+     * three. All FOUR pairs this guard's widening cleared were that kind —
+     * `Runtime::__construct()` (its whole `@param` set, for `$environmentBlock`
+     * / `$parallelToolCalls` / `$parallelToolDeadlineSeconds`, stranded above
+     * the `$memoryBlock` property), {@see \SugarCraft\Crush\Commands\CommandSpec::refusedForm()},
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Glob::prunedDirs()} and
+     * {@see \SugarCraft\Crush\Tui\Components\MenuBar::activateMenu()}, each of
+     * which `ReflectionMethod::getDocComment()` reported as `false` beforehand
+     * and reports a block for now.
      *
-     * SCOPED TO `Chat.php` DELIBERATELY. The same scan finds four more pairs
-     * elsewhere in `src/`, in files this change does not own; widening the
-     * guard would red on work in flight rather than on this defect. The finding
-     * is recorded in the hardening backlog instead.
+     * WHAT THIS DOC-BLOCK USED TO SAY, and why the sentence is gone (rule 7):
+     * it said "SCOPED TO `Chat.php` DELIBERATELY … widening the guard would red
+     * on work in flight rather than on this defect", and it was right when
+     * written — three sibling lanes were editing `src/` in the same round.
+     * WHAT IS TRUE NOW: those lanes merged, the four pairs the narrow scope
+     * deferred are fixed, and the roster below is the whole of `src/` plus the
+     * binary. WHY IT STILL EARNS ITS PLACE: the reason for the narrow scope was
+     * never that the shape is harmless outside `Chat.php` — it was concurrency,
+     * and a future round narrowing this again for the same reason should say so
+     * here rather than delete the guard.
+     *
+     * A WIDENED GUARD IS A STANDING OBLIGATION ON EVERY OTHER LANE, and that is
+     * the point: it reds on the next stacked pair anyone writes, in any file,
+     * rather than only in the one file that happened to have the bug first.
      */
-    public function testChatCarriesNoStackedDocComments(): void
+    public function testNoSourceFileCarriesStackedDocComments(): void
     {
-        $chat = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Chat.php');
+        $root = \dirname(__DIR__, 2);
+        $files = self::phpSourceRoster($root);
+
+        // THE ROSTER IS THE OTHER HALF OF THE KNOWN-POSITIVE BELOW. A scan of
+        // an EMPTY roster also yields [], so the fixtures alone cannot tell a
+        // working instrument from one pointed at nothing. These three are named
+        // because they exist, not counted: a cardinality over `src/` is stale
+        // the moment any lane adds a file.
+        self::assertContains($root . '/src/Chat.php', $files);
+        self::assertContains($root . '/src/Runtime.php', $files);
+        self::assertContains($root . '/bin/sugarcrush', $files);
+
+        $stacked = [];
+        foreach ($files as $file) {
+            $source = file_get_contents($file);
+
+            // A file this scan could not read must go RED, not silently
+            // contribute zero findings — an unreadable file is a hole shaped
+            // exactly like the next stacked pair.
+            self::assertIsString(
+                $source,
+                $file . ' could not be read, so the assertion below does not speak for it.',
+            );
+
+            foreach (self::stackedDocCommentLines($source) as $line) {
+                $stacked[] = substr($file, \strlen($root) + 1) . ':' . $line;
+            }
+        }
 
         self::assertSame(
             [],
-            self::stackedDocCommentLines($chat),
-            'src/Chat.php has doc-comments stacked immediately on top of each other at the lines '
-                . 'listed. PHP attaches only the last of a run, so every earlier one documents '
-                . 'nothing: its @return tag is off the method and its reasoning is orphaned. Merge '
-                . 'them into one block, or move the stranded one down to the declaration it describes.',
+            $stacked,
+            'These files have doc-comments stacked immediately on top of each other at the '
+                . 'file:line pairs listed. PHP attaches only the last of a run, so every earlier '
+                . 'one documents nothing: its @return tag is off the method and its reasoning is '
+                . 'orphaned. Merge them into one block, or move the stranded one down to the '
+                . 'declaration it describes.',
         );
 
         // KNOWN-POSITIVE THROUGH THE SAME SCANNER IN THE SAME TEST (rule 15).
@@ -1170,6 +1213,36 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             /** Another block, with a declaration between them. */
             function g(): void {}
             PHP));
+    }
+
+    /**
+     * Every PHP file the stacked-doc-comment guard speaks for: all of `src/`,
+     * plus the `bin/sugarcrush` entry point.
+     *
+     * `bin/sugarcrush` is in the roster even though `token_get_all()` finds no
+     * `T_DOC_COMMENT` in it at all as this is written, because the guard exists
+     * for the block someone adds later. Its shebang line tokenises as
+     * `T_INLINE_HTML` (VERIFIED, PHP 8.3.6) rather than breaking the scan, so
+     * including it costs nothing.
+     *
+     * @return list<string> absolute paths, sorted
+     */
+    private static function phpSourceRoster(string $root): array
+    {
+        $files = [];
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
+            $root . '/src',
+            \FilesystemIterator::SKIP_DOTS,
+        ));
+        foreach ($walk as $entry) {
+            if ($entry->isFile() && $entry->getExtension() === 'php') {
+                $files[] = $entry->getPathname();
+            }
+        }
+        $files[] = $root . '/bin/sugarcrush';
+        sort($files);
+
+        return $files;
     }
 
     /**

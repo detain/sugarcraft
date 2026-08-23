@@ -967,20 +967,6 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
     }
 
     /**
-     * The prune set in force for this call, as a lookup keyed by directory
-     * name.
-     *
-     * The list is a default, not a prohibition. Naming a directory in the
-     * pattern (`vendor/**\/*.php`) or searching from inside it (`path:
-     * "vendor/foo"`) un-prunes it, on the same reasoning the hidden-segment
-     * rule uses: spelling a directory out is an explicit request for it, and
-     * a search that silently returns nothing for the thing you asked for by
-     * name is worse than a slow one. A caller wanting no pruning at all
-     * passes `prunedDirs: []` to the constructor.
-     *
-     * @return array<string, true>
-     */
-    /**
      * The prune list this instance was built with, for the schema text.
      *
      * Kept separate from {@see prunedDirs()} because the schema is written
@@ -1014,6 +1000,20 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         return $names[0];
     }
 
+    /**
+     * The prune set in force for this call, as a lookup keyed by directory
+     * name.
+     *
+     * The list is a default, not a prohibition. Naming a directory in the
+     * pattern (`vendor/**\/*.php`) or searching from inside it (`path:
+     * "vendor/foo"`) un-prunes it, on the same reasoning the hidden-segment
+     * rule uses: spelling a directory out is an explicit request for it, and
+     * a search that silently returns nothing for the thing you asked for by
+     * name is worse than a slow one. A caller wanting no pruning at all
+     * passes `prunedDirs: []` to the constructor.
+     *
+     * @return array<string, true>
+     */
     private function prunedDirs(string $pattern, string $baseDir): array
     {
         $named = array_flip(array_merge(

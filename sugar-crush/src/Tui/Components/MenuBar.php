@@ -366,13 +366,6 @@ final class MenuBar
     }
 
     /**
-     * Persist the menu index {@see handleKey()} navigated to.
-     *
-     * handleKey() is pure — it RETURNS the new index — and its only caller
-     * discarded that return value, so every left/right/h/l press recomputed
-     * a move and threw it away. Non-toggling, unlike {@see openMenu()}.
-     */
-    /**
      * The open menu's dropdown panel, or '' when nothing is open.
      *
      * The last missing piece: {@see render()} only ever recoloured the ACTIVE
@@ -479,6 +472,13 @@ final class MenuBar
         return 0;
     }
 
+    /**
+     * Persist the menu index {@see handleKey()} navigated to.
+     *
+     * handleKey() is pure — it RETURNS the new index — and its only caller
+     * discarded that return value, so every left/right/h/l press recomputed
+     * a move and threw it away. Non-toggling, unlike {@see openMenu()}.
+     */
     public static function activateMenu(int $index): void
     {
         $count = count(self::menus());
