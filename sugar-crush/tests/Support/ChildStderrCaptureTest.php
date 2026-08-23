@@ -7,8 +7,13 @@ namespace SugarCraft\Crush\Tests\Support;
 use PHPUnit\Framework\TestCase;
 
 /**
- * No child process launched from `tests/Integration/` may leave its stderr on
- * the suite's.
+ * No child process launched from a directory in {@see SCOPE} may leave its
+ * stderr on the suite's.
+ *
+ * The heading used to name `tests/Integration/`, which was the whole of
+ * SCOPE when this file was written and has been three directories and then
+ * six since. The constant is the list; a heading that repeats it is a second
+ * copy that goes stale on the commit that widens the first.
  *
  * WHAT THIS WAS COMMISSIONED TO FIX, AND WHAT WAS ACTUALLY THERE. Round 45
  * recorded the suite's `sugarcrush: ` stderr lines as a HARNESS property -
@@ -71,27 +76,135 @@ final class ChildStderrCaptureTest extends TestCase
     /**
      * Path prefixes, relative to `tests/`, the rule is enforced under.
      *
-     * WHAT THIS WAS: the single prefix `Integration/`, chosen when that was
-     * the only directory anyone had censused. WHAT IS TRUE NOW: it is all
-     * three directories round 47's lane split gave this lane, and widening
-     * cost nothing - measured with this file's own scanner over the whole of
-     * `tests/`, `Agents/` was already clean, and `Support/` had exactly one
-     * non-capture, `ForkedChildTest::isRaw()`'s `stty ... 2>/dev/null`, which
-     * was FIXED rather than exempted. Widening added no row to
-     * {@see ACCEPTED_DISCARDED_STDERR}.
+     * WHAT THIS WAS: three prefixes - `Agents/`, `Integration/`, `Support/` -
+     * the directories round 47's lane split gave that lane, widened from the
+     * single `Integration/` that was all anyone had censused. That `Chat/`
+     * and `MCP/` had been measured clean and were "free to adopt" was
+     * recorded in the hardening backlog and NOT here - attributed correctly
+     * because a reader who goes looking for it in this file's history will
+     * not find it, and a "WHAT IT SAID" that was never said is the same rot
+     * as a stale one.
      *
-     * WHY THE REMAINDER IS STILL OUT, stated rather than silently omitted:
-     * every other directory under `tests/` either holds non-captures that
-     * only its owning lane may edit, or is clean but owned by another lane -
-     * and adding a clean directory here is not free either, because it makes
-     * this guard an obligation on every spawn a sibling adds there, which
-     * reds at merge in a lane that never saw this file. That is a decision
-     * for the round that owns those directories; the scanner is pointed at a
-     * new one by adding a prefix here.
+     * WHAT IS TRUE NOW: round 48 owned them and adopted both, plus
+     * `Backend/`. The census was re-run rather than inherited - a count taken
+     * in one lane's worktree is invalidated by the next merge, so the claim
+     * was re-derived at this commit with this file's own scanner over the
+     * whole of `tests/`. `Chat/` and `MCP/` held non-captures: NONE.
+     * `Backend/` held exactly one, `EngineBackendTest::isRaw()`'s
+     * `stty ... 2>/dev/null` - a COPY of the helper round 47 fixed in
+     * `Support/ForkedChildTest.php`, sitting one directory away with the
+     * opposite behaviour because it was in no lane's file list. It was FIXED
+     * the same way rather than exempted, so the widening added no row at all
+     * to {@see ACCEPTED_DISCARDED_STDERR}. (The count of prefixes is not
+     * written out here: it was wrong in the commit that shipped it, said
+     * "five" over a list of six, and it is a number a reader can take from
+     * {@see SCOPE} itself.)
+     *
+     * WHY THE REMAINDER IS STILL OUT. This paragraph used to end the matter
+     * in prose: the remaining directories "hold non-captures that only its
+     * owning lane may edit", and widening was "a decision for the round that
+     * owns those directories". WHAT IS TRUE NOW: that reasoning is unchanged
+     * and still correct, but it was not CHECKED anywhere, and prose is not a
+     * partition. Measured: narrowing this constant all the way down to
+     * `['Integration/']` - undoing every widening this file has ever had -
+     * left the whole guard green with the same assertion count as the
+     * unmutated run. Membership of SCOPE had no signal in either direction,
+     * so nothing distinguished "deliberately deferred" from "never looked
+     * at". {@see OUT_OF_SCOPE} is where that reasoning now lives, one argued
+     * row per prefix, and {@see testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor()}
+     * is what makes the two lists jointly total over the offenders.
      *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Integration/', 'Support/'];
+    private const SCOPE = ['Agents/', 'Backend/', 'Chat/', 'Integration/', 'MCP/', 'Support/'];
+
+    /**
+     * Directories that hold an offending spawn and are NOT yet guarded, each
+     * with the reason it cannot be adopted in the round that recorded it.
+     *
+     * WHY THIS MAP EXISTS AT ALL, since {@see SCOPE} could simply have been
+     * widened: every prefix below names a directory in ANOTHER lane's file
+     * list. Adopting one means editing files this lane may not touch, and
+     * adding a directory to SCOPE without fixing its sites reds the guard for
+     * whoever merges next. The alternative to a row is not a fix - it is
+     * silence, which is what this file had.
+     *
+     * THE ROWS ARE CHECKED IN BOTH DIRECTIONS, so this cannot become a
+     * rubber stamp. {@see testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn()}
+     * fails on a row whose directory has been cleaned up - a deferral that
+     * has been overtaken is how a directory silently stops being tracked -
+     * and {@see testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor()} fails
+     * on an offender matched by neither list, which is the only outcome
+     * refused outright.
+     *
+     * A FILE AT THE ROOT OF `tests/` has no directory to name, so its key is
+     * its own filename. Both maps are matched with `str_starts_with()`, which
+     * makes that work; it reads oddly enough that the failure message says so
+     * rather than sending the reader looking for a directory.
+     *
+     * THE REASONS DELIBERATELY CARRY NO SITE COUNTS. A cardinality measured
+     * over `tests/` in one lane's worktree is wrong by the next merge, and
+     * every count a reader could want is derived by the two tests from the
+     * tree itself.
+     *
+     * @var array<string, string>
+     */
+    private const OUT_OF_SCOPE = [
+        'BaseSystemPromptTest.php' =>
+            'A root-level file, so the key is the filename. Its one offender is an `exec()` '
+            . 'removing a temp tree, where the shell has no output the test reads and the '
+            . 'redirection is pure noise-suppression. Cheap to close, but the file is at the '
+            . "root of tests/ and in no lane's list.",
+        'ChatTest.php' =>
+            'A root-level file, so the key is the filename. Its offender probes a tty with '
+            . '`stty ... 2>/dev/null`, where the discard is load-bearing: the call is a FEATURE '
+            . 'TEST whose failure output is expected and must not reach the suite. Closing it '
+            . 'means a pipe plus a decision about what to do with the text, not a redirection '
+            . 'swap.',
+        'Cli/' =>
+            'Offenders are `exec()` calls with no redirection at all, which is the cheap shape '
+            . 'to close - the child writes to a file the helper reads back, so fd 2 has an '
+            . 'obvious home. Deferred on ownership only.',
+        'Commands/' =>
+            'The largest inherited-shape cluster outside SCOPE and the cheapest to close: bare '
+            . '`exec()` calls, several of them `rm -rf` on a sandbox where nothing reads any '
+            . 'output. Deferred on ownership only.',
+        'Config/' =>
+            'One `exec(... 2>/dev/null)` whose exit status IS the assertion. The discard hides '
+            . "the diagnostic that would explain a failure, so closing it improves the test's "
+            . 'failure message rather than just its shape. Deferred on ownership only.',
+        'Context/' =>
+            'The largest discard cluster in the tree: `git init` / `git config` fixture setup '
+            . 'with `2>/dev/null` on each line. The discards are deliberate - a missing git '
+            . 'must not print - but they are also the shape this guard exists to refuse, so '
+            . 'each needs either a pipe or an argued exemption row. The volume is why this is '
+            . 'a round of its own.',
+        'Diagnostics/' =>
+            'A single bare `exec()`. Cheap, deferred on ownership only.',
+        'Hooks/' =>
+            'One `shell_exec()` reading `getconf PAGESIZE`, already `@`-suppressed and guarded '
+            . 'by a `<= 0` check, so the inherited fd 2 is the only thing that can reach the '
+            . 'suite. Cheap, deferred on ownership only.',
+        'Providers/' =>
+            'One `git init ... 2>/dev/null` behind a `markTestSkipped()` for a missing git - '
+            . 'the same fixture shape as Context/ and it should be settled with it rather than '
+            . 'piecemeal.',
+        'Renderer/' =>
+            'A POSITIONAL descriptor spec sending all three fds to /dev/null in a `runQuietly()` '
+            . 'helper. Read as `inherited` until round 48 fixed the classifier, so this row '
+            . 'records a site that was invisible rather than deferred. The discard is the '
+            . "helper's entire purpose, so this one wants an exemption row, not a fix.",
+        'Sessions/' =>
+            'A POSITIONAL descriptor spec sending all three fds to /dev/null while spawning a '
+            . 'process purely to harvest a pid that is guaranteed dead. Same classifier fix as '
+            . 'Renderer/, same conclusion: the discard is the point, so this wants an exemption '
+            . 'row.',
+        'Tools/' =>
+            'A `git init` fixture cluster with `2>/dev/null` plus one bare `exec()`. The git '
+            . 'half belongs with Context/ and Providers/.',
+        'Workflows/' =>
+            'A single bare `exec()`. Cheap, deferred on ownership only.',
+    ];
 
     /**
      * Spawn sites that send fd 2 to the null device ON PURPOSE, with the count
@@ -177,6 +290,133 @@ final class ChildStderrCaptureTest extends TestCase
         $this->assertSame(
             ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
             $one('proc_open("ls", self::descriptors(), $pipes);')['shape'],
+        );
+
+        // ...AND NEITHER IS AN fd-2 ENTRY IT CANNOT READ, which is a
+        // different hole in the same wall and was open until round 48. The
+        // scanner used to answer `captured` for any spec that merely NAMED
+        // fd 2 without holding the literal `/dev/null`, so an entry behind a
+        // call came back compliant on the strength of the key. The live shape
+        // is `BinSugarcrushDispatchTest::armWatchdog()`'s `2 => $devNull('w')`
+        // - a closure returning `['file','/dev/null','w']`, i.e. a discard
+        // reported as a capture.
+        //
+        // NOTHING IN THE TREE EXERCISES THIS, and that is stated rather than
+        // discovered later: a per-site census of all of `tests/` was run
+        // before and after each of the two widenings - the bracket check and
+        // the member check below it - and ZERO real sites moved either time,
+        // because that one site is settled as `discarded` on the
+        // command-string branch before its spec is ever read. The census
+        // harness was itself checked against the fixture cases below, which
+        // DO move, before its zero was believed. These fixtures are the only
+        // thing keeping the branch honest.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [1 => ["pipe","w"], 2 => $devNull("w")], $p);')['shape'],
+            'an fd-2 entry behind a call is not a capture - the scanner cannot see where it goes',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [2 => self::PIPE], $p);')['shape'],
+            'an fd-2 entry that is a constant is not a capture either',
+        );
+        // The long array syntax is deliberately NOT accepted as a literal:
+        // widening the shape is a decision for somebody holding a census.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [2 => array("pipe","w")], $p);')['shape'],
+        );
+
+        // AND AN ENTRY THAT IS A LITERAL ARRAY OF NON-LITERALS, which the
+        // first version of the rule above claimed to cover and did not. Its
+        // doc-block said "an entry that is not an inline literal array is
+        // unclassified" while the code only checked the BRACKETS: the
+        // decision underneath is `str_contains($entry, '/dev/null')` over the
+        // entry's SOURCE TEXT, so a member that is not its own value makes
+        // that search meaningless in the direction that waves an offender
+        // through. `['file', $devNull, 'w']` is the nearest sibling of
+        // `armWatchdog()`'s live site and read `captured` for a full round.
+        //
+        // All four spellings of "the text is not the value" are pinned,
+        // because each fails the substring search for a different reason and
+        // any one of them could be re-admitted by a narrower fix.
+        foreach ([
+            'a variable member' => '$devNull',
+            'a class constant member' => 'self::DEV_NULL',
+            'a global constant member' => 'DEV_NULL',
+            'a concatenated member' => "'/dev' . '/null'",
+            'an interpolated member' => '"/dev/{$name}"',
+        ] as $why => $member) {
+            $this->assertSame(
+                ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+                $one('proc_open("ls", [2 => ["file", ' . $member . ', "w"]], $p);')['shape'],
+                $why . ' is not a capture - the scanner is deciding on source text, and this '
+                    . "member's text is not its value",
+            );
+        }
+
+        // A POSITIONAL DESCRIPTOR SPEC, which `proc_open()` reads BY
+        // POSITION - element 2 is fd 2, with no `2 =>` key anywhere in the
+        // source. Every spelling of this returned `inherited` until round 48,
+        // because the classifier's first branch answered on the absence of
+        // the key alone. Four different truths came back as one answer, and
+        // `inherited` is a definite claim rather than an "I cannot tell", so
+        // it was wrong in BOTH polarities at once - understating a real
+        // discard and redding a real capture. All four are pinned.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $one('proc_open("ls", [["file","/dev/null","r"],["file","/dev/null","w"],'
+                . '["file","/dev/null","w"]], $p);')['shape'],
+            'a positional spec sending fd 2 to the null device is a discard - reading it as '
+                . 'inherited is the polarity that waves a real offender through',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [["pipe","r"],["pipe","w"],["pipe","w"]], $p);')['shape'],
+            'a positional spec piping fd 2 is a capture - reading it as inherited is the '
+                . 'polarity that reds correct code',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('proc_open("ls", [["pipe","r"],["pipe","w"]], $p);')['shape'],
+            'a spec with no third element really does leave fd 2 where the parent had it, so '
+                . 'this one shape must NOT move',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $one('proc_open("ls", [["pipe","r"],["pipe","w"],$err], $p);')['shape'],
+            'a positional element 2 that is not its own value is unreadable, and the honest '
+                . 'answer to that is a failure rather than a confident inherited',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('proc_open("ls", [0 => ["pipe","r"], 1 => ["pipe","w"]], $p);')['shape'],
+            'a KEYED spec that simply does not mention fd 2 leaves it inherited, and must not '
+                . 'be dragged into the positional reading',
+        );
+
+        // THE LIMIT OF THAT RULE, named here rather than left to be
+        // discovered: both of these are all-literal, so they are judged by
+        // the `/dev/null` text alone and come back `captured`. `redirect`
+        // merges fd 2 into fd 1 and this scanner does not model where fd 1
+        // went; a real path is a file the test may or may not read back.
+        // Closing either needs fd-1 destination modelling, and nothing in the
+        // tree exercises it.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [1 => ["pipe","w"], 2 => ["redirect", 1]], $p);')['shape'],
+        );
+
+        // THE OTHER POLARITY, because a rule that answers `unclassified` for
+        // everything reds correct code, and that is how the next real
+        // offender buys its exemption. Both literal shapes still resolve.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [2 => ["file", "/tmp/err", "w"]], $p);')['shape'],
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $one('proc_open("ls", [2 => ["file", "/dev/null", "w"]], $p);')['shape'],
         );
 
         // THE SPELLING THAT WAS MISSED. `\proc_open(...)` is
@@ -385,15 +625,32 @@ final class ChildStderrCaptureTest extends TestCase
      * the row goes, and the branch would have been left with no liveness
      * coverage at all.
      *
+     * THREE, and it is why this helper is no longer NAMED for the discard
+     * branch. WHAT THIS DOC-BLOCK SAID: that the thing needing a
+     * known-positive is the discard branch, and the name
+     * `assertTheDiscardBranchIsAlive()` said the same. WHAT IS TRUE NOW:
+     * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()} treats
+     * {@see ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED} as an offender too
+     * and carries a whole paragraph about it in its failure message, so
+     * `unclassified` is a second shape whose ABSENCE that guard asserts - and
+     * nothing here proved that shape could still be produced. Measured:
+     * with `fdTwoEntryIsAllLiteral()` mutated to `return true`, the absence
+     * guard passed - 1 test, 12 assertions, entirely green - while the
+     * unit-level fixture test above killed it. Blind the scanner's
+     * unclassified branch and the REAL-TREE guard stays quiet, which is the
+     * exact failure mode measurements ONE and TWO were about.
+     *
      * WHY THIS EARNS ITS PLACE: an assertion of "no occurrences" is not
      * evidence unless something in the same test proves the instrument can
-     * still produce one. All three discard paths are exercised below - a
-     * shell command string, a `proc_open()` COMMAND STRING, and a
-     * `proc_open()` DESCRIPTOR SPEC - each with the opposite polarity beside
-     * it, because a scanner stuck at `discarded` reds correct code and that
-     * is how the next real offender buys its exemption.
+     * still produce one - for EVERY shape that assertion is claiming zero of,
+     * not just the shape that happened to be found first. All three discard
+     * paths are exercised below - a shell command string, a `proc_open()`
+     * COMMAND STRING, and a `proc_open()` DESCRIPTOR SPEC - and both
+     * unclassified paths after them, each with the opposite polarity beside
+     * it, because a scanner stuck at `discarded` (or at `unclassified`) reds
+     * correct code and that is how the next real offender buys its exemption.
      */
-    private function assertTheDiscardBranchIsAlive(): void
+    private function assertTheOffendingShapeBranchesAreAlive(): void
     {
         $shape = static function (string $body): string {
             $sites = ChildStderrCaptureScanner::scan("<?php\n" . $body . "\n");
@@ -437,6 +694,62 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'caller reads - so reporting it as a discard is the polarity that reds correct '
                 . 'code',
         );
+
+        // THE FOURTH DISCARD PATH, added when it turned out to exist: a
+        // POSITIONAL spec, decided by `positionalShape()` rather than by
+        // either branch above. Two real sites in the tree read `inherited`
+        // until it was fixed.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            $shape('proc_open("ls", [["file","/dev/null","r"],["file","/dev/null","w"],'
+                . '["file","/dev/null","w"]], $p);'),
+            'the positional null-device path is dead, so a spec that discards fd 2 by position '
+                . 'reads as the inherited it is not',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $shape('proc_open("ls", [["pipe","r"],["pipe","w"],["pipe","w"]], $p);'),
+            'the positional path now calls a real capture something else, which is the other '
+                . 'polarity',
+        );
+
+        // THE UNCLASSIFIED SHAPE, which the caller also asserts zero of. Two
+        // paths reach it and a mutation of either one alone left the
+        // real-tree guard green, so both are fixtured here.
+        //
+        // PATH ONE: the fd-2 entry is found, but a member is not its own
+        // value. `fdTwoEntryIsAllLiteral()` is what refuses it; blinded to
+        // `return true` this reads as a capture and the absence guard passes.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $shape('proc_open("ls", [2 => $x], $p);'),
+            'an fd-2 entry whose member is a variable now reads as a shape this guard accepts, so '
+                . 'a spec the scanner cannot actually follow passes as innocent',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $shape('proc_open("ls", [2 => ["file", "/dev/{$n}", "w"]], $p);'),
+            'an interpolated member is not its own value either - if this is classified, a '
+                . '"/dev/{$n}" that resolves to /dev/null is being called a capture',
+        );
+
+        // PATH TWO: the descriptor spec is a variable this scanner cannot
+        // resolve at the call site at all, so there is no entry to read.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+            $shape('function b() { proc_open("ls", $d, $p); }'),
+            'an unresolvable descriptor spec now reads as a shape this guard accepts, so every '
+                . 'spawn that builds its spec elsewhere becomes invisible to the absence guard',
+        );
+
+        // THE OPPOSITE POLARITY FOR BOTH PATHS, because a scanner stuck at
+        // `unclassified` reds every correct spawn in the tree rather than
+        // hiding one - the other way this instrument can be broken.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $shape('proc_open("ls", [2 => ["file", "/tmp/e.log", "w"]], $p);'),
+            'a fully literal fd-2 entry is readable and must not be reported unclassified',
+        );
     }
 
     private static function inScope(string $relative): bool
@@ -452,7 +765,7 @@ final class ChildStderrCaptureTest extends TestCase
 
     public function testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites(): void
     {
-        $this->assertTheDiscardBranchIsAlive();
+        $this->assertTheOffendingShapeBranchesAreAlive();
 
         $root = \dirname(__DIR__);
         $offenders = [];
@@ -528,7 +841,7 @@ final class ChildStderrCaptureTest extends TestCase
      */
     public function testEveryDiscardExemptionStillDescribesRealSites(): void
     {
-        $this->assertTheDiscardBranchIsAlive();
+        $this->assertTheOffendingShapeBranchesAreAlive();
 
         $root = \dirname(__DIR__);
 
@@ -552,5 +865,197 @@ final class ChildStderrCaptureTest extends TestCase
                     . 'matches is a licence nobody checked.',
             );
         }
+    }
+
+    /**
+     * {@see SCOPE} AND {@see OUT_OF_SCOPE} MUST BE JOINTLY TOTAL over the
+     * offenders, or a deferral is a hole rather than a record.
+     *
+     * WHY THIS TEST HAD TO EXIST, measured rather than argued. Narrowing
+     * {@see SCOPE} to `['Integration/']` - undoing every widening this file
+     * has ever received, including the one made in the same round as this
+     * test - left the whole guard green, with the SAME assertion count as the
+     * unmutated run. {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()}
+     * never looks outside SCOPE, and
+     * {@see testEveryDiscardExemptionStillDescribesRealSites()} only checks
+     * rows that exist, so between them the two agreed that a directory nobody
+     * covers is fine. Dropping `MCP/` from SCOPE *and* deleting a real `2>&1`
+     * from a spawn in that directory also survived - a widening and the
+     * offender it was supposed to catch, removed together, in silence.
+     *
+     * So this one starts from the SPAWN SITES rather than from either list:
+     * every file anywhere under `tests/` holding a site this guard would
+     * refuse has to be matched by one list or the other. Adopting a directory
+     * is then a visible act, and so is declining to.
+     *
+     * NOTE THE REACH, because it is wider than {@see SCOPE} and easy to
+     * describe as though it were not. The walk is over ALL of `tests/`. An
+     * offending spawn added ANYWHERE - including a directory no lane has ever
+     * listed - reds this test until its directory is put in one of the two
+     * maps. That is intended, and it is a standing obligation on every other
+     * lane, so it is written down here rather than left to be rediscovered
+     * from a red merge.
+     *
+     * THE SIBLING GUARD ALREADY WORKS THIS WAY.
+     * {@see ForkedChildReaperAdoptionTest::testNoDirectoryWithUnreapedForksIsUnaccountedFor()}
+     * is the same invariant over the reaper, and the equivalent mutation
+     * there - drop a prefix, restore a real offender in it - is killed. This
+     * file was widened in the same round and did not get the invariant, which
+     * is the whole reason both mutations above survived here.
+     */
+    public function testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor(): void
+    {
+        $this->assertTheOffendingShapeBranchesAreAlive();
+
+        $root = \dirname(__DIR__);
+        $unaccounted = [];
+        $checked = 0;
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+        foreach ($files as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            $relative = substr($file->getPathname(), \strlen($root) + 1);
+            $offenders = self::offendingSites($relative, (string) file_get_contents($file->getPathname()));
+            if ($offenders === []) {
+                continue;
+            }
+            $checked++;
+
+            if (!self::accountedFor($relative)) {
+                $unaccounted[] = $relative . ' (' . implode(', ', $offenders) . ')';
+            }
+        }
+
+        // The scanner has to have found something to reason about, or
+        // "nothing is unaccounted for" is a statement about a dead
+        // instrument rather than about the tree.
+        $this->assertGreaterThan(
+            0,
+            $checked,
+            'the stderr scanner found no offending spawn anywhere under tests/ - it is dead',
+        );
+
+        $this->assertSame(
+            [],
+            $unaccounted,
+            'this file launches a child whose stderr lands on the suite\'s, and it is matched by '
+                . 'no prefix in either SCOPE or OUT_OF_SCOPE. Either give the spawn somewhere to '
+                . 'put fd 2 and add its directory to SCOPE, or add that directory to '
+                . 'OUT_OF_SCOPE with the reason it cannot be adopted yet. Both maps are matched '
+                . 'with str_starts_with(), so for a test at the ROOT of tests/ - which has no '
+                . 'directory - the entry is the filename itself. Leaving it in neither is the '
+                . 'only outcome this guard refuses.',
+        );
+    }
+
+    /**
+     * A deferral cannot outlive the offender it was written for.
+     *
+     * Without this, {@see OUT_OF_SCOPE} decays into a list of directories
+     * somebody once worried about, and the partition above would keep passing
+     * because a stale row still matches the prefix. A row whose directory has
+     * been cleaned up means the directory is ready to JOIN {@see SCOPE}, and
+     * that is the one moment anybody is likely to notice.
+     */
+    public function testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn(): void
+    {
+        $this->assertTheOffendingShapeBranchesAreAlive();
+
+        $root = \dirname(__DIR__);
+        $withOffenders = [];
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+        foreach ($files as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            $relative = substr($file->getPathname(), \strlen($root) + 1);
+            if (self::offendingSites($relative, (string) file_get_contents($file->getPathname())) !== []) {
+                $withOffenders[] = $relative;
+            }
+        }
+
+        foreach (self::OUT_OF_SCOPE as $prefix => $reason) {
+            $this->assertNotSame('', trim($reason), $prefix . ' is deferred without a reason');
+
+            $stillOffending = false;
+            foreach ($withOffenders as $relative) {
+                $stillOffending = $stillOffending || str_starts_with($relative, $prefix);
+            }
+
+            $this->assertTrue(
+                $stillOffending,
+                $prefix . ' is recorded in OUT_OF_SCOPE as holding a spawn whose stderr reaches '
+                    . 'the suite, and it no longer does. Move the prefix into SCOPE and delete '
+                    . 'this row - a deferral that has been overtaken is how a directory '
+                    . 'silently stops being guarded.',
+            );
+        }
+
+        // A prefix naming nothing at all is a typo that would satisfy neither
+        // direction of the partition, so it is refused separately rather than
+        // read as "clean".
+        foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
+            $this->assertTrue(
+                is_dir($root . '/' . rtrim($prefix, '/')) || is_file($root . '/' . $prefix),
+                $prefix . ' is recorded in OUT_OF_SCOPE but no such directory or file exists '
+                    . 'under tests/.',
+            );
+        }
+    }
+
+    /**
+     * The sites in one file this guard would refuse, after the file's own
+     * discard allowance is spent.
+     *
+     * Shared by the partition guards above so that "offending" means the same
+     * thing to both of them as it does to
+     * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()} - a
+     * second definition would let a site be an offender to one guard and not
+     * to another, which is the seam a deferral would slip through.
+     *
+     * @return list<string>
+     */
+    private static function offendingSites(string $relative, string $source): array
+    {
+        $allowance = self::ACCEPTED_DISCARDED_STDERR[$relative]['count'] ?? 0;
+        $offenders = [];
+
+        foreach (ChildStderrCaptureScanner::scan($source) as $site) {
+            if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_CAPTURED) {
+                continue;
+            }
+
+            if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_DISCARDED && $allowance > 0) {
+                $allowance--;
+
+                continue;
+            }
+
+            $offenders[] = $site['line'] . ':' . $site['call'] . ' -> ' . $site['shape'];
+        }
+
+        return $offenders;
+    }
+
+    private static function accountedFor(string $relative): bool
+    {
+        if (self::inScope($relative)) {
+            return true;
+        }
+
+        foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
+            if (str_starts_with($relative, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

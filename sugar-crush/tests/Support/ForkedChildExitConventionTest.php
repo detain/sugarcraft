@@ -35,16 +35,40 @@ use PHPUnit\Framework\TestCase;
  *
  *  - PLAIN EXIT. `React\EventLoop\Loop::get()` registers a shutdown function
  *    that RUNS the loop (`vendor/react/event-loop/src/Loop.php`), so a child
- *    inheriting a loop with any live watcher blocks at exit forever. This
- *    suite is shielded only because `tests/bootstrap.php` installs the loop
- *    with `Loop::set(new StreamSelectLoop())`, which never registers that
- *    hook - a shield that exists for an unrelated reason (ext-uv clock
- *    pinning) and could be reworked away without anybody connecting it to
- *    this.
+ *    inheriting a loop with any live watcher blocks at exit forever. WHAT
+ *    THIS BULLET SAID: this suite is shielded because `tests/bootstrap.php`
+ *    installs a `StreamSelectLoop`, "which never registers that hook".
+ *    WHAT IS TRUE NOW - read out of `Loop.php` and then measured, because
+ *    the sentence names the wrong agent: `Loop::get()` registers the hook,
+ *    and only on the branch where no instance is set yet. `Loop::set()`
+ *    registers NOTHING, whatever loop it is handed. The shield is therefore
+ *    `tests/bootstrap.php` calling `Loop::set()` BEFORE anything calls
+ *    `Loop::get()`, and the loop CLASS plays no part in it. Three probes on
+ *    PHP 8.3.6 with ext-uv loaded, each arming a 3600-second timer and then
+ *    falling off the end: `set()` of a `StreamSelectLoop` exits at once,
+ *    `set()` of an `ExtUvLoop` exits at once, and `Loop::get()` alone blocks
+ *    until it is killed. WHY THE WARNING STILL EARNS ITS PLACE, sharpened
+ *    rather than weakened by the correction: the line that shields this
+ *    suite is justified in `tests/bootstrap.php` purely on ext-uv
+ *    clock-pinning grounds and does not mention a shutdown hook, so the
+ *    rework to fear is one that DELETES the `Loop::set()` call - not one
+ *    that swaps which loop it passes, which is what the old sentence would
+ *    have had a reader watch for.
  *  - PLAIN EXIT. An inherited destructor with a real OS-level side effect
  *    fires in the child: candy-core's `Tty`/`PosixBackend` putting the SHARED
  *    kernel tty back into cooked mode is the one that cost this project a
  *    four-round bug hunt ({@see \SugarCraft\Crush\Support\ForkedChild}).
+ *  - PLAIN EXIT. THE CHILD REPUBLISHES THE PARENT'S OUTPUT BUFFER. This one
+ *    was in no doc-block in this tree until round 48 measured it, and it is
+ *    the consequence that survives every mitigation the tree already has -
+ *    the two above are each defused by something (candy-core's PID-aware
+ *    `restore()`, and `tests/bootstrap.php`'s loop choice), and nothing
+ *    defuses this. `runBare()` opens an output buffer before it invokes the
+ *    test method, the child inherits a COPY of it holding everything echoed
+ *    so far, and PHP flushes open buffers during shutdown - so one `echo`
+ *    lands on the suite's stdout twice. Pinned behaviourally by
+ *    {@see testAPlainExitInAForkedChildRepublishesTheOutputBufferItInherited()},
+ *    which is the only one of the three a scanner cannot see.
  *  - FALLING THROUGH. PHPUnit's own after-test hooks run twice, so a
  *    `tearDown()` that removes a temp tree removes it out from under the
  *    parent that is still reading it
@@ -414,5 +438,194 @@ final class ForkedChildExitConventionTest extends TestCase
                 "{$file} is exempted without a reason",
             );
         }
+    }
+
+    /**
+     * THE THIRD CONSEQUENCE OF A PLAIN EXIT, measured rather than reasoned
+     * about, and the one no doc-block in this tree carried: the child
+     * REPUBLISHES the output buffer it inherited.
+     *
+     * `TestCase::runBare()` calls `startOutputBuffering()` before it invokes
+     * the test method, so at the moment a test forks, the child inherits a
+     * COPY of an open `ob_start()` level holding everything the parent has
+     * echoed so far. PHP flushes open output buffers during its shutdown
+     * sequence, so a child leaving through a plain `exit()` writes that copy
+     * to the shared stdout - the parent then writes its own, and one `echo`
+     * appears twice in the suite's output. `exitNow()`'s SIGKILL never
+     * reaches the shutdown sequence, so nothing is flushed.
+     *
+     * WHY THIS IS PINNED HERE AND NOT LEFT AS PROSE. The other two
+     * consequences the class doc-block lists are pinned only by their own
+     * scanners, and this one is not a shape a scanner can see at all - it is
+     * a property of the interpreter, and the only honest way to assert it is
+     * to run both endings and count. It is also the consequence that survives
+     * every INDEPENDENT mitigation the tree already has: candy-core's
+     * PID-aware `PosixBackend::restore()` defuses the termios destructor, and
+     * `tests/bootstrap.php`'s `Loop::set()` CALL defuses React's shutdown
+     * hook - both of which hold whatever ending the child takes. (WHAT THIS
+     * SAID: that the `StreamSelectLoop` is what defuses the hook. WHAT IS
+     * TRUE, measured: `Loop::set()` registers no shutdown function at all,
+     * `Loop::get()` is what registers one, and so handing `set()` an
+     * `ExtUvLoop` defuses it identically - the call site is the agent and
+     * the loop class is irrelevant. WHY IT STILL BELONGS IN THIS PARAGRAPH:
+     * the point being made is that those two consequences each have a
+     * mitigation and this third one has none, and that point survives the
+     * correction untouched.) Nothing plays that role for an inherited
+     * output buffer. The one thing that
+     * defuses it is the ending this convention mandates, which the control
+     * below demonstrates: `exitNow()` produces one marker where a plain
+     * `exit()` produces two. So the other two consequences degrade when the
+     * convention is broken and this one does not - it simply happens.
+     *
+     * WHAT THIS TEST DOES NOT BUY, said plainly so nobody counts it twice: no
+     * change to `src/` can red it. (This sentence said "no change to this
+     * repository", which is too strong and measurably so - the probe script
+     * and {@see runProbe()} both live here, and deleting the `posix_kill()`
+     * from the probe reds this test. What cannot red it is a change to the
+     * code the convention governs, which is the claim that matters.) It runs
+     * a standalone `php` subprocess and asserts a property of the
+     * interpreter, which is the only way to assert this consequence at all,
+     * and it is the REASON the convention exists rather than a regression net
+     * over the code that follows it. The net is {@see ForkedChildExitScanner} and the guards
+     * that point it at the tree.
+     *
+     * NOT RUN INSIDE PHPUnit, deliberately. Forking under the live runner to
+     * demonstrate a double flush would put the duplicate on the SUITE's
+     * stdout, which is the defect itself. The mechanism is `ob_start()` plus
+     * PHP's shutdown, neither of which PHPUnit owns, so a plain `php`
+     * subprocess reproduces it exactly and keeps the evidence on a pipe this
+     * test reads.
+     *
+     * MEASURED on PHP 8.3.6, the only PHP on this box; CI also runs 8.4,
+     * where this has not been exercised. The assertion is a COUNT of a
+     * marker in the subprocess's own stdout, so it reports the truth on
+     * whatever version runs it rather than encoding this one.
+     */
+    public function testAPlainExitInAForkedChildRepublishesTheOutputBufferItInherited(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            $this->markTestSkipped('pcntl + posix are required to fork a child and SIGKILL it.');
+        }
+
+        $script = (string) tempnam(sys_get_temp_dir(), 'sc_forked_child_ob_probe_');
+        file_put_contents($script, <<<'PHP'
+            <?php
+            // Stands in for TestCase::runBare()'s startOutputBuffering().
+            ob_start();
+            echo "OB-MARKER\n";
+
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                fwrite(STDERR, "fork failed\n");
+                exit(2);
+            }
+            if ($pid === 0) {
+                if (($argv[1] ?? '') === 'exit-now') {
+                    @posix_kill(posix_getpid(), SIGKILL);
+                }
+                exit(0);
+            }
+
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+            ob_end_flush();
+            PHP);
+
+        try {
+            $plain = self::runProbe($script, 'plain-exit');
+            $exitNow = self::runProbe($script, 'exit-now');
+        } finally {
+            @unlink($script);
+        }
+
+        $this->assertSame('', $plain['stderr'], 'the plain-exit probe wrote on stderr: ' . $plain['stderr']);
+        $this->assertSame('', $exitNow['stderr'], 'the exit-now probe wrote on stderr: ' . $exitNow['stderr']);
+
+        // THE CONTROL COMES FIRST, because it is what makes the other number
+        // mean anything: one echo, one flush, when the child never reaches a
+        // shutdown sequence.
+        $this->assertSame(
+            1,
+            substr_count($exitNow['stdout'], 'OB-MARKER'),
+            'exitNow()\'s SIGKILL still let the child flush the buffer it inherited - if this is 1 '
+                . 'in both runs the probe is not reproducing the mechanism at all and the other '
+                . 'assertion proves nothing',
+        );
+
+        $this->assertSame(
+            2,
+            substr_count($plain['stdout'], 'OB-MARKER'),
+            'a forked child leaving through a plain exit() must flush its inherited copy of the '
+                . "parent's output buffer - under PHPUnit that copy is the test's own captured "
+                . 'output, republished onto the suite\'s stdout. If this is now 1, PHP stopped '
+                . 'flushing inherited buffers at exit: rewrite the class doc-block\'s third '
+                . 'consequence rather than deleting this test',
+        );
+    }
+
+    /**
+     * One run of the output-buffer probe, with BOTH child descriptors on
+     * pipes this test reads.
+     *
+     * `PHP_BINARY` rather than `php` on `PATH`: a harness that wrapped the
+     * `PATH` binary has already reported a child count of 0 for a file that
+     * spawns 33, and the interpreter running the suite is the one whose
+     * shutdown behaviour is under test.
+     *
+     * @return array{stdout:string,stderr:string}
+     */
+    private static function runProbe(string $script, string $mode): array
+    {
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'error_reporting=E_ALL', $script, $mode],
+            $descriptors,
+            $pipes,
+        );
+        self::assertIsResource($process, 'could not launch the output-buffer probe');
+
+        // BOTH PIPES ARE DRAINED TOGETHER. Reading fd 1 to EOF first and fd 2
+        // afterwards deadlocks the moment the child writes more than a pipe
+        // buffer on stderr: the child blocks writing fd 2, the parent blocks
+        // reading fd 1, and neither ever returns. This probe writes a couple
+        // of dozen bytes today - the hazard is a future probe, and a hang
+        // here would be attributed to the fork convention rather than to the
+        // harness.
+        $collected = [1 => '', 2 => ''];
+        $open = [1 => $pipes[1], 2 => $pipes[2]];
+        foreach ($open as $stream) {
+            stream_set_blocking($stream, false);
+        }
+
+        $deadline = microtime(true) + 30.0;
+        while ($open !== [] && microtime(true) < $deadline) {
+            $read = array_values($open);
+            $write = null;
+            $except = null;
+            if (@stream_select($read, $write, $except, 1) === false) {
+                break;
+            }
+
+            foreach ($read as $stream) {
+                $fd = (int) array_search($stream, $open, true);
+                $chunk = fread($stream, 8192);
+                if (\is_string($chunk) && $chunk !== '') {
+                    $collected[$fd] .= $chunk;
+
+                    continue;
+                }
+                if (feof($stream)) {
+                    unset($open[$fd]);
+                }
+            }
+        }
+
+        self::assertSame([], $open, 'the output-buffer probe did not close its pipes within 30s');
+
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        return ['stdout' => $collected[1], 'stderr' => $collected[2]];
     }
 }

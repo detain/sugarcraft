@@ -23,19 +23,26 @@ use PHPUnit\Framework\TestCase;
  * "`tests/Integration/` only... widening {@see SCOPE} to `''` derives the
  * list instead. That is the whole of the work when somebody owns those
  * files." WHAT IS TRUE NOW: round 47's lane b owned `tests/Agents/`,
- * `tests/Integration/` and `tests/Support/`, and widened {@see SCOPE} to
- * exactly those three - which is what turned four raw, unreaped forks in
+ * `tests/Integration/` and `tests/Support/`, and added exactly those three
+ * to {@see SCOPE} - which is what turned four raw, unreaped forks in
  * `Agents/AgentWorkerPoolTest.php` (two of whose children `sleep(120)`,
  * i.e. twice `defaultTimeLimit`) and two in `Support/ForkedChildTest.php`
- * into adoptions. WHY THIS STILL EARNS ITS PLACE: `''` was not reachable
- * from one lane and still is not. `tests/Backend/` holds four more, and a
- * guard cannot require an adoption in a directory the change is not allowed
- * to edit. So the remainder is recorded in {@see OUT_OF_SCOPE} - derived,
- * self-deleting, and NOT prose: {@see
- * testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()} fails the moment a
- * listed directory becomes clean, which is the failure mode the prose list
- * this replaced actually had (it was written from a census taken with a
- * scanner that could not see `\pcntl_fork()`, and so omitted
+ * into adoptions. `Diagnostics/` is a FOURTH, and it is not lane b's: round
+ * 47's lane a added it in the same round, which is why counting the prefixes
+ * from this paragraph alone gives the wrong answer. Round 48 owned
+ * `tests/Backend/` and adopted the four raw forks in
+ * `Backend/EngineBackendReapTest.php`, so {@see SCOPE} gained a FIFTH prefix
+ * and {@see OUT_OF_SCOPE} emptied. WHY THIS STILL EARNS ITS
+ * PLACE: `''` STILL is not reachable from one lane - the remaining
+ * directories hold no unreaped fork today, but adding them is an obligation
+ * on every fork a sibling later writes there, which reds at merge in a lane
+ * that never saw this file. So {@see OUT_OF_SCOPE} stays as the mechanism
+ * even while it is empty: it is derived, self-deleting, and NOT prose,
+ * because {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()} fails
+ * the moment a listed directory becomes clean - which is exactly how
+ * `Backend/` came off it, and which is the failure mode the prose list this
+ * replaced actually had (it was written from a census taken with a scanner
+ * that could not see `\pcntl_fork()`, and so omitted
  * `tests/Agents/TaskListTest.php` entirely).
  */
 final class ForkedChildReaperAdoptionTest extends TestCase
@@ -45,7 +52,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Diagnostics/', 'Integration/', 'Support/'];
+    private const SCOPE = ['Agents/', 'Backend/', 'Diagnostics/', 'Integration/', 'Support/'];
 
     /**
      * Prefixes with in-process forks that are NOT yet under {@see SCOPE},
@@ -57,17 +64,31 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      * and widen SCOPE) and when a listed prefix has crept into SCOPE (the two
      * lists would then disagree about the same directory).
      *
+     * EMPTY, AND KEPT. WHAT IT SAID: one row for `Backend/`, whose
+     * `EngineBackendReapTest.php` forked four times with a raw
+     * `pcntl_fork()` and declared no `tearDown()`, deferred because round
+     * 47's lane split gave that directory to nobody. WHAT IS TRUE NOW: round
+     * 48 owned it, adopted the trait, routed all four through
+     * `$this->forkTracked()` and added a reaping `tearDown()`, so the row
+     * went and `Backend/` joined {@see SCOPE} - which is the self-deleting
+     * behaviour working, not an incident. WHY AN EMPTY MAP STILL EARNS ITS
+     * PLACE: it is the only place a future deferral can be recorded as
+     * something checked against the tree rather than as a comment, and
+     * {@see testNoDirectoryWithUnreapedForksIsUnaccountedFor()} refuses the
+     * alternative - a fork in a directory named by neither map.
+     *
+     * WHAT EMPTYING IT COST, and why the test below changed in the same
+     * commit: this map was the reaper predicate's ONLY known-positive
+     * against real files on disk. Every other assertion in this file is an
+     * ABSENCE, and an absence is not evidence unless something in the same
+     * test proves the instrument can still produce a positive. So the walk
+     * those absences use now runs over a SYNTHETIC fixture tree first
+     * ({@see assertTheOffenderWalkIsAlive()}), which does not empty when the
+     * tree gets healthier.
+     *
      * @var array<string,string>
      */
-    private const OUT_OF_SCOPE = [
-        'Backend/' =>
-            'tests/Backend/EngineBackendReapTest.php forks four times with a raw pcntl_fork() and '
-            . 'declares no tearDown() at all. Round 47\'s lane split gave lane b tests/Agents/, '
-            . 'tests/Integration/ and tests/Support/ and gave tests/Backend/ to nobody, and a '
-            . 'guard that requires an edit its own lane may not make is a guard that gets '
-            . 'exempted rather than satisfied. Recorded here instead of silently omitted, so the '
-            . 'next lane that owns tests/Backend/ inherits the work rather than rediscovering it.',
-    ];
+    private const OUT_OF_SCOPE = [];
 
     /**
      * Raw `pcntl_fork()` sites in an adopting file that are deliberately NOT
@@ -182,6 +203,168 @@ final class ForkedChildReaperAdoptionTest extends TestCase
         }
 
         return true;
+    }
+
+    /**
+     * Every file under $directory the reaper predicate finds work in, as
+     * paths relative to $root.
+     *
+     * THE ONE WALK. It was inline in
+     * {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()} and is
+     * extracted so the synthetic known-positive below runs through THE SAME
+     * code the real-tree assertions do. A fixture that exercises a
+     * re-implementation of the walk proves the fixture works.
+     *
+     * {@see UNTRACKED_FORKS_ALLOWED} IS CONSULTED HERE, and it was not in the
+     * inline version - that copy called {@see missingHalves()} with the
+     * default allowance of 0 while the other two guards passed the file's
+     * real allowance, so two guards disagreed about the same predicate. No
+     * live effect either before or after (no exempted file has ever sat under
+     * a prefix this walk is pointed at), which is exactly why it would have
+     * gone on disagreeing until the day it mattered.
+     *
+     * @return list<string>
+     */
+    private static function unreapedForkOffendersUnder(string $directory, string $root): array
+    {
+        $offenders = [];
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
+        foreach ($files as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            $source = (string) file_get_contents($file->getPathname());
+            $sites = ForkedChildExitScanner::scan($source);
+            if ($sites === []) {
+                continue;
+            }
+
+            $relative = substr($file->getPathname(), \strlen($root) + 1);
+            if (self::missingHalves($source, $sites, self::UNTRACKED_FORKS_ALLOWED[$relative]['count'] ?? 0) !== []) {
+                $offenders[] = $relative;
+            }
+        }
+
+        sort($offenders);
+
+        return $offenders;
+    }
+
+    /**
+     * A KNOWN-POSITIVE THROUGH THE SAME PREDICATE, on files whose answer is
+     * known, in the same test that uses it to assert an absence.
+     *
+     * PREDICATE, NOT WALK, and the distinction is measured rather than
+     * pedantic. {@see unreapedForkOffendersUnder()} - the directory walk this
+     * fixture drives - is called by exactly ONE of the three tests that
+     * assert an absence, {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()};
+     * the other two iterate `tests/` inline. What all three share, and what
+     * this fixture therefore proves is alive, is the pair that DECIDES:
+     * {@see ForkedChildExitScanner::scan()} finding the sites and
+     * {@see missingHalves()} judging them. Measured, and stated precisely
+     * because the first draft of this paragraph rounded it up: stubbing
+     * `scan()` to `[]` reds all four real-tree tests here, and stubbing
+     * `missingHalves()` to `[]` reds three of them plus
+     * {@see testThePredicateReportsEachHalfItLooksFor()} - the fourth,
+     * {@see testEveryUntrackedForkExemptionStillDescribesRealSites()},
+     * counts sites and never consults the judgement. So the claim this
+     * method supports is "the predicate is alive", which is what the absences
+     * depend on - not "this exact walk is alive", which would be true of one
+     * caller in three.
+     *
+     * WHY THIS EXISTS AT ALL, and it is the whole reason it was written in
+     * the commit that emptied {@see OUT_OF_SCOPE} rather than in a later one.
+     * That map used to be this file's only real-tree known-positive: with a
+     * row for `Backend/`, {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()}
+     * asserted a PRESENCE against files on disk, so a scanner that stopped
+     * matching failed loudly there. Fixing `Backend/` deleted the row, and
+     * every remaining assertion in this file became an absence - "nothing is
+     * missing a reaper" - which a dead instrument satisfies perfectly. Doing
+     * the fix and the replacement in separate commits would leave a window
+     * where the guard was green and blind, and that window is the whole
+     * hazard.
+     *
+     * A SYNTHETIC TREE RATHER THAN A REAL FILE, because a real one is exactly
+     * what stopped working: a known-positive that lives in `tests/` is a
+     * known-positive somebody is eventually asked to fix. This pair cannot be
+     * fixed away - it is written on the fly, outside `tests/`, and removed
+     * again.
+     *
+     * BOTH POLARITIES, in one assertion. A scanner stuck at "everything is an
+     * offender" is not alive either; it is a guard that reds correct code,
+     * which is answered with an exemption, which is where the next real
+     * offender hides. So the adopting fixture beside the offending one has to
+     * come back clean.
+     */
+    private function assertTheOffenderWalkIsAlive(): void
+    {
+        $root = sys_get_temp_dir() . '/sc_reaper_walk_fixture_' . bin2hex(random_bytes(6));
+        $directory = $root . '/Fixture';
+        if (!mkdir($directory, 0o700, true) && !is_dir($directory)) {
+            self::fail('could not create the known-positive fixture tree at ' . $directory);
+        }
+
+        // An in-process fork with a child branch the scanner understands, in
+        // a class that declares neither half of the adoption.
+        file_put_contents($directory . '/Unreaped.php', <<<'PHP'
+            <?php
+            class UnreapedFixture
+            {
+                public function testForks(): void
+                {
+                    $pid = pcntl_fork();
+                    if ($pid === 0) {
+                        \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
+                    }
+                    pcntl_waitpid($pid, $status);
+                }
+            }
+            PHP);
+
+        // The same fork, carrying all three halves.
+        file_put_contents($directory . '/Adopting.php', <<<'PHP'
+            <?php
+            class AdoptingFixture
+            {
+                use ReapsForkedChildrenTrait;
+
+                protected function tearDown(): void
+                {
+                    $this->reapTrackedForkedChildren();
+                    $this->removeTree();
+                }
+
+                public function testForks(): void
+                {
+                    $pid = $this->forkTracked();
+                    if ($pid === 0) {
+                        \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
+                    }
+                    pcntl_waitpid($pid, $status);
+                }
+            }
+            PHP);
+
+        try {
+            $offenders = self::unreapedForkOffendersUnder($directory, $root);
+        } finally {
+            @unlink($directory . '/Unreaped.php');
+            @unlink($directory . '/Adopting.php');
+            @rmdir($directory);
+            @rmdir($root);
+        }
+
+        $this->assertSame(
+            ['Fixture/Unreaped.php'],
+            $offenders,
+            'the walk every absence assertion in this file depends on is not reporting a file '
+                . 'that plainly forks in-process with no reaper, or is reporting one that plainly '
+                . 'does have one. Until this passes, "no directory has an unreaped fork" is a '
+                . 'statement about a dead instrument rather than about the tree.',
+        );
     }
 
     /** Whether a `tests/`-relative path falls under any {@see SCOPE} prefix. */
@@ -353,6 +536,8 @@ final class ForkedChildReaperAdoptionTest extends TestCase
 
     public function testEveryInProcessForkInScopeIsCoveredByTheReaper(): void
     {
+        $this->assertTheOffenderWalkIsAlive();
+
         $root = \dirname(__DIR__);
         $offenders = [];
         $covered = 0;
@@ -421,13 +606,37 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      * about something already done, and the next reader widens SCOPE by
      * deleting a row rather than by measuring).
      *
-     * The scanner used here is the SAME one the in-scope assertion uses, and
-     * this test is the known-positive fixture for it: it asserts a PRESENCE.
-     * A scanner that stopped matching would fail here loudly instead of
-     * turning the absence assertion above silently green.
+     * WHAT THIS SAID: "the scanner used here is the SAME one the in-scope
+     * assertion uses, and this test is the known-positive fixture for it: it
+     * asserts a PRESENCE. A scanner that stopped matching would fail here
+     * loudly instead of turning the absence assertion above silently green."
+     *
+     * WHAT IS TRUE NOW: {@see OUT_OF_SCOPE} is empty, so the loop below runs
+     * zero times and this test asserts no presence against the tree at all.
+     * The sentence described the file as it stood while `Backend/` still had
+     * a row; the commit that adopted `Backend/` deleted the row and, with it,
+     * the only real-tree positive this predicate had. Leaving the claim
+     * standing tells the next reader that the absence assertions elsewhere in
+     * this file are backed by a positive here, and they are not.
+     *
+     * WHY THE REASONING STILL EARNS ITS PLACE: it was right about the hazard
+     * and wrong only about which mechanism now covers it. An absence asserted
+     * by a dead scanner is a green run about nothing, and the answer is still
+     * a positive through the same predicate - it just has to be one the tree
+     * cannot get healthier than, which a synthetic fixture is and a row in a
+     * legitimately-empty map is not. That is
+     * {@see assertTheOffenderWalkIsAlive()}, called on the first line below.
+     * Delete this paragraph and the next reader restores a known-positive
+     * duty to a map that is allowed to be empty.
      */
     public function testEveryOutOfScopeDirectoryStillHasAnUnreapedFork(): void
     {
+        // AND THE MAP IS ALLOWED TO BE EMPTY, so this is what keeps the test
+        // from being a vacuous pass - an iteration over nothing performs no
+        // assertions at all, which under this suite's `failOnRisky` reds the
+        // run for the wrong reason and under any other config passes silently.
+        $this->assertTheOffenderWalkIsAlive();
+
         $root = \dirname(__DIR__);
 
         foreach (self::OUT_OF_SCOPE as $prefix => $reason) {
@@ -449,27 +658,9 @@ final class ForkedChildReaperAdoptionTest extends TestCase
                 "{$prefix} is recorded in OUT_OF_SCOPE but no such directory exists under tests/.",
             );
 
-            $offenders = [];
-            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
-            foreach ($files as $file) {
-                /** @var \SplFileInfo $file */
-                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
-                    continue;
-                }
-
-                $source = (string) file_get_contents($file->getPathname());
-                $sites = ForkedChildExitScanner::scan($source);
-                if ($sites === []) {
-                    continue;
-                }
-                if (self::missingHalves($source, $sites) !== []) {
-                    $offenders[] = substr($file->getPathname(), \strlen($root) + 1);
-                }
-            }
-
             $this->assertNotSame(
                 [],
-                $offenders,
+                self::unreapedForkOffendersUnder($directory, $root),
                 "{$prefix} is recorded in OUT_OF_SCOPE as still holding unreaped in-process forks, "
                     . 'and it no longer does. Delete its row and add the prefix to SCOPE - a '
                     . 'deferral that has been overtaken is how a directory silently stops being '
@@ -514,6 +705,8 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      */
     public function testNoDirectoryWithUnreapedForksIsUnaccountedFor(): void
     {
+        $this->assertTheOffenderWalkIsAlive();
+
         $root = \dirname(__DIR__);
         $unaccounted = [];
         $checked = 0;

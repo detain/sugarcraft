@@ -8122,3 +8122,222 @@ its own independent hole.
 **Step.** Sweep the census tests for fixtures whose expected value is `0`, `[]` or `''` and ask, per
 fixture, what mutation of the instrument that fixture would survive. Where the answer is "all of them",
 give the fixture a positive component so the number it asserts is one only a live instrument produces.
+### Eb48-1 — a forked child's plain `exit()` republishes the parent's OUTPUT BUFFER
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: harness. **Measured.** Extends E201; does not
+contradict it.
+
+**What.** E201 was re-derived independently this round rather than inherited, with a fresh two-process
+probe under the vendored PHPUnit 10.5.64 on PHP 8.3.6, and it holds exactly as written: a child leaving
+through a plain `exit()` runs destructors and `register_shutdown_function` callbacks under its own pid
+and never reaches `tearDown()`/`@after`, which fire once in the parent. The FALL-THROUGH child is the one
+that re-enters the runner — the probe's fall-through child ran `tearDown()`, then went on to run the NEXT
+test method, forked a grandchild of its own, and printed a second complete PHPUnit summary.
+
+**The new part.** The probe also showed a THIRD consequence of the plain exit that no doc-block in this
+tree carried. `TestCase::runBare()` calls `startOutputBuffering()` before invoking the test method, so at
+the moment a test forks, the child inherits a COPY of an open `ob_start()` level holding everything the
+parent has echoed. PHP flushes open buffers during shutdown, so the child writes that copy out and one
+`echo` appears TWICE in the runner's output. Observed directly: `ob_level=1`, `ob_len=21` inside the
+child, and the marker printed twice.
+
+**Why it matters more than the other two.** Both consequences already written down are DEFUSED in this
+tree — candy-core's PID-aware `PosixBackend::restore()` defuses the termios destructor, and
+`tests/bootstrap.php`'s `Loop::set()` CALL defuses React's shutdown hook. Nothing defuses an inherited
+output buffer, and it is the one a scanner cannot see.
+
+**Correction to the sentence above, made in the same round it was written.** This entry first said "
+`tests/bootstrap.php`'s `StreamSelectLoop` defuses React's shutdown hook", naming the loop CLASS as the
+agent. That is inverted. Read out of `vendor/react/event-loop/src/Loop.php`: `Loop::get()` registers the
+autorun `register_shutdown_function`, and only on the branch where `self::$instance` is not yet a
+`LoopInterface`; `Loop::set()` registers nothing whatever loop it is handed. Measured with three probes on
+PHP 8.3.6 with ext-uv loaded, each arming a 3600-second timer and then falling off the end of the script:
+`Loop::set(new StreamSelectLoop())` then `get()` exits immediately (rc 0, no hook), `Loop::set(new
+ExtUvLoop())` then `get()` exits immediately (rc 0, no hook), and `Loop::get()` alone blocks until killed
+(rc 124 under `timeout 8` — the hook ran the loop). The agent is the `Loop::set()` CALL happening before
+any `Loop::get()`. The correction makes the warning sharper rather than weaker: `tests/bootstrap.php`
+justifies that line purely on ext-uv stale-clock grounds and never mentions a shutdown hook, so the
+dangerous rework is one that DELETES the `Loop::set()` call, not one that swaps the loop class — which is
+what the original sentence would have had a reader watch for. Both doc-block copies in
+`ForkedChildExitConventionTest` were rewritten in the rule-7 three-part form.
+
+**Status.** Pinned behaviourally by
+`ForkedChildExitConventionTest::testAPlainExitInAForkedChildRepublishesTheOutputBufferItInherited()`, in a
+plain `php` subprocess so the demonstration's duplicate lands on a pipe rather than on the suite's own
+stdout, with the `exitNow()` control asserted FIRST (a count of 1 in both runs would otherwise read as a
+pass). The class doc-block's consequence list gained the third bullet.
+
+### Eb48-2 — E208's hazard does not reproduce, and its file count is wrong
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: doc accuracy. **Measured**, PHP 8.3.6.
+
+**What E208 said.** `T_DOLLAR_OPEN_CURLY_BRACES` is 8.2-deprecated, is referenced from two files, and "a
+deprecation notice on 8.4 is a real risk you cannot test".
+
+**What is true.** The constant is defined (value 395). REFERENCING it emits nothing — the 8.2 deprecation
+is on the `"${a}"` SYNTAX, not on the token. `token_get_all()` over a source that does use that syntax
+still produces the token and still emits nothing, because it lexes rather than compiles. And the syntax
+occurs ZERO times across `src/` and `tests/` combined. So there is no 8.4 deprecation notice to risk.
+The real hazard is REMOVAL — further out than 8.4, and a hard `Error: Undefined constant` rather than a
+notice. The token is also referenced from NINE files, not two, which is why editing the literal pair was
+the wrong shape of fix: most of them belong to other lanes.
+
+**Status.** Handled by construction instead: `tests/Support/InterpolationOpenerTokenTest.php` derives the
+opener roster from the running interpreter (tokenise real interpolation spellings, keep any array token
+whose text ends in `{`) and requires every brace-walking scanner to name every token in it. The deprecated
+spelling is supplied as a single-quoted SOURCE STRING, so the file never compiles it and adds zero
+occurrences to the census.
+
+**Correction to the Status above, made in the same round.** This entry first said the guard requires every
+brace-walking scanner "under `tests/Support/`". That was true of the guard as first committed and stopped
+being true two commits later, when the walk was widened to all of `tests/` AND `src/` — that commit's own
+message is *"ITS FILE ALPHABET COULD NOT EXPRESS A LIVE OFFENDER."* Verified at the current head:
+`phpFilesToScan()` walks `['tests', 'src']` from the library root. The backlog is the durable artefact and
+was recording the superseded, narrower scope; the widening is the whole point of the entry, because it is
+what let the guard see the offender in the next entry.
+
+**A hole it had, and closed.** The derivation is only as wide as its own alphabet — mutation M10 deleted
+the `${a}` row and the guard stayed green with a roster of one. Graceful shrinking is the DESIGNED
+behaviour for the day PHP removes the syntax, so it cannot be forbidden; the guard now asks the
+interpreter whether the constant is still defined and requires a spelling to still produce it if so.
+
+### Eb48-3 — E205's two false positives have ZERO occurrences, and the first census that said otherwise was a window artefact
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: informational. **Measured, twice, and the first
+measurement was wrong.**
+
+**What.** E205 asks whoever attempts the predicate fix to run a tree-wide census before and after. Half
+of that is now done: the blast radius of the two known false positives, over all 95 spawn sites
+`ChildStderrCaptureScanner` finds under `tests/`. Shape A (a quoted inner shell, `sh -c '…'`): **0**.
+Shape B (more than one fd-2 redirection in one command): **0**. Neither false positive has a single
+occurrence anywhere in `tests/`, which is a stronger statement than E205's "no in-scope site has either
+shape" and bounds the value of fixing the predicate at zero live sites today.
+
+**THE FIRST RUN SAID 13, AND ALL THIRTEEN WERE THE HARNESS.** The census read a THREE-LINE window around
+each site's line number, and this tree is full of consecutive one-line `exec('… 2>&1');` calls — so the
+window spanned adjacent calls and counted their redirections together. `MCP/GitCommandHandlersTest.php`
+lines 27 and 28 are two separate `exec()`s with one fd-2 redirection each. Re-run with a one-line window:
+0. The generator's controls passed both times; the controls tested the PREDICATE and the defect was in
+the WINDOW, which is the failure this project has now recorded from three directions.
+
+**Bound on the figure.** A one-line window undercounts a call whose command string wraps. Both numbers
+are stated so the next reader can pick, and the generator is
+`scratchpad/r48b/e205.php` — re-derive rather than trust either.
+
+**Not fixed.** E205's argument stands unchanged: a real fix has to model fd 1's destination as it is
+reassigned, and there is nothing in the tree to verify it against. The per-site before/after census
+harness the entry asks for now exists (`scratchpad/r48b/sites.php`): it prints
+`file line call shape` for every site under `tests/`, with four known-answer controls at the top.
+
+### Eb48-4 — a copied test helper drifted because only one copy was ever in a lane's file list
+
+**Recorded 2026-08-22 by round-48 lane b.** Severity: process. **Observed.**
+
+**What.** `Backend/EngineBackendTest::isRaw()` and `Support/ForkedChildTest::isRaw()` are the same
+helper: run `stty -a` against a pty and substring-match `-icanon`/`-echo`. Round 47 fixed the `Support/`
+copy — a wrong `-F`/`-f` flag fails with an EMPTY stdout, indistinguishable from "the terminal is
+cooked", so the diagnostic on fd 2 is the only thing telling them apart and it was going to
+`/dev/null`. The `Backend/` copy was in no lane's file list and kept the bug for a full round, one
+directory away from its fixed twin.
+
+**How it surfaced.** Not by reading: by pointing `ChildStderrCaptureScanner` at `tests/Backend/` while
+adopting `Chat/` and `MCP/` for E206. The guard named the site.
+
+**Step.** The general shape is worth a guard of its own — two same-named private helpers in different
+test directories whose bodies have diverged. Nothing checks for it today, and the lane split makes it
+likelier rather than less likely: a fix lands in whichever copy the round happened to own.
+
+### Eb48-5 — `tests/VhsTapeContractTest.php` is a live brace-walker gap in no lane's file list, and the row recording it is self-deleting
+
+**Recorded 2026-08-23 by round-48 lane b.** Severity: harness / cross-lane coordination. **Measured**, PHP
+8.3.6, at the lane head that added `InterpolationOpenerTokenTest`.
+
+**What.** `VhsTapeContractTest::statements()` and `::callArgument()` are both brace walkers that increment
+depth on `\T_CURLY_OPEN || \T_ATTRIBUTE` and never on `\T_DOLLAR_OPEN_CURLY_BRACES`. Confirmed by reading
+both depth counters: neither names the deprecated opener anywhere. A `"${a}"` in a file either walker
+scans would therefore cost it a level and desynchronise the walk. **Latent, not live** — that syntax
+occurs zero times across `src/` and `tests/` — so this is a two-token fix nobody needs to rush.
+
+**Why it needs an entry of its own rather than a line inside Eb48-2.** The file sits at the ROOT of
+`tests/` and was in no lane's file list for round 48, so lane b could see it but not fix it. It is
+currently recorded only as the single row of `InterpolationOpenerTokenTest::KNOWN_GAPS`, i.e. the
+obligation lives inside another lane's test constant, where nothing outside that lane will look for it.
+
+**It is a merge landmine in BOTH directions, which is the actual reason this is written down.** The
+`KNOWN_GAPS` check runs against the tree in both directions: a row whose file no longer has the gap fails
+with *"Delete its row — a deferral that has been overtaken is how a file silently stops being guarded."*
+So: if nobody fixes `VhsTapeContractTest`, the gap persists unrecorded outside a test constant; and if a
+sibling lane DOES fix it without touching `InterpolationOpenerTokenTest`, lane b's guard goes red on a
+correct change. Whoever fixes the two depth counters must delete the `KNOWN_GAPS` row in the same
+change-set.
+
+**Step.** Add `\T_DOLLAR_OPEN_CURLY_BRACES` to both depth conditions in `tests/VhsTapeContractTest.php`,
+and delete the `tests/VhsTapeContractTest.php` row from
+`tests/Support/InterpolationOpenerTokenTest.php::KNOWN_GAPS` in the same commit. Needs an owner assigned,
+since the two files were in different lanes' lists.
+
+### Eb48-6 — the child-stderr scanner called EVERY positional `proc_open()` descriptor spec `inherited`
+
+**Recorded 2026-08-23 by round-48 lane b.** Severity: harness correctness. **Measured**, PHP 8.3.6.
+**Fixed in the same round.**
+
+**What.** `ChildStderrCaptureScanner::classifySpec()` opened with `if (!namesFdTwo($spec)) return
+SHAPE_INHERITED;`, and `namesFdTwo()` requires a literal `2 =>` key. But `proc_open()` reads a POSITIONAL
+descriptor array **by position** — element 2 *is* fd 2 — so a spec spelled
+`[['file','/dev/null','r'], ['file','/dev/null','w'], ['file','/dev/null','w']]` never reached the
+classifier at all.
+
+**Measured before the fix, four spellings through the tree's own scanner.** Positional `/dev/null` (truth:
+discarded) → `inherited`. Positional pipe (truth: captured) → `inherited`. A two-element spec (truth:
+inherited) → `inherited`. A positional element 2 that is a variable (truth: unreadable) → `inherited`.
+**Four different truths, one answer.** And `inherited` is a DEFINITE claim rather than an "I cannot tell",
+so the branch was wrong in both polarities at once: it understates a real discard *and* it reds a real
+capture.
+
+**Why it is the same defect the method's own doc-block is about.** That doc-block already argues "a guard
+that quietly ignores what it cannot parse has a hole shaped exactly like the next defect", and had been
+rewritten twice to push non-literal ENTRIES and non-literal MEMBERS into `unclassified`. The positional
+case sat one branch *earlier* than any of that reasoning looked.
+
+**Blast radius, full-tree census with the old scanner and the new, 95 sites on both sides.** Exactly two
+sites move — `ImageRenderingTest::runQuietly()` and `BackgroundSupervisorTest::deadPid()`, both
+`inherited` → `discarded`, both genuinely `['file','/dev/null','w']` at position 2. Both were already
+outside SCOPE, so no guard changed colour. Nothing became `unclassified`. The 95/61-captured totals
+independently re-derive the round's other census of the same tree.
+
+**Status.** Fixed: a token-based top-level element splitter reads positional element 2, fewer than three
+elements stays a real `inherited` (that is the truth, not a failure to read), and anything the splitter
+cannot follow is `unclassified`. All five positional shapes are pinned in the unit fixture test and the
+positional discard is the liveness helper's fourth discard path. Mutating `positionalShape()` back to the
+old always-`inherited` answer is killed by all five tests in the file.
+
+### Eb48-7 — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
+
+**Recorded 2026-08-23 by round-48 lane b.** Severity: cross-lane coordination. **Measured**, and the map
+is checked in both directions.
+
+**What.** `ChildStderrCaptureTest` had a SCOPE of six directories and nothing that gave membership any
+signal: narrowing SCOPE all the way to `['Integration/']` left the guard green with the *same* assertion
+count as the unmutated run. SCOPE and `OUT_OF_SCOPE` are now jointly total over the offenders, mirroring
+`ForkedChildReaperAdoptionTest`, so a spawn whose stderr reaches the suite must be matched by one list or
+the other.
+
+**The obligation.** Eleven directories plus the two files at the root of `tests/` — `Cli/`, `Commands/`,
+`Config/`, `Context/`, `Diagnostics/`, `Hooks/`, `Providers/`, `Renderer/`, `Sessions/`, `Tools/`,
+`Workflows/`, `BaseSystemPromptTest.php`, `ChatTest.php` — each hold at least one offending spawn and each
+sit in another lane's file list, which is why they are rows rather than fixes. The rows carry no site
+counts on purpose (a cardinality measured over `tests/` in one worktree is wrong by the next merge); both
+tests derive what they need from the tree.
+
+**Three natural batches, from the shapes measured at this commit.** The bare-`exec()` cluster
+(`Commands/`, `Cli/`, `Diagnostics/`, `Workflows/`, `BaseSystemPromptTest.php`) is the cheap shape — the
+child has an obvious home for fd 2 and nothing reads its output. The `git init`/`git config` fixture
+cluster (`Context/`, `Tools/`, `Providers/`) is one problem wearing three hats and should be settled
+together rather than piecemeal. The deliberate-discard pair (`Renderer/`, `Sessions/`) wants an argued
+exemption row, not a fix: in both the discard is the helper's entire purpose, and both were invisible
+until Eb48-6 fixed the classifier.
+
+**The row is self-deleting, in both directions.** A row whose directory has been cleaned up fails with
+"Move the prefix into SCOPE and delete this row"; an offender in a directory matched by neither list fails
+the partition. So a lane that fixes its directory must move the prefix in the same change-set, exactly as
+in Eb48-5.

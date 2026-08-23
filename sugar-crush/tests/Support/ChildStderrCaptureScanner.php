@@ -41,8 +41,17 @@ namespace SugarCraft\Crush\Tests\Support;
  * is writing on the suite's own stderr with no child process anywhere in the
  * picture. No amount of
  * per-spawn redirection touches one of those; they need a sink seam in
- * `src/`. This scanner is about the other kind, and reports honestly that
- * under `tests/Integration/` there is currently none of it.
+ * `src/`. This scanner is about the other kind.
+ *
+ * THAT SENTENCE USED TO END "and reports honestly that under
+ * `tests/Integration/` there is currently none of it". WHAT IS TRUE NOW: the
+ * guard that points this scanner at the tree covers six directories, not one,
+ * and which ones is {@see ChildStderrCaptureTest::SCOPE}'s business rather
+ * than a scanner's. WHY THE REST OF THE PARAGRAPH STILL EARNS ITS PLACE: the
+ * distinction it draws does not move with the scope. A reader who takes a
+ * green run as evidence that the suite's `sugarcrush: ` lines are gone has
+ * misread what this instrument can see, and most of those lines are the kind
+ * it cannot.
  */
 final class ChildStderrCaptureScanner
 {
@@ -315,35 +324,293 @@ final class ChildStderrCaptureScanner
 
     /**
      * A `proc_open()` descriptor spec, read for what fd 2 is pointed at.
+     *
+     * FD 2 BEING *NAMED* IS NOT FD 2 BEING *READ*, and until round 48 this
+     * method treated the two as the same thing. It answered `captured` for
+     * any spec that mentioned `2 =>` and did not contain the literal
+     * `/dev/null` - so an entry the scanner cannot actually read came back as
+     * compliant on the strength of the key alone. The live example is
+     * `Integration/BinSugarcrushDispatchTest::armWatchdog()`'s
+     * `2 => $devNull('w')`, a CLOSURE returning `['file','/dev/null','w']`:
+     * the truth there is a discard and the answer was `captured`, the
+     * polarity that waves a real offender through.
+     *
+     * Now an entry that is not an inline literal array is
+     * {@see SHAPE_UNCLASSIFIED} - a failure, which is the honest answer to
+     * "I cannot tell". A guard that quietly ignores what it cannot parse has
+     * a hole shaped exactly like the next defect.
+     *
+     * AND THE SAME IS TRUE OF THE MEMBERS, which the first version of this
+     * paragraph asserted and the first version of the code did not do. It
+     * closed `2 => $devNull('w')` and left `2 => ['file', $devNull, 'w']`
+     * reading `captured` - the nearest sibling of the very site it was
+     * written for, and the same wave-a-real-offender-through polarity the
+     * paragraph above condemns. Measured on PHP 8.3.6 against the code as it
+     * then stood: `['file', $devNull, 'w']`, `['file', self::DEV_NULL, 'w']`,
+     * `['file', DEV_NULL, 'w']` and `['file', '/dev' . '/null', 'w']` all
+     * came back `captured`, because the decision was `str_contains($entry,
+     * '/dev/null')` over the entry's SOURCE TEXT and none of those four spell
+     * it. {@see fdTwoEntryIsAllLiteral()} is the fix: every member must be a
+     * quoted string or a number, or the answer is again "I cannot tell".
+     *
+     * WHAT STILL READS `captured` AND IS MEANT TO, so the limit is named
+     * rather than discovered: `2 => ['redirect', 1]` merges fd 2 into fd 1
+     * and this scanner does not model where fd 1 went, and
+     * `2 => ['file', '/tmp/whatever.log', 'w']` is a real file the test may
+     * or may not read back. Both are all-literal, both are judged by the
+     * `/dev/null` text alone, and closing either needs fd-1 destination
+     * modelling that nothing in the tree currently exercises.
+     *
+     * MEASURED BEFORE IT WAS WRITTEN, per the rule that a prescription is a
+     * hypothesis - and the measurement corrected the sentence that stood here
+     * first. A per-site census of EVERY spawn site under `tests/` was taken
+     * with the old decision and with each of the two widenings: ZERO sites
+     * moved either time. Not one, as the first draft of this paragraph
+     * claimed. No total is written down here on purpose - a cardinality
+     * measured over `tests/` in one lane's worktree is wrong by the next
+     * merge, and the load-bearing half of that measurement is the zero.
+     * `armWatchdog()`'s site - the only non-literal fd-2 entry anywhere in
+     * `tests/` - reads `discarded` on every side, because its command string
+     * carries `>/dev/null 2>&1` and {@see classifyProcOpen()} settles that on
+     * an earlier branch before any descriptor spec is consulted. So the one
+     * occurrence this change was written for never reaches this method at
+     * all. It closes the SHAPE and adds no exemption row anywhere, which is
+     * also why it needed synthetic fixtures to be provable: there is nothing
+     * in the tree that exercises it.
      */
     private static function classifySpec(string $spec): string
     {
         if (!self::namesFdTwo($spec)) {
+            return self::positionalShape($spec);
+        }
+
+        $entry = self::fdTwoEntry($spec);
+        if ($entry === null || !self::fdTwoEntryIsAllLiteral($entry)) {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /**
+     * The shape of a descriptor spec that names no `2 =>` key.
+     *
+     * WHAT THIS BRANCH DID, and it is the hole this whole doc-block's thesis
+     * is about, one branch earlier than the thesis looks: a spec without a
+     * literal `2 =>` returned {@see SHAPE_INHERITED} outright. But
+     * `proc_open()` reads a POSITIONAL descriptor array by position - element
+     * 2 IS fd 2 - so `[['file','/dev/null','r'], ['file','/dev/null','w'],
+     * ['file','/dev/null','w']]` is a discard, and it came back `inherited`.
+     *
+     * WHAT IS TRUE NOW, measured on PHP 8.3.6 against the code as it then
+     * stood: EVERY positional spelling collapsed to `inherited` regardless of
+     * what element 2 actually was. A positional `/dev/null` (truth:
+     * discarded), a positional pipe (truth: captured), a two-element spec
+     * (truth: inherited) and a positional spec whose third element is a
+     * variable (truth: unreadable) all returned the same answer. Four
+     * different truths, one reply - and `inherited` is a DEFINITE claim, not
+     * an "I cannot tell", so it was wrong in both polarities at once: it
+     * understates a real discard, and it reds a real capture.
+     *
+     * WHY THIS EARNS ITS PLACE: the paragraph above says "a guard that
+     * quietly ignores what it cannot parse has a hole shaped exactly like the
+     * next defect", and then the very first branch of the method did exactly
+     * that. So the same rule is applied here - a positional element 2 is read
+     * when it can be read, and anything this splitter cannot follow is
+     * {@see SHAPE_UNCLASSIFIED} rather than a confident `inherited`.
+     *
+     * FEWER THAN THREE ELEMENTS IS A REAL `inherited`, not a failure to read:
+     * a spec that supplies only fds 0 and 1 leaves fd 2 pointing wherever the
+     * parent's was, which is the definition of the shape.
+     */
+    private static function positionalShape(string $spec): string
+    {
+        $elements = self::topLevelArrayElements($spec);
+
+        if ($elements === null) {
+            // Not an array literal here at all - a method call, a constant, a
+            // variable that resolved to something this scanner cannot follow.
+            // It may well redirect fd 2; nothing here can say it does not.
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        if ($elements === []) {
+            // An explicitly empty spec supplies no descriptors at all.
             return self::SHAPE_INHERITED;
         }
 
-        return self::fdTwoSpecIsTheNullDevice($spec) ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+        foreach ($elements as $element) {
+            // A keyed array that does not name `2` - the caller already
+            // established that - genuinely leaves fd 2 alone.
+            if (\str_contains($element, '=>')) {
+                return self::SHAPE_INHERITED;
+            }
+        }
+
+        if (!isset($elements[2])) {
+            return self::SHAPE_INHERITED;
+        }
+
+        $entry = \trim($elements[2]);
+        if (\str_starts_with($entry, '[') && \str_ends_with($entry, ']')) {
+            $entry = \substr($entry, 1, -1);
+        } elseif (\preg_match('/^array\s*\((.*)\)$/s', $entry, $inner) === 1) {
+            $entry = $inner[1];
+        } else {
+            // `STDERR`, a variable, a function call: not a descriptor triple
+            // this scanner can read.
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        if (!self::fdTwoEntryIsAllLiteral($entry)) {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /**
+     * The source text of each top-level element of an array literal, or null
+     * if $spec is not an array literal.
+     *
+     * Lexed rather than split on commas, because a descriptor spec's elements
+     * are themselves arrays and a nested `,` must not end one.
+     *
+     * @return list<string>|null
+     */
+    private static function topLevelArrayElements(string $spec): ?array
+    {
+        $tokens = \token_get_all('<?php ' . $spec . ';');
+        $start = null;
+        $count = \count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (\is_array($token) && \in_array($token[0], [\T_OPEN_TAG, \T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            if (self::tokenText($token) === '[') {
+                $start = $i + 1;
+            } elseif (\is_array($token) && $token[0] === \T_ARRAY) {
+                $next = self::next($tokens, $i);
+                if ($next === null || self::tokenText($tokens[$next]) !== '(') {
+                    return null;
+                }
+                $start = $next + 1;
+            }
+
+            break;
+        }
+
+        if ($start === null) {
+            return null;
+        }
+
+        $elements = [];
+        $current = '';
+        $depth = 0;
+
+        for ($i = $start; $i < $count; $i++) {
+            $text = self::tokenText($tokens[$i]);
+
+            if ($depth === 0 && ($text === ']' || $text === ')')) {
+                $current = \trim($current);
+                if ($current !== '') {
+                    $elements[] = $current;
+                }
+
+                return $elements;
+            }
+
+            if ($text === '[' || $text === '(') {
+                $depth++;
+            } elseif ($text === ']' || $text === ')') {
+                $depth--;
+            }
+
+            if ($depth === 0 && $text === ',') {
+                $elements[] = \trim($current);
+                $current = '';
+
+                continue;
+            }
+
+            $current .= $text;
+        }
+
+        // Ran off the end without closing - not something to guess about.
+        return null;
+    }
+
+    /**
+     * Whether every member of fd 2's entry is a quoted string or a number.
+     *
+     * THE DECISION BELOW IS MADE ON SOURCE TEXT, which is only sound when the
+     * text IS the value. `['file', $devNull, 'w']` is an inline literal array
+     * whose second member is a variable; searching its source for
+     * `/dev/null` answers "no" and the entry is then reported as a capture,
+     * which is the polarity that hides a discard. A concatenation, a class
+     * constant and a global constant fail the same way. So a member that is
+     * not its own value makes the whole entry unreadable.
+     *
+     * Lexed rather than pattern-matched: a `2 => ['file', "/dev/{$name}", 'w']`
+     * is a T_ENCAPSED_AND_WHITESPACE run and not a T_CONSTANT_ENCAPSED_STRING,
+     * so interpolation is rejected without needing a rule of its own.
+     */
+    private static function fdTwoEntryIsAllLiteral(string $entry): bool
+    {
+        $allowed = [\T_CONSTANT_ENCAPSED_STRING, \T_LNUMBER, \T_DNUMBER];
+
+        foreach (\token_get_all('<?php ' . $entry . ';') as $token) {
+            if (\is_string($token)) {
+                if ($token === ',' || $token === ';') {
+                    continue;
+                }
+
+                return false;
+            }
+
+            if (\in_array($token[0], [\T_OPEN_TAG, \T_WHITESPACE, \T_COMMENT], true)) {
+                continue;
+            }
+
+            if (!\in_array($token[0], $allowed, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The inside of fd 2's entry when that entry is an inline literal array,
+     * null when it is anything else.
+     *
+     * Null is the load-bearing return: it is what makes a `2 => $spec()`,
+     * a `2 => self::PIPE` or a `2 => array('pipe','w')` (long syntax, which
+     * this deliberately does not accept) fail rather than pass. Widening it
+     * to a shape is a decision somebody should make with a census in hand,
+     * not something a scanner should assume.
+     *
+     * IT IS NOT THE WHOLE READABILITY TEST, and reading it as one is how
+     * `['file', $devNull, 'w']` passed for a round. This method answers "is
+     * fd 2's entry an inline literal array"; whether its MEMBERS are literal
+     * is {@see fdTwoEntryIsAllLiteral()}'s question, and both have to be yes
+     * before the `/dev/null` text search below means anything.
+     */
+    private static function fdTwoEntry(string $spec): ?string
+    {
+        if (\preg_match('~(?:^|[\[,\s])2\s*=>\s*\[([^\]]*)\]~', $spec, $entry) !== 1) {
+            return null;
+        }
+
+        return $entry[1];
     }
 
     private static function namesFdTwo(string $spec): bool
     {
         return \preg_match('/(^|[\[,\s])2\s*=>/', $spec) === 1;
-    }
-
-    /**
-     * Whether fd 2's entry in a descriptor spec is `['file', '/dev/null', …]`.
-     *
-     * Only fd 2's own entry is inspected, so a spec that parks fd 0 on the
-     * null device - which is ordinary and correct, a child with no stdin -
-     * is not mistaken for a silenced stderr.
-     */
-    private static function fdTwoSpecIsTheNullDevice(string $spec): bool
-    {
-        if (\preg_match('~(?:^|[\[,\s])2\s*=>\s*\[([^\]]*)\]~', $spec, $entry) !== 1) {
-            return false;
-        }
-
-        return \str_contains($entry[1], '/dev/null');
     }
 
     /**

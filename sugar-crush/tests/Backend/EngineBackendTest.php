@@ -367,9 +367,38 @@ final class EngineBackendTest extends TestCase
     private function isRaw(string $slavePath): bool
     {
         // BSD/macOS stty takes the device flag lowercase (-f); GNU/Linux
-        // coreutils uses uppercase (-F).
+        // coreutils uses uppercase (-F). Using the wrong one fails with an
+        // EMPTY stdout, which is indistinguishable from "the terminal is
+        // cooked" - so the message on fd 2 is the only thing that tells those
+        // two apart, and it used to go to /dev/null.
+        //
+        // It cannot be folded into stdout with `2>&1` either: the return
+        // value below is a substring match for `-icanon`/`-echo`, and stty's
+        // diagnostic would be searched as if it were flag output. So fd 2
+        // goes to a file this helper reads back and fails on.
+        //
+        // THE SAME FIX AS {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest::isRaw()},
+        // which is where this helper was copied from. That copy was fixed in
+        // round 47 and this one was in no lane's file list, so the two sat one
+        // directory apart with opposite behaviour until `Backend/` joined
+        // {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureTest::SCOPE}
+        // and the guard said so.
         $flag = PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
-        $out = trim((string) shell_exec('stty ' . $flag . ' ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
+        $stderrFile = (string) tempnam(sys_get_temp_dir(), 'sc_enginebackend_stty_');
+
+        $out = trim((string) shell_exec(
+            'stty ' . $flag . ' ' . escapeshellarg($slavePath) . ' -a 2>' . escapeshellarg($stderrFile),
+        ));
+
+        $stderr = trim((string) @file_get_contents($stderrFile));
+        @unlink($stderrFile);
+
+        self::assertSame(
+            '',
+            $stderr,
+            'stty could not read the pty, so this helper cannot answer whether raw mode is set '
+                . 'and a bare false would be read as "cooked": ' . $stderr,
+        );
 
         return str_contains($out, '-icanon') && str_contains($out, '-echo');
     }

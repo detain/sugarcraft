@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * crush_code.md Phase 0 item 5: `completeAsync()`'s cancel teardown used to
@@ -25,6 +26,33 @@ use SugarCraft\Crush\Support\ForkedChild;
  */
 final class EngineBackendReapTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
+    /**
+     * The four children below are each waited for by the test that forked
+     * them, so on the PASSING path this reaper collects nothing.
+     *
+     * It is here for the path where an assertion between the fork and the
+     * wait fails, and for the one that has no other net at all: `phpunit.xml`
+     * sets `enforceTimeLimit` with `defaultTimeLimit="60"`, which PHPUnit
+     * implements as `pcntl_alarm()` plus a `SIGALRM` handler - and an alarm
+     * is not inherited across `pcntl_fork()`. So an abort here aborts exactly
+     * one of the processes this file put on the machine, the parent, and two
+     * of these children are alive for two full seconds with nothing left
+     * holding a clock on them. {@see ReapsForkedChildrenTrait} has the whole
+     * mechanism.
+     *
+     * FIRST STATEMENT, and that ordering is the point rather than a style
+     * choice: anything above it that tore state down would run while the
+     * orphans were still using it.
+     */
+    protected function tearDown(): void
+    {
+        $this->reapTrackedForkedChildren();
+
+        parent::tearDown();
+    }
+
     /**
      * Wall-clock ceiling for a bounded reap. reapChild()'s own budget is
      * 20 x 5ms = 100ms; 1s leaves an order of magnitude of slack for a loaded
@@ -148,7 +176,7 @@ final class EngineBackendReapTest extends TestCase
     {
         $this->requireFork();
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->markTestSkipped('fork() failed on this host.');
         }
@@ -181,7 +209,7 @@ final class EngineBackendReapTest extends TestCase
     {
         $this->requireFork();
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->markTestSkipped('fork() failed on this host.');
         }
@@ -217,7 +245,7 @@ final class EngineBackendReapTest extends TestCase
     {
         $this->requireFork();
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->markTestSkipped('fork() failed on this host.');
         }
@@ -266,7 +294,7 @@ final class EngineBackendReapTest extends TestCase
         $source = self::methodSource(new \ReflectionMethod(EngineBackend::class, 'sweepUnreapedChildren'));
         $this->assertStringNotContainsString('pcntl_waitpid(-1', $source);
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->markTestSkipped('fork() failed on this host.');
         }
