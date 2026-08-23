@@ -385,6 +385,11 @@ final class BackgroundSessionRunnerTest extends TestCase
         $backend = new FakeRunnerBackend('ok', events: [
             new ToolFinished('c1', 'Read', new ToolResult('c1', 'No such file or directory', true)),
             new ToolFinished('c2', 'Bash', new ToolResult('c2', 'exit status 0', false)),
+            // A SUCCESSFUL call whose OUTPUT happens to open with a roster
+            // phrase - a grep or a cat over a log full of them. Without the
+            // isError() guard the classifier would report the tool that ran
+            // as the tool that was stopped.
+            new ToolFinished('c4', 'Grep', new ToolResult('c4', 'Permission denied: 3 matches in auth.log', false)),
             new ToolFinished('c3', 'Grep', new ToolResult('c3', 'the hook denied: lower case is not the prefix', true)),
             // Not a ToolFinished at all: the observer sees ToolStarted too.
             new \stdClass(),
