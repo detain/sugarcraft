@@ -100,21 +100,111 @@ final class ChildStderrCaptureTest extends TestCase
      * "five" over a list of six, and it is a number a reader can take from
      * {@see SCOPE} itself.)
      *
-     * WHY THE REMAINDER IS STILL OUT, stated rather than silently omitted:
-     * every other directory under `tests/` either holds non-captures that
-     * only its owning lane may edit - measured at this commit, they are
-     * concentrated in `Context/`, `Tools/` and `Commands/`, the last of them
-     * almost entirely `inherited` rather than `discarded`, which is the
-     * cheaper shape to close - or is clean but owned by another lane. And
-     * adding a clean directory is not free either: it makes this guard an
-     * obligation on every spawn a sibling adds there, which reds at merge in
-     * a lane that never saw this file. That is a decision for the round that
-     * owns those directories; the scanner is pointed at a new one by adding a
-     * prefix here.
+     * WHY THE REMAINDER IS STILL OUT. This paragraph used to end the matter
+     * in prose: the remaining directories "hold non-captures that only its
+     * owning lane may edit", and widening was "a decision for the round that
+     * owns those directories". WHAT IS TRUE NOW: that reasoning is unchanged
+     * and still correct, but it was not CHECKED anywhere, and prose is not a
+     * partition. Measured: narrowing this constant all the way down to
+     * `['Integration/']` - undoing every widening this file has ever had -
+     * left the whole guard green with the same assertion count as the
+     * unmutated run. Membership of SCOPE had no signal in either direction,
+     * so nothing distinguished "deliberately deferred" from "never looked
+     * at". {@see OUT_OF_SCOPE} is where that reasoning now lives, one argued
+     * row per prefix, and {@see testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor()}
+     * is what makes the two lists jointly total over the offenders.
      *
      * @var list<string>
      */
     private const SCOPE = ['Agents/', 'Backend/', 'Chat/', 'Integration/', 'MCP/', 'Support/'];
+
+    /**
+     * Directories that hold an offending spawn and are NOT yet guarded, each
+     * with the reason it cannot be adopted in the round that recorded it.
+     *
+     * WHY THIS MAP EXISTS AT ALL, since {@see SCOPE} could simply have been
+     * widened: every prefix below names a directory in ANOTHER lane's file
+     * list. Adopting one means editing files this lane may not touch, and
+     * adding a directory to SCOPE without fixing its sites reds the guard for
+     * whoever merges next. The alternative to a row is not a fix - it is
+     * silence, which is what this file had.
+     *
+     * THE ROWS ARE CHECKED IN BOTH DIRECTIONS, so this cannot become a
+     * rubber stamp. {@see testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn()}
+     * fails on a row whose directory has been cleaned up - a deferral that
+     * has been overtaken is how a directory silently stops being tracked -
+     * and {@see testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor()} fails
+     * on an offender matched by neither list, which is the only outcome
+     * refused outright.
+     *
+     * A FILE AT THE ROOT OF `tests/` has no directory to name, so its key is
+     * its own filename. Both maps are matched with `str_starts_with()`, which
+     * makes that work; it reads oddly enough that the failure message says so
+     * rather than sending the reader looking for a directory.
+     *
+     * THE REASONS DELIBERATELY CARRY NO SITE COUNTS. A cardinality measured
+     * over `tests/` in one lane's worktree is wrong by the next merge, and
+     * every count a reader could want is derived by the two tests from the
+     * tree itself.
+     *
+     * @var array<string, string>
+     */
+    private const OUT_OF_SCOPE = [
+        'BaseSystemPromptTest.php' =>
+            'A root-level file, so the key is the filename. Its one offender is an `exec()` '
+            . 'removing a temp tree, where the shell has no output the test reads and the '
+            . 'redirection is pure noise-suppression. Cheap to close, but the file is at the '
+            . "root of tests/ and in no lane's list.",
+        'ChatTest.php' =>
+            'A root-level file, so the key is the filename. Its offender probes a tty with '
+            . '`stty ... 2>/dev/null`, where the discard is load-bearing: the call is a FEATURE '
+            . 'TEST whose failure output is expected and must not reach the suite. Closing it '
+            . 'means a pipe plus a decision about what to do with the text, not a redirection '
+            . 'swap.',
+        'Cli/' =>
+            'Offenders are `exec()` calls with no redirection at all, which is the cheap shape '
+            . 'to close - the child writes to a file the helper reads back, so fd 2 has an '
+            . 'obvious home. Deferred on ownership only.',
+        'Commands/' =>
+            'The largest inherited-shape cluster outside SCOPE and the cheapest to close: bare '
+            . '`exec()` calls, several of them `rm -rf` on a sandbox where nothing reads any '
+            . 'output. Deferred on ownership only.',
+        'Config/' =>
+            'One `exec(... 2>/dev/null)` whose exit status IS the assertion. The discard hides '
+            . "the diagnostic that would explain a failure, so closing it improves the test's "
+            . 'failure message rather than just its shape. Deferred on ownership only.',
+        'Context/' =>
+            'The largest discard cluster in the tree: `git init` / `git config` fixture setup '
+            . 'with `2>/dev/null` on each line. The discards are deliberate - a missing git '
+            . 'must not print - but they are also the shape this guard exists to refuse, so '
+            . 'each needs either a pipe or an argued exemption row. The volume is why this is '
+            . 'a round of its own.',
+        'Diagnostics/' =>
+            'A single bare `exec()`. Cheap, deferred on ownership only.',
+        'Hooks/' =>
+            'One `shell_exec()` reading `getconf PAGESIZE`, already `@`-suppressed and guarded '
+            . 'by a `<= 0` check, so the inherited fd 2 is the only thing that can reach the '
+            . 'suite. Cheap, deferred on ownership only.',
+        'Providers/' =>
+            'One `git init ... 2>/dev/null` behind a `markTestSkipped()` for a missing git - '
+            . 'the same fixture shape as Context/ and it should be settled with it rather than '
+            . 'piecemeal.',
+        'Renderer/' =>
+            'A POSITIONAL descriptor spec sending all three fds to /dev/null in a `runQuietly()` '
+            . 'helper. Read as `inherited` until round 48 fixed the classifier, so this row '
+            . 'records a site that was invisible rather than deferred. The discard is the '
+            . "helper's entire purpose, so this one wants an exemption row, not a fix.",
+        'Sessions/' =>
+            'A POSITIONAL descriptor spec sending all three fds to /dev/null while spawning a '
+            . 'process purely to harvest a pid that is guaranteed dead. Same classifier fix as '
+            . 'Renderer/, same conclusion: the discard is the point, so this wants an exemption '
+            . 'row.',
+        'Tools/' =>
+            'A `git init` fixture cluster with `2>/dev/null` plus one bare `exec()`. The git '
+            . 'half belongs with Context/ and Providers/.',
+        'Workflows/' =>
+            'A single bare `exec()`. Cheap, deferred on ownership only.',
+    ];
 
     /**
      * Spawn sites that send fd 2 to the null device ON PURPOSE, with the count
@@ -775,5 +865,197 @@ final class ChildStderrCaptureTest extends TestCase
                     . 'matches is a licence nobody checked.',
             );
         }
+    }
+
+    /**
+     * {@see SCOPE} AND {@see OUT_OF_SCOPE} MUST BE JOINTLY TOTAL over the
+     * offenders, or a deferral is a hole rather than a record.
+     *
+     * WHY THIS TEST HAD TO EXIST, measured rather than argued. Narrowing
+     * {@see SCOPE} to `['Integration/']` - undoing every widening this file
+     * has ever received, including the one made in the same round as this
+     * test - left the whole guard green, with the SAME assertion count as the
+     * unmutated run. {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()}
+     * never looks outside SCOPE, and
+     * {@see testEveryDiscardExemptionStillDescribesRealSites()} only checks
+     * rows that exist, so between them the two agreed that a directory nobody
+     * covers is fine. Dropping `MCP/` from SCOPE *and* deleting a real `2>&1`
+     * from a spawn in that directory also survived - a widening and the
+     * offender it was supposed to catch, removed together, in silence.
+     *
+     * So this one starts from the SPAWN SITES rather than from either list:
+     * every file anywhere under `tests/` holding a site this guard would
+     * refuse has to be matched by one list or the other. Adopting a directory
+     * is then a visible act, and so is declining to.
+     *
+     * NOTE THE REACH, because it is wider than {@see SCOPE} and easy to
+     * describe as though it were not. The walk is over ALL of `tests/`. An
+     * offending spawn added ANYWHERE - including a directory no lane has ever
+     * listed - reds this test until its directory is put in one of the two
+     * maps. That is intended, and it is a standing obligation on every other
+     * lane, so it is written down here rather than left to be rediscovered
+     * from a red merge.
+     *
+     * THE SIBLING GUARD ALREADY WORKS THIS WAY.
+     * {@see ForkedChildReaperAdoptionTest::testNoDirectoryWithUnreapedForksIsUnaccountedFor()}
+     * is the same invariant over the reaper, and the equivalent mutation
+     * there - drop a prefix, restore a real offender in it - is killed. This
+     * file was widened in the same round and did not get the invariant, which
+     * is the whole reason both mutations above survived here.
+     */
+    public function testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor(): void
+    {
+        $this->assertTheOffendingShapeBranchesAreAlive();
+
+        $root = \dirname(__DIR__);
+        $unaccounted = [];
+        $checked = 0;
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+        foreach ($files as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            $relative = substr($file->getPathname(), \strlen($root) + 1);
+            $offenders = self::offendingSites($relative, (string) file_get_contents($file->getPathname()));
+            if ($offenders === []) {
+                continue;
+            }
+            $checked++;
+
+            if (!self::accountedFor($relative)) {
+                $unaccounted[] = $relative . ' (' . implode(', ', $offenders) . ')';
+            }
+        }
+
+        // The scanner has to have found something to reason about, or
+        // "nothing is unaccounted for" is a statement about a dead
+        // instrument rather than about the tree.
+        $this->assertGreaterThan(
+            0,
+            $checked,
+            'the stderr scanner found no offending spawn anywhere under tests/ - it is dead',
+        );
+
+        $this->assertSame(
+            [],
+            $unaccounted,
+            'this file launches a child whose stderr lands on the suite\'s, and it is matched by '
+                . 'no prefix in either SCOPE or OUT_OF_SCOPE. Either give the spawn somewhere to '
+                . 'put fd 2 and add its directory to SCOPE, or add that directory to '
+                . 'OUT_OF_SCOPE with the reason it cannot be adopted yet. Both maps are matched '
+                . 'with str_starts_with(), so for a test at the ROOT of tests/ - which has no '
+                . 'directory - the entry is the filename itself. Leaving it in neither is the '
+                . 'only outcome this guard refuses.',
+        );
+    }
+
+    /**
+     * A deferral cannot outlive the offender it was written for.
+     *
+     * Without this, {@see OUT_OF_SCOPE} decays into a list of directories
+     * somebody once worried about, and the partition above would keep passing
+     * because a stale row still matches the prefix. A row whose directory has
+     * been cleaned up means the directory is ready to JOIN {@see SCOPE}, and
+     * that is the one moment anybody is likely to notice.
+     */
+    public function testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn(): void
+    {
+        $this->assertTheOffendingShapeBranchesAreAlive();
+
+        $root = \dirname(__DIR__);
+        $withOffenders = [];
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+        foreach ($files as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            $relative = substr($file->getPathname(), \strlen($root) + 1);
+            if (self::offendingSites($relative, (string) file_get_contents($file->getPathname())) !== []) {
+                $withOffenders[] = $relative;
+            }
+        }
+
+        foreach (self::OUT_OF_SCOPE as $prefix => $reason) {
+            $this->assertNotSame('', trim($reason), $prefix . ' is deferred without a reason');
+
+            $stillOffending = false;
+            foreach ($withOffenders as $relative) {
+                $stillOffending = $stillOffending || str_starts_with($relative, $prefix);
+            }
+
+            $this->assertTrue(
+                $stillOffending,
+                $prefix . ' is recorded in OUT_OF_SCOPE as holding a spawn whose stderr reaches '
+                    . 'the suite, and it no longer does. Move the prefix into SCOPE and delete '
+                    . 'this row - a deferral that has been overtaken is how a directory '
+                    . 'silently stops being guarded.',
+            );
+        }
+
+        // A prefix naming nothing at all is a typo that would satisfy neither
+        // direction of the partition, so it is refused separately rather than
+        // read as "clean".
+        foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
+            $this->assertTrue(
+                is_dir($root . '/' . rtrim($prefix, '/')) || is_file($root . '/' . $prefix),
+                $prefix . ' is recorded in OUT_OF_SCOPE but no such directory or file exists '
+                    . 'under tests/.',
+            );
+        }
+    }
+
+    /**
+     * The sites in one file this guard would refuse, after the file's own
+     * discard allowance is spent.
+     *
+     * Shared by the partition guards above so that "offending" means the same
+     * thing to both of them as it does to
+     * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()} - a
+     * second definition would let a site be an offender to one guard and not
+     * to another, which is the seam a deferral would slip through.
+     *
+     * @return list<string>
+     */
+    private static function offendingSites(string $relative, string $source): array
+    {
+        $allowance = self::ACCEPTED_DISCARDED_STDERR[$relative]['count'] ?? 0;
+        $offenders = [];
+
+        foreach (ChildStderrCaptureScanner::scan($source) as $site) {
+            if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_CAPTURED) {
+                continue;
+            }
+
+            if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_DISCARDED && $allowance > 0) {
+                $allowance--;
+
+                continue;
+            }
+
+            $offenders[] = $site['line'] . ':' . $site['call'] . ' -> ' . $site['shape'];
+        }
+
+        return $offenders;
+    }
+
+    private static function accountedFor(string $relative): bool
+    {
+        if (self::inScope($relative)) {
+            return true;
+        }
+
+        foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
+            if (str_starts_with($relative, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
