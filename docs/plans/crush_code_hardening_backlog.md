@@ -8120,3 +8120,69 @@ change-set.
 and delete the `tests/VhsTapeContractTest.php` row from
 `tests/Support/InterpolationOpenerTokenTest.php::KNOWN_GAPS` in the same commit. Needs an owner assigned,
 since the two files were in different lanes' lists.
+
+### Eb48-6 — the child-stderr scanner called EVERY positional `proc_open()` descriptor spec `inherited`
+
+**Recorded 2026-08-23 by round-48 lane b.** Severity: harness correctness. **Measured**, PHP 8.3.6.
+**Fixed in the same round.**
+
+**What.** `ChildStderrCaptureScanner::classifySpec()` opened with `if (!namesFdTwo($spec)) return
+SHAPE_INHERITED;`, and `namesFdTwo()` requires a literal `2 =>` key. But `proc_open()` reads a POSITIONAL
+descriptor array **by position** — element 2 *is* fd 2 — so a spec spelled
+`[['file','/dev/null','r'], ['file','/dev/null','w'], ['file','/dev/null','w']]` never reached the
+classifier at all.
+
+**Measured before the fix, four spellings through the tree's own scanner.** Positional `/dev/null` (truth:
+discarded) → `inherited`. Positional pipe (truth: captured) → `inherited`. A two-element spec (truth:
+inherited) → `inherited`. A positional element 2 that is a variable (truth: unreadable) → `inherited`.
+**Four different truths, one answer.** And `inherited` is a DEFINITE claim rather than an "I cannot tell",
+so the branch was wrong in both polarities at once: it understates a real discard *and* it reds a real
+capture.
+
+**Why it is the same defect the method's own doc-block is about.** That doc-block already argues "a guard
+that quietly ignores what it cannot parse has a hole shaped exactly like the next defect", and had been
+rewritten twice to push non-literal ENTRIES and non-literal MEMBERS into `unclassified`. The positional
+case sat one branch *earlier* than any of that reasoning looked.
+
+**Blast radius, full-tree census with the old scanner and the new, 95 sites on both sides.** Exactly two
+sites move — `Renderer/ImageRenderingTest.php:436` and `Sessions/BackgroundSupervisorTest.php:410`, both
+`inherited` → `discarded`, both genuinely `['file','/dev/null','w']` at position 2. Both were already
+outside SCOPE, so no guard changed colour. Nothing became `unclassified`. The 95/61-captured totals
+independently re-derive the round's other census of the same tree.
+
+**Status.** Fixed: a token-based top-level element splitter reads positional element 2, fewer than three
+elements stays a real `inherited` (that is the truth, not a failure to read), and anything the splitter
+cannot follow is `unclassified`. All five positional shapes are pinned in the unit fixture test and the
+positional discard is the liveness helper's fourth discard path. Mutating `positionalShape()` back to the
+old always-`inherited` answer is killed by all five tests in the file.
+
+### Eb48-7 — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
+
+**Recorded 2026-08-23 by round-48 lane b.** Severity: cross-lane coordination. **Measured**, and the map
+is checked in both directions.
+
+**What.** `ChildStderrCaptureTest` had a SCOPE of six directories and nothing that gave membership any
+signal: narrowing SCOPE all the way to `['Integration/']` left the guard green with the *same* assertion
+count as the unmutated run. SCOPE and `OUT_OF_SCOPE` are now jointly total over the offenders, mirroring
+`ForkedChildReaperAdoptionTest`, so a spawn whose stderr reaches the suite must be matched by one list or
+the other.
+
+**The obligation.** Eleven directories plus the two files at the root of `tests/` — `Cli/`, `Commands/`,
+`Config/`, `Context/`, `Diagnostics/`, `Hooks/`, `Providers/`, `Renderer/`, `Sessions/`, `Tools/`,
+`Workflows/`, `BaseSystemPromptTest.php`, `ChatTest.php` — each hold at least one offending spawn and each
+sit in another lane's file list, which is why they are rows rather than fixes. The rows carry no site
+counts on purpose (a cardinality measured over `tests/` in one worktree is wrong by the next merge); both
+tests derive what they need from the tree.
+
+**Three natural batches, from the shapes measured at this commit.** The bare-`exec()` cluster
+(`Commands/`, `Cli/`, `Diagnostics/`, `Workflows/`, `BaseSystemPromptTest.php`) is the cheap shape — the
+child has an obvious home for fd 2 and nothing reads its output. The `git init`/`git config` fixture
+cluster (`Context/`, `Tools/`, `Providers/`) is one problem wearing three hats and should be settled
+together rather than piecemeal. The deliberate-discard pair (`Renderer/`, `Sessions/`) wants an argued
+exemption row, not a fix: in both the discard is the helper's entire purpose, and both were invisible
+until Eb48-6 fixed the classifier.
+
+**The row is self-deleting, in both directions.** A row whose directory has been cleaned up fails with
+"Move the prefix into SCOPE and delete this row"; an offender in a directory matched by neither list fails
+the partition. So a lane that fixes its directory must move the prefix in the same change-set, exactly as
+in Eb48-5.
