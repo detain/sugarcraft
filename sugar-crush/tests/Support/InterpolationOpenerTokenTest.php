@@ -511,7 +511,7 @@ final class InterpolationOpenerTokenTest extends TestCase
      * token at all, keyed by its path relative to the library root.
      *
      * The substring pre-filter is a speed gate and nothing else: a file that
-     * does not contain the seven characters cannot name the constant, and
+     * does not contain the string `T_CURLY_OPEN` cannot name the constant, and
      * tokenising several hundred files to learn that is wasted. Selection is
      * still done on TOKENS, by {@see constantsNamedInCode()}.
      *

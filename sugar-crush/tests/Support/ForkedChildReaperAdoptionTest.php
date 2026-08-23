@@ -23,13 +23,16 @@ use PHPUnit\Framework\TestCase;
  * "`tests/Integration/` only... widening {@see SCOPE} to `''` derives the
  * list instead. That is the whole of the work when somebody owns those
  * files." WHAT IS TRUE NOW: round 47's lane b owned `tests/Agents/`,
- * `tests/Integration/` and `tests/Support/`, and widened {@see SCOPE} to
- * exactly those three - which is what turned four raw, unreaped forks in
+ * `tests/Integration/` and `tests/Support/`, and added exactly those three
+ * to {@see SCOPE} - which is what turned four raw, unreaped forks in
  * `Agents/AgentWorkerPoolTest.php` (two of whose children `sleep(120)`,
  * i.e. twice `defaultTimeLimit`) and two in `Support/ForkedChildTest.php`
- * into adoptions. Round 48 owned `tests/Backend/` and adopted the four raw
- * forks in `Backend/EngineBackendReapTest.php`, so {@see SCOPE} gained a
- * fourth prefix and {@see OUT_OF_SCOPE} emptied. WHY THIS STILL EARNS ITS
+ * into adoptions. `Diagnostics/` is a FOURTH, and it is not lane b's: round
+ * 47's lane a added it in the same round, which is why counting the prefixes
+ * from this paragraph alone gives the wrong answer. Round 48 owned
+ * `tests/Backend/` and adopted the four raw forks in
+ * `Backend/EngineBackendReapTest.php`, so {@see SCOPE} gained a FIFTH prefix
+ * and {@see OUT_OF_SCOPE} emptied. WHY THIS STILL EARNS ITS
  * PLACE: `''` STILL is not reachable from one lane - the remaining
  * directories hold no unreaped fork today, but adding them is an obligation
  * on every fork a sibling later writes there, which reds at merge in a lane

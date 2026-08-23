@@ -478,11 +478,15 @@ final class ForkedChildExitConventionTest extends TestCase
      * convention is broken and this one does not - it simply happens.
      *
      * WHAT THIS TEST DOES NOT BUY, said plainly so nobody counts it twice: no
-     * change to this repository can red it. It runs a standalone `php`
-     * subprocess and asserts a property of the interpreter, which is the only
-     * way to assert this consequence at all, and it is the REASON the
-     * convention exists rather than a regression net over the code that
-     * follows it. The net is {@see ForkedChildExitScanner} and the guards
+     * change to `src/` can red it. (This sentence said "no change to this
+     * repository", which is too strong and measurably so - the probe script
+     * and {@see runProbe()} both live here, and deleting the `posix_kill()`
+     * from the probe reds this test. What cannot red it is a change to the
+     * code the convention governs, which is the claim that matters.) It runs
+     * a standalone `php` subprocess and asserts a property of the
+     * interpreter, which is the only way to assert this consequence at all,
+     * and it is the REASON the convention exists rather than a regression net
+     * over the code that follows it. The net is {@see ForkedChildExitScanner} and the guards
      * that point it at the tree.
      *
      * NOT RUN INSIDE PHPUnit, deliberately. Forking under the live runner to
