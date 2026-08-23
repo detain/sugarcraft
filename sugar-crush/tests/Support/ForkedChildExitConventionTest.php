@@ -35,12 +35,25 @@ use PHPUnit\Framework\TestCase;
  *
  *  - PLAIN EXIT. `React\EventLoop\Loop::get()` registers a shutdown function
  *    that RUNS the loop (`vendor/react/event-loop/src/Loop.php`), so a child
- *    inheriting a loop with any live watcher blocks at exit forever. This
- *    suite is shielded only because `tests/bootstrap.php` installs the loop
- *    with `Loop::set(new StreamSelectLoop())`, which never registers that
- *    hook - a shield that exists for an unrelated reason (ext-uv clock
- *    pinning) and could be reworked away without anybody connecting it to
- *    this.
+ *    inheriting a loop with any live watcher blocks at exit forever. WHAT
+ *    THIS BULLET SAID: this suite is shielded because `tests/bootstrap.php`
+ *    installs a `StreamSelectLoop`, "which never registers that hook".
+ *    WHAT IS TRUE NOW - read out of `Loop.php` and then measured, because
+ *    the sentence names the wrong agent: `Loop::get()` registers the hook,
+ *    and only on the branch where no instance is set yet. `Loop::set()`
+ *    registers NOTHING, whatever loop it is handed. The shield is therefore
+ *    `tests/bootstrap.php` calling `Loop::set()` BEFORE anything calls
+ *    `Loop::get()`, and the loop CLASS plays no part in it. Three probes on
+ *    PHP 8.3.6 with ext-uv loaded, each arming a 3600-second timer and then
+ *    falling off the end: `set()` of a `StreamSelectLoop` exits at once,
+ *    `set()` of an `ExtUvLoop` exits at once, and `Loop::get()` alone blocks
+ *    until it is killed. WHY THE WARNING STILL EARNS ITS PLACE, sharpened
+ *    rather than weakened by the correction: the line that shields this
+ *    suite is justified in `tests/bootstrap.php` purely on ext-uv
+ *    clock-pinning grounds and does not mention a shutdown hook, so the
+ *    rework to fear is one that DELETES the `Loop::set()` call - not one
+ *    that swaps which loop it passes, which is what the old sentence would
+ *    have had a reader watch for.
  *  - PLAIN EXIT. An inherited destructor with a real OS-level side effect
  *    fires in the child: candy-core's `Tty`/`PosixBackend` putting the SHARED
  *    kernel tty back into cooked mode is the one that cost this project a
@@ -448,9 +461,17 @@ final class ForkedChildExitConventionTest extends TestCase
      * to run both endings and count. It is also the consequence that survives
      * every INDEPENDENT mitigation the tree already has: candy-core's
      * PID-aware `PosixBackend::restore()` defuses the termios destructor, and
-     * `tests/bootstrap.php`'s `StreamSelectLoop` defuses React's shutdown
-     * hook - both of which hold whatever ending the child takes. Nothing
-     * plays that role for an inherited output buffer. The one thing that
+     * `tests/bootstrap.php`'s `Loop::set()` CALL defuses React's shutdown
+     * hook - both of which hold whatever ending the child takes. (WHAT THIS
+     * SAID: that the `StreamSelectLoop` is what defuses the hook. WHAT IS
+     * TRUE, measured: `Loop::set()` registers no shutdown function at all,
+     * `Loop::get()` is what registers one, and so handing `set()` an
+     * `ExtUvLoop` defuses it identically - the call site is the agent and
+     * the loop class is irrelevant. WHY IT STILL BELONGS IN THIS PARAGRAPH:
+     * the point being made is that those two consequences each have a
+     * mitigation and this third one has none, and that point survives the
+     * correction untouched.) Nothing plays that role for an inherited
+     * output buffer. The one thing that
      * defuses it is the ending this convention mandates, which the control
      * below demonstrates: `exitNow()` produces one marker where a plain
      * `exit()` produces two. So the other two consequences degrade when the

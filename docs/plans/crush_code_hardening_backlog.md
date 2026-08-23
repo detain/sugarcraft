@@ -7988,8 +7988,23 @@ child, and the marker printed twice.
 
 **Why it matters more than the other two.** Both consequences already written down are DEFUSED in this
 tree — candy-core's PID-aware `PosixBackend::restore()` defuses the termios destructor, and
-`tests/bootstrap.php`'s `StreamSelectLoop` defuses React's shutdown hook. Nothing defuses an inherited
+`tests/bootstrap.php`'s `Loop::set()` CALL defuses React's shutdown hook. Nothing defuses an inherited
 output buffer, and it is the one a scanner cannot see.
+
+**Correction to the sentence above, made in the same round it was written.** This entry first said "
+`tests/bootstrap.php`'s `StreamSelectLoop` defuses React's shutdown hook", naming the loop CLASS as the
+agent. That is inverted. Read out of `vendor/react/event-loop/src/Loop.php`: `Loop::get()` registers the
+autorun `register_shutdown_function`, and only on the branch where `self::$instance` is not yet a
+`LoopInterface`; `Loop::set()` registers nothing whatever loop it is handed. Measured with three probes on
+PHP 8.3.6 with ext-uv loaded, each arming a 3600-second timer and then falling off the end of the script:
+`Loop::set(new StreamSelectLoop())` then `get()` exits immediately (rc 0, no hook), `Loop::set(new
+ExtUvLoop())` then `get()` exits immediately (rc 0, no hook), and `Loop::get()` alone blocks until killed
+(rc 124 under `timeout 8` — the hook ran the loop). The agent is the `Loop::set()` CALL happening before
+any `Loop::get()`. The correction makes the warning sharper rather than weaker: `tests/bootstrap.php`
+justifies that line purely on ext-uv stale-clock grounds and never mentions a shutdown hook, so the
+dangerous rework is one that DELETES the `Loop::set()` call, not one that swaps the loop class — which is
+what the original sentence would have had a reader watch for. Both doc-block copies in
+`ForkedChildExitConventionTest` were rewritten in the rule-7 three-part form.
 
 **Status.** Pinned behaviourally by
 `ForkedChildExitConventionTest::testAPlainExitInAForkedChildRepublishesTheOutputBufferItInherited()`, in a
