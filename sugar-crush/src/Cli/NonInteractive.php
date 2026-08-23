@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Cli;
 
 use SugarCraft\Crush\Backend;
-use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\DenialKind;
 
 /**
  * The `-p "<prompt>"` / `run "<prompt>"` one-shot, non-interactive CLI path.
@@ -950,34 +950,41 @@ final class NonInteractive
      * `$event` as one `refusals` entry, or null when it is not a refusal.
      *
      * THE CLASSIFICATION IS NOT THIS CLASS'S TO INVENT, and that is the whole
-     * design of the method. {@see Chat::DENIED_ERROR_PREFIXES} already names
-     * the error texts that mean "this call never ran" rather than "this call
-     * ran and failed" — it is what {@see Chat::isDeniedResult()} reads to draw
-     * a refusal as its own struck-through state in the TUI. Reusing the roster
-     * makes the headless document and the interactive frame agree on what a
-     * refusal IS by construction; a second list here would be two parties
-     * disagreeing about the same tool call depending on which surface the
-     * operator happened to be looking at.
+     * design of the method. {@see DenialKind} already names the error texts
+     * that mean "this call never ran" rather than "this call ran and failed" —
+     * it is what {@see \SugarCraft\Crush\Chat::isDeniedResult()} reads to
+     * draw a refusal as its own struck-through state in the TUI. Reusing the
+     * roster makes the headless document and the interactive frame agree on
+     * what a refusal IS by construction; a second list here would be two
+     * parties disagreeing about the same tool call depending on which surface
+     * the operator happened to be looking at.
      *
-     * {@see Chat} IS TOUCHED LAZILY, ON PURPOSE. The `-p` path exists partly
-     * so a run can avoid building a `Chat` at all, and a class constant is
-     * still a class load.
+     * THE LAZINESS ARGUMENT THAT USED TO LIVE HERE IS OBSOLETE, AND IT IS
+     * REWRITTEN RATHER THAN DROPPED, because it is the reason the roster was
+     * moved. WHAT IT SAID, across two paragraphs: that
+     * `Chat::DENIED_ERROR_PREFIXES` was "TOUCHED LAZILY, ON PURPOSE" since the
+     * `-p` path exists partly so a run can avoid building a `Chat` at all and
+     * a class constant is still a class load; and, correcting its own earlier
+     * claim, that the guard below is `!isError()` rather than "is a refusal",
+     * so a turn whose tool RAN AND FAILED — a `Read` on a missing path, a
+     * `Bash` exiting non-zero — reached the roster and loaded `Chat` while
+     * refusing nothing at all. That correction carried the measurement
+     * {@see \SugarCraft\Crush\Runtime}'s `DENIAL_HOOK` doc-block cites by
+     * name: `class_exists(Chat::class, false)` after a full {@see self::run()}
+     * on PHP 8.3.6 — FALSE for a turn with no tool events and for one whose
+     * tool succeeded, TRUE for an errored non-refusal and TRUE for a refusal.
      *
-     * THE PREDICATE IS "NO ERRORED TOOL RESULT", NOT "NO REFUSAL", and the
-     * doc-block had the wrong one. WHAT IT SAID: "the roster is read only after
-     * an errored {@see ToolFinished} has arrived, so a turn that refuses
-     * nothing — which is nearly all of them — never loads it". The first
-     * clause is right and the second does not follow from it: the guard below
-     * is `!isError()`, so a turn whose tool RAN AND FAILED — a `Read` on a
-     * missing path, a `Bash` exiting non-zero — reaches the roster and loads
-     * `Chat` while refusing nothing at all. MEASURED on PHP 8.3.6 with
-     * `class_exists(Chat::class, false)` after a full {@see self::run()}: false
-     * for a turn with no tool events and for one whose tool succeeded, true for
-     * one errored non-refusal and true for a refusal. WHY THE LAZINESS STILL
-     * EARNS ITS PLACE: the load is still avoided on every turn that errors
-     * nothing, which is the common `-p` shape, and moving the roster to a
-     * cheaper owner would put the headless document and the TUI back on two
-     * lists — the thing this method exists not to do.
+     * WHAT IS TRUE NOW: the roster is {@see DenialKind}, a leaf enum in
+     * `src/Permissions/` with no `use` statements at all, so this method
+     * classifies without naming `Chat` and the load does not happen on ANY
+     * turn. RE-MEASURED on PHP 8.3.6 by driving this method through reflection
+     * with one errored {@see ToolFinished} carrying `Hook denied: nope`:
+     * `class_exists(Chat::class, false)` is FALSE before AND after, where
+     * against the previous line it was false before and TRUE after. WHY THE
+     * PARAGRAPH STILL EARNS ITS PLACE: "do not make the headless path pay for
+     * the TUI model" is the constraint that chose where the roster went, and
+     * without it a future reader sees only a shorter `foreach` and puts the
+     * list back on the nearest convenient class.
      *
      * THE KNOWN LIMIT RECORDED HERE IS CLOSED (E210). WHAT IT SAID: "a
      * permission refusal and a plain hook DENY are indistinguishable here, and
@@ -1009,12 +1016,10 @@ final class NonInteractive
         }
 
         $reason = $event->result->content();
-        foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
-            if (\str_starts_with($reason, $prefix)) {
-                return ['tool' => $event->toolName, 'reason' => $reason];
-            }
+        if (DenialKind::classify($reason) === null) {
+            return null;
         }
 
-        return null;
+        return ['tool' => $event->toolName, 'reason' => $reason];
     }
 }
