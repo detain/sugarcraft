@@ -929,6 +929,70 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * exactly the damage, so the assertion is on the watcher's own state and
      * the ordering is argued at the call site.
      */
+    /**
+     * THE ONE-SHOT CANCELS ITSELF *BEFORE* IT NOTIFIES, asserted from inside
+     * the notification rather than after it.
+     *
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::notifyOnceWhenPending()}
+     * spends a paragraph on this and the "NO SPIN" argument leans on it, and
+     * until this test nothing held it: deleting the `cancelPendingNotification()`
+     * from inside the read-stream callback SURVIVED the whole `RuntimeNoticeSink`
+     * filter — 45 tests, 237 assertions, byte-identical to baseline.
+     *
+     * WHY IT SURVIVED, which is the more useful half. The consequence of losing
+     * that line is mild and self-healing: the re-arm that
+     * {@see \SugarCraft\Crush\Chat::pumpRuntimeNotices()} returns calls
+     * `cancelPendingNotification()` on its own way in, so the stale watcher is
+     * gone one pump later, and a second fire would only resolve an
+     * already-resolved `Deferred`. Nothing observable breaks. What breaks is
+     * the INVARIANT: `isNotificationArmed()` reports `true` across a window in
+     * which no watcher should be armed, and every later reader of that method
+     * inherits the wrong answer.
+     *
+     * WHICH IS WHY THE ASSERTION IS TAKEN INSIDE THE CALLBACK. Read afterwards
+     * it is worthless — by then the pump has re-armed and the state is `true`
+     * again for a legitimate reason, so the mutation and the fix look
+     * identical from outside.
+     */
+    public function testTheOneShotWatcherDisarmsItselfBeforeItNotifies(): void
+    {
+        self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host');
+
+        $loop = Loop::get();
+        $fired = false;
+        $armedWhenNotified = null;
+
+        self::assertTrue(RuntimeNoticeSink::notifyOnceWhenPending(
+            static function () use (&$fired, &$armedWhenNotified, $loop): void {
+                $armedWhenNotified = RuntimeNoticeSink::isNotificationArmed();
+                $fired = true;
+                $loop->stop();
+            },
+        ));
+        self::assertTrue(RuntimeNoticeSink::isNotificationArmed(), 'nothing was armed; the run below is moot');
+
+        self::assertTrue(RuntimeNoticeSink::record('a notice raised with nobody at the keyboard'));
+
+        // BOUNDED, and stopped by the callback rather than by the timer on the
+        // happy path — a bare run() on a watcher that never fires hangs the
+        // suite instead of failing it.
+        $guard = $loop->addTimer(2.0, static fn () => $loop->stop());
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        self::assertTrue($fired, 'the watcher never fired, so every assertion below is vacuous');
+        self::assertFalse(
+            $armedWhenNotified,
+            'the one-shot watcher was still armed at the moment it notified, so it is not one-shot. '
+                . 'A second readable event fires it again before any pump re-arms, and '
+                . 'isNotificationArmed() answers true for a watcher that has already been spent.',
+        );
+        self::assertFalse(
+            RuntimeNoticeSink::isNotificationArmed(),
+            'the spent watcher is still on the loop after the callback returned',
+        );
+    }
+
     public function testResetTakesTheReadWatcherBackOffTheLoop(): void
     {
         self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host');
