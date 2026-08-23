@@ -8008,9 +8008,11 @@ on the day it landed, on a string that is entirely correct. The scanner's alphab
 with a frame plus a denial VOCABULARY, and re-measured on PHP 8.3.6 the scan over `src/Chat.php` is now
 exactly the six real spellings (the three interpolated producers above and the roster's three entries) with
 `Permission mode:` correctly absent — so the carve-out needed is the three roster declaration lines and
-nothing more. Two things this amendment does NOT establish: the same scan has not been run over
-`src/Renderer.php` or `src/Cli/`, so a genuinely repo-wide version may need carve-outs this entry has not
-enumerated; and every token-kind claim here is measured on PHP 8.3.6 only, while CI also runs 8.4.
+nothing more. The other two obvious targets were measured at the same time and need no carve-out at all:
+`src/Renderer.php` and `src/Cli/NonInteractive.php` each return **zero**, i.e. both consumers classify
+against the roster rather than spelling a prefix themselves. All of this is measured by driving the SHIPPED
+`DenialPrefixRosterTest::denialLiteralsIn()` through reflection rather than a copy of it, on PHP 8.3.6 only
+— CI also runs 8.4, and no token-kind claim here has been checked there.
 
 ---
 
