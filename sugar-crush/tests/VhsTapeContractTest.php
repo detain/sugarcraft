@@ -2961,11 +2961,34 @@ final class VhsTapeContractTest extends TestCase
         self::assertSame(
             ['Set Shell' => 1],
             self::literalHeadArguments($interpolated)['tally'],
-            'and the token stream\'s one asymmetry: the `{` opening an interpolation is an ARRAY '
-            . 'token while the `}` closing it is a bare string, so a depth count that matched '
-            . 'only bare braces would go one closer over and truncate the argument list before '
-            . 'reaching the head. No call site in this file passes an interpolated string today, '
-            . 'which is precisely why the blind spot needs a fixture rather than a reader',
+            'and the FIRST of the token stream\'s three asymmetries: the `{` opening an '
+            . 'interpolation is an ARRAY token while the `}` closing it is a bare string, so a '
+            . 'depth count that matched only bare braces would go one closer over and truncate '
+            . 'the argument list before reaching the head. No call site in this file passes an '
+            . 'interpolated string today, which is precisely why the blind spot needs a fixture '
+            . 'rather than a reader',
+        );
+
+        // The 8.2-DEPRECATED SPELLING of the row above, and the reason it is a
+        // NOWDOC: `${dir}` inside a nowdoc is data, so this file never compiles
+        // it and cannot emit the deprecation on any PHP. `token_get_all()`
+        // lexes rather than compiles, so the scanner under test still sees the
+        // opener it has to handle for as long as PHP emits one.
+        $deprecatedInterpolation = <<<'PHP'
+            <?php
+            self::assertSame([], self::directiveValues("${dir}/x.tape", 'Set Font Size'), 'why');
+            PHP;
+
+        self::assertSame(
+            ['Set Font Size' => 1],
+            self::literalHeadArguments($deprecatedInterpolation)['tally'],
+            'and the SAME asymmetry in its other spelling, which this file did not handle for '
+            . 'four rounds while every other brace walker in the suite was given it one at a '
+            . 'time. `"${dir}"` opens with T_DOLLAR_OPEN_CURLY_BRACES - a THIRD array token, '
+            . 'whose text is `${` and not `{`, measured on PHP 8.3.6 - and closes with the same '
+            . 'bare `}`, so a walker naming only T_CURLY_OPEN loses a level here exactly as one '
+            . 'naming neither loses it above. Latent rather than live: the syntax occurs in no '
+            . 'model call site, which is why it needs a fixture and not a reader',
         );
 
         $nested = <<<'PHP'
@@ -3037,7 +3060,7 @@ final class VhsTapeContractTest extends TestCase
         self::assertSame(
             ['Set Theme' => 1],
             self::literalHeadArguments($attributed)['tally'],
-            'and the token stream\'s SECOND asymmetry, the mirror of the interpolation row '
+            'and the token stream\'s THIRD asymmetry, the mirror of the two interpolation rows '
             . 'above: `#[` comes back as one `T_ATTRIBUTE` token while its `]` comes back bare, '
             . 'so a depth count matching only bare brackets decrements once more than it '
             . 'increments and truncates the argument list before the head. Measured before the '
@@ -3359,7 +3382,7 @@ final class VhsTapeContractTest extends TestCase
         self::assertSame(
             [
                 'literalHeadArguments' => 14,
-                'callArgument' => 16,
+                'callArgument' => 17,
                 'headArgument' => 4,
                 'splitNamedArgument' => 4,
             ],
@@ -3379,7 +3402,7 @@ final class VhsTapeContractTest extends TestCase
         $total = array_sum($leaves);
 
         self::assertSame(
-            38,
+            39,
             $total,
             'and the total the register quotes, which is the sum of the four above and not a '
             . 'figure of its own. The retired version was a literal beside a sentence '
@@ -3446,10 +3469,10 @@ final class VhsTapeContractTest extends TestCase
         }
 
         self::assertSame(
-            21,
+            22,
             $total - \count(self::SWEEP_SURVIVORS),
             'and the KILLED count, DERIVED. It is the one figure in the register a sweeper '
-            . 'cannot measure from the source — it takes 38 runs — so it is the one figure '
+            . 'cannot measure from the source — it takes 39 runs — so it is the one figure '
             . 'that must not be typed independently of the two that can be. Round 19 typed it '
             . 'independently and it was one out',
         );
@@ -3616,6 +3639,62 @@ final class VhsTapeContractTest extends TestCase
     }
 
     /**
+     * {@see statements()} does not split inside EITHER interpolation spelling.
+     *
+     * WHY THIS IS A TEST AND NOT A NOTE. The splitter is one of the two brace
+     * walkers in this file, and unlike {@see callArgument()} it is reached only
+     * through {@see unanchoredConditions()}, which reads this file's OWN method
+     * bodies. Nothing in those bodies is an interpolated string, so both
+     * openers are unreachable from the census that consumes it and a leaf
+     * dropped here is silent in every other test the file has. Measured:
+     * removing `\T_DOLLAR_OPEN_CURLY_BRACES` from the depth condition leaves
+     * the whole file green without this method.
+     *
+     * The two spellings are supplied as SOURCE STRINGS in a nowdoc rather than
+     * written as code, so this file never compiles the 8.2-deprecated one and
+     * cannot emit its deprecation on any PHP; `token_get_all()` lexes rather
+     * than compiles, so the splitter still sees the opener.
+     */
+    public function testTheStatementSplitterSurvivesBothInterpolationSpellings(): void
+    {
+        $plain = <<<'PHP'
+            <?php $x = 'ac'; $y = 1;
+            PHP;
+        $modern = <<<'PHP'
+            <?php $x = "a{$b}c"; $y = 1;
+            PHP;
+        $deprecated = <<<'PHP'
+            <?php $x = "a${b}c"; $y = 1;
+            PHP;
+
+        $count = static fn (string $source): int
+            => \count(self::statements(\token_get_all($source)));
+
+        // The control: two statements, no interpolation, no opener involved.
+        // Without it a splitter that returned one statement for everything
+        // would satisfy both rows below.
+        self::assertSame(2, $count($plain), 'the splitter cannot even split two plain statements');
+
+        self::assertSame(
+            2,
+            $count($modern),
+            'the `{` of `"{$b}"` is an ARRAY token and its `}` is a bare one, so a splitter '
+            . 'that does not increment on T_CURLY_OPEN treats that `}` as a statement boundary '
+            . 'and cuts one statement into two',
+        );
+
+        self::assertSame(
+            2,
+            $count($deprecated),
+            'and the same in the 8.2-deprecated spelling, whose opener is a THIRD array token: '
+            . 'T_DOLLAR_OPEN_CURLY_BRACES, text `${` rather than `{`, measured on PHP 8.3.6. '
+            . 'This walker had it in neither depth condition for four rounds while every other '
+            . 'brace walker in the suite was given it one at a time, because the file sits at '
+            . 'the root of tests/ and was in no lane\'s ownership list',
+        );
+    }
+
+    /**
      * The statements of one method that carry a boolean condition NO anchor
      * introduces — one entry per such statement, each the missing BASE leaf that
      * {@see guardCensus()}'s token count cannot see.
@@ -3689,10 +3768,22 @@ final class VhsTapeContractTest extends TestCase
      * Split a method's token stream into statements at top-level `;`, `{` and `}`.
      *
      * Depth-counted over `(` and `[` so a `for` header's own semicolons do not
-     * split it, and over the SAME two token-stream asymmetries
-     * {@see callArgument()} handles — `T_CURLY_OPEN` and `T_ATTRIBUTE` open with
-     * an array token and close with a bare one, so a splitter matching only bare
-     * braces would treat the `}` of `"{$tape}"` as a statement boundary.
+     * split it, and over the SAME token-stream asymmetries
+     * {@see callArgument()} handles — `T_CURLY_OPEN`,
+     * `T_DOLLAR_OPEN_CURLY_BRACES` and `T_ATTRIBUTE` all open with an array
+     * token and close with a bare one, so a splitter matching only bare braces
+     * would treat the `}` of `"{$tape}"` as a statement boundary.
+     *
+     * WHAT THIS SAID: "the SAME two token-stream asymmetries", naming
+     * `T_CURLY_OPEN` and `T_ATTRIBUTE`. WHAT IS TRUE NOW: there are three, and
+     * the third — the opener of the 8.2-deprecated `${x}` spelling — was
+     * missing from both counters in this file while every other brace walker
+     * in the suite had been given it, because this file sat at the root of
+     * `tests/` and was in no lane's ownership list for the rounds that fixed
+     * the others. WHY THE PARAGRAPH STILL EARNS ITS PLACE: the asymmetry it
+     * describes is the whole reason a bare-brace depth count is wrong here,
+     * and that reasoning is what a reader needs before touching either
+     * counter. Only the roster was stale, not the argument.
      *
      * @param list<array{int, string, int}|string> $tokens
      *
@@ -3708,7 +3799,8 @@ final class VhsTapeContractTest extends TestCase
             $id = \is_array($token) ? $token[0] : $token;
 
             if ($token === '(' || $token === '['
-                || $id === \T_CURLY_OPEN || $id === \T_ATTRIBUTE) {
+                || $id === \T_CURLY_OPEN || $id === \T_DOLLAR_OPEN_CURLY_BRACES
+                || $id === \T_ATTRIBUTE) {
                 ++$depth;
             } elseif ($token === ')' || $token === ']') {
                 --$depth;
@@ -4325,7 +4417,7 @@ final class VhsTapeContractTest extends TestCase
      * it did not before: until
      * {@see testTheHeadScanSweepRegisterIsMeasuredNotNarrated()} existed these
      * four methods were outside every census, so a plain whole-file run read
-     * their kills correctly. It now reports "killed" for all thirty-eight
+     * their kills correctly. It now reports "killed" for all thirty-nine
      * without the flag, and a survivor is green either way.
      *
      * THE THREE FIGURES — leaves, survivors, killed — ARE NOT WRITTEN HERE. They
@@ -4386,10 +4478,19 @@ final class VhsTapeContractTest extends TestCase
      * this file has three times now declared that class of kill gone while one
      * sat in it — the `?? 0` kill sat inside the very method this register
      * documents, unrecorded, while the register said ONE.
-     * SIX of the kills — the accessor gate, both square-bracket depth arms,
-     * the `T_ATTRIBUTE` opener, {@see headArgument()}'s `$name === null` guard
-     * and the `\count($head) === 1` gate just named — were survivors until the
-     * fixture beside each went in, which is the whole reason those fixtures exist.
+     * SEVEN of the kills — the accessor gate, both square-bracket depth arms,
+     * the `T_ATTRIBUTE` opener, the `T_DOLLAR_OPEN_CURLY_BRACES` opener,
+     * {@see headArgument()}'s `$name === null` guard and the
+     * `\count($head) === 1` gate just named — were survivors until the fixture
+     * beside each went in, which is the whole reason those fixtures exist.
+     * THE DEPRECATED OPENER IS THE ONE THAT WAS MISSING FOR FOUR ROUNDS, and it
+     * was missing rather than argued away: {@see callArgument()}'s doc-block
+     * called it "a stated gap, not an unnoticed one" while
+     * `tests/Support/InterpolationOpenerTokenTest.php` was recording this file
+     * as the one brace walker in `tests/` and `src/` that still lacked it. Both
+     * halves are settled in the same change-set — the counters name the token
+     * and that row is gone — because a deferral recorded only inside another
+     * lane's test constant is a deferral nobody outside that lane looks for.
      *
      * ONE OTHER OPERATOR HAS BEEN SWEPT HERE, named because a survivor under an
      * unswept operator is not a gap: NARROW A SET LITERAL. `$callOperators`
@@ -4475,6 +4576,10 @@ final class VhsTapeContractTest extends TestCase
      *
      *   * `T_CURLY_OPEN` — the `{` that opens an interpolation in `"...{$x}..."`,
      *     closed by a bare `}`.
+     *   * `T_DOLLAR_OPEN_CURLY_BRACES` — the `${` that opens the spelling PHP 8.2
+     *     deprecated, also closed by a bare `}`. Its token text is `${` rather
+     *     than `{`, measured on PHP 8.3.6, so a walker keying on the text alone
+     *     misses it as surely as one keying on the bare string does.
      *   * `T_ATTRIBUTE` — the `#[` that opens an attribute, closed by a bare `]`.
      *     This was the SECOND asymmetry while the paragraph above it said "THE ONE
      *     ASYMMETRY", and it is not exotic here: this file's own data-provider
@@ -4488,9 +4593,22 @@ final class VhsTapeContractTest extends TestCase
      *
      * No call site in this file passes an interpolated string or an attribute
      * inside a model call today, which is exactly why both are worth handling now
-     * and pinning in {@see testTheHeadScanSeesACallWrappedAcrossLines()}. The
-     * deprecated `${x}` spelling is genuinely NOT handled and is not used — that
-     * one is a stated gap, not an unnoticed one.
+     * and pinning in {@see testTheHeadScanSeesACallWrappedAcrossLines()}.
+     *
+     * WHAT THIS SAID about the third opener: "the deprecated `${x}` spelling is
+     * genuinely NOT handled and is not used — that one is a stated gap, not an
+     * unnoticed one." WHAT IS TRUE NOW: it is handled, in both counters. The
+     * sentence was accurate when written and became the wrong half of a
+     * trade-off: `tests/Support/InterpolationOpenerTokenTest.php` derives the
+     * opener roster from the running interpreter and requires every brace
+     * walker under `tests/` and `src/` to name all of it, so "stated gap"
+     * stopped being a position this file could hold on its own. WHY THE
+     * REASONING STILL EARNS ITS PLACE: the distinction it draws — between a gap
+     * somebody argued for and a gap nobody noticed — is the one that decides
+     * whether an exemption row or a fix is the right answer, and the next
+     * asymmetry PHP adds will need it again. The syntax still occurs zero times
+     * in `src/` and `tests/`, so handling it costs one token per counter and
+     * buys the walk back if it ever appears.
      *
      * @param list<array{int, string, int}|string> $tokens
      *
@@ -4507,7 +4625,9 @@ final class VhsTapeContractTest extends TestCase
 
             if ($token === '(' || $token === '[' || $token === '{'
                 || (\is_array($token)
-                    && ($token[0] === \T_CURLY_OPEN || $token[0] === \T_ATTRIBUTE))) {
+                    && ($token[0] === \T_CURLY_OPEN
+                        || $token[0] === \T_DOLLAR_OPEN_CURLY_BRACES
+                        || $token[0] === \T_ATTRIBUTE))) {
                 ++$depth;
 
                 if ($depth === 1) {

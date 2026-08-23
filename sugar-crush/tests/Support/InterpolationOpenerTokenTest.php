@@ -103,25 +103,30 @@ final class InterpolationOpenerTokenTest extends TestCase
      * same reason, as {@see ForkedChildReaperAdoptionTest::OUT_OF_SCOPE}: a
      * deferral is a claim about the tree, so the tree is asked.
      *
-     * WHY A ROW RATHER THAN A FIX. The walk that produced this row was
-     * widened from `tests/Support/` to the whole of `tests/` and `src/` by a
-     * round whose file list was `tests/Support/` and `tests/Backend/`. The
-     * fix is two tokens and belongs to whoever owns the file; recording it
-     * here makes the obligation visible and counted, which an invisible one
-     * was not for as long as the guard could not see the directory it lived
-     * in.
+     * WHY A ROW RATHER THAN A FIX. The walk that produced the one row this
+     * constant has ever held was widened from `tests/Support/` to the whole
+     * of `tests/` and `src/` by a round whose file list was `tests/Support/`
+     * and `tests/Backend/`. The fix is one token per counter and belongs to
+     * whoever owns the file; recording it here made the obligation visible
+     * and counted, which an invisible one was not for as long as the guard
+     * could not see the directory it lived in.
+     *
+     * WHAT THIS SAID while it had a row: `tests/VhsTapeContractTest.php`'s
+     * two depth counters never incremented on the deprecated opener, so both
+     * walks would lose a level inside an interpolation spelled the 8.2 way.
+     * WHAT IS TRUE NOW: both counters name it, the row is gone, and the
+     * constant is empty. WHY THE CONSTANT STILL EARNS ITS PLACE EMPTY: the
+     * mechanism is what matters, not the row - the next round that widens
+     * this walk, or the next brace walker written by a lane that has never
+     * read this file, needs somewhere to record a deferral that the tree
+     * itself will then check. An empty map also makes the reconciliation
+     * below vacuous, which is why
+     * {@see testTheKnownGapReconciliationFailsInBothDirections()} exercises
+     * it on synthetic input rather than trusting an empty loop.
      *
      * @var array<string,string>
      */
-    private const KNOWN_GAPS = [
-        'tests/VhsTapeContractTest.php' =>
-            'Two depth counters - VhsTapeContractTest::statements() and ::callArgument() - '
-            . 'increment on `\T_CURLY_OPEN || \T_ATTRIBUTE` and never on the deprecated opener, '
-            . 'so both walks would lose a level inside a `"${a}"`. Latent rather than live: the '
-            . 'syntax occurs zero times in this repository, measured at the commit that added '
-            . 'this row. The file is at the root of tests/ and was in no lane\'s file list when '
-            . 'the guard was widened to reach it.',
-    ];
+    private const KNOWN_GAPS = [];
 
     /**
      * The array-token ids the running PHP uses to OPEN a brace that a plain
@@ -369,13 +374,7 @@ final class InterpolationOpenerTokenTest extends TestCase
                 . 'or this test is looking in the wrong place',
         );
 
-        $unrecorded = [];
-        foreach ($gaps as $relative => $names) {
-            if (isset(self::KNOWN_GAPS[$relative])) {
-                continue;
-            }
-            $unrecorded[] = $relative . ' does not name ' . implode(', ', $names);
-        }
+        [$unrecorded, $overtaken] = self::reconcile($gaps, self::KNOWN_GAPS);
 
         $this->assertSame(
             [],
@@ -393,14 +392,89 @@ final class InterpolationOpenerTokenTest extends TestCase
         // by measuring.
         foreach (self::KNOWN_GAPS as $relative => $reason) {
             $this->assertNotSame('', trim($reason), $relative . ' is deferred without a reason');
-            $this->assertArrayHasKey(
-                $relative,
-                $gaps,
-                $relative . ' is recorded in KNOWN_GAPS as a brace walker that misses an opener, '
-                    . 'and it no longer is. Delete its row - a deferral that has been overtaken '
-                    . 'is how a file silently stops being guarded.',
-            );
         }
+
+        $this->assertSame(
+            [],
+            $overtaken,
+            'this file is recorded in KNOWN_GAPS as a brace walker that misses an opener, and it '
+                . 'no longer is. Delete its row - a deferral that has been overtaken is how a '
+                . 'file silently stops being guarded.',
+        );
+    }
+
+    /**
+     * THE RECONCILIATION ITSELF, on input whose answer is known.
+     *
+     * WHY THIS EXISTS. {@see KNOWN_GAPS} is empty at this commit, and an
+     * empty map makes both directions of the check above loop zero times:
+     * "nothing is unrecorded" and "no row is overtaken" are then true of a
+     * reconciliation that has been deleted outright, which is the same hole
+     * as a fixture whose expected value is what a dead instrument returns.
+     * The tree cannot supply a positive here without re-breaking a file on
+     * purpose, so the positive is synthetic and goes through the SAME
+     * {@see reconcile()} the real check calls.
+     *
+     * BOTH DIRECTIONS, because they fail for opposite reasons and either can
+     * be deleted without the other noticing.
+     */
+    public function testTheKnownGapReconciliationFailsInBothDirections(): void
+    {
+        $gaps = ['a/Walker.php' => ['T_DOLLAR_OPEN_CURLY_BRACES']];
+
+        // A gap with no row: refused, and the message has to carry the file
+        // and the token or the next reader cannot act on it.
+        [$unrecorded, $overtaken] = self::reconcile($gaps, []);
+        $this->assertSame(
+            ['a/Walker.php does not name T_DOLLAR_OPEN_CURLY_BRACES'],
+            $unrecorded,
+            'a brace walker missing an opener, with no row recording it, was not reported',
+        );
+        $this->assertSame([], $overtaken, 'an empty KNOWN_GAPS cannot have an overtaken row');
+
+        // A row whose file has been fixed: refused from the other side.
+        [$unrecorded, $overtaken] = self::reconcile([], ['a/Walker.php' => 'deferred']);
+        $this->assertSame([], $unrecorded, 'a clean tree cannot produce an unrecorded gap');
+        $this->assertSame(
+            ['a/Walker.php'],
+            $overtaken,
+            'a KNOWN_GAPS row whose file no longer has the gap was not reported, so a deferral '
+                . 'can outlive the thing it deferred',
+        );
+
+        // Matched: neither direction fires. Without this the two assertions
+        // above are satisfied by a reconciliation that reports everything.
+        [$unrecorded, $overtaken] = self::reconcile($gaps, ['a/Walker.php' => 'deferred']);
+        $this->assertSame([], $unrecorded);
+        $this->assertSame([], $overtaken);
+    }
+
+    /**
+     * The two failure directions of the KNOWN_GAPS map, as data.
+     *
+     * @param array<string,list<string>> $gaps    file => openers it does not name
+     * @param array<string,string>       $known   file => reason it is deferred
+     *
+     * @return array{list<string>,list<string>} unrecorded gaps, overtaken rows
+     */
+    private static function reconcile(array $gaps, array $known): array
+    {
+        $unrecorded = [];
+        foreach ($gaps as $relative => $names) {
+            if (isset($known[$relative])) {
+                continue;
+            }
+            $unrecorded[] = $relative . ' does not name ' . implode(', ', $names);
+        }
+
+        $overtaken = [];
+        foreach (array_keys($known) as $relative) {
+            if (!isset($gaps[$relative])) {
+                $overtaken[] = $relative;
+            }
+        }
+
+        return [$unrecorded, $overtaken];
     }
 
     /**
