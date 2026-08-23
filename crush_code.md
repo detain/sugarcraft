@@ -1094,6 +1094,43 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 48 — CLOSED (`2b57cd9c`). Floor `9497 / 133585 / 1 skipped / rc 0`, `sugar-crush` linked.**
+Merges `68189e5e` (a, seam) · `198ce2f3` (b, forks) · `3c1f8aa8` (c, denial). Backlog 214 → **239**
+(E221–E245). Second session limit in two rounds: the first launch ended 5-of-9 and was **resumed**, not
+relaunched, because a cache existed.
+
+🔴 **E192 + E193 LANDED TOGETHER, and the brief's headline claim was falsified by the lane doing the
+work.** Six refusals now sit on the mid-session seam — four in `WorktreeManager`, two in
+`SglangProvider` — plus a one-shot self-cancelling tick so a notice raised while the UI is idle does not
+wait for the next `Msg`. But **nothing in `src/` or `bin/` constructs a `WorktreeManager`**, so the four
+sites the brief called "the most valuable" are DORMANT. Routed anyway on the tree's *dormant is not
+ungated* doctrine — a dormant emitter's channel is the one its first caller inherits — and the dormancy is
+now pinned by a construction-site guard. ⚠️ **`SglangProvider` was never asked the same question** (E227):
+two of the six moves rest on an unstated reachability assumption, and a provider is likelier reached
+through a name-keyed registry than a literal `new`.
+
+**A census two lanes shared merged with no git conflict — the dangerous case.**
+`tests/Cli/StderrEmitterCensusTest.php` took lane a's 944-line channel rewrite and lane c's new E219
+stderr site. Verified semantically by mutation, since git's silence proves nothing: deleting lane c's
+`\fwrite(\STDERR, …)` reds it with three failures including `12 is identical to 11`. **It was safe
+because the census asserts exact per-file cardinalities** — a `>=` or a subset check would have merged
+green and wrong. When two lanes must share a census, make it count exactly.
+
+**E219 shipped: a refused tool call now reaches the operator on stderr** on both output formats, with
+hook DENY, approver refusal and an unanswered ASK given three distinct identities (E210/E211); the `-p`
+tests no longer read the runner's real stdin (E212), which could hang the suite. Lane b derived the
+interpolation-opener roster from the interpreter rather than a literal pair (E208) and now calls an
+unreadable `proc_open` fd-2 entry *unclassified* rather than *captured* (E203) — and found, while doing
+it, that the scanner it was reviewing answered `inherited` for **every positional descriptor spec**
+regardless of truth.
+
+**Next, and unblocked by this merge:** **E226** — four stacked doc-comment pairs remain in `src/`
+(`CommandSpec.php:816`, `Runtime.php:73`, `Glob.php:969`, `MenuBar.php:368`), unexamined. Lane a scoped its
+guard to `Chat.php` on purpose so it would not red three lanes in flight; that reason is gone. In
+`Chat.php` **two of the three were the expensive kind** — a method left silently undocumented while its
+prose sat above an unrelated declaration. **E194 remains deferred** and remains a supervisor decision, not
+an edit: the seam now carries six more emitters and still has no PHPUnit-level reset.
+
 **ROUND 47 — CLOSED (`fb2d13d8`). Floor `9445 / 132167 / 1 skipped / rc 0`, `sugar-crush` linked.**
 🔴 **E171 IS DONE — the mid-session transcript seam exists.** A `RuntimeNoticeSink` with an explicit
 `arm()`, a `RuntimeNoticePumpMsg`, `Chat::subscriptions()` polling on `inFlight || hasPending()`, and both
