@@ -49,7 +49,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
  * `src/` and `bin/` is ELEVEN" — is CORRECT, and this file asserts that it
- * stays correct ({@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()}).
+ * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
@@ -515,7 +515,7 @@ final class StderrEmitterCensusTest extends TestCase
      * WIDER THAN THE ONE WORD IT READS TODAY, ON PURPOSE, and this paragraph
      * exists because a reviewer read that as softening the rule above. It does
      * not, and the reason is that BOTH arms of the guard are failures.
-     * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} does
+     * {@see testTheInheritedCensusStillAgreesWithTheScan()} does
      * `assertArrayHasKey()` and then `assertSame()` against the live scan, so
      * for a prose word this map does not carry the verdict is "the guard cannot
      * read the sentence", and for one it does carry the verdict is "the prose
@@ -1459,8 +1459,23 @@ final class StderrEmitterCensusTest extends TestCase
      * is the sentence a reader finds FIRST when they ask how many stderr writes
      * this application has, and it answers a narrower question than they asked
      * — so the day channel 1 moves, the reader's first answer must move with it.
+     *
+     * WHAT THIS METHOD USED TO BE CALLED, and why the name is now
+     * cardinality-free (E245). It was
+     * `testTheInheritedElevenSiteCensusStillAgreesWithTheScan()`. That number
+     * was correct when the name was written and stopped being correct when
+     * E219 added a `fwrite(\STDERR, …)` site to `src/Cli/NonInteractive.php`:
+     * the rosters and the anchored prose were all bumped, because each of them
+     * has a generator, and the METHOD NAME was the one statement of the count
+     * with nothing to contradict it.
+     * WHY THE POINT STILL EARNS ITS PLACE rather than just a quiet rename: a
+     * cardinality baked into an identifier rots exactly like one baked into
+     * prose, and unlike prose it cannot be anchored — there is no way to point
+     * {@see selfCountAnchors()} at a method name and have the mismatch red.
+     * The only available defence is not to put one there. The number this
+     * method validates is derived, below, from `census('direct')`.
      */
-    public function testTheInheritedElevenSiteCensusStillAgreesWithTheScan(): void
+    public function testTheInheritedCensusStillAgreesWithTheScan(): void
     {
         $path = \dirname(__DIR__, 2) . '/tests/Integration/BinSugarcrushAutoloadGuardTest.php';
         self::assertFileExists($path, 'the file carrying the prose census has moved');
@@ -1928,7 +1943,7 @@ final class StderrEmitterCensusTest extends TestCase
      * risk: this copy has its own known-positive control, in
      * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()}, and
      * before this method existed the same expression sat inline in
-     * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} with no
+     * {@see testTheInheritedCensusStillAgreesWithTheScan()} with no
      * control at all.
      *
      * THE DRIFT E196 PREDICTS HAS ALREADY STARTED, AND IT STARTED IN THE PROSE
