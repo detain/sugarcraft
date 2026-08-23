@@ -8,8 +8,25 @@ Nothing here depends on a prior conversation's context.
 
 ## ⏳ ROUND 48 IS IN FLIGHT RIGHT NOW — read this before starting anything
 
-**Launched 2026-08-22 from master `5a3fe80b`, tree clean.** Run `wf_220f1204-bf5` (task `w2ng743dx`),
-9 agents, three lanes × implement → adversarial review → fix, concurrency 3.
+**Launched 2026-08-22 from master `5a3fe80b`, tree clean. RESUMED 2026-08-23 after a session limit.**
+Run `wf_220f1204-bf5`, **current task `w6b7udp0n`** (the original was `w2ng743dx`), three lanes ×
+implement → adversarial review → fix, concurrency 3.
+
+🔴 **THE FIRST LAUNCH ENDED WITH 5 OF 9 DONE** — all three implementers plus lanes a and b's reviews.
+`fix:a-seam`, `fix:b-forks`, `review:c-denial` and `fix:c-denial` died. **Resumed rather than relaunched,
+because a cache existed** (contrast round 47, where zero completed and relaunching was right).
+
+**Lanes a and b were dirty, and AGAIN it was real work, not mutations** — inspected before touching
+anything, per this section's own rule. Lane a held a rule-7 three-part rewrite recording that **nothing in
+`src/` or `bin/` constructs a `WorktreeManager`**, so all four of its sites are DORMANT — which
+**falsifies part of this round's own brief**, where the supervisor called those four "the most valuable".
+Lane b held a precision rewrite on its interpreter-level control. Both committed as `SALVAGE (unverified)`
+— lane a `9baf0394`, lane b `b438814a` — naming the supervisor as committer and stating plainly that
+nothing about them has been checked.
+
+⚠️ **Lane HEADs are now AHEAD of what the cached reviews describe.** That is rule 22's scenario exactly,
+and the brief already tells each fix agent to re-derive HEAD and verify inherited commits by mutation
+rather than redo or trust them.
 
 **Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-48-wf_220f1204-bf5.js`
 🔴 **If a limit kills agents mid-round: RESUME if any completed** (`resumeFromRunId: 'wf_220f1204-bf5'`);

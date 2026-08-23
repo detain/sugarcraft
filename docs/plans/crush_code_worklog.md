@@ -10931,3 +10931,53 @@ Zero code overlap for the third round running; the only collision was the backlo
 `check-path-repos --no-lib-path-repos` rc 0 · only the root `composer.lock` tracked · **skips exactly 1**,
 confirmed by name. Every lane file byte-identical in master except the renumbered backlog and the two
 files the merge fix touched. Branches merged and deleted, lane dirs removed after the floor was measured.
+
+
+## ROUND 48 — IN FLIGHT (base `5a3fe80b`, run `wf_220f1204-bf5`)
+
+**Launched 2026-08-22, resumed 2026-08-23 after a session limit.** Three lanes × implement → adversarial
+review → fix. Base floor **OBSERVED** at `5a3fe80b`: `9445 / 132167 / 1 skipped / rc 0`.
+
+**Items.** Lane `a` (seam): **E192 + E193 together** — route `SglangProvider`, `AgentWorkerPool` and
+`WorktreeManager` onto the mid-session seam E171 built, plus the idle-tick, because either alone ships a
+defect; also **E195** (channel-6 alphabet) and E196. Lane `b` (forks): 🔴 **E201 first — it may falsify
+three rounds of bare-exit work**; **E202 + E209 as one item**, since fixing `tests/Backend/` removes the
+reaper scanner's only real-tree known-positive; **E206**, E203/E205/E208. Lane `c` (denial): 🔴 **E219**
+(a hook DENY reaches neither stderr nor `--output-format text`, and five places say otherwise), **E210**,
+**E211**'s `NonInteractive` half, and **E212** (every `NonInteractive::run()` test reads the real STDIN and
+a stdin that never EOFs **hangs the suite**).
+
+### Two supervisor actions taken at launch
+
+**E194 deferred, deliberately** — it was flagged in §0-NOW-48 as a supervisor decision. It wants a
+`PHPUnit\Runner\Extension` registered through `sugar-crush/phpunit.xml`. Deferred until after E192 lands,
+on the entry's own evidence: its generator note says *"re-run before acting; the answer changes as E192
+lands"*, and E192 changes which classes arm the sink. Registering a global test extension also shifts test
+infrastructure and the floor with it. Sequence is E192 → re-run the generator → decide.
+
+**The supervisor's own harness was fixed.** Round 47's lanes independently filed the SAME finding twice
+(E204 and E218): all three lanes wrote into one shared scratchpad and two collided on a generic filename —
+which means a mutation verdict attributed to the wrong tree. Each lane now gets
+`…/scratchpad/r48{a,b,c}/`, as rule 24. Round 47's predecessor-work section was also **removed** from the
+brief: it was true then and false now, and would have sent all three lanes hunting for commits that did
+not exist.
+
+### The session limit, second occurrence in two rounds
+
+The first launch ended with **5 of 9 agents done** — all three implementers plus lanes a and b's reviews.
+`fix:a-seam`, `fix:b-forks`, `review:c-denial` and `fix:c-denial` died. **Resumed** (not relaunched) since
+a cache existed, as `w6b7udp0n`.
+
+Lanes a and b were dirty. **Inspected before reverting, per round 47's lesson — and again it was real
+work, not mutations.** Lane a held a rule-7 three-part rewrite recording that **nothing in `src/` or
+`bin/` constructs a `WorktreeManager`**, so all four of its sites are DORMANT — which falsifies part of
+this round's own brief, where the supervisor called those four "the most valuable". Lane b held a precision
+rewrite stating what its interpreter-level control does and does not buy. Both parse; both committed as
+`SALVAGE (unverified)` at `9baf0394` and `b438814a`, naming the supervisor as committer and stating that
+nothing had been checked.
+
+⚠️ **Lane HEADs are now ahead of what the cached reviews describe**, which is exactly rule 22's scenario;
+the brief already instructs each fix agent to re-derive HEAD with `git log --oneline <base>..HEAD` and to
+verify inherited commits by mutation rather than redo or trust them.
+
+**Nothing merged yet. The merged floor has not been measured.**
