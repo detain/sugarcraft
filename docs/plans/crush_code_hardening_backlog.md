@@ -8145,7 +8145,7 @@ rewritten twice to push non-literal ENTRIES and non-literal MEMBERS into `unclas
 case sat one branch *earlier* than any of that reasoning looked.
 
 **Blast radius, full-tree census with the old scanner and the new, 95 sites on both sides.** Exactly two
-sites move — `Renderer/ImageRenderingTest.php:436` and `Sessions/BackgroundSupervisorTest.php:410`, both
+sites move — `ImageRenderingTest::runQuietly()` and `BackgroundSupervisorTest::deadPid()`, both
 `inherited` → `discarded`, both genuinely `['file','/dev/null','w']` at position 2. Both were already
 outside SCOPE, so no guard changed colour. Nothing became `unclassified`. The 95/61-captured totals
 independently re-derive the round's other census of the same tree.
