@@ -60,11 +60,25 @@ final class BackgroundSessionRunner
      * {@see BackgroundSupervisor::restoreOutput()} treats every line with that
      * opening as the daemon's own bookkeeping and drops it, so a refusal
      * record cannot be quoted back to the user as if the MODEL had written it.
-     * `tool:` and not `task:` for the same reason in the other direction —
-     * {@see BackgroundSupervisor::bufferReportsFailure()} decides a settled
-     * session's status from the last `[session:task:` line, and a refusal is an event
-     * inside a turn, not the turn's outcome. A turn that refuses a call and
-     * then answers is a COMPLETED turn.
+     * `tool:` AND NOT `task:`, and the honest version of why. WHAT IS TRUE:
+     * {@see BackgroundSupervisor::bufferReportsFailure()} reads the LAST
+     * `[session:task:` line in the buffer and settles the session on the word
+     * it finds there, and `refused` is not one of the two completion words.
+     * WHAT IS NOT TRUE, and was written here first: that naming this record
+     * `[session:task:refused]` would therefore fail every such session.
+     * MEASURED — the record renamed into the `task:` namespace leaves the
+     * whole suite green, because {@see self::executeTask()} always writes its
+     * outcome line AFTER any event the turn raised, so the outcome line is
+     * still the last one. WHY THE SEPARATION STILL EARNS ITS PLACE: ordering
+     * is the ONLY thing holding those two apart, and ordering is what a future
+     * edit changes — a refusal delivered late (a replayed event, a second turn
+     * in one session, an observer that fires on the way out) lands after the
+     * outcome and silently converts a completed session into a failed one.
+     * Keeping the record out of the namespace the outcome parser reads makes
+     * that unreachable rather than merely unlikely, and
+     * {@see \SugarCraft\Crush\Tests\Sessions\BackgroundSessionRunnerTest}
+     * pins the separation directly rather than through an ordering that
+     * happens to hide it.
      */
     public const REFUSAL_RECORD = '[session:tool:refused]';
 

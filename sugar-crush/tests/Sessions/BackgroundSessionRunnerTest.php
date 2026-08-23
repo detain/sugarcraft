@@ -439,12 +439,9 @@ final class BackgroundSessionRunnerTest extends TestCase
      * The record is BOOKKEEPING, not the turn's outcome — pinned against both
      * of the supervisor's own buffer readers.
      *
-     * `restoreOutput()` must drop it (it opens `[session:`) and
-     * `bufferReportsFailure()` must ignore it (it does NOT open
-     * `[session:task:`), so a turn that refuses a call and then answers still
-     * settles as Completed. Naming the record `[session:task:refused]` would
-     * have passed the first check and silently turned every such turn into a
-     * failed session.
+     * `restoreOutput()` must drop it (it opens `[session:`) so it is never
+     * quoted back as model output, and a turn that refuses a call and then
+     * answers must still settle as Completed.
      */
     public function testTheRefusalRecordIsBookkeepingAndDoesNotSettleTheSession(): void
     {
@@ -461,6 +458,41 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertFalse(
             self::bufferReportsFailureOf($contents),
             'a turn that refused a call and then answered was settled as a failure',
+        );
+    }
+
+    /**
+     * The record stays OUT of the namespace the outcome parser reads, and this
+     * is the assertion that actually catches a rename — the one above does not.
+     *
+     * MEASURED (round 49, mutation M3): renaming the constant to
+     * `[session:task:refused]` left the whole suite green, because every
+     * assertion elsewhere is written against the constant and moves with it,
+     * and because {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::executeTask()}
+     * writes its outcome line last, so the refusal never IS the last
+     * `[session:task:` line today. So the danger is latent rather than live —
+     * and it is exactly the kind that an ordering change makes live without
+     * touching this file. The second half below shows what the parser does the
+     * moment the ordering stops protecting it.
+     */
+    public function testTheRefusalRecordIsNotInTheOutcomeNamespace(): void
+    {
+        $this->assertStringStartsWith('[session:', BackgroundSessionRunner::REFUSAL_RECORD);
+        $this->assertStringStartsNotWith(
+            '[session:task:',
+            BackgroundSessionRunner::REFUSAL_RECORD,
+            'the refusal record is in the namespace bufferReportsFailure() settles sessions from',
+        );
+
+        // What the parser does with a refusal that arrives after the outcome,
+        // under each spelling. This is the consequence the assertion above
+        // buys, demonstrated rather than asserted about.
+        $this->assertFalse(self::bufferReportsFailureOf(
+            "[session:task:complete]\n" . BackgroundSessionRunner::REFUSAL_RECORD . " Bash was not run - Hook denied: no\n",
+        ));
+        $this->assertTrue(
+            self::bufferReportsFailureOf("[session:task:complete]\n[session:task:refused] Bash was not run\n"),
+            'the demonstration is vacuous: the task: spelling did not flip the outcome either',
         );
     }
 
