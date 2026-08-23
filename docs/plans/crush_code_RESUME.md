@@ -60,7 +60,7 @@ classes), THEN decide.** The supervisor does this edit, never a lane.
 ### WHAT THE SUPERVISOR MUST DO WHEN IT LANDS
 
 Merge `a` → `b` → `c`. Backlog conflict expected; keep both sides, renumber **from E220**,
-**longest-id-first** (`Ec48-10`/`-11` would otherwise be eaten by the `Ec48-1` pattern), then grep the
+**longest-id-first** (`E245`/`-11` would otherwise be eaten by the `E236` pattern), then grep the
 whole tree for `Ea48-`/`Eb48-`/`Ec48-`. Real overlap via `git diff --name-only <base>..HEAD` + `comm -12`,
 never lane self-reports.
 

@@ -7967,7 +7967,7 @@ and only the second one still needs the finding acted on.
 prescription against the tree before implementing it.
 
 
-### Ea48-1 — `AgentWorkerPool`'s `pcntl_fork() === -1` arm warns about nothing at all
+### E221 — `AgentWorkerPool`'s `pcntl_fork() === -1` arm warns about nothing at all
 
 `src/Agents/AgentWorkerPool.php`'s `startAgent()` has TWO paths to sequential execution and only one of
 them says so. (This entry said `executeOne()`; that method is two lines — resolve the executor, call
@@ -7987,7 +7987,7 @@ still produces every result, but a fork ceiling reached mid-session will keep be
 model retrying a large parallel dispatch is exactly the behaviour a transcript row could change. Decide
 that with the rule, not by symmetry with the arm above it.
 
-### Ea48-2 — `removeWorktree()` cannot tell "removed" from "still on disk"
+### E222 — `removeWorktree()` cannot tell "removed" from "still on disk"
 
 `src/Agents/WorktreeManager.php`'s `removeWorktree()` runs `removeDirectory($worktreePath)` when the
 directory survives git, then unconditionally drops the registry entry and saves. `removeDirectory()`'s
@@ -8005,7 +8005,7 @@ UNMEASURED — recorded from source.
 entry when it did not. A registry that lies about what exists is the thing to fix; the notice is
 secondary and would follow the E192 rule.
 
-### Ea48-3 — the seam has no reader in a hosted `Chat`
+### E223 — the seam has no reader in a hosted `Chat`
 
 E193 gives the mid-session seam an edge-driven wake-up armed from `Chat::init()`. `init()` is called by
 `SugarCraft\Core\Program`, and only by it. A `Chat` driven by an embedder that never builds a `Program` —
@@ -8018,7 +8018,7 @@ written down anywhere in `src/`.
 seam's idle wake-up is a `Program` feature and a host that drives `update()` itself owns the pumping. Pin
 whichever is chosen; today neither is asserted.
 
-### Ea48-4 — E196's two `flattened()` copies have already drifted, in the prose
+### E224 — E196's two `flattened()` copies have already drifted, in the prose
 
 MEASURED at round 48 by comparing the two declarations token by token with whitespace and comments
 dropped: `tests/Cli/StderrEmitterCensusTest.php`'s and
@@ -8036,7 +8036,7 @@ risk is unchanged while the indirection is added.
 **Step.** E196 as written, plus: the trait carries the implementation AND the union of both
 justifications, and EACH consuming test keeps its own known-positive control (E125).
 
-### Ea48-5 — E195's Step is wrong about channel 5
+### E225 — E195's Step is wrong about channel 5
 
 E195 says a `use`-statement resolver in `StderrEmitterCensusTest::scan()` "would close the alias case and
 would also strengthen channels 1, 2 and 5". MEASURED, PHP 8.3.6: the channel-5 half is false. Channel 5
@@ -8051,7 +8051,7 @@ for the write.
 
 **Step.** None — recorded so the count of wrong prescriptions stays honest. This is the eighth.
 
-### Ea48-6 — four stacked doc-comment pairs remain in `src/`, in files round 48 did not own
+### E226 — four stacked doc-comment pairs remain in `src/`, in files round 48 did not own
 
 Round 48's `Chat::pumpRuntimeNotices()` had E193's reasoning landed as a SECOND doc-comment above the
 block already there. PHP attaches only the LAST doc-comment of a run, so the earlier one documents
@@ -8085,7 +8085,7 @@ mis-attributed block, fix them, then widen the existing guard from `Chat.php` to
 changes. The generator for the census is
 `stackedDocCommentLines()` in that test.
 
-### Ea48-7 — `SglangProvider`'s reachability was never asked, though `WorktreeManager`'s was
+### E227 — `SglangProvider`'s reachability was never asked, though `WorktreeManager`'s was
 
 Round 48 routed six refusals onto the mid-session seam: four in `WorktreeManager` and two in
 `SglangProvider::decodeToolArguments()`. It then went to considerable length establishing that
@@ -8104,7 +8104,7 @@ factory shape — over `src/` and `bin/`, and over the provider registry's dispa
 provider is likelier to be reached through a name-keyed table than through a literal `new`. Then either
 pin the dormancy the way `WorktreeManager`'s is pinned, or state the live path in the doc-block.
 
-### Ea48-8 — the comment fixture that could not fail, and the class of fixture it belongs to
+### E228 — the comment fixture that could not fail, and the class of fixture it belongs to
 
 Round 48's first draft of `constructionSites()`'s guard asserted `0` over an all-comments source, with the
 message "constructionSites() reads comments, so it would red on prose about the constructor". That
@@ -8122,7 +8122,7 @@ its own independent hole.
 **Step.** Sweep the census tests for fixtures whose expected value is `0`, `[]` or `''` and ask, per
 fixture, what mutation of the instrument that fixture would survive. Where the answer is "all of them",
 give the fixture a positive component so the number it asserts is one only a live instrument produces.
-### Eb48-1 — a forked child's plain `exit()` republishes the parent's OUTPUT BUFFER
+### E229 — a forked child's plain `exit()` republishes the parent's OUTPUT BUFFER
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: harness. **Measured.** Extends E201; does not
 contradict it.
@@ -8167,7 +8167,7 @@ plain `php` subprocess so the demonstration's duplicate lands on a pipe rather t
 stdout, with the `exitNow()` control asserted FIRST (a count of 1 in both runs would otherwise read as a
 pass). The class doc-block's consequence list gained the third bullet.
 
-### Eb48-2 — E208's hazard does not reproduce, and its file count is wrong
+### E230 — E208's hazard does not reproduce, and its file count is wrong
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: doc accuracy. **Measured**, PHP 8.3.6.
 
@@ -8201,7 +8201,7 @@ the `${a}` row and the guard stayed green with a roster of one. Graceful shrinki
 behaviour for the day PHP removes the syntax, so it cannot be forbidden; the guard now asks the
 interpreter whether the constant is still defined and requires a spelling to still produce it if so.
 
-### Eb48-3 — E205's two false positives have ZERO occurrences, and the first census that said otherwise was a window artefact
+### E231 — E205's two false positives have ZERO occurrences, and the first census that said otherwise was a window artefact
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: informational. **Measured, twice, and the first
 measurement was wrong.**
@@ -8229,7 +8229,7 @@ reassigned, and there is nothing in the tree to verify it against. The per-site 
 harness the entry asks for now exists (`scratchpad/r48b/sites.php`): it prints
 `file line call shape` for every site under `tests/`, with four known-answer controls at the top.
 
-### Eb48-4 — a copied test helper drifted because only one copy was ever in a lane's file list
+### E232 — a copied test helper drifted because only one copy was ever in a lane's file list
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: process. **Observed.**
 
@@ -8247,7 +8247,7 @@ adopting `Chat/` and `MCP/` for E206. The guard named the site.
 test directories whose bodies have diverged. Nothing checks for it today, and the lane split makes it
 likelier rather than less likely: a fix lands in whichever copy the round happened to own.
 
-### Eb48-5 — `tests/VhsTapeContractTest.php` is a live brace-walker gap in no lane's file list, and the row recording it is self-deleting
+### E233 — `tests/VhsTapeContractTest.php` is a live brace-walker gap in no lane's file list, and the row recording it is self-deleting
 
 **Recorded 2026-08-23 by round-48 lane b.** Severity: harness / cross-lane coordination. **Measured**, PHP
 8.3.6, at the lane head that added `InterpolationOpenerTokenTest`.
@@ -8258,7 +8258,7 @@ both depth counters: neither names the deprecated opener anywhere. A `"${a}"` in
 scans would therefore cost it a level and desynchronise the walk. **Latent, not live** — that syntax
 occurs zero times across `src/` and `tests/` — so this is a two-token fix nobody needs to rush.
 
-**Why it needs an entry of its own rather than a line inside Eb48-2.** The file sits at the ROOT of
+**Why it needs an entry of its own rather than a line inside E230.** The file sits at the ROOT of
 `tests/` and was in no lane's file list for round 48, so lane b could see it but not fix it. It is
 currently recorded only as the single row of `InterpolationOpenerTokenTest::KNOWN_GAPS`, i.e. the
 obligation lives inside another lane's test constant, where nothing outside that lane will look for it.
@@ -8276,7 +8276,7 @@ and delete the `tests/VhsTapeContractTest.php` row from
 `tests/Support/InterpolationOpenerTokenTest.php::KNOWN_GAPS` in the same commit. Needs an owner assigned,
 since the two files were in different lanes' lists.
 
-### Eb48-6 — the child-stderr scanner called EVERY positional `proc_open()` descriptor spec `inherited`
+### E234 — the child-stderr scanner called EVERY positional `proc_open()` descriptor spec `inherited`
 
 **Recorded 2026-08-23 by round-48 lane b.** Severity: harness correctness. **Measured**, PHP 8.3.6.
 **Fixed in the same round.**
@@ -8311,7 +8311,7 @@ cannot follow is `unclassified`. All five positional shapes are pinned in the un
 positional discard is the liveness helper's fourth discard path. Mutating `positionalShape()` back to the
 old always-`inherited` answer is killed by all five tests in the file.
 
-### Eb48-7 — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
+### E235 — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
 
 **Recorded 2026-08-23 by round-48 lane b.** Severity: cross-lane coordination. **Measured**, and the map
 is checked in both directions.
@@ -8335,15 +8335,15 @@ child has an obvious home for fd 2 and nothing reads its output. The `git init`/
 cluster (`Context/`, `Tools/`, `Providers/`) is one problem wearing three hats and should be settled
 together rather than piecemeal. The deliberate-discard pair (`Renderer/`, `Sessions/`) wants an argued
 exemption row, not a fix: in both the discard is the helper's entire purpose, and both were invisible
-until Eb48-6 fixed the classifier.
+until E234 fixed the classifier.
 
 **The row is self-deleting, in both directions.** A row whose directory has been cleaned up fails with
 "Move the prefix into SCOPE and delete this row"; an offender in a directory matched by neither list fails
 the partition. So a lane that fixes its directory must move the prefix in the same change-set, exactly as
-in Eb48-5.
+in E233.
 ---
 
-## Ec48-1 — `Chat` has three hand-rolled denial-prefix producers, and E211's `NonInteractive` half is only half the roster problem
+### E236 — `Chat` has three hand-rolled denial-prefix producers, and E211's `NonInteractive` half is only half the roster problem
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: correctness (silent misclassification). **Measured.**
 
@@ -8371,7 +8371,7 @@ refused.
 **Step.** Route `Chat`'s three producers through the roster (or through `Runtime`'s constants), and extend
 `DenialPrefixRosterTest::testRuntimeSpellsNoDenialPrefixOutsideItsConstants()` to scan `src/Chat.php` with
 the roster's own declaration lines carved out. Owner: whoever holds `src/Chat.php`. Note the scanner must
-keep reading `T_ENCAPSED_AND_WHITESPACE` — see Ec48-2.
+keep reading `T_ENCAPSED_AND_WHITESPACE` — see E237.
 
 **Amended 2026-08-23, round-48 lane c fix stage — the Step above had a trap in it, and the trap is now
 gone.** Under the alphabet this entry was written against (`/^(Hook|Permission) [a-z]+:/`) the widened
@@ -8390,7 +8390,7 @@ against the roster rather than spelling a prefix themselves. All of this is meas
 
 ---
 
-## Ec48-2 — a scanner that reads only `T_CONSTANT_ENCAPSED_STRING` cannot see this tree's denial strings at all
+### E237 — a scanner that reads only `T_CONSTANT_ENCAPSED_STRING` cannot see this tree's denial strings at all
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: process. **Measured; caught in my own new guard.**
 
@@ -8404,7 +8404,7 @@ constant-only scanner reported "**3** hits in `src/Chat.php` — all three the r
 entries". WHAT IS TRUE, re-derived 2026-08-23 on PHP 8.3.6 by running the guard's own `denialLiteralsIn()`
 logic under the OLD regex over `src/Chat.php`: **4** constant hits — the roster's three plus
 `'Permission mode: %s — from %s'`, which is not a denial prefix — and, unchanged, **zero** for any of the
-three interpolated producers in Ec48-1's table, including the exact line E210 replaced. WHY THE ENTRY
+three interpolated producers in E236's table, including the exact line E210 replaced. WHY THE ENTRY
 STILL EARNS ITS PLACE: the finding is the ZERO, not the three. A constant-only scanner sees none of this
 tree's denial producers, which is the whole point, and the miscounted control hits made the guard look
 MORE alive than it was rather than less.
@@ -8418,7 +8418,7 @@ starts from both token kinds.
 
 ---
 
-## Ec48-3 — `RuntimeTest::testExecuteToolCallsYieldsErrorWhenHookDenies` passes with the prefix deleted
+### E238 — `RuntimeTest::testExecuteToolCallsYieldsErrorWhenHookDenies` passes with the prefix deleted
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: test-coverage. **Measured.**
 
@@ -8439,7 +8439,7 @@ this is a strengthening rather than a hole.
 
 ---
 
-## Ec48-4 — the denial roster lives on `Chat`, which is why the engine cannot read it
+### E239 — the denial roster lives on `Chat`, which is why the engine cannot read it
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: design. **Measured.**
 
@@ -8458,7 +8458,7 @@ properly at the event rather than in the text). `Chat` and `Runtime` both re-exp
 
 ---
 
-## Ec48-5 — an ASK refused at a terminal now writes two stderr lines
+### E240 — an ASK refused at a terminal now writes two stderr lines
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: cosmetic. **Known and deliberate.**
 
@@ -8478,7 +8478,7 @@ no-tty refusal, the EOF line) all say things the observer cannot.
 
 ---
 
-## Ec48-6 — the background-session daemon gets no refusal notice
+### E241 — the background-session daemon gets no refusal notice
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: observability. **Measured.**
 
@@ -8496,7 +8496,7 @@ out of lane c's file list.
 
 ---
 
-## Ec48-7 — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
+### E242 — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: test-infrastructure. **Observed, not fully diagnosed.**
 
@@ -8521,7 +8521,7 @@ holds, key the sandbox by uid **plus** the checkout's real path, which is the co
 distinguishes two lanes — and check what that does to the `ToolIpcFiles::sweepOnce()` reasoning in the
 same comment, which assumes one sandbox per uid. `tests/bootstrap.php` is shared infrastructure: a change
 there reds every lane at merge, so this wants its own round rather than a corner of one.
-## Ec48-8 — `HeadlessPermissionPrompt`'s `?? \STDIN` default is the second half of E212's hazard family
+### E243 — `HeadlessPermissionPrompt`'s `?? \STDIN` default is the second half of E212's hazard family
 
 **Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: latent hang, bounded. **Measured, PHP 8.3.6.**
 
@@ -8549,7 +8549,7 @@ human is the feature.
 
 ---
 
-## Ec48-9 — `stderrWritesIn()` still cannot see a `proc_open()` descriptor spec
+### E244 — `stderrWritesIn()` still cannot see a `proc_open()` descriptor spec
 
 **Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: guard coverage. **Partly measured.**
 
@@ -8573,7 +8573,7 @@ whoever notices the guard stayed green.
 
 ---
 
-## Ec48-10 — `StderrEmitterCensusTest`'s method name states a cardinality its body no longer carries
+### E245 — `StderrEmitterCensusTest`'s method name states a cardinality its body no longer carries
 
 **Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: cosmetic / rot. **Measured.** Lane a's file.
 
