@@ -48,6 +48,27 @@ use SugarCraft\Crush\Tools\ToolResult;
  */
 final class DenialPrefixRosterTest extends TestCase
 {
+    /**
+     * THE FRAME: a capitalised word run of at most four words ending in `:`.
+     *
+     * Four because `Permission required:` is two and the longest invented
+     * spelling worth worrying about (`Tool call rejected by policy:`) is four;
+     * an unbounded run would swallow the first colon of an entire sentence.
+     */
+    private const DENIAL_SHAPE = '/^[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/';
+
+    /**
+     * THE VOCABULARY: at least one of these words must appear inside the
+     * frame. This is what separates `Blocked:` (a denial nobody put on the
+     * roster) from `Tool not found:` (an ordinary error), which the frame
+     * alone cannot do because they are the same shape.
+     *
+     * `not` is only ever matched as part of a two-word phrase, deliberately:
+     * bare `not` is what makes `Tool not found:` a false positive.
+     */
+    private const DENIAL_TERMS = '/\b(?:den(?:y|ied|ial)|refus(?:e|ed|al)|block(?:ed)?|reject(?:ed)?'
+        . '|forbidden|disallowed|unauthori[sz]ed|required|not (?:allowed|permitted|granted))\b/i';
+
     private ProviderInterface $provider;
     private HookRegistry $hookRegistry;
     private Runtime $runtime;
@@ -219,11 +240,27 @@ final class DenialPrefixRosterTest extends TestCase
      * MEASURED on PHP 8.3.6 that would have missed the exact defect it exists
      * to catch: the line it replaced was `"Hook denied: {$hookResult->message}"`,
      * an INTERPOLATED string, whose literal half is `T_ENCAPSED_AND_WHITESPACE`.
-     * The same scan over `src/Chat.php` reported three hits — the roster's own
-     * entries at its three constant lines — and zero for either of that file's
-     * two hand-rolled producers, both of which are interpolated. A guard that
-     * cannot see the shape the code is actually written in is a guard whose
-     * emptiness means nothing.
+     *
+     * THE CENSUS THAT CLAIM CITED WAS WRONG IN BOTH HALVES, and it is
+     * corrected here rather than removed because the conclusion it supports is
+     * right. WHAT IT SAID: the constant-only scan over `src/Chat.php` reported
+     * "three hits — the roster's own entries at its three constant lines — and
+     * zero for either of that file's two hand-rolled producers". WHAT IS TRUE
+     * NOW, re-derived on PHP 8.3.6 by running this class's own
+     * {@see self::denialLiteralsIn()} over `src/Chat.php`: that file has THREE
+     * hand-rolled interpolated producers, not two —
+     * {@see Chat::answerPermission()}, {@see Chat::forkToolCalls()} and
+     * {@see Chat::gateToolCall()} — and under the OLD alphabet the
+     * constant-only scan reported FOUR, not three: the roster's three entries
+     * plus `'Permission mode: %s — from %s'`, a `sprintf` template in the
+     * permission-summary line that is not a denial prefix at all. Under the
+     * widened alphabet that fourth hit is gone (`mode` is not a denial term)
+     * and the interpolated three are seen, so the scan over that file is now
+     * exactly the six real spellings. WHY THE PARAGRAPH STILL EARNS ITS PLACE:
+     * the finding it records — that a constant-only scanner is blind to every
+     * producer in this tree — is unchanged and is why the scan reads both
+     * token kinds. A guard that cannot see the shape the code is actually
+     * written in is a guard whose emptiness means nothing.
      */
     public function testRuntimeSpellsNoDenialPrefixOutsideItsConstants(): void
     {
@@ -253,6 +290,38 @@ final class DenialPrefixRosterTest extends TestCase
             [],
             self::denialLiteralsIn('<?php /** Hook denied: only in a comment */ $x = 1;'),
             'the scanner reads comments, so it cannot answer this question at all',
+        );
+
+        // AND THE THREE SHAPES THE FIRST ALPHABET COULD NOT EXPRESS. Each was
+        // MEASURED as a SURVIVING mutation on PHP 8.3.6 — a dead `private
+        // const` in src/Runtime.php carrying it, with this file green — before
+        // the vocabulary replaced `/^(Hook|Permission) [a-z]+:/`. An off-roster
+        // opener is the worst of the three: Chat::isDeniedResult() compares
+        // case-sensitively, so `Blocked:` is a refusal that renders as an
+        // ordinary error on both surfaces and nothing else in the tree notices.
+        foreach ([
+            'a capitalised verb' => 'Permission ' . 'Blocked: nope',
+            'a two-word verb' => 'Permission ' . 'not granted: nope',
+            'an opener that is on neither roster' => 'Blo' . 'cked: nope',
+            'a verb the roster has never used' => 'Tool call ' . 'rejected: nope',
+        ] as $why => $shape) {
+            self::assertSame(
+                [$shape],
+                self::denialLiteralsIn('<?php $z = ' . var_export($shape, true) . ';'),
+                "the scanner cannot express {$why}, so its emptiness says nothing about that shape",
+            );
+        }
+
+        // AND THE NEGATIVE THE FRAME ALONE WOULD HAVE GOT WRONG. `Tool not
+        // found:` is the same SHAPE as `Blocked:` and is an ordinary tool
+        // error; src/Runtime.php spells it twice. Widening on shape alone —
+        // the obvious fix, and the one prescribed — reddens this guard on the
+        // day it lands. This fixture is what stops that being rediscovered.
+        self::assertSame(
+            [],
+            self::denialLiteralsIn('<?php $z = "Tool ' . 'not found: bash";'),
+            'the scanner now calls an ordinary tool error a denial prefix, which reddens this guard against '
+            . 'src/Runtime.php on two lines that are entirely correct',
         );
 
         $declared = array_values(self::runtimeDenialPrefixes());
@@ -320,8 +389,40 @@ final class DenialPrefixRosterTest extends TestCase
      * prefix, in source order.
      *
      * The shape rather than the three known values, so a fourth invented
-     * spelling (`'Permission blocked: '`) is caught by the same scan that
-     * catches a duplicate of a known one.
+     * spelling is caught by the same scan that catches a duplicate of a known
+     * one.
+     *
+     * TWO TESTS, NOT ONE, AND THE SECOND IS A VOCABULARY. WHAT THIS SAID
+     * BEFORE: one regex, `/^(Hook|Permission) [a-z]+:/`, described as
+     * shape-based. WHAT IS TRUE NOW: that alphabet could express exactly the
+     * three spellings already in the tree and the one example its own
+     * doc-block chose. MEASURED on PHP 8.3.6 by inserting a dead `private
+     * const` into `src/Runtime.php` and running this file: `'Permission
+     * blocked: nope'` was KILLED, while `'Permission Blocked: nope'`
+     * (capitalised verb), `'Permission not granted: nope'` (two-word verb) and
+     * `'Blocked: nope'` (an opener that is neither `Hook` nor `Permission`)
+     * all SURVIVED. An off-roster opener is precisely the defect this scan
+     * exists to catch, because `Chat::isDeniedResult()` matches
+     * case-sensitively with `str_starts_with`.
+     *
+     * WHY SHAPE ALONE CANNOT DO IT, and why the prescribed fix was not taken.
+     * The obvious widening — any capitalised word run ending in `:` — was
+     * MEASURED against this tree first and produces TWO false positives in
+     * `src/Runtime.php` (`"Tool not found: "`, twice), which are ordinary
+     * tool errors and not denials at all; the guard asserts an empty set, so
+     * it would have gone red on the day it landed. `'Tool not found:'` and
+     * `'Blocked:'` are the SAME SHAPE, so the discriminator has to be the
+     * words. Hence a frame plus a vocabulary: a capitalised run of at most
+     * four words ending in `:`, at least one of which is a denial term. The
+     * negative fixture in {@see testRuntimeSpellsNoDenialPrefixOutsideItsConstants()}
+     * pins that `Tool not found:` stays out.
+     *
+     * THE WHOLE LITERAL IS RETURNED, not the matched prefix, and that is
+     * load-bearing: the caller compares against the constants with `===`, so
+     * an interpolated `"Hook denied: {$why}"` yields `'Hook denied: '` with
+     * the trailing space and correctly fails to equal `'Hook denied:'`.
+     * Returning the trimmed prefix would make the exact hand-rolled shape this
+     * guard exists to catch compare equal to the constant and pass.
      *
      * @return list<string>
      */
@@ -344,7 +445,8 @@ final class DenialPrefixRosterTest extends TestCase
             } else {
                 continue;
             }
-            if (preg_match('/^(Hook|Permission) [a-z]+:/', $value) === 1) {
+            if (preg_match(self::DENIAL_SHAPE, $value, $m) === 1
+                && preg_match(self::DENIAL_TERMS, $m[0]) === 1) {
                 $out[] = $value;
             }
         }
