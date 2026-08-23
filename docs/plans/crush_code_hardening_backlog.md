@@ -7966,3 +7966,159 @@ and only the second one still needs the finding acted on.
 **Step.** None — recorded so the pattern is countable. The rule it supports is already standing: measure a
 prescription against the tree before implementing it.
 
+
+### Ea48-1 — `AgentWorkerPool`'s `pcntl_fork() === -1` arm warns about nothing at all
+
+`src/Agents/AgentWorkerPool.php`'s `startAgent()` has TWO paths to sequential execution and only one of
+them says so. (This entry said `executeOne()`; that method is two lines — resolve the executor, call
+`execute()` — and holds neither arm. Both are in `startAgent()`.) The `!pcntlForkAvailable()` arm calls `warnSequentialFallback()`; the arm immediately below
+it — `$pid = pcntl_fork(); if ($pid === -1)` — falls through to the same synchronous
+`$executor->execute()` + `storeResult()` with **no diagnostic of any kind**, not even on stderr. A real
+`fork()` failure (EAGAIN under an `RLIMIT_NPROC` ceiling, or a memory ceiling) is a far more interesting
+event than a missing extension, and it is the silent one.
+
+Found while applying E192's routing rule to the pool's single site; deliberately not fixed there, because
+adding an emitter is a different change from routing the ones that exist and would have moved the
+channel-3 roster in the same commit as E192's decision not to move it.
+
+**Step.** Give the `-1` arm a diagnostic. It is a fork that FAILED rather than a fork that was never
+available, so unlike `warnSequentialFallback()` it may deserve the seam under the E192 rule — the pool
+still produces every result, but a fork ceiling reached mid-session will keep being reached, and the
+model retrying a large parallel dispatch is exactly the behaviour a transcript row could change. Decide
+that with the rule, not by symmetry with the arm above it.
+
+### Ea48-2 — `removeWorktree()` cannot tell "removed" from "still on disk"
+
+`src/Agents/WorktreeManager.php`'s `removeWorktree()` runs `removeDirectory($worktreePath)` when the
+directory survives git, then unconditionally drops the registry entry and saves. `removeDirectory()`'s
+failure (a permission error, a busy mount, a file the process cannot unlink) is not checked, so the
+method can return normally having left the worktree on disk while the manager now believes it is gone.
+That state is worse than the failure E192 just routed: the NEXT `createWorktree()` for that agent id
+fails `worktreeExists()`-free and then fails at git, and nothing anywhere reported the first failure.
+
+MEASURED (git 2.43.0, Linux 6.8) for the related residue only: with the directory removed behind git's
+back, `git worktree list` reports the path `prunable` and a re-`add` at the same path fails with
+`fatal: '<path>' is a missing but already registered worktree`. The `removeDirectory()` failure itself is
+UNMEASURED — recorded from source.
+
+**Step.** Have `removeDirectory()` report whether it emptied the tree, and refuse to drop the registry
+entry when it did not. A registry that lies about what exists is the thing to fix; the notice is
+secondary and would follow the E192 rule.
+
+### Ea48-3 — the seam has no reader in a hosted `Chat`
+
+E193 gives the mid-session seam an edge-driven wake-up armed from `Chat::init()`. `init()` is called by
+`SugarCraft\Core\Program`, and only by it. A `Chat` driven by an embedder that never builds a `Program` —
+the hosted-pane shape `Chat::withSize()`'s doc-block describes — therefore never arms the watcher, and is
+back to "the notice waits for the next Msg the host happens to deliver". That is strictly no worse than
+before E193 and is not a regression, but it is now the only path where the gap remains and it is not
+written down anywhere in `src/`.
+
+**Step.** Either expose the wake Cmd so a host can run it, or state in `Chat::init()`'s doc-block that the
+seam's idle wake-up is a `Program` feature and a host that drives `update()` itself owns the pumping. Pin
+whichever is chosen; today neither is asserted.
+
+### Ea48-4 — E196's two `flattened()` copies have already drifted, in the prose
+
+MEASURED at round 48 by comparing the two declarations token by token with whitespace and comments
+dropped: `tests/Cli/StderrEmitterCensusTest.php`'s and
+`tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php`'s bodies are IDENTICAL. The justifications were
+not — the sibling carried a paragraph explaining why the second pattern is `\s+` and not `[ \t]+`, and
+the census copy did not. Round 48 brought that paragraph across, so the two are level again, but the
+episode is the evidence E196 was missing: the drift arrives in the reasoning before it arrives in the
+code, and a consolidation that keeps one implementation and one of the two justifications re-creates the
+asymmetry inside the trait.
+
+Not consolidated in round 48: the sibling census file is outside lane `a`'s test file set, and a
+half-consolidation (a trait with one consumer, the duplicate still in place) buys nothing — the drift
+risk is unchanged while the indirection is added.
+
+**Step.** E196 as written, plus: the trait carries the implementation AND the union of both
+justifications, and EACH consuming test keeps its own known-positive control (E125).
+
+### Ea48-5 — E195's Step is wrong about channel 5
+
+E195 says a `use`-statement resolver in `StderrEmitterCensusTest::scan()` "would close the alias case and
+would also strengthen channels 1, 2 and 5". MEASURED, PHP 8.3.6: the channel-5 half is false. Channel 5
+matches on the METHOD name plus a scope operator and never inspects the receiver, so
+`use X\Bootstrap as B; B::warnPermissionConfigOnce("x")` already scans **1**. A class alias cannot hide a
+`warnPermissionConfig*` call from it.
+
+The channels-1-and-2 half is true and was closed in round 48 by a different instrument: `use const
+STDERR as E; fwrite(E, "x")` and `use function fwrite as w; w(STDERR, "x")` both RUN and both write fd 2
+(measured), and under the first, channel 1 scores 0 while channel 2 scores 1 — for the `use` line, not
+for the write.
+
+**Step.** None — recorded so the count of wrong prescriptions stays honest. This is the eighth.
+
+### Ea48-6 — four stacked doc-comment pairs remain in `src/`, in files round 48 did not own
+
+Round 48's `Chat::pumpRuntimeNotices()` had E193's reasoning landed as a SECOND doc-comment above the
+block already there. PHP attaches only the LAST doc-comment of a run, so the earlier one documents
+nothing: the method had lost its `@return array{0:Chat,1:?\Closure}` tag entirely (VERIFIED by
+`ReflectionMethod::getDocComment()`) and two paragraphs of reasoning were orphaned.
+
+Scanning for the shape found it is not a one-off. SIX pairs existed in `src/` plus `bin/sugarcrush`
+(MEASURED, PHP 8.3.6, adjacent `T_DOC_COMMENT` tokens with nothing significant between). Three were in
+`src/Chat.php` and were fixed; the other two there were WORSE than the pump's, because the stranded block
+belonged to a DIFFERENT method: `refuseInFlightCommand()` and `dispatchCommand()` both read as
+undocumented while their prose sat above `refuseEmptyCustomCommand()` and `expandCustomCommand()`
+respectively — and `expandCustomCommand()` returns `?string` while the block stranded above it carried
+`@return array{0: self, 1: ?\Closure}|null`.
+
+FOUR remain, all outside lane `a`'s file set and therefore untouched and UNEXAMINED — nobody has checked
+whether these are the harmless kind (two blocks that merge) or the expensive kind (a method silently
+undocumented and another mis-described):
+
+- `src/Commands/CommandSpec.php:816`
+- `src/Runtime.php:73`
+- `src/Tools/BuiltIn/Glob.php:969`
+- `src/Tui/Components/MenuBar.php:368`
+
+The guard shipped in round 48 (`RuntimeNoticeSinkDeliveryTest::testChatCarriesNoStackedDocComments()`) is
+scoped to `Chat.php` ON PURPOSE: widening it would have redded four files belonging to work in flight in
+sibling lanes, which is a merge conflict dressed as a finding.
+
+**Step.** Once the parallel lanes have merged, check each of the four for a lost `@return` or a
+mis-attributed block, fix them, then widen the existing guard from `Chat.php` to `src/` plus
+`bin/sugarcrush`. The scanner and both its fixtures already exist and move as-is; only the file list
+changes. The generator for the census is
+`stackedDocCommentLines()` in that test.
+
+### Ea48-7 — `SglangProvider`'s reachability was never asked, though `WorktreeManager`'s was
+
+Round 48 routed six refusals onto the mid-session seam: four in `WorktreeManager` and two in
+`SglangProvider::decodeToolArguments()`. It then went to considerable length establishing that
+`WorktreeManager` is DORMANT — nothing in `src/` or `bin/` constructs it — and pinned that with
+`StderrEmitterCensusTest::testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt()`.
+
+No symmetric question was asked of `SglangProvider`. If it is also unreachable, then two of the round's
+six seam moves rest on the same unstated assumption the dormancy guard exists to correct, and the
+doc-blocks describing when those two notices fire are the same kind of unverified reachability claim that
+the `WorktreeManager` rewrite was needed to undo.
+
+UNMEASURED. Recorded from the shape of the round, not from a scan.
+
+**Step.** Run `constructionSites('SglangProvider', …)` — the scanner now exists and handles the `::new()`
+factory shape — over `src/` and `bin/`, and over the provider registry's dispatch as well, since a
+provider is likelier to be reached through a name-keyed table than through a literal `new`. Then either
+pin the dormancy the way `WorktreeManager`'s is pinned, or state the live path in the doc-block.
+
+### Ea48-8 — the comment fixture that could not fail, and the class of fixture it belongs to
+
+Round 48's first draft of `constructionSites()`'s guard asserted `0` over an all-comments source, with the
+message "constructionSites() reads comments, so it would red on prose about the constructor". That
+assertion CANNOT go red for any token-based scanner: `token_get_all()` returns a whole comment as a single
+`T_DOC_COMMENT`/`T_COMMENT` token (MEASURED, PHP 8.3.6), so no `T_NEW` ever appears inside one. Mutating
+`significantTokens()` out of the scanner entirely — the exact mutation the fixture names — left it green.
+
+It was fixed by asserting ONE over a source carrying a commented construction AND a live one, which fails
+in both directions. But the general shape is worth a sweep: a fixture whose expected value is the value
+the instrument returns when it is DEAD proves nothing, and "assert 0 on a comments-only source" is a
+common and comfortable-looking instance of exactly that. It is rule 15 one level down — the known-positive
+control was present in that test and still did not save the fixture next to it, because the fixture had
+its own independent hole.
+
+**Step.** Sweep the census tests for fixtures whose expected value is `0`, `[]` or `''` and ask, per
+fixture, what mutation of the instrument that fixture would survive. Where the answer is "all of them",
+give the fixture a positive component so the number it asserts is one only a live instrument produces.

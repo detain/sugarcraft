@@ -1077,9 +1077,74 @@ final class Chat implements Model
         $this->currentSessionId = $currentSessionId;
     }
 
+    /**
+     * Arm the mid-session seam's edge-driven wake-up (E193).
+     *
+     * THE ONLY THING THIS MODEL WANTS AT STARTUP, and it is deliberately not a
+     * subscription. {@see subscriptions()}' runtime-notice tick is declared on
+     * `$inFlight || RuntimeNoticeSink::hasPending()`, and `Program` re-evaluates
+     * that only when it reconciles — after `init()` and after every dispatched
+     * `Msg`. A notice raised while the UI is IDLE therefore arms nothing and
+     * waits for whatever `Msg` arrives next, which on a genuinely idle session
+     * is the user's next keystroke. MEASURED end to end; the numbers and the
+     * two controls are in
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::notifyOnceWhenPending()}'s
+     * doc-block, which is also where the argument against fixing it with an
+     * unconditional tick lives.
+     *
+     * RETURNS null FOR EVERY Chat THAT IS NOT THE PROCESS'S DRAIN OWNER, which
+     * is the same gate {@see subscriptions()} applies first and for the same
+     * reason: {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
+     * is destructive, so a second listening `Chat` would take rows out from
+     * under the real transcript.
+     */
     public function init(): ?\Closure
     {
-        return null;
+        return $this->runtimeNoticeWake();
+    }
+
+    /**
+     * A Cmd that resolves with one {@see RuntimeNoticePumpMsg} the next time a
+     * notice lands on the sink's cross-fork transport — see {@see init()}.
+     *
+     * NULL WHEN THERE IS NO TRANSPORT, rather than a promise that never
+     * settles. Without one the sink is on its in-process array backend, which
+     * only this process can write to and only synchronously; every such write
+     * happens inside an `update()` or an `init()`, and `Program` reconciles
+     * after both, so `hasPending()` is consulted in time and the tick takes it
+     * from there. The gap this closes is specifically the OFF-LOOP writer, and
+     * off-loop writers reach the sink through the datagram pair or not at all.
+     *
+     * THE `!$armed` ARM INSIDE THE PROMISE RESOLVES WITH null AND NOT WITH A
+     * PUMP. `Cmd::promise()` accepts `?Msg`, and null dispatches nothing —
+     * which is what must happen if the transport disappeared between the
+     * check above and the factory running (a `reset()` from a test's
+     * `tearDown`, or a second `Bootstrap::chat()`). Resolving with a
+     * `RuntimeNoticePumpMsg` instead would drain an empty inbox, re-arm, fail
+     * to arm again, and resolve immediately once more: a hot loop, built out
+     * of the fix for a missing wake-up.
+     */
+    private function runtimeNoticeWake(): ?\Closure
+    {
+        if (!$this->drainsRuntimeNotices || !RuntimeNoticeSink::hasTransport()) {
+            return null;
+        }
+
+        return Cmd::promise(static function (): PromiseInterface {
+            $deferred = new Deferred();
+
+            $armed = RuntimeNoticeSink::notifyOnceWhenPending(
+                static function () use ($deferred): void {
+                    $deferred->resolve(new RuntimeNoticePumpMsg());
+                },
+            );
+
+            if (!$armed) {
+                $deferred->resolve(null);
+            }
+
+            return $deferred->promise();
+        });
     }
 
     public function update(Msg $msg): array
@@ -5749,6 +5814,24 @@ final class Chat implements Model
     }
 
     /**
+     * Refuse, VISIBLY, a file-based command whose template expanded to nothing.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function refuseEmptyCustomCommand(string $text): array
+    {
+        return [$this->mutate([
+            'history' => [...$this->history, Message::system(sprintf(
+                '%s is a command file whose template expanded to nothing — most often a body that is only '
+                . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
+                . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
+                . 'on its own.',
+                self::quoteDraftForNotice($text),
+            ))],
+        ]), null];
+    }
+
+    /**
      * Refuse, VISIBLY, a slash command submitted while a turn is running.
      *
      * WHY REFUSED AND NOT QUEUED, since an ordinary prompt is queued: a queued
@@ -5780,25 +5863,14 @@ final class Chat implements Model
      * once the turn settles runs it, and the notice says so.
      *
      * @return array{0:self,1:?\Closure}
-     */
-    /**
-     * Refuse, VISIBLY, a file-based command whose template expanded to nothing.
      *
-     * @return array{0:self,1:?\Closure}
+     * MOVED HERE FROM ABOVE {@see refuseEmptyCustomCommand()}, where it had
+     * been stranded as a second stacked doc-comment. PHP attaches only the
+     * LAST of a run of them, so this block documented nothing at all and this
+     * method read as undocumented; a reader who found the prose would have
+     * attributed it to the empty-template refusal, which is a different rule
+     * for a different reason. Three such pairs were in this file.
      */
-    private function refuseEmptyCustomCommand(string $text): array
-    {
-        return [$this->mutate([
-            'history' => [...$this->history, Message::system(sprintf(
-                '%s is a command file whose template expanded to nothing — most often a body that is only '
-                . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
-                . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
-                . 'on its own.',
-                self::quoteDraftForNotice($text),
-            ))],
-        ]), null];
-    }
-
     private function refuseInFlightCommand(string $text): array
     {
         return [$this->mutate([
@@ -6169,45 +6241,6 @@ final class Chat implements Model
     }
 
     /**
-     * Route a submitted draft to a slash-command handler, or return null when
-     * it is an ordinary prompt for the model.
-     *
-     * The name is parsed by {@see CommandParser::parse()} (crush_code.md Phase
-     * 4 item 7), which was already built, already tested, and already used by
-     * {@see \SugarCraft\Crush\Commands\AgentsCommand} - while this method's
-     * predecessor re-derived the same thing inline as sixteen
-     * `str_starts_with($text, '/name')` calls. Dispatching on the parsed NAME
-     * instead of on a prefix is what makes the set of live commands a thing a
-     * test can enumerate: `tests/Commands/SlashDispatchTest.php`'s
-     * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits
-     * `/name` for every `slashVisible` row in {@see CommandRegistry} and fails
-     * when the turn reaches the backend, so a registry row with no arm here
-     * reds the suite. The before/after dispatch table for the refactor lives in
-     * that file's other methods rather than in prose here.
-     *
-     * Two guards keep the parse from widening what dispatches, because
-     * `parse()` is deliberately more forgiving than the chain it replaced:
-     *
-     * - it LOWERCASES and strips punctuation out of the name it reports, so
-     *   `/KEYS` and `/keys` and `/k:eys` all parse to `keys`. The old chain
-     *   compared raw bytes and matched none but the last, and `KeyHelpTest`'s
-     *   draft corpus asserts `/KEYS` is sent to the model as prose. Requiring
-     *   the canonical spelling to appear verbatim at the head of the draft
-     *   keeps that exact, for every command at once.
-     * - `$text === '/' . $name` is what keeps the four argument-less commands
-     *   argument-less. `/exit now` and `/keys foo` were prompts before this
-     *   refactor because their arms compared the WHOLE trimmed buffer; a bare
-     *   name match would have quietly turned both into commands.
-     *
-     * What did change, deliberately, is that a name is no longer a PREFIX:
-     * `/compactfoo` and `/rewind3` used to be swallowed by the `/compact` and
-     * `/rewind` handlers, and now go to the model like any other typo. Nothing
-     * advertised them and no test named them - the before/after table for
-     * every registry spelling is in the Phase 4 item 7 report.
-     *
-     * @return array{0: self, 1: ?\Closure}|null
-     */
-    /**
      * The prompt a typed `/name …` should send when `name` is one of this
      * session's file-based commands, or null when it is not one — in which case
      * {@see submit()} falls through to {@see dispatchCommand()} and then to the
@@ -6396,6 +6429,52 @@ final class Chat implements Model
         return null;
     }
 
+    /**
+     * Route a submitted draft to a slash-command handler, or return null when
+     * it is an ordinary prompt for the model.
+     *
+     * The name is parsed by {@see CommandParser::parse()} (crush_code.md Phase
+     * 4 item 7), which was already built, already tested, and already used by
+     * {@see \SugarCraft\Crush\Commands\AgentsCommand} - while this method's
+     * predecessor re-derived the same thing inline as sixteen
+     * `str_starts_with($text, '/name')` calls. Dispatching on the parsed NAME
+     * instead of on a prefix is what makes the set of live commands a thing a
+     * test can enumerate: `tests/Commands/SlashDispatchTest.php`'s
+     * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits
+     * `/name` for every `slashVisible` row in {@see CommandRegistry} and fails
+     * when the turn reaches the backend, so a registry row with no arm here
+     * reds the suite. The before/after dispatch table for the refactor lives in
+     * that file's other methods rather than in prose here.
+     *
+     * Two guards keep the parse from widening what dispatches, because
+     * `parse()` is deliberately more forgiving than the chain it replaced:
+     *
+     * - it LOWERCASES and strips punctuation out of the name it reports, so
+     *   `/KEYS` and `/keys` and `/k:eys` all parse to `keys`. The old chain
+     *   compared raw bytes and matched none but the last, and `KeyHelpTest`'s
+     *   draft corpus asserts `/KEYS` is sent to the model as prose. Requiring
+     *   the canonical spelling to appear verbatim at the head of the draft
+     *   keeps that exact, for every command at once.
+     * - `$text === '/' . $name` is what keeps the four argument-less commands
+     *   argument-less. `/exit now` and `/keys foo` were prompts before this
+     *   refactor because their arms compared the WHOLE trimmed buffer; a bare
+     *   name match would have quietly turned both into commands.
+     *
+     * What did change, deliberately, is that a name is no longer a PREFIX:
+     * `/compactfoo` and `/rewind3` used to be swallowed by the `/compact` and
+     * `/rewind` handlers, and now go to the model like any other typo. Nothing
+     * advertised them and no test named them - the before/after table for
+     * every registry spelling is in the Phase 4 item 7 report.
+     *
+     * @return array{0: self, 1: ?\Closure}|null
+     *
+     * MOVED HERE FROM ABOVE {@see expandCustomCommand()}, where it had been
+     * stranded as a second stacked doc-comment and so documented nothing. The
+     * mis-attribution was the expensive half: `expandCustomCommand()` returns
+     * `?string`, and a reader taking the block above it at face value would
+     * have read this `@return array{0: self, 1: ?\Closure}|null` as ITS
+     * contract.
+     */
     private function dispatchCommand(string $text): ?array
     {
         // The bare "mcp auth …" form, which predates the discoverable `/mcp`
@@ -10811,15 +10890,37 @@ final class Chat implements Model
         // from the real transcript rather than duplicate them.
         //
         // ORed WITH $inFlight RATHER THAN RELYING ON hasPending() ALONE, and
-        // that is the load-bearing half. Every mid-session emitter E171 names
-        // — the two tool-call parsers, `SglangProvider`, `AgentWorkerPool`,
-        // `WorktreeManager` — raises its notice DURING a turn, and on the
-        // interactive path it does so inside
+        // that is the load-bearing half. The mid-session emitters that are on a
+        // live path — the two tool-call parsers, and `SglangProvider`'s two
+        // argument-decode refusals — raise their notices DURING a turn, and on
+        // the interactive path they do so inside
         // {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
         // forked child. Waiting for `hasPending()` to go true would work, but
         // only on whatever Msg happened to arrive next; arming for the whole
         // turn means the row appears while the turn is still running, which is
         // the entire point of a seam that is not launch-only.
+        //
+        // `WorktreeManager`'S FOUR (E192) ARE ON THE SEAM AND ON NO PATH, and
+        // this list named them among the four above as though they were. WHAT
+        // IS TRUE NOW, checked rather than assumed: nothing in `src/` or `bin/`
+        // constructs a `WorktreeManager` — only its own doc-comments mention
+        // the constructor and the factory — and `Team::claimTask()`, the one
+        // method that takes one, has no caller in `src/` either. The class is
+        // dormant, its own doc-block now says so, and the census pins it. They
+        // are named here anyway rather than dropped, because when a first
+        // caller does arrive it will be from tool dispatch, i.e. inside a turn,
+        // and this clause is the one that will cover it.
+        //
+        // AND `hasPending()` ALONE IS NOT MERELY WEAKER, IT CAN NEVER FIRE ON
+        // ITS OWN (E193). `Program` consults this method only when it
+        // reconciles, i.e. after `init()` and after every dispatched `Msg`. On
+        // an idle session there is no next `Msg` to reconcile after, so a
+        // notice that becomes pending here arms nothing at all — MEASURED on a
+        // real `Program`, zero rows after two seconds of loop time with the row
+        // still sitting in the socket. That gap is closed OUTSIDE this method,
+        // by the edge-driven watcher {@see init()} arms; this clause is what
+        // covers the in-turn case, where the watcher and the tick are both live
+        // and either may win.
         if ($this->drainsRuntimeNotices && ($this->inFlight || RuntimeNoticeSink::hasPending())) {
             $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
                 self::RUNTIME_NOTICE_SUBSCRIPTION,
@@ -10950,14 +11051,44 @@ final class Chat implements Model
      * new-but-identical Chat would repaint the transcript twice a second for
      * the whole of every turn.
      *
+     * BOTH RETURN PATHS RE-ARM, INCLUDING THE EMPTY ONE, and that is not
+     * symmetry for its own sake. {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::notifyOnceWhenPending()}
+     * is one-shot, so whatever fires it consumes it; if the empty path did not
+     * re-arm, the first pump that happened to find nothing would leave the
+     * session with no wake-up for the rest of its life. That path is REACHED,
+     * and by an ordinary interleaving rather than an exotic one: during a turn
+     * both the `$inFlight` tick and the watcher are live, and whichever
+     * dispatches second drains an inbox the other already emptied.
+     *
+     * THE EMPTY ARM IS PINNED BY {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest::testAPumpThatFindsNothingStillRenewsTheOneShotWake()}
+     * AND BY NOTHING ELSE, which was found by mutation rather than assumed:
+     * returning `null` here SURVIVED the whole `RuntimeNoticeSink` filter until
+     * that test existed, because every other pump in the suite finds a row and
+     * takes the other branch.
+     *
+     * IT STILL RETURNS `$this` UNCHANGED WHEN THERE IS NOTHING, so
+     * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest::testTheSecondPumpAddsNothingBecauseTheFirstConsumedTheInbox()}'s
+     * point survives: an empty pump must not repaint. Only the Cmd differs.
+     *
+     * ONE DOC-BLOCK AND NOT TWO, which is why the paragraphs above read as two
+     * halves written a round apart — they were. E193's re-arm paragraphs landed
+     * as a SECOND doc-comment stacked between the original block and this
+     * declaration, and PHP attaches only the last one: the `@return` tag below
+     * had come off the method entirely (VERIFIED by
+     * `ReflectionMethod::getDocComment()`, which returned the re-arm block with
+     * no `@return` in it), and the original block's reasoning — the batching
+     * argument, the `Role::System` argument — was orphaned prose that no tool
+     * and no `{@see}` could resolve. Merged rather than either half deleted.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function pumpRuntimeNotices(): array
     {
         $notices = RuntimeNoticeSink::drain();
+        $rearm = $this->runtimeNoticeWake();
 
         if ($notices === []) {
-            return [$this, null];
+            return [$this, $rearm];
         }
 
         $messages = [];
@@ -10965,7 +11096,7 @@ final class Chat implements Model
             $messages[] = Message::system($notice);
         }
 
-        return [$this->mutate(['history' => [...$this->history, ...$messages]]), null];
+        return [$this->mutate(['history' => [...$this->history, ...$messages]]), $rearm];
     }
 
     /**

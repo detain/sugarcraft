@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Providers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -1227,6 +1228,25 @@ final readonly class SglangProvider implements ProviderInterface
      * Static because it reads no instance state and {@see argumentDecoder()}
      * must hand it to a parser built before any provider instance exists.
      *
+     * BOTH OF THIS METHOD'S DIAGNOSTICS ARE ON THE MID-SESSION TRANSCRIPT SEAM
+     * (E192), and the rule that put them there is the one the two tool-call
+     * parsers' class doc-blocks state: a notice goes to
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} if and
+     * only if the emitter did not produce what the caller asked for. It did
+     * not. The model supplied an `arguments` payload and the call is about to
+     * run with NONE — `read()` with no `path`, `write()` with no `content` —
+     * which is the unrecoverable shape
+     * {@see \SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser}
+     * refuses outright rather than fire. This class cannot refuse it (the
+     * decode result is fixed by W1.A4 and the turn stays alive), so the seam
+     * is the only place the user and the model learn that the call they are
+     * about to see the result of is not the call that was requested. The model
+     * reading the row on the next turn is the point: it can retry.
+     *
+     * THE ZERO-ARGUMENT CASE ABOVE IS DELIBERATELY NOT ON THE SEAM. An absent
+     * or blank payload is how a genuine zero-argument call arrives, so there is
+     * nothing to report — that arm returns before either warning.
+     *
      * @return array<mixed>
      */
     private static function decodeToolArguments(mixed $raw, string $toolName): array
@@ -1254,7 +1274,7 @@ final readonly class SglangProvider implements ProviderInterface
             // TypeError. Degrading to `[]` keeps the turn alive, but it must
             // not be the silent downgrade CONTRIBUTING.md forbids - the call
             // is about to run with no arguments at all.
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'SglangProvider: tool call "%s" arguments decoded to %s, not an object; '
                 . 'defaulting to no arguments. Raw payload: %s',
                 $toolName,
@@ -1265,7 +1285,7 @@ final readonly class SglangProvider implements ProviderInterface
             return [];
         }
 
-        error_log(self::malformedArgumentsWarning($toolName, $raw));
+        RuntimeNoticeSink::warn(self::malformedArgumentsWarning($toolName, $raw));
 
         return [];
     }
@@ -1369,6 +1389,19 @@ final readonly class SglangProvider implements ProviderInterface
      * `...$toolResults` onto the history), so scanning only the single last
      * message would miss n-1 of them, and a multi-tool coding turn is
      * precisely where a risky file body shows up.
+     *
+     * DELIBERATELY LEFT ON `error_log()` WHEN E192 MOVED THIS CLASS'S OTHER TWO
+     * DIAGNOSTICS TO THE SEAM, and the routing rule is what decides it rather
+     * than a judgement about how interesting the line is. The rule asks whether
+     * the emitter produced what the caller asked for; here it did. Nothing
+     * failed, nothing was refused, nothing was silently downgraded — this
+     * PREDICTS that a LATER call echoing this content may be truncated. A seam
+     * row is a `Role::System` message re-sent to the model on every subsequent
+     * turn, and this one fires once per matching tool result in the trailing
+     * batch, so a multi-tool turn over XML-ish files would put several
+     * speculative rows in the conversation and keep paying for them for the
+     * rest of the session. `error_log()` is unclipped, costs no tokens, and is
+     * what a log trawl wants from a prediction.
      *
      * @param array<mixed> $messages
      * @param string       $model the request's model id, which decides whether

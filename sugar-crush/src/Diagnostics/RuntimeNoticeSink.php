@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Diagnostics;
 
+use React\EventLoop\Loop;
+
 /**
  * The MID-SESSION half of the transcript seam: a process-wide inbox any
  * subsystem can put a user-visible warning into once the alternate screen is
@@ -233,6 +235,18 @@ final class RuntimeNoticeSink
 
     /** @var resource|null The write end, inherited by every child forked after {@see arm()}. */
     private static $transportWrite = null;
+
+    /**
+     * Removes the readable-watcher {@see notifyOnceWhenPending()} installed, or
+     * null when none is installed.
+     *
+     * A CLOSURE AND NOT A BOOL, so the fd and the loop it was registered on
+     * travel with the canceller. {@see reset()} must be able to take the
+     * watcher off the loop BEFORE it closes the stream, and a `removeReadStream`
+     * against `self::$transportRead` read at cancel time would be reaching for a
+     * property the caller may already have nulled.
+     */
+    private static ?\Closure $pendingWatcher = null;
 
     /**
      * Report a warning on BOTH channels: `error_log()` for the complete record,
@@ -471,6 +485,112 @@ final class RuntimeNoticeSink
     }
 
     /**
+     * Call `$notify` once, on the event loop, the next time a notice arrives
+     * on the cross-fork transport (E193).
+     *
+     * WHY THIS EXISTS AT ALL, AND WHY {@see hasPending()} IS NOT ENOUGH.
+     * {@see \SugarCraft\Crush\Chat::subscriptions()} declares its poll on
+     * `$inFlight || hasPending()`, and `hasPending()` is only ever consulted
+     * when `\SugarCraft\Core\Program` reconciles — which it does after
+     * `init()` and after every dispatched `Msg`, and at no other time
+     * (`Program::reconcileWantedSubscriptions()` has exactly those two
+     * callers). So a notice that becomes pending while the UI is IDLE — no
+     * turn in flight, nothing else armed — arms nothing, and goes on arming
+     * nothing until some unrelated `Msg` happens to arrive. In practice that
+     * is the next key the user presses.
+     *
+     * MEASURED, PHP 8.3.6 / `StreamSelectLoop`, on a real `Program` running a
+     * real `Chat`: a child forked before `run()` recorded one notice 0.3s in;
+     * after 2.0s of loop time the transcript had ZERO `Role::System` rows and
+     * `hasPending()` was still true. The same probe with `inFlight: true`
+     * delivered the row, and with the notice recorded before `run()` delivered
+     * both — so the harness was not blind, the idle case simply never wakes.
+     * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest}
+     * carries all three as tests.
+     *
+     * WHY A READ WATCHER AND NOT AN UNCONDITIONAL TICK. That is the fix
+     * `Chat::subscriptions()`' doc-block rules out three separate times, in
+     * the same words each time: a timer that wakes the loop and repaints
+     * forever on the overwhelmingly common launch where nothing ever warns.
+     * The objection is about the repaint, and it is correct —
+     * `Program::dispatch()` marks the frame dirty for every `Msg`, so an
+     * unconditional pump tick is an unconditional repaint at its interval. A
+     * readable-watcher costs one fd in the loop's select set and produces a
+     * `Msg` only when a datagram actually lands, which is strictly better than
+     * the tick on both axes: no idle wake-ups at all, and no poll latency when
+     * one does arrive.
+     *
+     * ONE-SHOT, AND IT CANCELS ITSELF BEFORE IT NOTIFIES. The caller re-arms
+     * from its own `update()`, which is what keeps the arming decision in the
+     * model rather than in this class — a `Chat` that stopped being the
+     * process's drain owner must be able to stop listening, and a second
+     * `notifyOnceWhenPending()` replaces the first rather than stacking a
+     * second watcher on one fd.
+     *
+     * NO SPIN, and the reason is a property of the transport rather than a
+     * guard. `stream_select()` reports the read end readable only when at
+     * least one whole datagram is queued ({@see arm()} makes a `SOCK_DGRAM`
+     * pair), `record()` refuses an empty message before it ever writes, and
+     * this process holds its own copy of the write end open for the life of
+     * the sink — so a readable fd always yields something for {@see drain()}
+     * to take. The one shape that WOULD spin is a readable fd whose peer has
+     * hung up, and the only code that closes the write end is {@see reset()},
+     * which cancels this watcher first.
+     *
+     * @param \Closure(): void $notify run on the loop when a datagram lands
+     *
+     * @return bool whether a watcher was installed. False means there is no
+     *              cross-fork transport — the in-process backend can only be
+     *              written by this process, synchronously, and every such write
+     *              is already followed by a reconcile
+     */
+    public static function notifyOnceWhenPending(\Closure $notify): bool
+    {
+        if (self::$transportRead === null) {
+            return false;
+        }
+
+        self::cancelPendingNotification();
+
+        $loop = Loop::get();
+        $stream = self::$transportRead;
+
+        $loop->addReadStream($stream, static function () use ($notify): void {
+            self::cancelPendingNotification();
+            $notify();
+        });
+
+        self::$pendingWatcher = static function () use ($loop, $stream): void {
+            $loop->removeReadStream($stream);
+        };
+
+        return true;
+    }
+
+    /**
+     * Take any {@see notifyOnceWhenPending()} watcher back off the loop.
+     *
+     * IDEMPOTENT, and it nulls the property BEFORE running the canceller: the
+     * watcher's own callback calls this, so a canceller that re-entered would
+     * otherwise see itself still installed.
+     */
+    public static function cancelPendingNotification(): void
+    {
+        $canceller = self::$pendingWatcher;
+        self::$pendingWatcher = null;
+
+        if ($canceller !== null) {
+            $canceller();
+        }
+    }
+
+    /** Whether a {@see notifyOnceWhenPending()} watcher is installed. */
+    public static function isNotificationArmed(): bool
+    {
+        return self::$pendingWatcher !== null;
+    }
+
+    /**
      * Drop everything, including the transport.
      *
      * DISARMS TOO, so a reset sink is a dropping sink until something arms it
@@ -493,6 +613,12 @@ final class RuntimeNoticeSink
      */
     public static function reset(): void
     {
+        // BEFORE THE fclose() BELOW, not after. A watcher left on the loop over
+        // a closed stream is a resource `stream_select()` will be handed on
+        // every iteration for the rest of the process — and in a 9000-test run
+        // that is every later test's loop, not just this one's.
+        self::cancelPendingNotification();
+
         self::$armed = false;
         self::$queue = [];
         self::$dropped = 0;

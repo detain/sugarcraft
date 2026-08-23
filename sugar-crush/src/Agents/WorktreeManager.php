@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 
@@ -19,6 +20,82 @@ use SugarCraft\Crush\Support\HomeDirectory;
  *
  * while the registry is stored at:
  *     {basePath}/.registry.json
+ *
+ * ALL FOUR OF THIS CLASS'S DIAGNOSTICS ARE ON THE MID-SESSION TRANSCRIPT SEAM
+ * (E192), and this paragraph is the per-site decision rather than a blanket
+ * one. The rule is the one the two tool-call parsers' class doc-blocks state:
+ * a notice goes to {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}
+ * if and only if the emitter did not produce what the caller asked for.
+ * Everything this class reports is of exactly that kind, which is why it is
+ * the only one of E192's three emitters to move all of its sites:
+ *
+ *  - {@see createWorktree()}'s `git worktree add` failure: the worktree does
+ *    not exist and the method throws. Nothing the agent was spawned to do can
+ *    happen.
+ *  - {@see removeWorktree()}'s `git worktree remove` failure: this one LOOKS
+ *    like a recovery, because the directory is force-removed below and the
+ *    registry entry is dropped, so the method returns normally. It is not one,
+ *    and the difference was MEASURED rather than argued (git 2.43.0, Linux
+ *    6.8, this box): with the worktree directory removed behind git's back,
+ *    `git worktree list` still reports the path as `prunable`, and a later
+ *    `git worktree add` at the SAME path — which is what the next
+ *    `createWorktree()` for that agent id runs — fails with
+ *    `fatal: '<path>' is a missing but already registered worktree`. So the
+ *    removal did not complete, and its consequence is that the next creation
+ *    for that agent is refused. The caller is told nothing today unless it
+ *    reads fd 2.
+ *  - {@see resolveWorktreeInclude()}'s include-file refusal: every file the
+ *    repository's `worktreeIncludeFile` listed is absent from the new
+ *    worktree. An agent that needs a `.env` or a composer auth token to build
+ *    will fail for a reason with no visible cause.
+ *  - {@see copyGlob()}'s pattern refusal: the same, for one entry of the list.
+ *    Counted per call site and not per line, so a list with several escaping
+ *    patterns is one site here and several rows in the transcript — which is
+ *    the honest shape: each is a distinct file the user asked for and did not
+ *    get, and {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
+ *    de-duplicates identical rows within a batch.
+ *
+ * WHY THAT IS WORTH TRANSCRIPT TOKENS, which is the objection the routing rule
+ * exists to answer — and the first thing this paragraph has to say is that
+ * NOTHING IN `src/` OR `bin/` CONSTRUCTS THIS CLASS, so none of the four sites
+ * above fires on any path today.
+ *
+ * WHAT THIS PARAGRAPH SAID: "These fire while the alternate screen is up, so
+ * today they land as unprefixed lines on a frame the renderer believes it owns
+ * — visible as corruption, or not at all."
+ *
+ * WHAT IS TRUE NOW, checked rather than asserted: neither `new WorktreeManager`
+ * nor `WorktreeManager::new(` occurs anywhere in `src/` or `bin/` outside this
+ * file's own doc-comments, and {@see Team::claimTask()} — the one method that
+ * takes a `WorktreeManager` — has no caller in `src/` either. Only tests build
+ * one. So the sentence above describes a FUTURE and not a present, and it was
+ * written as a present. Two other files in this package already said as much
+ * and this one did not read them: {@see \SugarCraft\Crush\Cli\Bootstrap}'s
+ * "DORMANT: nothing in `src/` constructs a `WorktreeManager`", and
+ * {@see WorktreeConfig}'s "DORMANT IS NOT UNGATED". The doc-block on the
+ * `$config` property below says it too — cited by the symbol and not by a line
+ * distance, because the distance was written as "thirty lines below" and is
+ * nearer fifty.
+ *
+ * WHY THE ROUTING STILL EARNS ITS PLACE, which is a different question from
+ * whether it fires. "DORMANT IS NOT UNGATED" is this package's own doctrine
+ * and {@see WorktreeConfig} is the file it was written against: a dormant
+ * emitter's channel is the channel its FIRST caller inherits, and choosing it
+ * now costs one commit while changing it after that caller exists costs a
+ * reader who has already learned the wrong one. The routing rule answers YES
+ * for all four sites on their merits — each reports a thing the caller asked
+ * for and did not get — and that answer does not depend on when the first
+ * caller arrives. What DOES depend on it is the alternate-screen harm, which
+ * is why it is now stated conditionally. The reader who could act on these is
+ * the model as much as the user: a worktree that was not created is a step the
+ * next turn must not assume happened, on the day a next turn can reach one.
+ *
+ * THE DORMANCY IS PINNED RATHER THAN MERELY WRITTEN DOWN, which is the other
+ * half of that doctrine — see
+ * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s
+ * construction-site guard. It reds the day something in `src/` builds one, at
+ * which point the paragraph above becomes true and is to be rewritten to say
+ * so rather than the guard being deleted.
  */
 final class WorktreeManager
 {
@@ -176,7 +253,7 @@ final class WorktreeManager
         // Git writes worktree path to stdout on success; exit code 0 + dir exists = success.
         // Any exit code != 0 or output containing "fatal" indicates failure.
         if ($exitCode !== 0 || str_contains($outputStr, 'fatal')) {
-            error_log("WorktreeManager: git worktree add failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
+            RuntimeNoticeSink::warn("WorktreeManager: git worktree add failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
             throw new \RuntimeException(
                 sprintf('Failed to create worktree for agent "%s": %s', $agentId, $outputStr ?: 'unknown error'),
             );
@@ -248,7 +325,7 @@ final class WorktreeManager
         // Git worktree remove returns exit code 0 on success, but may print to stderr.
         // Any exit code != 0 or output containing "fatal" indicates failure.
         if ($exitCode !== 0 || str_contains($outputStr, 'fatal')) {
-            error_log("WorktreeManager: git worktree remove failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
+            RuntimeNoticeSink::warn("WorktreeManager: git worktree remove failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
         }
 
         // Remove the directory in case git didn't (e.g., dirty worktree was force-removed)
@@ -347,8 +424,14 @@ final class WorktreeManager
      * while the copy resolves against `$repoRoot`, so an outside list cannot name
      * a file the in-repo list could not have named anyway. What it does close is
      * that the outside file is READ at all — `file()` on a path a committed
-     * config value chose — and that its lines then reach `error_log()` through
-     * the pattern refusal below. Two drafts of
+     * config value chose — and that its lines then reach the user through the
+     * pattern refusal below. THAT REFUSAL NO LONGER GOES ONLY TO `error_log()`;
+     * E192 routed all four of this class's diagnostics onto
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, which
+     * writes `error_log()` itself and ALSO puts the row on the mid-session
+     * transcript. The measurement this sentence rests on is unchanged — the
+     * outside file's lines still reach a user-visible diagnostic — and it is
+     * now one the user can actually read with the alternate screen up. Two drafts of
      * {@see \SugarCraft\Crush\Tests\Agents\WorktreeIncludeContainmentTest} asserted
      * on the copy and stayed green with this gate deleted, which is how the
      * distinction was found rather than assumed.
@@ -360,8 +443,8 @@ final class WorktreeManager
      * the value is `.sugar-crush/config.json`'s, and `$repoRoot = ''` is the
      * constructor's own default. MEASURED with that pair and a
      * `worktreeIncludeFile` of `../<a directory beside the CWD>/list`: the outside
-     * file was READ and its line reached `error_log()` through the pattern refusal
-     * below — pinned by
+     * file was READ and its line reached the pattern refusal below (which went to
+     * `error_log()` when this was measured and now goes to the seam as well) — pinned by
      * `WorktreeIncludeContainmentTest::testAnIncludeFileEscapingTheCwdIsRefusedWhenThereIsNoRepoRoot`,
      * which reddens with the old conjunct restored. The gate is now unconditional and
      * the anchor is the tree the path resolves against, CWD included. What it
@@ -408,7 +491,8 @@ final class WorktreeManager
         // `WorktreeManager::new()` and by `new WorktreeManager($config)`.
         // MEASURED on this host with `$repoRoot = ''` and
         // `worktreeIncludeFile: '../outside/list'`: the outside file was READ and
-        // its lines reached `error_log()` through the pattern refusal below —
+        // its lines reached the pattern refusal below — `error_log()` when this
+        // was measured, and since E192 the transcript seam as well —
         // verbatim the harm this gate's own doc-block says it closes.
         //
         // SO THE ANCHOR IS THE TREE THE PATH IS ACTUALLY RESOLVED AGAINST: the
@@ -420,7 +504,7 @@ final class WorktreeManager
         $anchor = $this->repoRoot !== '' ? $this->repoRoot : (getcwd() ?: '');
 
         if (!ContainedPath::within($includeFile, $anchor)) {
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'WorktreeManager: refusing worktreeIncludeFile "%s" — it resolves outside %s (%s), and a file '
                 . 'outside that tree does not list what this worktree wants copied.',
                 $this->config->worktreeIncludeFile,
@@ -539,7 +623,7 @@ final class WorktreeManager
         $srcPath = $srcRoot . '/' . $pattern;
 
         if (!ContainedPath::within($srcPath, $srcRoot) || !self::patternStaysInside($pattern)) {
-            error_log(sprintf(
+            RuntimeNoticeSink::warn(sprintf(
                 'WorktreeManager: refusing .worktreeinclude pattern "%s" — it leaves the source root (%s) or '
                 . 'the worktree (%s).',
                 $pattern,

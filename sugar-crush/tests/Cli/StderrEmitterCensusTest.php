@@ -19,7 +19,9 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * at the emitter, and
  * {@see testNoStderrChannelOutsideTheScannedOnesHasAppeared()} asserts that the
  * remaining ways to acquire a handle on fd 2 — a `php://` stream,
- * `error_log()`'s destination form — are still unused. What is NOT covered: a
+ * `error_log()`'s destination form, and an import that renames one of the
+ * names those channels key on ({@see ALIASABLE_STDERR_NAMES}) — are still
+ * unused. What is NOT covered: a
  * child process this application spawns with fd 2 inherited, which is a
  * property of the spawn and not of a call site here. The sentence held false
  * once already, for channel 5's whole family; see below.
@@ -57,7 +59,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — TWENTY-SEVEN sites across twelve files. MEASURED on this
+ *  3. `error_log(…)` — TWENTY-ONE sites across eleven files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -71,7 +73,15 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     documents all five behind one flag. A fall here is a fall in EMITTERS;
  *     read it as a fall in diagnostics and you will go hunting for four that
  *     were never deleted.
- *     IT FELL AGAIN IN ROUND 47, BY EIGHT, AND AGAIN NO MESSAGE WAS DELETED.
+ *     IT FELL TWICE MORE, BY EIGHT AND THEN BY SIX, AND AGAIN NO MESSAGE WAS
+ *     DELETED. Round 48 (E192) routed `WorktreeManager`'s four and two of
+ *     `SglangProvider`'s three onto the same seam, which is why this channel
+ *     no longer names `src/Agents/WorktreeManager.php` at all. Read the
+ *     absence of a whole file here as six emitters moving, not as six
+ *     diagnostics disappearing: every one of them still reaches stderr,
+ *     because `RuntimeNoticeSink::warn()` calls `error_log()` for them, and
+ *     channel 6 is where they are counted now. Round 47's move, which said the
+ *     same thing one round earlier:
  *     Eight of the two tool-call parsers' diagnostics were routed through
  *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, which
  *     calls `error_log()` itself and then ALSO puts the row on the mid-session
@@ -95,8 +105,8 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — EIGHT
- *     of them, in TWO files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — FOURTEEN
+ *     of them, in FOUR files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -133,11 +143,25 @@ use SugarCraft\Crush\Cli\Bootstrap;
  *     There is none of any shape today. The scanner reads the class token
  *     before `::` and accepts the bare, qualified and fully-qualified
  *     spellings, so all four make a site INVISIBLE rather than mis-attributed
- *     — which is the failure mode rule 14 warns about, and the reason the
- *     `self::`/`static::` shape is not left to the roster alone:
- *     {@see testTheTwoEmitterFunnelsDoNotCountTheSameWrite()} asks
- *     {@see methodCallSites()}, whose alphabet does cover it, whether the sink
- *     calls its own `warn()`.
+ *     — which is the failure mode rule 14 warns about.
+ *     THREE OF THE FOUR ARE NOW BOUNDED RATHER THAN MERELY NAMED (E195), and
+ *     the paragraph above used to stop at naming them. `self::`, `static::`,
+ *     a variable class name and an aliased import are all visible to
+ *     {@see methodCallSites()}, which is keyed on the CALL rather than on the
+ *     receiver, and
+ *     {@see testEveryWarnCallInSrcIsEitherASeamSiteOrOnTheNonSeamRoster()}
+ *     asserts across all of `src/` that the difference between what that
+ *     scanner counts and what channel 6 counts is exactly
+ *     {@see NON_SEAM_WARN_SITES}. A seam write in any of those three spellings
+ *     therefore reds instead of vanishing.
+ *     THE FOURTH — `call_user_func([RuntimeNoticeSink::class, 'warn'], …)` —
+ *     reaches the name as a STRING and no scanner keyed on a call site can see
+ *     it. There is no such site, and E195's own Step judges the instrument not
+ *     worth building until there is; that judgement is recorded on
+ *     {@see NON_SEAM_WARN_SITES} rather than left as a silence.
+ *     The narrower question of whether the sink calls its own `warn()` is
+ *     still asked separately by
+ *     {@see testTheTwoEmitterFunnelsDoNotCountTheSameWrite()}.
  *
  * WHY CHANNEL 5 EXISTS, AND IT IS THIS FILE'S OWN ALPHABET TRAP SPRUNG ON
  * ITSELF. WHAT THE LINE ABOVE SAID: channel 4 is "the roster a user actually
@@ -231,13 +255,24 @@ final class StderrEmitterCensusTest extends TestCase
     private const ERROR_LOG_SITES = [
         'src/Agents/AgentWorkerPool.php' => 1,
         'src/Agents/ForeignAgentPresetRegistry.php' => 2,
-        'src/Agents/WorktreeManager.php' => 4,
+        // WorktreeManager HAD FOUR AND HAS NONE, which is the largest single
+        // move this roster has recorded, and it is the reason to read a fall
+        // here as a fall in EMITTERS rather than in diagnostics: all four of
+        // its messages still reach stderr, through
+        // RuntimeNoticeSink::warn()'s own error_log(), and all four now reach
+        // the transcript too. The file is absent rather than zero because
+        // census() omits files with no sites; testEveryFileTheRostersNameExists()
+        // is what keeps that from hiding a deletion.
         'src/Chat.php' => 1,
         'src/Cli/Bootstrap.php' => 1,
         'src/Commands/CommandLoader.php' => 1,
         'src/Diagnostics/RuntimeNoticeSink.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
-        'src/Providers/SglangProvider.php' => 3,
+        // 3 until round 48 routed the two argument-decode refusals onto the
+        // seam (E192). The one left is flagTruncationRiskInLatestToolResults(),
+        // which PREDICTS a risk rather than reporting a failure — the routing
+        // rule's answer, and that method's doc-block states it.
+        'src/Providers/SglangProvider.php' => 1,
         // 11 and 7 until round 47 routed eight of the eighteen onto the
         // transcript seam through RuntimeNoticeSink::warn(), which error_log()s
         // for them. Channel 6 is where those eight are counted now; not one
@@ -309,9 +344,147 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const RUNTIME_NOTICE_SITES = [
+        // E192, round 48: all four of this class's diagnostics. Its own
+        // doc-block records the per-site decision, including the one that
+        // looks like a recovery and is not — a failed `git worktree remove`
+        // leaves the path registered and `prunable`, so the NEXT
+        // createWorktree() for that agent id is refused.
+        'src/Agents/WorktreeManager.php' => 4,
+        // E192, round 48: the two argument-decode refusals. The third site in
+        // that file stayed on channel 3 — see its entry there.
+        'src/Providers/SglangProvider.php' => 2,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 4,
         'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
     ];
+
+    /**
+     * The names channels 1, 2 and 3 key on, which an alias can rename out from
+     * under them.
+     *
+     * MEASURED, PHP 8.3.6 — and the measurement is that both of these are real,
+     * working PHP rather than a lexer curiosity: `use const STDERR as E;
+     * fwrite(E, "x")` runs and writes to fd 2, and `use function fwrite as w;
+     * w(STDERR, "x")` runs and does the same. Under the first, channel 1 scores
+     * 0 (its scanner needs the token `STDERR` as `fwrite`'s first argument) and
+     * channel 2 scores 1 — for the `use` LINE, not for the write — so three
+     * writes through `E` are one row on the wrong channel. Under the second the
+     * write moves from channel 1 to channel 2, which is milder: the two are
+     * complements over the `STDERR` constant, so the pair stays exhaustive and
+     * the write is mis-filed rather than lost.
+     *
+     * SO THIS IS A CHANNEL AND NOT A REPAIR OF CHANNEL 1. Teaching channel 1 to
+     * follow an alias means a `use`-resolver, which at the token level must
+     * tell an import from a trait `use Foo;` inside a class body — the same
+     * token sequence — and a resolver that gets that wrong INVENTS an alias.
+     * The unscanned-channel scan already exists to say "a way to reach fd 2
+     * that no roster here covers has appeared", and an alias of one of these
+     * three names is exactly that. There is none in `src/` or `bin/` today;
+     * when one arrives it reds, and whoever adds it decides where it is
+     * counted.
+     *
+     * @var list<string>
+     */
+    private const ALIASABLE_STDERR_NAMES = [
+        'fwrite', 'fputs', 'fprintf', 'vfprintf', 'error_log', 'STDERR',
+    ];
+
+    /**
+     * Every function that writes to a stream handed to it as its first
+     * argument, which is what channel 1 actually means by "an `fwrite(STDERR,
+     * …)` site".
+     *
+     * WHAT THE ALPHABET USED TO BE: `fwrite`, alone.
+     *
+     * WHAT IS TRUE NOW, and why a one-name alphabet was the wrong size. PHP
+     * ships `fputs` as an ALIAS of `fwrite` — same function, no import needed,
+     * one token's difference at the call site — so `fputs(STDERR, 'x')` was a
+     * direct fd-2 write that scored 0 on channel 1 and landed on channel 2
+     * instead (MEASURED, PHP 8.3.6), i.e. on the channel whose reasoning treats
+     * a `STDERR` mention as benign because nothing is written through it.
+     * `fprintf`/`vfprintf` take the stream first too. That is rule 11's shape
+     * exactly: the alphabet had been drawn around the aliasing mechanism the
+     * round was already thinking about — `use function fwrite as w` — and it
+     * could not express PHP's own aliases, which need no import at all.
+     *
+     * LATENT AND NOT LIVE. There are no `fputs`, `fprintf` or `vfprintf` calls
+     * in `src/` or `bin/` (MEASURED, PHP 8.3.6), so widening the alphabet moved
+     * no site between channels and changed no roster. It is the next one that
+     * this catches.
+     */
+    private const STREAM_WRITE_FUNCTIONS = ['fwrite', 'fputs', 'fprintf', 'vfprintf'];
+
+    /**
+     * Calls of a method named `warn` in `src/` that are NOT channel-6 sites,
+     * per file.
+     *
+     * THE COMPLEMENT THAT MAKES CHANNEL 6 CHECKABLE (E195). Channel 6's scanner
+     * requires the receiver token — `RuntimeNoticeSink` in one of the three
+     * spellings PHP lexes differently — and that requirement is what makes it
+     * correct AND what makes it blind. MEASURED on PHP 8.3.6, each of these
+     * scans as 0 on channel 6 where the bare spelling scans 1:
+     * `self::warn()`, `static::warn()`, `$c = RuntimeNoticeSink::class;
+     * $c::warn()`, `call_user_func([RuntimeNoticeSink::class, 'warn'])`, and
+     * `use … as Sink; Sink::warn()`. They fail QUIET — the site becomes
+     * INVISIBLE rather than mis-attributed, which is the shape rule 14 warns
+     * about, and it is strictly worse than an over-count: nothing anywhere
+     * reports a number that looks wrong.
+     *
+     * SO EVERY `warn(` CALL IN `src/` IS ACCOUNTED FOR, on channel 6 or here.
+     * {@see methodCallSites()} is receiver-agnostic — its doc-block and its
+     * own known-positive fixture cover `self::`, `static::`, `$this->`, an
+     * aliased import and a variable class name — so the difference between
+     * what it counts and what channel 6 counts is exactly the set of `warn`
+     * calls channel 6 cannot see. Today that difference is one file's three
+     * `$this->warn(` calls, which are a private method of
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} and have no
+     * relation to this seam. A fourth would be a decision, which is the point.
+     *
+     * WHY NOT THE `use`-RESOLVER E195's OWN STEP PRESCRIBED, and this is
+     * measured rather than preferred. That Step says a `use`-statement resolver
+     * in {@see scan()} "would close the alias case and would also strengthen
+     * channels 1, 2 and 5". The channel-5 half is FALSE: channel 5 keys on the
+     * METHOD name plus a scope operator and never looks at the receiver, so an
+     * aliased class cannot hide anything from it — MEASURED, PHP 8.3.6,
+     * `use X\Bootstrap as B; B::warnPermissionConfigOnce("x")` already scans
+     * 1. And a token-level `use` resolver has to tell an IMPORT from a trait
+     * `use Foo;` inside a class body, which is the same token sequence; a
+     * resolver that gets that wrong INVENTS an alias, which is a worse failure
+     * than the blindness it replaces. This closes three of the four shapes with
+     * an instrument that already exists and already has a known-positive.
+     *
+     * THE FOURTH REMAINS OPEN AND IS NAMED RATHER THAN LEFT TO BE FOUND:
+     * `call_user_func([RuntimeNoticeSink::class, 'warn'], …)` reaches the name
+     * as a STRING, so no scanner keyed on a `T_STRING` call site can see it.
+     * There is no site of that shape in `src/` today and E195's own Step judges
+     * it not worth an instrument until there is; this file agrees, and says so
+     * here so that the agreement is a recorded decision rather than an
+     * omission.
+     *
+     * @var array<string, int>
+     */
+    private const NON_SEAM_WARN_SITES = [
+        // Three `$this->warn(` calls on the registry's own private helper.
+        'src/Agents/ForeignAgentPresetRegistry.php' => 3,
+    ];
+
+    /**
+     * The three operators a method call can be spelled with, and the two
+     * partitions of them that
+     * {@see testEveryWarnCallInSrcIsEitherASeamSiteOrOnTheNonSeamRoster()}
+     * measures separately.
+     *
+     * EXHAUSTIVE BY CONSTRUCTION, and asserted to be: a method call in PHP
+     * 8.3.6 reaches its name through `::`, `->` or `?->` and through nothing
+     * else, so the two partitions must sum to the whole. That sum is checked
+     * per file rather than assumed, because a fourth spelling appearing in some
+     * later PHP is exactly the kind of change that would otherwise make both
+     * partitions quietly under-count at once.
+     */
+    private const WARN_CALL_OPERATORS = [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR];
+
+    private const SCOPED_CALL_OPERATORS = [T_DOUBLE_COLON];
+
+    private const INSTANCE_CALL_OPERATORS = [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR];
 
     /**
      * The bracket openers PHP lexes as an ARRAY token while lexing the closer
@@ -476,7 +649,387 @@ final class StderrEmitterCensusTest extends TestCase
             }
             PHP), 'methodCallSites() has gone blind; the assertion above is vacuous');
 
+        // AND THE SAME FIXTURE THROUGH THE PARTITION
+        // {@see testEveryWarnCallInSrcIsEitherASeamSiteOrOnTheNonSeamRoster()}
+        // now measures with, since a partition whose halves are both dead sums
+        // to a correct-looking whole in every file that has no calls at all.
+        // Four of the five are `::` — self, static, an aliased import and a
+        // variable class name, which is every spelling channel 6 cannot read —
+        // and exactly one is `->`.
+        $partitionFixture = <<<'PHP'
+            <?php
+            use A\B\RuntimeNoticeSink as Sink;
+            class A {
+                public static function warn(string $m): void {}
+                public function f(): void {
+                    self::warn('a');
+                    static::warn('b');
+                    $this?->warn('c');
+                    Sink::warn('d');
+                    $c = RuntimeNoticeSink::class;
+                    $c::warn('e');
+                    $callable = self::warn(...);
+                }
+            }
+            PHP;
+        self::assertSame(
+            4,
+            self::methodCallSites('warn', $partitionFixture, self::SCOPED_CALL_OPERATORS),
+            'the scoped half of the partition has gone blind, so a seam write in any `::` spelling '
+                . 'would now pass the roster it is supposed to red',
+        );
+        self::assertSame(
+            1,
+            self::methodCallSites('warn', $partitionFixture, self::INSTANCE_CALL_OPERATORS),
+            'the instance half of the partition has gone blind — `?->` included, which is the spelling '
+                . 'this fixture uses precisely because the bare `->` one is the obvious one to test',
+        );
+
         self::assertArrayNotHasKey('src/Diagnostics/RuntimeNoticeSink.php', self::RUNTIME_NOTICE_SITES);
+    }
+
+    /**
+     * EVERY `warn(` CALL IN `src/` IS EITHER A CHANNEL-6 SITE OR ON
+     * {@see NON_SEAM_WARN_SITES} — see that constant for why (E195).
+     *
+     * WHAT THIS SAID: "THE ASSERTION IS THE DIFFERENCE, PER FILE, and not two
+     * totals. A total would net a new hidden seam call against a removed
+     * `$this->warn(` and report nothing; the per-file identity cannot."
+     *
+     * WHAT IS TRUE NOW, MEASURED rather than reasoned. The per-file identity
+     * nets too, inside a file, and round 48's review demonstrated it: add
+     * `use …\RuntimeNoticeSink as Sink;` to
+     * `src/Agents/ForeignAgentPresetRegistry.php` and turn ONE of its three
+     * `$this->warn(` calls into `Sink::warn(`. That is a working seam write in
+     * the spelling channel 6 is blindest to. {@see methodCallSites()} is
+     * receiver-agnostic and still counts 3; `scan('runtime_notice', …)` still
+     * scores 0; the gap is still 3; the roster still matches. The whole census
+     * ran byte-identical to baseline. The netting was available in that file
+     * precisely BECAUSE it is the only one carrying a non-zero non-seam budget
+     * — there were three calls to displace.
+     *
+     * WHY THIS STILL EARNS ITS PLACE, and what was added rather than removed.
+     * The difference is kept, because its `assertGreaterThanOrEqual()` arm is
+     * the only thing that reds when the two scanners contradict each other. But
+     * the identity is no longer the whole guard: the `warn(` calls are now
+     * PARTITIONED BY OPERATOR and each half pinned against its own roster.
+     * `::warn(` — every spelling of a seam write, `self::`, `static::`,
+     * `$class::` and an aliased import included — must equal
+     * {@see RUNTIME_NOTICE_SITES} per file; `->warn(`/`?->warn(` must equal
+     * {@see NON_SEAM_WARN_SITES}. A hidden seam write now reds TWICE over: it
+     * appears in a file the scoped roster credits with none, and it is missing
+     * from the instance roster it displaced. Displacement is what the old
+     * formulation could not see, and it is the direction a partition closes and
+     * a difference cannot.
+     *
+     * BOTH INSTRUMENTS ARE LOAD-BEARING IN BOTH DIRECTIONS, which is what makes
+     * this something other than an absence assertion. A dead
+     * {@see methodCallSites()} reports 0 for a file the roster credits with 3
+     * and reds; a dead `scan('runtime_notice', …)` makes the gap equal the
+     * whole `warn` count in four files that are supposed to have none and reds.
+     * The fixture at the bottom is still there, because "both would red" is an
+     * argument and the fixture is a measurement — and because it is the only
+     * thing here that demonstrates the blindness this test exists to bound.
+     */
+    public function testEveryWarnCallInSrcIsEitherASeamSiteOrOnTheNonSeamRoster(): void
+    {
+        $gaps = [];
+        $scoped = [];
+        $instance = [];
+
+        foreach (self::sources() as $relative => $absolute) {
+            $source = (string) file_get_contents($absolute);
+            $all = self::methodCallSites('warn', $source);
+            $viaScope = self::methodCallSites('warn', $source, self::SCOPED_CALL_OPERATORS);
+            $viaObject = self::methodCallSites('warn', $source, self::INSTANCE_CALL_OPERATORS);
+
+            self::assertSame(
+                $all,
+                $viaScope + $viaObject,
+                "{$relative}: the two operator partitions no longer sum to every warn() call, so a "
+                    . 'method-call spelling exists that neither roster below can see',
+            );
+
+            if ($viaScope > 0) {
+                $scoped[$relative] = $viaScope;
+            }
+            if ($viaObject > 0) {
+                $instance[$relative] = $viaObject;
+            }
+
+            $gap = $all - self::scan('runtime_notice', $source);
+
+            self::assertGreaterThanOrEqual(
+                0,
+                $gap,
+                "{$relative}: channel 6 counts more RuntimeNoticeSink::warn() sites than there are calls of "
+                    . 'a method named warn() at all. One of the two scanners is wrong; they cannot both be.',
+            );
+
+            if ($gap > 0) {
+                $gaps[$relative] = $gap;
+            }
+        }
+        ksort($gaps);
+        ksort($scoped);
+        ksort($instance);
+
+        // THE PARTITION, WHICH IS WHAT CLOSES DISPLACEMENT. Every `::warn(` in
+        // `src/` is a seam write in SOME spelling — this package has no other
+        // static `warn()` — so the scoped half must be channel 6's roster
+        // exactly. An aliased import, `self::`, `static::` or a variable class
+        // name all land here whether or not `scan('runtime_notice', …)` can
+        // read them, which is the point: this roster is keyed on the CALL and
+        // channel 6's is keyed on the RECEIVER, so a write that hides from one
+        // is counted by the other.
+        self::assertSame(
+            self::RUNTIME_NOTICE_SITES,
+            $scoped,
+            'a `::warn(` call in src/ is not where channel 6 says the seam writes are. Either a seam '
+                . 'write appeared in a spelling channel 6 cannot read (an aliased import, self::, '
+                . 'static::, $class::) — in which case the census is under-counting by that much — or '
+                . 'somebody added a static warn() that is not the sink\'s, which needs its own roster.',
+        );
+
+        self::assertSame(
+            self::NON_SEAM_WARN_SITES,
+            $instance,
+            'an instance `->warn(` call in src/ is not on the non-seam roster. A DISAPPEARING one matters '
+                . 'as much as a new one: round 48 hid a seam write by replacing exactly one of these, and '
+                . 'the difference-based assertion below saw nothing because the totals still balanced.',
+        );
+
+        self::assertSame(
+            self::NON_SEAM_WARN_SITES,
+            $gaps,
+            'a call of a method named warn() in src/ is not a channel-6 site and is not on the non-seam '
+                . 'roster. Either it is somebody else\'s warn() — add it to NON_SEAM_WARN_SITES with a '
+                . 'sentence saying whose — or it is a seam write in one of the spellings channel 6 cannot '
+                . 'see (self::, static::, a variable class name, an aliased import), in which case channel '
+                . '6\'s roster is under-counting by that much and the census is quietly wrong.',
+        );
+
+        // THE BLINDNESS THIS TEST BOUNDS, DEMONSTRATED IN THE SAME TEST rather
+        // than argued. An aliased import is a real seam write that channel 6
+        // scores 0 for; the roster above is what would notice it, and this row
+        // is what proves the two scanners still disagree about it the way the
+        // reasoning above assumes. MEASURED, PHP 8.3.6.
+        $aliased = "<?php\nuse SugarCraft\\Crush\\Diagnostics\\RuntimeNoticeSink as Sink;\nSink::warn('x');\n";
+        self::assertSame(
+            0,
+            self::scan('runtime_notice', $aliased),
+            'channel 6 can now see an aliased import on its own, which is better than this test assumed — '
+                . 'rewrite the reasoning above rather than deleting the row',
+        );
+        self::assertSame(
+            1,
+            self::methodCallSites('warn', $aliased),
+            'the receiver-agnostic scanner has gone blind to an aliased import, so the identity above '
+                . 'cannot detect the shape it exists to detect',
+        );
+    }
+
+    /**
+     * {@see \SugarCraft\Crush\Agents\WorktreeManager} carries FOUR channel-6
+     * sites and NOTHING IN `src/` OR `bin/` CONSTRUCTS IT, so all four are
+     * dormant — and this test is what makes that a pinned fact rather than a
+     * sentence three doc-blocks happen to agree on.
+     *
+     * WHY A DORMANCY GUARD AND NOT A DELETION. "DORMANT IS NOT UNGATED" is this
+     * package's own doctrine — {@see \SugarCraft\Crush\Agents\WorktreeConfig}
+     * is the file it was written against — and a dormant emitter's channel is
+     * the channel its FIRST caller inherits. Round 48 routed all four onto the
+     * seam for that reason, and then wrote two doc-blocks describing them as
+     * firing "while the alternate screen is up", which was a reachability claim
+     * that had never been checked and was false. This guard exists so the next
+     * such sentence is a red rather than a plausible paragraph.
+     *
+     * WHAT IT ASSERTS, in two halves that fail differently. The roster half
+     * pins the four sites; the construction half pins the zero. A file that
+     * starts building one reds here with a message telling the reader which
+     * paragraphs are now out of date, which is the moment to REWRITE them — not
+     * to delete this test.
+     *
+     * WHAT THE SCANNER CANNOT SEE, named rather than left to be found:
+     * `new $class` with the name in a variable. MEASURED on this tree, PHP
+     * 8.3.6, there are SIX such sites and all six are in
+     * `src/Providers/VertexProvider.php`, across four variables —
+     * `$requestClass`, `$clientClass`, `$bodyClass`, `$valueClass` — each
+     * assigned a literal `Google\…` protobuf class-name string earlier in the
+     * same method, so none of them can be this class. (A previous draft of this
+     * sentence said "three lines above the `new`". The six distances are 3, 4,
+     * 4, 4, 4 and 6, so that was one site of six; a line-distance in a comment
+     * rots on the next edit anyway, and naming the variables does not.) Also
+     * invisible:
+     * `(new ReflectionClass(...))->newInstance()` and container resolution,
+     * neither of which this package does.
+     *
+     * A NOTE ON THE LEXER THAT COST A DRAFT OF THIS TEST. In `Foo::new(`, PHP
+     * 8.3.6 lexes `new` as `T_NEW` and not as `T_STRING` — so the project's
+     * canonical `::new()` factory is invisible to every scanner in this file
+     * that keys on {@see callableName()}, {@see methodCallSites()} included.
+     * That is why {@see constructionSites()} matches the factory shape on
+     * `T_NEW` explicitly.
+     *
+     * WHAT THIS SAID: "…and why a naive 'count the `new` tokens' scan of `src/`
+     * reports 285 rather than 6."
+     *
+     * WHAT IS TRUE NOW: no generator produces 285. MEASURED, PHP 8.3.6, token
+     * walk over `src/` plus `bin/sugarcrush`: `T_NEW` tokens number in the
+     * thousands, `T_NEW` followed by a name token slightly fewer, textual
+     * occurrences of `new ` slightly fewer again — and none of the five
+     * candidate readings lands anywhere near 285. The trailing "rather than 6"
+     * was borrowed from a different paragraph two sentences earlier, where 6 is
+     * the `new $variable` count; the fixture below asserts 4, not 6, so the
+     * comparison did not even name this test's own answer.
+     *
+     * WHY THE POINT STILL EARNS ITS PLACE, restated over something that cannot
+     * rot. A cardinality over `src/` written into prose is wrong the moment any
+     * other work merges, which is half of why that figure went unchallenged.
+     * The comparison is therefore made against the FIXTURE below, in the
+     * fixture's own assertion: a bare `T_NEW` count over it is EIGHT where
+     * {@see constructionSites()} answers FOUR. The gap is the whole reason this
+     * scanner discriminates by token shape instead of counting `new`.
+     */
+    public function testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt(): void
+    {
+        self::assertSame(
+            4,
+            self::RUNTIME_NOTICE_SITES['src/Agents/WorktreeManager.php'] ?? 0,
+            'WorktreeManager left channel 6; the dormancy reasoning below is about sites that no longer exist',
+        );
+
+        $built = [];
+        foreach (self::sources() as $relative => $absolute) {
+            $sites = self::constructionSites('WorktreeManager', (string) file_get_contents($absolute));
+            if ($sites > 0) {
+                $built[$relative] = $sites;
+            }
+        }
+        ksort($built);
+
+        self::assertSame(
+            [],
+            $built,
+            'something in src/ or bin/ now constructs a WorktreeManager, so its four seam sites are live. '
+                . 'That is a good change and this is not a request to revert it — but three doc-blocks say '
+                . 'the class is dormant (WorktreeManager\'s own, Bootstrap\'s, WorktreeConfig\'s) and '
+                . 'Chat::subscriptions() says its notices are NOT among the in-turn emitters. Rewrite those '
+                . 'four, then update this test to pin the new reachability instead of the old dormancy.',
+        );
+
+        // KNOWN-POSITIVE THROUGH THE SAME SCANNER IN THE SAME TEST (rule 15).
+        // An assertion of [] proves nothing unless something here proves the
+        // instrument still matches. Round 44 shipped an empty census whose
+        // scanner was dead and stayed green through 18,228 assertions.
+        //
+        // FOUR CONSTRUCTIONS AND FOUR NON-CONSTRUCTIONS, in one fixture: the
+        // bare, fully-qualified and namespace-qualified `new`, plus the
+        // `::new()` factory; against a different class, a `::class` reference,
+        // the DECLARATION of a static method named `new`, and — the shape that
+        // matters most, because it is what `src/` is full of — a `::new()`
+        // factory call on some other class.
+        $fixture = <<<'PHP'
+            <?php
+            use SugarCraft\Crush\Agents\WorktreeManager;
+            $a = new WorktreeManager();
+            $b = new \SugarCraft\Crush\Agents\WorktreeManager($config);
+            $c = Agents\WorktreeManager::new('/repo');
+            $d = new Agents\WorktreeManager($config);
+            $e = new WorktreeConfig();
+            $f = WorktreeManager::class;
+            $g = WorktreeConfig::new();
+            class X { public static function new(): self { return new self(); } }
+            PHP;
+
+        self::assertSame(
+            4,
+            self::constructionSites('WorktreeManager', $fixture),
+            'constructionSites() has gone blind; the empty assertion above is vacuous',
+        );
+
+        // THE NAIVE COUNT, GENERATED HERE RATHER THAN QUOTED. Eight `T_NEW`
+        // tokens against four constructions of this class — the four the
+        // scanner must reject are a different class, that class's `::new()`
+        // factory, the DECLARATION of a static `new()`, and `new self()`. This
+        // is the comparison a `src/`-wide figure used to make in prose, moved
+        // onto something a merge cannot invalidate.
+        $naive = 0;
+        foreach (self::significantTokens($fixture) as $token) {
+            if (\is_array($token) && $token[0] === T_NEW) {
+                $naive++;
+            }
+        }
+        self::assertSame(
+            8,
+            $naive,
+            'the fixture no longer carries eight `new` tokens, so the paragraph above comparing the '
+                . 'naive count against this scanner\'s four is describing a fixture that is gone',
+        );
+
+        // AND IT MUST NOT SEE A DOC-COMMENT. `WorktreeManager`'s own doc-blocks
+        // mention `new WorktreeManager()` and `WorktreeManager::new($repoRoot)`
+        // five times between them (MEASURED, this tree) — a guard that read
+        // them would red on its own explanation of why it is green.
+        //
+        // ONE COMMENTED CONSTRUCTION AND ONE LIVE ONE, ASSERTING *ONE*, and not
+        // a comment-only fixture asserting zero. A comment-only fixture cannot
+        // discriminate here and the first draft of this test shipped one:
+        // `token_get_all()` returns a whole comment as a SINGLE `T_DOC_COMMENT`
+        // or `T_COMMENT` token (MEASURED, PHP 8.3.6), so a `T_NEW` never
+        // appears inside one and NO mutation of this scanner's comment handling
+        // can make an all-comments source answer anything but zero. Mutating
+        // `significantTokens()` out of {@see constructionSites()} entirely left
+        // that assertion green. Asserting ONE fails in both directions instead:
+        // a grep-shaped reimplementation counts the comments and answers two,
+        // a dead scanner answers zero.
+        self::assertSame(1, self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            /** Built by `new WorktreeManager()` or `WorktreeManager::new($root)`. */
+            // new WorktreeManager();
+            $live = new WorktreeManager();
+            PHP), 'constructionSites() no longer separates a commented constructor from a called one');
+    }
+
+    /**
+     * AN ANONYMOUS CLASS NAMING THE TARGET IN ITS HEADER IS A FAILURE, NOT A
+     * ZERO — the third of this file's refusals, alongside
+     * {@see testTheDepthWalkRedsOnAnOpenerItDoesNotRecognise()} and
+     * {@see testTheAliasScanRedsOnAnImportThatNeverTerminates()}, and here for
+     * the same reason: `new class extends WorktreeManager {}` constructs a
+     * subclass, which lights the four seam sites exactly as thoroughly as
+     * constructing the class itself, and it is the one construction shape
+     * {@see constructionSites()} cannot attribute.
+     *
+     * NOT REACHABLE FROM THE CENSUS TODAY, which is why it needs its own test:
+     * a token walk over `src/` and `bin/` found no `new class` at all when this
+     * was written (MEASURED, PHP 8.3.6), so nothing else in this suite fires
+     * the throw and an unfired throw is an assumption rather than a guard. The
+     * file count that walk covered is deliberately NOT recorded here: a
+     * cardinality over `src/` written into prose is wrong the moment any other
+     * work merges, and this claim does not need one to stand up.
+     *
+     * THE NEGATIVE HALF MATTERS AS MUCH. An anonymous class that does NOT name
+     * the target must still answer, or the refusal would make every future
+     * `new class` in this package unmeasurable — so the same shape extending
+     * something else scans quietly, and the live construction beside it is
+     * still counted.
+     */
+    public function testTheConstructionScanRedsOnAnAnonymousClassItCannotAttribute(): void
+    {
+        self::assertSame(1, self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            $other = new class ($arg) extends WorktreeConfig implements Countable {};
+            $live = new WorktreeManager();
+            PHP), 'an anonymous class extending something else now derails the walk');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot attribute');
+
+        self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            $x = new class ($config) extends WorktreeManager {};
+            PHP);
     }
 
     public function testThePrefixedWriterRosterIsUnchanged(): void
@@ -538,11 +1091,31 @@ final class StderrEmitterCensusTest extends TestCase
      *
      * This is the only claim of exhaustiveness this file makes, and it is
      * deliberately a narrow one: it does not prove that no other way to reach
-     * fd 2 exists in PHP, it proves that the three OTHER ways this application
+     * fd 2 exists in PHP, it proves that the FOUR other ways this application
      * could plausibly acquire one have not been used. `php://stderr` and
-     * `php://output` opened as streams, and `error_log()`'s three-argument
+     * `php://output` opened as streams; `error_log()`'s three-argument
      * destination form, which routes somewhere channel 3's reasoning about
-     * `ini_get('error_log')` does not cover.
+     * `ini_get('error_log')` does not cover; and — added by E195 — a
+     * `use function`/`use const` import that renames `fwrite`, `error_log` or
+     * `STDERR`, which does not add a way to reach fd 2 so much as take an
+     * existing one out of the other scanners' alphabet. See
+     * {@see ALIASABLE_STDERR_NAMES} for what each of those does to channels 1
+     * and 2, measured.
+     *
+     * AND THE CLAIM IS ONLY AS WIDE AS ITS ALPHABET, which is the thing to
+     * attack before believing it. WHAT THIS SAID, implicitly, by listing the
+     * import-renaming channel as the answer to aliasing: that renaming an
+     * import is how a write becomes unrecognisable. WHAT IS TRUE NOW: PHP
+     * renames two of these itself. `fputs` IS `fwrite`, no import required, and
+     * `fprintf`/`vfprintf` take the stream first as well — so before
+     * {@see STREAM_WRITE_FUNCTIONS} existed, `fputs(STDERR, 'x')` scored 0 on
+     * channel 1 and 1 on channel 2 (MEASURED, PHP 8.3.6), landing on the
+     * channel that reads a `STDERR` mention as benign. The alphabet had been
+     * drawn around the aliasing mechanism the round was thinking about rather
+     * than around the ones the language provides. WHY THE CLAIM STILL EARNS ITS
+     * PLACE: the channels were right, the alphabet was short, and it is the
+     * alphabet that was widened — no channel was added or removed, and no site
+     * in `src/` moved between them.
      *
      * AN ASSERTION OF ZERO IS NOT EVIDENCE, so the positive control is IN THIS
      * TEST and not in the shared provider: round 44 emptied a census in this
@@ -684,6 +1257,31 @@ final class StderrEmitterCensusTest extends TestCase
         $this->expectExceptionMessage('ARRAY_TOKEN_OPENERS');
 
         self::argumentCount($stream, 1);
+    }
+
+    /**
+     * AN IMPORT THE ALIAS SCAN CANNOT FINISH READING IS A FAILURE, NOT A ZERO.
+     *
+     * The twin of {@see testTheDepthWalkRedsOnAnOpenerItDoesNotRecognise()},
+     * and here for the same reason: the throw exists for a source shape no
+     * well-formed file produces, so nothing else in this suite can reach it,
+     * and an unreachable throw that has never been fired is an assumption
+     * rather than a guard. REACHABLE IN ONE PLACE THAT MATTERS THOUGH —
+     * {@see scan()} is also run over the hand-written fixtures in
+     * {@see scannerCases()}, and a fixture whose `use function` line lost its
+     * semicolon would otherwise scan as a quiet 0 and pin nothing.
+     */
+    public function testTheAliasScanRedsOnAnImportThatNeverTerminates(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('never reaches its `;`');
+
+        // NOT a watched name, deliberately, and the first draft of this test
+        // used one and stayed green: an import that matches returns `true` from
+        // the first matching token and never walks to the `;` at all. The throw
+        // is only reachable for an import the walk has to read to the END —
+        // which is exactly the case where a quiet `false` would be a hole.
+        self::scan('other', '<?php use function someOtherThing as w');
     }
 
     /**
@@ -940,6 +1538,29 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a direct write' => ['direct', '<?php fwrite(STDERR, "x");', 1];
         yield 'a namespaced direct write' => ['direct', '<?php \\fwrite(\\STDERR, "x");', 1];
         yield 'a direct write is not indirect' => ['indirect', '<?php fwrite(STDERR, "x");', 0];
+
+        // PHP'S OWN ALIASES OF fwrite(), which need no import and so cannot be
+        // caught by the aliased-import channel. Each of these was a direct fd-2
+        // write scoring 0 on channel 1 and 1 on channel 2 until
+        // {@see STREAM_WRITE_FUNCTIONS} widened the alphabet — landing, that
+        // is, on the channel whose reasoning is "STDERR is mentioned but not
+        // written through, so it is benign".
+        yield 'fputs is fwrite' => ['direct', '<?php fputs(STDERR, "x");', 1];
+        yield 'fputs is not indirect' => ['indirect', '<?php fputs(STDERR, "x");', 0];
+        yield 'fprintf takes the stream first' => ['direct', '<?php fprintf(STDERR, "%s", "x");', 1];
+        yield 'fprintf is not indirect' => ['indirect', '<?php fprintf(STDERR, "%s", "x");', 0];
+        yield 'vfprintf takes the stream first' => ['direct', '<?php vfprintf(STDERR, "%s", $a);', 1];
+        yield 'a namespaced fputs' => ['direct', '<?php \\fputs(\\STDERR, "x");', 1];
+
+        // AND STDERR NOT IN FIRST POSITION IS STILL INDIRECT, which is what
+        // stops the widened alphabet from swallowing channel 2 whole: it is the
+        // POSITION that makes a write, not the function name.
+        yield 'STDERR passed to fputs second is indirect' => ['indirect', '<?php fputs($h, STDERR);', 1];
+
+        // AN IMPORT RENAMING ONE OF THE ALIASES IS STILL THE OTHER CHANNEL'S
+        // JOB, and it now has the names for it.
+        yield 'an import renaming fputs' => ['other', '<?php use function fputs as p;', 1];
+        yield 'an import renaming fprintf' => ['other', '<?php use function Ns\\fprintf as p;', 1];
         yield 'a captured handle' => ['indirect', '<?php $this->err = $err ?? \\STDERR;', 1];
         yield 'a defaulted parameter' => ['indirect', '<?php function f($h = STDERR) {}', 1];
         yield 'STDERR in a comment' => ['indirect', "<?php // fwrite(STDERR, 'x');\n\$x = 1;", 0];
@@ -1030,6 +1651,40 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a php:// output stream' => ['other', '<?php file_put_contents("php://output", $x);', 1];
         yield 'error_log with a destination' => ['other', '<?php error_log("x", 3, "/tmp/f");', 1];
         yield 'plain error_log is not an other channel' => ['other', '<?php error_log("x");', 0];
+        // E195. Both of these RUN and both really write fd 2 (MEASURED, PHP
+        // 8.3.6), which is what makes them a channel rather than a lexer
+        // curiosity.
+        yield 'a const import renaming STDERR' => ['other', '<?php use const STDERR as E; fwrite(E, "x");', 1];
+        yield 'a function import renaming fwrite' => [
+            'other',
+            '<?php use function fwrite as w; w(STDERR, "x");',
+            1,
+        ];
+        yield 'a function import renaming error_log' => [
+            'other',
+            '<?php use function error_log as elog; elog("x");',
+            1,
+        ];
+        yield 'a const import of something else is not a channel' => [
+            'other',
+            '<?php use const PHP_EOL as NL; echo NL;',
+            0,
+        ];
+        yield 'a plain class import is not a const or function import' => [
+            'other',
+            '<?php use A\\B\\STDERR; echo 1;',
+            0,
+        ];
+        yield 'a closure use clause is not an import' => [
+            'other',
+            '<?php $f = function () use ($fwrite) { return $fwrite; };',
+            0,
+        ];
+        yield 'a trait use inside a class body is not an import' => [
+            'other',
+            '<?php trait STDERR {} class A { use STDERR; }',
+            0,
+        ];
         yield 'error_log with a type but no destination' => ['other', '<?php error_log("x", 0);', 0];
 
         // E161's three shapes, as the `other` channel sees them. Each is a
@@ -1268,13 +1923,30 @@ final class StderrEmitterCensusTest extends TestCase
      * {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}'s
      * private method of the same name, and the duplication is recorded rather
      * than resolved: the shared home for it is a test-support trait, and adding
-     * one is outside the file set round 45's lane may touch. Consolidating the
-     * two is a deferred finding. What is NOT duplicated is the risk — this copy
-     * has its own known-positive control, in
+     * one is outside the file set round 45's lane may touch — and outside round
+     * 48's too, which is why E196 is still open. What is NOT duplicated is the
+     * risk: this copy has its own known-positive control, in
      * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()}, and
      * before this method existed the same expression sat inline in
      * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} with no
      * control at all.
+     *
+     * THE DRIFT E196 PREDICTS HAS ALREADY STARTED, AND IT STARTED IN THE PROSE
+     * RATHER THAN IN THE CODE. MEASURED at round 48 by comparing the two
+     * declarations token by token with whitespace and comments dropped: the
+     * bodies are IDENTICAL. The justifications were not — the sibling carried a
+     * paragraph on why the second pattern is `\s+` and not `[ \t]+`, and this
+     * copy did not. It has been brought across rather than left, because the
+     * copy that loses a reason is the copy whose next reader simplifies it. A
+     * consolidation that keeps one implementation and one of the two
+     * justifications would have re-created the same asymmetry in a trait.
+     *
+     * (The instrument that found this was wrong on its first run: anchored on
+     * the token `flattened`, it compared the first CALL site in each file
+     * instead of the declaration, and reported "not identical". Anchoring on
+     * `T_FUNCTION` gave the answer above. Recorded because a comparison harness
+     * that silently compares the wrong two things is the failure this file's
+     * whole subject is about.)
      */
     private static function flattened(string $source): string
     {
@@ -1284,6 +1956,11 @@ final class StderrEmitterCensusTest extends TestCase
         // spans two of them and exists in neither.
         $joined = (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', $source);
 
+        // `\s+` and not `[ \t]+`: the marker strip leaves the newline of any
+        // line it did not match (a bare code line, the last line of a file), and
+        // a sentence that wraps onto one of those would still be split. Caught
+        // by the fixture in the caller, which is the reason the fixture is a
+        // known-POSITIVE and not a smoke test.
         return (string) preg_replace('/\s+/', ' ', $joined);
     }
 
@@ -1389,6 +2066,27 @@ final class StderrEmitterCensusTest extends TestCase
                     $count++;
                 }
 
+                // AN IMPORT THAT RENAMES ONE OF THE NAMES THE STDERR CHANNELS
+                // KEY ON — see self::ALIASABLE_STDERR_NAMES. Detected at the
+                // `use` and not at the call: the call is the thing that has
+                // become unrecognisable, so there is nothing there left to
+                // match on.
+                //
+                // `T_USE` FOLLOWED BY `T_CONST` OR `T_FUNCTION` IS THE WHOLE
+                // DISAMBIGUATION, and it is why this clause does not need the
+                // class-body tracking a general `use`-resolver would. The other
+                // two things spelled `use` cannot take that shape: a closure's
+                // `use` is followed by `(`, and a trait `use` is followed by a
+                // name. A plain `use A\B\C;` class import is not scanned here
+                // either — it cannot rename a function or a constant.
+                if (
+                    \is_array($token)
+                    && $token[0] === T_USE
+                    && self::importsAnAliasableStderrName($significant, $i)
+                ) {
+                    $count++;
+                }
+
                 // error_log()'s THREE-argument form: the destination argument
                 // takes it somewhere channel 3's `ini_get('error_log')` is ''
                 // reasoning does not describe, so it is a separate channel and
@@ -1426,10 +2124,14 @@ final class StderrEmitterCensusTest extends TestCase
                 continue;
             }
 
-            $isFirstArgumentOfFwrite = ($significant[$i - 1] ?? null) === '('
-                && self::callableName($significant[$i - 2] ?? null) === 'fwrite';
+            $isWrittenThrough = ($significant[$i - 1] ?? null) === '('
+                && \in_array(
+                    self::callableName($significant[$i - 2] ?? null),
+                    self::STREAM_WRITE_FUNCTIONS,
+                    true,
+                );
 
-            if ($channel === 'direct' ? $isFirstArgumentOfFwrite : !$isFirstArgumentOfFwrite) {
+            if ($channel === 'direct' ? $isWrittenThrough : !$isWrittenThrough) {
                 $count++;
             }
         }
@@ -1483,10 +2185,10 @@ final class StderrEmitterCensusTest extends TestCase
      * Named rather than left to be discovered, for the reason the class
      * doc-block's channel-6 bullet gives.
      */
-    private static function methodCallSites(string $method, string $source): int
+    private static function methodCallSites(string $method, string $source, ?array $only = null): int
     {
         $significant = self::significantTokens($source);
-        $operators = [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR];
+        $operators = $only ?? self::WARN_CALL_OPERATORS;
 
         $count = 0;
         foreach ($significant as $i => $token) {
@@ -1512,6 +2214,202 @@ final class StderrEmitterCensusTest extends TestCase
         }
 
         return $count;
+    }
+    /**
+     * How many times `$class` is CONSTRUCTED in `$source`: the `new` shapes,
+     * plus this project's canonical `::new()` factory.
+     *
+     * TOKENS AND NOT TEXT, for the reason {@see scan()} gives at length. It
+     * matters more here than anywhere else in this file, because the class this
+     * guard is pointed at documents its own constructor: a `grep`-based version
+     * would red on the prose explaining why it is green.
+     *
+     * MATCHED ON THE LAST NAMESPACE SEGMENT, so `new WorktreeManager`,
+     * `new \SugarCraft\Crush\Agents\WorktreeManager` and
+     * `Agents\WorktreeManager::new(` each count once. The cost of that
+     * shortcut is that a DIFFERENT class of the same short name would count
+     * too; this package has one of each, and a false POSITIVE here reds a
+     * dormancy claim rather than hiding a live one, which is the direction an
+     * over-eager guard should fail in.
+     *
+     * WHY THE FACTORY ARM KEYS ON `T_NEW` AND NOT ON A NAME. In `Foo::new(`,
+     * PHP 8.3.6 lexes `new` as `T_NEW` and not as `T_STRING` — MEASURED on this
+     * box — so {@see callableName()} returns `null` for it and
+     * {@see methodCallSites('new', …)} cannot see the factory at all. The
+     * factory arm therefore matches a `T_NEW` PRECEDED by `T_DOUBLE_COLON` and
+     * reads the class name from the token before that operator. The same rule
+     * is what excludes the factory's own DECLARATION, `public static function
+     * new()`, whose `T_NEW` is preceded by `T_FUNCTION`.
+     *
+     * NO `(` IS REQUIRED ON THE CONSTRUCTOR ARM, because `new Foo;` is legal
+     * PHP and constructs exactly as much as `new Foo()` does. The factory arm
+     * does require one, since `Foo::new` without a call is a syntax error and a
+     * bare `T_NEW` after `::` in any other position is not a construction.
+     *
+     * WHAT IT REFUSES RATHER THAN MISSES: `new class … extends <target>`, which
+     * constructs a subclass and so defeats a dormancy claim just as thoroughly,
+     * but which this walk cannot attribute. It throws rather than answering
+     * zero — a guard that quietly ignores the unparseable has a hole shaped
+     * exactly like the next defect. There are no `new class` sites in `src/` or
+     * `bin/` today (MEASURED, PHP 8.3.6), so the arm is a tripwire and not a
+     * live path. `new $variable` it can neither see nor detect; that hole is
+     * named and measured in {@see
+     * testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt()}.
+     */
+    private static function constructionSites(string $class, string $source): int
+    {
+        $significant = self::significantTokens($source);
+        $count = 0;
+
+        foreach ($significant as $i => $token) {
+            if (!\is_array($token) || $token[0] !== T_NEW) {
+                continue;
+            }
+
+            $previous = $significant[$i - 1] ?? null;
+            if (\is_array($previous) && $previous[0] === T_DOUBLE_COLON) {
+                if (($significant[$i + 1] ?? null) !== '(') {
+                    continue;
+                }
+                if (self::constructedName($significant[$i - 2] ?? null) === $class) {
+                    $count++;
+                }
+
+                continue;
+            }
+
+            $named = $significant[$i + 1] ?? null;
+            if (\is_array($named) && $named[0] === T_CLASS) {
+                self::refuseUnattributableAnonymousClass($significant, $i + 1, $class);
+
+                continue;
+            }
+
+            if (self::constructedName($named) === $class) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * The short class name a `new`-adjacent token denotes, or `null` if the
+     * token names no class at all.
+     *
+     * Deliberately NOT {@see callableName()}, which accepts only `T_STRING` and
+     * `T_NAME_FULLY_QUALIFIED` because the calls it serves are function calls.
+     * A class reference is also spelled `T_NAME_QUALIFIED` — `Agents\Worktree`
+     * — and two of the four constructions this file's own fixture pins arrive
+     * in exactly that shape.
+     */
+    private static function constructedName(array|string|null $token): ?string
+    {
+        if (!\is_array($token)) {
+            return null;
+        }
+        if (!\in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+            return null;
+        }
+
+        $segments = explode('\\', $token[1]);
+        $short = array_pop($segments);
+
+        return $short === '' ? null : $short;
+    }
+
+    /**
+     * Throw if the anonymous class whose `T_CLASS` sits at `$classToken` names
+     * `$class` in its header, since {@see constructionSites()} cannot decide
+     * whether that is a construction of a subclass or an unrelated mention.
+     *
+     * Walks to the `{` that opens the class body, tracking parenthesis depth so
+     * that a constructor argument list is skipped rather than read as a header.
+     * A header that never opens a body is itself unparseable and also throws.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $significant
+     */
+    private static function refuseUnattributableAnonymousClass(
+        array $significant,
+        int $classToken,
+        string $class,
+    ): void {
+        $depth = 0;
+        $total = \count($significant);
+
+        for ($j = $classToken + 1; $j < $total; $j++) {
+            $token = $significant[$j];
+
+            if ($token === '(') {
+                $depth++;
+
+                continue;
+            }
+            if ($token === ')') {
+                $depth--;
+
+                continue;
+            }
+            if ($depth === 0 && $token === '{') {
+                return;
+            }
+            if ($depth === 0 && self::constructedName($token) === $class) {
+                throw new \RuntimeException(
+                    "constructionSites() found `new class` naming {$class} in its header and cannot "
+                        . 'attribute it. Teach it that shape rather than letting it answer zero.',
+                );
+            }
+        }
+
+        throw new \RuntimeException(
+            'constructionSites() found a `new class` header that never opens a body; the token walk '
+                . 'has lost sync with the source it is reading.',
+        );
+    }
+
+    /**
+     * Whether the `use` at `$i` is a `use function`/`use const` import naming
+     * one of {@see ALIASABLE_STDERR_NAMES}.
+     *
+     * Every name token up to the terminating `;` is checked, aliases included:
+     * an import whose ALIAS is `fwrite` is as capable of confusing a reader —
+     * and a future scanner — as one whose target is.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $significant
+     */
+    private static function importsAnAliasableStderrName(array $significant, int $i): bool
+    {
+        $kind = $significant[$i + 1] ?? null;
+        if (!\is_array($kind) || !\in_array($kind[0], [T_CONST, T_FUNCTION], true)) {
+            return false;
+        }
+
+        for ($j = $i + 2; $j < \count($significant); $j++) {
+            $token = $significant[$j];
+            if ($token === ';') {
+                return false;
+            }
+
+            $name = self::callableName($token);
+            if ($name === null && \is_array($token) && $token[0] === T_NAME_QUALIFIED) {
+                $name = $token[1];
+            }
+            if ($name === null) {
+                continue;
+            }
+
+            $segments = explode('\\', trim($name, '\\'));
+            if (\in_array(end($segments), self::ALIASABLE_STDERR_NAMES, true)) {
+                return true;
+            }
+        }
+
+        // A `use` that never terminates is a source this scanner cannot answer
+        // for, and a quiet `false` is the hole rule 14 names.
+        throw new \RuntimeException(
+            'a `use function`/`use const` import opened at token ' . $i . ' never reaches its `;`; '
+                . 'the unscanned-channel scan cannot answer for this source',
+        );
     }
 
     private static function isRuntimeNoticeSinkCall(array $significant, int $i): bool
