@@ -384,7 +384,34 @@ final class StderrEmitterCensusTest extends TestCase
      *
      * @var list<string>
      */
-    private const ALIASABLE_STDERR_NAMES = ['fwrite', 'error_log', 'STDERR'];
+    private const ALIASABLE_STDERR_NAMES = [
+        'fwrite', 'fputs', 'fprintf', 'vfprintf', 'error_log', 'STDERR',
+    ];
+
+    /**
+     * Every function that writes to a stream handed to it as its first
+     * argument, which is what channel 1 actually means by "an `fwrite(STDERR,
+     * …)` site".
+     *
+     * WHAT THE ALPHABET USED TO BE: `fwrite`, alone.
+     *
+     * WHAT IS TRUE NOW, and why a one-name alphabet was the wrong size. PHP
+     * ships `fputs` as an ALIAS of `fwrite` — same function, no import needed,
+     * one token's difference at the call site — so `fputs(STDERR, 'x')` was a
+     * direct fd-2 write that scored 0 on channel 1 and landed on channel 2
+     * instead (MEASURED, PHP 8.3.6), i.e. on the channel whose reasoning treats
+     * a `STDERR` mention as benign because nothing is written through it.
+     * `fprintf`/`vfprintf` take the stream first too. That is rule 11's shape
+     * exactly: the alphabet had been drawn around the aliasing mechanism the
+     * round was already thinking about — `use function fwrite as w` — and it
+     * could not express PHP's own aliases, which need no import at all.
+     *
+     * LATENT AND NOT LIVE. There are no `fputs`, `fprintf` or `vfprintf` calls
+     * in `src/` or `bin/` (MEASURED, PHP 8.3.6), so widening the alphabet moved
+     * no site between channels and changed no roster. It is the next one that
+     * this catches.
+     */
+    private const STREAM_WRITE_FUNCTIONS = ['fwrite', 'fputs', 'fprintf', 'vfprintf'];
 
     /**
      * Calls of a method named `warn` in `src/` that are NOT channel-6 sites,
@@ -1075,6 +1102,21 @@ final class StderrEmitterCensusTest extends TestCase
      * {@see ALIASABLE_STDERR_NAMES} for what each of those does to channels 1
      * and 2, measured.
      *
+     * AND THE CLAIM IS ONLY AS WIDE AS ITS ALPHABET, which is the thing to
+     * attack before believing it. WHAT THIS SAID, implicitly, by listing the
+     * import-renaming channel as the answer to aliasing: that renaming an
+     * import is how a write becomes unrecognisable. WHAT IS TRUE NOW: PHP
+     * renames two of these itself. `fputs` IS `fwrite`, no import required, and
+     * `fprintf`/`vfprintf` take the stream first as well — so before
+     * {@see STREAM_WRITE_FUNCTIONS} existed, `fputs(STDERR, 'x')` scored 0 on
+     * channel 1 and 1 on channel 2 (MEASURED, PHP 8.3.6), landing on the
+     * channel that reads a `STDERR` mention as benign. The alphabet had been
+     * drawn around the aliasing mechanism the round was thinking about rather
+     * than around the ones the language provides. WHY THE CLAIM STILL EARNS ITS
+     * PLACE: the channels were right, the alphabet was short, and it is the
+     * alphabet that was widened — no channel was added or removed, and no site
+     * in `src/` moved between them.
+     *
      * AN ASSERTION OF ZERO IS NOT EVIDENCE, so the positive control is IN THIS
      * TEST and not in the shared provider: round 44 emptied a census in this
      * tree, blinded the scanner, and watched "nothing is stale" pass with
@@ -1496,6 +1538,29 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a direct write' => ['direct', '<?php fwrite(STDERR, "x");', 1];
         yield 'a namespaced direct write' => ['direct', '<?php \\fwrite(\\STDERR, "x");', 1];
         yield 'a direct write is not indirect' => ['indirect', '<?php fwrite(STDERR, "x");', 0];
+
+        // PHP'S OWN ALIASES OF fwrite(), which need no import and so cannot be
+        // caught by the aliased-import channel. Each of these was a direct fd-2
+        // write scoring 0 on channel 1 and 1 on channel 2 until
+        // {@see STREAM_WRITE_FUNCTIONS} widened the alphabet — landing, that
+        // is, on the channel whose reasoning is "STDERR is mentioned but not
+        // written through, so it is benign".
+        yield 'fputs is fwrite' => ['direct', '<?php fputs(STDERR, "x");', 1];
+        yield 'fputs is not indirect' => ['indirect', '<?php fputs(STDERR, "x");', 0];
+        yield 'fprintf takes the stream first' => ['direct', '<?php fprintf(STDERR, "%s", "x");', 1];
+        yield 'fprintf is not indirect' => ['indirect', '<?php fprintf(STDERR, "%s", "x");', 0];
+        yield 'vfprintf takes the stream first' => ['direct', '<?php vfprintf(STDERR, "%s", $a);', 1];
+        yield 'a namespaced fputs' => ['direct', '<?php \\fputs(\\STDERR, "x");', 1];
+
+        // AND STDERR NOT IN FIRST POSITION IS STILL INDIRECT, which is what
+        // stops the widened alphabet from swallowing channel 2 whole: it is the
+        // POSITION that makes a write, not the function name.
+        yield 'STDERR passed to fputs second is indirect' => ['indirect', '<?php fputs($h, STDERR);', 1];
+
+        // AN IMPORT RENAMING ONE OF THE ALIASES IS STILL THE OTHER CHANNEL'S
+        // JOB, and it now has the names for it.
+        yield 'an import renaming fputs' => ['other', '<?php use function fputs as p;', 1];
+        yield 'an import renaming fprintf' => ['other', '<?php use function Ns\\fprintf as p;', 1];
         yield 'a captured handle' => ['indirect', '<?php $this->err = $err ?? \\STDERR;', 1];
         yield 'a defaulted parameter' => ['indirect', '<?php function f($h = STDERR) {}', 1];
         yield 'STDERR in a comment' => ['indirect', "<?php // fwrite(STDERR, 'x');\n\$x = 1;", 0];
@@ -2059,10 +2124,14 @@ final class StderrEmitterCensusTest extends TestCase
                 continue;
             }
 
-            $isFirstArgumentOfFwrite = ($significant[$i - 1] ?? null) === '('
-                && self::callableName($significant[$i - 2] ?? null) === 'fwrite';
+            $isWrittenThrough = ($significant[$i - 1] ?? null) === '('
+                && \in_array(
+                    self::callableName($significant[$i - 2] ?? null),
+                    self::STREAM_WRITE_FUNCTIONS,
+                    true,
+                );
 
-            if ($channel === 'direct' ? $isFirstArgumentOfFwrite : !$isFirstArgumentOfFwrite) {
+            if ($channel === 'direct' ? $isWrittenThrough : !$isWrittenThrough) {
                 $count++;
             }
         }
