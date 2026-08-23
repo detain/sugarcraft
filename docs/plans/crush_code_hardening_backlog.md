@@ -8029,9 +8029,17 @@ the wrong shape of fix: most of them belong to other lanes.
 
 **Status.** Handled by construction instead: `tests/Support/InterpolationOpenerTokenTest.php` derives the
 opener roster from the running interpreter (tokenise real interpolation spellings, keep any array token
-whose text ends in `{`) and requires every brace-walking scanner under `tests/Support/` to name every
-token in it. The deprecated spelling is supplied as a single-quoted SOURCE STRING, so the file never
-compiles it and adds zero occurrences to the census.
+whose text ends in `{`) and requires every brace-walking scanner to name every token in it. The deprecated
+spelling is supplied as a single-quoted SOURCE STRING, so the file never compiles it and adds zero
+occurrences to the census.
+
+**Correction to the Status above, made in the same round.** This entry first said the guard requires every
+brace-walking scanner "under `tests/Support/`". That was true of the guard as first committed and stopped
+being true two commits later, when the walk was widened to all of `tests/` AND `src/` — that commit's own
+message is *"ITS FILE ALPHABET COULD NOT EXPRESS A LIVE OFFENDER."* Verified at the current head:
+`phpFilesToScan()` walks `['tests', 'src']` from the library root. The backlog is the durable artefact and
+was recording the superseded, narrower scope; the widening is the whole point of the entry, because it is
+what let the guard see the offender in the next entry.
 
 **A hole it had, and closed.** The derivation is only as wide as its own alphabet — mutation M10 deleted
 the `${a}` row and the guard stayed green with a roster of one. Graceful shrinking is the DESIGNED
@@ -8083,3 +8091,32 @@ adopting `Chat/` and `MCP/` for E206. The guard named the site.
 **Step.** The general shape is worth a guard of its own — two same-named private helpers in different
 test directories whose bodies have diverged. Nothing checks for it today, and the lane split makes it
 likelier rather than less likely: a fix lands in whichever copy the round happened to own.
+
+### Eb48-5 — `tests/VhsTapeContractTest.php` is a live brace-walker gap in no lane's file list, and the row recording it is self-deleting
+
+**Recorded 2026-08-23 by round-48 lane b.** Severity: harness / cross-lane coordination. **Measured**, PHP
+8.3.6, at the lane head that added `InterpolationOpenerTokenTest`.
+
+**What.** `VhsTapeContractTest::statements()` and `::callArgument()` are both brace walkers that increment
+depth on `\T_CURLY_OPEN || \T_ATTRIBUTE` and never on `\T_DOLLAR_OPEN_CURLY_BRACES`. Confirmed by reading
+both depth counters: neither names the deprecated opener anywhere. A `"${a}"` in a file either walker
+scans would therefore cost it a level and desynchronise the walk. **Latent, not live** — that syntax
+occurs zero times across `src/` and `tests/` — so this is a two-token fix nobody needs to rush.
+
+**Why it needs an entry of its own rather than a line inside Eb48-2.** The file sits at the ROOT of
+`tests/` and was in no lane's file list for round 48, so lane b could see it but not fix it. It is
+currently recorded only as the single row of `InterpolationOpenerTokenTest::KNOWN_GAPS`, i.e. the
+obligation lives inside another lane's test constant, where nothing outside that lane will look for it.
+
+**It is a merge landmine in BOTH directions, which is the actual reason this is written down.** The
+`KNOWN_GAPS` check runs against the tree in both directions: a row whose file no longer has the gap fails
+with *"Delete its row — a deferral that has been overtaken is how a file silently stops being guarded."*
+So: if nobody fixes `VhsTapeContractTest`, the gap persists unrecorded outside a test constant; and if a
+sibling lane DOES fix it without touching `InterpolationOpenerTokenTest`, lane b's guard goes red on a
+correct change. Whoever fixes the two depth counters must delete the `KNOWN_GAPS` row in the same
+change-set.
+
+**Step.** Add `\T_DOLLAR_OPEN_CURLY_BRACES` to both depth conditions in `tests/VhsTapeContractTest.php`,
+and delete the `tests/VhsTapeContractTest.php` row from
+`tests/Support/InterpolationOpenerTokenTest.php::KNOWN_GAPS` in the same commit. Needs an owner assigned,
+since the two files were in different lanes' lists.
