@@ -13,6 +13,7 @@ use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Tools\Tool;
@@ -25,16 +26,31 @@ use SugarCraft\Crush\Tools\ToolResult;
  * CLASSIFIES THEM LIVES IN A DIFFERENT CLASS (E210, E211).
  *
  * {@see Runtime::gate()} is the engine-path producer of a denial reason and
- * {@see Chat::DENIED_ERROR_PREFIXES} is the roster two surfaces read to decide
+ * {@see DenialKind} is the roster two surfaces read to decide
  * whether a tool result is a REFUSAL (a call that never ran, drawn struck
  * through by {@see \SugarCraft\Crush\Renderer::renderToolResults()} and listed
  * in a `--output-format json` document's `refusals` array by
  * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()}) or an ordinary
  * tool ERROR (a call that ran and failed, which the model is expected to act
  * on). The producer does not READ that roster and deliberately does not — see
- * {@see Runtime::DENIAL_HOOK}'s doc-block for the measured reason, which is
- * that reading it would autoload `Chat` on the first gated tool call of every
- * run including the `-p` path that exists to avoid building one.
+ * {@see Runtime::DENIAL_HOOK}'s doc-block for the measured reason.
+ *
+ * THE ROSTER MOVED, AND HALF THE REASON THIS FILE EXISTS WENT WITH IT (E239).
+ * WHAT THIS DOC-BLOCK SAID: that the roster is `Chat::DENIED_ERROR_PREFIXES`,
+ * and that `Runtime` cannot read it because doing so would autoload `Chat` on
+ * the first gated tool call of every run, including the `-p` path that exists
+ * to avoid building one. WHAT IS TRUE NOW: the roster is {@see DenialKind}, a
+ * dependency-free enum in `src/Permissions/`, and that autoload objection no
+ * longer applies to it — `Chat::DENIED_ERROR_PREFIXES` is a projection of the
+ * enum, and {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()}
+ * already classifies against the enum instead (MEASURED, PHP 8.3.6: that path
+ * no longer loads `Chat` at all). WHY THIS FILE STILL EARNS ITS PLACE:
+ * `src/Runtime.php` was owned by a different concurrent lane when the leaf
+ * landed, so `Runtime`'s three `DENIAL_*` constants are STILL three string
+ * literals and still a copy. Until they are re-pointed at the enum's cases,
+ * this file is the only thing making that copy loud. The day they are, the
+ * membership test below becomes a tautology and should be deleted with them —
+ * not before.
  *
  * WHAT IS LEFT WHEN A PRODUCER DOES NOT READ ITS ROSTER is a copy that can
  * drift, and the drift is silent in the worst direction: a prefix
@@ -348,6 +364,122 @@ final class DenialPrefixRosterTest extends TestCase
         );
     }
 
+    // ── one spelling, in one file ────────────────────────────────────────
+
+    /**
+     * THE FILES IN THE DENIAL FAMILY THAT MUST SPELL NOTHING, and the one that
+     * must spell everything.
+     *
+     * Named files rather than a walk of `src/`, and that is a measurement
+     * rather than timidity. Running {@see denialLiteralsIn()} over the whole
+     * of `src/` on PHP 8.3.6 returns a fourth file —
+     * `src/Agents/TaskBlockedException.php`, whose `'Task creation blocked: '`
+     * is an exception message and matches the vocabulary's `block(ed)?` term.
+     * It is not a tool-result prefix and is not on any roster, so a whole-tree
+     * scan would red this guard on a string that is entirely correct. The
+     * value here is per-file and not a total, so a lane adding a file to
+     * `src/` cannot move it (E-rule 18).
+     *
+     * @var array<string, int>
+     */
+    private const FAMILY_SPELLINGS = [
+        // The leaf. Three cases, three backing values, and nothing else.
+        'src/Permissions/DenialKind.php' => 3,
+        // The TUI model. Was three hand-rolled producers plus a roster of
+        // three literals; is now zero (E236/E239).
+        'src/Chat.php' => 0,
+        // The two classifiers. Both were already zero before E239 and this
+        // pins that they stay that way: a consumer that spells a prefix is a
+        // consumer that has stopped agreeing with the roster.
+        'src/Renderer.php' => 0,
+        'src/Cli/NonInteractive.php' => 0,
+        'src/Cli/HeadlessPermissionPrompt.php' => 0,
+    ];
+
+    /**
+     * EVERY DENIAL PREFIX IN THE FAMILY IS SPELLED IN `DenialKind` AND NOWHERE
+     * ELSE (E239).
+     *
+     * THE POSITIVE ROW IS THE CONTROL, AND IT IS NOT A SEPARATE FIXTURE. Four
+     * of the five expectations below are ZERO, and a zero is what a dead
+     * scanner returns too — the shape that let round 48 ship a comment fixture
+     * proving nothing. The `DenialKind.php` row runs through the identical
+     * path (same `file_get_contents`, same {@see denialLiteralsIn()}) and
+     * expects THREE, so a scanner that stopped matching, a path that stopped
+     * resolving, or a token kind that stopped being read all red this test on
+     * that row before the four zeros can lie.
+     *
+     * The positive row asserts the VALUES and not merely the count, because a
+     * scanner returning three of the wrong strings would satisfy a count.
+     */
+    public function testTheLeafIsTheOnlyFileInTheFamilyThatSpellsADenialPrefix(): void
+    {
+        foreach (self::FAMILY_SPELLINGS as $relative => $expected) {
+            $found = self::denialLiteralsIn(self::sourceOf($relative));
+
+            self::assertCount(
+                $expected,
+                $found,
+                "{$relative} spells " . \count($found) . ' denial-shaped literal(s) and should spell '
+                . "{$expected}: " . var_export($found, true) . '. Every prefix belongs to a '
+                . 'DenialKind case; a second spelling is a second definition, and the one that drifts '
+                . 'renders a BLOCKED call as an ordinary tool ERROR on both surfaces',
+            );
+        }
+
+        self::assertSame(
+            DenialKind::prefixes(),
+            self::denialLiteralsIn(self::sourceOf('src/Permissions/DenialKind.php')),
+            'the three literals in the leaf are no longer the three case values the leaf exposes, so the '
+            . 'zero expectations above were checked by a scanner that is looking at the wrong thing',
+        );
+    }
+
+    /**
+     * AND THE PROJECTION HAS NOT DRIFTED FROM THE ENUM.
+     *
+     * `Chat::DENIED_ERROR_PREFIXES` is declared as three
+     * `DenialKind::Case->value` constant expressions rather than three
+     * literals, which makes drift impossible by construction TODAY — but it is
+     * `public const` on a class an embedder reads, so someone re-spelling it
+     * as literals is a one-line edit that nothing else in the tree would
+     * notice. Compared with `assertSame`, so ORDER is pinned too: at least one
+     * consumer iterates the constant.
+     */
+    public function testChatsPublicRosterIsStillTheEnumsOwnList(): void
+    {
+        self::assertSame(DenialKind::prefixes(), Chat::DENIED_ERROR_PREFIXES);
+    }
+
+    /**
+     * AND THE CLASSIFIER `Chat` EXPOSES IS THE ENUM'S, for every kind and for
+     * a plain error.
+     *
+     * {@see Chat::isDeniedResult()} now delegates to
+     * {@see DenialKind::classify()}. That delegation is worth pinning at the
+     * BEHAVIOURAL level rather than by reading the body: the renderer, the
+     * headless document and three other test files all call the wrapper, and
+     * a wrapper that stopped agreeing with the enum would put the TUI and the
+     * `--output-format json` document back on two answers.
+     */
+    public function testChatsClassifierAgreesWithTheEnumOnEveryKindAndOnAPlainError(): void
+    {
+        foreach (DenialKind::cases() as $kind) {
+            $text = $kind->reason('something');
+
+            self::assertSame($kind, DenialKind::classify($text), "DenialKind::reason() for {$kind->name} "
+                . 'produces a string its own classify() does not recognise');
+            self::assertTrue(
+                Chat::isDeniedResult(ChatToolResult::error('Bash', $text, 'call_1')),
+                "Chat::isDeniedResult() disagrees with DenialKind on {$kind->name}",
+            );
+        }
+
+        self::assertNull(DenialKind::classify('No such file or directory'));
+        self::assertFalse(Chat::isDeniedResult(ChatToolResult::error('Bash', 'No such file or directory', 'call_1')));
+        self::assertFalse(Chat::isDeniedResult(ChatToolResult::ok('Bash', 'Permission denied: not an error at all', 'call_1')));
+    }
+
     // ── harness ──────────────────────────────────────────────────────────
 
     /**
@@ -375,7 +507,20 @@ final class DenialPrefixRosterTest extends TestCase
     /** The raw text of `src/Runtime.php`, or a loud failure. */
     private static function runtimeSource(): string
     {
-        $path = \dirname(__DIR__) . '/src/Runtime.php';
+        return self::sourceOf('src/Runtime.php');
+    }
+
+    /**
+     * The raw text of one repo-relative source file, or a loud failure.
+     *
+     * Throws rather than returning `''` (rule 14). An unreadable file is a
+     * question this guard cannot answer, and `''` scans to zero literals —
+     * indistinguishable from the clean result four of the five
+     * {@see self::FAMILY_SPELLINGS} rows expect.
+     */
+    private static function sourceOf(string $relative): string
+    {
+        $path = \dirname(__DIR__) . '/' . $relative;
         $source = @file_get_contents($path);
         if ($source === false) {
             throw new \RuntimeException("{$path} could not be read; this guard cannot answer for it");
