@@ -478,6 +478,16 @@ final class DenialPrefixRosterTest extends TestCase
         self::assertNull(DenialKind::classify('No such file or directory'));
         self::assertFalse(Chat::isDeniedResult(ChatToolResult::error('Bash', 'No such file or directory', 'call_1')));
         self::assertFalse(Chat::isDeniedResult(ChatToolResult::ok('Bash', 'Permission denied: not an error at all', 'call_1')));
+
+        // OPENS WITH, NOT CONTAINS. A `Bash` that RAN and printed the OS's own
+        // "Permission denied" is an ordinary failure the model is expected to
+        // act on; classifying it as a refusal would strike it through in the
+        // TUI and tell a JSON consumer the call never happened. Without this
+        // pair, substituting `str_contains` for `str_starts_with` inside
+        // DenialKind::classify() is a surviving mutation.
+        $midString = 'cat: /root/.ssh/id_rsa: Permission denied: consult your administrator';
+        self::assertNull(DenialKind::classify($midString));
+        self::assertFalse(Chat::isDeniedResult(ChatToolResult::error('Bash', $midString, 'call_1')));
     }
 
     // ── harness ──────────────────────────────────────────────────────────
