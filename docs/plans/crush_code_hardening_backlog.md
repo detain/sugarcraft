@@ -11128,6 +11128,34 @@ cannot read as a clean one, and three copies of that arm is three places for it 
 
 ---
 
+### E364 — the additive assertion LOWER BOUND is only a bound if the merge neither adds nor removes
+
+**Recorded 2026-08-24 by the supervisor at the round-51 merge.** Severity: process. **First violation of a
+bound that had held for nine rounds, and the cause is the supervisor's own merge-time edit.**
+
+**What happened.** Round 51's lanes measured `+1`, `+27` and `+41` tests and `+9`, `+182`, `+815`
+assertions over `9661 / 142165`. Predicted: tests `9730` exactly, assertions **at least** `143171`.
+Measured at the merge: `9730 / 143168 / 1 skipped / rc 0`. Tests exact for the ninth consecutive round;
+**assertions THREE BELOW the floor of the bound.**
+
+**Why, exactly.** The merge red on lane c's `NonBlockingVocabularyTest`, whose roster listed two
+contradictory sentences in a file lane a owns — and lane a had fixed them. The guard's own failure message
+prescribed the resolution: delete the rows. **Deleting two data rows removes the assertions those rows
+generated.** 143171 − 3 = 143168.
+
+**The rule this establishes.** "Predict assertions as a LOWER BOUND" (E191) assumes the merge is
+monotonic — that composition can only ADD assertions (a census absorbing a sibling's new sites) and never
+remove them. **A merge-time resolution that DELETES roster or fixture data breaks the bound downward, and
+that is not a defect, it is the guard working.** State the direction with the prediction: a bound is a
+LOWER bound *given no merge-time deletions*, and when a deletion is made, adjust the bound by the deleted
+rows' assertion cost and say so.
+
+**Step.** At merge, after resolving any red, recompute the expected assertion figure from the lane deltas
+MINUS the cost of anything the resolution deleted, before comparing to the measured total. Do not report a
+bound violation without first checking whether the merge itself removed assertions.
+
+---
+
 ### E334 — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: brief accuracy, on the item's whole subject.
