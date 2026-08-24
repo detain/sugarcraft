@@ -10343,3 +10343,56 @@ token after the record marker is safe against the line protocol — but
 wants its own step rather than riding on a roster refactor.
 
 ---
+
+## Ea49-5 — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
+
+`Chat::invokeTool()`'s `catch (\Throwable $e)` returns
+`ToolResult::error($name, $e->getMessage(), $toolCall->id)` — the message VERBATIM, with no prefix of
+its own — and `Chat::isDeniedResult()` reads exactly that field and hands it to
+`DenialKind::classify()`. So any tool whose exception message OPENS with `Permission denied:`,
+`Permission required:` or `Hook denied:` is drawn struck through in the TUI and listed in a
+`--output-format json` document's `refusals` array as a call that never ran — when in fact it ran and
+failed. Verified at round 49 on PHP 8.3.6: `isDeniedResult()` reads `$result->error`; the catch is
+generic, so the throwing class need not name anything the round-49 co-occurrence guard can see.
+
+The engine path is NOT affected and that asymmetry is the interesting part: `Runtime::executionFailure()`
+wraps a throw as `Error: %s failed with %s: %s`, so a forged prefix there is defused by the wrapper. The
+TUI-side callback has no such wrapper.
+
+Nothing in `src/` spells a roster prefix today (the whole-`src/` map in `DenialPrefixRosterTest` asserts
+it), so this is not currently reachable from a built-in tool. It IS reachable from an MCP tool, a
+`Skill`, or any exception text that quotes an OS error — the direction of the failure is that a call the
+model DID make is reported to a machine consumer as one that never happened.
+
+**Step.** Either prefix the caught message the way `Runtime::executionFailure()` does, or classify on a
+typed field rather than on free text (`ToolRefusal` already exists and carries a `DenialKind`). Deferred
+here rather than fixed because both options change a model-visible string, which is a behaviour change
+wanting its own step and its own golden-file pass — and functionality comes before hardening.
+
+---
+
+## Ea49-6 — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
+
+Round 49 widened it twice (round-49 implement pass: the `^` anchor and the `[a-z]+` verb; round-49 fix
+pass: `declined`, `prohibited`, `vetoed`, `barred`, plus a case-variant rule and per-frame judging). Both
+widenings were found by someone thinking of a word that was not on the list, which is the point: the
+guard's coverage IS its alphabet, and its alphabet is written to match the cases already known.
+
+MEASURED on PHP 8.3.6 at round 49 (fix pass): with the current list, a dead `private const` in
+`src/Permissions/ToolRefusal.php` carrying `Tool call declined:`, `Tool call prohibited:`, `Vetoed:` or
+`permission denied:` all SURVIVED `--filter DenialPrefixRoster`; all four are KILLED now. The next
+invented verb that is not on the list survives in exactly the same way.
+
+Also recorded, so it is not rediscovered: widening the frame's opener from `[A-Z]` to `[A-Za-z]` — the
+obvious general fix — was measured and NOT taken. Over 200,000 random strings from a 21-token alphabet
+of this tree's own denial words, four seeds (49491 / 20260824 / 777 / 1), the `(?<![A-Za-z])` lookbehind
+changes the verdict 639-691 times with the capitalised opener and ZERO times with a widened one: a
+lowercase-permitted frame always has its leftmost match at a word start, so widening leaves a
+live-looking assertion in the pattern doing nothing.
+
+**Step.** The only structural fix is to stop guessing at vocabulary — e.g. require every producer of a
+tool-result error to go through a factory that names a `DenialKind` or explicitly declines to, so the
+guard becomes "no raw error strings" rather than "no strings that look like denials". That is a
+tree-wide change and wants its own plan.
+
+---
