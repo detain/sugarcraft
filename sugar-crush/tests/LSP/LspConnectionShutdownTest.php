@@ -49,6 +49,15 @@ final class LspConnectionShutdownTest extends TestCase
      */
     private const BOUND_SECONDS = 4.0;
 
+    /**
+     * Tighter than {@see BOUND_SECONDS}, because {@see __destruct()} has no
+     * protocol phase to pay for: it is the ~1.0s SIGTERM grace plus the reap,
+     * and nothing else. Sized to sit between that and the 8.0s request timeout
+     * {@see testDroppingTheLastReferenceKillsTheServer()} configures precisely
+     * so a destructor that sends `shutdown` cannot slip under it.
+     */
+    private const DESTRUCTOR_BOUND_SECONDS = 3.0;
+
     private string $tempDir = '';
 
     /** @var list<int> pids a fixture reported for itself, killed on the way out */
@@ -156,7 +165,17 @@ final class LspConnectionShutdownTest extends TestCase
      */
     public function testDroppingTheLastReferenceKillsTheServer(): void
     {
-        $connection = $this->connectedOver(self::STUBBORN_SERVER);
+        // A DELIBERATELY LARGE REQUEST TIMEOUT, and it is the whole point of the
+        // second assertion. The destructor must reach the teardown ladder
+        // WITHOUT sending `shutdown` first, so the two behaviours have to be
+        // separable on the clock: with this timeout, a destructor that speaks
+        // the protocol against a fixture that never answers pays
+        // 8s + the ~1s ladder, while the correct one pays only the ladder.
+        // At the file's default of 2.0s the two were 3.0s and 1.0s, both under
+        // BOUND_SECONDS — and MEASURED, a mutation swapping `stopProcess()` for
+        // `disconnect()` in the destructor SURVIVED. The window was the fault,
+        // not the mutation.
+        $connection = $this->connectedOver(self::STUBBORN_SERVER, 8.0);
         $pid = $this->selfReportedPid();
         $this->assertTrue($this->isAlive($pid), 'the fixture server must be running before the drop');
 
@@ -171,12 +190,15 @@ final class LspConnectionShutdownTest extends TestCase
             . 'abandons a RUNNING child (0.000s, state S) instead of waiting for it',
         );
 
-        // And the destructor must be bounded too — it must not have grown the
-        // 30s `shutdown` protocol round trip that disconnect() performs.
         $this->assertLessThan(
-            self::BOUND_SECONDS,
+            self::DESTRUCTOR_BOUND_SECONDS,
             $elapsed,
-            sprintf('__destruct() took %.2fs; it must not speak the LSP shutdown protocol', $elapsed),
+            sprintf(
+                '__destruct() took %.2fs against an 8.0s request timeout; it must run the bounded '
+                . 'teardown ladder directly and must NOT speak the LSP shutdown protocol, which would '
+                . 'put a request timeout at whatever arbitrary point the last reference is dropped',
+                $elapsed,
+            ),
         );
     }
 
@@ -367,14 +389,14 @@ final class LspConnectionShutdownTest extends TestCase
      * `connect()` already sets the `initialized` flag that `disconnect()`
      * branches on — so the path under test is reached without it.
      */
-    private function connectedOver(string $source): LspConnection
+    private function connectedOver(string $source, float $requestTimeout = 2.0): LspConnection
     {
         $script = $this->tempDir . '/server.php';
         file_put_contents($script, $source);
         @unlink($this->pidFile());
 
         $connection = new LspConnection($script, [$script, $this->pidFile()]);
-        $connection->connect(PHP_BINARY, [], null, 2.0);
+        $connection->connect(PHP_BINARY, [], null, $requestTimeout);
         $this->assertTrue($connection->isConnected(), 'the fixture server must have started');
 
         $this->selfReportedPid();
