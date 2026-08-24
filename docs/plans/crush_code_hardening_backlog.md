@@ -8592,3 +8592,136 @@ has no generator to catch it.
 
 ---
 
+
+### Ed49-1 — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: harness correctness. **Measured**, PHP 8.3.6.
+**Recorded as `KNOWN_GAPS` rows, not fixed** — none of the three files is in any lane's list.
+
+**How they were found, which is the entry rather than the files.** E233's fix closed
+`tests/VhsTapeContractTest.php`. That left `InterpolationOpenerTokenTest::KNOWN_GAPS` empty and the guard
+apparently complete. It was not: its SELECTION predicate is "names `T_CURLY_OPEN` as code", which is a
+brace walker whose author already knew the problem existed. **A walker that counts depth on the BARE
+one-byte strings `'{'` and `'}'` names no token constant at all and was invisible by construction.** The
+alphabet was the set of files that already agreed with the guard — rule 11, in a file whose own doc-block
+had said so twice.
+
+**The widened predicate** — a comparison operator adjacent to a one-byte `'{'` literal AND to a `'}'` one,
+token-based — finds exactly three under `tests/` and zero false positives among the seven walkers the old
+predicate already covered. Generator: `scratchpad/r49d/bare.php`.
+
+**`tests/Cli/BootstrapLaunchFormatConstantsTest.php` FAILS OPEN, and that is why this is severity-real.**
+`methodBody()` counts on the bare `'{'` over a `token_get_all()` stream, where `T_CURLY_OPEN` is an ARRAY
+token that never `===` the bare string while its closer IS the bare string — so the count goes one closer
+over and the body ends early. It misses **the everyday `{$x}` spelling**, not only the deprecated one.
+Measured through the shipped private methods by reflection (`scratchpad/r49d/proof.php`), not a replica:
+one `"{$x}"` inserted into a scanned method cut the body from 16 significant tokens to 6 and made a format
+literal that `testNoMethodThatOwnsANamedFormatAlsoHoldsALiteralOne()` exists to reject **invisible — `[]`
+where the offender should have been**. The direction matters: the sibling assertion
+(`testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt()`) would go RED on truncation, so the file fails
+safe in one direction and open in the other.
+
+**Latent, all three, today.** `scratchpad/r49d/live.php` runs the shipped walk and a corrected one over all
+eight `Bootstrap` methods the file reads: identical on every one, because none carries an interpolation.
+`SlashDispatchTest::dispatchArmNames()` walks `Chat::dispatchCommand()`, which has zero `T_CURLY_OPEN`
+tokens. `ReadmeJsonErrorContractDriftTest` uses `PhpToken` and so handles `T_CURLY_OPEN` **by accident** —
+that token's text IS `{` — and misses only `${`, whose text is `${`.
+
+**Step.** Give each of the three the full opener roster and delete its `KNOWN_GAPS` row in the same
+change-set, exactly as E233 required of `VhsTapeContractTest`. `tests/Cli/` first: it is the one that
+hides a defect rather than inventing one.
+
+### Ed49-2 — the round-49 brief's stated floor does not reproduce, in both figures
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: process. **Measured** at `db90e768`, PHP 8.3.6.
+
+**What the brief said.** "THE SUITE FLOOR AT `db90e768` IS `9445 tests / 132167 assertions / 1 skipped /
+rc 0` — measured by the supervisor at this exact commit, per E167."
+
+**What is true.** A clean `cp -a` lane at `db90e768`, 18/18 in-lane symlinks verified with `is_link`,
+`vendor/bin/phpunit` with no filter: **`9499 tests / 133587 assertions / 1 skipped / rc 0`**. Both figures
+are higher, so this is not a lane missing tests; it is the brief quoting a stale pair. The RESUME section
+of the same round quotes 9497, which is a third number and also not it.
+
+**Why it matters more than it looks.** The floor is the one figure a lane cannot re-derive from anywhere
+else, and it is what a reviewer checks a lane's delta against. A lane that trusts the brief and reports
+"+54 tests" has mis-stated its own change by an order of magnitude.
+
+### Ed49-3 — E232's live instance was already fixed, and the guard built for it had to find its own positive
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
+
+**What E232 said.** `Backend/EngineBackendTest::isRaw()` "was in no lane's file list and kept the bug for a
+full round, one directory away from its fixed twin."
+
+**What is true at `db90e768`.** Round 48 fixed it. The two copies now differ by exactly one token, and that
+token is the temp-name prefix each uses for the stderr file it reads back — a difference that MUST exist,
+per the same round's process-unique-temp-name work. So the guard E232 asked for could not use its own
+motivating case as a known positive: it is now an ACCEPTED row, not an offender. The positive is synthetic
+instead, and goes through the same `driftReport()` the tree does.
+
+**The general point, which is the reusable half.** A guard commissioned by a finding will usually arrive
+after the finding has been fixed. Round 48's E209 hit this and answered it the same way. **Assume the
+motivating instance will be gone and plan the synthetic positive from the start** — otherwise the guard
+ships with its known-positive slot filled by a case that is about to disappear, and the next round deletes
+it as stale.
+
+### Ed49-4 — `DuplicatedTestHelperDriftTest`'s bound is one token, and two is unexplored
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: coverage. **Measured**, PHP 8.3.6.
+
+**What.** The new drift guard flags same-named private helpers in different files whose bodies agree except
+for at most ONE token per side after the common prefix and suffix are trimmed. Twelve names are inside that
+bound and each carries an argued row. Relaxing `DRIFT_BOUND` to 2 or 3 brings in further names; sampled,
+most are `self::` against `$this->`, which is noise — but "most" is not "all" and nothing has checked.
+
+**Why the bound is where it is.** One token is the shape of the defect the guard was commissioned for: the
+whole helper agrees and a single flag, literal or name does not. Widening is a round of its own with rows
+to argue, not a constant to nudge. Generator: `scratchpad/r49d/core.php` prints every cross-file pair with
+its core size, sorted.
+
+**Also unexplored, and stated because the alphabet is the coverage:** protected and public helpers are out
+of scope; a helper copied and RENAMED is out of reach by construction; and two classes in one file are
+never compared (measured: no file in `tests/` declares one private name twice today).
+
+### Ed49-5 — `awaitPromise()`'s two bounds are the one accepted divergence that is behavioural
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
+
+**What.** Of the twelve rows in `DuplicatedTestHelperDriftTest::ACCEPTED_DIVERGENCE`, eleven are spelling —
+a leading `\` on a global call, an FQN against an import, a parameter name, a failure-message string, a
+temp-name prefix that must differ. One is not: `awaitPromise()` waits **10.0** seconds in
+`Backend/EngineBackendTest` and `Integration/UsageWiringTest`, and **15.0** in
+`Integration/StreamingWiringTest`. Both are defensible — a streaming wiring test legitimately needs longer
+than an engine unit test — but a timeout is exactly the thing a copied helper drifts in, and the row is the
+only place anybody would notice a fourth copy arriving with a fourth number.
+
+**Step.** Either extract the helper with the bound as a parameter, or leave the row and let it carry the
+argument. No action is required today; the entry exists so the decision is made deliberately the next time
+a copy is added.
+
+### Ed49-6 — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: cross-lane harness. **Observed**, then reproduced by
+elimination.
+
+**What.** `TeamTest::tearDown()` asserts that the real `~/.sugar-crush` footprint is unchanged across each
+test. During lane d's full run it failed at `TeamTest.php:77` with a diff listing **2,522** entries under
+`/home/my/.sugar-crush/teams/` named `throwing-*`. Re-run alone, the same file is green — 26 tests, 78
+assertions. Nothing in lane d touches `Agents/`.
+
+**Mechanism.** The guard compares a snapshot taken in `setUp()` against one taken in `tearDown()`. `HOME`
+is redirected per test, but the snapshot is of the REAL home, and five lanes run concurrently on one
+machine with one real home. Another lane's `Team` test writing a `throwing-*` directory between this
+lane's two snapshots is indistinguishable from this lane's own test doing it.
+
+**Why it is not simply "flaky".** The guard is correct and worth keeping — it catches a test writing into
+the real home, which is the failure it was built for. What it cannot do is attribute the write. The cheap
+fix is to compare only entries the test's own process could have created (a per-process name prefix is
+already the convention after E242); the expensive one is a per-lane `HOME`.
+
+**Also worth noting:** the 2,522 leftover directories are themselves evidence that something is not
+cleaning up. They were not deleted — sibling lanes were running and a glob delete under a shared home is
+the hazard this round's brief spends a paragraph on.
+
+---
