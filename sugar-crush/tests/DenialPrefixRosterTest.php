@@ -654,9 +654,11 @@ final class DenialPrefixRosterTest extends TestCase
             'src/Permissions/DenialKind.php' => DenialKind::prefixes(),
         ];
 
+        $actual = self::denialLiteralsAcrossSrc();
+
         self::assertSame(
             $expected,
-            self::denialLiteralsAcrossSrc(),
+            $actual,
             'src/ spells a denial-shaped literal somewhere other than the two files that have earned one. '
             . 'Every tool-result prefix belongs to a DenialKind case; a second spelling is a second '
             . 'definition, and the one that drifts renders a BLOCKED call as an ordinary tool ERROR on '
@@ -664,11 +666,19 @@ final class DenialPrefixRosterTest extends TestCase
             . 'exclusion OFF_ROSTER_THROWABLE_SHAPES carries, not a row added here',
         );
 
-        // AND THE FOUR FILES THE OLD MAP NAMED, called out by name so their
+        // AND THE FIVE FILES THE OLD MAP NAMED, called out by name so their
         // absence from the map above is a stated claim rather than something a
         // reader has to notice. These are the roster's two classifiers and the
-        // two surfaces that render its answer; a prefix appearing in any of
-        // them is a consumer that has stopped agreeing with the roster.
+        // surfaces that render its answer; a prefix appearing in any of them
+        // is a consumer that has stopped agreeing with the roster.
+        //
+        // THESE ROWS ARE A RESTATEMENT AND NOT INDEPENDENT COVERAGE, which is
+        // worth saying plainly: whenever the whole-map assertSame above holds,
+        // $expected has exactly two keys and none of these five can be one, so
+        // every row below is unconditionally true. They exist so a reader
+        // grepping for a consumer's path finds the claim, and they read the
+        // map that was already computed -- calling the walk again per row cost
+        // five extra 292-file token_get_all passes for nothing.
         foreach ([
             'src/Chat.php',
             'src/Renderer.php',
@@ -676,7 +686,7 @@ final class DenialPrefixRosterTest extends TestCase
             'src/Cli/HeadlessPermissionPrompt.php',
             'src/Runtime.php',
         ] as $consumer) {
-            self::assertArrayNotHasKey($consumer, self::denialLiteralsAcrossSrc(), "{$consumer} spells a "
+            self::assertArrayNotHasKey($consumer, $actual, "{$consumer} spells a "
                 . 'denial prefix. It is a reader of the roster, not an author of one');
         }
     }
@@ -866,6 +876,17 @@ final class DenialPrefixRosterTest extends TestCase
      * entry; a fourth denial kind SHOULD red this test, because it is a
      * change to a document other people parse.
      *
+     * AND THE PIN LIVES HERE ALONE. The five `kind` assertions in
+     * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest}
+     * are all written `DenialKind::<Case>->token()`, so both sides of each of
+     * them still move together — deliberately, since that file's subject is
+     * the document's SHAPE rather than its vocabulary. MEASURED on PHP 8.3.6
+     * at round 49: `token()` returning `$this->name` produces exactly ONE
+     * failure when this file, that file and
+     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} are run
+     * together, and it is the first assertion below. Do not read those tests
+     * as covering the token.
+     *
      * THE SHAPE IS ASSERTED SEPARATELY FROM THE SET, because the two fail
      * differently: the set catches a respelling, and the lowercase-only shape
      * catches the specific regression of emitting the PHP identifier — which
@@ -888,6 +909,87 @@ final class DenialPrefixRosterTest extends TestCase
 
         self::assertSame($tokens, array_unique($tokens), 'two denial kinds share one token, so a consumer '
             . 'cannot tell them apart at all');
+    }
+
+    /**
+     * AND `README.md` PUBLISHES THE SAME THREE TOKENS AND SAYS THERE ARE
+     * THREE OF THEM.
+     *
+     * THE GAP THIS CLOSES. The doc-block above calls the three strings "the
+     * contract `README.md` publishes", and until round 49 nothing read
+     * `README.md` to check — a fourth denial kind would red the token test and
+     * leave the published document silently wrong, which is the surface an
+     * out-of-process consumer actually writes its parser against. Verified at
+     * round 49: no copy of the `refusals` schema exists under `docs/` or
+     * `bin/`, so `README.md` is the only published one.
+     *
+     * THE NUMERAL IS DERIVED FROM THE ENUM, not spelled here, so this is a
+     * drift guard rather than a second place the cardinality is written down:
+     * add a case and the assertion starts demanding the word `four`.
+     *
+     * AND THE EXTRACTOR CARRIES A KNOWN-POSITIVE (rule 15). Both assertions
+     * below are claims ABOUT a slice of a file, and a slicer that returns the
+     * wrong slice — or a matcher that has stopped matching — fails in the
+     * direction of silence, so a synthetic markdown fixture goes through the
+     * identical helper first.
+     */
+    public function testTheReadmePublishesTheSameThreeKindTokens(): void
+    {
+        // KNOWN-POSITIVE FIRST: the helper really does cut the paragraph out
+        // of a document, and really does fail loudly when it cannot.
+        $fixture = "intro\n\nOne key is **conditional**: FIXTURE-BODY\n\nBefore this,\ntail\n";
+        self::assertStringContainsString(
+            'FIXTURE-BODY',
+            self::refusalsParagraphIn($fixture),
+            'the paragraph extractor cannot find a paragraph it is looking straight at, so its answer for '
+            . 'README.md says nothing',
+        );
+
+        $paragraph = self::refusalsParagraphIn(self::sourceOf('README.md'));
+
+        $numerals = [1 => 'one', 2 => 'two', 3 => 'three', 4 => 'four', 5 => 'five', 6 => 'six'];
+        $count = \count(DenialKind::cases());
+        self::assertArrayHasKey($count, $numerals, 'this guard cannot spell the number of denial kinds');
+        self::assertStringContainsString(
+            'one of exactly ' . $numerals[$count] . ' tokens',
+            $paragraph,
+            "README.md no longer tells a consumer there are {$count} kind tokens, and it is the only place "
+            . 'the refusals schema is published',
+        );
+
+        foreach (DenialKind::cases() as $kind) {
+            self::assertStringContainsString(
+                '`' . $kind->token() . '`',
+                $paragraph,
+                "README.md's refusals paragraph does not name the token '{$kind->token()}', so a consumer "
+                . 'matching on the documented vocabulary drops every refusal of that kind',
+            );
+        }
+    }
+
+    /**
+     * The `refusals` paragraph of a markdown document, or a loud failure.
+     *
+     * Sliced rather than searched whole (rule 14 in spirit): `hook` and
+     * `refused` are ordinary words that appear all over `README.md`, so
+     * matching them against the whole file would pass on a document that had
+     * deleted the schema entirely.
+     */
+    private static function refusalsParagraphIn(string $markdown): string
+    {
+        $open = strpos($markdown, 'One key is **conditional**');
+        if ($open === false) {
+            throw new \RuntimeException('README.md no longer opens the refusals paragraph the way this '
+                . 'guard finds it; the schema may still be published, but this guard cannot answer for it');
+        }
+
+        $close = strpos($markdown, 'Before this,', $open);
+        if ($close === false) {
+            throw new \RuntimeException('README.md no longer closes the refusals paragraph the way this '
+                . 'guard finds it; this guard cannot answer for it');
+        }
+
+        return substr($markdown, $open, $close - $open);
     }
 
     /**
