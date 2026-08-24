@@ -12245,7 +12245,7 @@ there is.
 **Do not fix by reordering alone.** Establish first, by measurement, whether any caller currently depends
 on the empty-string result — a provider error path that has always returned `''` may have a test pinning
 that. Rule 15/25 applies: a fixture whose expected value is what a dead instrument returns proves nothing.
-### Ea52-1 — the resource-id-as-descriptor defect has SIX instances, not three, and one of them is not latent
+### E368 — the resource-id-as-descriptor defect has SIX instances, not three, and one of them is not latent
 
 **Recorded 2026-08-24 by round-52 lane a; AMENDED the same day, after review, by the fix agent.**
 Severity: correctness — five latent, **one live on every `2>file` invocation**. Measured, PHP 8.3.6.
@@ -12364,7 +12364,7 @@ is the wrong number.
 
 ---
 
-### Ea52-2 — three doc-block rows in `StdinConstantReaderCensusTest` describe defects this round closed
+### E369 — three doc-block rows in `StdinConstantReaderCensusTest` describe defects this round closed
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: stale justification. **Out of lane —
 `sugar-crush/tests/StdinConstantReaderCensusTest.php` is on no lane's list this round. Reported, not
@@ -12389,7 +12389,7 @@ a row with no judgement is a row the next reader adds blind.
 
 ---
 
-### Ea52-3 — two family members degrade rather than throw, and nothing pins that they still do
+### E370 — two family members degrade rather than throw, and nothing pins that they still do
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: unpinned invariant. **Verified by symbol. Out of lane
 — `candy-core/src/Util/Tty.php` and `candy-core/src/Util/Tty/WindowsBackend.php`.**
@@ -12415,7 +12415,7 @@ operand order. Leave `WindowsBackend` unjudged for Windows on purpose and say so
 
 ---
 
-### Ea52-4 — `pgrep -f <pattern>` matches the shell that is running the measurement
+### E371 — `pgrep -f <pattern>` matches the shell that is running the measurement
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: methodology. **Measured, PHP 8.3.6 / bash, three
 takes.**
@@ -12457,7 +12457,7 @@ merge. No source file cites one — that is the standing rule, and it is what ma
 
 ---
 
-### Eb52-1 — `LOCK_EX` is not load-bearing for `AuditHook`'s write on any filesystem this box can offer
+### E372 — `LOCK_EX` is not load-bearing for `AuditHook`'s write on any filesystem this box can offer
 
 **Recorded 2026-08-24 by round-49 lane b, from a mutation of its own fix.** Severity: stated bound.
 **Measured**, PHP 8.3.6, Linux, local ext4. Not a defect; recorded because a surviving mutation that is
@@ -12482,7 +12482,7 @@ and a behavioural test becomes possible.
 
 ---
 
-### Eb52-2 — `RuntimeNoticeSink::drain()` de-duplicates, and a "how many notices" assertion measures that instead
+### E373 — `RuntimeNoticeSink::drain()` de-duplicates, and a "how many notices" assertion measures that instead
 
 **Recorded 2026-08-24 by round-49 lane b, from a mutation of its own new test.** Severity: instrument
 trap, general. **Measured** — the mutation survived, then killed after the window was fixed.
@@ -12514,7 +12514,7 @@ unqualified verb is what makes a reader think a drain-per-stimulus test is expos
 
 ---
 
-### Eb52-3 — E346's "five sites each need the token inserted" is wrong: two do
+### E374 — E346's "five sites each need the token inserted" is wrong: two do
 
 **Recorded 2026-08-24 by round-49 lane b, which implemented E346.** Severity: premise correction, minor.
 **Measured** — by making the change and reading which tests went red.
@@ -12534,7 +12534,7 @@ was right and is confirmed by mutation: moving the token BEFORE the marker is ki
 
 ---
 
-### Eb52-4 — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
+### E375 — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: open design question. Verified, not implemented.
 
@@ -12556,7 +12556,7 @@ qualifier, then implement. Until then the two arms are deliberately indistinguis
 
 ---
 
-### Eb52-5 — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
+### E376 — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
 
 **Recorded 2026-08-24 by round-49 lane b, which caused it.** Severity: doc drift, no runtime effect.
 **Measured**, PHP 8.3.6. Not fixed — `src/Cli/HeadlessPermissionPrompt.php` was outside this lane.
@@ -12585,7 +12585,7 @@ review is (rule 16), and this one was measured against the file rather than coun
 
 ---
 
-### Eb52-6 — the one refusal arm whose remedy is invisible is the one whose remedy gets clipped first
+### E377 — the one refusal arm whose remedy is invisible is the one whose remedy gets clipped first
 
 **Recorded 2026-08-24 by round-49 lane b (fix pass), confirming a reviewer NOTE with its own measurement.**
 Severity: observability, not reachable at the production path. Not fixed.
@@ -12618,7 +12618,7 @@ spending the session's context), and `AuditHookRefusalNoticeTest` asserts the re
 
 ---
 
-### Eb52-7 — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
+### E378 — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
 
 **Recorded 2026-08-24 by round-49 lane b, which put the fork there.** Severity: future obligation, no hole
 today. Not fixed — `tests/Support/ForkedChildReaperAdoptionTest.php` is not this lane's file.
@@ -12638,7 +12638,7 @@ One word; the only fork in that directory already satisfies it, so it cannot red
 
 ---
 
-### Eb52-8 — observing the suite floor at a pre-pin commit writes the production audit path that E351 closed
+### E379 — observing the suite floor at a pre-pin commit writes the production audit path that E351 closed
 
 **Recorded 2026-08-24 by round-49 lane b (fix pass), having done it.** Severity: process, self-limiting.
 No code change wanted.
@@ -12662,7 +12662,7 @@ baseline is measured in has the same property, and a reader finding a grown prod
 **Step.** None on the code. When the lanes are merged, remove
 `/tmp/sugar-crush-audit-<euid>/audit.log` on the build box once — no lane can safely do it while siblings
 are still running suites at pre-pin commits, and no lane should glob-delete under `/tmp` in any case.
-### Ec52-1 — E362's mechanism is refuted: a killed child produces a RED, and the RISKY comes from PHPUnit's own per-test limit
+### E380 — E362's mechanism is refuted: a killed child produces a RED, and the RISKY comes from PHPUnit's own per-test limit
 
 **Recorded 2026-08-24 by round-52 lane c, against its own brief.** Severity: diagnosis.
 **Measured, PHP 8.3.6 / PHPUnit 10.5.64.**
@@ -12733,7 +12733,7 @@ abort into an arbitrary LATER test, with a message quoting sixty seconds and no 
 
 ---
 
-### Ec52-2 — two tests asserting an ABSENCE from a child's stderr passed on a child that never ran
+### E381 — two tests asserting an ABSENCE from a child's stderr passed on a child that never ran
 
 **Recorded 2026-08-24 by round-52 lane c. FIXED this round.** Severity: rule-15 hole, live.
 
@@ -12764,7 +12764,7 @@ TO, not "was not killed by the one signal I thought of". `exec()` already return
 
 ---
 
-### Ec52-3 — a control table whose rows all wear ONE grammatical shape left a whole parser walk dead (E360, second instance)
+### E382 — a control table whose rows all wear ONE grammatical shape left a whole parser walk dead (E360, second instance)
 
 **Recorded 2026-08-24 by round-52 lane c, against its own new guard.** Severity: coverage.
 **Measured, PHP 8.3.6. FIXED before it shipped.**
@@ -12782,7 +12782,7 @@ contained one.
 
 ---
 
-### Ec52-4 — `BuiltInToolCorpusTest` hard-codes `src/`'s FILE COUNT, so any lane adding a source file reds it
+### E383 — `BuiltInToolCorpusTest` hard-codes `src/`'s FILE COUNT, so any lane adding a source file reds it
 
 **Recorded 2026-08-24 by round-52 lane c.** Severity: merge hazard, live this round.
 **Measured, PHP 8.3.6, at `b9abd2fb`.**
@@ -12805,7 +12805,7 @@ source file.
 
 ---
 
-### Ec52-5 — the per-file assertion cost, measured per census, and the grep that derived its population had the hole it warns about
+### E384 — the per-file assertion cost, measured per census, and the grep that derived its population had the hole it warns about
 
 **Recorded 2026-08-24 by round-52 lane c** as E354's step (a)/(b) made concrete. Severity: prediction.
 
@@ -12853,7 +12853,7 @@ ONE ADDED `tests/` FILE — **+5 assertions, +0 tests**:
 | `Support/ReflectionLineSliceReaderCensusTest` | +1 |
 
 ONE ADDED `src/` FILE — **+48 assertions and +1 TEST on a run where `BuiltInToolCorpusTest` reds
-(Ec52-4); +53 counting only the classes that stayed green**:
+(E383); +53 counting only the classes that stayed green**:
 
 | census | per added src/ file |
 | --- | --- |
@@ -12868,14 +12868,14 @@ ONE ADDED `src/` FILE — **+48 assertions and +1 TEST on a run where `BuiltInTo
 | `Diagnostics/RuntimeNoticeSinkDeliveryTest` | +2 |
 | `Support/HomeDirectoryPathReaderInventoryTest` | +1 |
 | `Support/NonBlockingVocabularyTest` | +1 |
-| `Tools/BuiltInToolCorpusTest` | **−5, because it FAILS** — see Ec52-4 |
+| `Tools/BuiltInToolCorpusTest` | **−5, because it FAILS** — see E383 |
 
 **The asymmetry is the finding.** A source file costs roughly ten times what a test file costs, moves
 four times as many censuses, adds a TEST as well as assertions, and reds a hard-coded figure on the way
 past. A lane that predicts its merged floor by counting the tests it added will be wrong by ~53 per
 source file a sibling adds.
 
-### Ec52-6 — the E355 sweep over `tests/Cli/`'s two censuses: eight killed, two survivors, both E363's shape
+### E385 — the E355 sweep over `tests/Cli/`'s two censuses: eight killed, two survivors, both E363's shape
 
 **Recorded 2026-08-24 by round-52 lane c. FIXED this round.** Severity: guard coverage.
 **Measured, PHP 8.3.6, each run filtered to the file under mutation — so each verdict is a claim about
@@ -12900,7 +12900,7 @@ loop gets written with an example in mind, and the one after the loop gets writt
 
 ---
 
-### Ec52-7 — `readOrFail()` still has no fixture in three `tests/Config/` files (E357 carried forward)
+### E386 — `readOrFail()` still has no fixture in three `tests/Config/` files (E357 carried forward)
 
 **Recorded 2026-08-24 by round-52 lane c.** Not actioned: `tests/Config/` is not this lane's.
 
@@ -12913,7 +12913,7 @@ fold the three into `RefusesAnUnreadableSourceTrait` and delete the `readOrFail`
 
 ---
 
-### Ec52-8 — a census population with no floor: "at least one file" let a 1-of-N walk report the whole tree clean
+### E387 — a census population with no floor: "at least one file" let a 1-of-N walk report the whole tree clean
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: rule-15 hole, live.
 **Measured, PHP 8.3.6 / PHPUnit 10.5.64.**
@@ -12939,7 +12939,7 @@ population against an independently written enumeration, or anchor it on somethi
 
 ---
 
-### Ec52-9 — a rule-15 control that covers ONE component of four, in a comment claiming it is "the whole instrument"
+### E388 — a rule-15 control that covers ONE component of four, in a comment claiming it is "the whole instrument"
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: rule-15 hole, live.
 
@@ -12953,7 +12953,7 @@ says the control must be IN THE SAME TEST: a sibling is a separately deletable u
 it would see a green suite.
 
 **Fixed** by running the positive fixture through the scanner inside the absence test, adding the
-population cross-check of Ec52-8, and asserting the split hands on everything it was given when it
+population cross-check of E387, and asserting the split hands on everything it was given when it
 reports nothing unresolvable. All four components now mutate to a red **filtered to that single method**.
 
 **Generalise it:** when writing a rule-15 control, enumerate the instrument's components and say which
@@ -12962,7 +12962,7 @@ nobody has counted.
 
 ---
 
-### Ec52-10 — a known-answer table whose refusal rows all collapse to `assertIsString()`
+### E389 — a known-answer table whose refusal rows all collapse to `assertIsString()`
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: instrument hole.
 
@@ -12983,7 +12983,7 @@ decoration and the table only proves the function returned the right TYPE.
 
 ---
 
-### Ec52-11 — the lane bounding child processes added an unbounded child process, in the same round
+### E390 — the lane bounding child processes added an unbounded child process, in the same round
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: hygiene, live.
 
@@ -13000,13 +13000,13 @@ argument. Verified by mutation: with the budget cut to 1s and the child replaced
 fires and names the budget.
 
 **Step, open:** the two budgets are two `private const`s in two files with the same name and the same
-argument, and the third, fourth and fifth spawn sites (Ec52-13) will make three and four. A shared
+argument, and the third, fourth and fifth spawn sites (E392) will make three and four. A shared
 constant plus one ceiling guard would be better than five copies — but a shared test helper is a
 cross-lane edit and the ceiling guard's home is not settled.
 
 ---
 
-### Ec52-12 — the provenance walk cannot see a test method INHERITED from a base class
+### E391 — the provenance walk cannot see a test method INHERITED from a base class
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer.** Severity: coverage gap, unpopulated today.
 
@@ -13027,7 +13027,7 @@ being unpopulated the first time someone writes an abstract test base.
 
 ---
 
-### Ec52-13 — the ten `timeout -s KILL 60` sites, RE-ARGUED under the corrected cost model
+### E392 — the ten `timeout -s KILL 60` sites, RE-ARGUED under the corrected cost model
 
 **Recorded 2026-08-24 by round-52 lane c; supersedes the same lane's earlier deferred framing.**
 
@@ -13037,7 +13037,7 @@ BootstrapHookFileTest.php`, `BootstrapLaunchNoticeRoutingTest.php`,
 `tests/Integration/BinSugarcrushAutoloadGuardTest.php`, `McpToolWiringTest.php`. All outside lane c's
 file list.
 
-**The earlier framing said the payoff is "a red instead of nothing". Under Ec52-1's correction that is
+**The earlier framing said the payoff is "a red instead of nothing". Under E380's correction that is
 wrong: with `failOnRisky="true"` a hang at any of those ten sites ALREADY fails the run.** The payoff is
 smaller and still real — a specific message naming the budget and the child instead of "aborted after 60
 seconds", and the assertions below the spawn kept in the totals rather than shed. **Whoever picks this
