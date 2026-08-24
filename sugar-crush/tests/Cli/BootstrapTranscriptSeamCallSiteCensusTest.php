@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 
 /**
  * How many of {@see \SugarCraft\Crush\Cli\Bootstrap}'s launch warnings are
@@ -52,11 +53,49 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * HOW THE COUNT IS DEFINED. Strip T_WHITESPACE, T_COMMENT and T_DOC_COMMENT
  * from `token_get_all()`, then count every T_STRING equal to the method name
  * that is BOTH preceded by a scope token (`::` or `->`) AND followed by `(`
- * that is not the `(...)` of a first-class callable. Stripping whitespace
+ * that is not the `(...)` of a first-class callable.
+ *
+ * WHAT EACH CLAUSE BUYS, and three of the four sentences that used to answer
+ * this were wrong or unpinned (E228). WHAT IT SAID: "Stripping whitespace
  * first is what makes it survive a call reformatted across lines; requiring
  * the scope token is what excludes the `function` declaration; requiring the
  * paren is what excludes a string reference and a `[self::class, 'name']`
- * callable array.
+ * callable array."
+ *
+ * WHAT IS TRUE NOW, MEASURED clause by clause on PHP 8.3.6 by removing each
+ * one from {@see countSeamCallSites()} and re-running every row of
+ * {@see scanDefinitionCases()}:
+ *
+ *  - THE SCOPE-TOKEN CLAUSE was the one sentence that held. Removing it takes
+ *    `the declaration` and `a bare function of the same name` from 0 to 1, so
+ *    both rows kill it.
+ *  - THE WHITESPACE STRIP was described correctly and pinned by nothing. With
+ *    it removed, `a call reformatted across lines` still answers 1 — that
+ *    fixture wraps INSIDE the argument list, where no whitespace ever sat
+ *    between the tokens the scan reads. Not one provider row changed answer.
+ *    The row that does kill it is `a call whose scope operator is spaced`,
+ *    which puts the whitespace where the scan actually looks.
+ *  - THE COMMENT STRIP was not claimed to buy anything and buys the same thing
+ *    one token over: a block comment is legal between the `::` and the method
+ *    name, and with the strip gone the scan reads a T_COMMENT as the preceding
+ *    token and scores the call 0. Removing the strip took no provider row off
+ *    its expected answer either; `a call with a comment between the scope
+ *    operator and the name` is what now kills it.
+ *  - THE PAREN CLAUSE sentence was FALSE. Removing the clause leaves both
+ *    shapes it names at 0: a quoted method name in `[self::class, 'name']` and
+ *    a string spelling the call form are `T_CONSTANT_ENCAPSED_STRING`, so it
+ *    is the T_STRING requirement that excludes them and the paren has nothing
+ *    to do with it. What the paren clause really excludes is a CLASS-CONSTANT
+ *    reference of the same name — the method name after `::` with no call
+ *    after it — which scans 1 without the clause, and which no row covered.
+ *
+ * WHY THE PARAGRAPH STILL EARNS ITS PLACE rather than being deleted along with
+ * its errors: a reader deciding whether a clause can be simplified away needs
+ * to know what each one is for, and three of these four clauses genuinely are
+ * load-bearing. The repair is that every claim above is now a row in
+ * {@see scanDefinitionCases()} that goes red when the clause it describes is
+ * removed, so the next version of this paragraph cannot drift from the code
+ * without something noticing.
  *
  * THE `(...)` CLAUSE IS NOT REDUNDANT, and the sentence it replaces claimed it
  * was. WHAT IT SAID: "requiring the paren is what excludes a
@@ -111,6 +150,24 @@ use SugarCraft\Crush\Cli\Bootstrap;
  */
 final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
 {
+    /**
+     * WHY THIS CONSUMER USES `flattened()` IN ONE PLACE AND NOT THE OTHER, kept
+     * here rather than moved into the trait because it is true of this file
+     * only (E224). {@see testTheProseSiteCountInThisFilesOwnDocBlocksMatchesTheList()}
+     * matches against the flattened source; {@see testTheProseCountsMatchTheTokenScan()}
+     * deliberately does NOT: those ten anchors each carry their own explicit
+     * handling of the wrap they cross, they are proven against the files they
+     * name, and re-pointing ten working anchors at a different input to gain
+     * nothing is how a guard gets broken by its own improvement.
+     *
+     * BOTH NUMBERS IN THAT SENTENCE ARE ANCHORED, by
+     * {@see SELF_COUNT_ANCHORS}, which is why the sentence lives in this file
+     * and not in the trait: the anchors name the file they read, and a
+     * paragraph about one consumer sitting in shared code would be a claim
+     * about every consumer.
+     */
+    use FlattensSourceProseTrait;
+
     private const SEAM_METHOD = 'warnPermissionConfigInTranscript';
 
     /**
@@ -473,6 +530,42 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         yield 'a nullsafe call' => ["<?php \$o?->{$m}('x');", 1];
         yield 'the declaration' => ["<?php class B { private static function {$m}(string \$m): void {} }", 0];
         yield 'a call reformatted across lines' => ["<?php self::{$m}(\n    sprintf(\n        'x',\n    ),\n);", 1];
+
+        // THE ROW ABOVE DOES NOT PIN THE WHITESPACE STRIP AND WAS BELIEVED TO
+        // (E228). Its newlines are inside the ARGUMENT LIST; the scan only ever
+        // looks at the three tokens `self`, `::`, `<name>` and the `(` after
+        // them, and no whitespace sits between those. MEASURED, PHP 8.3.6: with
+        // T_WHITESPACE taken out of the strip it still answers 1, and so did
+        // every other row in this provider. This is the row that puts the
+        // whitespace where the scan reads, and it fails in both directions — 0
+        // with the strip removed, 0 with the scan dead.
+        yield 'a call whose scope operator is spaced' => ["<?php self :: {$m} ('x');", 1];
+
+        // AND THE SAME HOLE ONE TOKEN OVER, for T_COMMENT/T_DOC_COMMENT. A
+        // block comment is legal between `::` and the method name, so with the
+        // comment strip removed the token before the name is a T_COMMENT and
+        // the call scores 0. Nothing pinned that either: the two comment rows
+        // below answer 0 whether the strip is there or not, because
+        // `token_get_all()` hands a whole comment back as ONE token and the
+        // method name never appears as a T_STRING inside one. They are real
+        // rows — they kill a grep-shaped reimplementation, see the note at the
+        // bottom of this provider — but they are not rows about the strip.
+        yield 'a call with a comment between the scope operator and the name' => [
+            "<?php self::/* c */{$m}('x');",
+            1,
+        ];
+
+        // THE CLASS-CONSTANT REFERENCE, which is what the paren clause really
+        // excludes — not the callable array and not the string spelling, both
+        // of which are excluded by the T_STRING requirement and answer 0 with
+        // the paren clause gone (MEASURED, PHP 8.3.6). Written as the reference
+        // BESIDE a live call rather than alone, so the expected value is one
+        // only a live scanner produces: 2 with the paren clause removed, 0 with
+        // the scan dead. A lone reference asserting 0 would have survived both.
+        yield 'a class-constant reference of the same name beside a live call' => [
+            "<?php \$x = self::{$m}; self::{$m}('y');",
+            1,
+        ];
         yield 'a doc-block reference' => ["<?php /** {@see {$m}()} */ \$x = 1;", 0];
         yield 'a line comment quoting the call form' => ["<?php // self::{$m}(\n\$x = 1;", 0];
         yield 'a string spelling the call form' => ["<?php \$x = 'self::{$m}(';", 0];
@@ -485,7 +578,33 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         // of the sort in it must answer 0, so a scan that has silently started
         // counting something else shows up here rather than in the number ten
         // sentences are corrected against.
+        //
+        // THE ONLY ROW HERE WITH NO POSITIVE COMPONENT, AND DELIBERATELY SO. It
+        // cannot have one without ceasing to be what it is, and E228's sweep
+        // named it rather than leaving the omission to look like an oversight.
+        // What it kills is a scan that counts SOMETHING in a source containing
+        // nothing of the sort — measured, a scan mutated to increment once per
+        // significant token answers 4 here. What it cannot kill is a dead scan,
+        // and it is not asked to: eight rows in this provider expect a non-zero
+        // count, so a dead instrument reds the provider whatever this row does.
         yield 'a source with no mention at all' => ['<?php echo 1;', 0];
+
+        // WHAT THE FOUR PURE-NEGATIVE ROWS ABOVE ACTUALLY KILL, recorded
+        // because E228's whole subject is a fixture credited with catching a
+        // mutation it survives. MEASURED, PHP 8.3.6, by mutating
+        // {@see countSeamCallSites()} and re-running this provider:
+        // `a doc-block reference`, `a line comment quoting the call form`,
+        // `a string spelling the call form` and `a callable array` each answer
+        // 0 under EVERY structural mutation of the clause list — the scope
+        // token, the paren, the ellipsis guard and both halves of the strip.
+        // The mutation they do kill is the one this class's doc-block warns a
+        // reader about at length: the scan reimplemented as a substring count.
+        // Against `substr_count($source, self::SEAM_METHOD)` all four go to 1;
+        // against `substr_count($source, 'self::' . self::SEAM_METHOD . '(')`
+        // the comment row and the string row go to 1. That is a real defect to
+        // be guarded against and these are the rows that guard it — but it is
+        // NOT the branch-by-branch coverage of the definition they were filed
+        // under, which is why the three rows added above exist.
     }
 
     /** @dataProvider scanDefinitionCases */
@@ -561,34 +680,6 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
                     . "{$expected} rows",
             );
         }
-    }
-
-    /**
-     * `$source` with doc-block and line-comment continuation markers removed
-     * and every run of whitespace collapsed to one space.
-     *
-     * See {@see SELF_COUNT_ANCHORS} for why prose in source may not be matched
-     * against the raw bytes. Deliberately NOT used by
-     * {@see testTheProseCountsMatchTheTokenScan()}: those ten anchors each carry
-     * their own explicit handling of the wrap they cross, they are proven
-     * against the files they name, and re-pointing ten working anchors at a
-     * different input to gain nothing is how a guard gets broken by its own
-     * improvement.
-     */
-    private static function flattened(string $source): string
-    {
-        // `\*(?!/)` — the CONTINUATION marker, never the terminator. Letting
-        // `*/` be stripped too would run the end of one doc-block into the
-        // start of the next, and an anchor could then match a "sentence" that
-        // spans two of them and exists in neither.
-        $joined = (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', $source);
-
-        // `\s+` and not `[ \t]+`: the marker strip leaves the newline of any
-        // line it did not match (a bare code line, the last line of a file), and
-        // a sentence that wraps onto one of those would still be split. Caught
-        // by the fixture in the caller, which is the reason the fixture is a
-        // known-POSITIVE and not a smoke test.
-        return (string) preg_replace('/\s+/', ' ', $joined);
     }
 
     /**

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 
 /**
  * Every place in `src/` and `bin/` that can put a line on the user's stderr,
@@ -49,7 +50,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
  * `src/` and `bin/` is ELEVEN" — is CORRECT, and this file asserts that it
- * stays correct ({@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()}).
+ * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
@@ -216,6 +217,17 @@ use SugarCraft\Crush\Cli\Bootstrap;
  */
 final class StderrEmitterCensusTest extends TestCase
 {
+    /**
+     * E196/E224. The trait's doc-block carries the union of what this file's
+     * copy and the sibling census's copy each said; nothing was picked between
+     * them. This consumer's own known-positive control for the flattener is the
+     * first assertion in
+     * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()}, and it
+     * stays here rather than moving into the trait for the reason that test's
+     * doc-block gives: sharing the code is not sharing the control.
+     */
+    use FlattensSourceProseTrait;
+
     /**
      * Channel 1: a literal `fwrite(STDERR, …)`.
      *
@@ -515,7 +527,7 @@ final class StderrEmitterCensusTest extends TestCase
      * WIDER THAN THE ONE WORD IT READS TODAY, ON PURPOSE, and this paragraph
      * exists because a reviewer read that as softening the rule above. It does
      * not, and the reason is that BOTH arms of the guard are failures.
-     * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} does
+     * {@see testTheInheritedCensusStillAgreesWithTheScan()} does
      * `assertArrayHasKey()` and then `assertSame()` against the live scan, so
      * for a prose word this map does not carry the verdict is "the guard cannot
      * read the sentence", and for one it does carry the verdict is "the prose
@@ -544,30 +556,51 @@ final class StderrEmitterCensusTest extends TestCase
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
     {
-        self::assertSame(self::DIRECT_SITES, self::census('direct'), self::message('fwrite(STDERR, …)'));
+        $actual = self::census('direct');
+        self::assertSame(
+            self::DIRECT_SITES,
+            $actual,
+            self::message('fwrite(STDERR, …)', self::DIRECT_SITES, $actual),
+        );
     }
 
     public function testTheIndirectStderrHandleRosterIsUnchanged(): void
     {
-        self::assertSame(self::INDIRECT_SITES, self::census('indirect'), self::message('captured STDERR handle'));
+        $actual = self::census('indirect');
+        self::assertSame(
+            self::INDIRECT_SITES,
+            $actual,
+            self::message('captured STDERR handle', self::INDIRECT_SITES, $actual),
+        );
     }
 
     public function testTheErrorLogRosterIsUnchanged(): void
     {
-        self::assertSame(self::ERROR_LOG_SITES, self::census('error_log'), self::message('error_log()'));
+        $actual = self::census('error_log');
+        self::assertSame(
+            self::ERROR_LOG_SITES,
+            $actual,
+            self::message('error_log()', self::ERROR_LOG_SITES, $actual),
+        );
     }
 
     public function testTheSugarcrushMessageShapeRosterIsUnchanged(): void
     {
-        self::assertSame(self::MESSAGE_SHAPES, self::census('shape'), self::message('`sugarcrush: ` message'));
+        $actual = self::census('shape');
+        self::assertSame(
+            self::MESSAGE_SHAPES,
+            $actual,
+            self::message('`sugarcrush: ` message', self::MESSAGE_SHAPES, $actual),
+        );
     }
 
     public function testTheRuntimeNoticeSeamRosterIsUnchanged(): void
     {
+        $actual = self::census('runtime_notice');
         self::assertSame(
             self::RUNTIME_NOTICE_SITES,
-            self::census('runtime_notice'),
-            self::message('RuntimeNoticeSink::warn()'),
+            $actual,
+            self::message('RuntimeNoticeSink::warn()', self::RUNTIME_NOTICE_SITES, $actual),
         );
     }
 
@@ -1034,10 +1067,11 @@ final class StderrEmitterCensusTest extends TestCase
 
     public function testThePrefixedWriterRosterIsUnchanged(): void
     {
+        $actual = self::census('prefixed');
         self::assertSame(
             self::PREFIXED_WRITER_SITES,
-            self::census('prefixed'),
-            self::message('warnPermissionConfig*()'),
+            $actual,
+            self::message('warnPermissionConfig*()', self::PREFIXED_WRITER_SITES, $actual),
         );
     }
 
@@ -1459,8 +1493,23 @@ final class StderrEmitterCensusTest extends TestCase
      * is the sentence a reader finds FIRST when they ask how many stderr writes
      * this application has, and it answers a narrower question than they asked
      * — so the day channel 1 moves, the reader's first answer must move with it.
+     *
+     * WHAT THIS METHOD USED TO BE CALLED, and why the name is now
+     * cardinality-free (E245). It was
+     * `testTheInheritedElevenSiteCensusStillAgreesWithTheScan()`. That number
+     * was correct when the name was written and stopped being correct when
+     * E219 added a `fwrite(\STDERR, …)` site to `src/Cli/NonInteractive.php`:
+     * the rosters and the anchored prose were all bumped, because each of them
+     * has a generator, and the METHOD NAME was the one statement of the count
+     * with nothing to contradict it.
+     * WHY THE POINT STILL EARNS ITS PLACE rather than just a quiet rename: a
+     * cardinality baked into an identifier rots exactly like one baked into
+     * prose, and unlike prose it cannot be anchored — there is no way to point
+     * {@see selfCountAnchors()} at a method name and have the mismatch red.
+     * The only available defence is not to put one there. The number this
+     * method validates is derived, below, from `census('direct')`.
      */
-    public function testTheInheritedElevenSiteCensusStillAgreesWithTheScan(): void
+    public function testTheInheritedCensusStillAgreesWithTheScan(): void
     {
         $path = \dirname(__DIR__, 2) . '/tests/Integration/BinSugarcrushAutoloadGuardTest.php';
         self::assertFileExists($path, 'the file carrying the prose census has moved');
@@ -1531,12 +1580,109 @@ final class StderrEmitterCensusTest extends TestCase
      * handle, say, expected absent) the `[]` shape and its vacuity arrive with
      * it.
      *
+     * WHAT EACH ROW EXPECTING 0 ACTUALLY KILLS (E228). Round 48 shipped a
+     * fixture asserting 0 whose failure message named a mutation the fixture
+     * survived, so the rows here were swept the same way: mutate the
+     * instrument, re-run the whole provider, and record which rows change
+     * answer. MEASURED, PHP 8.3.6. The result, in three groups:
+     *
+     *  - CLAUSE ROWS, which kill the removal of the clause they describe and
+     *    are what they claim to be. `the declaration is not a call` and
+     *    `an unscoped same-named function is not one of ours` kill the scope
+     *    operator; the two first-class-callable rows kill the ellipsis guard;
+     *    `some other class's warn() is not the seam` kills the receiver check
+     *    and `the seam class reached with an instance operator is not the seam`
+     *    kills the operator check beside it; `the seam record() is not the warn
+     *    funnel` kills the method-name check; three rows kill the
+     *    `T_CONST`/`T_FUNCTION` disambiguation in the import walk; `a const
+     *    import of something else is not a channel` kills a widened
+     *    {@see ALIASABLE_STDERR_NAMES}; and the destination-form rows kill both
+     *    a relaxed threshold and the loss of a {@see ARRAY_TOKEN_OPENERS}
+     *    entry, the latter by making the walk THROW rather than answer.
+     *  - GREP ROWS. Every row whose subject is a comment, a doc-block or a
+     *    string literal — and there are seven — answers 0 under every
+     *    structural mutation of the scanners, because a comment is a single
+     *    token and the names never appear as a T_STRING inside one. What they
+     *    kill is the channel reimplemented as a `substr_count()`, which is the
+     *    exact temptation {@see scan()}'s own doc-block spends a paragraph
+     *    talking a reader out of. They are load-bearing; they are just not
+     *    load-bearing for the reason a reader would assume.
+     *  - THE BARE CONTROLS, `<?php echo 1;` on a channel that must find nothing
+     *    in it. These kill only a scanner that counts something in a source
+     *    with nothing in it (measured: one that increments per significant
+     *    token answers 4 — that fixture's significant-token count is a
+     *    property of the fixture and does not move). They cannot kill a dead
+     *    scanner and are not asked to, because most of this provider expects a
+     *    non-zero count and a dead {@see scan()} therefore reds it on its own.
+     *
+     * AND THE SENTENCE THAT USED TO CARRY THAT LAST CLAIM WAS ALREADY WRONG
+     * WHEN IT WAS COMMITTED — inside the very commit that swept this provider
+     * for fixtures crediting themselves with mutations they survive. WHAT IT
+     * SAID: "THE FOUR BARE CONTROLS at the bottom, `<?php echo 1;` on each
+     * channel … That was measured too, by blinding {@see scan()}: thirty-two
+     * rows go red."
+     * WHAT WAS TRUE WHEN THAT SENTENCE WAS COMMITTED, MEASURED at round 49 by
+     * inserting `return 0;` at the top of {@see scan()} and running this class
+     * (PHP 8.3.6, commit `11081a38`): thirty-five rows went red, not
+     * thirty-two. Thirty-two was the count BEFORE the same commit added three
+     * non-zero rows to this provider, and nothing re-derived it afterwards. The
+     * other two numerals were wrong in the same way — the provider carried five
+     * `<?php echo 1;` rows and not four, on five of its seven channel spellings
+     * and not on each, with none on `indirect` and none on `shape`. All three
+     * are written in the past tense on purpose: they are quoted measurements of
+     * one commit, and the sibling census's criterion is that a sentence saying
+     * what a count WAS is exempt from anchoring while a sentence saying what it
+     * IS is not. The present-tense form of the claim is the generator named
+     * below, which is where a reader should look for today's answer.
+     * WHY THE CLAIM STILL EARNS ITS PLACE: it is the entire reason the bare
+     * controls are allowed to have no positive component of their own, so it
+     * has to be true, and a numeral in a doc-block is the one form of it that
+     * nothing keeps honest (rule 18). It is now carried by a generator
+     * instead: {@see testEveryChannelInThisProviderHasARowADeadScanWouldRed()}
+     * asserts the property the number was standing in for, per channel, which
+     * is strictly stronger than any single total and cannot go stale when a row
+     * is added.
+     *
+     * THE ONE HOLE THE SWEEP FOUND was the comment strip in
+     * {@see significantTokens()} — no row killed its removal, on any channel.
+     * The rows added for it are marked in place. There are FOUR of them and
+     * all four red when the strip goes, which is one more than the sentence
+     * here used to claim: the fourth is `and that write is still not indirect`,
+     * and it is the interesting one, because it fails in the OPPOSITE
+     * direction. It expects 0 at head and answers 1 with the comment strip
+     * gone — an unstripped comment displaces `STDERR` out of the first
+     * argument position, so channel 2 starts counting a direct write as a
+     * captured handle. MEASURED, PHP 8.3.6, round 49.
+     *
      * @return iterable<string, array{0: string, 1: string, 2: int}>
      */
     public static function scannerCases(): iterable
     {
         yield 'a direct write' => ['direct', '<?php fwrite(STDERR, "x");', 1];
         yield 'a namespaced direct write' => ['direct', '<?php \\fwrite(\\STDERR, "x");', 1];
+
+        // THE COMMENT STRIP, PINNED (E228). {@see significantTokens()} drops
+        // T_WHITESPACE, T_COMMENT and T_DOC_COMMENT, and until this row nothing
+        // in this provider noticed if it stopped dropping the last two: the
+        // three rows that MENTION a comment all answer 0 whether the strip runs
+        // or not, because `token_get_all()` returns a whole comment as ONE
+        // token and the names these channels key on never appear as a T_STRING
+        // inside one. What the strip actually buys is ADJACENCY — every channel
+        // here reads `$significant[$i - 1]` and `$significant[$i + 1]` — and a
+        // comment is legal in exactly those two positions. MEASURED, PHP 8.3.6:
+        // this row is 1 at head, 0 with T_COMMENT/T_DOC_COMMENT out of the
+        // strip, and 0 with T_WHITESPACE out of it, so it fails in both
+        // directions against either half.
+        yield 'a direct write with a comment before the handle' => [
+            'direct',
+            '<?php fwrite(/* c */ STDERR, "x");',
+            1,
+        ];
+        yield 'and that write is still not indirect' => [
+            'indirect',
+            '<?php fwrite(/* c */ STDERR, "x");',
+            0,
+        ];
         yield 'a direct write is not indirect' => ['indirect', '<?php fwrite(STDERR, "x");', 0];
 
         // PHP'S OWN ALIASES OF fwrite(), which need no import and so cannot be
@@ -1573,6 +1719,14 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a prefixed interpolation' => ['shape', '<?php $x = "sugarcrush: {$y} nope";', 1];
         yield 'the prefix only in a comment' => ['shape', "<?php // sugarcrush: nope\n\$x = 1;", 0];
         yield 'a warn call' => ['prefixed', '<?php self::warnPermissionConfigOnce("x");', 1];
+        // The same adjacency, on the channel that reads the token BEFORE the
+        // name rather than the token before the handle. 0 with the comment
+        // strip removed.
+        yield 'a warn call with a comment before the name' => [
+            'prefixed',
+            '<?php self::/* c */warnPermissionConfigOnce("x");',
+            1,
+        ];
         yield 'all three entry points' => [
             'prefixed',
             '<?php self::warnPermissionConfig("a"); self::warnPermissionConfigOnce("b"); '
@@ -1614,6 +1768,14 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a fully-qualified runtime-notice seam call' => [
             'runtime_notice',
             '<?php \\SugarCraft\\Crush\\Diagnostics\\RuntimeNoticeSink::warn("x");',
+            1,
+        ];
+        // And on channel 6, which reads TWO tokens back — the operator and then
+        // the class — so a comment in either position blinds it without the
+        // strip. 0 with the comment strip removed.
+        yield 'a seam call with a comment before the name' => [
+            'runtime_notice',
+            '<?php RuntimeNoticeSink::/* c */warn("x");',
             1,
         ];
         yield 'some other class\'s warn() is not the seam' => ['runtime_notice', '<?php Logger::warn("x");', 0];
@@ -1763,6 +1925,83 @@ final class StderrEmitterCensusTest extends TestCase
     }
 
     /**
+     * Every channel spelling {@see scannerCases()} uses carries at least one
+     * row a DEAD {@see scan()} would red.
+     *
+     * THIS IS THE GENERATOR FOR A SENTENCE THAT USED TO BE A NUMERAL. The
+     * provider's doc-block licenses its bare `<?php echo 1;` controls to have
+     * no positive component of their own, and the licence rests entirely on
+     * "a dead scan() reds this provider anyway". That was written down as a
+     * count of rows, the count was wrong the day it was committed, and a count
+     * is the wrong shape for the claim regardless: what has to be true is not
+     * that some total of rows reds, it is that NO CHANNEL is left where every
+     * row expects 0 — because on such a channel a dead scanner is green, and
+     * that is exactly the failure E228 is about.
+     *
+     * PER CHANNEL AND NOT IN TOTAL, which is the strengthening. A provider
+     * could hold a hundred non-zero rows on `direct` and still have every
+     * `shape` row expecting 0; the total would look reassuring and the `shape`
+     * scanner would be untested against death. The per-channel form cannot be
+     * satisfied that way, and it does not move when a row is added.
+     *
+     * `prefixed:<entryPoint>` IS FOLDED ONTO `prefixed` deliberately. It is not
+     * a separate channel, it is a filtered view of that one — see
+     * {@see scan()}, which parses the suffix and then runs the `prefixed`
+     * branch — so requiring each suffix spelling to carry its own non-zero row
+     * would red on a legitimate negative row for one entry point. The
+     * suffixed form has its own dedicated guard for the failure that matters
+     * to it, {@see testTheScannerRedsOnAnEntryPointItCannotAnswerFor()}.
+     *
+     * ITS OWN KNOWN-POSITIVE CONTROL, and it needs one for the reason rule 15
+     * exists: the per-channel assertion is `assertArrayHasKey`, and a bucketer
+     * that put every row in the non-zero bucket would satisfy it on every
+     * channel while reading nothing. So this first asserts that both buckets
+     * are populated AND that two rows whose expected values are known landed
+     * on the correct side of the split.
+     */
+    public function testEveryChannelInThisProviderHasARowADeadScanWouldRed(): void
+    {
+        $withANonZeroRow = [];
+        $zeroOnly = [];
+        foreach (self::scannerCases() as $label => [$channel, , $expected]) {
+            $base = str_starts_with($channel, 'prefixed:') ? 'prefixed' : $channel;
+            if ($expected === 0) {
+                $zeroOnly[$base][] = $label;
+
+                continue;
+            }
+
+            $withANonZeroRow[$base][] = $label;
+        }
+
+        // THE CONTROL. Two rows this file spells out a few hundred lines up,
+        // one of each kind, asserted to be on the side the split should have
+        // put them. A bucketer that ignored $expected passes the loop below
+        // and fails here.
+        self::assertContains(
+            'a direct write',
+            $withANonZeroRow['direct'] ?? [],
+            'the split no longer reads the expected value: a row expecting 1 is not in the non-zero bucket',
+        );
+        self::assertContains(
+            'a direct write is not indirect',
+            $zeroOnly['indirect'] ?? [],
+            'the split no longer reads the expected value: a row expecting 0 is not in the zero bucket',
+        );
+
+        foreach (array_keys($zeroOnly + $withANonZeroRow) as $channel) {
+            self::assertArrayHasKey(
+                $channel,
+                $withANonZeroRow,
+                "every row on channel '{$channel}' expects 0, so a dead scan() returning 0 would leave all "
+                    . 'of them green and nothing here would notice. Add a row on this channel whose expected '
+                    . 'value only a live scanner can produce; do not rely on another channel\'s rows to '
+                    . 'cover it.',
+            );
+        }
+    }
+
+    /**
      * A file the roster names but the tree does not have is a FAILURE.
      *
      * WHAT THIS SAID, and it contradicted itself inside one sentence: "deleting
@@ -1773,8 +2012,10 @@ final class StderrEmitterCensusTest extends TestCase
      * key from {@see census()} and leaves it in the roster, so
      * `assertSame(<roster>, <census>)` reds on its own — the clause immediately
      * after the dash says exactly that, and the claim before the dash is the
-     * false one. This test is REDUNDANT with the four roster assertions, in
-     * both directions.
+     * false one. This test is REDUNDANT with the roster assertions, in
+     * both directions — the numeral that stood where "the" now does said four
+     * and the rosters have since grown past it, which is the same rot this
+     * file is about.
      * WHY IT STILL EARNS ITS PLACE: the message. A roster assertion failing on
      * a deleted file prints an array diff and leaves the reader to notice that
      * one key is a path that no longer exists; this prints the path and says
@@ -1802,17 +2043,50 @@ final class StderrEmitterCensusTest extends TestCase
      * generates it.
      *
      * WHY THIS EXISTS AND WHY IT IS EMBARRASSING. This file's whole subject is
-     * that a count nobody derives goes stale, and it shipped six of its own —
-     * one per channel, plus the two in the channel-5 paragraph — hand-typed
-     * from numbers the tests below derive, in a round whose sibling census had
-     * just built the anchoring machinery for exactly this. All six were correct
-     * the day they were written, which is the only thing that is ever true of
-     * them.
+     * that a count nobody derives goes stale, and it shipped a set of its own,
+     * hand-typed from numbers the tests below derive, in a round whose sibling
+     * census had just built the anchoring machinery for exactly this.
+     *
+     * AND THEN THE PARAGRAPH SAYING SO GOT ITS OWN COUNT WRONG, WHICH IS THE
+     * JOKE FINISHING ITSELF. Found by round 49's review; rule 18. WHAT IT SAID,
+     * in three places: "it shipped six of its own — one per channel, plus the
+     * two in the channel-5 paragraph"; "All six were correct the day they were
+     * written, which is the only thing that is ever true of them"; "Two of the
+     * six cross a wrap."
+     * WHAT IS TRUE NOW: this list holds NINE rows, and it has never held six.
+     * The commit that introduced it committed SEVEN — read back out of git, not
+     * inferred — so "all six were correct the day they were written" was false
+     * on the day IT was written, inside the doc-block of the guard whose whole
+     * purpose is to stop that. Round 48's transcript-seam channel then took the
+     * list to its present size and the numeral moved with nothing, because a
+     * numeral in a doc-block is the one statement of a count that has no
+     * generator. The arithmetic never worked either: one per channel plus two
+     * is eight.
+     * WHY THE HISTORY STILL EARNS ITS PLACE: "six" is the measurement of how
+     * fast this happens to the author who was thinking about the problem
+     * hardest, taken on that author. What has changed is that the number in the
+     * sentence above is now DERIVED like every other number in this file — the
+     * last assertion in
+     * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()} reads
+     * that numeral back out of this doc-block and compares it with
+     * `count(self::selfCountAnchors())`, so adding a row without editing the
+     * sentence reds. Verified by mutation both ways: before that assertion
+     * existed, rewriting all three numerals to "nineteen" left this class
+     * entirely green — 90 tests, 1346 assertions, measured at commit
+     * `11081a38`, which is the class as it stood BEFORE this round's review
+     * added anything to it.
+     *
+     * WHERE THE REGRESS STOPS, and it stops one level up exactly as the sibling
+     * census stops it: how many sentences state the size of this list is not
+     * written down anywhere, and the sentence above is the only one that states
+     * it. If you find yourself wanting to write that size a second time, add a
+     * row instead.
      *
      * MATCHED AGAINST {@see flattened()} AND NOT THE RAW BYTES, for the reason
      * the sibling census gives: a doc-block wraps at 80 columns with ` * ` on
-     * every continuation, so a sentence is never those bytes in a row. Two of
-     * the six cross a wrap. The flattener's own known-positive control is the
+     * every continuation, so a sentence is never those bytes in a row. Some of
+     * these anchors cross a wrap; how many is deliberately not stated here, per
+     * the paragraph above. The flattener's own known-positive control is the
      * first assertion in the test, because a flattener returning `''` would
      * make every anchor fail open into a zero match — which this treats as a
      * failure, not a skip.
@@ -1911,66 +2185,148 @@ final class StderrEmitterCensusTest extends TestCase
                 "the prose for {$site['what']} says \"{$word}\" but its roster generates {$site['expected']}",
             );
         }
+
+        // AND THE SIZE OF THE ANCHOR LIST ITSELF, which is the one cardinality
+        // this guard used to state in prose and not derive — wrongly, in three
+        // sentences, from the day it was written. See selfCountAnchors()' own
+        // doc-block for the history. This is level two and there is no level
+        // three: nothing states how many sentences state this.
+        $anchored = preg_match('/this list holds ([A-Z]+) rows/', $own, $size);
+        self::assertSame(
+            1,
+            $anchored,
+            'selfCountAnchors() no longer states its own size where this can read it. It must state it '
+                . 'exactly once, in words, or the size goes back to being a number with no generator — '
+                . 're-point this anchor, do not drop it.',
+        );
+        self::assertArrayHasKey(
+            strtolower($size[1]),
+            self::NUMBER_WORDS,
+            "selfCountAnchors() states its own size as \"{$size[1]}\", which is not a number word this "
+                . 'guard can read. Widen self::NUMBER_WORDS; do not leave it unparsed.',
+        );
+        self::assertSame(
+            \count(self::selfCountAnchors()),
+            self::NUMBER_WORDS[strtolower($size[1])],
+            'selfCountAnchors() says it holds "' . strtolower($size[1]) . '" rows and it holds '
+                . \count(self::selfCountAnchors()) . '. A row was added or removed without editing the '
+                . 'sentence that states the size — edit it; that sentence is the only one allowed to.',
+        );
     }
 
     // ── the scanners ─────────────────────────────────────────────────────
 
     /**
-     * `$source` with doc-block and line-comment continuation markers removed
-     * and every run of whitespace collapsed to one space.
+     * The failure text for a roster assertion, with the per-file delta spelled
+     * out rather than left to PHPUnit's array diff.
      *
-     * DELIBERATELY A SECOND COPY of
-     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}'s
-     * private method of the same name, and the duplication is recorded rather
-     * than resolved: the shared home for it is a test-support trait, and adding
-     * one is outside the file set round 45's lane may touch — and outside round
-     * 48's too, which is why E196 is still open. What is NOT duplicated is the
-     * risk: this copy has its own known-positive control, in
-     * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()}, and
-     * before this method existed the same expression sat inline in
-     * {@see testTheInheritedElevenSiteCensusStillAgreesWithTheScan()} with no
-     * control at all.
+     * WRITTEN FOR A READER WHO DID NOT CAUSE THE FAILURE. This census counts
+     * what OTHER lanes write: it pins exact per-file cardinalities across
+     * `src/`, so a lane that adds or removes one stderr write reds it at merge
+     * — which is the design, and round 48 is the round that proved an exact
+     * cardinality is what makes a shared census safe to merge. The person who
+     * sees the red is therefore usually the person MERGING five branches, not
+     * the person who moved the number. An array diff makes them read two maps
+     * and spot the differing key; this names the file, what the roster claims
+     * and what the scan actually found, so the resolution is a one-line edit
+     * with nothing re-derived.
      *
-     * THE DRIFT E196 PREDICTS HAS ALREADY STARTED, AND IT STARTED IN THE PROSE
-     * RATHER THAN IN THE CODE. MEASURED at round 48 by comparing the two
-     * declarations token by token with whitespace and comments dropped: the
-     * bodies are IDENTICAL. The justifications were not — the sibling carried a
-     * paragraph on why the second pattern is `\s+` and not `[ \t]+`, and this
-     * copy did not. It has been brought across rather than left, because the
-     * copy that loses a reason is the copy whose next reader simplifies it. A
-     * consolidation that keeps one implementation and one of the two
-     * justifications would have re-created the same asymmetry in a trait.
+     * DERIVED, NEVER WRITTEN DOWN (rule 18): no cardinality in this text is
+     * typed anywhere, so none of it can go stale.
      *
-     * (The instrument that found this was wrong on its first run: anchored on
-     * the token `flattened`, it compared the first CALL site in each file
-     * instead of the declaration, and reported "not identical". Anchoring on
-     * `T_FUNCTION` gave the answer above. Recorded because a comparison harness
-     * that silently compares the wrong two things is the failure this file's
-     * whole subject is about.)
+     * AND "THE SAME CALL" IS NOW LITERALLY TRUE, WHICH IT WAS NOT WHEN THIS
+     * SENTENCE WAS WRITTEN (rule 8; round 49's review). WHAT IT SAID: "both
+     * sides come from the same call the assertion is making". WHAT WAS ACTUALLY
+     * HAPPENING: every caller passed `self::census($channel)` a SECOND time as
+     * the message argument, which PHP evaluates eagerly on the green path too —
+     * so the map the reader was shown came from an independent re-scan of
+     * `src/`, not from the map the assertion compared, and each roster test
+     * walked and tokenised all of `src/` twice. Harmless here because
+     * {@see census()} is deterministic, and measured at 0.15s per call on PHP
+     * 8.3.6, so ~0.9s of the suite across the six roster tests.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE rather than being dropped as
+     * pedantry: it is the reason each caller hoists the scan into a local
+     * before asserting on it, and a reader who does not know that will inline
+     * it back for tidiness and quietly restore both the double scan and the
+     * gap between what is asserted and what is reported.
+     *
+     * ITS OWN CORRECTNESS IS TESTED, and it has to be, because a failure
+     * message's generator is the one piece of a green suite that never runs. A
+     * `message()` returning `''` would be invisible for as long as the census
+     * stayed green and would then be missing at exactly the moment it is
+     * needed. {@see testTheRosterFailureMessageNamesEveryFileThatMovedAndBothCounts()}
+     * runs it on known input.
+     *
+     * @param array<string, int> $expected the roster
+     * @param array<string, int> $actual   what the scan found
      */
-    private static function flattened(string $source): string
+    private static function message(string $channel, array $expected = [], array $actual = []): string
     {
-        // `\*(?!/)` — the CONTINUATION marker, never the terminator. Letting
-        // `*/` be stripped too would run the end of one doc-block into the
-        // start of the next, and an anchor could then match a "sentence" that
-        // spans two of them and exists in neither.
-        $joined = (string) preg_replace('#\n\s*(?:\*(?!/)|//)[ \t]?#', ' ', $source);
+        $moved = [];
+        foreach (array_keys($expected + $actual) as $file) {
+            $was = $expected[$file] ?? null;
+            $now = $actual[$file] ?? null;
+            if ($was === $now) {
+                continue;
+            }
 
-        // `\s+` and not `[ \t]+`: the marker strip leaves the newline of any
-        // line it did not match (a bare code line, the last line of a file), and
-        // a sentence that wraps onto one of those would still be split. Caught
-        // by the fixture in the caller, which is the reason the fixture is a
-        // known-POSITIVE and not a smoke test.
-        return (string) preg_replace('/\s+/', ' ', $joined);
-    }
+            $moved[] = sprintf(
+                '  %s: the roster says %s, the scan counts %s',
+                $file,
+                $was === null ? 'nothing' : (string) $was,
+                $now === null ? 'nothing' : (string) $now,
+            );
+        }
+        sort($moved);
 
-    private static function message(string $channel): string
-    {
+        $delta = $moved === [] ? '' : "\n\nWHAT MOVED, per file:\n" . implode("\n", $moved) . "\n";
+
         return "The roster of {$channel} sites in src/ and bin/ moved. That is not automatically wrong — but "
             . 'a new stderr write in this application needs a decision: does it belong on '
             . 'Bootstrap::warnPermissionConfigInTranscript()\'s transcript seam (it names something the '
             . 'session can no longer DO), on stderr alone (the user\'s config is malformed but the session '
-            . 'is intact), or nowhere (it is debug output). Make the decision, then update the roster.';
+            . 'is intact), or nowhere (it is debug output). Make the decision, then update the roster.'
+            . $delta;
+    }
+
+    /**
+     * {@see message()} names every file whose count moved, in both directions,
+     * and stays quiet about the ones that did not.
+     *
+     * THE QUIET HALF IS AN ABSENCE ASSERTION and would prove nothing on its own
+     * — a dead `message()` mentions no file at all, so "it does not mention the
+     * unchanged one" passes (E228, rule 15). Its positive component is the
+     * three assertions above it, on the same call, in this test.
+     */
+    public function testTheRosterFailureMessageNamesEveryFileThatMovedAndBothCounts(): void
+    {
+        $message = self::message(
+            'error_log()',
+            ['src/Bumped.php' => 2, 'src/Gone.php' => 1, 'src/Unchanged.php' => 3],
+            ['src/Bumped.php' => 5, 'src/Arrived.php' => 1, 'src/Unchanged.php' => 3],
+        );
+
+        self::assertStringContainsString(
+            'src/Bumped.php: the roster says 2, the scan counts 5',
+            $message,
+            'a file whose count moved is no longer named with both numbers',
+        );
+        self::assertStringContainsString(
+            'src/Gone.php: the roster says 1, the scan counts nothing',
+            $message,
+            'a file the roster names and the scan no longer finds is not reported as a removal',
+        );
+        self::assertStringContainsString(
+            'src/Arrived.php: the roster says nothing, the scan counts 1',
+            $message,
+            'a file the scan found and no roster names is not reported as an arrival — which is the '
+                . 'direction a sibling lane adding an emitter fails in',
+        );
+        self::assertStringNotContainsString(
+            'src/Unchanged.php',
+            $message,
+            'the delta lists a file that did not move, so a real one-file change would arrive buried',
+        );
     }
 
     /** @return array<string, int> file => count, files with zero omitted */
