@@ -153,20 +153,58 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             . 'longer out of reach (or no longer exists). Delete it — a row that outlives its '
             . 'site is a standing permission nobody re-argued.');
 
+        foreach (self::DECLARING_FILE_UNCHECKED as $key => $reason) {
+            self::assertNotSame('', trim($reason), $key . ' is recorded without a reason');
+        }
+
+        [$unrecorded, $overtaken] = self::rosterVerdicts($readers, self::DECLARING_FILE_UNCHECKED);
+
+        self::assertSame([], $unrecorded, self::unrecordedMessage($unrecorded));
+
+        self::assertSame([], $overtaken, 'a recorded reader has been fixed, renamed or deleted. '
+            . 'Delete the row — a row that outlives the reader it describes is how this census '
+            . 'quietly stops covering anything. If the reader was merely RENAMED, re-key the row: '
+            . 'the fix has not happened.');
+    }
+
+    /**
+     * What the roster says about a scan result: the readers that owe a row, and
+     * the rows that have outlived their reader.
+     *
+     * EXTRACTED BECAUSE THE SCANNER IS FIXTURED AND THIS WAS NOT (E322), and
+     * that is a measurement rather than a suspicion. All THREE of the branches
+     * this replaces survived a mutation on PHP 8.3.6, each run filtered to this
+     * file, so each verdict is a claim about the guards in it: emptying
+     * `$unrecorded` after the append, emptying `$overtaken` after the
+     * `no such reader` append, and gating the `names the declaring file now`
+     * append on `false` all left the census GREEN — 2 tests, 439 assertions,
+     * OK. The reason is the same one E322 gives: the census asserts an ABSENCE
+     * over a population that currently produces none, so an arm that reports
+     * nothing is indistinguishable from an arm that is right.
+     *
+     * THE TWO `overtaken` KINDS ARE SEPARATE BRANCHES AND ARE FIXTURED
+     * SEPARATELY. They mean different things — a row whose reader is GONE is a
+     * rename or a deletion, and a row whose reader now names its file is a FIX
+     * — and the failure text tells the reader to do different things about
+     * them. A table that only proved "something was reported" would let either
+     * branch answer for both.
+     *
+     * @param  array<string,bool>   $readers key => whether it names the declaring file
+     * @param  array<string,string> $roster  key => reason
+     * @return array{list<string>, list<string>} unrecorded readers, overtaken rows
+     */
+    private static function rosterVerdicts(array $readers, array $roster): array
+    {
         $unrecorded = [];
         foreach ($readers as $key => $namesTheFile) {
-            if ($namesTheFile || isset(self::DECLARING_FILE_UNCHECKED[$key])) {
+            if ($namesTheFile || isset($roster[$key])) {
                 continue;
             }
             $unrecorded[] = $key;
         }
 
-        self::assertSame([], $unrecorded, self::unrecordedMessage($unrecorded));
-
         $overtaken = [];
-        foreach (self::DECLARING_FILE_UNCHECKED as $key => $reason) {
-            self::assertNotSame('', trim($reason), $key . ' is recorded without a reason');
-
+        foreach ($roster as $key => $reason) {
             if (!\array_key_exists($key, $readers)) {
                 $overtaken[] = $key . ' (no such reader any more)';
             } elseif ($readers[$key]) {
@@ -174,10 +212,77 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             }
         }
 
-        self::assertSame([], $overtaken, 'a recorded reader has been fixed, renamed or deleted. '
-            . 'Delete the row — a row that outlives the reader it describes is how this census '
-            . 'quietly stops covering anything. If the reader was merely RENAMED, re-key the row: '
-            . 'the fix has not happened.');
+        return [$unrecorded, $overtaken];
+    }
+
+    /**
+     * KNOWN-ANSWER TABLE FOR THE ROSTER ARM, in both polarities (E322).
+     *
+     * Neither half is evidence alone: without the rows that must report, an arm
+     * that reports nothing passes; without the rows that must NOT report, one
+     * that reports everything passes. The rows that must not report are the
+     * ones this census's whole population consists of today.
+     *
+     * @param array<string,bool>   $readers
+     * @param array<string,string> $roster
+     * @param list<string>         $unrecorded
+     * @param list<string>         $overtaken
+     *
+     * @dataProvider rosterCases
+     */
+    public function testTheRosterArmAnswersCorrectlyOnCasesWhoseAnswerIsKnown(
+        string $why,
+        array $readers,
+        array $roster,
+        array $unrecorded,
+        array $overtaken,
+    ): void {
+        self::assertSame([$unrecorded, $overtaken], self::rosterVerdicts($readers, $roster), $why);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: array<string,bool>, 2: array<string,string>, 3: list<string>, 4: list<string>}>
+     */
+    public static function rosterCases(): iterable
+    {
+        $why = 'a fixture reason, not a claim about the tree';
+
+        yield 'a reader that names no file and has no row is unrecorded' => [
+            'the arm stopped reporting the one thing this census exists to report',
+            ['A.php::a' => false], [], ['A.php::a'], [],
+        ];
+        yield 'a reader that names no file but HAS a row is spared' => [
+            'the roster does nothing, so every recorded reader is reported as unrecorded',
+            ['A.php::a' => false], ['A.php::a' => $why], [], [],
+        ];
+        yield 'a row keyed on ANOTHER reader does not spare this one' => [
+            'the roster lookup is not keyed on the reader, so one row spares every reader',
+            ['A.php::a' => false], ['B.php::b' => $why], ['A.php::a'], ['B.php::b (no such reader any more)'],
+        ];
+        yield 'a reader that names its file is reported by neither arm' => [
+            'a correct reader was reported, so the census reds on the state it wants',
+            ['A.php::a' => true], [], [], [],
+        ];
+        yield 'a row whose reader is gone is overtaken, as a rename or a deletion' => [
+            'a row that outlived its reader was not reported, so the roster can never be cleaned',
+            [], ['A.php::a' => $why], [], ['A.php::a (no such reader any more)'],
+        ];
+        yield 'a row whose reader now names its file is overtaken, as a FIX' => [
+            'a row whose reader has been FIXED was not reported — the other overtaken branch '
+                . 'cannot answer for this one, because the reader still exists',
+            ['A.php::a' => true], ['A.php::a' => $why], [], ['A.php::a (it names the declaring file now)'],
+        ];
+        yield 'the two overtaken kinds are told apart' => [
+            'the two branches produced the same text, so the failure tells the reader to do the '
+                . 'wrong thing for one of them',
+            ['A.php::a' => true], ['A.php::a' => $why, 'B.php::b' => $why],
+            [],
+            ['A.php::a (it names the declaring file now)', 'B.php::b (no such reader any more)'],
+        ];
+        yield 'an empty scan and an empty roster report nothing' => [
+            'the arm invented an offender out of nothing',
+            [], [], [], [],
+        ];
     }
 
     /**
