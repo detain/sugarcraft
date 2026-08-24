@@ -63,7 +63,22 @@ use SugarCraft\Crush\Tools\ToolResult;
  * denial term, so the widest guard in this file cannot see it — while the
  * membership test KILLS it. The two guards cover different holes: the walk
  * catches a second spelling that LOOKS like a denial, and the membership test
- * catches a constant that has stopped being one. WHY THE PRESCRIPTION STILL
+ * catches a constant that has stopped being one.
+ *
+ * AND ONE HOLE THEY NO LONGER COVER BETWEEN THEM, WHICH IS E246's OWN COST.
+ * Recorded here rather than left to a backlog line, because a reader of the
+ * paragraph above would otherwise take "not a tautology" for "nothing was
+ * lost". The membership test used to compare a LITERAL prefix against a
+ * roster derived from {@see DenialKind}, so it also caught a respelling of a
+ * CASE; now both sides derive from the enum and move together. MEASURED on
+ * PHP 8.3.6 at round 49, both halves: substituting
+ * `case Hook = 'Blocked:';` leaves this entire file GREEN at HEAD (12 tests,
+ * 81 assertions), and FAILS the membership test at its `assertContains` when
+ * `Runtime`'s three constants are put back in their pre-E246 literal form.
+ * {@see self::testTheRostersBackingValuesAreTheThreePublishedPrefixes()} is
+ * the replacement, and it is deliberately spelled out rather than derived.
+ *
+ * WHY THE PRESCRIPTION STILL
  * EARNS ITS PLACE: it is the reason this paragraph checked before deleting,
  * and a reviewer reading only the first half would have taken it.
  *
@@ -161,6 +176,43 @@ final class DenialPrefixRosterTest extends TestCase
                 . '--output-format json refusals array. Add it to the roster or reuse an entry that is on it',
             );
         }
+    }
+
+    /**
+     * AND THE ROSTER'S BACKING VALUES ARE THESE THREE STRINGS, WRITTEN OUT.
+     *
+     * THIS IS COVERAGE E246 REMOVED. Before it, `Runtime`'s three `DENIAL_*`
+     * constants were string literals, so
+     * {@see self::testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()}
+     * compared a literal against a derived roster and a respelled case broke
+     * the comparison. Making both sides derive is the right fix for drift and
+     * it is also what made that comparison self-consistent by construction, so
+     * the published STRINGS need a pin of their own. The measurement is in
+     * this class's doc-block.
+     *
+     * SPELLED OUT AND NOT DERIVED, deliberately — the same treatment
+     * {@see self::testTheDocumentsKindTokenIsLowercaseAndIsTheThreePublishedWords()}
+     * gives the tokens, and for the same reason. Every other assertion in this
+     * file reads the prefixes through {@see DenialKind::prefixes()} or through
+     * a projection of it, so all of them move together with a respelling.
+     * These three are the bytes a finished reason OPENS with, matched
+     * case-sensitively by {@see Chat::isDeniedResult()} and by anything
+     * out-of-process reading a run's stderr or its `refusals` array. Changing
+     * one is a change to what this application publishes and should cost a
+     * deliberate edit here.
+     *
+     * ORDER IS PINNED TOO, with `assertSame`: at least one consumer iterates
+     * the roster, and {@see DenialKind::prefixes()} promises `cases()` order.
+     */
+    public function testTheRostersBackingValuesAreTheThreePublishedPrefixes(): void
+    {
+        self::assertSame(
+            ['Permission denied:', 'Permission required:', 'Hook denied:'],
+            DenialKind::prefixes(),
+            'a DenialKind case has been respelled. The roster and every consumer of it derive from this '
+            . 'enum, so no other assertion in this tree can see the change: these three strings are what '
+            . 'a finished denial reason opens with and what an out-of-process reader matches on',
+        );
     }
 
     /**
