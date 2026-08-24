@@ -490,10 +490,28 @@ final class BackgroundSupervisorReapTest extends TestCase
      * as SURVIVING. What this asserts is the weaker, still worth having claim
      * that `spawnSession()` leaves no zombie behind on its happy path — the
      * regression E365 describes, one level up.
+     *
+     * ⚠️ WHY THIS TEST OPENS BY MAKING A ZOMBIE ON PURPOSE. Its real assertion
+     * is `assertSame([], $zombies)`, and an assertion that a set is EMPTY is
+     * satisfied just as well by an instrument that cannot see anything at all.
+     * That is not hypothetical here and it is not a hypothetical in general:
+     * MEASURED, with `directChildPids()` mutated to `return []`, this test
+     * passed — one assertion, green — and a probe on the UNMUTATED tree showed
+     * `$new` is empty on every ordinary run, so the zombie-classifying
+     * predicate below never executes on a single pid. Both halves of it could
+     * be inverted and nothing here would notice.
+     *
+     * So {@see assertTheZombieScannerIsLive()} runs FIRST, IN THIS TEST — not
+     * in a sibling a `--filter` or a careless deletion can separate from it —
+     * and drives a real exited-but-unwaited child through the SAME
+     * `directChildPids()` + `commOf()`/`isAlive()` pair, requiring it to be
+     * FOUND, then reaped, then not found. Only after that does the empty result
+     * below carry information.
      */
     public function testSpawnSessionLeavesNoZombieChildBehind(): void
     {
         $this->requireProcTools();
+        $this->assertTheZombieScannerIsLive();
         foreach (['pcntl_fork', 'posix_setsid', 'stream_socket_server'] as $fn) {
             if (!function_exists($fn)) {
                 $this->markTestSkipped("{$fn}() unavailable");
@@ -915,6 +933,73 @@ final class BackgroundSupervisorReapTest extends TestCase
         }
 
         return array_values(array_unique($pids));
+    }
+
+    /**
+     * KNOWN-POSITIVE CONTROL for the zombie scanner, run inside the test whose
+     * only assertion is that a set is empty.
+     *
+     * Spawns a child that exits immediately and deliberately does NOT wait for
+     * it, so it sits in state `Z` — the exact condition
+     * {@see testSpawnSessionLeavesNoZombieChildBehind()} claims not to find
+     * after `spawnSession()`. Every component of that claim is then required to
+     * fire on it: `directChildPids()` must LIST it, `commOf()` must answer
+     * non-null (a zombie keeps `/proc/<pid>/comm`), and `isAlive()` must answer
+     * false. `proc_close()` reaps it and the pid must leave the list again.
+     *
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive takes: a
+     * child running `exit(0);` reaches state `Z` in ~0.044s, appears in
+     * `/proc/self/task/<tid>/children` while there, and is gone from it
+     * immediately after `proc_close()`. The 5s bound below is that figure with
+     * two orders of magnitude of slack for a loaded box — five lanes share it.
+     */
+    private function assertTheZombieScannerIsLive(): void
+    {
+        $control = proc_open(
+            [PHP_BINARY, '-r', 'exit(0);'],
+            [['file', '/dev/null', 'r'], ['file', '/dev/null', 'a'], ['file', '/dev/null', 'a']],
+            $controlPipes
+        );
+        $this->assertIsResource($control, 'could not spawn the control child');
+
+        $status = proc_get_status($control);
+        $controlPid = (int) $status['pid'];
+        $this->reportedPids[] = $controlPid;
+
+        try {
+            $deadline = microtime(true) + 5.0;
+            while (microtime(true) < $deadline && $this->isAlive($controlPid)) {
+                usleep(2000);
+            }
+
+            $this->assertFalse(
+                $this->isAlive($controlPid),
+                'the control child never became a zombie, so this test cannot vouch for the '
+                . 'scanner and the empty result it guards means nothing'
+            );
+            $this->assertContains(
+                $controlPid,
+                $this->directChildPids(),
+                'directChildPids() cannot see a REAL unwaited child, so its empty answer in '
+                . 'this test is the answer of a dead instrument, not evidence of a clean spawn'
+            );
+            $this->assertNotNull(
+                $this->commOf($controlPid),
+                'commOf() answered null for a real zombie, which would make the zombie filter '
+                . 'reject every genuine offender it is meant to catch'
+            );
+        } finally {
+            // Reap it here rather than leaving it to tearDown: the second half
+            // of the control is that the scanner stops seeing it once waited for.
+            proc_close($control);
+        }
+
+        $this->assertNotContains(
+            $controlPid,
+            $this->directChildPids(),
+            'directChildPids() still lists a child that has been waited for, so it cannot tell '
+            . 'a reaped child from a leaked one — which is the only distinction this test makes'
+        );
     }
 
     private function requireProcTools(): void
