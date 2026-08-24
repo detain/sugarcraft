@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Tui\StallDetector;
 use SugarCraft\Crush\Tui\StallWarning;
 
@@ -163,12 +164,25 @@ final class BackgroundSupervisor implements SessionNotificationInterface
         }
         stream_set_timeout($serverSocket, 5);
 
-        // Build command to run the session subprocess.
-        // The subprocess will: daemonize, connect to socket, run the task.
-        $cmd = sprintf(
-            '%s -r %s',
-            escapeshellarg(PHP_BINARY),
-            escapeshellarg($this->buildSessionDaemonCode(
+        // Build the argv for the session subprocess, which will daemonize,
+        // connect to the socket and run the task.
+        //
+        // AN ARGV, NOT A SHELL STRING, and the change is what makes the comment
+        // below the handshake TRUE. This was
+        // `sprintf('%s -r %s', escapeshellarg(PHP_BINARY), escapeshellarg($code))`,
+        // and a string hands `proc_open()` to `/bin/sh -c`. `/bin/sh` on this
+        // host is dash, which does NOT apply the `-c` exec optimisation —
+        // MEASURED, with this exact descriptor spec, the direct child's `comm`
+        // is `(sh)` and the `php -r` launcher is a GRANDCHILD. So
+        // `proc_get_status($proc)['pid']` reported the SHELL, not the launcher
+        // the comment named, and `proc_terminate()` on the error path below
+        // killed dash and left the launcher running. Nothing here was ever a
+        // shell fragment — it is a program and two arguments — so the shell
+        // bought nothing and cost the process tree.
+        $cmd = [
+            PHP_BINARY,
+            '-r',
+            $this->buildSessionDaemonCode(
                 $socketPath,
                 $bufferPath,
                 $sessionId,
@@ -177,8 +191,8 @@ final class BackgroundSupervisor implements SessionNotificationInterface
                 $agent->provider,
                 $agent->model,
                 $timeoutSeconds,
-            ))
-        );
+            ),
+        ];
 
         // Daemon stdout/stderr go to a sidecar log rather than the session
         // buffer: the buffer is the curated transcript reconnect() restores
@@ -201,7 +215,16 @@ final class BackgroundSupervisor implements SessionNotificationInterface
         // Wait for child to connect to our socket (with timeout)
         $clientSocket = @stream_socket_accept($serverSocket, 5);
         if ($clientSocket === false) {
-            proc_close($proc);
+            // BOUNDED, because this is the path where the launcher is by
+            // definition misbehaving: it did not connect within five seconds, so
+            // assuming it is about to exit is assuming away the failure. A bare
+            // `proc_close()` here WAITS — MEASURED on this host, against a child
+            // that ignores SIGTERM, `proc_terminate()` + `proc_close()` returns
+            // only after the child's whole remaining lifetime (7.77s for an 8s
+            // child), and with no signal at all it waits indefinitely. A wedged
+            // launcher would therefore hang the TUI thread that asked for a
+            // background session.
+            ProcessReaper::terminateAndClose($proc);
             fclose($serverSocket);
             @unlink($socketPath);
             @unlink($bufferPath);
@@ -222,17 +245,49 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             tags: $tags,
         );
 
-        // Read the handshake and take the DAEMON's pid from it. The pid
-        // proc_get_status() reports belongs to the `php -r` launcher, which
-        // exits during the daemon's double fork — tracking that one makes
-        // isProcessRunning() false immediately and reconnect() would report
-        // every freshly spawned session as already Completed.
+        // Read the handshake and take the DAEMON's pid from it.
+        //
+        // WHAT THIS COMMENT SAID: that the pid `proc_get_status()` reports
+        // belongs to the `php -r` launcher, which exits during the daemon's
+        // double fork. WHAT WAS TRUE: while the command above was a shell
+        // STRING, it reported the `sh` wrapper instead — MEASURED, `comm` was
+        // `(sh)` — because dash does not exec through `-c`. WHY IT STILL EARNS
+        // ITS PLACE: the reasoning was right and the spawn is now an argv, so
+        // the sentence describes the tree it always claimed to. The launcher IS
+        // the direct child, it DOES exit during the double fork, and tracking it
+        // would still make isProcessRunning() false immediately and have
+        // reconnect() report every freshly spawned session as already Completed.
+        // Hence the handshake pid, with the launcher pid only as a fallback for
+        // a handshake that did not parse.
         stream_set_timeout($clientSocket, 2);
         $handshake = @fgets($clientSocket);
         fclose($clientSocket);
 
         $childPid = self::parseHandshakePid(is_string($handshake) ? $handshake : '')
             ?? (proc_get_status($proc)['pid'] ?? 0);
+
+        // REAP THE LAUNCHER, EXPLICITLY — and never signal it.
+        //
+        // THE DOUBLE FORK IS INTENTIONAL AND IS NOT BEING REMOVED. A background
+        // session must outlive the TUI that started it: that is the whole
+        // feature. {@see buildSessionDaemonCode()} forks, `posix_setsid()`s and
+        // forks again precisely so the daemon has no controlling terminal and is
+        // reparented to init, and {@see reconnect()} exists to find those daemons
+        // again in a LATER process. Signalling through this handle would
+        // therefore be wrong twice over: it cannot reach the daemon (a
+        // great-grandchild in another session), and if it landed early enough it
+        // would kill the launcher mid-fork.
+        //
+        // What it CAN do is not leave the launcher unwaited. The happy path used
+        // to call nothing at all here and relied, silently, on `$proc` leaving
+        // scope: MEASURED on this host, the `proc_open()` resource destructor
+        // reaps an already-exited child instantly (state `Z` -> `GONE`) and a
+        // held handle shows the launcher sitting in `Z` until it does. That
+        // worked, and it worked for a reason no reader of this method could see.
+        // {@see \SugarCraft\Crush\Support\ProcessReaper::reapIfExited()} says it
+        // out loud: wait briefly WITHOUT signalling, close if it exited, and
+        // otherwise leave the handle to the destructor.
+        ProcessReaper::reapIfExited($proc);
 
         $session = $session->withStatus(BackgroundSessionStatus::Running);
 

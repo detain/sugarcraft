@@ -13557,3 +13557,156 @@ the reasoning kept — the original point, that the contract does not need a *co
 true and is why the helper takes a device path.
 
 ---
+
+### Eb53-1 — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: medium (duplication, not a live defect).
+
+E366's fix added `sugar-crush/src/Support/ProcessReaper.php` — one bounded
+SIGTERM → poll → signal 9 → `proc_close()` ladder — and put all four of this round's teardown sites on it
+(`ClaudeCodeMcpClient::disconnect()`, `LspConnection::stopProcess()`,
+`ClaudeCodeProvider`'s stream teardown, `BackgroundSupervisor`'s accept-failure path).
+
+**Two older copies were deliberately left in place**: `MCP/StdioMcpServer::stop()` and
+`Backend/StreamingCommandBackend::terminateAndReap()`. Each carries its own private `waitForExit()` and its
+own copy of the three budget constants. Both are correct today and both are tested
+(`tests/MCP/StdioMcpServerShutdownTest`), and neither file was in lane b's round-53 file list, so migrating
+them would have been an out-of-lane edit on a path with no defect on it. The reason to do it later is drift:
+three copies of a budget constant is how one of them ends up different.
+
+**Acceptance for whoever takes it**: after migration, mutate `ProcessReaper::TERMINATE_GRACE_SECONDS` and
+confirm BOTH suites move. If only one does, a private copy survived the migration.
+
+---
+
+### Eb53-2 — `spawnSession()`'s explicit launcher reap is legibility, not a leak fix, and its deletion survives
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: informational. **This is a recorded SURVIVING mutation,
+written down so nobody re-derives it as a hole.**
+
+`BackgroundSupervisor::spawnSession()` now ends with `ProcessReaper::reapIfExited($proc)`. Deleting that
+line does **not** leak a zombie and the round-53 test suite does not pretend it does: `$proc` goes out of
+scope at the end of the method, and — measured on this host, PHP 8.3.6 — PHP's `proc_open()` resource
+destructor reaps an already-exited child instantly (`Z` → `GONE`, no observable window) and abandons a
+still-running one in 0.000s. Mutation `M9-no-explicit-reap` therefore **SURVIVED**, deliberately.
+
+What the explicit call buys is a defined budget and a place to hang the reasoning, and what the tests DO
+pin is that the reaper used there is the **non-signalling** one: swapping `reapIfExited()` for
+`terminateAndClose()` is killed, because signalling a launcher that is mid-`fork()` would kill the process
+in the act of creating the session.
+
+**Do not "fix" the survivor by asserting on zombies.** The honest pin already exists
+(`testSpawnSessionLeavesNoZombieChildBehind`) and it passes with or without the call, which is why the
+class doc-block says so out loud.
+
+---
+
+### Eb53-3 — a `src/` file-count census is now load-bearing in two places and five lanes are editing `src/`
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: process / merge hazard.
+
+`tests/Tools/BuiltInToolCorpusTest.php` asserts exact cardinalities over `src/` (files, concrete classes,
+top-level declarations) and additionally asserts that `src/Context/RepoMapBlock.php`'s doc-block **restates
+two of them**. Adding one file to `src/` therefore reds four assertions across two files, one of which is
+production source. Lane b hit this by adding `src/Support/ProcessReaper.php`; **lane a's brief also creates
+files under `src/Permissions/`**, so the same three literals will be wrong again at merge, and they can
+merge textually clean while being arithmetically wrong (rule 32).
+
+The bump is applied with a ⚠️ note on the census doc-block naming the correct resolution: re-derive all
+three from the merged tree and check that `declarations − files` still equals the secondary-declaration
+total, which is the one assertion there that a wrong pair of literals cannot satisfy by accident.
+
+**The deeper question for a later round** (deliberately NOT done here — it is a rewrite of a guard lane b
+does not own): the file and declaration counts are pure cardinalities and rule 18 says a cardinality
+measured over `src/` should be derived by a test rather than written into prose. The *invariant* that
+census defends — no secondary declaration is a dispatchable tool — is already asserted separately and is
+immune to the count. Consider whether the three literals earn their maintenance cost at all, or whether the
+`RepoMapBlock` restatement should quote a range rather than an integer.
+
+---
+
+### Eb53-4 — the copied-helper drift guard caught a defect inside the change that added the copies
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: informational. **Evidence that the guard pays for itself.**
+
+Round 53's items 1, 2 and 4 added three shutdown test files that each carry a byte-identical copy of
+`pidFile()` and `selfReportedPid()`. The literals had already drifted before the commits landed —
+`/server.pid` against `/child.pid`, "the fixture server never reported its pid" against "the fixture
+child …" — and `selfReportedPid()` took a `ClaudeCodeMcpClient` in one copy and nothing in the other two,
+with the parameter **unused**. `DuplicatedTestHelperDriftTest` reported all of it on the lane's first
+baseline, including the signature-only divergence its own doc-block explains no other check can see.
+
+Resolved by making the copies agree rather than by recording an accepted divergence. Worth noting for the
+next reviewer: **the copies are still copies.** The guard's own advice offers extraction as an option, and
+four files in this package now share these helpers. Extraction would land them in `tests/Support/`, which
+round 53 assigns to another lane, so it is deferred rather than declined.
+
+---
+
+### Eb53-5 — `MCP/StdioMcpServer` has the identical undrained-stderr wedge, and is OUT OF LANE
+
+**Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: functional, latent. **Reported, deliberately not fixed — the file belongs to another lane.**
+
+`StdioMcpServer::start()` opens fd 2 as `['pipe', 'w']`, sets only fd 1 non-blocking, and **never reads
+fd 2** (`grep -c 'pipes\[2\]'` → 0 on this file). That is byte-for-byte the shape round 53 fixed in three
+sibling classes. A pipe whose reader never reads holds one kernel buffer, after which the child blocks in
+`write(2)`: an MCP server that logs to stderr — the conventional place for a **stdio**-transport server to
+log, since stdout is the protocol — stops answering and cannot exit.
+
+**Generator, so this needs no re-investigation.** PHP 8.3.6, Linux 6.8, 64 KiB pipe buffer. Three-pipe
+descriptor spec identical to the class's own, fd 1 non-blocking, fd 2 never read, 5.0 s deadline / 5 ms
+poll; child writes N bytes to stderr and then a framed reply to stdout. Three consecutive takes,
+identical every time:
+
+| stderr bytes | reply arrived | elapsed |
+|---|---|---|
+| 1 000 | yes | 0.04 s |
+| 60 000 | yes | 0.04 s |
+| 100 000 | **no** | 5.00 s (deadline) |
+
+**The symptom is not a hang on the reading side, which is how this survived three reviews.** Every read
+path is deadline-bounded, so the CALLER returns on time with nothing while the SERVER is permanently
+stuck, and `isConnected()` goes on answering true.
+
+**Acceptance for whoever takes it:** mirror `LspConnection::drainStderr()` — `stream_set_blocking($pipes[2],
+false)` at start, a bounded drain called before each stdout read and once before teardown, a tail capped at
+one pipe buffer. Guard the read with `is_resource()`, **not** `@`: `fread()` on a closed pipe raises a
+TypeError, which `@` does not suppress (this bit the LSP fix, surfaced by `testProcessDiesMidRead`). Pin it
+with a two-row test — a quiet control under one buffer and a loud row over it — asserting **that the reply
+arrived**, never that the call was quick; a timing bound is satisfied by the broken version.
+
+---
+
+### Eb53-6 — `McpMessage::parse()` raises a TypeError on a JSON-RPC reply whose `result` is not an object
+
+**Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: robustness. **Found incidentally; `src/McpMessage.php` is out of lane.**
+
+`McpMessage::__construct()` types `$result` as `?array`, and `parse()` passes `$decoded['result']` straight
+through with no shape check. A server answering `{"jsonrpc":"2.0","id":"1","result":"ok"}` — legal JSON-RPC
+2.0, where `result` is any value — therefore raises
+`TypeError: McpMessage::__construct(): Argument #4 ($result) must be of type ?array, string given`.
+
+Observed while building a fixture for Eb53-5's sibling fix: the fixture answered with a string `result` and
+the client threw. Every other malformed input `parse()` meets is answered with `null`; this one is an
+uncaught throw out of `readMessages()`, i.e. a third-party MCP server can crash the client with a
+well-formed reply.
+
+**Acceptance:** widen the parameter to `mixed` (and the `?array` PHPDoc with it) or coerce a non-array
+`result` the way the other fields are coerced, then pin with a parse test per JSON-RPC scalar type —
+string, int, bool, null — plus the array case as the known-positive control.
+
+---
+
+### Eb53-7 — `BackgroundSupervisorReapTest` moves the suite's skip count off 1 on any non-Linux runner
+
+**Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: CI hygiene. **Not a defect today; filed so a future runner change does not read as a regression.**
+
+The round's standing invariant is "the suite's skip count is exactly 1". `BackgroundSupervisorReapTest`
+adds capability gates — `requireProcTools()` needs `proc_open`, `posix_kill` and a `/proc`, and three tests
+additionally need `pcntl_fork`, `posix_setsid` and `stream_socket_server`. These are **capability** skips,
+not the timing-dependent kind the round forbids, and they are correct usage. But they read `/proc`, so on a
+macOS or Windows runner the count moves from 1 to several and any check pinned to the literal 1 reds for a
+reason that is not a defect.
+
+No action while `sugar-crush` is Linux-only in CI. **Trigger:** if `sugar-crush` is ever added to
+`MACOS_LIBS` or `WINDOWS_LIBS` in `ci.yml`, the skip-count invariant must be expressed per-platform first.
