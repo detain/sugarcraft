@@ -11205,20 +11205,29 @@ on a closed resource, so an `is_resource()` guard has to come first — which `i
 
 ---
 
-### Ea51-4 — `candy-mosaic` and `candy-palette` each carry a committed per-lib `composer.lock`
+### Ea51-4 — RETRACTED BEFORE IT SHIPPED: the two `composer.lock` files are NOT committed, and `ls` cannot tell
 
-**Recorded 2026-08-24 by round-51 lane a.** Severity: build hygiene, against a stated repo rule.
-**Measured by `ls`. Out of lane. Reported, not fixed.**
+**Recorded and refuted 2026-08-24 by round-51 lane a, in that order.** Severity: none — there is no defect.
+Kept as a methodology instance, because the refutation came from the entry's own stated generator.
 
-`AGENTS.md` and `CONTRIBUTING.md` both state that a per-lib `composer.lock` must never be committed,
-because `composer install` then resolves from the lock and silently ignores CI's path-repo injection —
-which makes a PR that breaks a sibling pass its dependent lib's job. `candy-mosaic/composer.lock` and
-`candy-palette/composer.lock` are present in the tree at `a85fcfd6`. `sugar-crush/` has none, and
-`/*/composer.lock` is gitignored, so these two predate the ignore rule rather than slipping past it.
+**WHAT THIS ENTRY SAID**, drafted and committed: "`candy-mosaic/composer.lock` and
+`candy-palette/composer.lock` are present in the tree at `a85fcfd6`", filed against the rule that
+`AGENTS.md` and `CONTRIBUTING.md` both state — never commit a per-lib `composer.lock`, because
+`composer install` then resolves from it and silently ignores CI's path-repo injection.
 
-**Not touched here**, both because no lane owns those manifests and because deleting a lock is exactly the
-kind of change that should not ride along inside a descriptor-0 commit. Recorded with its verification:
-`git ls-files '*/composer.lock'` is the generator.
+**WHAT IS TRUE.** `git ls-files '*/composer.lock'` returns **nothing**. Both files exist on disk and both
+are UNTRACKED: `/*/composer.lock` is gitignored, and these are ordinary local build artefacts of the sort
+every lib with a `vendor/` has. No rule is broken and there is nothing to remove.
+`php tools/check-path-repos.php --no-lib-path-repos` exits 0 ("scanned 58 libs … no sibling path-repos in
+per-lib manifests").
 
-**Step.** `git rm --cached` the two locks in a change of their own, then confirm
-`php tools/check-path-repos.php --no-lib-path-repos` still exits 0.
+**WHY IT IS KEPT RATHER THAN DELETED.** The evidence was `ls candy-palette/` — a listing of the WORKING
+TREE — used to support a claim about what is COMMITTED. Those are different questions and the cheap command
+answers the wrong one, silently and in the direction that looks like a finding. It is the same shape as
+round 44's `ls -l | grep -c '^l'` printing a correct-looking 18 over real directories, and as round 44's
+`grep -c` reporting a confident zero on binary output: an instrument that answers a nearby question. The
+entry was written, committed, and then refuted by running the generator it had itself named — which is the
+only reason it did not ship as a finding, and an argument for naming the generator even when the claim
+feels obvious.
+
+**Step.** None.
