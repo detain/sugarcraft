@@ -3591,6 +3591,56 @@ final class VhsTapeContractTest extends TestCase
     }
 
     /**
+     * AND THE SAME-FILE HALF, which the declaring-file check cannot see: line
+     * numbers frozen at class load against a file re-read on every call.
+     *
+     * The offsets are supplied here rather than reflected, because the failure
+     * being pinned is precisely offsets that no longer match the file - a state
+     * a live reflection cannot be asked to produce, and the reason the check
+     * lives in a function taking `$lines` instead of reading the file itself.
+     * The correct slice comes first so the refusal below cannot be a predicate
+     * stuck at "no".
+     */
+    public function testASliceIsRefusedUnlessItsFirstLineDeclaresTheMethodAsked(): void
+    {
+        $lines = [
+            "<?php\n",
+            "    private static function alpha(): int\n",
+            "    {\n",
+            "        return 1;\n",
+            "    }\n",
+            "    private static function beta(): int\n",
+            "    {\n",
+            "        return 2;\n",
+            "    }\n",
+        ];
+
+        self::assertStringContainsString(
+            'return 1;',
+            self::declaredSlice($lines, 'alpha', 2, 5),
+            'the reader refused a slice whose first line DOES declare the method asked for, so '
+            . 'it is stuck at no and the refusal below proves nothing',
+        );
+
+        try {
+            self::declaredSlice($lines, 'alpha', 6, 9);
+            self::fail(
+                'the reader accepted one declaration\'s offsets for another declaration\'s name '
+                . 'and returned beta()\'s body as alpha()\'s. That is the shape of the run in '
+                . 'which this file changed on disk mid-suite: every census measured a neighbour '
+                . 'and blamed the prose next to it.',
+            );
+        } catch (\PHPUnit\Framework\ExpectationFailedException $refusal) {
+            self::assertStringContainsString(
+                'does not declare alpha()',
+                $refusal->getMessage(),
+                'the reader refused, but for some other reason, so this fixture is not pinning '
+                . 'the first-line check',
+            );
+        }
+    }
+
+    /**
      * One model method's own tokens, with comments and whitespace dropped.
      *
      * WHAT THIS SAID: "located by reflection rather than by line numbers so it
@@ -3640,11 +3690,12 @@ final class VhsTapeContractTest extends TestCase
         $lines = file(__FILE__);
         self::assertIsArray($lines, 'could not read this file');
 
-        $body = implode('', array_slice(
+        $body = self::declaredSlice(
             $lines,
-            $reflection->getStartLine() - 1,
-            $reflection->getEndLine() - $reflection->getStartLine() + 1,
-        ));
+            $method,
+            $reflection->getStartLine(),
+            $reflection->getEndLine(),
+        );
 
         $dropped = [\T_COMMENT, \T_DOC_COMMENT];
 
@@ -3657,6 +3708,43 @@ final class VhsTapeContractTest extends TestCase
             static fn (array|string $token): bool => !\is_array($token)
                 || !\in_array($token[0], $dropped, true),
         ));
+    }
+
+    /**
+     * Lines $start..$end of $lines, refused unless the first of them declares
+     * $method.
+     *
+     * THE DECLARING-FILE CHECK ABOVE DOES NOT COVER THIS ONE, and the failure
+     * it leaves open is the one actually observed. Reflection's line numbers
+     * are fixed when the class is loaded and `file(__FILE__)` is read on every
+     * call, so an edit to THIS file between those two moments shifts every
+     * slice while the file name still matches. In the run where that happened
+     * each body came back one declaration out of step and the census reported
+     * {@see directiveValues()}'s figures under {@see scanRegex()}'s name.
+     *
+     * ONE LINE IS ENOUGH TO CATCH IT because the slice starts at the
+     * declaration: if the first line does not spell `function <name>`, the
+     * offsets are not addressing the method that was asked for, whatever else
+     * is true. A declaration split across a line break between the keyword and
+     * the name would also be refused - that is a shape this reader does not
+     * understand rather than a false alarm, and saying so is the point.
+     *
+     * @param list<string> $lines
+     */
+    private static function declaredSlice(array $lines, string $method, int $start, int $end): string
+    {
+        self::assertStringContainsString(
+            'function ' . $method,
+            $lines[$start - 1] ?? '',
+            'the first line of the slice reflection points at does not declare ' . $method
+            . '(), so these offsets address some other part of this file and every figure '
+            . 'measured from them is a figure about the wrong method. The ordinary cause is '
+            . 'that this file was EDITED while the suite was running - a mutation harness '
+            . 'rewriting it in place will do it - in which case the run is void rather than '
+            . 'red. Do not adjust the census to match what came back.',
+        );
+
+        return implode('', array_slice($lines, $start - 1, $end - $start + 1));
     }
 
     /**
