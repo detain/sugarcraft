@@ -505,6 +505,17 @@ final class WorktreeRemovalReportingTest extends TestCase
      * its discovery half but APPENDS `bin/sugarcrush` unconditionally, so the
      * roster really can carry an entry nothing checked.
      *
+     * ONLY ONE OF THE TWO IS DRIVEN HERE, and saying so is the point. Rewriting
+     * `is_file($file)` to `true` is KILLED by the guard's directory case;
+     * rewriting the `assertIsString()` to a `(string)` cast SURVIVES this file's
+     * suite (both MEASURED). Driving the read arm needs an unreadable FILE,
+     * which needs a `chmod` whose outcome depends on the uid — and that arm is
+     * already driven, with both polarities, by
+     * `RuntimeNoticeSinkDeliveryTest::testARosterEntryTheScanCannotReadFailsRatherThanScoringZero()`
+     * over the identical shape. A second copy here would be drift, not
+     * coverage. What is NOT acceptable is deleting the arm because nothing
+     * reds without it.
+     *
      * @param list<string> $files
      *
      * @return list<string>
