@@ -34,7 +34,12 @@ use PHPUnit\Framework\TestCase;
  * other's write and its `assertFileExists`, and both vandalising the audit log
  * of any real `sugarcrush` on the same box. Measured under one shared private
  * `TMPDIR`, six concurrent runs: 2, 1 and 1 failures across three takes before
- * the fix, 0, 0 and 0 after it.
+ * the fix, 0, 0 and 0 after it — that figure is NOT this file's own, it is
+ * carried forward verbatim from the commit that landed the fix (`906fa666`)
+ * and was verified against that commit message rather than re-run here. Rule 3
+ * applies to a sentence you copy as much as to a number you generate, and a
+ * measurement whose generator lives somewhere else has to say so or the next
+ * reader will re-cite it as this file's evidence.
  *
  * A GUARD WHOSE ALPHABET IS THE TOKEN `uniqid` CANNOT EXPRESS THE SECOND SHAPE
  * BY CONSTRUCTION, so a sweep that fixed 91 call sites walked straight past it

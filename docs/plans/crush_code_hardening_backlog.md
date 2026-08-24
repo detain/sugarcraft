@@ -10280,7 +10280,7 @@ and the row must be deleted when they are fixed.
 
 ---
 
-### Ec49-2 — E286's fix landed in one reader; ELEVEN take the shape, and its OBSERVED half is guarded in one
+### Ec49-2 — E286's fix landed in one reader; the shape recurs, and its OBSERVED half is guarded in one
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: correctness of an instrument. **Measured**, PHP 8.3.6.
 Half fixed with a census; half deferred with the reason.
@@ -10291,30 +10291,45 @@ for the wrong-file case, and a `declaredSlice()` that refuses unless the slice's
 `function <name>` for the same-file-shifted case.
 
 **The shape recurs and nothing in the tree said so.** Derived by
-`tests/Support/ReflectionLineSliceReaderCensusTest`: every function under `tests/` that indexes a line array
-with reflection's line numbers. **Direction one — naming the declaring file — is satisfied by all but one**
-(`Cli/HelpTest.php::backendSelectionVariables`), which is rostered.
+`tests/Support/ReflectionLineSliceReaderCensusTest`: every function under `tests/` that reaches a line-array
+slice with reflection's line numbers. **Direction one — naming the declaring file — is satisfied by all but
+one** (`Cli/HelpTest.php::backendSelectionVariables`), which is rostered.
 
-**Direction two is satisfied by ONE reader out of eleven, and it is the half that was actually OBSERVED
+**CORRECTION, 2026-08-24, from this round's own review.** This entry originally said "ELEVEN take the shape"
+and "ten readers in nine files". Neither figure reproduced, and worse, the census that produced them could
+not see the exemplar it was written about: it required `getStartLine` and `array_slice` in the SAME
+function, and `VhsTapeContractTest::modelMethodTokens()` delegates the indexing to `declaredSlice()`, so
+both halves of that pair fell out. Re-opening E286's direction-one defect verbatim in that exemplar left the
+census GREEN. The census now selects on the reflection read alone and chases the slice one hop into
+same-file callees; a read whose slice is out of that reach is filed rather than skipped. **No cardinality is
+restated here** — it is derived on every run, which is the only form that survives a merge (rule 18).
+
+**Direction two is satisfied by ONE reader, and it is the half that was actually OBSERVED
 failing.** Reflection's line numbers are fixed at class load and `file()` is read per call, so an edit to
 the file in between shifts every slice while the name still matches; in the run where that happened a
 census reported one method's figures under another's name, under a message blaming stale prose — which
 invites the reader to edit the figures. Only `VhsTapeContractTest` refuses it.
 
-**Why the second half is not guarded here.** Ten readers in nine files, and the roster key is
-`<file>::<method>` — with five lanes merging concurrently that reds on every rename, for a defect that
-needs a mid-run edit to fire. It wants one round that adds a shared `declaredSlice()` to the readers
-themselves rather than a census over them.
+**Why the second half is not guarded here.** The roster key would be `<file>::<method>` — with five lanes
+merging concurrently that reds on every rename, for a defect that needs a mid-run edit to fire. It wants one
+round that adds a shared `declaredSlice()` to the readers themselves rather than a census over them.
 
 **Step.** (a) One `assertSame()` in `Cli/HelpTest.php::backendSelectionVariables` — it reflects `Bootstrap`
 and slices a `$lines` read by path, correct by construction until one of those methods arrives through a
-trait. (b) Lift `declaredSlice()` into a shared helper and route the ten readers through it.
+trait. (b) Lift `declaredSlice()` into a shared helper and route the readers through it. **Note on (b),
+which the original entry got wrong:** lifting the helper out of each declaring FILE moves `array_slice`
+past the census's one-hop-within-one-file bound. That no longer blinds the census silently — every affected
+reader lands in `SLICE_UNREACHABLE` and reds with a message saying so — but whoever does (b) must expect
+that red and answer it by widening the census's resolution or rostering the readers, NOT by deleting the
+census.
 
 ---
 
-### Ec49-3 — two of round 49's own review findings were ALREADY FIXED at the round's base commit
+### Ec49-3 — three of round 49's own review findings were ALREADY FIXED at or in the round's base commit
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: process. **Verified in the tree at `906fa666`.**
+**Corrected from "two" to "three" 2026-08-24:** E298's fix *is* `906fa666` itself, so it belongs in this
+count alongside E287 and E286. The miscount is the entry's own lesson happening to the entry.
 
 Lane c's brief asked for E287 (the drift guard's visibility alphabet "was defended by a feeling") and E286
 (a reader slicing `file(__FILE__)` with reflection's line numbers "unchecked in both directions") as work
@@ -10369,5 +10384,86 @@ real-tree liveness control.
 
 **Step.** Decide: keep the fixed default and open it with `O_APPEND` plus an `is_link()` refusal, or move
 the default under a per-user directory the process owns.
+
+---
+
+### Ec49-6 — four `src/` `uniqid()` calls carried a literal prefix and therefore no entropy at all
+
+**Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: same family as
+`Ec49-1`. **Measured**, PHP 8.3.6.
+
+**What.** `ProcessUniqueTempNameTest`'s guard banned the ARGUMENT-LESS call. `uniqid($p)` is `$p` followed
+by the *same* 13-hex microtime suffix the bare call returns — 20000/20000 prefixed values conform,
+and `uniqid('A_')` / `uniqid('B_')` at one instant give `A_6a8bc9d22f617` / `B_6a8bc9d22f618` — so a
+constant literal prefix contributes **zero** cross-process entropy and a call carrying one is precisely
+what the guard's own sentence describes. Four `src/` sites were spared by it:
+`src/Agents/AgentManager.php` (`subagent_`), `src/App/App.php` (`skill_fork_`),
+`src/Hooks/ScriptHook.php` (`hook_`), `src/Providers/ClaudeCodeProvider.php` (`tool_`).
+
+**The guard has been widened** — the predicate is now "no more-entropy flag" — and all four are rostered in
+`NO_ENTROPY_FLAG_INVENTORY` with traced reasons. Censused over the 249 call sites in scope: 240 carry the
+flag, 9 do not, 0 are undecidable.
+
+**Traced, not assumed.** `AgentManager` and `App` build `SubAgent` ids that reach
+`AgentWorkerPool::resultFile()`/`progressFile()` under `makeResultDirPath()`, which already carries a pid
+and 64 bits — same containment argument as `Ec49-1`, and it fails at the same moment. `ScriptHook`'s value
+is a display NAME (the payload file is `tempnam()`-generated at a different site) and
+`ClaudeCodeProvider`'s is a tool-call id (the `sc_runtime_tool_*` / `sc_chat_tool_*` files are named by
+`ToolIpcFiles::reserve()`); neither reaches a filename.
+
+**Step.** Fix all nine sites in one edit — `uniqid($prefix . getmypid() . '_', true)` — and delete the five
+inventory rows. It is a `src/` edit, out of a tests-only lane. Doing it with `Ec49-1` is one change, not two.
+
+---
+
+### Ec49-7 — the static-path scanner's alphabet still cannot express four shapes, and now says so in a test
+
+**Recorded 2026-08-24 by round-49 lane c's fix stage.** Severity: stated bound. **Measured**, PHP 8.3.6.
+
+`ProcessUniqueTempNameTest`'s second scanner gained constructors (`new \SQLite3`, `new \PDO` — the shape
+E242 actually took, and one a global-function alphabet could not see even with a fully fixed path),
+`/var/tmp`, `DIRECTORY_SEPARATOR`, and per-argument rather than first-argument-only classification.
+
+Four shapes are still missed, each now pinned by
+`testTheStaticPathScannerSaysWhatItCannotSee()` with a known-positive control beside it so the
+expected-empty rows are not satisfied by a dead instrument: a heredoc path, a path reached through a class
+constant, a `unix://` socket URI (the literal does not begin at the root), and `proc_open()`'s cwd. Each
+reds that test if it is ever fixed, which forces the paragraph describing the bound to be rewritten with it.
+
+**Step.** Widen the alphabet: `T_START_HEREDOC` runs, a `stream_socket_server`/`stream_socket_client` arm
+that strips a scheme before matching the root, `proc_open`'s fourth argument, and a class-constant
+resolution within the declaring file. Delete the corresponding row from the test with each.
+
+---
+
+### Ec49-8 — a fifth `significantTokens()` copy arrived in the round that widened the drift guard's bound
+
+**Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: latent duplication.
+
+`ProcessUniqueTempNameTest::significantTokens()` joins the copies in `StderrEmitterCensusTest`,
+`ContainedPathInventoryTest`, `HomeDirectoryPathReaderInventoryTest` and `ReadmeJsonErrorContractDriftTest`.
+They are semantically identical and spelled far enough apart (`$out` / `$tokens` / `$significant`,
+`\token_get_all` vs `token_get_all`, brace placement) that the divergence exceeds `DRIFT_BOUND` at 1 **and**
+at 2, so the guard the same round strengthened cannot see them.
+
+Not a defect today — it is exactly the family the widened bound exists for, arriving one notch outside it.
+
+**Step.** Either extract one shared `significantTokens()` (it has no lib-local behaviour in any copy), or
+measure bound 3 (see `Ec49-1`'s neighbour on the unexplored bound) and decide whether the guard should
+reach this far. Extraction is the cheaper of the two and removes the question.
+
+---
+
+### Ec49-9 — `readOrFail()` and its refusal test are now duplicated across three census files
+
+**Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: latent duplication.
+
+`readOrFail()` and `testTheCensusRefusesASourceItCannotOpenInsteadOfScanningItAsEmpty()` are byte-identical
+in two files and near-identical in a third (`ProcessUniqueTempNameTest`'s message differs). Nothing reds:
+the drift guard skips identical bodies, and the public test method is not `T_PRIVATE`. The family therefore
+arrives already two spellings apart, which is how the previous four-copy families started.
+
+**Step.** Extract both into one trait beside `TokenFunctionRanges` — the arm exists so an unreadable source
+cannot read as a clean one, and three copies of that arm is three places for it to be quietly reverted.
 
 ---
