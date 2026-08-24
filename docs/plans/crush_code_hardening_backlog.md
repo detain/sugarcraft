@@ -13226,3 +13226,42 @@ down. The census now carries `T_NAME_QUALIFIED`, `T_NAME_FULLY_QUALIFIED` and `T
 removing them reds it (mutation M11).
 
 ---
+
+### Ea53-6 — E368's population re-derived tree-wide with the corrected instrument: closed but for sites 2 and 4
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: measurement. **The generator is committed this time
+— that is the point of the entry.**
+
+E368's replacement generator was a scratch script and did not survive the round, so its "1832 files across
+58 libraries, 10 sink calls" could not be re-run by anyone. The instrument now lives at
+`candy-core/tests/Util/Tty/DescriptorSinkScanner`, is exercised by
+`candy-core/tests/Util/Tty/DescriptorSinkArgumentCensusTest`, and the census walks **every** `<lib>/src`
+it can find rather than a listed few — a census that enumerates the libraries it looks in can only find
+the defect where someone already suspected it, which is the same failure it was written to replace.
+
+Re-derived, PHP 8.3.6, over this lane's worktree: **58 libraries with a `src/`, 13 sink calls.** *Do not
+trust those two numbers — re-derive them; the census is set-equality on a judged roster precisely so that
+no count is load-bearing.* Of the 13:
+
+  - **2 remain defect-shaped**, both `INT_CAST_VIA_VARIABLE` in `candy-core`'s `PosixBackend` — E368 sites
+    2 and 4, deferred with reasons in Ea53-2 and judged in the roster.
+  - **3 were the sites fixed this round** (E368 sites 3, 5, 6), now `VARIABLE` off a real descriptor,
+    `LITERAL_INT` and `LITERAL_INT`.
+  - **8 were already correct.** Five match E368's carve-out list. **Two do not appear in it at all** —
+    `candy-log/src/Log.php`'s `posix_isatty(\STDERR)` and `candy-vcr/src/Cli/RecordCommand.php`'s
+    `posix_ttyname(\STDIN)`. Both pass the STREAM uncast, which `posix_isatty()` and `posix_ttyname()`
+    accept, so both are correct — but the carve-out list was a hand-read snapshot and it was incomplete,
+    which is the fourth time in this family that a hand-maintained roster of "the ones we know about"
+    has turned out to be a subset.
+  - The remaining one is `candy-pty/src/SizeIoctl.php`'s own `\posix_isatty($fd)` guard, i.e. the check
+    the whole family ultimately trips over.
+
+**No seventh instance exists tree-wide.** That is a claim the first census could not have made, because it
+searched on operand shape; this one searches on the sink and reports anything it cannot classify.
+
+Mutation-verified against the census alone (`--filter DescriptorSinkArgumentCensusTest`): reintroducing
+the cast in `candy-flip/src/Renderer.php`, in `candy-pty/src/SizeIoctl.php`, and in
+`candy-shine/src/Theme.php` each reds it — the last of those being a library no earlier scoping of this
+census would have looked at.
+
+---
