@@ -389,25 +389,9 @@ final class TtyStreamArgumentCensusTest extends TestCase
             foreach ($scope as $path => $source) {
                 foreach (self::programOptionsConstructions($source) as $site) {
                     ++$seen;
-
-                    if ($site['unparsed']) {
-                        $offenders[] = $path . ': new ' . $site['name']
-                            . '(<argument list this scanner could not read to its close>)';
-
-                        continue;
-                    }
-                    if ($site['positional']) {
-                        $offenders[] = $path . ': new ' . $site['name']
-                            . '(<positional arguments - this scanner cannot tell which slot the termios '
-                            . 'landed in>)';
-
-                        continue;
-                    }
-                    if (
-                        \in_array('termios', $site['named'], true)
-                        && !\in_array('input', $site['named'], true)
-                    ) {
-                        $offenders[] = $path . ': new ' . $site['name'] . '(termios: …) with no input:';
+                    $offender = self::optionsOffender($path, $site);
+                    if ($offender !== null) {
+                        $offenders[] = $offender;
                     }
                 }
             }
@@ -543,6 +527,93 @@ final class TtyStreamArgumentCensusTest extends TestCase
                 ['name' => 'Tty', 'firstArg' => 'expression', 'extraArgs' => true],
             ],
         ];
+    }
+
+    /**
+     * The offender line for one `ProgramOptions` site, or null if it is fine.
+     *
+     * WHY THIS IS A METHOD AND NOT THREE `if`s IN THE LOOP ABOVE. It was three
+     * `if`s, and dropping the POSITIONAL one changed nothing — the whole
+     * census stayed green. The fixtures pin what the SCANNER reports; nothing
+     * pinned what the ARM does with it, so two of the three branches were
+     * unreachable-by-any-test the moment they were written (rule 2: suspect
+     * the assertion's window before you suspect the mutation's relevance).
+     * Split out, the classification has known answers of its own below.
+     *
+     * ORDER IS PART OF THE ANSWER. `unparsed` outranks everything: if the walk
+     * could not reach the end of the argument list, the named-argument list it
+     * collected is a prefix and "no termios seen" means nothing.
+     *
+     * @param array{name: string, named: list<string>, positional: bool, unparsed: bool} $site
+     */
+    private static function optionsOffender(string $path, array $site): ?string
+    {
+        if ($site['unparsed']) {
+            return $path . ': new ' . $site['name']
+                . '(<argument list this scanner could not read to its close>)';
+        }
+
+        if ($site['positional']) {
+            return $path . ': new ' . $site['name']
+                . '(<positional arguments - this scanner cannot tell which slot the termios landed in>)';
+        }
+
+        if (\in_array('termios', $site['named'], true) && !\in_array('input', $site['named'], true)) {
+            return $path . ': new ' . $site['name'] . '(termios: …) with no input:';
+        }
+
+        return null;
+    }
+
+    /**
+     * KNOWN ANSWERS FOR THE CLASSIFICATION, which is the half a mutation
+     * proved was unpinned.
+     *
+     * Three rows must produce an offender and three must produce null. Without
+     * the null rows this would be satisfied by a classifier that reports
+     * everything; without the offender rows, by one that reports nothing.
+     *
+     * @param array{name: string, named: list<string>, positional: bool, unparsed: bool} $site
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('optionsOffenderFixtures')]
+    public function testTheOptionsClassifierAnswersCorrectlyOnSitesWhoseAnswerIsKnown(
+        array $site,
+        ?string $expected,
+    ): void {
+        self::assertSame($expected, self::optionsOffender('p.php', $site));
+    }
+
+    /**
+     * @return iterable<string, array{array{name: string, named: list<string>, positional: bool, unparsed: bool}, ?string}>
+     */
+    public static function optionsOffenderFixtures(): iterable
+    {
+        $site = static fn (array $o): array => $o + [
+            'name' => 'ProgramOptions',
+            'named' => [],
+            'positional' => false,
+            'unparsed' => false,
+        ];
+
+        yield 'THE HAZARD: termios named, input not' => [
+            $site(['named' => ['termios']]),
+            'p.php: new ProgramOptions(termios: …) with no input:',
+        ];
+        yield 'a positional list is an offender even when nothing hazardous is named' => [
+            $site(['positional' => true]),
+            'p.php: new ProgramOptions(<positional arguments - this scanner cannot tell which slot the '
+                . 'termios landed in>)',
+        ];
+        yield 'an unclosed list is an offender, and OUTRANKS a clean named list' => [
+            $site(['named' => ['input'], 'unparsed' => true]),
+            'p.php: new ProgramOptions(<argument list this scanner could not read to its close>)',
+        ];
+        yield 'termios AND input is clean - the builder shape' => [
+            $site(['named' => ['input', 'termios']]),
+            null,
+        ];
+        yield 'input alone is clean' => [$site(['named' => ['input']]), null];
+        yield 'neither named is clean' => [$site(['named' => ['useAltScreen']]), null];
     }
 
     /**
