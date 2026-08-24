@@ -61,6 +61,16 @@ use PHPUnit\Framework\TestCase;
  * thing standing, and an empty roster would agree with it. That is not a
  * hypothetical: a census in this repo has already been observed passing,
  * entirely green, with its scanner mutated dead.
+ *
+ * There are TWO entry points to keep alive, not one.
+ * {@see DescriptorSinkScanner::scanSource()} classifies a string;
+ * {@see DescriptorSinkScanner::scanTree()} walks a directory and calls it.
+ * Every absence in this file is computed through the second, so a control
+ * that exercises only the first leaves the walk unwatched -- which is exactly
+ * how a `scanTree()` gutted to see no files was measured passing this file's
+ * absence test on its own. {@see self::assertTheInstrumentBehindTheAbsenceIsAlive()}
+ * covers both, and is called from the absence test itself so that a
+ * `--filter` on one method name cannot strand it.
  */
 final class DescriptorSinkArgumentCensusTest extends TestCase
 {
@@ -225,25 +235,32 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      */
     public function testNoSiteIsSpelledInAWayTheScannerCannotClassify(): void
     {
-        // THE IN-TEST KNOWN-POSITIVE. The assertion below is an absence, and
-        // an empty result is also what a dead scanner returns. The control
-        // further down this file catches that too -- but only while both
-        // tests run: MEASURED (round-53 mutation M9a), with `scanSource()`
-        // gutted to walk no tokens at all, THIS TEST ON ITS OWN passed, one
-        // test and one green assertion, against an instrument that could no
-        // longer see anything. Under `--filter` on this method's name, or if
-        // the control below is ever moved out, that is the whole guard. So
-        // the positive lives here as well, in the same test as the absence
-        // it is protecting.
-        $alive = DescriptorSinkScanner::scanSource(
-            "<?php\n" . DescriptorSinkScanner::FUNCTION_SINKS[0] . '(0 + 1)' . ";\n",
-        );
-        self::assertSame(
-            [DescriptorSinkScanner::UNCLASSIFIED],
-            array_column($alive, 'kind'),
-            'the scanner can no longer report an unnameable operand, so the emptiness asserted '
-                . 'below is a property of the instrument and not of the tree',
-        );
+        // THE IN-TEST KNOWN-POSITIVE, ON THE ENTRY POINT THE ABSENCE BELOW
+        // ACTUALLY USES. An empty result is also what a dead instrument
+        // returns, so an absence assertion is worth nothing on its own.
+        //
+        // WHAT AN EARLIER REVISION OF THIS COMMENT SAID: that a `scanSource()`
+        // fixture here closed that hole, because MEASURED (round-53 mutation
+        // M9a) this test on its own had passed against a `scanSource()` gutted
+        // to walk no tokens.
+        //
+        // WHAT IS TRUE NOW: that control watched the wrong window. The absence
+        // below is computed through {@see self::scanLibraries()}, which reaches
+        // {@see DescriptorSinkScanner::scanTree()} -- a SECOND entry point with
+        // its own directory walk, which a `scanSource()` fixture never touches.
+        // MEASURED (round-53 mutation R1), with `scanTree()`'s `is_dir()` arm
+        // rewritten to return an empty list unconditionally, this test on its
+        // own passed again: one test, TWO green assertions, the `scanSource()`
+        // control among them, against a tree walk that could no longer see a
+        // single file.
+        //
+        // WHY THIS STILL EARNS ITS PLACE: the reasoning was right and only the
+        // window was wrong. A positive still has to run inside this method,
+        // because under `--filter` on this method's name it is the whole guard.
+        // It now runs through `scanTree()`, and it keeps a `scanSource()`
+        // component so that a classifier that stopped being able to say
+        // UNCLASSIFIED is caught here too.
+        $this->assertTheInstrumentBehindTheAbsenceIsAlive();
 
         $unclassified = [];
         foreach ($this->scanLibraries() as $key => $hit) {
@@ -419,6 +436,74 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         }
 
         return self::$scanned = $found;
+    }
+
+    /**
+     * A fixture goes through BOTH entry points the absence assertion depends
+     * on, and each must come back with the classifications it was built to
+     * produce.
+     *
+     * `scanTree()` is exercised against a throwaway directory rather than
+     * against the monorepo, so the control states a property of the scanner
+     * and not of whatever happens to be committed today. The directory name
+     * is process-unique: sibling lanes run their own suites against the same
+     * /tmp, and a shared fixture path is a cross-lane failure waiting for a
+     * coincidence.
+     *
+     * The sink text is built from the scanner's own constants rather than
+     * typed out, for the reason given on
+     * {@see testTheScannerReportsEveryShapeIncludingTheOnesItCannotName()}.
+     */
+    private function assertTheInstrumentBehindTheAbsenceIsAlive(): void
+    {
+        $fn = DescriptorSinkScanner::FUNCTION_SINKS[0];
+
+        // (a) The classifier can still say "I have no word for this".
+        self::assertSame(
+            [DescriptorSinkScanner::UNCLASSIFIED],
+            array_column(DescriptorSinkScanner::scanSource("<?php\n" . $fn . '(0 + 1)' . ";\n"), 'kind'),
+            'the scanner can no longer report an unnameable operand, so the emptiness asserted '
+                . 'in the calling test is a property of the instrument and not of the tree',
+        );
+
+        // (b) The TREE WALK -- the entry point the absence is computed
+        // through -- still reads files and still reports what is in them.
+        $dir = sys_get_temp_dir() . '/sc_r53a_sink_tree_' . bin2hex(random_bytes(8));
+        self::assertTrue(mkdir($dir, 0700, true), 'could not create the control fixture directory');
+
+        try {
+            file_put_contents(
+                $dir . '/fixture.php',
+                "<?php\n" . $fn . '(0)' . ";\n" . $fn . '(0 + 1)' . ";\n",
+            );
+
+            $hits = DescriptorSinkScanner::scanTree($dir);
+            self::assertSame(
+                [DescriptorSinkScanner::LITERAL_INT, DescriptorSinkScanner::UNCLASSIFIED],
+                array_column($hits, 'kind'),
+                'scanTree() no longer reports what is in a file it was pointed at, so the '
+                    . 'emptiness asserted in the calling test says nothing about the tree',
+            );
+            self::assertSame(
+                [$dir . '/fixture.php'],
+                array_values(array_unique(array_column($hits, 'file'))),
+                'scanTree() reported hits that did not come from the file it was given',
+            );
+        } finally {
+            // Exact-path deletes only -- never a glob under /tmp, which is
+            // shared with the other lanes' suites.
+            @unlink($dir . '/fixture.php');
+            @rmdir($dir);
+        }
+
+        // (c) And the walk over the REAL tree reached something. A path typo
+        // in monorepoRoot() would otherwise turn the absence green.
+        self::assertNotSame(
+            [],
+            $this->scanLibraries(),
+            'the census found no descriptor sink anywhere in the tree, so the absence asserted '
+                . 'in the calling test is about a walk that reached nothing',
+        );
     }
 
     private function monorepoRoot(): string
