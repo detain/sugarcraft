@@ -1165,7 +1165,12 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // the moment any lane adds a file.
         self::assertContains($root . '/src/Chat.php', $files);
         self::assertContains($root . '/src/Runtime.php', $files);
+        // AND FOR THE BINARY, `assertContains` ALONE IS A TAUTOLOGY:
+        // phpSourceRoster() appends that path unconditionally rather than
+        // discovering it, so the roster would still "contain" it on a checkout
+        // where the file was gone. The existence check is the half that can fail.
         self::assertContains($root . '/bin/sugarcrush', $files);
+        self::assertFileExists($root . '/bin/sugarcrush');
 
         $stacked = [];
         foreach ($files as $file) {

@@ -177,6 +177,98 @@ final class WorktreeRemovalReportingTest extends TestCase
     }
 
     /**
+     * A FAILURE ON AN EARLIER ENTRY MUST NOT STOP THE LATER ONES BEING TRIED,
+     * AND THE TEST ABOVE CANNOT SEE THAT.
+     *
+     * `removeDirectory()`'s loop is written
+     * `$emptied = $this->removeDirectory($itemPath) && $emptied;` and the
+     * comment beside it says the operand ORDER is the point: `&&`
+     * short-circuits, so the other way round would skip every remaining
+     * subdirectory once one had failed. MEASURED (PHP 8.3.6): swapping the two
+     * operands SURVIVES `testAnUnremovableTreeReportsFalseAndSurvives()`, for
+     * two reasons that compound. Its "still did what it could" entry is a FILE,
+     * and a file goes through the `elseif (!@unlink(...))` branch, which no
+     * `&&` guards at all; and `scandir()` returns names sorted, so `loose.txt`
+     * is already gone BEFORE `nested/` fails, leaving `$emptied` still true
+     * when the recursion is reached.
+     *
+     * So this fixture uses two SUBDIRECTORIES and names them so the unremovable
+     * one sorts FIRST — and asserts that ordering rather than trusting it,
+     * because the whole fixture is vacuous if the loop sees them the other way
+     * round. With the operands swapped, `z-removable/` is never visited.
+     */
+    public function testAFailureOnAnEarlierEntryDoesNotStopLaterEntriesBeingRemoved(): void
+    {
+        $tree = $this->tmpRoot . '/order';
+        mkdir($tree . '/a-locked', 0755, true);
+        file_put_contents($tree . '/a-locked/pinned.txt', 'x');
+        mkdir($tree . '/z-removable/deep', 0755, true);
+        file_put_contents($tree . '/z-removable/deep/gone.txt', 'x');
+        self::assertTrue(chmod($tree . '/a-locked', 0555));
+        self::assertFalse(
+            is_writable($tree . '/a-locked'),
+            'the mode-bit denial did not take — running as root, or on a filesystem that ignores '
+                . 'mode bits, and then nothing below is measuring anything',
+        );
+
+        // THE ORDER IS PART OF THE FIXTURE, so it is asserted, not assumed.
+        self::assertSame(
+            ['a-locked', 'z-removable'],
+            array_values(array_diff((array) scandir($tree), ['.', '..'])),
+            'the loop no longer sees the unremovable entry first, so a short-circuiting '
+                . 'conjunction would pass this test for the wrong reason',
+        );
+
+        self::assertFalse(self::removeDirectory($this->manager, $tree));
+        self::assertFileExists($tree . '/a-locked/pinned.txt');
+        self::assertDirectoryDoesNotExist(
+            $tree . '/z-removable',
+            'a subdirectory AFTER the failing one was never visited — the loop is '
+                . 'short-circuiting on the accumulated flag instead of recursing first',
+        );
+
+        chmod($tree . '/a-locked', 0755);
+    }
+
+    /**
+     * AN UNREADABLE DIRECTORY REPORTS FALSE, WHICH IS THE ARM THIS CHANGE'S OWN
+     * DOC-BLOCK NAMES FIRST AND NOTHING WAS COVERING.
+     *
+     * `removeDirectory()`'s doc-block lists four exits the `void` version
+     * swallowed, and "an unreadable directory returned early" is the first of
+     * them. MEASURED (PHP 8.3.6): rewriting `if ($entries === false) { return
+     * false; }` to `return true;` SURVIVES every other test in this file — the
+     * only fixture that denies anything denies WRITE (`0555`), which leaves
+     * `scandir()` working. `0000` is a different arm and needs its own fixture.
+     *
+     * The positive half is in the same test: a loose file beside the unreadable
+     * directory still goes, so a remover that had simply become "always false"
+     * would not satisfy this either.
+     */
+    public function testAnUnreadableDirectoryReportsFalseRatherThanReturningEarly(): void
+    {
+        $tree = $this->tmpRoot . '/unreadable';
+        mkdir($tree . '/inner', 0755, true);
+        file_put_contents($tree . '/inner/hidden.txt', 'x');
+        file_put_contents($tree . '/loose.txt', 'x');
+        self::assertTrue(chmod($tree . '/inner', 0000));
+        self::assertFalse(
+            is_readable($tree . '/inner'),
+            'the mode-bit denial did not take — running as root, or on a filesystem that ignores '
+                . 'mode bits, and then nothing below is measuring anything',
+        );
+
+        self::assertFalse(self::removeDirectory($this->manager, $tree));
+        self::assertDirectoryExists($tree . '/inner');
+
+        // AND IT STILL DID WHAT IT COULD, which is what stops this being
+        // satisfied by a remover that answers false unconditionally.
+        self::assertFileDoesNotExist($tree . '/loose.txt');
+
+        chmod($tree . '/inner', 0755);
+        self::assertFileExists($tree . '/inner/hidden.txt');
+    }
+    /**
      * THE REFUSAL ITSELF: an unremovable worktree keeps its registry entry.
      *
      * This is the whole point of the boolean. Before it, this same scenario
@@ -253,7 +345,12 @@ final class WorktreeRemovalReportingTest extends TestCase
 
         // The roster half of the control: [] over an empty roster is also [].
         self::assertContains($root . '/src/Agents/WorktreeManager.php', $files);
+        // `assertContains` alone is a TAUTOLOGY for this one — phpSources()
+        // appends the path unconditionally, so the roster would "contain" it on a
+        // box where the file had been deleted. The existence check is the part
+        // that can fail.
         self::assertContains($root . '/bin/sugarcrush', $files);
+        self::assertFileExists($root . '/bin/sugarcrush');
 
         $sites = [];
         foreach ($files as $file) {
@@ -345,9 +442,20 @@ final class WorktreeRemovalReportingTest extends TestCase
                 $previous = $significant[$i - 1] ?? null;
                 if (\is_array($previous) && $previous[0] === T_DOUBLE_COLON) {
                     // `Foo::new(` — PHP 8.3.6 lexes that `new` as T_NEW, not
-                    // T_STRING, which is why the factory needs its own arm. The
-                    // same rule excludes `public static function new()`, whose
-                    // T_NEW is preceded by T_FUNCTION.
+                    // T_STRING, which is why the factory needs its own arm.
+                    //
+                    // WHAT THIS COMMENT USED TO SAY: that `public static function
+                    // new()` is excluded "by the same rule", its T_NEW being
+                    // preceded by T_FUNCTION. WHAT IS TRUE: a declaration IS
+                    // excluded, but not here and not by this rule. Its previous
+                    // token is T_FUNCTION, so this arm is never entered; it falls
+                    // to the bare-`new` check below, which asks whether the token
+                    // AFTER T_NEW names the target class — and there it is `(`,
+                    // which names nothing (VERIFIED by token_get_all(), PHP
+                    // 8.3.6). WHY THE SENTENCE STILL EARNS ITS PLACE: a reader
+                    // deleting the class-name check because "the double-colon
+                    // rule already handles declarations" would start scoring
+                    // every `function new()` in the tree as a construction site.
                     if (
                         ($significant[$i + 1] ?? null) === '('
                         && self::shortName($significant[$i - 2] ?? null) === $class

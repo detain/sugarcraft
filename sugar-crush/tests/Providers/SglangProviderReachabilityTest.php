@@ -248,9 +248,19 @@ final class SglangProviderReachabilityTest extends TestCase
      * since `new Foo;` constructs just as much as `new Foo()`), and the
      * canonical `Foo::new()` factory — which has to be matched on `T_NEW`
      * preceded by `T_DOUBLE_COLON`, because PHP 8.3.6 lexes the `new` in
-     * `Foo::new(` as `T_NEW` rather than `T_STRING`. A `T_NEW` preceded by
-     * `T_FUNCTION` is that factory's DECLARATION and is excluded by the same
-     * rule.
+     * `Foo::new(` as `T_NEW` rather than `T_STRING`.
+     *
+     * THAT FACTORY'S OWN DECLARATION IS EXCLUDED TOO, BUT NOT BY THAT RULE.
+     * WHAT THIS PARAGRAPH USED TO SAY: "a `T_NEW` preceded by `T_FUNCTION` is
+     * that factory's DECLARATION and is excluded by the same rule". WHAT IS
+     * TRUE: `public static function new()` lexes as `T_FUNCTION T_NEW '('`
+     * (VERIFIED by `token_get_all()`, PHP 8.3.6), so its previous token is not
+     * `T_DOUBLE_COLON` and the factory arm is never entered. It is the
+     * bare-`new` arm that rejects it, by asking whether the token AFTER `T_NEW`
+     * names the target class — and there it is `(`, which names nothing. WHY THE
+     * SENTENCE STILL EARNS ITS PLACE: a reader who dropped that class-name check
+     * on the grounds that the double-colon rule already handles declarations
+     * would start scoring every `function new()` in the tree as a construction.
      *
      * `namedFactories` is the arm the other scanner does not have: every OTHER
      * static call on `$class`, by method name, in source order. That is where
