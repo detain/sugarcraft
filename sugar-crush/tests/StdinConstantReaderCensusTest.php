@@ -7,7 +7,12 @@ namespace SugarCraft\Crush\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * EVERYTHING REACHABLE FROM THIS PROCESS THAT READS DESCRIPTOR 0 BY NAME.
+ * EVERY REACHABLE SUGARCRAFT LIBRARY THAT NAMES DESCRIPTOR 0.
+ *
+ * The headline used to read "everything reachable from this process", and the
+ * scope below has never been that — see "what this scope excludes, measured
+ * rather than assumed" at the foot of this doc-block, which is where the
+ * difference is written down instead of being left for a reader to discover.
  *
  * This roster is the missing input to E296. Round 49 tried three times to
  * replace the suite's descriptor 0 with `/dev/null`, which is the only repair
@@ -109,15 +114,46 @@ use PHPUnit\Framework\TestCase;
  *
  * ## Scope, stated rather than left to be inferred
  *
- * `src` and `bin` of this package, and `src` of each reachable sibling. Not a
- * sibling's `tests`, which never execute in this process. Not this package's
- * `tests`: the files there that read the constant do so deliberately and as
- * the subject of their own assertions, and pinning them here would make this
- * file a merge conflict for every lane that adds one while telling nobody
- * anything they did not already assert. No count, on purpose (rule 18) — one
- * taken over `tests/` in a lane worktree is wrong the hour a sibling lane
- * merges. The generator is in this class, so the wider answer is one edit
- * away: add `tests` to {@see PACKAGE_SCOPE} and read what it reports.
+ * `src` and `bin` of this package, and `src` of each reachable SUGARCRAFT
+ * sibling under `vendor/sugarcraft`. Not a sibling's `tests`, which never
+ * execute in this process. Not this package's `tests`: the files there that
+ * read the constant do so deliberately and as the subject of their own
+ * assertions, and pinning them here would make this file a merge conflict for
+ * every lane that adds one while telling nobody anything they did not already
+ * assert. No count, on purpose (rule 18) — one taken over `tests/` in a lane
+ * worktree is wrong the hour a sibling lane merges. The generator is in this
+ * class, so the wider answer is one edit away: add `tests` to
+ * {@see PACKAGE_SCOPE} and read what it reports.
+ *
+ * ## WHAT THIS SCOPE EXCLUDES, MEASURED RATHER THAN ASSUMED
+ *
+ * The rest of `vendor/` — the third-party packages — is NOT scanned, and that
+ * is a choice rather than an oversight, so here is what is out there. Running
+ * {@see fd0References()} over every non-`sugarcraft` `vendor/**.php` outside a
+ * `tests/` directory (8,247 files, PHP 8.3.6) reports FOUR:
+ * `sebastian/environment/src/Console.php` and
+ * `phpunit/phpunit/src/TextUI/Command/Commands/GenerateConfigurationCommand.php`
+ * (both `STDIN`), `mtdowling/jmespath.php/bin/jp.php` (`STDIN`), and
+ * `symfony/yaml/Command/LintCommand.php` (`php://stdin`).
+ *
+ * The first is the one that matters, because it is inside the runner's OWN
+ * dependency tree: `Console::getNumberOfColumns()` is
+ * `$this->isInteractive(defined('STDIN') ? STDIN : self::STDIN)`, and
+ * `defined('STDIN')` stays TRUE after `fclose(\STDIN)` (measured, 3/3, PHP
+ * 8.3.6 — `defined()` true, `is_resource()` false), so under option (a) it
+ * hands a CLOSED resource on. Read to the end, though, it is safe:
+ * `isInteractive()` opens with `is_resource($fileDescriptor)`, so a closed
+ * handle takes the int branch, reaches `@posix_isatty()`, and degrades to "not
+ * interactive" — an 80-column answer, not a break. Observed: the full-suite
+ * run with the descriptor replacement applied produced no error from it.
+ *
+ * It stays out of the asserted set for a reason that is not "it is fine".
+ * `vendor/` is gitignored and composer-managed, so a roster over it is a
+ * roster over content this repository does not version: it would red on an
+ * unrelated upstream bump and teach the next reader to widen it away. The four
+ * names above are therefore recorded here, with their generator, as a
+ * measurement at a point in time — and if option (a) ever ships, that
+ * `sebastian/environment` call is the one to re-read first.
  */
 final class StdinConstantReaderCensusTest extends TestCase
 {
