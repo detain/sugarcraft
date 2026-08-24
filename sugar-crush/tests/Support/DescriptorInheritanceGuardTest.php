@@ -37,13 +37,28 @@ use RecursiveIteratorIterator;
  * ({@see testNoDescriptorSpecInSrcIsUnreadable()}), and what a spec does name
  * is useful detail on a failure. It is detail, never an exemption.
  *
- * NO COUNT IS ASSERTED ANYWHERE IN THIS FILE, deliberately. E366's HIGH list
- * was five sites on the day it was written, and the round that acted on it had
- * four of those files open in another lane. A census pinned to "five" reds on
- * the commit that lands the fix, and the red looks like the fixer's defect
- * rather than the instrument's brittleness. What is asserted is the SHAPE:
- * every exposed spawn is either handled or carries a row here saying why not,
- * and every row still matches something.
+ * NO CENSUS OF THE TREE IS ASSERTED IN THIS FILE, deliberately, WITH ONE
+ * EXCEPTION THAT IS ALSO DELIBERATE. E366's HIGH list was five sites on the
+ * day it was written, and the round that acted on it had four of those files
+ * open in another lane. A census pinned to "five" reds on the commit that
+ * lands the fix, and the red looks like the fixer's defect rather than the
+ * instrument's brittleness. What is asserted is the SHAPE: every exposed spawn
+ * is either handled or carries a row here saying why not, and every row still
+ * matches something.
+ *
+ * WHAT THIS PARAGRAPH USED TO SAY, and it is now a trap rather than doctrine:
+ * "NO COUNT IS ASSERTED ANYWHERE IN THIS FILE". WHAT IS TRUE NOW:
+ * {@see testEveryExposedSpawnInAReachableLibIsAccountedFor()} asserts the
+ * sibling walk saw more than a hundred files before believing what it did not
+ * find there. WHY THAT ONE EARNS ITS PLACE AND MUST NOT BE DELETED BY SOMEBODY
+ * QUOTING THE SENTENCE ABOVE AT IT: it is a LOWER BOUND far beneath what the
+ * closure actually holds, not an equality, so no fix and no lane's merge can
+ * carry the tree across it. The only thing that can is a walk pointed at
+ * nothing, which is the one thing it exists to catch - the arm it guards
+ * asserts a set is EMPTY, and a walk over zero files returns an empty set
+ * every bit as convincingly as a healthy closure does. A lower bound has none
+ * of the brittleness this paragraph is about; an equality would have all of
+ * it.
  *
  * THE ROSTER IS KEYED BY SYMBOL, NOT BY LINE. Line numbers in this tree rot
  * inside one round; `File.php::method` survives everything except a rename,
@@ -197,10 +212,46 @@ final class DescriptorInheritanceGuardTest extends TestCase
      *
      * WHY THE GUARD WIDENED. Round 53 built this instrument, rostered seven
      * sites, and scoped it to `sugar-crush/src` - and the defect class is not
-     * a sugar-crush property. Measured over the reachable closure at the time
-     * of writing: 8 spawn sites outside this package, 3 of them exposed, and
-     * two of those three are in candy-pty, which every PTY-driven child in the
-     * tree goes through.
+     * a sugar-crush property. The rows below are what the widening found, and
+     * most of them are in candy-pty, which every PTY-driven child in the tree
+     * goes through.
+     *
+     * NO CENSUS FIGURE IS WRITTEN IN THIS DOC-BLOCK, which is a correction
+     * rather than an omission. WHAT IT USED TO SAY: "8 spawn sites outside
+     * this package, 3 of them exposed". WHAT IS TRUE NOW: that was correct on
+     * the day it was written and any sibling's merge invalidates it, in a
+     * sentence no test reads. WHY THE INFORMATION IS NOT LOST: this roster IS
+     * the figure, and {@see testNoReachableLibRowIsStale()} re-derives it
+     * against the tree on every run - which a sentence cannot do.
+     *
+     * WHAT "REACHABLE" MEANS, TWICE OVER, AND NEITHER HALF IS A CHOICE MADE
+     * HERE. Which LIBRARIES: whatever `vendor/sugarcraft` holds, i.e. what
+     * this package requires - see {@see LIB_SCOPE}. Which FILES INSIDE ONE:
+     * the autoload roots that library's own `composer.json` declares, read by
+     * {@see autoloadRoots()} rather than assumed to be `src`. The distinction
+     * matters because the second half used to be unstated: the walk went to
+     * `<lib>/src` and nothing said why, which is the same shape as the
+     * exemption this round removed - a narrowing nobody had argued for.
+     *
+     * WHAT THAT DERIVATION LEAVES OUT, measured rather than waved at.
+     * `autoload-dev` is deliberately not read, and that is what puts a
+     * sibling's `tests/` out of scope: Composer registers `autoload-dev` for
+     * the ROOT package only, so a lib's own tests cannot be loaded from this
+     * process however many spawns they contain. `examples/` appears in no
+     * autoload section of any lib in the closure and is unreachable for the
+     * same reason - stated rather than left to be inferred, because
+     * candy-focus's examples do hold exposed spawns and a reader who found
+     * them would otherwise think this guard had missed them.
+     *
+     * THE GAP THIS ARGUMENT DOES NOT COVER, because "loadable" is not the same
+     * as "runs and inherits our descriptors": code a lib EXECS. candy-pty
+     * ships `bin/pty-shim.php` and `Spawn.php::wrapInShim()` runs it as a
+     * child, so that shim inherits this process's descriptors and anything it
+     * spawned would inherit them again - and no arm of this guard reads it.
+     * Measured on this tree: the shim mentions `proc_open` twice and both are
+     * prose in comments, so the scanner reports no site and no unresolved
+     * appearance there. That is a measurement of today, not a guarantee, and
+     * it is filed rather than fixed here.
      *
      * A ROW HERE IS A DIFFERENT ANIMAL FROM ONE IN {@see ACCOUNTED_FOR}, and
      * the split into two rosters is the whole point rather than tidiness.
@@ -665,6 +716,63 @@ final class DescriptorInheritanceGuardTest extends TestCase
             FOUND MORE: the function grew another exposed spawn. Read it before
             raising the number.
             TEXT);
+    }
+
+    /**
+     * The reachability of a FILE is read off a manifest, in both polarities.
+     *
+     * The lib arms above assert that a walk found nothing wrong, and a walk
+     * pointed at the wrong directory finds nothing wrong very reliably. The
+     * `> 100` floor catches a walk pointed at nothing at all; this catches the
+     * subtler half - a derivation that quietly answers `src` whatever the
+     * manifest says, or quietly answers nothing whatever the manifest says.
+     * Both directions are pinned because a rule verified in one is half a rule.
+     */
+    public function testAutoloadRootsAreDerivedFromTheManifest(): void
+    {
+        self::assertSame(
+            ['src'],
+            self::autoloadRoots(['autoload' => ['psr-4' => ['SugarCraft\\Pty\\' => 'src/']]]),
+            'the ordinary shape every lib in the closure uses today; if this is wrong the walk '
+                . 'is scanning the wrong files and every absence it reports is empty.',
+        );
+
+        self::assertSame(
+            ['bin/boot.php', 'lib', 'map', 'other'],
+            self::autoloadRoots(['autoload' => [
+                'psr-4' => ['A\\' => 'lib/', 'B\\' => ['lib/', 'other/']],
+                'classmap' => ['map/'],
+                'files' => ['bin/boot.php'],
+            ]]),
+            'every autoload kind contributes, a list-valued psr-4 prefix contributes each of its '
+                . 'paths, and duplicates collapse. A derivation that reads only psr-4 would miss '
+                . 'a classmap, which is a perfectly ordinary way to ship loadable code.',
+        );
+
+        self::assertSame(
+            [],
+            self::autoloadRoots(['autoload-dev' => ['psr-4' => ['A\\Tests\\' => 'tests/']]]),
+            'autoload-dev MUST NOT contribute. Composer registers it for the root package only, '
+                . "so a sibling's tests/ is not loadable from this process - and that, rather "
+                . 'than a hard-coded directory name, is why lib test suites are out of scope. If '
+                . "this returns ['tests'] the guard starts reading every sibling's test suite "
+                . 'and reds on spawns that cannot reach this process at all.',
+        );
+
+        self::assertSame(
+            [],
+            self::autoloadRoots(['name' => 'sugarcraft/candy-nothing']),
+            'a manifest with no autoload section makes nothing loadable; the caller turns this '
+                . 'into a loud failure rather than a silent skip.',
+        );
+
+        self::assertSame(
+            [''],
+            self::autoloadRoots(['autoload' => ['psr-4' => ['A\\' => '']]]),
+            'a package-root autoload must survive normalisation as an empty string so the '
+                . 'caller can refuse it. Dropping it here would turn "walk this whole package, '
+                . 'vendor and all" into "walk nothing", silently.',
+        );
     }
 
     /**
@@ -1277,7 +1385,18 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
-     * Every reachable sibling library's `src`, keyed `<lib>/<relative path>`.
+     * Every reachable sibling library's loadable sources, keyed `<lib>/<path>`.
+     *
+     * THE ROOTS ARE READ, NOT ASSUMED. This walk used to go to `<lib>/src`
+     * with nothing saying why, which is an unargued narrowing of exactly the
+     * kind this round removed elsewhere. It now asks each library's own
+     * `composer.json` which directories it autoloads - see
+     * {@see autoloadRoots()} and {@see ACCOUNTED_FOR_IN_LIBS}' doc-block for
+     * what that reaches and what it does not. At the time of writing every
+     * lib in the closure declares `src/` and nothing else, so the file set is
+     * the same one the hard-coded directory produced; the difference is that
+     * a lib which starts autoloading somewhere else is followed without
+     * anybody having to remember this method exists.
      *
      * @return iterable<string, string>
      */
@@ -1294,27 +1413,125 @@ final class DescriptorInheritanceGuardTest extends TestCase
         \sort($libs);
 
         foreach ($libs as $lib) {
-            $dir = $lib . '/src';
-            if (!\is_dir($dir)) {
-                continue;
-            }
+            $name = \basename($lib);
+            $manifest = $lib . '/composer.json';
 
-            $files = [];
-            /** @var \SplFileInfo $file */
-            foreach (new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            ) as $file) {
-                if ($file->isFile() && $file->getExtension() === 'php') {
-                    $files[] = $file->getPathname();
+            // Rule 14, and the reason none of these three are `continue`: a
+            // library this package requires but whose roots cannot be derived
+            // is a library silently dropped from every absence assertion
+            // downstream, which is indistinguishable from a clean one.
+            self::assertFileExists(
+                $manifest,
+                $name . ' is in the reachable closure but has no composer.json, so its autoload '
+                    . 'roots cannot be derived and this walk would skip it without saying so.',
+            );
+
+            $decoded = \json_decode((string) \file_get_contents($manifest), true);
+            self::assertIsArray($decoded, $name . '/composer.json did not decode to an array.');
+
+            $roots = self::autoloadRoots($decoded);
+            self::assertNotSame(
+                [],
+                $roots,
+                $name . ' declares no autoload section, so nothing in it is loadable from this '
+                    . 'process - which may well be true, but it has never been true here before '
+                    . 'and the walk must not decide that quietly.',
+            );
+
+            foreach ($roots as $root) {
+                self::assertNotSame(
+                    '',
+                    $root,
+                    $name . ' autoloads from its package root. Walking that would descend into '
+                        . "the library's own vendor/ directory, so this needs a decision rather "
+                        . 'than a default.',
+                );
+
+                $path = $lib . '/' . $root;
+
+                if (\is_file($path)) {
+                    if (\pathinfo($path, \PATHINFO_EXTENSION) === 'php') {
+                        yield $name . '/' . $root => (string) \file_get_contents($path);
+                    }
+
+                    continue;
+                }
+
+                if (!\is_dir($path)) {
+                    continue;
+                }
+
+                $files = [];
+                /** @var \SplFileInfo $file */
+                foreach (new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+                ) as $file) {
+                    if ($file->isFile() && $file->getExtension() === 'php') {
+                        $files[] = $file->getPathname();
+                    }
+                }
+                \sort($files);
+
+                foreach ($files as $each) {
+                    yield $name . '/' . \substr($each, \strlen($path) + 1)
+                        => (string) \file_get_contents($each);
                 }
             }
-            \sort($files);
+        }
+    }
 
-            foreach ($files as $path) {
-                yield \basename($lib) . '/' . \substr($path, \strlen($dir) + 1)
-                    => (string) \file_get_contents($path);
+    /**
+     * The directories and files a Composer manifest makes loadable.
+     *
+     * PURE, AND SEPARATE FROM THE WALK ON PURPOSE: it is the one part of the
+     * reachability argument that can be pinned against literals instead of
+     * against whatever the closure happens to contain today, so
+     * {@see testAutoloadRootsAreDerivedFromTheManifest()} can assert both
+     * polarities without coupling this file to a sibling's manifest.
+     *
+     * `autoload-dev` IS NOT READ, and that omission is load-bearing rather
+     * than an oversight: Composer registers a package's `autoload-dev` only
+     * when that package is the ROOT of the install, so a sibling library's
+     * `tests/` is not loadable from this process. That is the derived reason
+     * lib test suites are out of this guard's scope, and it is a better reason
+     * than "we walk src".
+     *
+     * An empty path string means the package root; it is returned as-is rather
+     * than dropped, because the caller has to refuse it loudly and a filter
+     * here would turn that refusal into a silent skip.
+     *
+     * @param array<string, mixed> $manifest a decoded composer.json
+     * @return list<string> normalised, unique, sorted; may be empty
+     */
+    private static function autoloadRoots(array $manifest): array
+    {
+        $section = $manifest['autoload'] ?? null;
+        if (!\is_array($section)) {
+            return [];
+        }
+
+        $roots = [];
+
+        foreach (['psr-4', 'psr-0'] as $kind) {
+            /** @var mixed $paths */
+            foreach ((array) ($section[$kind] ?? []) as $paths) {
+                foreach ((array) $paths as $path) {
+                    $roots[] = \rtrim(\trim((string) $path), '/');
+                }
             }
         }
+
+        foreach (['classmap', 'files'] as $kind) {
+            /** @var mixed $path */
+            foreach ((array) ($section[$kind] ?? []) as $path) {
+                $roots[] = \rtrim(\trim((string) $path), '/');
+            }
+        }
+
+        $roots = \array_values(\array_unique($roots));
+        \sort($roots);
+
+        return $roots;
     }
 
     /** @return iterable<string, string> relative path => source */
