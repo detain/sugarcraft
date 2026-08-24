@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Hooks\BuiltIn\AuditHook;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * WHAT E328 SAID, AND WHY A TEST RATHER THAN A PARAGRAPH SAYS OTHERWISE.
@@ -47,6 +48,15 @@ use SugarCraft\Crush\Support\ForkedChild;
 final class AuditHookConcurrentAppendTest extends TestCase
 {
     /**
+     * This file forks inside the PHPUnit process, so it owes the ledger
+     * {@see ForkedChildReaperAdoptionTest} requires: `phpunit.xml`'s time
+     * limit is a `pcntl_alarm()`, an alarm is not inherited across a fork, so
+     * a timed-out parent leaves these writers running unbounded against a log
+     * `tearDown()` is about to delete.
+     */
+    use ReapsForkedChildrenTrait;
+
+    /**
      * Writers, records each, and payload bytes.
      *
      * The payload is past `PIPE_BUF` (4096 on Linux) and past one page, which
@@ -64,6 +74,11 @@ final class AuditHookConcurrentAppendTest extends TestCase
 
     protected function tearDown(): void
     {
+        // BEFORE the unlink, not after: the reaper's whole point is that the
+        // children must be dead before the file they are appending to goes
+        // away, or the orphans go on writing into whatever takes its inode.
+        $this->reapTrackedForkedChildren();
+
         // Exact-path delete of a name this test created; never a glob.
         if ($this->log !== '' && is_file($this->log)) {
             @unlink($this->log);
@@ -155,7 +170,7 @@ final class AuditHookConcurrentAppendTest extends TestCase
 
         $pids = [];
         for ($w = 0; $w < self::WRITERS; $w++) {
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             self::assertNotSame(-1, $pid, 'fork failed');
             if ($pid === 0) {
                 // A CALLER-SUPPLIED path, so `$ownsPath` is false and the write
